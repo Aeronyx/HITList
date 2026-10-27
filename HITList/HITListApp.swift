@@ -7,6 +7,11 @@ struct HITListApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // Unit tests run hosted in the app; keep them off the real store and CloudKit.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            container = ModelContainerFactory.preview()
+            return
+        }
         CloudSyncMonitor.shared.start()
         container = ModelContainerFactory.make()
         TaskActions.seedDefaultsIfNeeded(in: container.mainContext)
