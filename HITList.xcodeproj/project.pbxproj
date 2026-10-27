@@ -30,9 +30,12 @@
 		B88DCC9DB0698CADA1F3C03A /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7433290494D95848705DE1E /* ModelContainerFactory.swift */; };
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
 		D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */; };
+		D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08BB24F8F65457496F557A04 /* Deduplicator.swift */; };
 		DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC4E971C5262969197F1F3 /* TaskRow.swift */; };
 		E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */; };
 		E2EDC1033F73BA817EFF8FA9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F188E277BC60A2CD068AAD /* SettingsView.swift */; };
+		EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */; };
+		F731493FD4E1A807845123C1 /* Debouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A889BC2315D60CA212A38FD /* Debouncer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,11 +51,14 @@
 /* Begin PBXFileReference section */
 		03340EB6E38EDAB8BB35B0C4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		06571975348E2AFECA8660F9 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		08BB24F8F65457496F557A04 /* Deduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deduplicator.swift; sourceTree = "<group>"; };
 		14A4D705270750EEB72A1890 /* HITListTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HITListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeduplicatorTests.swift; sourceTree = "<group>"; };
 		3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotBuilder.swift; sourceTree = "<group>"; };
 		42AC4E971C5262969197F1F3 /* TaskRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRow.swift; sourceTree = "<group>"; };
 		48F188E277BC60A2CD068AAD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		4A889BC2315D60CA212A38FD /* Debouncer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debouncer.swift; sourceTree = "<group>"; };
 		4F2C6F0B31F217723029B1AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		659074BDF3973B67D923222D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -140,6 +146,7 @@
 			children = (
 				06571975348E2AFECA8660F9 /* BackupService.swift */,
 				EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */,
+				08BB24F8F65457496F557A04 /* Deduplicator.swift */,
 				B73ACCF90D84809171E18645 /* Keychain.swift */,
 				8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */,
 				3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */,
@@ -159,6 +166,7 @@
 		99156D3ACDD204A9422D33CF /* HITListTests */ = {
 			isa = PBXGroup;
 			children = (
+				32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */,
 				C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */,
 			);
 			path = HITListTests;
@@ -184,6 +192,7 @@
 		C1EF16AD8728590770C3CF51 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				4A889BC2315D60CA212A38FD /* Debouncer.swift */,
 				EAAC54705A328613C9AC2A94 /* Formatting.swift */,
 				71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */,
 			);
@@ -304,6 +313,8 @@
 				6E50FF54C3B9C120C602A26E /* BackupService.swift in Sources */,
 				77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */,
 				A11E01F132BD9E7D649C8BD7 /* ContentView.swift in Sources */,
+				F731493FD4E1A807845123C1 /* Debouncer.swift in Sources */,
+				D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */,
 				74E66A8FC0FB24F9EE188997 /* FilterEditorView.swift in Sources */,
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
 				2627D544E45DE46036EB040C /* HITListApp.swift in Sources */,
@@ -329,6 +340,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */,
 				B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

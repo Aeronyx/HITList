@@ -74,6 +74,12 @@ final class CloudSyncMonitor {
             lastSuccess = (phase, Date())
             if phase == .setup { lastError = nil }
             Self.log.info("\(phase.rawValue, privacy: .public) succeeded")
+            if event.type == .import { NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil) }
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted on the main actor after each successful CloudKit import.
+    static let cloudKitImportSucceeded = Notification.Name("HITList.cloudKitImportSucceeded")
 }

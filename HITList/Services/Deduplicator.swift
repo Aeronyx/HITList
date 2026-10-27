@@ -1,0 +1,110 @@
+import Foundation
+import SwiftData
+import OSLog
+
+/// Records that can end up duplicated across devices: seeded before the first CloudKit import, or
+/// created under the same name on two devices while offline. CloudKit cannot enforce uniqueness.
+protocol DeduplicatedModel: PersistentModel {
+    var id: UUID { get }
+    var name: String { get }
+    var createdAt: Date { get }
+    var updatedAt: Date { get set }
+}
+
+extension Project: DeduplicatedModel {}
+extension TaskLabel: DeduplicatedModel {}
+extension SavedFilter: DeduplicatedModel {}
+
+struct DedupeReport: Equatable, CustomStringConvertible {
+    var projects = 0
+    var labels = 0
+    var filters = 0
+
+    var removed: Int { projects + labels + filters }
+    var description: String { "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s)" }
+}
+
+/// Collapses duplicate projects, labels and saved filters. Runs at launch and after every successful
+/// CloudKit import.
+///
+/// Records are grouped first by `id` (same seed or same record arriving twice), then by trimmed,
+/// lowercased `name`. The survivor is the one with the earliest `createdAt`, ties broken by
+/// `id.uuidString`, so every device picks the same record from the same data and the passes converge
+/// instead of deleting each other's survivors. Tasks are re-pointed to the survivor; the survivor
+/// keeps its own fields except `updatedAt`, which becomes the newest of the group. One pass leaves no
+/// duplicates, so a second pass changes nothing.
+@MainActor
+enum Deduplicator {
+    private static let log = Logger(subsystem: "com.trammells.hitlist", category: "dedupe")
+
+    @discardableResult
+    static func run(in context: ModelContext) throws -> DedupeReport {
+        var report = DedupeReport()
+        report.projects = try collapse(Project.self, in: context) { loser, winner in
+            for task in loser.tasks ?? [] { task.project = winner }
+        }
+        report.labels = try collapse(TaskLabel.self, in: context) { loser, winner in
+            for task in loser.tasks ?? [] {
+                var labels = (task.labels ?? []).filter { $0.persistentModelID != loser.persistentModelID }
+                if !labels.contains(where: { $0.persistentModelID == winner.persistentModelID }) { labels.append(winner) }
+                task.labels = labels
+            }
+        }
+        report.filters = try collapse(SavedFilter.self, in: context) { _, _ in }
+        if context.hasChanges { try context.save() }
+        return report
+    }
+
+    /// `run`, logging the report when anything was merged. Errors are logged, not thrown: a failed pass
+    /// is retried on the next import or launch.
+    static func runAndLog(in context: ModelContext, trigger: String) {
+        do {
+            let report = try run(in: context)
+            if report.removed > 0 {
+                log.notice("dedupe after \(trigger, privacy: .public): \(report.description, privacy: .public)")
+            }
+        } catch {
+            context.rollback()
+            log.error("dedupe after \(trigger, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Survivor order: earliest `createdAt`, then smallest `id.uuidString`.
+    static func precedes<M: DeduplicatedModel>(_ a: M, _ b: M) -> Bool {
+        if a.createdAt != b.createdAt { return a.createdAt < b.createdAt }
+        return a.id.uuidString < b.id.uuidString
+    }
+
+    static func nameKey(_ name: String) -> String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Returns the number of records deleted.
+    private static func collapse<M: DeduplicatedModel>(_ type: M.Type, in context: ModelContext,
+                                                       repoint: (_ loser: M, _ winner: M) -> Void) throws -> Int {
+        var removed = 0
+        var survivors: [M] = []
+        for group in Dictionary(grouping: try context.fetch(FetchDescriptor<M>()), by: \.id).values {
+            survivors.append(merge(group, in: context, removed: &removed, repoint: repoint))
+        }
+        // Unnamed records have nothing in common but the missing name; leave them alone.
+        let named = Dictionary(grouping: survivors, by: { nameKey($0.name) }).filter { !$0.key.isEmpty }
+        for group in named.values where group.count > 1 {
+            _ = merge(group, in: context, removed: &removed, repoint: repoint)
+        }
+        return removed
+    }
+
+    private static func merge<M: DeduplicatedModel>(_ group: [M], in context: ModelContext, removed: inout Int,
+                                                    repoint: (_ loser: M, _ winner: M) -> Void) -> M {
+        guard group.count > 1, let winner = group.min(by: precedes) else { return group[0] }
+        let newest = group.map(\.updatedAt).max()!
+        if winner.updatedAt != newest { winner.updatedAt = newest }
+        for loser in group where loser.persistentModelID != winner.persistentModelID {
+            repoint(loser, winner)
+            context.delete(loser)
+            removed += 1
+        }
+        return winner
+    }
+}
