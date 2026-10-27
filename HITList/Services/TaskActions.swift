@@ -89,7 +89,7 @@ enum TaskActions {
         DefaultFilter(key: "unscheduled", name: "Unscheduled", query: "no date & !recurring", colorHex: "#B07CF5"),
     ]
 
-    static let didSeedDefaultsKey = "didSeedDefaults"
+    nonisolated static let didSeedDefaultsKey = "didSeedDefaults"
 
     /// Adds a few starter filters on a brand-new install so the feature is discoverable.
     ///
@@ -97,7 +97,7 @@ enum TaskActions {
     /// filter with that id or that name already exists. A device that seeds before its first CloudKit
     /// import still creates copies, but they share ids with the other devices' copies, and
     /// `Deduplicator` collapses them after the import. The per-device flag only saves the fetch.
-    static func seedDefaultsIfNeeded(in context: ModelContext, defaults: UserDefaults = .standard) {
+    static func seedDefaultsIfNeeded(in context: ModelContext, defaults: UserDefaults = AppGroup.defaults) {
         guard !defaults.bool(forKey: didSeedDefaultsKey) else { return }
         do {
             let existing = try context.fetch(FetchDescriptor<SavedFilter>())

@@ -7,8 +7,8 @@ enum NotificationScheduler {
     static let enabledKey = "notifications.enabled"
 
     static var isEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: enabledKey) }
-        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+        get { AppGroup.defaults.bool(forKey: enabledKey) }
+        set { AppGroup.defaults.set(newValue, forKey: enabledKey) }
     }
 
     static func requestPermission() async -> Bool {
