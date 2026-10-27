@@ -1,0 +1,89 @@
+{
+  "" : {
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/HITListCoreTests-primary.dia",
+    "emit-module-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/HITListCoreTests-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/HITListCoreTests-primary-emit-module.dia",
+    "pch" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/HITListCoreTests-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/HITListCoreTests-primary.swiftdeps"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/DerivedSources/test_entry_point.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/test_entry_point~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/AutocompleteEngineTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/AutocompleteEngineTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/DateExpressionTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/DateExpressionTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/FilterQueryTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/FilterQueryTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/QuickAddParserTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/QuickAddParserTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/RecurrenceRuleTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/RecurrenceRuleTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/SnapshotTests.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/SnapshotTests~partial.swiftmodule"
+  },
+  "/Users/gtrammell/Desktop/HITList/HITListCore/Tests/HITListCoreTests/TestSupport.swift" : {
+    "const-values" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.swiftconstvalues",
+    "dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.d",
+    "diagnostics" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.dia",
+    "index-unit-output-path" : "/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.o",
+    "llvm-bc" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.bc",
+    "object" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.o",
+    "swift-dependencies" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport.swiftdeps",
+    "swiftmodule" : "/Users/gtrammell/Desktop/HITList/HITListCore/.build/out/Intermediates.noindex/HITListCore.build/Debug/HITListCoreTests-p.build/Objects-normal/arm64/TestSupport~partial.swiftmodule"
+  }
+}
