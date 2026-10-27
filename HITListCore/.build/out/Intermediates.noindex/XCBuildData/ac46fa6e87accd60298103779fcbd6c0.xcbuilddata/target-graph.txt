@@ -1,7 +1,0 @@
-Target dependency graph (3 targets)
-Target 'AllExcludingTests' in project 'Aggregate'
-➜ Explicit dependency on target 'HITListCore-product' in project 'HITListCore'
-➜ Explicit dependency on target 'HITListCore' in project 'HITListCore'
-Target 'HITListCore-product' in project 'HITListCore'
-➜ Explicit dependency on target 'HITListCore' in project 'HITListCore'
-Target 'HITListCore' in project 'HITListCore' (no dependencies)

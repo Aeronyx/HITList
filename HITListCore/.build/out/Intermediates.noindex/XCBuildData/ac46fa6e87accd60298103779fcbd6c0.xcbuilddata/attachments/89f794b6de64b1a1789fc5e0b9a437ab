@@ -1,4 +1,0 @@
-module HITListCore {
-header "HITListCore-Swift.h"
-export *
-}
