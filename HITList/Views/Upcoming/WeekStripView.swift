@@ -12,6 +12,10 @@ struct WeekStripView: View {
     /// Pages are week offsets from the current week.
     let weeks: ClosedRange<Int>
     @Binding var visibleWeek: Int?
+    /// The day a dragged task hovers over.
+    @Binding var dropTarget: Date?
+    /// Dropped task payloads on a day; false if the drop was refused.
+    var onDrop: ([String], Date) -> Bool
     var onSelect: (Date) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -71,6 +75,7 @@ struct WeekStripView: View {
         let isPast = day < today
         let isFocused = day == focusedDay
         let count = counts[day] ?? 0
+        let isDropTarget = day == dropTarget
         return Button { onSelect(day) } label: {
             VStack(spacing: 4) {
                 Text(day.formatted(.dateTime.weekday(.abbreviated)))
@@ -90,9 +95,19 @@ struct WeekStripView: View {
             .opacity(isPast ? 0.45 : 1)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Theme.accent.opacity(isDropTarget ? 0.22 : 0)))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.accent, lineWidth: isDropTarget ? 1.5 : 0))
+            .scaleEffect(isDropTarget && !reduceMotion ? 1.06 : 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .dropDestination(for: String.self) { items, _ in
+            onDrop(items, day)
+        } isTargeted: { hovering in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
+                if hovering, !isPast { dropTarget = day } else if dropTarget == day { dropTarget = nil }
+            }
+        }
         .accessibilityLabel(accessibilityLabel(day, count: count, isToday: isToday))
     }
 

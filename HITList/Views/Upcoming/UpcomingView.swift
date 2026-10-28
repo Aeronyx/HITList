@@ -20,6 +20,10 @@ struct UpcomingView: View {
     @State private var focusedDay: Date?
     /// The day whose "+ Add task" row is an open text field.
     @State private var addingDay: Date?
+    /// The day a dragged task is hovering over, in the strip or on a header.
+    @State private var dropTarget: Date?
+    /// The task whose Pick Date popover is open.
+    @State private var pickingDateFor: UUID?
     @State private var headers = HeaderPositions()
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
@@ -72,7 +76,8 @@ struct UpcomingView: View {
                 VStack(spacing: 0) {
                     WeekStripView(strip: strip, today: today, focusedDay: focusedDay,
                                   counts: UpcomingSchedule.counts(of: entries, calendar: calendar),
-                                  weeks: Self.weeks, visibleWeek: $visibleWeek) { day in
+                                  weeks: Self.weeks, visibleWeek: $visibleWeek, dropTarget: $dropTarget,
+                                  onDrop: { drop($0, on: $1) }) { day in
                         jump(to: day, schedule: schedule, proxy: proxy)
                     }
                     Divider()
@@ -139,6 +144,15 @@ struct UpcomingView: View {
         #endif
         .environment(\.defaultMinListHeaderHeight, 0)
         .slateList()
+        #if os(macOS)
+        // ⌘← / ⌘→ move the selected task a day. Only while the list has focus, so text fields keep them.
+        .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+            guard press.modifiers == .command, let task = selectedTask, !task.isCompleted else { return .ignored }
+            let offset = press.key == .rightArrow ? 1 : -1
+            move(task, to: TaskRescheduling.day(offset, from: task.dueDate, now: now, calendar: calendar))
+            return .handled
+        }
+        #endif
     }
 
     private func row(_ entry: Entry) -> some View {
@@ -159,7 +173,53 @@ struct UpcomingView: View {
                     move(task, to: calendar.date(byAdding: .day, value: 1, to: today)!)
                 } label: { Label("Tomorrow", systemImage: "sunrise") }
                 .tint(.orange)
+                Button { pickingDateFor = task.id } label: { Label("Pick Date", systemImage: "calendar") }
+                    .tint(Theme.accent)
             }
+            .draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
+            .contextMenu { rowMenu(task) }
+            .popover(isPresented: Binding(get: { pickingDateFor == task.id },
+                                          set: { if !$0, pickingDateFor == task.id { pickingDateFor = nil } })) {
+                PickDatePopover(initial: task.dueDate ?? today) { day in
+                    pickingDateFor = nil
+                    move(task, to: day)
+                } onRemove: {
+                    pickingDateFor = nil
+                    withAnimation(reduceMotion ? nil : .snappy) { TaskActions.reschedule(task, to: nil, in: context) }
+                    rescheduleNotifications()
+                }
+            }
+    }
+
+    @ViewBuilder
+    private func rowMenu(_ task: TaskItem) -> some View {
+        ForEach(TaskRescheduling.QuickDate.allCases, id: \.self) { quick in
+            Button(quick.title, systemImage: quick.symbol) { move(task, to: quick.date(now: now, calendar: calendar)) }
+        }
+        Button("Pick Date…", systemImage: "calendar") {
+            // Let the menu finish closing before the popover anchors to the row.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(150))
+                pickingDateFor = task.id
+            }
+        }
+        if task.dueDate != nil {
+            Button("Remove Date", systemImage: "calendar.badge.minus") {
+                withAnimation(reduceMotion ? nil : .snappy) { TaskActions.reschedule(task, to: nil, in: context) }
+                rescheduleNotifications()
+            }
+        }
+        Divider()
+        Menu("Priority") {
+            ForEach(Priority.allCases, id: \.self) { p in
+                Button { task.priorityValue = p; task.touch(); try? context.save() } label: { Label(p.displayName, systemImage: p.symbol) }
+            }
+        }
+        Divider()
+        Button("Delete", systemImage: "trash", role: .destructive) {
+            if selectedTask?.id == task.id { selectedTask = nil }
+            TaskActions.delete(task, in: context)
+        }
     }
 
     private func overdueHeader(_ overdue: [Entry]) -> some View {
@@ -203,8 +263,16 @@ struct UpcomingView: View {
                 Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
             }
             Spacer()
+            if dropTarget == day.date {
+                Label("Move here", systemImage: "arrow.down.to.line").labelStyle(.titleAndIcon).foregroundStyle(Theme.accent)
+            }
         }
-        .modifier(DayHeaderStyle())
+        .modifier(DayHeaderStyle(highlighted: dropTarget == day.date))
+        .dropDestination(for: String.self) { items, _ in
+            drop(items, on: day.date)
+        } isTargeted: { hovering in
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) { dropHover(hovering, on: day.date) }
+        }
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { headerMoved(day.date, to: $0) }
         .onDisappear { headerGone(day.date) }
     }
@@ -283,6 +351,24 @@ struct UpcomingView: View {
     }
 
     // MARK: - Actions
+
+    /// Reschedules dropped tasks onto `day`, keeping their times. Days before today don't take drops.
+    private func drop(_ payload: [String], on day: Date) -> Bool {
+        dropTarget = nil
+        guard day >= today else { return false }
+        let ids = Set(TaskRescheduling.taskIDs(in: payload))
+        let tasks = allTasks.filter { ids.contains($0.id) && !$0.isCompleted }
+        guard !tasks.isEmpty else { return false }
+        withAnimation(reduceMotion ? nil : .snappy) {
+            for task in tasks { TaskActions.reschedule(task, to: day, in: context) }
+        }
+        rescheduleNotifications()
+        return true
+    }
+
+    private func dropHover(_ hovering: Bool, on day: Date) {
+        if hovering, day >= today { dropTarget = day } else if dropTarget == day { dropTarget = nil }
+    }
 
     private func move(_ task: TaskItem, to day: Date) {
         withAnimation(reduceMotion ? nil : .snappy) { TaskActions.reschedule(task, to: day, in: context) }
@@ -387,8 +473,11 @@ private final class HeaderPositions {
     var minY: [Date: CGFloat] = [:]
 }
 
-/// Slate background for pinned section headers, so rows don't show through them.
+/// Slate background for pinned section headers, so rows don't show through them. Tinted while a
+/// dragged task hovers over it.
 private struct DayHeaderStyle: ViewModifier {
+    var highlighted = false
+
     func body(content: Content) -> some View {
         content
             .font(.subheadline)
@@ -397,7 +486,8 @@ private struct DayHeaderStyle: ViewModifier {
             .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.background)
-            .overlay(alignment: .bottom) { Theme.separator.frame(height: 0.5) }
+            .background(Theme.accent.opacity(highlighted ? 0.18 : 0))
+            .overlay(alignment: .bottom) { (highlighted ? Theme.accent : Theme.separator).frame(height: highlighted ? 2 : 0.5) }
             .listRowInsets(EdgeInsets())
     }
 }
@@ -468,5 +558,21 @@ extension QuickAddResult {
         result.dueDate = day
         result.hasDueTime = false
         return result
+    }
+}
+
+/// What a dragged row looks like under the finger or pointer.
+private struct DragPreview: View {
+    let title: String
+
+    var body: some View {
+        Label(title, systemImage: "circle")
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Theme.elevated, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6)))
+            .foregroundStyle(.primary)
+            .preferredColorScheme(.dark)
     }
 }
