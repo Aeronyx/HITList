@@ -11,24 +11,24 @@ final class BackupService {
     var state: State = .idle
 
     var serverURL: String {
-        get { UserDefaults.standard.string(forKey: "backup.serverURL") ?? "" }
-        set { UserDefaults.standard.set(newValue, forKey: "backup.serverURL") }
+        get { AppGroup.defaults.string(forKey: "backup.serverURL") ?? "" }
+        set { AppGroup.defaults.set(newValue, forKey: "backup.serverURL") }
     }
     var token: String {
         get { Keychain.get("backup.token") ?? "" }
         set { newValue.isEmpty ? Keychain.delete("backup.token") : Keychain.set(newValue, for: "backup.token") }
     }
     var automaticBackupEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "backup.automatic") }
-        set { UserDefaults.standard.set(newValue, forKey: "backup.automatic") }
+        get { AppGroup.defaults.bool(forKey: "backup.automatic") }
+        set { AppGroup.defaults.set(newValue, forKey: "backup.automatic") }
     }
     var intervalHours: Int {
-        get { max(1, UserDefaults.standard.integer(forKey: "backup.intervalHours").nonZero ?? 24) }
-        set { UserDefaults.standard.set(newValue, forKey: "backup.intervalHours") }
+        get { max(1, AppGroup.defaults.integer(forKey: "backup.intervalHours").nonZero ?? 24) }
+        set { AppGroup.defaults.set(newValue, forKey: "backup.intervalHours") }
     }
     private(set) var lastBackupAt: Date? {
-        get { UserDefaults.standard.object(forKey: "backup.lastAt") as? Date }
-        set { UserDefaults.standard.set(newValue, forKey: "backup.lastAt") }
+        get { AppGroup.defaults.object(forKey: "backup.lastAt") as? Date }
+        set { AppGroup.defaults.set(newValue, forKey: "backup.lastAt") }
     }
 
     var isConfigured: Bool { !serverURL.isEmpty && !token.isEmpty }

@@ -74,24 +74,48 @@ enum TaskActions {
         try? context.save()
     }
 
+    struct DefaultFilter {
+        /// Seed key for `SeedIdentity.savedFilter`; never change it, unlike the display name.
+        let key: String
+        let name: String
+        let query: String
+        let colorHex: String
+    }
+
+    static let defaultFilters: [DefaultFilter] = [
+        DefaultFilter(key: "focus", name: "Focus", query: "(p1 | p2) & (overdue | today)", colorHex: "#E5484D"),
+        DefaultFilter(key: "this-week", name: "This week", query: "next 7 days | overdue", colorHex: "#5E81F4"),
+        DefaultFilter(key: "waiting", name: "Waiting", query: "@waiting", colorHex: "#9A9A9A"),
+        DefaultFilter(key: "unscheduled", name: "Unscheduled", query: "no date & !recurring", colorHex: "#B07CF5"),
+    ]
+
+    nonisolated static let didSeedDefaultsKey = "didSeedDefaults"
+
     /// Adds a few starter filters on a brand-new install so the feature is discoverable.
-    static func seedDefaultsIfNeeded(in context: ModelContext) {
-        let key = "didSeedDefaults"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        let existing = (try? context.fetchCount(FetchDescriptor<SavedFilter>())) ?? 0
-        if existing == 0 {
-            let defaults: [(String, String, String)] = [
-                ("Focus", "(p1 | p2) & (overdue | today)", "#E5484D"),
-                ("This week", "next 7 days | overdue", "#5E81F4"),
-                ("Waiting", "@waiting", "#9A9A9A"),
-                ("Unscheduled", "no date & !recurring", "#B07CF5"),
-            ]
-            for (i, (name, query, color)) in defaults.enumerated() {
-                context.insert(SavedFilter(name: name, query: query, colorHex: color, sortOrder: i))
+    ///
+    /// Each default filter gets the same stable id on every device (`SeedIdentity`), and is skipped if a
+    /// filter with that id or that name already exists. A device that seeds before its first CloudKit
+    /// import still creates copies, but they share ids with the other devices' copies, and
+    /// `Deduplicator` collapses them after the import. The per-device flag only saves the fetch.
+    static func seedDefaultsIfNeeded(in context: ModelContext, defaults: UserDefaults = AppGroup.defaults) {
+        guard !defaults.bool(forKey: didSeedDefaultsKey) else { return }
+        do {
+            let existing = try context.fetch(FetchDescriptor<SavedFilter>())
+            let ids = Set(existing.map(\.id))
+            let names = Set(existing.map { Deduplicator.nameKey($0.name) })
+            for (i, seed) in defaultFilters.enumerated() {
+                let id = SeedIdentity.savedFilter(seed.key)
+                guard !ids.contains(id), !names.contains(Deduplicator.nameKey(seed.name)) else { continue }
+                let filter = SavedFilter(name: seed.name, query: seed.query, colorHex: seed.colorHex, sortOrder: i)
+                filter.id = id
+                context.insert(filter)
             }
-            try? context.save()
+            try context.save()
+            defaults.set(true, forKey: didSeedDefaultsKey)
+        } catch {
+            context.rollback()
+            print("seedDefaults failed: \(error)")
         }
-        UserDefaults.standard.set(true, forKey: key)
     }
 
     /// Developer aid: `HITList -seedSampleData` inserts one task with a project and a label so every

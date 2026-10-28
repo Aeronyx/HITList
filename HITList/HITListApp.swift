@@ -4,13 +4,28 @@ import SwiftData
 @main
 struct HITListApp: App {
     let container: ModelContainer
+    private var importObserver: NSObjectProtocol?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        // Unit tests run hosted in the app; keep them off the real store and CloudKit.
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            container = ModelContainerFactory.preview()
+            return
+        }
         CloudSyncMonitor.shared.start()
         container = ModelContainerFactory.make()
-        TaskActions.seedDefaultsIfNeeded(in: container.mainContext)
-        TaskActions.seedSampleDataIfRequested(in: container.mainContext)
+        let context = container.mainContext
+        TaskActions.seedDefaultsIfNeeded(in: context)
+        Deduplicator.runAndLog(in: context, trigger: "launch")
+        TaskActions.seedSampleDataIfRequested(in: context)
+        // Imports arrive in bursts (one event per zone fetch); dedupe once the burst settles.
+        let debounce = Debouncer(delay: .seconds(2))
+        importObserver = NotificationCenter.default.addObserver(forName: .cloudKitImportSucceeded, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                debounce.schedule { Deduplicator.runAndLog(in: context, trigger: "import") }
+            }
+        }
     }
 
     var body: some Scene {
