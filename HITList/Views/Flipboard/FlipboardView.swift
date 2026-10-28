@@ -15,6 +15,8 @@ struct FlipboardView: View {
     @State private var now = Date()
     @State private var width: CGFloat = 0
     @State private var adding = false
+    @State private var editing: TaskItem?
+    @State private var opened: TaskItem?
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     private static let spacing: CGFloat = 14
@@ -51,7 +53,7 @@ struct FlipboardView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: Self.spacing) {
                         ForEach(switches) { task in
-                            FlipSwitchTile(task: task, now: now)
+                            FlipSwitchTile(task: task, now: now, onEdit: { editing = task }, onOpen: { open(task) })
                         }
                     }
                     .padding(16)
@@ -76,6 +78,27 @@ struct FlipboardView: View {
         .sheet(isPresented: $adding) {
             FlipSwitchEditor(task: nil).slateSheet()
         }
+        .sheet(item: $editing) { task in
+            FlipSwitchEditor(task: task).slateSheet()
+        }
+        .sheet(item: $opened) { task in
+            NavigationStack {
+                TaskDetailView(task: task) { opened = nil }
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) { Button("Done") { opened = nil } }
+                    }
+            }
+            .slateSheet()
+        }
+    }
+
+    /// The Mac shows the task in the detail column; iPhone and iPad open it in a sheet.
+    private func open(_ task: TaskItem) {
+        #if os(macOS)
+        selectedTask = task
+        #else
+        opened = task
+        #endif
     }
 }
 

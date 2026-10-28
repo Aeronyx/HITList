@@ -4,19 +4,33 @@ import HITListCore
 
 /// One switch on the wall: title in small caps, the LED, the rocker, and the light bar.
 ///
-/// Tapping a red switch flips it back to green by completing the task.
+/// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED goes out,
+/// the bar resets, and only then does the task complete, so the board re-sorts after the flip has
+/// landed. A green switch asks before it is flipped early.
 struct FlipSwitchTile: View {
     let task: TaskItem
     let now: Date
+    var onEdit: () -> Void
+    var onOpen: () -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// True while a flip animates: the tile already shows where the flip will land, before the task
+    /// itself changes.
+    @State private var flipping = false
+    /// The rocker dips toward red and springs back when a green switch is flipped early.
+    @State private var dipping = false
+    @State private var confirmEarly = false
+
+    private static let flipDuration: Duration = .milliseconds(380)
 
     private var rule: RecurrenceRule { task.recurrenceRule ?? Flipboard.defaultRule }
-    private var shownDue: Date? { task.dueDate }
+    private var shownDue: Date? {
+        flipping ? Flipboard.dueAfterFlip(due: task.dueDate, rule: rule, now: now) : task.dueDate
+    }
     private var side: Flipboard.Side { Flipboard.side(due: shownDue, now: now) }
     private var isOverdue: Bool { Flipboard.isOverdue(due: shownDue, now: now) }
-    private var tilt: Double { side == .green ? 1 : -1 }
+    private var tilt: Double { dipping ? -0.35 : side == .green ? 1 : -1 }
     private var fraction: Double { Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) }
 
     private var caption: String {
@@ -54,10 +68,10 @@ struct FlipSwitchTile: View {
             Button(action: tapped) {
                 RockerSwitch(tilt: tilt)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RockerPressStyle(reduceMotion: reduceMotion))
             .accessibilityLabel(task.title)
             .accessibilityValue(side == .red ? "Red, \(caption)" : "Green, \(caption)")
-            .accessibilityHint(side == .red ? "Flips the switch back to green" : "")
+            .accessibilityHint(side == .red ? "Flips the switch back to green" : "Marks it done early")
 
             VStack(spacing: 5) {
                 FlipLightBar(fraction: fraction, side: side)
@@ -79,11 +93,67 @@ struct FlipSwitchTile: View {
                 }
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
+        #if os(iOS)
+        .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
+        #endif
+        .contextMenu {
+            Button { onEdit() } label: { Label("Edit Interval…", systemImage: "timer") }
+            Button { onOpen() } label: { Label("Open Task", systemImage: "arrow.up.forward.square") }
+            Divider()
+            Button(role: .destructive) {
+                withAnimation(.snappy) { Flipboard.remove(task, in: context) }
+            } label: { Label("Remove from Flipboard", systemImage: "minus.circle") }
+        }
+        .confirmationDialog("Mark “\(task.title)” done early?", isPresented: $confirmEarly, titleVisibility: .visible) {
+            Button("Mark Done") { flip() }
+        } message: {
+            if let due = task.dueDate {
+                Text("It isn’t due until \(DueFormatter.text(for: due, hasTime: false, now: now)).")
+            }
+        }
+        .onAppear { FlipHaptic.prepare() }
     }
 
     private func tapped() {
-        guard side == .red else { return }
-        withAnimation(.snappy(duration: 0.35)) { Flipboard.flip(task, in: context) }
+        guard !flipping else { return }
+        if side == .red { flip() } else { confirmEarly = true }
+    }
+
+    private func flip() {
+        let wasGreen = side == .green
+        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.52)
+        FlipHaptic.play()
+        if wasGreen && !reduceMotion {
+            // Already green: press it through toward red, then let it spring home.
+            withAnimation(.easeIn(duration: 0.11)) { dipping = true; flipping = true }
+            Task {
+                try? await Task.sleep(for: .milliseconds(110))
+                withAnimation(spring) { dipping = false }
+            }
+        } else {
+            withAnimation(spring) { flipping = true }
+        }
+        Task {
+            try? await Task.sleep(for: Self.flipDuration)
+            withAnimation(.snappy(duration: 0.35)) {
+                Flipboard.flip(task, in: context)
+                flipping = false
+            }
+            await NotificationScheduler.reschedule(context: context)
+        }
+    }
+}
+
+/// Pressing the rocker sinks the whole switch a touch, like pushing real plastic.
+private struct RockerPressStyle: ButtonStyle {
+    var reduceMotion: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
+            .brightness(configuration.isPressed ? -0.04 : 0)
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .contentShape(Rectangle())
     }
 }
 
