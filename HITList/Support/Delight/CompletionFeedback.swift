@@ -33,7 +33,7 @@ final class CompletionFeedback {
     /// Nil outputs mean the real sound and haptic (default arguments can't build main-actor objects).
     init(defaults: UserDefaults = AppGroup.defaults, sound: FeedbackOutput? = nil, haptics: FeedbackOutput? = nil) {
         self.defaults = defaults
-        self.sound = sound ?? CompletionSoundPlayer { CompletionSound.resolvedURL(in: defaults) }
+        self.sound = sound ?? CompletionSoundPlayer { CompletionSound.resolvedURL(in: defaults, custom: CustomSoundStore(defaults: defaults)) }
         self.haptics = haptics ?? CompletionHaptic()
     }
 
@@ -104,8 +104,11 @@ final class CompletionSoundPlayer: FeedbackOutput {
         next = 0
         players = (0..<Self.poolSize).compactMap { _ in try? AVAudioPlayer(contentsOf: url) }
         players.forEach { $0.prepareToPlay() }
+        let log = Logger(subsystem: "com.trammells.hitlist", category: "delight")
         if players.isEmpty {
-            Logger(subsystem: "com.trammells.hitlist", category: "delight").error("Couldn't load completion sound \(url.lastPathComponent, privacy: .public)")
+            log.error("Couldn't load completion sound \(url.lastPathComponent, privacy: .public)")
+        } else {
+            log.info("Loaded completion sound \(url.lastPathComponent, privacy: .public)")
         }
     }
 
@@ -115,7 +118,9 @@ final class CompletionSoundPlayer: FeedbackOutput {
         let player = players[next]
         next = (next + 1) % players.count
         player.currentTime = 0
-        player.play()
+        if !player.play() {
+            Logger(subsystem: "com.trammells.hitlist", category: "delight").error("Completion sound didn't start")
+        }
     }
 }
 
