@@ -200,9 +200,14 @@ struct TaskListView: View {
         .toolbar {
             if selection != .completed {
                 ToolbarItem(placement: .automatic) {
-                    Toggle(isOn: $showCompleted) { Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash") }
-                        .toggleStyle(.button)
-                        .help("Show completed tasks")
+                    Toggle(isOn: $showCompleted) {
+                        Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash")
+                            .labelStyle(.iconOnly)
+                            .imageScale(.medium)
+                            .font(.body)
+                    }
+                    .toggleStyle(.button)
+                    .help("Show completed tasks")
                 }
             }
             if let filter = currentFilter {

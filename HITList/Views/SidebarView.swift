@@ -164,9 +164,14 @@ struct SidebarView: View {
         HStack {
             Text(title)
             Spacer()
-            Button(action: add) { Image(systemName: "plus") }
-                .buttonStyle(.borderless)
-                .help("Add \(title.dropLast())")
+            Button(action: add) {
+                Image(systemName: "plus")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Add \(title.dropLast())")
+            .padding(.trailing, 8)
         }
     }
 

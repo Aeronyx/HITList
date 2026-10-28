@@ -79,6 +79,9 @@ struct SettingsView: View {
                 Text("Only tasks with a specific time get a notification.").font(.caption).foregroundStyle(.secondary)
             }
             .slateRow()
+
+            DelightSettingsSection()
+                .slateRow()
         }
         .formStyle(.grouped)
         .slateList()
