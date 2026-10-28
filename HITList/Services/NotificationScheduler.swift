@@ -113,8 +113,8 @@ enum NotificationScheduler {
     @MainActor private static var isRescheduling = false
     @MainActor private static var rerunReasons: Set<String> = []
 
-    /// Replaces all pending task notifications with ones for incomplete, timed tasks due in the next 14 days.
-    /// Calls that arrive while one is running are folded into a single rerun, so passes never interleave.
+    /// Brings the pending set in line with `NotificationPlan`: the soonest 60 incomplete, timed tasks due in
+    /// the next 14 days (plus a summary if more), changing only what differs. Calls that arrive while one is running are folded into a single rerun, so passes never interleave.
     @MainActor
     static func reschedule(context: ModelContext, reason: String = "app") async {
         guard !isRescheduling else {
@@ -132,32 +132,115 @@ enum NotificationScheduler {
         isRescheduling = false
     }
 
+    static let fingerprintKey = "fingerprint"
+    static let dueKey = "due"
+    /// `NotificationPlan.ledgerKey`s of reminders this device has scheduled, so a late one never repeats.
+    static let ledgerKey = "notifications.scheduledKeys"
+    @MainActor private static var loggedDenied = false
+
     @MainActor
     private static func performReschedule(context: ModelContext, reason: String) async {
         let center = UNUserNotificationCenter.current()
-        center.removeAllPendingNotificationRequests()
-        guard isEnabled else { return }
-        let now = Date()
-        let horizon = Calendar.current.date(byAdding: .day, value: 14, to: now)!
+        let pending = await center.pendingNotificationRequests()
+        guard isEnabled else {
+            if !pending.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier))
+                log.info("Reminders off: removed \(pending.count) pending (\(reason, privacy: .public))")
+            }
+            return
+        }
+        switch await center.notificationSettings().authorizationStatus {
+        case .denied:
+            if !loggedDenied {
+                loggedDenied = true
+                log.notice("Reminders are on but notification permission is denied; nothing scheduled")
+            }
+            return
+        case .notDetermined:
+            log.info("Notification permission not requested yet; nothing scheduled (\(reason, privacy: .public))")
+            return
+        default:
+            break
+        }
+
         let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
             task.isCompleted == false && task.hasDueTime == true && task.dueDate != nil
         })
-        guard let tasks = try? context.fetch(descriptor) else { return }
-        var scheduled = 0
-        for task in tasks {
-            guard let due = task.dueDate, due > now, due < horizon else { continue }
-            let content = UNMutableNotificationContent()
-            content.title = task.title
-            content.body = [task.project?.name, task.priorityValue == .p4 ? nil : task.priorityValue.shortName]
-                .compactMap { $0 }.joined(separator: " · ")
-            content.sound = .default
-            content.categoryIdentifier = NotificationResponder.categoryIdentifier
-            content.userInfo = [taskIDKey: task.id.uuidString]
-            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: due)
-            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            let request = UNNotificationRequest(identifier: task.id.uuidString, content: content, trigger: trigger)
-            if (try? await center.add(request)) != nil { scheduled += 1 }
+        let items: [NotificationPlan.Item]
+        do {
+            items = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+        } catch {
+            log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
+            return
         }
-        log.info("Rescheduled (\(reason, privacy: .public)): \(scheduled) pending")
+        let now = Date()
+        let calendar = Calendar.current
+        // No ledger yet (first run of this build): count tasks that just became due as announced, so
+        // upgrading doesn't re-announce reminders build 1 already delivered.
+        var ledger = AppGroup.defaults.stringArray(forKey: ledgerKey).map(Set.init) ?? Set(items.compactMap { item in
+            guard let due = item.dueDate, due <= now, due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
+            return NotificationPlan.ledgerKey(taskID: item.id, dueDate: due)
+        })
+        let plan = NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
+        let pendingFingerprints = Dictionary(
+            pending.map { ($0.identifier, $0.content.userInfo[fingerprintKey] as? String ?? "") },
+            uniquingKeysWith: { first, _ in first })
+        let diff = plan.diff(pending: pendingFingerprints)
+
+        // Remove stale first so adding never pushes past the system's 64-request cap (it drops the latest
+        // silently). Requests that are still wanted stay pending throughout; changed ones are replaced in place.
+        if !diff.remove.isEmpty { center.removePendingNotificationRequests(withIdentifiers: diff.remove) }
+        var failed: Set<String> = []
+        for request in diff.add {
+            do {
+                try await center.add(systemRequest(for: request, now: now, calendar: calendar))
+            } catch {
+                failed.insert(request.identifier)
+                log.error("Adding reminder failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        for request in plan.requests where !failed.contains(request.identifier) {
+            if let key = request.ledgerKey { ledger.insert(key) }
+        }
+        AppGroup.defaults.set(NotificationPlan.prunedLedger(ledger, now: now).sorted(), forKey: ledgerKey)
+
+        let delivered = await center.deliveredNotifications().map { note in
+            (identifier: note.request.identifier,
+             dueDate: (note.request.content.userInfo[dueKey] as? Double).map(Date.init(timeIntervalSince1970:)))
+        }
+        let stale = NotificationPlan.staleDelivered(delivered, tasks: items)
+        if !stale.isEmpty { center.removeDeliveredNotifications(withIdentifiers: stale) }
+
+        let overdue = diff.add.filter { $0.kind == .overdue }.count
+        log.info("""
+            Rescheduled (\(reason, privacy: .public)): \(plan.requests.count) wanted, +\(diff.add.count) \
+            −\(diff.remove.count), \(overdue) overdue now, \(plan.droppedCount) over the limit, \
+            \(stale.count) delivered cleared
+            """)
+    }
+
+    private static func systemRequest(for request: NotificationPlan.Request, now: Date, calendar: Calendar) -> UNNotificationRequest {
+        let content = UNMutableNotificationContent()
+        content.title = request.title
+        content.body = request.body
+        content.sound = .default
+        var userInfo: [String: Any] = [fingerprintKey: request.fingerprint]
+        if let taskID = request.taskID {
+            content.categoryIdentifier = NotificationResponder.categoryIdentifier
+            userInfo[taskIDKey] = taskID.uuidString
+        }
+        if let due = request.dueDate { userInfo[dueKey] = due.timeIntervalSince1970 }
+        content.userInfo = userInfo
+        let trigger = request.triggerDate <= now ? nil : calendarTrigger(for: request.triggerDate, calendar: calendar)
+        return UNNotificationRequest(identifier: request.identifier, content: content, trigger: trigger)
+    }
+
+    /// Pinned to the time zone, so it fires at the same instant the app shows as due even if the zone
+    /// changes before the reschedule that follows the change runs.
+    static func calendarTrigger(for date: Date, calendar: Calendar) -> UNCalendarNotificationTrigger {
+        var comps = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        comps.calendar = calendar
+        comps.timeZone = calendar.timeZone
+        return UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
     }
 }
