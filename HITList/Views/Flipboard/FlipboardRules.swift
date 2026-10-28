@@ -115,11 +115,13 @@ enum Flipboard {
 
     // MARK: Flipping
 
-    /// The due date a flip lands on: what completing the task gives (`RecurrenceRule.nextDueDate`), moved
-    /// on again if that is still today, so a flipped switch always shows green.
+    /// The due date a flip lands on. Like a physical switch, flipping restarts the interval from the day
+    /// you flip it (shave on Thursday, every 3 days: due Sunday) rather than continuing the old schedule,
+    /// so a flipped switch always shows green with a full interval ahead. George's call, 2026-10-28.
+    /// For weekday rules this is the next chosen weekday after today.
     static func dueAfterFlip(due: Date?, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Date {
         let today = calendar.startOfDay(for: now)
-        var next = rule.nextDueDate(from: due ?? today, now: now, calendar: calendar)
+        var next = rule.nextOccurrence(after: today, calendar: calendar)
         var guardCount = 0
         while calendar.startOfDay(for: next) <= today && guardCount < 1000 {
             next = rule.nextOccurrence(after: next, calendar: calendar)
@@ -136,7 +138,7 @@ enum Flipboard {
         // Without a due date toggleCompletion would mark a recurring task done instead of rolling it.
         if task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
         TaskActions.toggleCompletion(task, in: context)
-        // toggleCompletion can land on today (e.g. due Monday every 3 days, flipped on Thursday).
+        // toggleCompletion continues the old schedule; a flip restarts it from today (see dueAfterFlip).
         if task.dueDate != target { TaskActions.reschedule(task, to: target, keepTime: false, in: context) }
     }
 
