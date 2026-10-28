@@ -19,6 +19,12 @@ CloudKit container come first.
 | 6 | Reminder robustness (reschedule on import, actions, time zones) | done 2026-10-28 | Opus 5.5 session, effort High |
 | 7 | App-layer tests + GitHub Actions CI | done 2026-10-28 | Opus 5.5 session, effort Medium |
 | 8 | Calendar (EventKit), themes, preferences | UI sessions | |
+
+### UI
+
+| Item | Status | Owner |
+|------|--------|-------|
+| Upcoming + Inbox | Upcoming done 2026-10-28 (drag-and-drop not yet verified); Inbox polish not started | Opus 5.5 session, effort High |
 | — | External TestFlight / App Store prerequisites | before friends | George |
 | | **Core** | | |
 | 9 | Filter language (Todoist parity, autocomplete, editor) | done 2026-10-28 | Opus 5.5 session, effort High |
