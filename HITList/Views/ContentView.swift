@@ -20,11 +20,17 @@ struct ContentView: View {
         } content: {
             SwiftUI.Group {
                 switch selection ?? .today {
-                case .upcoming: UpcomingView(selectedTask: $selectedTask)
-                case let other: TaskListView(selection: other, selectedTask: $selectedTask)
+                case .flipboard:
+                    FlipboardView(selectedTask: $selectedTask)
+                        .navigationSplitViewColumnWidth(min: 440, ideal: 640)
+                case .upcoming:
+                    UpcomingView(selectedTask: $selectedTask)
+                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+                case let other:
+                    TaskListView(selection: other, selectedTask: $selectedTask)
+                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 320, ideal: 420)
         } detail: {
             if let task = selectedTask {
                 TaskDetailView(task: task) { selectedTask = nil }
