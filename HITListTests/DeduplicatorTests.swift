@@ -111,9 +111,14 @@ final class DeduplicatorTests: XCTestCase {
 
         XCTAssertEqual(report.labels, 1)
         XCTAssertEqual(try fetch(TaskLabel.self).count, 2)
-        XCTAssertEqual(both.labels?.map(\.id).sorted { $0.uuidString < $1.uuidString },
-                       [urgent.id, home.id].sorted { $0.uuidString < $1.uuidString })
-        XCTAssertEqual(onlyLoser.labels?.map(\.id), [urgent.id])
+        // Split into typed steps: Swift 6.3 (Xcode 26.6, used by CI) cannot type-check the one-liner in time.
+        let byIDString: (UUID, UUID) -> Bool = { $0.uuidString < $1.uuidString }
+        let bothIDs: [UUID] = (both.labels ?? []).map(\.id).sorted(by: byIDString)
+        let expectedIDs: [UUID] = [urgent.id, home.id].sorted(by: byIDString)
+        XCTAssertEqual(bothIDs, expectedIDs)
+        XCTAssertEqual(both.labels?.count, 2, "winner is not added twice")
+        let onlyLoserIDs: [UUID] = (onlyLoser.labels ?? []).map(\.id)
+        XCTAssertEqual(onlyLoserIDs, [urgent.id])
     }
 
     func testWinnerIsEarliestCreatedAtRegardlessOfInsertionOrder() throws {
