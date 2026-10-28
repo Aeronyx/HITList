@@ -37,6 +37,7 @@ struct SidebarView: View {
                 row("Inbox", "tray", .inbox, count: inboxCount)
                 row("Today", "calendar", .today, count: todayCount, tint: .red)
                 row("Upcoming", "calendar.badge.clock", .upcoming)
+                row("Flipboard", "switch.2", .flipboard)
                 row("Completed", "checkmark.circle", .completed)
             }
 
