@@ -49,3 +49,11 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
   commands or click paths. Write no documents except the ROADMAP.md status row your brief names.
 - Final message always includes: what changed per commit, test counts before/after, how you verified
   it running (simulator and/or Mac), the branch name, and anything George must do.
+
+## Concurrency note (2026-10-28 evening)
+Four branches are being merged into master while you work: sync-resilience (CloudSyncMonitor,
+SettingsView, SidebarView footer, ModelContainerFactory, HITListApp), reminders (NotificationScheduler,
+one line in HITListApp), tests-ci (HITListTests, scripts/test.sh, .github), completion-delight
+(TaskRow, TaskListView, Resources/CompletionSound.caf, DelightSettingsSection). Do not edit any of
+those files unless your brief explicitly allows a one-line insertion. Prefer new files. Use `TaskRow`
+and `TaskActions` as they are.
