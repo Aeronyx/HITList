@@ -25,6 +25,7 @@
 		79D44CE11E4002BD0DE04C52 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D3D00811FB7ED869EAE0115 /* CloudKit.framework */; };
 		7CDAC394E6A6B395A25E5788 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2126889A9D7B6886FF5AE480 /* AppGroup.swift */; };
 		8BEE1428829E2C50A53D5820 /* QuickAddBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9EC82F1E173A1E132C25A05D /* QuickAddBar.swift */; };
+		9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */; };
 		A11E01F132BD9E7D649C8BD7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899E17FD4EC8DCCC11FD290D /* ContentView.swift */; };
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */; };
@@ -76,6 +77,7 @@
 		966FF672CF1AE97484CD00CE /* TaskActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActions.swift; sourceTree = "<group>"; };
 		99F5C84701529B786312B4FD /* AppGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupTests.swift; sourceTree = "<group>"; };
 		9EC82F1E173A1E132C25A05D /* QuickAddBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddBar.swift; sourceTree = "<group>"; };
+		A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationResponder.swift; sourceTree = "<group>"; };
 		AD12153261EC9FBC68657755 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		B73ACCF90D84809171E18645 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		B7433290494D95848705DE1E /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
@@ -137,6 +139,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		42C342686DDF9DFD462F2349 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */,
+			);
+			path = Notifications;
+			sourceTree = "<group>";
+		};
 		64179C5A02D5892B2DC6989D /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -155,6 +165,7 @@
 				8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */,
 				3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */,
 				966FF672CF1AE97484CD00CE /* TaskActions.swift */,
+				42C342686DDF9DFD462F2349 /* Notifications */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -328,6 +339,7 @@
 				54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */,
 				B88DCC9DB0698CADA1F3C03A /* ModelContainerFactory.swift in Sources */,
 				109F1063E4CA1A1EC234AE79 /* Models.swift in Sources */,
+				9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */,
 				BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */,
 				4E3CC00722B95EA5C12A9D06 /* ProjectEditorView.swift in Sources */,
 				8BEE1428829E2C50A53D5820 /* QuickAddBar.swift in Sources */,
