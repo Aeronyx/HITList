@@ -20,7 +20,8 @@ signing=(-allowProvisioningUpdates)
 suites=()
 for arg in "$@"; do
   case "$arg" in
-    --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO) ;;
+    # TEST_RUNNER_* settings reach the test process's environment; tests that need an entitlement skip on it.
+    --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO TEST_RUNNER_HITLIST_UNSIGNED=1) ;;
     core|macos|ios) suites+=("$arg") ;;
     *) print -u2 "unknown argument: $arg (expected core, macos, ios, --unsigned)"; exit 2 ;;
   esac
