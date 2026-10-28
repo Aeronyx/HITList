@@ -110,6 +110,14 @@ final class CloudSyncMonitor {
         }
     }
 
+    /// After a reset the old store's sync times no longer describe this store.
+    func forgetLastSync() {
+        lastImportAt = nil
+        lastExportAt = nil
+        AppGroup.defaults.removeObject(forKey: Self.lastImportKey)
+        AppGroup.defaults.removeObject(forKey: Self.lastExportKey)
+    }
+
     func dismissAccountNotice() {
         if accountNotice == .signedOut { signedOutDismissed = true }
         accountNotice = nil

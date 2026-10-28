@@ -11,6 +11,8 @@ struct SettingsView: View {
     @State private var exportDocument: SnapshotDocument?
     @State private var showImporter = false
     @State private var importMessage: String?
+    @State private var confirmReset = false
+    @State private var showReopenAlert = false
 
     var body: some View {
         Form {
@@ -18,6 +20,8 @@ struct SettingsView: View {
                 SyncStatusLine()
                     .fixedSize(horizontal: false, vertical: true)
                 DisclosureGroup("Details") { syncDetails }
+                Button("Reset local cache and re-download…", role: .destructive) { confirmReset = true }
+                    .disabled(!LocalCacheReset.isAvailable)
             } header: {
                 Text("iCloud Sync")
             } footer: {
@@ -55,6 +59,17 @@ struct SettingsView: View {
             ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             #endif
         }
+        .confirmationDialog("Reset local cache?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button(resetActionTitle, role: .destructive) { resetLocalCache() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your tasks stay in iCloud and are downloaded again into a fresh copy on this device. Changes made here that haven't synced yet won't come back.")
+        }
+        .alert("Quit and reopen HITList to finish", isPresented: $showReopenAlert) {
+            Button("OK") {}
+        } message: {
+            Text(reopenMessage)
+        }
         .fileExporter(isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
                       document: exportDocument, contentType: .json,
                       defaultFilename: "HITList-\(Date().formatted(.iso8601.year().month().day()))") { _ in }
@@ -70,6 +85,23 @@ struct SettingsView: View {
                 importMessage = "Import failed: \(error.localizedDescription)"
             }
         }
+    }
+
+    #if os(macOS)
+    private let resetActionTitle = "Reset and Relaunch"
+    private let reopenMessage = "HITList couldn't relaunch itself. Quit it and open it again to download a fresh copy."
+    #else
+    private let resetActionTitle = "Reset"
+    private let reopenMessage = "Swipe HITList away in the app switcher, then open it again. It downloads a fresh copy from iCloud when it starts."
+    #endif
+
+    private func resetLocalCache() {
+        LocalCacheReset.request()
+        #if os(macOS)
+        LocalCacheReset.relaunch { showReopenAlert = true }
+        #else
+        showReopenAlert = true
+        #endif
     }
 
     @ViewBuilder

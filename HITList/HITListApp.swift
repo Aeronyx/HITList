@@ -15,6 +15,7 @@ struct HITListApp: App {
         }
         CloudSyncMonitor.shared.start()
         container = ModelContainerFactory.make()
+        if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         TaskActions.seedDefaultsIfNeeded(in: context)
         Deduplicator.runAndLog(in: context, trigger: "launch")
