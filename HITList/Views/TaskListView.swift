@@ -13,6 +13,9 @@ struct TaskListView: View {
     @Query private var filters: [SavedFilter]
     @State private var showCompleted = false
     @State private var now = Date()
+    /// Rows animating out after a completion, each anchored at the due date it had when tapped.
+    @State private var completions = CompletionAnimator<Date?>()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -60,23 +63,54 @@ struct TaskListView: View {
         let tasks: [TaskItem]
     }
 
+    /// A row's task and the due date it is listed under: its own, or while its completion animates,
+    /// the one it had when tapped (a completed recurring task has already moved to its next date).
+    private struct Placed: FilterableTask {
+        let task: TaskItem
+        let filterDueDate: Date?
+        var filterTitle: String { task.filterTitle }
+        var filterNotes: String { task.filterNotes }
+        var filterPriority: Int { task.filterPriority }
+        var filterHasDueTime: Bool { task.filterHasDueTime }
+        var filterIsCompleted: Bool { task.filterIsCompleted }
+        var filterProjectName: String? { task.filterProjectName }
+        var filterLabelNames: [String] { task.filterLabelNames }
+        var filterIsRecurring: Bool { task.filterIsRecurring }
+    }
+
+    /// Tasks completed here in the last moment, which the list keeps showing until their animation ends.
+    private var recentlyCompleted: Set<UUID> { completions.heldIDs }
+
+    private func matchedTasks() throws -> [TaskItem] {
+        var source = queryString
+        if showCompleted, selection != .completed { source = "(\(source)) & (completed | !completed)" }
+        return try FilterQuery(source, now: now).apply(to: allTasks, now: now)
+    }
+
+    /// The matched tasks plus the recently completed ones, in list order.
+    private func placed(_ matched: [TaskItem]) -> [Placed] {
+        guard !completions.isEmpty else { return matched.map { Placed(task: $0, filterDueDate: $0.dueDate) } }
+        let held = recentlyCompleted
+        let anchors = completions.anchors
+        let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
+        let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
+        return FilterQuery.defaultSort(shown + animating)
+    }
+
     private var result: Result<[Group], FilterQueryError> {
         do {
-            var source = queryString
-            if showCompleted, selection != .completed { source = "(\(source)) & (completed | !completed)" }
-            let query = try FilterQuery(source, now: now)
-            let matched = query.apply(to: allTasks, now: now)
+            let matched = try matchedTasks()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
                 return .success([Group(id: "completed", title: "", tasks: sorted)])
             }
             var groups: [Group] = []
-            for task in matched {
-                let key = DueFormatter.sectionTitle(for: task.dueDate, now: now)
+            for row in placed(matched) {
+                let key = DueFormatter.sectionTitle(for: row.filterDueDate, now: now)
                 if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [task])
+                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task])
                 } else {
-                    groups.append(Group(id: key, title: key, tasks: [task]))
+                    groups.append(Group(id: key, title: key, tasks: [row.task]))
                 }
             }
             return .success(groups)
@@ -99,9 +133,12 @@ struct TaskListView: View {
                         ForEach(groups) { group in
                             Section {
                                 ForEach(group.tasks) { task in
-                                    TaskRow(task: task, now: now, showProject: currentProject == nil)
+                                    let phase = completions.phase(of: task.id)
+                                    TaskRow(task: task, now: now, showProject: currentProject == nil,
+                                            completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+                                        .opacity(phase == .animating ? 0 : 1)
                                         .tag(task)
-                                        .slateRow()
+                                        .completionRowBackground(flashing: phase == .pending)
                                         .swipeActions(edge: .trailing) {
                                             Button(role: .destructive) {
                                                 if selectedTask?.id == task.id { selectedTask = nil }
@@ -167,6 +204,49 @@ struct TaskListView: View {
         }
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
+        // Held rows belong to the list they were completed in.
+        .onChange(of: selection) { _, _ in completions.cancelAll() }
+    }
+
+    // MARK: - Completion
+
+    /// Completing saves at once (sync isn't held back by the animation) and keeps the row on screen
+    /// while it celebrates, then collapses it; un-completing just fades the row back to normal.
+    private func toggleCompletion(_ task: TaskItem) {
+        if task.isCompleted {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                completions.cancel(task.id)
+                TaskActions.toggleCompletion(task, in: context)
+            }
+            return
+        }
+        // A recurring task mid-animation: it already advanced; a second tap must not advance it again.
+        guard completions.phase(of: task.id) == nil else { return }
+        let token = withAnimation(.easeOut(duration: 0.12)) { completions.begin(task.id, anchor: task.dueDate) }
+        TaskActions.toggleCompletion(task, in: context)
+        CompletionFeedback.shared.taskCompleted()
+        Task { await finishCompletion(of: task.id, token: token) }
+    }
+
+    /// ~600 ms of check, strike and flash, then the row fades and the list closes the gap. Rows that
+    /// still belong in the list (Show Completed is on) just settle. Every step checks `token`, so an
+    /// undo or a newer completion of the same task wins.
+    private func finishCompletion(of id: UUID, token: Int) async {
+        try? await Task.sleep(for: .milliseconds(600))
+        if (try? matchedTasks())?.contains(where: { $0.id == id }) == true {
+            withAnimation(.easeOut(duration: 0.25)) { _ = completions.remove(id, token: token) }
+            return
+        }
+        guard withAnimation(.easeIn(duration: 0.18), { completions.collapse(id, token: token) }) else { return }
+        try? await Task.sleep(for: .milliseconds(180))
+        if reduceMotion {
+            // Reduce Motion: the fade above is the whole effect; the gap closes without sliding.
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { _ = completions.remove(id, token: token) }
+        } else {
+            withAnimation(.snappy(duration: 0.3)) { _ = completions.remove(id, token: token) }
+        }
     }
 
     private var emptyTitle: String {
