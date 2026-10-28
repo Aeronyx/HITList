@@ -45,6 +45,8 @@ final class FilterAutocompleteTests: XCTestCase {
         XCTAssertEqual(suggest("today").map(\.replacement), [" & ", " | "])
         XCTAssertEqual(suggest("(p1 | p2 ").map(\.title), ["&", "|", ")"])
         XCTAssertEqual(suggest("#Work ").map(\.title), ["&", "|"])
+        XCTAssertEqual(suggest("(p1 | p2) & (today | overdue)").map(\.replacement), [" & ", " | "])
+        XCTAssertEqual(suggest("(p1 | (p2) ").map(\.title), ["&", "|", ")"])
     }
 
     func testProjects() {

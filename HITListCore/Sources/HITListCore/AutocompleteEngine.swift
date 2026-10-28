@@ -253,6 +253,14 @@ extension AutocompleteEngine {
             return Array(out.prefix(limit))
         }
 
+        // Right after a closing parenthesis only an operator can follow.
+        var back = c
+        while back > 0, chars[back - 1].isWhitespace { back -= 1 }
+        if back > 0, chars[back - 1] == ")" {
+            addOperators()
+            return Array(out.prefix(limit))
+        }
+
         let completions = FilterSyntax.entries.filter { $0.category != .operators }.flatMap(\.completions)
         if term.isEmpty {
             for starter in FilterSyntax.starters {
