@@ -143,10 +143,8 @@ enum NotificationScheduler {
         let center = UNUserNotificationCenter.current()
         let pending = await center.pendingNotificationRequests()
         guard isEnabled else {
-            if !pending.isEmpty {
-                center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier))
-                log.info("Reminders off: removed \(pending.count) pending (\(reason, privacy: .public))")
-            }
+            if !pending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier)) }
+            log.info("Rescheduled (\(reason, privacy: .public)): reminders off, removed \(pending.count) pending")
             return
         }
         switch await center.notificationSettings().authorizationStatus {
