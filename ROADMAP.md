@@ -102,6 +102,29 @@ defaults. UI sessions own these.
 Privacy policy URL (even with zero data collection), support URL, screenshots per platform,
 age rating, first external build passes Beta App Review (~1 day). No code required.
 
+## Ideas backlog (George, 2026-10-28)
+
+Not scheduled. Each becomes a roadmap item when picked up.
+
+- **Completion delight.** Todoist's completion sound, strike-through and the row sliding away. A
+  short custom sound (respecting silent mode), haptic on iOS, 250 ms strike + collapse animation,
+  undo toast for 5 s.
+- **Chargeable tasks** ("gym 3x week"). A quota per period rather than a due date: `n` ticks per
+  week/month, shown as a persistent card between Today and Overdue with a progress ring until the
+  quota is met, then it rests until the period rolls over. Schema: new optional fields on
+  `TaskItem` (`quotaCount`, `quotaPeriod`, `quotaTicks: [Date]`), so a V2 schema version.
+- **Task Flipboard.** George's long-dreamt wall of switches and lights: each recurring self-care or
+  chore task is a physical-looking toggle that flips from green to red after its interval (shave
+  every 3 days) and resets when flipped back. Digital version: a dedicated Flipboard screen and a
+  macOS widget / iOS Lock Screen widget, skeuomorphic toggles with a satisfying flip animation and
+  sound, interval countdown as a thin light bar. Chargeable tasks could live here too. Keep the
+  option of driving a real board over the network later (the switch state is just a record).
+- **AI / API / MCP.** First-class Claude integration: an MCP server exposing tasks, filters and
+  quick-add (so Claude Desktop / Claude Code can read and add tasks), App Intents for Siri and
+  Shortcuts, and a documented JSON export. Possibly a local HTTP endpoint on the Mac for automation.
+- **Fun.** Nyan Cat very rarely flying across the top of the window; seasonal pixel-art variants of
+  a few buttons on the solstices, Halloween and similar; all behind a "Delight" toggle in Settings.
+
 ## Decisions log
 
 - 2026-10-26: iCloud private database only; home server stays a design relic (DESIGN.md).
