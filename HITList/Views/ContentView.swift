@@ -18,8 +18,13 @@ struct ContentView: View {
             SidebarView(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } content: {
-            TaskListView(selection: selection ?? .today, selectedTask: $selectedTask)
-                .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+            SwiftUI.Group {
+                switch selection ?? .today {
+                case .upcoming: UpcomingView(selectedTask: $selectedTask)
+                case let other: TaskListView(selection: other, selectedTask: $selectedTask)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 320, ideal: 420)
         } detail: {
             if let task = selectedTask {
                 TaskDetailView(task: task) { selectedTask = nil }
