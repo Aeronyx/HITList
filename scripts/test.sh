@@ -1,0 +1,66 @@
+#!/bin/zsh
+# HITList tests: HITListCore `swift test`, then the app test bundle on macOS and the iPhone simulator.
+# Prints one summary line per suite and exits non-zero if any suite fails. Runs from any directory.
+#
+# Usage:
+#   scripts/test.sh                    # core, macos, ios
+#   scripts/test.sh core macos         # any subset, in the order given
+#   scripts/test.sh --unsigned macos   # build without signing, the way CI does
+#
+# Environment overrides: DEVELOPER_DIR, SIMULATOR (default "iPhone 17").
+# Full logs go to a temporary directory; its path is printed when a suite fails.
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+SIMULATOR="${SIMULATOR:-iPhone 17}"
+
+signing=(-allowProvisioningUpdates)
+suites=()
+for arg in "$@"; do
+  case "$arg" in
+    --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO) ;;
+    core|macos|ios) suites+=("$arg") ;;
+    *) print -u2 "unknown argument: $arg (expected core, macos, ios, --unsigned)"; exit 2 ;;
+  esac
+done
+(( ${#suites} )) || suites=(core macos ios)
+
+LOGS="$(mktemp -d "${${TMPDIR:-/tmp}%/}/hitlist-tests.XXXXXX")"
+failed=0
+summary=()
+
+# The last "Executed N tests, with F failures" line is the run total (XCTest prints one per test class too).
+xctest_total() { grep -E 'Executed [0-9]+ tests?, with [0-9]+ failures?' "$1" | tail -1 | sed -E 's/^[[:space:]]*Executed ([0-9]+) tests?, with ([0-9]+) failures?.*/\1 tests, \2 failures/' }
+
+run_suite() {
+  local name="$1"; shift
+  local log="$LOGS/$name.log" start=$SECONDS
+  print "▸ $name"
+  "$@" > "$log" 2>&1
+  local code=$? counts
+  counts="$(xctest_total "$log")"
+  [[ -n "$counts" ]] || counts="no tests ran (build failed?)"
+  if (( code == 0 )); then
+    summary+=("✔ $name: $counts in $(( SECONDS - start ))s")
+  else
+    summary+=("✘ $name: $counts, exit $code (log: $log)")
+    failed=1
+  fi
+}
+
+for suite in "${suites[@]}"; do
+  case "$suite" in
+    core)  run_suite core swift test --package-path HITListCore ;;
+    macos) run_suite macos xcodebuild test -project HITList.xcodeproj -scheme HITList \
+             -destination 'platform=macOS' "${signing[@]}" ;;
+    ios)   run_suite ios xcodebuild test -project HITList.xcodeproj -scheme HITList \
+             -destination "platform=iOS Simulator,name=$SIMULATOR" "${signing[@]}" ;;
+  esac
+done
+
+print
+print -l -- "${summary[@]}"
+(( failed )) || rm -rf "$LOGS"
+exit $failed
