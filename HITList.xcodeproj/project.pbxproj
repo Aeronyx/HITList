@@ -21,6 +21,7 @@
 		27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528485A27E1D787530779DBE /* LocalCacheReset.swift */; };
 		29DBD082850E4F48EC9CB314 /* CompletionToastState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520369BF71B18D8B0D28327F /* CompletionToastState.swift */; };
 		2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */; };
+		2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */; };
 		429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */; };
 		4427C494548C477A0D31DE0F /* NotificationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */; };
 		45ECCAFF0C36623DD6DDD8E8 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD12153261EC9FBC68657755 /* TaskListView.swift */; };
@@ -133,6 +134,7 @@
 		B7433290494D95848705DE1E /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelightSettingsSection.swift; sourceTree = "<group>"; };
 		BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardTests.swift; sourceTree = "<group>"; };
 		C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWatch.swift; sourceTree = "<group>"; };
 		C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackupTests.swift; sourceTree = "<group>"; };
 		C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlan.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 				38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */,
 				7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */,
 				32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */,
+				BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */,
 				C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */,
 				4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */,
 				0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */,
@@ -504,6 +507,7 @@
 				4A5A32F96EDD564B3FC09DE9 /* CompletionFeedbackTests.swift in Sources */,
 				2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */,
 				EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */,
+				2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */,
 				E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */,
 				891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */,
 				5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */,
