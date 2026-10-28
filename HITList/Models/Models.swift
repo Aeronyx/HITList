@@ -118,6 +118,7 @@ extension TaskItem: FilterableTask {
     var filterProjectName: String? { project?.name }
     var filterLabelNames: [String] { (labels ?? []).map(\.name) }
     var filterIsRecurring: Bool { recurrence != nil }
+    var filterCreatedDate: Date? { createdAt }
 }
 
 extension HITListSchemaV1 {

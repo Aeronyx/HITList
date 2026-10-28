@@ -13,6 +13,12 @@ public protocol FilterableTask {
     var filterProjectName: String? { get }
     var filterLabelNames: [String] { get }
     var filterIsRecurring: Bool { get }
+    /// When the task was created, for `created:` terms. `nil` (the default) never matches them.
+    var filterCreatedDate: Date? { get }
+}
+
+extension FilterableTask {
+    public var filterCreatedDate: Date? { nil }
 }
 
 /// A plain value implementation, handy for tests and for snapshots.
@@ -26,6 +32,7 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
     public var filterProjectName: String?
     public var filterLabelNames: [String]
     public var filterIsRecurring: Bool
+    public var filterCreatedDate: Date?
 
     public init(
         title: String,
@@ -36,7 +43,8 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         isCompleted: Bool = false,
         projectName: String? = nil,
         labelNames: [String] = [],
-        isRecurring: Bool = false
+        isRecurring: Bool = false,
+        createdDate: Date? = nil
     ) {
         filterTitle = title
         filterNotes = notes
@@ -47,5 +55,6 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         filterProjectName = projectName
         filterLabelNames = labelNames
         filterIsRecurring = isRecurring
+        filterCreatedDate = createdDate
     }
 }
