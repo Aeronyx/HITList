@@ -20,6 +20,8 @@ CloudKit container come first.
 | 7 | App-layer tests + GitHub Actions CI | done 2026-10-28 | Opus 5.5 session, effort Medium |
 | 8 | Calendar (EventKit), themes, preferences | UI sessions | |
 | — | External TestFlight / App Store prerequisites | before friends | George |
+| **UI** | | | |
+| — | Task Flipboard | done 2026-10-28 | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 
@@ -97,6 +99,21 @@ Run `scripts/release.sh --help`.
 EventKit read-only overlay of today's events; theme choices within the dark palette; filter
 defaults. UI sessions own these.
 
+## Task Flipboard (shipped 2026-10-28)
+
+A Flipboard screen (sidebar, under Upcoming) shows recurring chores as a wall of skeuomorphic
+rocker switches: green while the task is due in the future, red once it is due or overdue (the LED
+glows, and pulses slowly when overdue unless Reduce Motion is on), with a thin light bar and
+"2 of 3 days" for time elapsed in the interval. Red sorts first, most overdue on top. Tapping a red
+switch flips it with a sprung 3D rocker animation and a haptic (no sound) and completes the task
+through `TaskActions.toggleCompletion`, which rolls the due date forward; a green switch asks
+before being done early. A switch is just a recurring task without a time that carries the
+`flipboard` label (stable seeded id), so there is no schema change and a real board could later be
+driven from the same records. Add switches with "+" (title, every N days/weeks) or "Add to
+Flipboard" in task detail; long-press or right-click edits the interval, opens the task, or removes
+it. Code: `HITList/Views/Flipboard/`, tests in `HITListTests/FlipboardTests.swift`. Not yet built
+from the original idea: widgets, a flip sound, and chargeable tasks on the board.
+
 ## External TestFlight / App Store prerequisites
 
 Privacy policy URL (even with zero data collection), support URL, screenshots per platform,
@@ -113,12 +130,6 @@ Not scheduled. Each becomes a roadmap item when picked up.
   week/month, shown as a persistent card between Today and Overdue with a progress ring until the
   quota is met, then it rests until the period rolls over. Schema: new optional fields on
   `TaskItem` (`quotaCount`, `quotaPeriod`, `quotaTicks: [Date]`), so a V2 schema version.
-- **Task Flipboard.** George's long-dreamt wall of switches and lights: each recurring self-care or
-  chore task is a physical-looking toggle that flips from green to red after its interval (shave
-  every 3 days) and resets when flipped back. Digital version: a dedicated Flipboard screen and a
-  macOS widget / iOS Lock Screen widget, skeuomorphic toggles with a satisfying flip animation and
-  sound, interval countdown as a thin light bar. Chargeable tasks could live here too. Keep the
-  option of driving a real board over the network later (the switch state is just a record).
 - **AI / API / MCP.** First-class Claude integration: an MCP server exposing tasks, filters and
   quick-add (so Claude Desktop / Claude Code can read and add tasks), App Intents for Siri and
   Shortcuts, and a documented JSON export. Possibly a local HTTP endpoint on the Mac for automation.
