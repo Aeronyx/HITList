@@ -1,5 +1,10 @@
 import SwiftUI
 import HITListCore
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
 
 /// Colours of the board's hardware, dimmed to sit on the slate palette.
 enum FlipboardPalette {
@@ -159,5 +164,32 @@ struct FlipLightBar: View {
             }
         }
         .frame(height: 5)
+    }
+}
+
+/// The click of the rocker: a rigid impact on iPhone, the trackpad's alignment tap on the Mac. No sound.
+/// Follows the haptics toggle in Settings › Delight.
+@MainActor
+enum FlipHaptic {
+    #if os(iOS)
+    private static var generator: UIImpactFeedbackGenerator?
+    #endif
+
+    static func prepare() {
+        #if os(iOS)
+        guard CompletionFeedback.shared.areHapticsEnabled else { return }
+        if generator == nil { generator = UIImpactFeedbackGenerator(style: .rigid) }
+        generator?.prepare()
+        #endif
+    }
+
+    static func play() {
+        guard CompletionFeedback.shared.areHapticsEnabled else { return }
+        #if os(iOS)
+        prepare()
+        generator?.impactOccurred()
+        #else
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        #endif
     }
 }
