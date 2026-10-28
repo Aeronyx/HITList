@@ -51,13 +51,18 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 # ---- build number -------------------------------------------------------------------------------
-CURRENT=$(grep -E '^\s+CURRENT_PROJECT_VERSION:' project.yml | awk '{print $2}')
-MARKETING=$(grep -E '^\s+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
+CURRENT=$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | awk '{print $2}')
+MARKETING=$(grep -E '^[[:space:]]+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
+[[ "$CURRENT" =~ ^[0-9]+$ ]] || fail "could not read CURRENT_PROJECT_VERSION from project.yml"
+LOGDIR="$ROOT/build/logs"; mkdir -p "$LOGDIR"
 if (( BUMP )); then
   NEXT=$((CURRENT + 1))
   step "Bump build $CURRENT -> $NEXT (version $MARKETING)"
-  sed -i '' -E "s/^(\s+CURRENT_PROJECT_VERSION:) .*/\1 $NEXT/" project.yml
-  sed -i '' -E "s/^(\s+CFBundleVersion:) .*/\1 \"$NEXT\"/" project.yml
+  # BSD sed has no \s; use a POSIX class, then prove the bump landed (a silent no-op would re-upload the old build).
+  sed -i '' -E "s/^([[:space:]]+CURRENT_PROJECT_VERSION:) .*/\1 $NEXT/" project.yml
+  sed -i '' -E "s/^([[:space:]]+CFBundleVersion:) .*/\1 \"$NEXT\"/" project.yml
+  grep -qE "^[[:space:]]+CURRENT_PROJECT_VERSION: $NEXT\$" project.yml || fail "CURRENT_PROJECT_VERSION bump did not apply"
+  grep -qE "^[[:space:]]+CFBundleVersion: \"$NEXT\"\$" project.yml || fail "CFBundleVersion bump did not apply"
 else
   NEXT=$CURRENT
   step "Keeping build $NEXT (version $MARKETING)"
@@ -101,13 +106,20 @@ for p in $PLATFORMS; do
   rm -rf "$ARCHIVE" "$OUT"
 
   step "Archive $p"
-  xcodebuild archive -project HITList.xcodeproj -scheme HITList -destination "$DEST" \
-    -archivePath "$ARCHIVE" -allowProvisioningUpdates -quiet 2>&1 | grep -E "error:|ARCHIVE FAILED" && fail "archive $p failed" || true
+  if ! xcodebuild archive -project HITList.xcodeproj -scheme HITList -destination "$DEST" \
+       -archivePath "$ARCHIVE" -allowProvisioningUpdates > "$LOGDIR/archive-$p.log" 2>&1; then
+    grep -E "error:|failed with exit code|The following build commands failed" -A2 "$LOGDIR/archive-$p.log" | head -30
+    tail -12 "$LOGDIR/archive-$p.log"
+    fail "archive $p failed (log: $LOGDIR/archive-$p.log)"
+  fi
   [[ -d "$ARCHIVE" ]] || fail "archive $p missing"
 
   step "Export $p"
-  xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
-    -exportPath "$OUT" -allowProvisioningUpdates 2>&1 | grep -E "error:|EXPORT FAILED" && fail "export $p failed" || true
+  if ! xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist ExportOptions.plist \
+       -exportPath "$OUT" -allowProvisioningUpdates > "$LOGDIR/export-$p.log" 2>&1; then
+    grep -E "error:|EXPORT FAILED" -A2 "$LOGDIR/export-$p.log" | head -20
+    fail "export $p failed (log: $LOGDIR/export-$p.log)"
+  fi
   [[ -f "$ARTIFACT" ]] || fail "export $p produced no artifact"
 
   step "Verify entitlements $p"
