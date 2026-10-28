@@ -16,7 +16,7 @@ CloudKit container come first.
 | 2 | Versioned schema + migration plan + schema rules | done 2026-10-27 | same session as 1 |
 | 3 | Move the store into an App Group container | done 2026-10-27 | same session as 1 |
 | 5 | Sync resilience (account change, reset cache, auto backup, status row) | next | Opus 5.5 session, effort High |
-| 6 | Reminder robustness (reschedule on import, actions, time zones) | later | |
+| 6 | Reminder robustness (reschedule on import, actions, time zones) | done 2026-10-28 | Opus 5.5 session, effort High |
 | 7 | App-layer tests + Xcode Cloud CI | later | Opus 5.5 session, effort High |
 | 8 | Calendar (EventKit), themes, preferences | UI sessions | |
 | — | External TestFlight / App Store prerequisites | before friends | George |
