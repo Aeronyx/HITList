@@ -85,6 +85,9 @@ public enum FilterSyntax {
         .init(keyword: "\\", summary: "Treat the next character in a name as text", example: "#One\\ \\&\\ Two", category: .operators, completions: []),
     ]
 
+    /// What autocomplete offers in an empty term position, before anything is typed.
+    public static let starters: [String] = ["today", "overdue", "p1", "#", "@", "7 days", "no date", "due before: ", "search: ", "!", "("]
+
     /// Date phrases offered after `due:`, `due before:`, `created:` and the like.
     public static let dateCompletions: [String] = [
         "today", "tomorrow", "yesterday", "next week", "this week", "next month",
