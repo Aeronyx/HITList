@@ -15,6 +15,7 @@ struct TaskListView: View {
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
+    @State private var toast = CompletionToastState()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -123,56 +124,64 @@ struct TaskListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            switch result {
-            case .success(let groups):
-                if groups.isEmpty {
-                    ContentUnavailableView(emptyTitle, systemImage: "checkmark.circle", description: Text(emptyDescription))
-                        .frame(maxHeight: .infinity)
-                } else {
-                    List(selection: $selectedTask) {
-                        ForEach(groups) { group in
-                            Section {
-                                ForEach(group.tasks) { task in
-                                    let phase = completions.phase(of: task.id)
-                                    TaskRow(task: task, now: now, showProject: currentProject == nil,
-                                            completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
-                                        .opacity(phase == .animating ? 0 : 1)
-                                        .tag(task)
-                                        .completionRowBackground(flashing: phase == .pending)
-                                        .swipeActions(edge: .trailing) {
-                                            Button(role: .destructive) {
-                                                if selectedTask?.id == task.id { selectedTask = nil }
-                                                TaskActions.delete(task, in: context)
-                                            } label: { Label("Delete", systemImage: "trash") }
-                                        }
-                                        .swipeActions(edge: .leading) {
-                                            Button {
-                                                TaskActions.reschedule(task, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), in: context)
-                                            } label: { Label("Tomorrow", systemImage: "sunrise") }
-                                            .tint(.orange)
-                                        }
-                                }
-                            } header: {
-                                if !group.title.isEmpty {
-                                    Text(group.title)
-                                        .foregroundStyle(group.id == "Overdue" ? .red : .secondary)
+            SwiftUI.Group {
+                switch result {
+                case .success(let groups):
+                    if groups.isEmpty {
+                        ContentUnavailableView(emptyTitle, systemImage: "checkmark.circle", description: Text(emptyDescription))
+                            .frame(maxHeight: .infinity)
+                    } else {
+                        List(selection: $selectedTask) {
+                            ForEach(groups) { group in
+                                Section {
+                                    ForEach(group.tasks) { task in
+                                        let phase = completions.phase(of: task.id)
+                                        TaskRow(task: task, now: now, showProject: currentProject == nil,
+                                                completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+                                            .opacity(phase == .animating ? 0 : 1)
+                                            .tag(task)
+                                            .completionRowBackground(flashing: phase == .pending)
+                                            .swipeActions(edge: .trailing) {
+                                                Button(role: .destructive) {
+                                                    if selectedTask?.id == task.id { selectedTask = nil }
+                                                    TaskActions.delete(task, in: context)
+                                                } label: { Label("Delete", systemImage: "trash") }
+                                            }
+                                            .swipeActions(edge: .leading) {
+                                                Button {
+                                                    TaskActions.reschedule(task, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), in: context)
+                                                } label: { Label("Tomorrow", systemImage: "sunrise") }
+                                                .tint(.orange)
+                                            }
+                                    }
+                                } header: {
+                                    if !group.title.isEmpty {
+                                        Text(group.title)
+                                            .foregroundStyle(group.id == "Overdue" ? .red : .secondary)
+                                    }
                                 }
                             }
                         }
+                        #if os(macOS)
+                        .listStyle(.inset)
+                        #endif
+                        .slateList()
                     }
-                    #if os(macOS)
-                    .listStyle(.inset)
-                    #endif
-                    .slateList()
+                case .failure(let error):
+                    ContentUnavailableView {
+                        Label("Filter Error", systemImage: "exclamationmark.triangle")
+                    } description: {
+                        Text(error.message)
+                        Text(queryString).font(.callout.monospaced()).foregroundStyle(.secondary)
+                    }
+                    .frame(maxHeight: .infinity)
                 }
-            case .failure(let error):
-                ContentUnavailableView {
-                    Label("Filter Error", systemImage: "exclamationmark.triangle")
-                } description: {
-                    Text(error.message)
-                    Text(queryString).font(.callout.monospaced()).foregroundStyle(.secondary)
+            }
+            .overlay(alignment: .bottom) {
+                if toast.isVisible {
+                    CompletionToast(message: toast.message, onUndo: undoToast)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
-                .frame(maxHeight: .infinity)
             }
 
             if selection != .completed {
@@ -213,6 +222,14 @@ struct TaskListView: View {
     /// Completing saves at once (sync isn't held back by the animation) and keeps the row on screen
     /// while it celebrates, then collapses it; un-completing just fades the row back to normal.
     private func toggleCompletion(_ task: TaskItem) {
+        let checked = task.isCompleted || completions.phase(of: task.id) != nil
+        if checked, let record = toast.record(for: task.id) {
+            // Un-checking a row the toast still offers to undo is that undo (it knows how to put a
+            // recurring task's date back).
+            withAnimation(.snappy) { toast.remove(task.id) }
+            revert([record])
+            return
+        }
         if task.isCompleted {
             withAnimation(.easeInOut(duration: 0.25)) {
                 completions.cancel(task.id)
@@ -222,10 +239,49 @@ struct TaskListView: View {
         }
         // A recurring task mid-animation: it already advanced; a second tap must not advance it again.
         guard completions.phase(of: task.id) == nil else { return }
+
+        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
+            .restoreDueDate(due)
+        } else {
+            .uncomplete
+        }
         let token = withAnimation(.easeOut(duration: 0.12)) { completions.begin(task.id, anchor: task.dueDate) }
         TaskActions.toggleCompletion(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task.id, token: token) }
+        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+    }
+
+    private func showToast(_ completed: CompletedTask) {
+        let generation = withAnimation(.snappy) { toast.add(completed) }
+        AccessibilityNotification.Announcement(toast.message).post()
+        Task {
+            try? await Task.sleep(for: CompletionToastState.lifetime)
+            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+        }
+    }
+
+    private func undoToast() {
+        let records = withAnimation(.snappy) { toast.takeAll() }
+        revert(records)
+    }
+
+    /// Puts tasks back the way they were before they were completed; their rows reappear (or stop
+    /// animating out) because they match the list again.
+    private func revert(_ records: [CompletedTask]) {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            for record in records {
+                completions.cancel(record.id)
+                guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                switch record.revert {
+                case .uncomplete:
+                    if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }
+                case .restoreDueDate(let due):
+                    // Not toggleCompletion: on a recurring task that would advance the date again.
+                    TaskActions.reschedule(task, to: due, keepTime: false, in: context)
+                }
+            }
+        }
     }
 
     /// ~600 ms of check, strike and flash, then the row fades and the list closes the gap. Rows that

@@ -32,7 +32,8 @@ struct TaskRow: View {
                 Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
                     .foregroundStyle(checkColor)
-                    .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace))
+                    // The symbol swap only on completing; un-completing (and Reduce Motion) just cross-fades.
+                    .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
                     .keyframeAnimator(initialValue: 1.0, trigger: pops) { content, scale in
                         content.scaleEffect(scale)
                     } keyframes: { _ in
