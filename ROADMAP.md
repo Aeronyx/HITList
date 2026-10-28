@@ -20,6 +20,8 @@ CloudKit container come first.
 | 7 | App-layer tests + GitHub Actions CI | done 2026-10-28 | Opus 5.5 session, effort Medium |
 | 8 | Calendar (EventKit), themes, preferences | UI sessions | |
 | — | External TestFlight / App Store prerequisites | before friends | George |
+| | **Core** | | |
+| 9 | Filter language (Todoist parity, autocomplete, editor) | done 2026-10-28 | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 
@@ -131,3 +133,7 @@ Not scheduled. Each becomes a roadmap item when picked up.
 - 2026-10-26: CloudKit.framework linked explicitly (macOS 26 sandbox bug, Apple forums 835400).
 - 2026-10-26: `com.apple.developer.icloud-container-development-container-identifiers` must never be
   in the entitlements; App Store Connect rejects uploads carrying it (errors 90045 / 90285).
+- 2026-10-28: Filter language skips Todoist's collaboration terms (`assigned`, `added by`, `shared`,
+  `workspace`), `subtask`, `/sections` and `deadline:`: HITList is single-user and has no sub-tasks,
+  sections or deadlines, so they get explanatory errors instead. `,` stays an AND (one list per view)
+  rather than Todoist's "separate lists".

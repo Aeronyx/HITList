@@ -126,6 +126,25 @@ public struct DateExpressionParser: Sendable {
         return DateSpan(start: saturday, end: day(2, from: saturday))
     }
 
+    /// The weekend after `spanWeekend()`.
+    public func spanNextWeekend() -> DateSpan {
+        let s = day(7, from: spanWeekend().start)
+        return DateSpan(start: s, end: day(2, from: s))
+    }
+
+    /// The past `n` days plus today.
+    public func spanLastDays(_ n: Int) -> DateSpan {
+        DateSpan(start: day(-n), end: day(1))
+    }
+
+    /// The whole of the named month (1...12): this year's if it hasn't ended yet, otherwise next year's.
+    public func spanMonth(_ month: Int) -> DateSpan {
+        var year = calendar.component(.year, from: today)
+        if month < calendar.component(.month, from: today) { year += 1 }
+        let s = startOfDay(makeDate(year: year, month: month, day: 1)!)
+        return DateSpan(start: s, end: firstDayOfNextMonth(after: s))
+    }
+
     // MARK: - Vocabulary
 
     static let weekdayNames: [String: Int] = [
