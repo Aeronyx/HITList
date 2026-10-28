@@ -145,6 +145,8 @@ struct TaskDetailView: View {
             }
             .slateRow()
 
+            FlipboardDetailSection(task: task).slateRow()
+
             Section {
                 Button(task.isCompleted ? "Mark Incomplete" : (task.recurrence == nil ? "Complete" : "Complete & Advance")) {
                     TaskActions.toggleCompletion(task, in: context)
