@@ -163,3 +163,140 @@ public struct AutocompleteEngine: Sendable {
         return result.isEmpty ? nil : result
     }
 }
+
+// MARK: - Filter query suggestions
+
+/// A completion for the filter-query field: replace `range` (character offsets) with `replacement`.
+public struct FilterSuggestion: Equatable, Sendable {
+    public enum Kind: String, Sendable { case keyword, date, project, label, operatorSymbol }
+    public var kind: Kind
+    /// Short text for a chip.
+    public var title: String
+    public var replacement: String
+    public var range: Range<Int>
+
+    /// The query with the suggestion applied, and the cursor offset just after the inserted text.
+    public func applied(to text: String) -> (text: String, cursor: Int) {
+        var chars = Array(text)
+        let lower = min(range.lowerBound, chars.count), upper = min(range.upperBound, chars.count)
+        chars.replaceSubrange(lower..<upper, with: Array(replacement))
+        return (String(chars), lower + replacement.count)
+    }
+}
+
+extension AutocompleteEngine {
+    /// Suggestions for the filter query `text` at character offset `cursor` (default: the end):
+    /// keywords and operators at a term position, date phrases after `due:`-style fields, and
+    /// project or label names after `#`, `@` or `%`. Nothing inside `search:` text.
+    public static func filterSuggestions(text: String, cursor: Int? = nil, projects: [String], labels: [String],
+                                         limit: Int = 8) -> [FilterSuggestion] {
+        let chars = Array(text)
+        let c = min(max(cursor ?? chars.count, 0), chars.count)
+        var out: [FilterSuggestion] = []
+        func add(_ kind: FilterSuggestion.Kind, _ replacement: String, _ range: Range<Int>, title: String? = nil) {
+            let t = title ?? replacement.trimmingCharacters(in: .whitespaces)
+            guard !out.contains(where: { $0.title == t }) else { return }
+            out.append(FilterSuggestion(kind: kind, title: t, replacement: replacement, range: range))
+        }
+
+        // Inside an open quote: a quoted project/label name, or search text (no suggestions).
+        let quotes = chars[..<c].indices.filter { chars[$0] == "\"" }
+        if quotes.count % 2 == 1 {
+            let q = quotes.last!
+            guard q > 0, "#@%".contains(chars[q - 1]) else { return [] }
+            var sigilStart = q - 1
+            if sigilStart > 0, chars[sigilStart] == "#", chars[sigilStart - 1] == "#" { sigilStart -= 1 }
+            return nameSuggestions(sigil: String(chars[sigilStart..<q]), typed: String(chars[(q + 1)..<c]),
+                                   range: sigilStart..<c, projects: projects, labels: labels, limit: limit)
+        }
+
+        // The word being typed.
+        var s = c
+        while s > 0, !(chars[s - 1].isWhitespace || "()&|,!:\"".contains(chars[s - 1])) { s -= 1 }
+        let word = String(chars[s..<c])
+        if let first = word.first, "#@%".contains(first) {
+            let sigil = word.hasPrefix("##") ? "##" : String(first)
+            return nameSuggestions(sigil: sigil, typed: String(word.dropFirst(sigil.count)), range: s..<c,
+                                   projects: projects, labels: labels, limit: limit)
+        }
+
+        // The current term runs back to the previous operator or parenthesis.
+        var termStart = s
+        while termStart > 0, !"(&|,!".contains(chars[termStart - 1]) { termStart -= 1 }
+        while termStart < c, chars[termStart].isWhitespace { termStart += 1 }
+        let term = String(chars[termStart..<c]).lowercased()
+        let endsWithSpace = c > 0 && chars[c - 1].isWhitespace
+        let opens = chars[..<c].filter { $0 == "(" }.count - chars[..<c].filter { $0 == ")" }.count
+
+        func addOperators() {
+            let lead = endsWithSpace || c == 0 ? "" : " "
+            add(.operatorSymbol, lead + "& ", c..<c, title: "&")
+            add(.operatorSymbol, lead + "| ", c..<c, title: "|")
+            if opens > 0 { add(.operatorSymbol, lead + ") ", c..<c, title: ")") }
+        }
+
+        // After `due:`, `created before:` and the like: date phrases.
+        if let colon = chars[termStart..<c].lastIndex(of: ":") {
+            let field = String(chars[termStart..<colon]).lowercased().trimmingCharacters(in: .whitespaces)
+            let dateFields = ["due", "date", "created"].flatMap { [$0, $0 + " before", $0 + " after"] }
+            guard dateFields.contains(field) else { return [] }
+            var phraseStart = colon + 1
+            while phraseStart < c, chars[phraseStart].isWhitespace { phraseStart += 1 }
+            let phrase = String(chars[phraseStart..<c]).lowercased()
+            if endsWithSpace, !phrase.isEmpty, FilterParser.dateTerm(phrase, parser: DateExpressionParser()) != nil {
+                addOperators()
+                return Array(out.prefix(limit))
+            }
+            for d in FilterSyntax.dateCompletions where d.hasPrefix(phrase) && d != phrase {
+                add(.date, d + " ", phraseStart..<c)
+            }
+            return Array(out.prefix(limit))
+        }
+
+        let completions = FilterSyntax.entries.filter { $0.category != .operators }.flatMap(\.completions)
+        if term.isEmpty {
+            for starter in FilterSyntax.starters {
+                add(starter == "!" || starter == "(" ? .operatorSymbol : .keyword, spaced(starter), c..<c)
+            }
+            return Array(out.prefix(limit))
+        }
+        for completion in completions where completion.lowercased().hasPrefix(term) && completion.lowercased() != term {
+            add(.keyword, spaced(completion), termStart..<c)
+        }
+        if out.isEmpty, (try? FilterQuery(term)) != nil {
+            addOperators()
+        } else if out.isEmpty, !endsWithSpace, let fix = FilterSyntax.closest(to: word) {
+            add(.keyword, fix + " ", s..<c)
+        }
+        return Array(out.prefix(limit))
+    }
+
+    /// Completions end with a space so the next suggestion row starts fresh, except where more
+    /// text must follow immediately (`#`, `@`, `!`, `(`) or the space is already there.
+    private static func spaced(_ completion: String) -> String {
+        if completion.hasSuffix(" ") || ["#", "@", "!", "("].contains(completion) { return completion }
+        return completion + " "
+    }
+
+    private static func nameSuggestions(sigil: String, typed: String, range: Range<Int>, projects: [String],
+                                        labels: [String], limit: Int) -> [FilterSuggestion] {
+        let isProject = sigil.hasPrefix("#")
+        var names = isProject ? projects : labels
+        if isProject, !names.contains(where: { $0.caseInsensitiveCompare("Inbox") == .orderedSame }) { names.append("Inbox") }
+        let q = typed.lowercased()
+        let scored: [(String, Double)] = names.compactMap { name in
+            let n = name.lowercased()
+            if n == q { return nil }
+            let score: Double = q.isEmpty ? 1 : (n.hasPrefix(q) ? 3 : (n.contains(q) ? 1.5 : 0))
+            return score > 0 ? (name, score) : nil
+        }
+        return scored
+            .sorted { $0.1 > $1.1 || ($0.1 == $1.1 && $0.0.localizedCaseInsensitiveCompare($1.0) == .orderedAscending) }
+            .prefix(limit)
+            .map { name, _ in
+                let needsQuotes = name.contains { $0.isWhitespace || "()&|,!:<>=\"\\".contains($0) }
+                return FilterSuggestion(kind: isProject ? .project : .label, title: sigil + name,
+                                        replacement: sigil + (needsQuotes ? "\"\(name)\"" : name) + " ", range: range)
+            }
+    }
+}
