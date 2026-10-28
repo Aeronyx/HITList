@@ -166,6 +166,7 @@ struct TaskListView: View {
             }
         }
         .onReceive(clock) { now = $0 }
+        .onAppear { CompletionFeedback.shared.prepare() }
     }
 
     private var emptyTitle: String {
