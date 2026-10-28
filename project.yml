@@ -55,6 +55,9 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         UIUserInterfaceStyle: Dark
         NSHumanReadableCopyright: ""
+        # Shows Documents (the daily JSON backups, see LocalBackup.swift) in the iOS Files app.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trammells.hitlist

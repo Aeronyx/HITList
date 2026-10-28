@@ -2,6 +2,9 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 import HITListCore
+#if os(macOS)
+import AppKit
+#endif
 
 struct SettingsView: View {
     @Environment(\.modelContext) private var context
@@ -13,6 +16,8 @@ struct SettingsView: View {
     @State private var importMessage: String?
     @State private var confirmReset = false
     @State private var showReopenAlert = false
+    @State private var lastBackup = AppGroup.defaults.object(forKey: LocalBackup.lastBackupKey) as? Date
+    @State private var backupMessage: String?
 
     var body: some View {
         Form {
@@ -35,6 +40,30 @@ struct SettingsView: View {
                 }
                 Button("Import JSON…") { showImporter = true }
                 if let importMessage { Text(importMessage).font(.caption).foregroundStyle(.secondary) }
+            }
+            .slateRow()
+
+            Section {
+                TimelineView(.periodic(from: .now, by: 60)) { tick in
+                    Text("Last backup: \(lastBackup.map { SyncState.relative($0, now: tick.date) } ?? "never")")
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                Button("Back up now") { backUpNow() }
+                #if os(macOS)
+                Button("Show backups in Finder") {
+                    let newest = LocalBackup.backups(in: LocalBackup.directory).last
+                    NSWorkspace.shared.activateFileViewerSelecting([newest ?? LocalBackup.directory])
+                }
+                #endif
+                if let backupMessage { Text(backupMessage).font(.caption).foregroundStyle(.secondary) }
+            } header: {
+                Text("Backups")
+            } footer: {
+                #if os(macOS)
+                Text("A copy of your data is saved once a day; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON.")
+                #else
+                Text("A copy of your data is saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON.")
+                #endif
             }
             .slateRow()
 
@@ -94,6 +123,19 @@ struct SettingsView: View {
     private let resetActionTitle = "Reset"
     private let reopenMessage = "Swipe HITList away in the app switcher, then open it again. It downloads a fresh copy from iCloud when it starts."
     #endif
+
+    private func backUpNow() {
+        do {
+            if let url = try LocalBackup.run(context: context) {
+                lastBackup = AppGroup.defaults.object(forKey: LocalBackup.lastBackupKey) as? Date
+                backupMessage = "Saved \(url.lastPathComponent)"
+            } else {
+                backupMessage = "Nothing to back up yet."
+            }
+        } catch {
+            backupMessage = "Backup failed: \(error.localizedDescription)"
+        }
+    }
 
     private func resetLocalCache() {
         LocalCacheReset.request()
