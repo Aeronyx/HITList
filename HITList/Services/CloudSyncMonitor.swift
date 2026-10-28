@@ -25,10 +25,15 @@ final class CloudSyncMonitor {
     /// Domain, code, description and CloudKit userInfo of the latest failure, for the Details disclosure.
     private(set) var lastErrorDetail: String?
     private(set) var lastErrorAt: Date?
+    /// Shown as a banner above the lists after a sign-out or an account switch.
+    private(set) var accountNotice: AccountWatch.Notice?
+    private var signedOutDismissed = false
+    private let accountWatch = AccountWatch(defaults: AppGroup.defaults)
     /// Events that have started and not ended, by identifier, with their start time.
     private var inFlight: [UUID: Date] = [:]
 
     private var observers: [NSObjectProtocol] = []
+    private var loggedState: String?
     private let pathMonitor = NWPathMonitor()
 
     static let lastImportKey = "sync.lastImportAt"
@@ -69,7 +74,10 @@ final class CloudSyncMonitor {
         ) { [weak self] note in
             guard let event = note.userInfo?[NSPersistentCloudKitContainer.eventNotificationUserInfoKey]
                     as? NSPersistentCloudKitContainer.Event else { return }
-            MainActor.assumeIsolated { self?.record(event) }
+            MainActor.assumeIsolated {
+                self?.record(event)
+                self?.logStateIfChanged()
+            }
         })
         observers.append(center.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -83,6 +91,7 @@ final class CloudSyncMonitor {
                 guard let self, self.isOnline != online else { return }
                 self.isOnline = online
                 Self.log.info("Network \(online ? "reachable" : "unreachable", privacy: .public)")
+                self.logStateIfChanged()
             }
         }
         pathMonitor.start(queue: DispatchQueue(label: "com.trammells.hitlist.network"))
@@ -96,10 +105,54 @@ final class CloudSyncMonitor {
         container.accountStatus { [weak self] status, error in
             Task { @MainActor in
                 if let error { Self.log.error("accountStatus failed: \(error.localizedDescription, privacy: .public)") }
-                self?.accountStatus = status
-                Self.log.info("iCloud account status: \(Self.describe(status), privacy: .public)")
+                self?.accountStatusChanged(to: status, container: container)
             }
         }
+    }
+
+    func dismissAccountNotice() {
+        if accountNotice == .signedOut { signedOutDismissed = true }
+        accountNotice = nil
+    }
+
+    private func accountStatusChanged(to status: CKAccountStatus, container: CKContainer) {
+        // The previous launch's status counts too: signing out while the app was closed is still a sign-out.
+        let previous = accountStatus ?? accountWatch.lastStatus
+        accountStatus = status
+        if previous != status {
+            Self.log.notice("iCloud account: \(Self.describe(previous), privacy: .public) → \(Self.describe(status), privacy: .public)")
+        } else {
+            Self.log.info("iCloud account status: \(Self.describe(status), privacy: .public)")
+        }
+        if status == .available { signedOutDismissed = false }
+        setNotice(accountWatch.update(status: status, shown: accountNotice, signedOutDismissed: signedOutDismissed))
+        logStateIfChanged()
+        guard status == .available else { return }
+        container.fetchUserRecordID { [weak self] id, error in
+            Task { @MainActor in
+                guard let self else { return }
+                guard let name = id?.recordName else {
+                    Self.log.error("fetchUserRecordID failed: \(error?.localizedDescription ?? "no id", privacy: .public)")
+                    return
+                }
+                self.setNotice(self.accountWatch.update(userRecordName: name, shown: self.accountNotice))
+            }
+        }
+    }
+
+    /// Logs each change of the status line ("Synced …" counts as one state whatever its time).
+    private func logStateIfChanged() {
+        let current = state
+        let key = current.isSynced ? "synced" : current.summary()
+        guard key != loggedState else { return }
+        loggedState = key
+        Self.log.notice("Sync state: \(current.summary(), privacy: .public)")
+    }
+
+    private func setNotice(_ notice: AccountWatch.Notice?) {
+        guard notice != accountNotice else { return }
+        Self.log.notice("Account banner: \(notice.map { "\($0)" } ?? "hidden", privacy: .public)")
+        accountNotice = notice
     }
 
     private func record(_ event: NSPersistentCloudKitContainer.Event) {
