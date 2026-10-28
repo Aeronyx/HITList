@@ -7,6 +7,12 @@ enum ModelContainerFactory {
     nonisolated(unsafe) static var isCloudKitEnabled = false
     nonisolated(unsafe) static var startupError: String? = nil
 
+    /// Why the container runs without CloudKit, in a few words for the sync status line.
+    static var localOnlyReason: String {
+        if AppGroup.defaults.bool(forKey: "disableCloudKit") { return "iCloud sync turned off" }
+        return startupError == nil ? "iCloud sync not started" : "iCloud unavailable at launch"
+    }
+
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "storage")
     private static let storeName = "HITList.store"
 

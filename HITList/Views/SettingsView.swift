@@ -1,7 +1,6 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
-import CloudKit
 import HITListCore
 
 struct SettingsView: View {
@@ -16,28 +15,9 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                HStack {
-                    Text("Status")
-                    Spacer()
-                    if ModelContainerFactory.isCloudKitEnabled {
-                        Label("Syncing via iCloud", systemImage: "checkmark.icloud").foregroundStyle(.green)
-                    } else {
-                        Label("Local only", systemImage: "xmark.icloud").foregroundStyle(.orange)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                if let err = ModelContainerFactory.startupError {
-                    Text(err).font(.caption).foregroundStyle(.secondary)
-                }
-                if let status = CloudSyncMonitor.shared.accountStatus, status != .available {
-                    Label(accountText(status), systemImage: "person.crop.circle.badge.exclamationmark").font(.caption).foregroundStyle(.orange)
-                }
-                if let err = CloudSyncMonitor.shared.lastError {
-                    Label(err, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(.orange)
-                        .textSelection(.enabled)
-                } else if let ok = CloudSyncMonitor.shared.lastSuccess {
-                    Text("Last \(ok.phase.rawValue) \(ok.at.formatted(.relative(presentation: .named)))").font(.caption).foregroundStyle(.secondary)
-                }
+                SyncStatusLine()
+                    .fixedSize(horizontal: false, vertical: true)
+                DisclosureGroup("Details") { syncDetails }
             } header: {
                 Text("iCloud Sync")
             } footer: {
@@ -92,15 +72,44 @@ struct SettingsView: View {
         }
     }
 
-}
+    @ViewBuilder
+    private var syncDetails: some View {
+        let monitor = CloudSyncMonitor.shared
+        detailRow("Account", CloudSyncMonitor.describe(monitor.accountStatus))
+        detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
+        detailRow("Last import", timestamp(monitor.lastImportAt))
+        detailRow("Last export", timestamp(monitor.lastExportAt))
+        if let err = ModelContainerFactory.startupError {
+            detailBlock("Startup error", err)
+        }
+        if let detail = monitor.lastErrorDetail {
+            detailBlock("Last error, \(timestamp(monitor.lastErrorAt))", detail)
+        }
+        detailBlock("Store", context.container.configurations.first?.url.path ?? "unknown")
+    }
 
-private func accountText(_ status: CKAccountStatus) -> String {
-    switch status {
-    case .noAccount: return "No iCloud account is signed in on this device."
-    case .restricted: return "iCloud access is restricted on this device."
-    case .couldNotDetermine: return "Couldn't determine iCloud account status."
-    case .temporarilyUnavailable: return "iCloud is temporarily unavailable. Sync will resume automatically."
-    default: return "iCloud available."
+    private func timestamp(_ date: Date?) -> String {
+        date?.formatted(date: .abbreviated, time: .standard) ?? "never"
+    }
+
+    // LabeledContent wraps badly in this sheet; a plain HStack with fixedSize lays out reliably.
+    private func detailRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+            Spacer()
+            Text(value).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.trailing)
+        }
+        .font(.caption)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func detailBlock(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+            Text(value).foregroundStyle(Theme.secondaryText).textSelection(.enabled)
+        }
+        .font(.caption)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
