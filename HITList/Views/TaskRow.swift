@@ -11,7 +11,9 @@ struct TaskRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Button {
+                let completing = !task.isCompleted
                 withAnimation(.snappy) { TaskActions.toggleCompletion(task, in: context) }
+                if completing { CompletionFeedback.shared.taskCompleted() }
             } label: {
                 Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
                     .font(.title3)
