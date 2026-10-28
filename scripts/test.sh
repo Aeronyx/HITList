@@ -20,8 +20,9 @@ signing=(-allowProvisioningUpdates)
 suites=()
 for arg in "$@"; do
   case "$arg" in
-    # TEST_RUNNER_* settings reach the test process's environment; tests that need an entitlement skip on it.
-    --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO TEST_RUNNER_HITLIST_UNSIGNED=1) ;;
+    # xcodebuild forwards TEST_RUNNER_* from its own environment (not from build settings) to the test
+    # process as HITLIST_UNSIGNED=1; tests that need an entitlement skip on it.
+    --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO); export TEST_RUNNER_HITLIST_UNSIGNED=1 ;;
     core|macos|ios) suites+=("$arg") ;;
     *) print -u2 "unknown argument: $arg (expected core, macos, ios, --unsigned)"; exit 2 ;;
   esac
@@ -34,8 +35,12 @@ else LOGS="$(mktemp -d "${${TMPDIR:-/tmp}%/}/hitlist-tests.XXXXXX")"; fi
 failed=0
 summary=()
 
-# The last "Executed N tests, with F failures" line is the run total (XCTest prints one per test class too).
-xctest_total() { grep -E 'Executed [0-9]+ tests?, with [0-9]+ failures?' "$1" | tail -1 | sed -E 's/^[[:space:]]*Executed ([0-9]+) tests?, with ([0-9]+) failures?.*/\1 tests, \2 failures/' }
+# The last "Executed N tests, with [S tests skipped and] F failures" line is the run total (XCTest prints
+# one per test class too, and adds the skipped clause only when something was skipped).
+xctest_total() {
+  grep -E 'Executed [0-9]+ tests?, with ([0-9]+ tests? skipped and )?[0-9]+ failures?' "$1" | tail -1 \
+    | sed -E 's/^[[:space:]]*Executed ([0-9]+) tests?, with (([0-9]+) tests? skipped and )?([0-9]+) failures?.*/\1 tests, \4 failures, \3 skipped/; s/, +skipped$//'
+}
 
 run_suite() {
   local name="$1"; shift
@@ -70,5 +75,6 @@ done
 
 print
 print -l -- "${summary[@]}"
-(( failed )) || rm -rf "$LOGS"
+# Keep logs when a caller pinned the directory (CI uploads them); otherwise clean up on success.
+(( failed )) || [[ -n "${HITLIST_TEST_LOGS:-}" ]] || rm -rf "$LOGS"
 exit $failed
