@@ -155,14 +155,14 @@ final class FlipboardTests: XCTestCase {
         XCTAssertEqual(Flipboard.side(due: task.dueDate, now: Date()), .red)
         Flipboard.flip(task, in: context)
         XCTAssertGreaterThan(task.dueDate!, today)
-        XCTAssertEqual(task.dueDate, daysFromToday(1), "the schedule's next occurrence after today (due -2 + 3)")
+        XCTAssertEqual(task.dueDate, daysFromToday(3), "a flip restarts the interval from today, not from the old due date")
         XCTAssertEqual(Flipboard.side(due: task.dueDate, now: Date()), .green)
         XCTAssertFalse(task.isCompleted, "a switch rolls forward instead of completing")
         XCTAssertTrue(Flipboard.isMember(task))
     }
 
-    func testFlipThatWouldLandOnTodayMovesOnAnInterval() throws {
-        // toggleCompletion alone gives today (-3 + 3), which would leave the switch red.
+    func testFlipOfLongOverdueSwitchRestartsFromToday() throws {
+        // toggleCompletion alone would give today (-3 + 3) and leave the switch red.
         let task = try switchTask(due: daysFromToday(-3))
         Flipboard.flip(task, in: context)
         XCTAssertEqual(task.dueDate, daysFromToday(3))
@@ -174,10 +174,10 @@ final class FlipboardTests: XCTestCase {
         XCTAssertEqual(task.dueDate, daysFromToday(3))
     }
 
-    func testEarlyFlipOfGreenSwitchAdvancesOneInterval() throws {
+    func testEarlyFlipOfGreenSwitchRestartsFromToday() throws {
         let task = try switchTask("Water plants", due: daysFromToday(4), rule: .weekly)
         Flipboard.flip(task, in: context)
-        XCTAssertEqual(task.dueDate, daysFromToday(11))
+        XCTAssertEqual(task.dueDate, daysFromToday(7), "watering early restarts the week from today")
     }
 
     func testFlipWithoutDueDateStartsTheSchedule() throws {

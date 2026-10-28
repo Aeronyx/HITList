@@ -115,8 +115,9 @@ rocker switches: green while the task is due in the future, red once it is due o
 glows, and pulses slowly when overdue unless Reduce Motion is on), with a thin light bar and
 "2 of 3 days" for time elapsed in the interval. Red sorts first, most overdue on top. Tapping a red
 switch flips it with a sprung 3D rocker animation and a haptic (no sound) and completes the task
-through `TaskActions.toggleCompletion`, which rolls the due date forward; a green switch asks
-before being done early. A switch is just a recurring task without a time that carries the
+through `TaskActions.toggleCompletion`; like a physical switch, the flip then restarts the interval
+from the flip day (George's decision, 2026-10-28), so a 3-day switch flipped on Thursday is due
+Sunday. A green switch asks before being done early. A switch is just a recurring task without a time that carries the
 `flipboard` label (stable seeded id), so there is no schema change and a real board could later be
 driven from the same records. Add switches with "+" (title, every N days/weeks) or "Add to
 Flipboard" in task detail; long-press or right-click edits the interval, opens the task, or removes
