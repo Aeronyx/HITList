@@ -42,4 +42,14 @@ jobs:
       # Unsigned: the tests use the in-memory store and HITListApp.init's XCTest guard, so no CloudKit
       # entitlement or provisioning profile is needed.
       - name: App tests (macOS, unsigned)
+        env:
+          HITLIST_TEST_LOGS: ${{ runner.temp }}/hitlist-tests
         run: scripts/test.sh --unsigned macos
+
+      - name: Upload test logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: ${{ runner.temp }}/hitlist-tests
+          if-no-files-found: ignore
