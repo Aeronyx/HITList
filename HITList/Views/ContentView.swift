@@ -18,8 +18,13 @@ struct ContentView: View {
             SidebarView(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } content: {
-            TaskListView(selection: selection ?? .today, selectedTask: $selectedTask)
-                .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+            if selection == .flipboard {
+                FlipboardView(selectedTask: $selectedTask)
+                    .navigationSplitViewColumnWidth(min: 440, ideal: 640)
+            } else {
+                TaskListView(selection: selection ?? .today, selectedTask: $selectedTask)
+                    .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+            }
         } detail: {
             if let task = selectedTask {
                 TaskDetailView(task: task) { selectedTask = nil }
