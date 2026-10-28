@@ -1,5 +1,7 @@
 # HITList — Human-in-the-List
 
+[![Tests](https://github.com/Aeronyx/HITList/actions/workflows/tests.yml/badge.svg?branch=master)](https://github.com/Aeronyx/HITList/actions/workflows/tests.yml)
+
 A small, fast, Todoist-flavored task manager for iPhone, iPad, and Mac. Built around three
 things: a real filter query language, natural-language quick add with learned autofill, and
 free sync through your own iCloud account, with an optional backup channel to a home server.
@@ -10,7 +12,7 @@ See [DESIGN.md](DESIGN.md) for scope, architecture, the filter grammar, and the 
 
 | Path | What |
 |------|------|
-| `HITListCore/` | Swift package: filter language, date parsing, quick add, autocomplete, recurrence, snapshot format. `swift test` runs 39 tests in under a second. |
+| `HITListCore/` | Swift package: filter language, date parsing, quick add, autocomplete, recurrence, snapshot format. `swift test` runs 43 tests in under a second. |
 | `HITList/` | SwiftUI multiplatform app (iOS 18+, macOS 15+) using SwiftData + CloudKit. |
 | `server/` | Optional backup receiver for your home server (Python stdlib + Docker). |
 | `project.yml` | XcodeGen spec. Run `xcodegen generate` to (re)create `HITList.xcodeproj`. |
@@ -34,6 +36,24 @@ container `iCloud.com.trammells.hitlist`. The first signed build registers the c
 If `xcodebuild` complains about the active developer directory, prefix commands with
 `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` or run
 `sudo xcode-select -s /Applications/Xcode.app`.
+
+## Development
+
+```bash
+scripts/test.sh                    # HITListCore, app tests on macOS, app tests on the iPhone 17 simulator
+scripts/test.sh core macos         # any subset
+scripts/test.sh --unsigned macos   # the unsigned build CI runs
+```
+
+It prints one line per suite (`✔ macos: 60 tests, 0 failures in 12s`) and exits non-zero on any
+failure, keeping the full log. App tests (`HITListTests/`) run hosted in the app against an in-memory
+store; `HITListApp.init` skips CloudKit under XCTest, so they never touch real data.
+
+CI: `.github/workflows/tests.yml` runs on pushes and pull requests to `master` on the `macos-26`
+runner with its newest Xcode: `swift test` for HITListCore, then the app tests on macOS, unsigned.
+macOS runner minutes count 10x against the free allowance on private repositories; Xcode Cloud
+(set up in App Store Connect → the app → Xcode Cloud) is the alternative, with 25 free hours a month
+in the Apple Developer Program.
 
 ## Quick add cheat sheet
 
