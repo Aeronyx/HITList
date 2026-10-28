@@ -27,7 +27,9 @@ for arg in "$@"; do
 done
 (( ${#suites} )) || suites=(core macos ios)
 
-LOGS="$(mktemp -d "${${TMPDIR:-/tmp}%/}/hitlist-tests.XXXXXX")"
+# HITLIST_TEST_LOGS pins the log directory (CI uploads it as an artifact); otherwise a temp dir.
+if [[ -n "${HITLIST_TEST_LOGS:-}" ]]; then LOGS="$HITLIST_TEST_LOGS"; mkdir -p "$LOGS"
+else LOGS="$(mktemp -d "${${TMPDIR:-/tmp}%/}/hitlist-tests.XXXXXX")"; fi
 failed=0
 summary=()
 
@@ -47,6 +49,11 @@ run_suite() {
   else
     summary+=("✘ $name: $counts, exit $code (log: $log)")
     failed=1
+    # Surface the cause right away; the full log stays on disk.
+    print -- "--- $name: errors ---"
+    grep -E "(^|: )(error|fatal error): |xcodebuild: error|Testing failed|\*\* (BUILD|TEST) FAILED" "$log" | sort -u | head -40
+    print -- "--- $name: last 15 lines ---"
+    tail -15 "$log"
   fi
 }
 
