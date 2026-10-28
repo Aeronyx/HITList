@@ -4,12 +4,14 @@ import SwiftData
 @main
 struct HITListApp: App {
     let container: ModelContainer
+    private let isTesting: Bool
     private var importObserver: NSObjectProtocol?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Unit tests run hosted in the app; keep them off the real store and CloudKit.
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+        isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        if isTesting {
             container = ModelContainerFactory.preview()
             return
         }
@@ -39,6 +41,7 @@ struct HITListApp: App {
                     guard phase == .active else { return }
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }
+                    if !isTesting { LocalBackup.runIfDue(context: context) }
                 }
         }
         .modelContainer(container)
