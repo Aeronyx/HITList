@@ -29,6 +29,7 @@ struct HITListApp: App {
                 debounce.schedule { Deduplicator.runAndLog(in: context, trigger: "import") }
             }
         }
+        NotificationScheduler.bootstrap(container: container)
     }
 
     var body: some Scene {
