@@ -31,6 +31,7 @@ struct HITListApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .safeAreaInset(edge: .top, spacing: 0) { AccountChangeBanner() }
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .onChange(of: scenePhase) { _, phase in
