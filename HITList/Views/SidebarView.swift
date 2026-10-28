@@ -16,6 +16,9 @@ struct SidebarView: View {
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var showSettings = false
+    #if os(macOS)
+    @Environment(\.openSettings) private var openSettings
+    #endif
 
     private var todayCount: Int {
         let now = Date(), start = Calendar.current.startOfDay(for: now)
@@ -95,6 +98,15 @@ struct SidebarView: View {
                 }
             } header: {
                 sectionHeader("Labels") { creatingLabel = true }
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SyncStatusFooter {
+                #if os(macOS)
+                openSettings()
+                #else
+                showSettings = true
+                #endif
             }
         }
         .navigationTitle("HITList")
