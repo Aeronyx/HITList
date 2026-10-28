@@ -16,6 +16,10 @@ final class AppGroupTests: XCTestCase {
     }
 
     func testAppGroupContainerIsAvailable() throws {
+        // CI builds unsigned (scripts/test.sh --unsigned), so the host app has no app-group entitlement
+        // and macOS hands back a URL whose directory was never created.
+        try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] == "1",
+                      "unsigned build has no app group entitlement")
         let url = try XCTUnwrap(AppGroup.containerURL, "app group entitlement missing")
         var isDirectory: ObjCBool = false
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue)
