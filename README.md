@@ -52,6 +52,8 @@ store; `HITListApp.init` skips CloudKit under XCTest, so they never touch real d
 CI: `.github/workflows/tests.yml` runs on pushes and pull requests to `master` on the `macos-26`
 runner with its newest Xcode: `swift test` for HITListCore, then the app tests on macOS, unsigned.
 macOS runner minutes count 10x against the free allowance on private repositories; Xcode Cloud
+
+If a run is cancelled with no steps and the annotation "not acquired by Runner of type hosted", GitHub had no Apple Silicon macOS runner free for 15 minutes; re-run it (`gh run rerun <id>`) rather than changing anything. Entitlement-dependent tests skip on the unsigned CI build (`HITLIST_UNSIGNED=1`).
 (set up in App Store Connect → the app → Xcode Cloud) is the alternative, with 25 free hours a month
 in the Apple Developer Program.
 
