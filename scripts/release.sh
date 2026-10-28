@@ -160,7 +160,8 @@ fi
 # ---- commit + tag -------------------------------------------------------------------------------
 if (( BUMP )); then
   step "Commit and tag build $NEXT"
-  git add project.yml
+  # The bump regenerates the project and Info.plist; commit them with it so the tag is reproducible.
+  git add project.yml HITList.xcodeproj HITList/Info.plist
   git commit -q -m "Release $MARKETING ($NEXT)
 
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
