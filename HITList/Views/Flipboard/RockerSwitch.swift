@@ -128,8 +128,8 @@ struct FlipLED: View {
     var size: CGFloat = 13
 
     /// Opacity of the green glass and its bloom at rest: faint, not lit.
-    static let doneLevel = 0.42
-    static let doneBloom = 0.5
+    static let doneLevel = 0.55
+    static let doneBloom = 0.75
 
     var body: some View {
         SwiftUI.Group {
