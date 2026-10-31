@@ -63,7 +63,7 @@ targets:
       properties:
         CFBundleDisplayName: HITList
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "4"
+        CFBundleVersion: "5"
         LSApplicationCategoryType: public.app-category.productivity
         UIBackgroundModes: [remote-notification]
         UILaunchScreen: {}
@@ -89,7 +89,7 @@ targets:
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
-        CURRENT_PROJECT_VERSION: 4
+        CURRENT_PROJECT_VERSION: 5
         MARKETING_VERSION: "0.1.0"
         ENABLE_HARDENED_RUNTIME: YES
         DEAD_CODE_STRIPPING: YES
