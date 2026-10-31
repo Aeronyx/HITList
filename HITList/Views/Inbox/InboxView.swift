@@ -2,9 +2,10 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The inbox: tasks without a project, under an "Inbox · 7" header, with an "Inbox zero" state when
-/// it's empty and a Process button that steps through it one task at a time. Rows, completion, and
-/// the undo toast behave as in every other task list.
+/// The inbox: every dated task (in any Group) plus undated tasks with no Group, as one list by priority
+/// then due date (`TaskOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
+/// empty and a Process button that steps through it one task at a time. Undated tasks in a Group are
+/// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -19,14 +20,6 @@ struct InboxView: View {
     @State private var processing = false
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
-    /// The same query the sidebar's Inbox has always meant.
-    private static let query = "no project"
-
-    private struct Group: Identifiable {
-        let id: String
-        let tasks: [TaskItem]
-    }
 
     /// A row's task and the due date it is listed under: its own, or while its completion animates,
     /// the one it had when tapped (a completed recurring task has already moved to its next date).
@@ -44,48 +37,33 @@ struct InboxView: View {
     }
 
     private func matchedTasks() -> [TaskItem] {
-        let source = showCompleted ? "(\(Self.query)) & (completed | !completed)" : Self.query
-        return (try? FilterQuery(source, now: now).apply(to: allTasks, now: now)) ?? []
+        TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
     }
 
     /// Open inbox tasks, for the header.
     private var openCount: Int { allTasks.filter(\.isInInbox).count }
 
-    /// The matched tasks plus the recently completed ones, grouped by due day in list order.
-    private var groups: [Group] {
+    /// The matched tasks plus the recently completed ones, by priority then due date.
+    private var rows: [TaskItem] {
         let matched = matchedTasks()
-        let rows: [Placed]
-        if completions.isEmpty {
-            rows = matched.map { Placed(task: $0, filterDueDate: $0.dueDate) }
-        } else {
-            let held = completions.heldIDs
-            let anchors = completions.anchors
-            let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
-            let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
-            rows = FilterQuery.defaultSort(shown + animating)
-        }
-        var groups: [Group] = []
-        for row in rows {
-            let key = DueFormatter.sectionTitle(for: row.filterDueDate, now: now)
-            if let i = groups.firstIndex(where: { $0.id == key }) {
-                groups[i] = Group(id: key, tasks: groups[i].tasks + [row.task])
-            } else {
-                groups.append(Group(id: key, tasks: [row.task]))
-            }
-        }
-        return groups
+        guard !completions.isEmpty else { return matched }
+        let held = completions.heldIDs
+        let anchors = completions.anchors
+        let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
+        let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
+        return TaskOrdering.sorted(shown + animating).map(\.task)
     }
 
     var body: some View {
-        let groups = groups
+        let rows = rows
         VStack(spacing: 0) {
             header
             SwiftUI.Group {
-                if groups.isEmpty {
+                if rows.isEmpty {
                     InboxZeroView()
                         .transition(.opacity)
                 } else {
-                    list(groups)
+                    list(rows)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -145,15 +123,10 @@ struct InboxView: View {
             .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
     }
 
-    private func list(_ groups: [Group]) -> some View {
+    private func list(_ rows: [TaskItem]) -> some View {
         List(selection: $selectedTask) {
-            ForEach(groups) { group in
-                Section {
-                    ForEach(group.tasks) { row($0) }
-                } header: {
-                    Text(group.id)
-                        .foregroundStyle(group.id == "Overdue" ? .red : .secondary)
-                }
+            Section {
+                ForEach(rows) { row($0) }
             }
             Section { InlineAddRow(context: .inbox, key: "inbox") }
         }

@@ -29,7 +29,7 @@ struct SidebarView: View {
         }.count
     }
 
-    private var inboxCount: Int { openTasks.filter { $0.project == nil }.count }
+    private var inboxCount: Int { openTasks.filter(\.isInInbox).count }
 
     var body: some View {
         List(selection: $selection) {
@@ -75,12 +75,12 @@ struct SidebarView: View {
                     .tag(SidebarItem.project(project.id))
                     .slateRow()
                     .contextMenu {
-                        Button("Edit Project…") { editingProject = project }
+                        Button("Edit Group…") { editingProject = project }
                         Button("Delete", role: .destructive) { delete(project) }
                     }
                 }
             } header: {
-                sectionHeader("Projects") { creatingProject = true }
+                sectionHeader("Groups") { creatingProject = true }
             }
 
             Section {
@@ -180,8 +180,8 @@ struct SidebarView: View {
 }
 
 /// "Filters +": the add button sits 6 pt after the title, never at the trailing edge. On the Mac it
-/// fades in while the pointer is over the header row.
-private struct SidebarSectionHeader: View {
+/// fades in while the pointer is over the header row. The iPhone's Browse page uses it too.
+struct SidebarSectionHeader: View {
     let title: String
     let add: () -> Void
     @State private var isHovered = false

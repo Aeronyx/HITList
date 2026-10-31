@@ -1,7 +1,8 @@
 import Foundation
+import HITListCore
 
 /// The order Process mode steps through the inbox: oldest first, one task at a time. Skipping sends a
-/// task to the back once; skipping it again drops it. Tasks that leave the inbox (moved to a project,
+/// task to the back once; skipping it again drops it. Tasks that leave the inbox (an undated one moved to a Group,
 /// deleted, completed, here or on another device) drop out.
 struct InboxProcessQueue: Equatable {
     /// Still to show, the current task first.
@@ -77,6 +78,7 @@ extension InboxProcessQueue {
 }
 
 extension TaskItem {
-    /// Open and without a project: what the Inbox shows (its query is "no project").
-    var isInInbox: Bool { project == nil && !isCompleted }
+    /// An open task the Inbox shows (`TaskOrdering.isInInbox`): it has a date, in any Group, or it has
+    /// no Group. An undated task in a Group is a note and only shows in that Group.
+    var isInInbox: Bool { !isCompleted && TaskOrdering.isInInbox(self) }
 }

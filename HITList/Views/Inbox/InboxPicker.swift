@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Process mode's Move to project and Add label menu: a searchable list. Typing filters it, Return picks
-/// the top match, and a name that matches nothing can be created ("New project “Garden”").
+/// Process mode's Move to Group and Add label menu: a searchable list. Typing filters it, Return picks
+/// the top match, and a name that matches nothing can be created ("New Group “Garden”").
 struct InboxPicker: View {
     struct Option: Identifiable {
         let id: UUID
@@ -15,7 +15,7 @@ struct InboxPicker: View {
     }
 
     let title: String
-    /// "project" or "label", for the create rows.
+    /// "Group" or "label", for the create rows.
     let noun: String
     let symbol: String
     let options: [Option]
