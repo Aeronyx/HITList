@@ -1,13 +1,18 @@
 import SwiftUI
+import AVFoundation
 import UniformTypeIdentifiers
 
-/// Settings for completion feedback. Drop it into SettingsView's `Form` as `DelightSettingsSection()`.
+/// Settings for completion feedback: a `HITGroup` for SettingsView's page, `DelightSettingsSection()`.
+/// The sound row opens a compact list of sounds, each with a ▶ that plays it without choosing it.
 struct DelightSettingsSection: View {
     @AppStorage(CompletionFeedback.hapticsKey, store: AppGroup.defaults) private var haptics = true
     @State private var sound: CompletionSound
     @State private var customName: String?
     @State private var isImporting = false
     @State private var importError: String?
+    @State private var showingSounds = false
+    @State private var preview = SoundPreview()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let audioTypes: [UTType] =
         [UTType("com.apple.coreaudio-format"), .wav, .aiff, .mpeg4Audio, .mp3].compactMap { $0 }
@@ -25,42 +30,25 @@ struct DelightSettingsSection: View {
     }
 
     var body: some View {
-        Section {
-            HStack {
-                Picker("Completion sound", selection: $sound) {
-                    ForEach(choices) { Text($0.displayName).tag($0) }
-                }
-                Button {
-                    CompletionFeedback.shared.previewSound()
-                } label: {
-                    Image(systemName: "play.fill")
-                }
-                .buttonStyle(.borderless)
-                .disabled(sound == .none)
-                .accessibilityLabel("Play sound")
+        HITGroup("Completing Tasks", footer: footer) {
+            HITMenuRow("Completion sound", systemImage: "speaker.wave.2", value: sound.displayName,
+                       accessory: .expand(isExpanded: showingSounds)) {
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showingSounds.toggle() }
+            }
+            if showingSounds {
+                ForEach(choices) { choice in soundRow(choice) }
             }
             if let customName {
-                HStack {
-                    Label(customName, systemImage: "waveform")
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer()
+                HITMenuRow(customName, systemImage: "waveform") {
                     Button("Remove", role: .destructive, action: removeCustom)
-                        .buttonStyle(.borderless)
+                        .buttonStyle(HITButtonStyle(.destructive, size: .small))
                 }
             }
-            Button("Choose your own…") { isImporting = true }
-            Toggle("Haptics", isOn: $haptics)
-        } header: {
-            Text("Completing Tasks")
-        } footer: {
-            #if os(iOS)
-            Text("Your own sound can be up to 2 seconds long. Sounds follow the silent switch and never pause your music.")
-            #else
-            Text("Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad.")
-            #endif
+            HITMenuRow("Choose your own…", systemImage: "folder", accessory: .none) { isImporting = true }
+            Toggle(isOn: $haptics) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }
+                .toggleStyle(.hit)
+                .hitRowPadding()
         }
-        .slateRow()
         .onChange(of: sound) { _, new in CompletionSound.select(new, in: AppGroup.defaults) }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: Self.audioTypes) { result in
             switch result {
@@ -73,6 +61,46 @@ struct DelightSettingsSection: View {
         } message: {
             Text(importError ?? "")
         }
+    }
+
+    #if os(iOS)
+    private let footer = "Your own sound can be up to 2 seconds long. Sounds follow the silent switch and never pause your music."
+    #else
+    private let footer = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad."
+    #endif
+
+    /// One sound in the open list: tap to choose it (checkmark), ▶ to hear it.
+    private func soundRow(_ choice: CompletionSound) -> some View {
+        let selected = choice == sound
+        return HStack(spacing: HITSpacing.m) {
+            Button { sound = choice } label: {
+                HStack(spacing: HITSpacing.m) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.accent)
+                        .frame(width: 22)
+                        .opacity(selected ? 1 : 0)
+                    Text(choice == .custom ? (customName ?? choice.displayName) : choice.displayName)
+                        .font(HITType.body)
+                        .foregroundStyle(selected ? HITColor.text : Theme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            if choice != .none {
+                Button { preview.play(choice) } label: { Image(systemName: "play.fill") }
+                    .buttonStyle(HITIconButtonStyle(font: .system(size: 12)))
+                    .accessibilityLabel("Play \(choice.displayName)")
+            }
+        }
+        .padding(.leading, HITSpacing.l)
+        .padding(.trailing, HITSpacing.m)
+        .frame(minHeight: HITRowMetrics.minHeight - 4)
+        .background(Theme.background.opacity(0.35))
     }
 
     private func importCustom(from url: URL) {
@@ -96,5 +124,23 @@ struct DelightSettingsSection: View {
         CustomSoundStore().remove()
         customName = nil
         if sound == .custom { sound = CompletionSound.fallback }
+    }
+}
+
+/// Plays any sound once for the ▶ buttons, whichever is chosen. Uses the same ambient audio category
+/// as `CompletionSoundPlayer`, so it follows the silent switch and mixes with music.
+@MainActor
+final class SoundPreview {
+    private var player: AVAudioPlayer?
+
+    func play(_ sound: CompletionSound) {
+        let url = sound == .custom ? CustomSoundStore().fileURL : sound.bundleURL
+        guard let url else { return }
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setCategory(.ambient)
+        #endif
+        player?.stop()
+        player = try? AVAudioPlayer(contentsOf: url)
+        player?.play()
     }
 }

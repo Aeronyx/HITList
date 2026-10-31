@@ -120,7 +120,7 @@ struct SidebarView: View {
                 Button { showSettings = true } label: { Image(systemName: "gearshape") }
             }
         }
-        .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() }.slateSheet() }
+        .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
         #else
         .listStyle(.sidebar)
         #endif
@@ -162,18 +162,7 @@ struct SidebarView: View {
     }
 
     private func sectionHeader(_ title: String, add: @escaping () -> Void) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Button(action: add) {
-                Image(systemName: "plus")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .help("Add \(title.dropLast())")
-            .padding(.trailing, 8)
-        }
+        SidebarSectionHeader(title: title, add: add)
     }
 
     private func delete(_ filter: SavedFilter) {
@@ -187,5 +176,32 @@ struct SidebarView: View {
     private func delete(_ label: TaskLabel) {
         if selection == .label(label.id) { selection = .today }
         context.delete(label); try? context.save()
+    }
+}
+
+/// "Filters +": the add button sits 6 pt after the title, never at the trailing edge. On the Mac it
+/// fades in while the pointer is over the header row.
+private struct SidebarSectionHeader: View {
+    let title: String
+    let add: () -> Void
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+            Button(action: add) { Image(systemName: "plus") }
+                .buttonStyle(HITIconButtonStyle(font: .system(size: 13, weight: .semibold), alignment: .leading))
+                .help("Add \(title.dropLast())")
+                .accessibilityLabel("Add \(title.dropLast())")
+                #if os(macOS)
+                .opacity(isHovered ? 1 : 0)
+                #endif
+            Spacer(minLength: 0)
+        }
+        .textCase(nil)
+        .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
+        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
     }
 }

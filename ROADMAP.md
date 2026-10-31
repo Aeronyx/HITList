@@ -31,6 +31,7 @@ CloudKit container come first.
 | Upcoming view (week strip, day sections, drag to reschedule) | done 2026-10-28, drag-and-drop not yet verified by hand | Opus 5.5 session, effort High |
 | Inbox polish (empty state, count, Process mode) | done 2026-10-31 | Opus 5.5 session, effort High |
 | Task Flipboard | done 2026-10-28 | Opus 5.5 session, effort High |
+| Design system (custom buttons, toggle, chips, fields, sheet chrome; editors, Settings, sidebar "+", "…" menu) | done 2026-10-31; guide in HITList/Support/DesignSystem/README.md | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 
