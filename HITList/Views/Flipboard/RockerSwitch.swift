@@ -138,13 +138,17 @@ struct FlipLED: View {
                     FlipLamp(red: level, green: 0, size: size)
                 } animation: { _ in .easeInOut(duration: 1.3) }
             } else if reduceMotion {
-                lamp(flare: 0)
+                lamp
             } else {
                 // One flare as the switch turns green; the trigger fires on every change, the flare only
                 // shows on `.done`.
-                lamp(flare: 0)
-                    .keyframeAnimator(initialValue: 0.0, trigger: glow == .done) { _, flare in
-                        lamp(flare: flare)
+                let strength = glow == .done ? 1.0 : 0
+                let size = size
+                lamp
+                    .keyframeAnimator(initialValue: 0.0, trigger: glow == .done) { content, flare in
+                        content
+                            .brightness(0.3 * strength * flare)
+                            .shadow(color: FlipboardPalette.ledGreen.opacity(0.8 * strength * flare), radius: size * (0.4 + 0.9 * flare))
                     } keyframes: { _ in
                         KeyframeTrack {
                             CubicKeyframe(1, duration: 0.14)
@@ -157,12 +161,9 @@ struct FlipLED: View {
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.35), value: glow)
     }
 
-    private func lamp(flare: Double) -> FlipLamp {
+    private var lamp: FlipLamp {
         let done = glow == .done
-        return FlipLamp(red: done ? 0 : 1,
-                        green: done ? Self.doneLevel + (1 - Self.doneLevel) * flare : 0,
-                        greenBloom: done ? Self.doneBloom + 0.5 * flare : 0,
-                        size: size)
+        return FlipLamp(red: done ? 0 : 1, green: done ? Self.doneLevel : 0, greenBloom: done ? Self.doneBloom : 0, size: size)
     }
 }
 
@@ -173,6 +174,8 @@ struct FlipLamp: View {
     var green: Double = 0
     /// Strength of the green halo; follows `green` unless given.
     var greenBloom: Double?
+    /// A dim red tint in unlit glass (a charger's empty lamps while it is red), without a halo.
+    var ember: Double = 0
     var size: CGFloat = 13
 
     private var radius: CGFloat { size * 0.62 }
@@ -186,7 +189,7 @@ struct FlipLamp: View {
                 Circle()
                     .fill(RadialGradient(colors: [Color(hex: "#FFD0D0"), FlipboardPalette.ledOn, Color(hex: "#8E1A1F")],
                                          center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: radius))
-                    .opacity(red > 0 ? 0.55 + 0.45 * red : 0)
+                    .opacity(red > 0 ? 0.55 + 0.45 * red : ember)
             }
             .overlay {
                 Circle()
@@ -205,6 +208,200 @@ struct FlipLamp: View {
             .shadow(color: FlipboardPalette.ledOn.opacity(red > 0 ? 0.9 * red : 0), radius: size * (0.3 + 0.46 * red))
             .shadow(color: FlipboardPalette.ledGreen.opacity(min(1, 0.8 * bloom)), radius: size * (0.25 + 0.6 * bloom))
             .accessibilityHidden(true)
+    }
+}
+
+/// A charger's lamps: one per flip it needs, spread along a recessed strip across the top of the tile.
+///
+/// - A flip lights the next lamp with a spring pop, and its glow spreads to the lamps beside it.
+/// - The flip that fills the row pops the last lamp, then a bloom runs along the strip: every lamp
+///   flares left to right while a band of light sweeps across.
+/// - When the count falls (the interval ended, or "Flip back to red") the lamps go out right to left.
+/// - Reduce Motion: lamps simply fade on and off.
+struct FlipChargeLamps: View {
+    var target: Int
+    /// Lamps lit: the flips counted, or the full target while the switch is green.
+    var count: Int
+    var side: Flipboard.Side
+    var reduceMotion: Bool
+
+    /// What the lamps show while a fill or a drain steps through; nil = `count`.
+    @State private var shown: Int?
+    @State private var pulse = Pulse()
+    @State private var sweep = 0
+    @State private var job: Task<Void, Never>?
+
+    struct Pulse: Equatable {
+        enum Kind { case pop, bloom }
+        var id = 0
+        var origin = 0
+        var kind: Kind = .pop
+    }
+
+    private struct LampFX {
+        var scale = 1.0
+        var glow = 0.0
+    }
+
+    private struct SweepFX {
+        var x = -0.5
+        var opacity = 0.0
+    }
+
+    static let height: CGFloat = 20
+    private static let gap: CGFloat = 4
+
+    /// How lamp `index` answers a pulse: when it starts, how bright it flares, how far it pops.
+    static func response(of index: Int, to pulse: Pulse) -> (delay: Double, glow: Double, pop: Double) {
+        switch pulse.kind {
+        case .pop:
+            switch abs(index - pulse.origin) {
+            case 0: return (0.0001, 1, 1)
+            case 1: return (0.07, 0.55, 0.12)
+            case 2: return (0.14, 0.25, 0.04)
+            default: return (0.0001, 0, 0)
+            }
+        case .bloom:
+            return (0.0001 + 0.05 * Double(index), 1, 0.35)
+        }
+    }
+
+    var body: some View {
+        let lit = min(target, shown ?? count)
+        GeometryReader { proxy in
+            let n = CGFloat(max(1, target))
+            let slot = (proxy.size.width - 12 - Self.gap * (n - 1)) / n
+            let size = max(5, min(11, slot / 1.38))
+            HStack(spacing: Self.gap) {
+                ForEach(Array(0..<target), id: \.self) { index in
+                    lamp(index, isLit: index < lit, size: size)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding(.horizontal, 6)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .background { housing }
+            .overlay { sweepBand(width: proxy.size.width) }
+        }
+        .frame(height: Self.height)
+        .onChange(of: count) { old, new in animate(from: old, to: new) }
+        .onDisappear { job?.cancel() }
+        .accessibilityElement()
+        .accessibilityLabel("\(min(count, target)) of \(target) lamps lit")
+    }
+
+    private var housing: some View {
+        Capsule()
+            .fill(LinearGradient(colors: [FlipboardPalette.bezelTop, FlipboardPalette.bezelBottom],
+                                 startPoint: .top, endPoint: .bottom))
+            .overlay {
+                Capsule().strokeBorder(LinearGradient(colors: [.black.opacity(0.7), .white.opacity(0.09)],
+                                                      startPoint: .top, endPoint: .bottom), lineWidth: 1)
+            }
+    }
+
+    private func lamp(_ index: Int, isLit: Bool, size: CGFloat) -> some View {
+        FlipLamp(green: isLit ? 0.9 : 0, greenBloom: isLit ? 0.6 : 0, ember: isLit || side == .green ? 0 : 0.16, size: size)
+            .animation(reduceMotion ? .easeInOut(duration: 0.15) : .spring(response: 0.28, dampingFraction: 0.55), value: isLit)
+            .keyframeAnimator(initialValue: LampFX(), trigger: pulse) { content, fx in
+                content
+                    .scaleEffect(fx.scale)
+                    .brightness(0.18 * fx.glow)
+                    .shadow(color: FlipboardPalette.ledGreen.opacity(0.9 * fx.glow), radius: 2 + size * fx.glow)
+            } keyframes: { _ in
+                let response = Self.response(of: index, to: pulse)
+                KeyframeTrack(\.scale) {
+                    LinearKeyframe(1, duration: response.delay)
+                    SpringKeyframe(1 + 0.5 * response.pop, duration: 0.14, spring: .snappy)
+                    SpringKeyframe(1, duration: 0.45, spring: .bouncy)
+                }
+                KeyframeTrack(\.glow) {
+                    LinearKeyframe(0, duration: response.delay)
+                    CubicKeyframe(response.glow, duration: 0.12)
+                    CubicKeyframe(0, duration: 0.6)
+                }
+            }
+    }
+
+    /// The band of light that runs along the strip when the row fills.
+    private func sweepBand(width: CGFloat) -> some View {
+        Color.clear
+            .keyframeAnimator(initialValue: SweepFX(), trigger: sweep) { content, fx in
+                content.overlay(alignment: .leading) {
+                    LinearGradient(colors: [.clear, FlipboardPalette.ledGreen.opacity(0.5), .white.opacity(0.65),
+                                            FlipboardPalette.ledGreen.opacity(0.5), .clear],
+                                   startPoint: .leading, endPoint: .trailing)
+                        .frame(width: width * 0.45)
+                        .offset(x: fx.x * width)
+                        .opacity(fx.opacity)
+                        .blendMode(.plusLighter)
+                }
+            } keyframes: { _ in
+                KeyframeTrack(\.x) {
+                    LinearKeyframe(-0.45, duration: 0.0001)
+                    CubicKeyframe(1.0, duration: 0.6)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(0, duration: 0.0001)
+                    CubicKeyframe(1, duration: 0.15)
+                    LinearKeyframe(1, duration: 0.25)
+                    CubicKeyframe(0, duration: 0.25)
+                }
+            }
+            .clipShape(Capsule())
+            .allowsHitTesting(false)
+    }
+
+    private func animate(from old: Int, to new: Int) {
+        job?.cancel()
+        let old = min(old, target), new = min(new, target)
+        guard !reduceMotion else {
+            shown = nil
+            return
+        }
+        if new == old + 1 {
+            shown = nil
+            pulse = Pulse(id: pulse.id + 1, origin: new - 1, kind: .pop)
+            if new == target {
+                job = Task {
+                    try? await Task.sleep(for: .milliseconds(180))
+                    guard !Task.isCancelled else { return }
+                    bloom()
+                }
+            }
+        } else if new > old {
+            // Several at once ("Mark done"): fill left to right, then bloom.
+            shown = old
+            job = Task {
+                for step in (old + 1)...new {
+                    try? await Task.sleep(for: .milliseconds(80))
+                    guard !Task.isCancelled else { return }
+                    shown = step
+                    pulse = Pulse(id: pulse.id + 1, origin: step - 1, kind: .pop)
+                }
+                shown = nil
+                guard new == target else { return }
+                try? await Task.sleep(for: .milliseconds(150))
+                guard !Task.isCancelled else { return }
+                bloom()
+            }
+        } else if new < old {
+            // Out right to left.
+            shown = old
+            job = Task {
+                for step in stride(from: old - 1, through: new, by: -1) {
+                    try? await Task.sleep(for: .milliseconds(120))
+                    guard !Task.isCancelled else { return }
+                    shown = step
+                }
+                shown = nil
+            }
+        }
+    }
+
+    private func bloom() {
+        pulse = Pulse(id: pulse.id + 1, origin: 0, kind: .bloom)
+        sweep += 1
     }
 }
 
@@ -255,7 +452,18 @@ enum FlipHaptic {
         #endif
     }
 
-    /// A softer bump as a long press registers and the switch's menu opens.
+    /// A charger filling up: the success pattern on iPhone, a level change on the Mac.
+    static func charged() {
+        guard CompletionFeedback.shared.areHapticsEnabled else { return }
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #else
+        NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+        #endif
+    }
+
+    /// A softer bump as a long press registers and the switch's menu opens, or a charged switch is
+    /// tapped again.
     static func menu() {
         guard CompletionFeedback.shared.areHapticsEnabled else { return }
         #if os(iOS)

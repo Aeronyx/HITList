@@ -2,11 +2,16 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// One switch on the wall: title in small caps, the LED, the rocker, and the light bar.
+/// One switch on the wall: title in small caps, the LED (or a charger's row of lamps), the rocker, and
+/// the light bar.
 ///
-/// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED goes out,
-/// the bar resets, a click plays (`FlipSound`), and only then does the task complete, so the board re-sorts after the flip has
-/// landed. A green switch asks before it is flipped early.
+/// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED settles to
+/// faint green, the bar resets, a click plays (`FlipSound`), and only then does the task roll on, so the
+/// board re-sorts after the flip has landed. A green switch asks before it is flipped early.
+///
+/// A charger (`flipTarget` > 1) takes several flips: each one presses the rocker toward green and lets
+/// it spring back while the next lamp pops on; the last one lights the row, snaps the rocker to green and
+/// runs a bloom along the lamps, with the bubble after the click. Tapping a charged switch only bounces.
 ///
 /// Long press anywhere on the tile, the rocker included (iPhone), or right-click (Mac) opens the switch's
 /// menu; on the Mac a long press opens the same actions in a popover. The rocker is not a `Button`, so
@@ -14,77 +19,49 @@ import HITListCore
 struct FlipSwitchTile: View {
     let task: TaskItem
     let now: Date
-    var onEdit: () -> Void
+    var onEdit: (FlipSwitchEditor.Focus) -> Void
     var onOpen: () -> Void
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// True while a flip animates: the tile already shows where the flip will land, before the task
+    /// Where a flip in progress will land: the tile shows it while the rocker moves, before the task
     /// itself changes.
-    @State private var flipping = false
-    /// The rocker dips toward red and springs back when a green switch is flipped early.
-    @State private var dipping = false
+    @State private var landing: Flipboard.Charge?
+    /// Overrides the rocker's tilt while it dips and springs back.
+    @State private var dip: Double?
     @State private var confirmEarly = false
     /// The rocker sinks a touch under the finger.
     @State private var pressed = false
     /// When the last long press fired: the tap that ends it must not also flip the switch.
     @State private var longPressedAt: Date?
     @State private var showMenuPanel = false
+    /// The lamps a charger shows instead of its count, while a drain is about to play.
+    @State private var lampsOverride: Int?
 
     private static let flipDuration: Duration = .milliseconds(380)
+    private static let countDuration: Duration = .milliseconds(240)
 
+    private var flipping: Bool { landing != nil }
     private var rule: RecurrenceRule { task.recurrenceRule ?? Flipboard.defaultRule }
-    private var shownDue: Date? {
-        flipping ? Flipboard.dueAfterFlip(due: task.dueDate, rule: rule, now: now) : task.dueDate
+    private var target: Int { Flipboard.clampedTarget(task.flipTarget) }
+    private var charge: Flipboard.Charge { landing ?? Flipboard.Charge(task) }
+    private var side: Flipboard.Side { Flipboard.side(due: charge.due, now: now) }
+    private var isOverdue: Bool { Flipboard.isOverdue(due: charge.due, now: now) }
+    private var count: Int { Flipboard.effectiveCount(charge, target: target, rule: rule, now: now) }
+    private var tilt: Double { dip ?? (side == .green ? 1 : -1) }
+    private var started: Bool {
+        Flipboard.hasStarted(due: charge.due, createdAt: task.createdAt) || count > 0
     }
-    private var side: Flipboard.Side { Flipboard.side(due: shownDue, now: now) }
-    private var isOverdue: Bool { Flipboard.isOverdue(due: shownDue, now: now) }
-    private var tilt: Double { dipping ? -0.35 : side == .green ? 1 : -1 }
-    /// A flip in progress lands on a started switch.
-    private var started: Bool { flipping || Flipboard.hasStarted(task) }
-    private var fraction: Double { started ? Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) : 0 }
-    private var caption: String { Flipboard.caption(due: shownDue, rule: rule, started: started, now: now) }
+    private var fraction: Double { started ? Flipboard.elapsedFraction(due: charge.due, rule: rule, now: now) : 0 }
+    private var caption: String {
+        Flipboard.caption(due: charge.due, rule: rule, started: started, count: count, target: target, now: now)
+    }
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(task.title)
-                        .font(HITType.subheadlineSemibold.smallCaps())
-                        .tracking(0.6)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                    Text(rule.displayText.lowercased())
-                        .font(HITType.caption2)
-                        .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 0)
-                FlipLED(glow: side == .green ? .done : isOverdue ? .overdue : .due, reduceMotion: reduceMotion)
-            }
-
+        FlipSwitchFace(title: task.title, ruleText: rule.displayText.lowercased(), target: target,
+                       lamps: lampsOverride ?? count, side: side, isOverdue: isOverdue, fraction: fraction,
+                       caption: caption, reduceMotion: reduceMotion) {
             rocker
-
-            VStack(spacing: 5) {
-                FlipLightBar(fraction: fraction, side: side)
-                Text(caption)
-                    .font(HITType.caption2.monospacedDigit())
-                    .foregroundStyle(side == .red ? FlipboardPalette.redTop : Theme.secondaryText)
-                    .lineLimit(1)
-            }
-        }
-        .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.surface)
-                .overlay { ScrewHeads().padding(6) }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.07), .black.opacity(0.4)],
-                                                     startPoint: .top, endPoint: .bottom), lineWidth: 1)
-                }
-                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         #if os(iOS)
@@ -108,11 +85,19 @@ struct FlipSwitchTile: View {
                 Text("It isn’t due until \(DueFormatter.text(for: due, hasTime: false, now: now)).")
             }
         }
-        .onAppear { FlipHaptic.prepare() }
+        .onAppear {
+            FlipHaptic.prepare()
+            noteLamps(firstAppearance: true)
+        }
+        .onChange(of: side) { noteLamps(firstAppearance: false) }
+        .onChange(of: charge) { noteLamps(firstAppearance: false) }
     }
 
     private var accessibilityValue: String { side == .red ? "Red, \(caption)" : "Green, \(caption)" }
-    private var accessibilityHint: String { side == .red ? "Flips the switch back to green" : "Marks it done early" }
+    private var accessibilityHint: String {
+        if side == .red { return target > 1 ? "Counts one flip" : "Flips the switch back to green" }
+        return target > 1 ? "Already charged" : "Marks it done early"
+    }
 
     /// The rocker takes taps only; the long press goes to the tile's menu.
     private var rocker: some View {
@@ -139,7 +124,13 @@ struct FlipSwitchTile: View {
         }
         guard !flipping else { return }
         press()
-        if side == .red { flip() } else { confirmEarly = true }
+        if side == .red {
+            flip()
+        } else if target > 1 {
+            bounce()
+        } else {
+            confirmEarly = true
+        }
     }
 
     /// The rocker sinks and comes back up, like pushing real plastic.
@@ -160,15 +151,146 @@ struct FlipSwitchTile: View {
         #endif
     }
 
+    // MARK: Flipping
+
+    private func flip() {
+        guard !flipping else { return }
+        let (next, outcome) = Flipboard.afterFlip(Flipboard.Charge(task), target: target, rule: rule, now: now)
+        switch outcome {
+        case .ignored: bounce()
+        case .counted: countFlip(to: next)
+        case .charged: chargeUp(to: next, markDone: false)
+        }
+    }
+
+    private func markDone() {
+        guard !flipping else { return }
+        let (next, outcome) = Flipboard.afterMarkDone(Flipboard.Charge(task), target: target, rule: rule, now: now)
+        switch outcome {
+        case .ignored: bounce()
+        case .counted: countFlip(to: next)
+        case .charged: chargeUp(to: next, markDone: true)
+        }
+    }
+
+    /// One flip toward a charger's target: the rocker presses toward green and springs back, a lamp
+    /// pops on.
+    private func countFlip(to next: Flipboard.Charge) {
+        FlipHaptic.play()
+        FlipSound.play()
+        if reduceMotion {
+            withAnimation(.easeInOut(duration: 0.2)) { landing = next }
+        } else {
+            withAnimation(.easeIn(duration: 0.09)) { dip = -0.2 }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { landing = next }
+            Task {
+                try? await Task.sleep(for: .milliseconds(90))
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.5)) { dip = nil }
+            }
+        }
+        commit(after: Self.countDuration) { Flipboard.flip(task, in: context) }
+    }
+
+    /// The flip that turns the switch green. A charger snaps harder and blooms, with the bubble.
+    private func chargeUp(to next: Flipboard.Charge, markDone: Bool) {
+        let wasGreen = side == .green
+        let isCharger = target > 1
+        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2)
+            : isCharger ? .spring(response: 0.3, dampingFraction: 0.42) : .spring(response: 0.35, dampingFraction: 0.52)
+        FlipHaptic.play()
+        FlipSound.play()
+        if isCharger {
+            Task {
+                try? await Task.sleep(for: .milliseconds(170))
+                FlipHaptic.charged()
+                FlipSound.playCharged()
+            }
+        }
+        if wasGreen && !reduceMotion {
+            // Already green: press it through toward red, then let it spring home.
+            withAnimation(.easeIn(duration: 0.11)) { dip = -0.35; landing = next }
+            Task {
+                try? await Task.sleep(for: .milliseconds(110))
+                withAnimation(spring) { dip = nil }
+            }
+        } else {
+            withAnimation(spring) { landing = next }
+        }
+        commit(after: Self.flipDuration) {
+            if markDone { Flipboard.markDone(task, in: context) } else { Flipboard.flip(task, in: context) }
+        }
+    }
+
+    /// A charged switch tapped again: a small bounce and a soft bump, nothing else.
+    private func bounce() {
+        FlipHaptic.menu()
+        guard !reduceMotion else { return }
+        withAnimation(.easeOut(duration: 0.08)) { dip = 0.62 }
+        Task {
+            try? await Task.sleep(for: .milliseconds(80))
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { dip = nil }
+        }
+    }
+
+    /// Writes the flip once the animation has landed, then lets the tile follow the task again.
+    private func commit(after delay: Duration, _ write: @escaping () -> Void) {
+        Task {
+            try? await Task.sleep(for: delay)
+            withAnimation(.snappy(duration: 0.35)) {
+                write()
+                landing = nil
+            }
+            await NotificationScheduler.reschedule(context: context)
+        }
+    }
+
+    /// "Flip back to red": the rocker springs back to red, a lamp goes out.
+    private func flipBack() {
+        guard !flipping, Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now) else { return }
+        FlipHaptic.play()
+        FlipSound.play()
+        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)
+        withAnimation(spring) {
+            Flipboard.flipBack(task, in: context)
+        }
+        Task { await NotificationScheduler.reschedule(context: context) }
+    }
+
+    // MARK: Draining
+
+    /// Remembers a charger shown full; the first time it shows the next interval (red, nothing counted)
+    /// the lamps start full and drain right to left. While the board is open across the boundary the
+    /// count falls on its own and the lamps drain the same way.
+    private func noteLamps(firstAppearance: Bool) {
+        guard target > 1, !flipping else { return }
+        if side == .green {
+            FlipDrainMemory.recordFull(task.id, due: task.dueDate)
+            return
+        }
+        let recorded = FlipDrainMemory.recordedDue(for: task.id)
+        FlipDrainMemory.forget(task.id)
+        guard firstAppearance, !reduceMotion,
+              Flipboard.shouldDrain(recordedDue: recorded, due: task.dueDate, count: count, now: now) else { return }
+        lampsOverride = target
+        Task {
+            try? await Task.sleep(for: .milliseconds(450))
+            lampsOverride = nil
+        }
+    }
+
     // MARK: The menu
 
     private var menuItems: [FlipMenuItem] {
-        [
+        let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now)
+        let chargedCharger = target > 1 && side == .green
+        return [
             FlipMenuItem(id: "back", title: "Flip back to red", systemImage: "arrow.uturn.backward",
-                         isDisabled: !Flipboard.canFlipBack(due: task.dueDate, now: now) || flipping) { flipBack() },
-            FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit() },
+                         isDisabled: !canFlipBack || flipping) { flipBack() },
+            FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit(.interval) },
+            FlipMenuItem(id: "flips", title: "Flips per interval…", systemImage: "circle.grid.3x1") { onEdit(.flips) },
             FlipMenuItem(id: "open", title: "Open task", systemImage: "arrow.up.forward.square") { onOpen() },
-            FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle", isDisabled: flipping) { markDone() },
+            FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle",
+                         isDisabled: flipping || chargedCharger) { markDone() },
             FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
                 withAnimation(.snappy) { Flipboard.remove(task, in: context) }
             },
@@ -182,47 +304,70 @@ struct FlipSwitchTile: View {
                 .disabled(item.isDisabled)
         }
     }
+}
 
-    /// "Mark done" from the menu: the same as flipping it, without asking when it is green.
-    private func markDone() {
-        guard !flipping else { return }
-        flip()
-    }
+/// The look of a switch, from plain values: shared by the board's tiles and the editor's live preview.
+/// One flip per interval shows the single LED top right; more show a row of lamps across the top.
+struct FlipSwitchFace<Rocker: View>: View {
+    let title: String
+    let ruleText: String
+    let target: Int
+    /// Lamps lit (chargers only).
+    let lamps: Int
+    let side: Flipboard.Side
+    let isOverdue: Bool
+    let fraction: Double
+    let caption: String
+    let reduceMotion: Bool
+    @ViewBuilder var rocker: Rocker
 
-    /// "Flip back to red": the rocker springs back to red, then the due date returns to the flip day.
-    private func flipBack() {
-        guard !flipping, Flipboard.canFlipBack(due: task.dueDate, now: now) else { return }
-        FlipHaptic.play()
-        FlipSound.play()
-        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)
-        withAnimation(spring) {
-            Flipboard.flipBack(task, in: context, now: now)
-        }
-        Task { await NotificationScheduler.reschedule(context: context) }
-    }
-
-    private func flip() {
-        let wasGreen = side == .green
-        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.52)
-        FlipHaptic.play()
-        FlipSound.play()
-        if wasGreen && !reduceMotion {
-            // Already green: press it through toward red, then let it spring home.
-            withAnimation(.easeIn(duration: 0.11)) { dipping = true; flipping = true }
-            Task {
-                try? await Task.sleep(for: .milliseconds(110))
-                withAnimation(spring) { dipping = false }
+    var body: some View {
+        VStack(spacing: 12) {
+            if target > 1 {
+                FlipChargeLamps(target: target, count: lamps, side: side, reduceMotion: reduceMotion)
+                    .padding(.horizontal, 2)
             }
-        } else {
-            withAnimation(spring) { flipping = true }
-        }
-        Task {
-            try? await Task.sleep(for: Self.flipDuration)
-            withAnimation(.snappy(duration: 0.35)) {
-                Flipboard.flip(task, in: context)
-                flipping = false
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(HITType.subheadlineSemibold.smallCaps())
+                        .tracking(0.6)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    Text(ruleText)
+                        .font(HITType.caption2)
+                        .foregroundStyle(Theme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if target <= 1 {
+                    FlipLED(glow: side == .green ? .done : isOverdue ? .overdue : .due, reduceMotion: reduceMotion)
+                }
             }
-            await NotificationScheduler.reschedule(context: context)
+
+            rocker
+
+            VStack(spacing: 5) {
+                FlipLightBar(fraction: fraction, side: side)
+                Text(caption)
+                    .font(HITType.caption2.monospacedDigit())
+                    .foregroundStyle(side == .red ? FlipboardPalette.redTop : Theme.secondaryText)
+                    .lineLimit(1)
+                    .contentTransition(.numericText())
+            }
+        }
+        .padding(14)
+        .background {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.surface)
+                .overlay { ScrewHeads().padding(6) }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(LinearGradient(colors: [.white.opacity(0.07), .black.opacity(0.4)],
+                                                     startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
     }
 }
