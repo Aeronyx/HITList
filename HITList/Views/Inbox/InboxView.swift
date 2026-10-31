@@ -110,9 +110,12 @@ struct InboxView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { processing = true } label: {
-                    Label("Process", systemImage: "tray.and.arrow.down")
-                        .labelStyle(.titleAndIcon)
+                    HStack(spacing: 5) {
+                        Image(systemName: "tray.and.arrow.down")
+                        Text("Process")
+                    }
                 }
+                .accessibilityLabel("Process")
                 .disabled(openCount == 0)
                 .help("Go through the inbox one task at a time")
             }
