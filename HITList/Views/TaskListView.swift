@@ -128,8 +128,17 @@ struct TaskListView: View {
                 switch result {
                 case .success(let groups):
                     if groups.isEmpty {
-                        ContentUnavailableView(emptyTitle, systemImage: "checkmark.circle", description: Text(emptyDescription))
-                            .frame(maxHeight: .infinity)
+                        ContentUnavailableView {
+                            Label(emptyTitle, systemImage: "checkmark.circle")
+                        } description: {
+                            Text(emptyDescription)
+                        } actions: {
+                            if selection != .completed {
+                                Button("Add Task") { popouts.openQuickAdd(addContext) }
+                                    .buttonStyle(.hitPrimary)
+                            }
+                        }
+                        .frame(maxHeight: .infinity)
                     } else {
                         List(selection: popouts.selection) {
                             ForEach(groups) { group in
@@ -161,6 +170,9 @@ struct TaskListView: View {
                                     }
                                 }
                             }
+                            if selection != .completed {
+                                Section { InlineAddRow(context: addContext, key: "list") }
+                            }
                         }
                         #if os(macOS)
                         .listStyle(.inset)
@@ -183,15 +195,8 @@ struct TaskListView: View {
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
-
-            if selection != .completed {
-                Divider()
-                QuickAddBar(defaultProject: currentProject, defaultLabel: currentLabel)
-                    .padding(.horizontal)
-                    .padding(.vertical, 10)
-                    .background(Theme.surface)
-            }
         }
+        .quickAddEntry(addContext, showsButton: selection != .completed)
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
@@ -326,6 +331,18 @@ struct TaskListView: View {
         }
     }
     private var emptyDescription: String {
-        selection == .completed ? "Completed tasks show up here." : "Add one below. Try: Call mom tomorrow 5pm p2 #Family"
+        selection == .completed ? "Completed tasks show up here." : "Try: Call mom tomorrow 5pm p2 #Family"
+    }
+
+    /// What a task added here defaults to: Today's date in Today, this project in a project, and so on.
+    private var addContext: QuickAddContext {
+        switch selection {
+        case .inbox: return .inbox
+        case .today: return .today
+        case .upcoming: return .upcoming
+        case .project: return currentProject.map { .project(name: $0.name) } ?? .plain
+        case .label: return currentLabel.map { .label(name: $0.name) } ?? .plain
+        case .filter, .completed: return .plain
+        }
     }
 }

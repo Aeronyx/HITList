@@ -95,13 +95,8 @@ struct InboxView: View {
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
-
-            Divider()
-            QuickAddBar(defaultProject: nil, defaultLabel: nil)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Theme.surface)
         }
+        .quickAddEntry(.inbox)
         .background(Theme.background)
         .navigationTitle("Inbox")
         #if os(iOS)
@@ -160,6 +155,7 @@ struct InboxView: View {
                         .foregroundStyle(group.id == "Overdue" ? .red : .secondary)
                 }
             }
+            Section { InlineAddRow(context: .inbox, key: "inbox") }
         }
         #if os(macOS)
         .listStyle(.inset)
