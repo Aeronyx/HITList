@@ -9,20 +9,34 @@ import SwiftUI
 /// Unselected chips are an outline with a grey label and a tinted icon; selected chips fill with the
 /// tint at low opacity and the label turns tinted. Put several in a `HITChipRow` so they wrap.
 /// For a chip that opens a `Menu`, use `HITChipLabel` as the menu's label with `.buttonStyle(.plain)`.
+///
+/// `size: .compact` is the quick-add card's slim scrolling bar: a 30 pt capsule with tighter padding
+/// and a smaller label; with an empty title it is a 30 pt circle around the icon (the bar's "+").
+///
+///     HITChip("", systemImage: "plus", size: .compact) { showOptions = true }
 struct HITChip: View {
+    /// `.regular`: 28 pt tall, 6 pt corners. `.compact`: 30 pt capsule (the quick-add bar).
+    enum Size: Hashable {
+        case regular, compact
+
+        var height: CGFloat { self == .compact ? 30 : 28 }
+    }
+
     let title: String
     var systemImage: String?
     var tint: Color?
     var isSelected = false
+    var size: Size = .regular
     var action: (() -> Void)?
     var onDismiss: (() -> Void)?
 
     init(_ title: String, systemImage: String? = nil, tint: Color? = nil, isSelected: Bool = false,
-         onDismiss: (() -> Void)? = nil, action: (() -> Void)? = nil) {
+         size: Size = .regular, onDismiss: (() -> Void)? = nil, action: (() -> Void)? = nil) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
         self.isSelected = isSelected
+        self.size = size
         self.onDismiss = onDismiss
         self.action = action
     }
@@ -47,11 +61,11 @@ struct HITChip: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(HITIconButtonStyle(font: .system(size: 9, weight: .bold)))
-                .padding(.trailing, 2)
+                .padding(.trailing, size == .compact ? 4 : 2)
                 .accessibilityLabel("Remove \(title)")
             }
         }
-        .modifier(HITChipBackground(tint: tint, isSelected: isSelected, isHovered: isHovered && isEnabled))
+        .modifier(HITChipBackground(tint: tint, isSelected: isSelected, isHovered: isHovered && isEnabled, size: size))
         .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
         .onHover { isHovered = $0 }
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
@@ -60,8 +74,8 @@ struct HITChip: View {
     }
 
     private var content: some View {
-        HITChipContent(title: title, systemImage: systemImage, tint: tint, isSelected: isSelected,
-                       trailingPadding: onDismiss == nil ? HITSpacing.s + 2 : HITSpacing.xs)
+        HITChipContent(title: title, systemImage: systemImage, tint: tint, isSelected: isSelected, size: size,
+                       trailingPadding: onDismiss == nil ? nil : HITSpacing.xs)
     }
 }
 
@@ -74,20 +88,23 @@ struct HITChipLabel: View {
     var systemImage: String?
     var tint: Color?
     var isSelected = false
+    var size: HITChip.Size = .regular
 
-    init(_ title: String, systemImage: String? = nil, tint: Color? = nil, isSelected: Bool = false) {
+    init(_ title: String, systemImage: String? = nil, tint: Color? = nil, isSelected: Bool = false,
+         size: HITChip.Size = .regular) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
         self.isSelected = isSelected
+        self.size = size
     }
 
     @State private var isHovered = false
 
     var body: some View {
-        HITChipContent(title: title, systemImage: systemImage, tint: tint, isSelected: isSelected,
-                       trailingPadding: HITSpacing.s + 2)
-            .modifier(HITChipBackground(tint: tint, isSelected: isSelected, isHovered: isHovered))
+        HITChipContent(title: title, systemImage: systemImage, tint: tint, isSelected: isSelected, size: size,
+                       trailingPadding: nil)
+            .modifier(HITChipBackground(tint: tint, isSelected: isSelected, isHovered: isHovered, size: size))
             .onHover { isHovered = $0 }
     }
 }
@@ -120,23 +137,32 @@ private struct HITChipContent: View {
     let systemImage: String?
     let tint: Color?
     let isSelected: Bool
-    let trailingPadding: CGFloat
+    let size: HITChip.Size
+    /// Nil: the size's usual padding (a dismiss × after the text asks for less).
+    let trailingPadding: CGFloat?
+
+    private var iconOnly: Bool { title.isEmpty && systemImage != nil }
 
     var body: some View {
         let look = HITChipAppearance(tint: tint, isSelected: isSelected, isHovered: false)
-        HStack(spacing: 5) {
+        let compact = size == .compact
+        let leading: CGFloat = compact ? HITSpacing.s + 3 : HITSpacing.s + 2
+        HStack(spacing: compact ? 4 : 5) {
             if let systemImage {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: compact ? 12 : 11, weight: .semibold))
                     .foregroundStyle(look.icon)
             }
-            Text(title)
-                .font(HITType.control)
-                .lineLimit(1)
+            if !iconOnly {
+                Text(title)
+                    .font(compact ? HITType.subheadlineMedium : HITType.control)
+                    .lineLimit(1)
+            }
         }
-        .padding(.leading, HITSpacing.s + 2)
-        .padding(.trailing, trailingPadding)
-        .frame(height: 28)
+        .padding(.leading, iconOnly ? 0 : leading)
+        .padding(.trailing, iconOnly ? 0 : trailingPadding ?? leading)
+        .frame(minWidth: iconOnly ? size.height : nil)
+        .frame(height: size.height)
         .contentShape(Rectangle())
     }
 }
@@ -145,10 +171,11 @@ private struct HITChipBackground: ViewModifier {
     let tint: Color?
     let isSelected: Bool
     let isHovered: Bool
+    var size: HITChip.Size = .regular
 
     func body(content: Content) -> some View {
         let look = HITChipAppearance(tint: tint, isSelected: isSelected, isHovered: isHovered)
-        let shape = RoundedRectangle(cornerRadius: HITRadius.chip, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: size == .compact ? size.height / 2 : HITRadius.chip, style: .continuous)
         content
             .foregroundStyle(look.label)
             .background(shape.fill(look.fill))

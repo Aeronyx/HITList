@@ -11,8 +11,9 @@ extension View {
     }
 }
 
-/// Where the popouts appear. iPhone: the quick-add card docked to the bottom above the keyboard, the
-/// task in a bottom sheet. Mac (and iPad): both as a 560 pt panel centred about 18% from the top of
+/// Where the popouts appear. iPhone: the quick-add card as a detached oval floating 12 pt above the
+/// keyboard (12 pt from the screen edges) over a black 0.5 backdrop that closes it on tap; the task in a
+/// bottom sheet. Mac (and iPad): both as a 560 pt panel centred about 18% from the top of
 /// the window over a dimmed backdrop.
 struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
@@ -103,20 +104,36 @@ struct PopoutHost: ViewModifier {
             .transition(.opacity)
         } else {
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.35)
+                Color.black.opacity(0.5)
                     .ignoresSafeArea()
                     .onTapGesture { popouts.closeQuickAdd() }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Close")
                     .transition(.opacity)
                 card
-                    .background(
-                        UnevenRoundedRectangle(topLeadingRadius: HITRadius.card, topTrailingRadius: HITRadius.card, style: .continuous)
-                            .fill(Theme.surface)
-                            .ignoresSafeArea(.container, edges: .bottom)
-                            .shadow(color: .black.opacity(0.35), radius: 16, y: -2)
-                    )
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom))
+                    .ovalCardChrome()
+                    .padding(.horizontal, Self.ovalInset)
+                    .padding(.bottom, Self.ovalInset)
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
+    }
+
+    /// The oval's distance from the screen edges and from the top of the keyboard. The keyboard's safe
+    /// area keeps the card above it, so it floats rather than docks.
+    static let ovalInset: CGFloat = 12
+}
+
+extension View {
+    /// The iPhone quick-add card: a detached oval (28 pt continuous corners), slate surface, hairline
+    /// border, soft shadow.
+    func ovalCardChrome() -> some View {
+        let shape = RoundedRectangle(cornerRadius: QuickAddPopout.cardRadius, style: .continuous)
+        return self
+            .background(shape.fill(Theme.surface))
+            .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
+            .clipShape(shape)
+            .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
     }
 }
 

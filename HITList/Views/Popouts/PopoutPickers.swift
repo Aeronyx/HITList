@@ -50,19 +50,26 @@ extension View {
 // MARK: - Date
 
 /// Today, Tomorrow, This weekend, Next week, No date, then a month calendar; optionally a repeat menu.
+/// The Deadline chip uses it too, with `title: "Deadline"` and `clearTitle: "No deadline"`.
 struct DateChipPopover: View {
     var selected: Date?
     var now = Date()
     var onPick: (Date?) -> Void
     var recurrence: RecurrenceRule?
     var onRepeat: ((RecurrenceRule?) -> Void)?
+    /// Shown above the presets when set ("Deadline").
+    var title: String?
+    var clearTitle = "No date"
 
     @State private var calendarDay: Date
 
-    init(selected: Date?, now: Date = Date(), onPick: @escaping (Date?) -> Void,
+    init(selected: Date?, now: Date = Date(), title: String? = nil, clearTitle: String = "No date",
+         onPick: @escaping (Date?) -> Void,
          recurrence: RecurrenceRule? = nil, onRepeat: ((RecurrenceRule?) -> Void)? = nil) {
         self.selected = selected
         self.now = now
+        self.title = title
+        self.clearTitle = clearTitle
         self.onPick = onPick
         self.recurrence = recurrence
         self.onRepeat = onRepeat
@@ -88,7 +95,7 @@ struct DateChipPopover: View {
         if weekend > p.day(1) { list.append(Preset(id: "This weekend", symbol: "sofa", tint: Theme.accent, date: weekend)) }
         list.append(Preset(id: "Next week", symbol: "arrow.right.circle", tint: PopoutTint.later,
                            date: p.day(7, from: p.startOfWeek(containing: now))))
-        if selected != nil { list.append(Preset(id: "No date", symbol: "circle.slash", tint: Theme.secondaryText, date: nil)) }
+        if selected != nil { list.append(Preset(id: clearTitle, symbol: "circle.slash", tint: Theme.secondaryText, date: nil)) }
         return list
     }
 
@@ -99,16 +106,20 @@ struct DateChipPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                Text(title).font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+                    .padding([.horizontal, .top], HITSpacing.m)
+            }
             HITChipRow {
                 ForEach(presets) { preset in
                     HITChip(preset.id, systemImage: preset.symbol, tint: preset.tint, isSelected: isPicked(preset),
                             action: { onPick(preset.date) })
-                        .help(preset.date.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? "Remove the date")
+                        .help(preset.date.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? clearTitle)
                 }
             }
             .padding(HITSpacing.m)
             Rectangle().fill(Theme.separator).frame(height: 1)
-            DatePicker("Due date", selection: $calendarDay, displayedComponents: .date)
+            DatePicker(title ?? "Due date", selection: $calendarDay, displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .padding(.horizontal, HITSpacing.m)
@@ -275,7 +286,7 @@ struct ProjectChipPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HITField("Search projects", text: $search, systemImage: "magnifyingglass", clearable: true)
+            HITField("Search groups", text: $search, systemImage: "magnifyingglass", clearable: true)
                 .padding(HITSpacing.m)
             ScrollView {
                 VStack(spacing: 0) {
