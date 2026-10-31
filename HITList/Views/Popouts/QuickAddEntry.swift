@@ -1,8 +1,9 @@
 import SwiftUI
 
 extension View {
-    /// Makes this list a place to add tasks into: records it as ⌘N's context and adds the floating
-    /// accent "+" (iPhone/iPad) or the toolbar "+" (Mac) that opens the quick-add card.
+    /// Makes this list a place to add tasks into: records it as the context of ⌘N and of the iPhone
+    /// tab bar's "+" (`popouts.listContext`), and adds the toolbar "+" (Mac) or the floating "+" (iPad).
+    /// On iPhone the one "+" lives in the tab chrome (`MobileShell`), so lists draw none there.
     func quickAddEntry(_ context: QuickAddContext, showsButton: Bool = true) -> some View {
         modifier(QuickAddEntry(context: context, showsButton: showsButton))
     }
@@ -12,17 +13,17 @@ private struct QuickAddEntry: ViewModifier {
     let context: QuickAddContext
     let showsButton: Bool
     @Environment(PopoutController.self) private var popouts
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
 
     func body(content: Content) -> some View {
         content
             #if os(iOS)
             .safeAreaInset(edge: .bottom, alignment: .trailing, spacing: 0) {
-                if showsButton {
+                // iPad only: the iPhone's "+" is part of the tab bar chrome.
+                if showsButton, sizeClass == .regular {
                     FloatingAddButton { popouts.openQuickAdd(context) }
-                        .opacity(popouts.state.showsAddButton ? 1 : 0)
-                        .scaleEffect(popouts.state.showsAddButton ? 1 : 0.6)
-                        .allowsHitTesting(popouts.state.showsAddButton)
-                        .animation(.snappy(duration: 0.2), value: popouts.state.showsAddButton)
                         .padding(.trailing, HITSpacing.l + 4)
                         .padding(.bottom, HITSpacing.m)
                 }
@@ -44,23 +45,34 @@ private struct QuickAddEntry: ViewModifier {
     }
 }
 
-/// The accent "+" floating bottom-right over a list on iPhone, as in Todoist.
+/// The thumb-sized accent oval "+" bottom-right, above the iPhone tab bar (and floating over a list on
+/// iPad). It shrinks away while a popout is up; `popouts.openQuickAdd()` adds into the list on screen.
 struct FloatingAddButton: View {
+    static let size = CGSize(width: 64, height: 48)
     var action: () -> Void
+    @Environment(PopoutController.self) private var popouts
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var shown: Bool { popouts.state.showsAddButton }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(HITColor.onAccent)
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(Theme.accent))
+                .frame(width: Self.size.width, height: Self.size.height)
+                .background(Capsule().fill(Theme.accent))
                 .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
-                .contentShape(Circle())
+                .contentShape(Capsule())
         }
         .buttonStyle(FloatingAddPressStyle())
         .accessibilityLabel("Add task")
         .accessibilityIdentifier("quickAddButton")
+        .opacity(shown ? 1 : 0)
+        .scaleEffect(shown ? 1 : 0.6)
+        .allowsHitTesting(shown)
+        .accessibilityHidden(!shown)
+        .animation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.2), value: shown)
     }
 }
 
