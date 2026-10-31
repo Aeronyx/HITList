@@ -1,5 +1,8 @@
 import SwiftUI
 import SwiftData
+#if canImport(AppKit)
+import AppKit
+#endif
 
 extension View {
     /// Draws the window's popouts over this view. Applied once, by `ContentView`.
@@ -55,6 +58,15 @@ struct PopoutHost: ViewModifier {
             }
             .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: popouts.state.isFloatingQuickAddOpen)
             .animation(.easeOut(duration: 0.18), value: usesPanel && popouts.state.isTaskOpen)
+            #if os(macOS)
+            // ⌘← / ⌘→ move the popped-out task a day, from any list; a text field being edited keeps them.
+            .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
+                guard press.modifiers == .command, let task = popouts.task, !task.isCompleted,
+                      !(NSApp.keyWindow?.firstResponder is NSTextView) else { return .ignored }
+                popouts.shiftDay(task, by: press.key == .rightArrow ? 1 : -1, in: context)
+                return .handled
+            }
+            #endif
             .sheet(item: Binding(get: { usesPanel ? nil : popouts.task },
                                  set: { if $0 == nil, !usesPanel { popouts.closeTask() } })) { task in
                 ScrollView {

@@ -125,6 +125,15 @@ final class PopoutController {
         }
     }
 
+    /// ⌘← / ⌘→ and the popout's "A day earlier / later": the task's due day moves by `offset` days,
+    /// keeping its time of day. An undated task counts from today. Completed tasks stay put.
+    func shiftDay(_ task: TaskItem, by offset: Int, in context: ModelContext, now: Date = Date()) {
+        guard !task.isCompleted else { return }
+        let day = TaskRescheduling.day(offset, from: task.dueDate, now: now)
+        TaskActions.reschedule(task, to: day, in: context)
+        Task { await NotificationScheduler.reschedule(context: context) }
+    }
+
     /// The toast's Undo: puts every task it lists back as it was.
     func undoCompletions(in context: ModelContext) {
         let records = withAnimation(.snappy) { toast.takeAll() }

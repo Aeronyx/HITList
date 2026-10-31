@@ -137,15 +137,6 @@ struct UpcomingView: View {
         #endif
         .environment(\.defaultMinListHeaderHeight, 0)
         .slateList()
-        #if os(macOS)
-        // ⌘← / ⌘→ move the selected task a day. Only while the list has focus, so text fields keep them.
-        .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
-            guard press.modifiers == .command, let task = selectedTask, !task.isCompleted else { return .ignored }
-            let offset = press.key == .rightArrow ? 1 : -1
-            move(task, to: TaskRescheduling.day(offset, from: task.dueDate, now: now, calendar: calendar))
-            return .handled
-        }
-        #endif
     }
 
     private func row(_ entry: Entry) -> some View {

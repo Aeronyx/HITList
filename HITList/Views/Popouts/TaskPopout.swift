@@ -104,6 +104,15 @@ struct TaskPopout: View {
                 }
             }
             Divider()
+            Button(Self.menuTitle("A day earlier", key: "⌘←"), systemImage: "arrow.left.circle") {
+                popouts.shiftDay(task, by: -1, in: context)
+            }
+            .disabled(task.isCompleted)
+            Button(Self.menuTitle("A day later", key: "⌘→"), systemImage: "arrow.right.circle") {
+                popouts.shiftDay(task, by: 1, in: context)
+            }
+            .disabled(task.isCompleted)
+            Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
         } label: {
             Image(systemName: "ellipsis")
@@ -118,6 +127,15 @@ struct TaskPopout: View {
         .fixedSize()
         .accessibilityLabel("More")
         .help("Duplicate, move or delete")
+    }
+
+    /// Menu titles carry their Mac shortcut, since `PopoutHost` handles the keys rather than the menu.
+    private static func menuTitle(_ title: String, key: String) -> String {
+        #if os(macOS)
+        return title + "   " + key
+        #else
+        return title
+        #endif
     }
 
     // MARK: Description
