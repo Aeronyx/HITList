@@ -6,7 +6,8 @@ import OSLog
 import UIKit
 #endif
 
-/// Schedules a local notification at the due time of each upcoming timed task, and keeps the pending
+/// Schedules a local notification for each upcoming timed task, at its due time or its reminder offset
+/// before it ("!15mb": "in 15 min · Haircut"; see `NotificationPlan`), and keeps the pending
 /// set current when tasks arrive from another device, the clock or time zone changes, or the day rolls over.
 enum NotificationScheduler {
     static let enabledKey = "notifications.enabled"
@@ -176,8 +177,9 @@ enum NotificationScheduler {
         // No ledger yet (first run of this build): count tasks that just became due as announced, so
         // upgrading doesn't re-announce reminders build 1 already delivered.
         var ledger = AppGroup.defaults.stringArray(forKey: ledgerKey).map(Set.init) ?? Set(items.compactMap { item in
-            guard let due = item.dueDate, due <= now, due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
-            return NotificationPlan.ledgerKey(taskID: item.id, dueDate: due)
+            guard let due = item.dueDate, let remindAt = item.remindAt, remindAt <= now,
+                  due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
+            return NotificationPlan.ledgerKey(taskID: item.id, dueDate: remindAt)
         })
         let plan = NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
         let pendingFingerprints = Dictionary(
