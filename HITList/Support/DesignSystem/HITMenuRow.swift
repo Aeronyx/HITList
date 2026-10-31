@@ -5,12 +5,19 @@ import SwiftUI
 ///
 ///     HITMenuRow("Completion sound", systemImage: "speaker.wave.2", value: "Bubble") { showSounds = true }
 ///     HITMenuRow("Back up now", systemImage: "externaldrive", accessory: .none) { backUp() }
+///     HITMenuRow("Details", accessory: .expand(isExpanded: showDetails)) { showDetails.toggle() }
 ///     HITMenuRow("Account", value: "Available")                          // read-only
 ///     HITMenuRow("Sound", systemImage: "speaker.wave.2") { Button("Play") { … }.buttonStyle(.hitIcon) }
 ///     Toggle(isOn: $haptics) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }.toggleStyle(.hit)
 ///         .hitRowPadding()
 struct HITMenuRow<Trailing: View>: View {
-    enum Accessory { case chevron, none }
+    enum Accessory: Equatable {
+        /// A right-pointing chevron: the row opens something.
+        case chevron
+        /// A chevron that turns down while `isExpanded`: the row shows more rows below it.
+        case expand(isExpanded: Bool)
+        case none
+    }
 
     let title: String
     var subtitle: String?
@@ -45,10 +52,11 @@ struct HITMenuRow<Trailing: View>: View {
                     .truncationMode(.middle)
             }
             trailing
-            if action != nil, accessory == .chevron {
+            if action != nil, accessory != .none {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.secondaryText.opacity(0.7))
+                    .rotationEffect(.degrees(accessory == .expand(isExpanded: true) ? 90 : 0))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

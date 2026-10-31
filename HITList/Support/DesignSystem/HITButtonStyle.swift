@@ -121,15 +121,19 @@ private struct HITButtonBody: View {
 ///     Button(action: add) { Image(systemName: "plus") }.buttonStyle(.hitIcon)
 struct HITIconButtonStyle: ButtonStyle {
     var font: Font = .system(size: 13, weight: .semibold)
+    /// Where the glyph sits in its 24 pt target. `.leading` puts it flush against what precedes it
+    /// (the sidebar "+" right after a section title) while the target still extends past it.
+    var alignment: Alignment = .center
 
     func makeBody(configuration: Configuration) -> some View {
-        HITIconButtonBody(configuration: configuration, font: font)
+        HITIconButtonBody(configuration: configuration, font: font, alignment: alignment)
     }
 }
 
 private struct HITIconButtonBody: View {
     let configuration: ButtonStyle.Configuration
     let font: Font
+    let alignment: Alignment
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -138,7 +142,7 @@ private struct HITIconButtonBody: View {
         configuration.label
             .font(font)
             .foregroundStyle(isEnabled && (configuration.isPressed || isHovered) ? Theme.accent : Theme.secondaryText)
-            .frame(minWidth: 24, minHeight: 24)
+            .frame(minWidth: 24, minHeight: 24, alignment: alignment)
             .contentShape(Rectangle())
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : HITButtonStyle.Appearance.disabledOpacity)
             .onHover { isHovered = $0 }
