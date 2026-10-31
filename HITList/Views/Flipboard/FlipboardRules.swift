@@ -168,6 +168,31 @@ enum Flipboard {
         if task.dueDate != target { TaskActions.reschedule(task, to: target, keepTime: false, in: context) }
     }
 
+    // MARK: Flipping back
+
+    /// Where "Flip back to red" puts a green switch's due date: the day its interval began, which is the
+    /// day it was flipped (a flip restarts the interval from the flip day), and never later than today,
+    /// so the switch is red again. The due date before the flip is not stored, so a switch that was
+    /// overdue comes back due on its flip day rather than on the older date.
+    static func dueAfterFlipBack(due: Date, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Date {
+        let start = calendar.startOfDay(for: intervalStart(due: due, rule: rule, calendar: calendar))
+        return min(start, calendar.startOfDay(for: now))
+    }
+
+    /// "Flip back to red" undoes the last flip; a red switch has nothing to undo.
+    static func canFlipBack(due: Date?, now: Date, calendar: Calendar = .current) -> Bool {
+        side(due: due, now: now, calendar: calendar) == .green
+    }
+
+    /// Undoes the last flip of a green switch: it turns red, due on the day it was flipped.
+    @MainActor
+    static func flipBack(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        guard let rule = task.recurrenceRule, let due = task.dueDate, canFlipBack(due: due, now: now) else { return }
+        task.dueDate = dueAfterFlipBack(due: due, rule: rule, now: now)
+        task.touch()
+        try? context.save()
+    }
+
     // MARK: Joining and leaving
 
     /// The `flipboard` label, created with its stable id the first time.

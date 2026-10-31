@@ -7,6 +7,10 @@ import HITListCore
 /// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED goes out,
 /// the bar resets, a click plays (`FlipSound`), and only then does the task complete, so the board re-sorts after the flip has
 /// landed. A green switch asks before it is flipped early.
+///
+/// Long press anywhere on the tile, the rocker included (iPhone), or right-click (Mac) opens the switch's
+/// menu; on the Mac a long press opens the same actions in a popover. The rocker is not a `Button`, so
+/// the long press reaches the menu instead of being swallowed by the button.
 struct FlipSwitchTile: View {
     let task: TaskItem
     let now: Date
@@ -21,6 +25,11 @@ struct FlipSwitchTile: View {
     /// The rocker dips toward red and springs back when a green switch is flipped early.
     @State private var dipping = false
     @State private var confirmEarly = false
+    /// The rocker sinks a touch under the finger.
+    @State private var pressed = false
+    /// When the last long press fired: the tap that ends it must not also flip the switch.
+    @State private var longPressedAt: Date?
+    @State private var showMenuPanel = false
 
     private static let flipDuration: Duration = .milliseconds(380)
 
@@ -55,13 +64,7 @@ struct FlipSwitchTile: View {
                 FlipLED(isOn: side == .red, pulsing: isOverdue && !reduceMotion)
             }
 
-            Button(action: tapped) {
-                RockerSwitch(tilt: tilt)
-            }
-            .buttonStyle(RockerPressStyle(reduceMotion: reduceMotion))
-            .accessibilityLabel(task.title)
-            .accessibilityValue(side == .red ? "Red, \(caption)" : "Green, \(caption)")
-            .accessibilityHint(side == .red ? "Flips the switch back to green" : "Marks it done early")
+            rocker
 
             VStack(spacing: 5) {
                 FlipLightBar(fraction: fraction, side: side)
@@ -83,17 +86,21 @@ struct FlipSwitchTile: View {
                 }
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
         }
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         #if os(iOS)
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
         #endif
-        .contextMenu {
-            Button { onEdit() } label: { Label("Edit Interval…", systemImage: "timer") }
-            Button { onOpen() } label: { Label("Open Task", systemImage: "arrow.up.forward.square") }
-            Divider()
-            Button(role: .destructive) {
-                withAnimation(.snappy) { Flipboard.remove(task, in: context) }
-            } label: { Label("Remove from Flipboard", systemImage: "minus.circle") }
+        // A haptic as the hold registers, then the menu (iPhone) or the popover (Mac). Simultaneous, so
+        // the rocker's tap and the scroll view keep working.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: Self.longPressDuration).onEnded { _ in longPressed() }
+        )
+        .contextMenu { menuButtons }
+        #if os(macOS)
+        .popover(isPresented: $showMenuPanel, arrowEdge: .trailing) {
+            FlipSwitchMenuPanel(items: menuItems) { showMenuPanel = false }
         }
+        #endif
         .confirmationDialog("Mark “\(task.title)” done early?", isPresented: $confirmEarly, titleVisibility: .visible) {
             Button("Mark Done") { flip() }
         } message: {
@@ -104,9 +111,94 @@ struct FlipSwitchTile: View {
         .onAppear { FlipHaptic.prepare() }
     }
 
+    private var accessibilityValue: String { side == .red ? "Red, \(caption)" : "Green, \(caption)" }
+    private var accessibilityHint: String { side == .red ? "Flips the switch back to green" : "Marks it done early" }
+
+    /// The rocker takes taps only; the long press goes to the tile's menu.
+    private var rocker: some View {
+        RockerSwitch(tilt: tilt)
+            .scaleEffect(pressed && !reduceMotion ? 0.96 : 1)
+            .brightness(pressed ? -0.04 : 0)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: tapped)
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(task.title)
+            .accessibilityValue(accessibilityValue)
+            .accessibilityHint(accessibilityHint)
+            .accessibilityAction { tapped() }
+            .accessibilityActions { menuButtons }
+    }
+
+    private static let longPressDuration = 0.35
+
     private func tapped() {
+        if let longPressedAt, Date().timeIntervalSince(longPressedAt) < 1.5 {
+            self.longPressedAt = nil
+            return
+        }
         guard !flipping else { return }
+        press()
         if side == .red { flip() } else { confirmEarly = true }
+    }
+
+    /// The rocker sinks and comes back up, like pushing real plastic.
+    private func press() {
+        guard !reduceMotion else { return }
+        withAnimation(.easeOut(duration: 0.07)) { pressed = true }
+        Task {
+            try? await Task.sleep(for: .milliseconds(90))
+            withAnimation(.easeOut(duration: 0.12)) { pressed = false }
+        }
+    }
+
+    private func longPressed() {
+        longPressedAt = Date()
+        FlipHaptic.menu()
+        #if os(macOS)
+        showMenuPanel = true
+        #endif
+    }
+
+    // MARK: The menu
+
+    private var menuItems: [FlipMenuItem] {
+        [
+            FlipMenuItem(id: "back", title: "Flip back to red", systemImage: "arrow.uturn.backward",
+                         isDisabled: !Flipboard.canFlipBack(due: task.dueDate, now: now) || flipping) { flipBack() },
+            FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit() },
+            FlipMenuItem(id: "open", title: "Open task", systemImage: "arrow.up.forward.square") { onOpen() },
+            FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle", isDisabled: flipping) { markDone() },
+            FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
+                withAnimation(.snappy) { Flipboard.remove(task, in: context) }
+            },
+        ]
+    }
+
+    @ViewBuilder private var menuButtons: some View {
+        ForEach(menuItems) { item in
+            if item.role == .destructive { Divider() }
+            Button(role: item.role, action: item.action) { Label(item.title, systemImage: item.systemImage) }
+                .disabled(item.isDisabled)
+        }
+    }
+
+    /// "Mark done" from the menu: the same as flipping it, without asking when it is green.
+    private func markDone() {
+        guard !flipping else { return }
+        flip()
+    }
+
+    /// "Flip back to red": the rocker springs back to red, then the due date returns to the flip day.
+    private func flipBack() {
+        guard !flipping, Flipboard.canFlipBack(due: task.dueDate, now: now) else { return }
+        FlipHaptic.play()
+        FlipSound.play()
+        let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)
+        withAnimation(spring) {
+            Flipboard.flipBack(task, in: context, now: now)
+        }
+        Task { await NotificationScheduler.reschedule(context: context) }
     }
 
     private func flip() {
@@ -135,16 +227,39 @@ struct FlipSwitchTile: View {
     }
 }
 
-/// Pressing the rocker sinks the whole switch a touch, like pushing real plastic.
-private struct RockerPressStyle: ButtonStyle {
-    var reduceMotion: Bool
+/// One action in a switch's menu, shown as a context-menu button and, on the Mac, as a row in the
+/// long-press popover.
+struct FlipMenuItem: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    var role: ButtonRole?
+    var isDisabled = false
+    let action: () -> Void
+}
 
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
-            .brightness(configuration.isPressed ? -0.04 : 0)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-            .contentShape(Rectangle())
+/// The switch menu as a popover of design-system rows (the Mac's long press; right-click gets the
+/// system context menu with the same items).
+struct FlipSwitchMenuPanel: View {
+    let items: [FlipMenuItem]
+    var dismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(items) { item in
+                if item.role == .destructive {
+                    Rectangle().fill(Theme.separator).frame(height: 1)
+                }
+                HITMenuRow(item.title, systemImage: item.systemImage, role: item.role, accessory: .none) {
+                    dismiss()
+                    item.action()
+                }
+                .disabled(item.isDisabled)
+            }
+        }
+        .padding(.vertical, HITSpacing.xs)
+        .frame(width: 250)
+        .background(Theme.elevated)
     }
 }
 

@@ -192,4 +192,14 @@ enum FlipHaptic {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         #endif
     }
+
+    /// A softer bump as a long press registers and the switch's menu opens.
+    static func menu() {
+        guard CompletionFeedback.shared.areHapticsEnabled else { return }
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.8)
+        #else
+        NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now)
+        #endif
+    }
 }
