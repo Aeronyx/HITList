@@ -4,9 +4,9 @@ import HITListCore
 
 struct TaskListView: View {
     let selection: SidebarItem
-    @Binding var selectedTask: TaskItem?
 
     @Environment(\.modelContext) private var context
+    @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query private var projects: [Project]
     @Query private var labels: [TaskLabel]
@@ -131,7 +131,7 @@ struct TaskListView: View {
                         ContentUnavailableView(emptyTitle, systemImage: "checkmark.circle", description: Text(emptyDescription))
                             .frame(maxHeight: .infinity)
                     } else {
-                        List(selection: $selectedTask) {
+                        List(selection: popouts.selection) {
                             ForEach(groups) { group in
                                 Section {
                                     ForEach(group.tasks) { task in
@@ -143,7 +143,7 @@ struct TaskListView: View {
                                             .completionRowBackground(flashing: phase == .pending)
                                             .swipeActions(edge: .trailing) {
                                                 Button(role: .destructive) {
-                                                    if selectedTask?.id == task.id { selectedTask = nil }
+                                                    if popouts.task?.id == task.id { popouts.closeTask() }
                                                     TaskActions.delete(task, in: context)
                                                 } label: { Label("Delete", systemImage: "trash") }
                                             }

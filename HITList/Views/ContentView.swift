@@ -8,48 +8,40 @@ enum SidebarItem: Hashable {
     case label(UUID)
 }
 
+/// Sidebar + list, Todoist style: no detail column. Opening a task or adding one pops a card out over
+/// the list (`PopoutHost`); iPhone stacks the sidebar and the list.
 struct ContentView: View {
     @State private var selection: SidebarItem? = .today
-    @State private var selectedTask: TaskItem?
+    @State private var popouts = PopoutController()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             SidebarView(selection: $selection)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
-        } content: {
+        } detail: {
             SwiftUI.Group {
                 switch selection ?? .today {
                 case .flipboard:
-                    FlipboardView(selectedTask: $selectedTask)
-                        .navigationSplitViewColumnWidth(min: 440, ideal: 640)
+                    FlipboardView(selectedTask: popouts.selection)
                 case .inbox:
-                    InboxView(selectedTask: $selectedTask)
-                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+                    InboxView(selectedTask: popouts.selection)
                 case .upcoming:
-                    UpcomingView(selectedTask: $selectedTask)
-                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+                    UpcomingView(selectedTask: popouts.selection)
                 case let other:
-                    TaskListView(selection: other, selectedTask: $selectedTask)
-                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
+                    TaskListView(selection: other)
                 }
             }
-        } detail: {
-            if let task = selectedTask {
-                TaskDetailView(task: task) { selectedTask = nil }
-                    .id(task.id)
-            } else {
-                ContentUnavailableView("No Task Selected", systemImage: "checkmark.circle",
-                                       description: Text("Pick a task to see its details."))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Theme.background)
-            }
+            .navigationSplitViewColumnWidth(min: 420, ideal: 640)
         }
-        .onChange(of: selection) { _, _ in selectedTask = nil }
+        .environment(popouts)
+        .popoutHost(popouts)
+        .focusedSceneValue(\.popouts, popouts)
+        .onChange(of: selection) { _, _ in popouts.closeAll() }
         .background(Theme.background)
         #if os(macOS)
         .containerBackground(Theme.background, for: .window)
-        .frame(minWidth: 900, minHeight: 560)
+        .frame(minWidth: 760, minHeight: 560)
         #endif
     }
 }
