@@ -23,6 +23,9 @@ struct ContentView: View {
                 case .flipboard:
                     FlipboardView(selectedTask: $selectedTask)
                         .navigationSplitViewColumnWidth(min: 440, ideal: 640)
+                case .inbox:
+                    InboxView(selectedTask: $selectedTask)
+                        .navigationSplitViewColumnWidth(min: 320, ideal: 420)
                 case .upcoming:
                     UpcomingView(selectedTask: $selectedTask)
                         .navigationSplitViewColumnWidth(min: 320, ideal: 420)
