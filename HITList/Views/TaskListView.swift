@@ -40,7 +40,7 @@ struct TaskListView: View {
         case .upcoming: return "Upcoming"
         case .completed: return "Completed"
         case .filter: return currentFilter?.name ?? "Filter"
-        case .project: return currentProject?.name ?? "Project"
+        case .project: return currentProject?.name ?? "Group"
         case .label: return currentLabel.map { "@" + $0.name } ?? "Label"
         }
     }
@@ -62,6 +62,10 @@ struct TaskListView: View {
         let id: String
         let title: String
         let tasks: [TaskItem]
+        /// The header's colour: "Overdue" red, today green, other days grey.
+        var color: Color = Theme.secondaryText
+        /// Rows under a header that names their day show only their time.
+        var hidesDay = false
     }
 
     /// A row's task and the due date it is listed under: its own, or while its completion animates,
@@ -83,6 +87,15 @@ struct TaskListView: View {
     private var recentlyCompleted: Set<UUID> { completions.heldIDs }
 
     private func matchedTasks() throws -> [TaskItem] {
+        // Today and the Inbox follow `TaskOrdering`'s rules rather than a query (an undated task in a
+        // Group is a note: never in Today or the Inbox, only in its Group).
+        switch selection {
+        case .today:
+            return allTasks.filter { TaskOrdering.isInToday($0, now: now, includeCompleted: showCompleted) }
+        case .inbox:
+            return TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        default: break
+        }
         var source = queryString
         if showCompleted, selection != .completed { source = "(\(source)) & (completed | !completed)" }
         return try FilterQuery(source, now: now).apply(to: allTasks, now: now)
@@ -105,13 +118,22 @@ struct TaskListView: View {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
                 return .success([Group(id: "completed", title: "", tasks: sorted)])
             }
+            let rows = placed(matched)
+            switch selection {
+            case .today: return .success(todayGroups(rows))
+            case .inbox:
+                let tasks = TaskOrdering.sorted(rows).map(\.task)
+                return .success(tasks.isEmpty ? [] : [Group(id: "inbox", title: "", tasks: tasks)])
+            default: break
+            }
             var groups: [Group] = []
-            for row in placed(matched) {
+            for row in rows {
                 let key = DueFormatter.sectionTitle(for: row.filterDueDate, now: now)
                 if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task])
+                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task], color: groups[i].color)
                 } else {
-                    groups.append(Group(id: key, title: key, tasks: [row.task]))
+                    groups.append(Group(id: key, title: key, tasks: [row.task],
+                                        color: DueFormatter.sectionColor(for: row.filterDueDate, now: now)))
                 }
             }
             return .success(groups)
@@ -120,6 +142,28 @@ struct TaskListView: View {
         } catch {
             return .failure(FilterQueryError(message: error.localizedDescription, position: 0))
         }
+    }
+
+    /// Today: "Overdue" (red), then the day, "Oct 31, Saturday" (green), each by priority then due time.
+    /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
+    private func todayGroups(_ rows: [Placed]) -> [Group] {
+        var overdue: [Placed] = [], today: [Placed] = []
+        for row in rows {
+            switch TaskOrdering.todaySection(for: row.filterDueDate, now: now) {
+            case .overdue?: overdue.append(row)
+            case .today?: today.append(row)
+            case nil: break
+            }
+        }
+        guard !(overdue.isEmpty && today.isEmpty) else { return [] }
+        var groups: [Group] = []
+        if !overdue.isEmpty {
+            groups.append(Group(id: "Overdue", title: "Overdue", tasks: TaskOrdering.sorted(overdue).map(\.task),
+                                color: HITColor.dueOverdue))
+        }
+        groups.append(Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated),
+                            tasks: TaskOrdering.sorted(today).map(\.task), color: HITColor.dueToday, hidesDay: true))
+        return groups
     }
 
     var body: some View {
@@ -146,7 +190,7 @@ struct TaskListView: View {
                                     ForEach(group.tasks) { task in
                                         let phase = completions.phase(of: task.id)
                                         TaskRow(task: task, now: now, showProject: currentProject == nil,
-                                                completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+                                                hidesDay: group.hidesDay, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
                                             .opacity(phase == .animating ? 0 : 1)
                                             .tag(task)
                                             .completionRowBackground(flashing: phase == .pending)
@@ -166,7 +210,7 @@ struct TaskListView: View {
                                 } header: {
                                     if !group.title.isEmpty {
                                         Text(group.title)
-                                            .foregroundStyle(group.id == "Overdue" ? .red : .secondary)
+                                            .foregroundStyle(group.color)
                                     }
                                 }
                             }

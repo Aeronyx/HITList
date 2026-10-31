@@ -65,18 +65,51 @@ enum DueFormatter {
         return hasTime ? date < now : date < calendar.startOfDay(for: now)
     }
 
-    /// Section header for grouping by due day.
-    static func sectionTitle(for date: Date?, now: Date = Date(), calendar: Calendar = .current) -> String {
+    /// How `sectionTitle` names days from today on.
+    enum SectionStyle {
+        /// "Today", "Tomorrow", "Monday, Nov 2", "Mon, Nov 9, 2026".
+        case relative
+        /// Every day by its date, the Today screen's header: "Oct 31, Saturday".
+        case dated
+    }
+
+    /// Section header for grouping by due day. Days before today are all "Overdue".
+    static func sectionTitle(for date: Date?, now: Date = Date(), style: SectionStyle = .relative,
+                             calendar: Calendar = .current, locale: Locale = .current) -> String {
         guard let date else { return "No date" }
         let today = calendar.startOfDay(for: now)
         let day = calendar.startOfDay(for: date)
         if day < today { return "Overdue" }
+        if style == .dated { return dayTitle(for: date, now: now, calendar: calendar, locale: locale) }
+        let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
         let days = calendar.dateComponents([.day], from: today, to: day).day ?? 0
         switch days {
         case 0: return "Today"
         case 1: return "Tomorrow"
-        case 2...6: return date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
-        default: return date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().year())
+        case 2...6: return date.formatted(format.weekday(.wide).month(.abbreviated).day())
+        default: return date.formatted(format.weekday(.abbreviated).month(.abbreviated).day().year())
         }
+    }
+
+    /// "Oct 31, Saturday"; another year adds it: "Jan 2, 2027, Saturday".
+    static func dayTitle(for date: Date, now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        let day = date.formatted(sameYear ? format.month(.abbreviated).day() : format.month(.abbreviated).day().year())
+        return "\(day), \(date.formatted(format.weekday(.wide)))"
+    }
+
+    /// The time alone, "5:30 PM", for rows whose day the section header already says.
+    static func timeText(for date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        date.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).hour().minute())
+    }
+
+    /// A day section header's colour: "Overdue" red, today green (`HITColor.due`'s rule), others grey.
+    static func sectionColor(for date: Date?, now: Date = Date(), calendar: Calendar = .current) -> Color {
+        guard let date else { return Theme.secondaryText }
+        let today = calendar.startOfDay(for: now)
+        let day = calendar.startOfDay(for: date)
+        if day < today { return HITColor.dueOverdue }
+        return day == today ? HITColor.dueToday : Theme.secondaryText
     }
 }
