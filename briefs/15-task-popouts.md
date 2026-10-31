@@ -23,6 +23,11 @@ use the popouts. New tests in `HITListTests/`.
   popout must work in all three: TaskListView, InboxView, UpcomingView. Prefer one shared presenter
   (an `@Observable` popout controller injected via the environment) over per-view copies.
 - The Flipboard (`HITList/Views/Flipboard/`) opens a task via "Open task"; route that through the task popout too.
+- Upcoming rows (`UpcomingView.swift` ~line 165-181) carry both `.draggable` and `.contextMenu`. Verified on the
+  iPhone 17 simulator on 2026-10-31: a long press opens the context menu, so the drag never lifts and a finger
+  that keeps moving lands on a menu item. Decision: on iOS remove `.draggable` from the rows and keep swipe
+  actions + Pick Date (Todoist does the same on iPhone); keep drag-to-day on macOS, and verify it there by
+  running the Mac build and dragging with the mouse. Keep the week-strip and header drop targets for macOS.
 - Design-system components are documented in `HITList/Support/DesignSystem/README.md` and shown in the
   `DesignSystemGallery` preview. No default `.bordered`/`.borderedProminent` buttons, plain `Toggle`s or
   default pickers anywhere you touch.
