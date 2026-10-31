@@ -16,7 +16,6 @@ struct FlipboardView: View {
     @State private var width: CGFloat = 0
     @State private var adding = false
     @State private var editing: TaskItem?
-    @State private var opened: TaskItem?
     @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -93,25 +92,10 @@ struct FlipboardView: View {
         .sheet(item: $editing) { task in
             FlipSwitchEditor(task: task).slateSheet()
         }
-        .sheet(item: $opened) { task in
-            NavigationStack {
-                TaskDetailView(task: task) { opened = nil }
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) { Button("Done") { opened = nil } }
-                    }
-            }
-            .slateSheet()
-        }
     }
 
-    /// The Mac shows the task in the detail column; iPhone and iPad open it in a sheet.
-    private func open(_ task: TaskItem) {
-        #if os(macOS)
-        selectedTask = task
-        #else
-        opened = task
-        #endif
-    }
+    /// Opens the task popout (`selectedTask` is `PopoutController.selection`).
+    private func open(_ task: TaskItem) { selectedTask = task }
 }
 
 extension SidebarItem {
