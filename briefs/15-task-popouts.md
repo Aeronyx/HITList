@@ -17,6 +17,16 @@ phone or directly inside an existing list on the laptop (Todoist's inline add ro
 `UpcomingView.swift`, `FlipboardView.swift` and `InboxView` where they open a task or quick-add, so they
 use the popouts. New tests in `HITListTests/`.
 
+## Know before you start
+- `HITList/Views/Inbox/InboxView.swift` has its own list implementation (it does not wrap `TaskListView`), as
+  does `HITList/Views/Upcoming/UpcomingView.swift`. Your quick-add popout, floating "+", inline add row and task
+  popout must work in all three: TaskListView, InboxView, UpcomingView. Prefer one shared presenter
+  (an `@Observable` popout controller injected via the environment) over per-view copies.
+- The Flipboard (`HITList/Views/Flipboard/`) opens a task via "Open task"; route that through the task popout too.
+- Design-system components are documented in `HITList/Support/DesignSystem/README.md` and shown in the
+  `DesignSystemGallery` preview. No default `.bordered`/`.borderedProminent` buttons, plain `Toggle`s or
+  default pickers anywhere you touch.
+
 ## Task, four commits
 1. **Two columns, not three.** `NavigationSplitView` becomes sidebar + list on Mac/iPad; iPhone stacks.
    Remove the detail column and `selectedTask` plumbing; selection now means "present the task popout".
