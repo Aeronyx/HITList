@@ -4,8 +4,9 @@ import HITListCore
 
 /// A task, popped out: a bottom sheet on iPhone, the top-centred panel on the Mac. Minimal until you
 /// reach for more: checkbox and title (edit in place), a collapsed "Add description", and the chip row
-/// (date, priority, project, labels, reminder, repeat); a repeating task also offers the Flipboard.
-/// The `…` menu holds Duplicate, Move and Delete. Every change saves as it is made.
+/// (date, priority, group, labels, reminder with its offset, repeat, then deadline and location when
+/// set); a repeating task also offers the Flipboard. The `…` menu holds Location, Deadline, Duplicate,
+/// Move and Delete. Every change saves as it is made.
 struct TaskPopout: View {
     @Bindable var task: TaskItem
 
@@ -21,10 +22,13 @@ struct TaskPopout: View {
     /// The check fills for a moment before the popout closes with the toast.
     @State private var completing = false
     @State private var pops = 0
+    /// Deadline / Location picked from the `…` menu: their chips show before they have a value.
+    @State private var revealsDeadline = false
+    @State private var revealsLocation = false
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
 
-    enum Chip: Hashable { case date, priority, project, labels, reminder, repeating }
+    enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.m) {
@@ -96,6 +100,9 @@ struct TaskPopout: View {
 
     private var moreMenu: some View {
         Menu {
+            Button("Location", systemImage: "mappin.and.ellipse") { reveal(.location) }
+            Button("Deadline", systemImage: "scope") { reveal(.deadline) }
+            Divider()
             Button("Duplicate", systemImage: "plus.square.on.square", action: duplicate)
             Menu("Move to…", systemImage: "arrow.right.square") {
                 Button("Inbox", systemImage: "tray") { setProject(nil) }
@@ -126,7 +133,20 @@ struct TaskPopout: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .accessibilityLabel("More")
-        .help("Duplicate, move or delete")
+        .accessibilityIdentifier("popoutMore")
+        .help("Location, deadline, duplicate, move or delete")
+    }
+
+    /// Shows the Deadline or Location chip and opens its popover once the menu has gone.
+    private func reveal(_ chip: Chip) {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+            if chip == .deadline { revealsDeadline = true }
+            if chip == .location { revealsLocation = true }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            openChip = chip
+        }
     }
 
     /// Menu titles carry their Mac shortcut, since `PopoutHost` handles the keys rather than the menu.
@@ -214,18 +234,21 @@ struct TaskPopout: View {
                     LabelsChipPopover(labels: labels, selected: task.labelList.map(\.name), onToggle: toggleLabel)
                 }
 
-            HITChip(timeParts == nil ? "Reminder" : (due?.formatted(date: .omitted, time: .shortened) ?? "Reminder"),
-                    systemImage: "alarm", tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
+            HITChip(ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes),
+                    systemImage: (task.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
+                    tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
                     isSelected: timeParts != nil, action: { openChip = .reminder })
                 .popover(isPresented: chipBinding(.reminder)) {
-                    ReminderChipPopover(hour: timeParts?.hour, minute: timeParts?.minute, onPick: { h, m in
+                    ReminderChipPopover(hour: timeParts?.hour, minute: timeParts?.minute,
+                                        offsetMinutes: task.reminderOffsetMinutes, onPick: { h, m in
                         openChip = nil
                         setTime(hour: h, minute: m)
                     }, onClear: {
                         openChip = nil
                         clearTime()
-                    })
+                    }, onOffset: setReminderOffset)
                 }
+                .accessibilityIdentifier("popoutReminderChip")
 
             HITChip(task.recurrenceRule?.displayText ?? "Repeat", systemImage: "repeat",
                     tint: task.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
@@ -236,7 +259,42 @@ struct TaskPopout: View {
                         setRecurrence(rule)
                     }
                 }
+
+            if task.deadline != nil || revealsDeadline { deadlineChip(now: now) }
+            if task.locationName != nil || revealsLocation { locationChip }
         }
+    }
+
+    private func deadlineChip(now: Date) -> some View {
+        let deadline = task.deadline
+        return HITChip(deadline.map { "Deadline · " + DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Deadline",
+                       systemImage: "scope",
+                       tint: deadline == nil ? Theme.secondaryText : PopoutTint.date(deadline, now: now),
+                       isSelected: deadline != nil,
+                       onDismiss: deadline == nil ? nil : { setDeadline(nil) },
+                       action: { openChip = .deadline })
+            .popover(isPresented: chipBinding(.deadline)) {
+                DateChipPopover(selected: deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
+                    openChip = nil
+                    setDeadline(day)
+                }
+            }
+            .accessibilityIdentifier("popoutDeadlineChip")
+    }
+
+    private var locationChip: some View {
+        let name = task.locationName
+        return HITChip(name ?? "Location", systemImage: "mappin.and.ellipse",
+                       tint: name == nil ? Theme.secondaryText : Theme.accent, isSelected: name != nil,
+                       onDismiss: name == nil ? nil : { setLocation(nil) },
+                       action: { openChip = .location })
+            .popover(isPresented: chipBinding(.location)) {
+                LocationChipPopover(name: name) { value in
+                    openChip = nil
+                    setLocation(value)
+                }
+            }
+            .accessibilityIdentifier("popoutLocationChip")
     }
 
     // MARK: Flipboard
@@ -301,7 +359,33 @@ struct TaskPopout: View {
     private func clearTime() {
         if let due = task.dueDate { task.dueDate = Calendar.current.startOfDay(for: due) }
         task.hasDueTime = false
+        task.reminderOffsetMinutes = nil
         save()
+    }
+
+    /// Nil or 0 reminds at the due time.
+    private func setReminderOffset(_ minutes: Int?) {
+        let value = (minutes ?? 0) > 0 ? minutes : nil
+        guard task.reminderOffsetMinutes != value else { return }
+        task.reminderOffsetMinutes = value
+        save()
+    }
+
+    /// The deadline's day; nil removes it and its chip.
+    private func setDeadline(_ day: Date?) {
+        task.deadline = day.map { Calendar.current.startOfDay(for: $0) }
+        if day == nil { revealsDeadline = false }
+        save(reschedule: false)
+    }
+
+    /// Trimmed; nil or blank removes it and its chip.
+    private func setLocation(_ name: String?) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        if value == nil { revealsLocation = false }
+        guard task.locationName != value else { return }
+        task.locationName = value
+        save(reschedule: false)
     }
 
     private func setRecurrence(_ rule: RecurrenceRule?) {
@@ -330,6 +414,9 @@ struct TaskPopout: View {
         let copy = TaskItem(title: task.title, notes: task.notes, priority: task.priority, dueDate: task.dueDate,
                             hasDueTime: task.hasDueTime, project: task.project, labels: task.labels ?? [],
                             recurrence: task.recurrenceRule)
+        copy.reminderOffsetMinutes = task.reminderOffsetMinutes
+        copy.deadline = task.deadline
+        copy.locationName = task.locationName
         context.insert(copy)
         try? context.save()
         rescheduleNotifications()

@@ -2,14 +2,23 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The quick-add card, the same everywhere: docked above the keyboard on iPhone, a panel near the top
-/// of the window on the Mac, or expanded in place of a list's "Add task" row.
+/// The quick-add card, the same everywhere: on iPhone a detached oval floating just above the keyboard
+/// over a dimmed screen (`PopoutHost`), on the Mac the 560 pt panel near the top of the window, or
+/// expanded in place of a list's "Add task" row.
 ///
-/// Type naturally ("Call mom tomorrow 5pm #Family @calls p2"); tokens light up and the chips follow.
-/// Tapping a chip writes its token into the text. Return adds the task and keeps the card open, empty,
-/// for the next one; Escape or × closes it.
+/// "Task Name" in `HITType.taskName` (Inter 14 bold), then one slim horizontally scrolling bar of
+/// compact chips: "+" (Description, Labels, Location, Deadline, Repeat), Date, Priority, Reminder,
+/// Group, then Labels, Deadline and Repeat once they are set or picked from "+". Type naturally
+/// ("Haircut tom 11am p1 !15mb"); tokens light up and the chips follow. Picking a chip writes its token
+/// into the text. Return adds the task and keeps the card open, empty, for the next one; Escape, ×, or
+/// a tap on the dimmed backdrop closes it.
 struct QuickAddPopout: View {
     enum Style { case floating, inline }
+
+    /// The iPhone oval's corner radius.
+    static let cardRadius: CGFloat = 28
+    /// Inside the card: generous, on every side.
+    static let padding: CGFloat = 20
 
     let context: QuickAddContext
     var style: Style = .floating
@@ -30,8 +39,9 @@ struct QuickAddPopout: View {
     @State private var addedGeneration = 0
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
+    @FocusState private var locationFocused: Bool
 
-    enum Chip: Hashable { case date, priority, reminder, project, labels }
+    enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
     init(context: QuickAddContext, style: Style = .floating, onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {}) {
         self.context = context
@@ -49,24 +59,31 @@ struct QuickAddPopout: View {
         let parser = parser
         let parsed = parser.parse(draft.text)
         let chips = draft.chips(parser)
-        VStack(alignment: .leading, spacing: HITSpacing.s + 2) {
-            TokenHighlightField(placeholder: placeholder, text: $draft.text, tokens: parsed.tokens,
-                                priority: parsed.priority, focus: $titleFocused, onSubmit: save)
-            if draft.showsNotes {
-                HITField("Description", text: $draft.notes, axis: .vertical, lineLimit: 1...5)
+        VStack(alignment: .leading, spacing: HITSpacing.m) {
+            TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
+                                priority: parsed.priority, focus: $titleFocused, bordered: false, onSubmit: save)
+                .accessibilityIdentifier("quickAddTitle")
+            if draft.shows(.description) {
+                HITField("Description", text: $draft.notes, systemImage: "text.alignleft", axis: .vertical, lineLimit: 1...5)
                     .focused($notesFocused)
                     .transition(.opacity)
             }
+            if draft.shows(.location) {
+                HITField("Location", text: $draft.locationName, systemImage: "mappin.and.ellipse", clearable: true)
+                    .focused($locationFocused)
+                    .onSubmit(save)
+                    .transition(.opacity)
+                    .accessibilityIdentifier("quickAddLocation")
+            }
             suggestionRow(parsed)
-            chipRow(chips, parser: parser)
+            optionBar(chips, parser: parser)
             if let errorMessage {
                 Text(errorMessage).font(HITType.caption).foregroundStyle(HITColor.danger)
             }
-            Rectangle().fill(Theme.separator).frame(height: 1)
-            footer(chips)
+            footer
         }
-        .padding(HITSpacing.l)
-        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.showsNotes)
+        .padding(Self.padding)
+        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.extras)
         .onAppear {
             rebuildEngine()
             titleFocused = true
@@ -77,21 +94,16 @@ struct QuickAddPopout: View {
         .onChange(of: openChip) { _, chip in
             // iPhone: the keyboard steps aside while a chip's popover needs the room, then comes back.
             #if os(iOS)
-            if chip != nil { titleFocused = false; notesFocused = false } else { titleFocused = true }
+            if chip != nil {
+                titleFocused = false; notesFocused = false; locationFocused = false
+            } else {
+                titleFocused = true
+            }
             #endif
         }
         #if os(macOS)
         .onExitCommand(perform: onClose)
         #endif
-    }
-
-    private var placeholder: String {
-        switch context {
-        case .project(let name): return "Add to \(name)… e.g. Draft plan fri 3pm p2"
-        case .label(let name): return "Add @\(name) task… e.g. Reply to Sam tomorrow"
-        case .day(let day): return "Task for \(day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))"
-        default: return "Task name, e.g. Call mom tomorrow 5pm #Family p2"
-        }
     }
 
     // MARK: Suggestions
@@ -101,6 +113,7 @@ struct QuickAddPopout: View {
     }
 
     /// Autocomplete for the word being typed, then "you usually add these" attributes for the title.
+    /// Only there while it has something to offer.
     @ViewBuilder
     private func suggestionRow(_ parsed: QuickAddResult) -> some View {
         let suggestions = draft.text.isEmpty ? [] : currentEngine.suggestions(for: draft.text, limit: 5)
@@ -115,7 +128,7 @@ struct QuickAddPopout: View {
                         .buttonStyle(SuggestionStyle())
                     }
                     if let autofill {
-                        Image(systemName: "sparkles").font(HITType.caption).foregroundStyle(Theme.secondaryText)
+                        Image(systemName: "sparkles").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondaryText)
                         if let p = autofill.projectName {
                             Button("#\(p)") { appendToken(QuickAddTokens.project(p)) }.buttonStyle(SuggestionStyle())
                         }
@@ -127,7 +140,9 @@ struct QuickAddPopout: View {
                         }
                     }
                 }
+                .padding(.horizontal, Self.padding)
             }
+            .padding(.horizontal, -Self.padding)
             .frame(height: 24)
             .transition(.opacity)
         }
@@ -159,84 +174,190 @@ struct QuickAddPopout: View {
         engine = AutocompleteEngine(tasks: allTasks, projects: projects.map(\.name), labels: labels.map(\.name))
     }
 
-    // MARK: Chips
+    // MARK: The option bar
 
     private func chipBinding(_ chip: Chip) -> Binding<Bool> {
         Binding(get: { openChip == chip }, set: { if !$0, openChip == chip { openChip = nil } })
     }
 
-    @ViewBuilder
-    private func chipRow(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        let now = parser.dateParser.now
-        HITChipRow {
-            HITChip(chips.dueDate.map { DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Date",
-                    systemImage: chips.recurrence == nil ? "calendar" : "repeat",
-                    tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
-                    isSelected: chips.dueDate != nil, action: { openChip = .date })
-                .popover(isPresented: chipBinding(.date)) {
-                    DateChipPopover(selected: chips.dueDate, now: now, onPick: { day in
-                        draft.setDate(day, parser)
-                        openChip = nil
-                        titleFocused = true
-                    }, recurrence: chips.recurrence, onRepeat: { rule in
-                        draft.setRecurrence(rule, parser)
-                        openChip = nil
-                        titleFocused = true
-                    })
-                }
+    /// Closes the open popover and puts the cursor back in the title.
+    private func done() {
+        openChip = nil
+        titleFocused = true
+    }
 
-            HITChip(chips.priority == .p4 ? "Priority" : chips.priority.shortName, systemImage: chips.priority.symbol,
-                    tint: chips.priority == .p4 ? Theme.secondaryText : chips.priority.color,
-                    isSelected: chips.priority != .p4, action: { openChip = .priority })
-                .popover(isPresented: chipBinding(.priority)) {
-                    PriorityChipPopover(selection: chips.priority) { p in
-                        draft.setPriority(p, parser)
-                        openChip = nil
-                        titleFocused = true
-                    }
-                }
+    /// One slim row that scrolls sideways, edge to edge inside the card.
+    private func optionBar(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                plusMenu
+                dateChip(chips, parser: parser)
+                priorityChip(chips, parser: parser)
+                reminderChip(chips, parser: parser)
+                groupChip(chips, parser: parser)
+                if !chips.labelNames.isEmpty || draft.shows(.labels) { labelsChip(chips, parser: parser) }
+                if chips.deadline != nil || draft.shows(.deadline) { deadlineChip(chips) }
+                if chips.recurrence != nil || draft.shows(.repeating) { repeatChip(chips, parser: parser) }
+            }
+            .padding(.horizontal, Self.padding)
+            .padding(.vertical, 1)
+        }
+        .padding(.horizontal, -Self.padding)
+        .frame(height: HITChip.Size.compact.height + 2)
+        .accessibilityIdentifier("quickAddOptionBar")
+    }
 
-            HITChip(chips.hasDueTime ? (chips.dueDate?.formatted(date: .omitted, time: .shortened) ?? "Reminder") : "Reminder",
-                    systemImage: "alarm", tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
-                    isSelected: chips.hasDueTime, action: { openChip = .reminder })
-                .popover(isPresented: chipBinding(.reminder)) {
-                    let parts = chips.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
-                    ReminderChipPopover(hour: chips.hasDueTime ? parts?.hour : nil, minute: chips.hasDueTime ? parts?.minute : nil,
-                                        onPick: { h, m in
-                                            draft.setTime(hour: h, minute: m, parser)
-                                            openChip = nil
-                                            titleFocused = true
-                                        }, onClear: {
-                                            draft.clearTime(parser)
-                                            openChip = nil
-                                            titleFocused = true
-                                        })
-                }
+    /// "+": the options that have no chip until you ask for them.
+    private var plusMenu: some View {
+        Menu {
+            Button("Description", systemImage: "text.alignleft") { reveal(.description) }
+            Button("Labels", systemImage: "tag") { reveal(.labels) }
+            Button("Location", systemImage: "mappin.and.ellipse") { reveal(.location) }
+            Button("Deadline", systemImage: "scope") { reveal(.deadline) }
+            Button("Repeat", systemImage: "repeat") { reveal(.repeating) }
+        } label: {
+            HITChipLabel("", systemImage: "plus", tint: Theme.accent, size: .compact)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("More options")
+        .accessibilityIdentifier("quickAddPlus")
+        .help("Description, labels, location, deadline, repeat")
+    }
 
-            HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : "number",
-                    tint: projectTint(chips.projectName), isSelected: chips.projectName != nil, action: { openChip = .project })
-                .popover(isPresented: chipBinding(.project)) {
-                    ProjectChipPopover(projects: projects, selectedName: chips.projectName) { project in
-                        draft.setProject(project?.name, parser)
-                        openChip = nil
-                        titleFocused = true
-                    }
-                }
-
-            HITChip(chips.labelNames.isEmpty ? "Labels" : chips.labelNames.map { "@" + $0 }.joined(separator: " "),
-                    systemImage: "tag", tint: chips.labelNames.isEmpty ? Theme.secondaryText : PopoutTint.label,
-                    isSelected: !chips.labelNames.isEmpty, action: { openChip = .labels })
-                .popover(isPresented: chipBinding(.labels)) {
-                    LabelsChipPopover(labels: labels, selected: chips.labelNames) { name in
-                        draft.toggleLabel(name, parser)
-                    }
-                }
-
-            if let rule = chips.recurrence {
-                HITChip(rule.displayText, systemImage: "repeat", tint: PopoutTint.today, isSelected: true,
-                        onDismiss: { draft.setRecurrence(nil, parser) }) { openChip = .date }
+    /// Shows the picked option's control: a field gets the cursor, a chip opens its popover once the
+    /// menu has gone (presenting while the menu is still dismissing would be dropped).
+    private func reveal(_ extra: QuickAddDraft.Extra) {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { draft.reveal(extra) }
+        let chip: Chip? = switch extra {
+        case .labels: .labels
+        case .deadline: .deadline
+        case .repeating: .repeating
+        case .description, .location: nil
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            if let chip {
+                openChip = chip
+            } else if extra == .description {
+                notesFocused = true
+            } else {
+                locationFocused = true
             }
         }
+    }
+
+    private func dateChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        let now = parser.dateParser.now
+        return HITChip(chips.dueDate.map { DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Date",
+                       systemImage: chips.recurrence == nil ? "calendar" : "repeat",
+                       tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
+                       isSelected: chips.dueDate != nil, size: .compact, action: { openChip = .date })
+            .popover(isPresented: chipBinding(.date)) {
+                DateChipPopover(selected: chips.dueDate, now: now, onPick: { day in
+                    draft.setDate(day, parser)
+                    done()
+                }, recurrence: chips.recurrence, onRepeat: { rule in
+                    draft.setRecurrence(rule, parser)
+                    done()
+                })
+            }
+            .accessibilityIdentifier("quickAddDateChip")
+    }
+
+    private func priorityChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        HITChip(chips.priority == .p4 ? "Priority" : chips.priority.shortName, systemImage: chips.priority.symbol,
+                tint: chips.priority == .p4 ? Theme.secondaryText : chips.priority.color,
+                isSelected: chips.priority != .p4, size: .compact, action: { openChip = .priority })
+            .popover(isPresented: chipBinding(.priority)) {
+                PriorityChipPopover(selection: chips.priority) { p in
+                    draft.setPriority(p, parser)
+                    done()
+                }
+            }
+            .accessibilityIdentifier("quickAddPriorityChip")
+    }
+
+    private func reminderChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes)
+        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
+                       tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
+                       isSelected: chips.hasDueTime, size: .compact, action: { openChip = .reminder })
+            .popover(isPresented: chipBinding(.reminder)) {
+                let parts = chips.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
+                ReminderChipPopover(hour: chips.hasDueTime ? parts?.hour : nil, minute: chips.hasDueTime ? parts?.minute : nil,
+                                    offsetMinutes: chips.reminderOffsetMinutes,
+                                    onPick: { h, m in
+                                        draft.setTime(hour: h, minute: m, parser)
+                                        done()
+                                    }, onClear: {
+                                        draft.clearTime(parser)
+                                        draft.setReminderOffset(nil, parser)
+                                        done()
+                                    }, onOffset: { minutes in
+                                        draft.setReminderOffset(minutes, parser)
+                                    })
+            }
+            .accessibilityIdentifier("quickAddReminderChip")
+    }
+
+    private func groupChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : "number",
+                tint: projectTint(chips.projectName), isSelected: chips.projectName != nil, size: .compact,
+                action: { openChip = .project })
+            .popover(isPresented: chipBinding(.project)) {
+                ProjectChipPopover(projects: projects, selectedName: chips.projectName) { project in
+                    draft.setProject(project?.name, parser)
+                    done()
+                }
+            }
+            .accessibilityLabel("Group: \(chips.projectName ?? "Inbox")")
+            .accessibilityIdentifier("quickAddGroupChip")
+    }
+
+    private func labelsChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        HITChip(chips.labelNames.isEmpty ? "Labels" : chips.labelNames.map { "@" + $0 }.joined(separator: " "),
+                systemImage: "tag", tint: chips.labelNames.isEmpty ? Theme.secondaryText : PopoutTint.label,
+                isSelected: !chips.labelNames.isEmpty, size: .compact, action: { openChip = .labels })
+            .popover(isPresented: chipBinding(.labels)) {
+                LabelsChipPopover(labels: labels, selected: chips.labelNames) { name in
+                    draft.toggleLabel(name, parser)
+                }
+            }
+    }
+
+    private func deadlineChip(_ chips: QuickAddChips) -> some View {
+        let now = Date()
+        return HITChip(chips.deadline.map { "Deadline · " + DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Deadline",
+                       systemImage: "scope",
+                       tint: chips.deadline == nil ? Theme.secondaryText : PopoutTint.date(chips.deadline, now: now),
+                       isSelected: chips.deadline != nil, size: .compact,
+                       onDismiss: chips.deadline == nil ? nil : { draft.setDeadline(nil) },
+                       action: { openChip = .deadline })
+            .popover(isPresented: chipBinding(.deadline)) {
+                DateChipPopover(selected: chips.deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
+                    draft.setDeadline(day)
+                    done()
+                }
+            }
+            .accessibilityIdentifier("quickAddDeadlineChip")
+    }
+
+    private func repeatChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        HITChip(chips.recurrence?.displayText ?? "Repeat", systemImage: "repeat",
+                tint: chips.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
+                isSelected: chips.recurrence != nil, size: .compact,
+                onDismiss: chips.recurrence == nil ? nil : { draft.setRecurrence(nil, parser) },
+                action: { openChip = .repeating })
+            .popover(isPresented: chipBinding(.repeating)) {
+                RepeatChipPopover(rule: chips.recurrence) { rule in
+                    draft.setRecurrence(rule, parser)
+                    if rule == nil { draft.extras.remove(.repeating) }
+                    done()
+                }
+            }
     }
 
     private func projectTint(_ name: String?) -> Color {
@@ -246,17 +367,8 @@ struct QuickAddPopout: View {
 
     // MARK: Footer
 
-    private func footer(_ chips: QuickAddChips) -> some View {
+    private var footer: some View {
         HStack(spacing: HITSpacing.s) {
-            if !draft.showsNotes {
-                Button {
-                    draft.showsNotes = true
-                    notesFocused = true
-                } label: {
-                    Label("Description", systemImage: "text.alignleft")
-                }
-                .buttonStyle(HITButtonStyle(.ghost, size: .small))
-            }
             if let added {
                 Label(added, systemImage: "checkmark.circle.fill")
                     .font(HITType.caption)
@@ -277,6 +389,7 @@ struct QuickAddPopout: View {
             .buttonStyle(HITButtonStyle(.primary, shape: .circle))
             .disabled(draft.result(parser).title.isEmpty)
             .accessibilityLabel("Add task")
+            .accessibilityIdentifier("quickAddSave")
             .help("Add task (Return)")
         }
     }
@@ -314,7 +427,7 @@ struct QuickAddPopout: View {
     }
 }
 
-/// A thin suggestion pill above the chips.
+/// A thin suggestion pill above the option bar.
 private struct SuggestionStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

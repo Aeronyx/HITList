@@ -99,8 +99,8 @@ There is no detail column: tasks are added and opened in two popouts, presented 
 
 | Popout | iPhone | Mac (and iPad) |
 |---|---|---|
-| `QuickAddPopout` (new task) | card docked above the keyboard, slate `Theme.surface`, 14 pt top corners; opened by the floating accent "+" bottom-right | 560 pt panel centred ~18% from the top over a dimmed backdrop; opened by ⌘N and the toolbar "+" |
-| Inline add (same card, in place) | the "Add task" row opens the docked card | the "Add task" row at the end of a list expands into the card |
+| `QuickAddPopout` (new task) | detached oval (`ovalCardChrome()`: 28 pt continuous corners, slate `Theme.surface`, hairline border, shadow) inset 12 pt from the screen edges, floating 12 pt above the keyboard over a black 0.5 backdrop that closes on tap; 20 pt padding; opened by the floating accent "+" | the same contents in the 560 pt panel centred ~18% from the top over a dimmed backdrop; opened by ⌘N and the toolbar "+" |
+| Inline add (same card, in place) | the "Add task" row opens the oval card | the "Add task" row at the end of a list expands into the card |
 | `TaskPopout` (open a task) | bottom sheet, medium/large detents, grabber | the same top-centred panel |
 
 ```swift
@@ -113,13 +113,32 @@ popouts.open(task)
 ```
 - `QuickAddContext` sets the defaults: Today/Upcoming = today without a time, an Upcoming day = that
   day, a project = that project, a label = that label, Inbox = undated in the Inbox.
+- The quick-add card, top to bottom: the title (placeholder "Task Name", `HITType.taskName` = Inter 14
+  bold, `TokenHighlightField(bordered: false)` since the card is the frame), any revealed Description /
+  Location fields, the autocomplete row (only while it has suggestions), then one slim horizontally
+  scrolling bar of `HITChip(size: .compact)` chips (30 pt capsules; an untitled chip is a 30 pt icon
+  circle): **"+"**, **Date** ("Today" in green from Today, "Date" elsewhere), **Priority**, **Reminder**
+  ("11:00 AM · 15 min before"), **Group** (its name, or "Inbox"), then **Labels**, **Deadline**,
+  **Repeat** once set or picked from "+". Last, the "Added ‘…’" note, × and the send button.
+- **"+"** is a menu: Description, Labels, Location, Deadline, Repeat. Picking one reveals it in the card
+  (`QuickAddDraft.reveal`): Description and Location are fields that take the cursor; Labels, Deadline and
+  Repeat add their chip to the bar and open its popover. Deadline and Location have no text token; they
+  live in `QuickAddDraft` (`deadline`, `locationName`) and reach `QuickAddResult` and `TaskActions.create`.
 - `QuickAddDraft` keeps the text and the chips in step (typing fills chips; picking a chip writes its
-  token: `tomorrow`, `5:30pm`, `p2`, `#"Two Words"`, `@label`, `every weekday`). Pure; see `PopoutTests`.
-- The title is `TokenHighlightField`: `HITFieldChrome` around a text field with each token tinted
-  behind the text (`PopoutTint`). Chip popovers live in `PopoutPickers.swift` (date, priority, reminder,
-  project, labels, repeat) and are shared by both popouts.
-- Return saves and keeps the card open; Esc or × closes. Completing in `TaskPopout` plays the usual
-  completion feedback, closes it, and shows the undo toast.
+  token: `tomorrow`, `5:30pm`, `p2`, `#"Two Words"`, `@label`, `every weekday`, `!15mb`). Pure; see
+  `PopoutTests`. Example: "Haircut tom 11am p1 !15mb" = Tomorrow · P1 · 11:00 AM · 15 min before.
+- **Reminder grammar** (`ReminderOffset` in HITListCore): `!15mb` or `!15m` = 15 minutes before the due
+  time, `!1hb`/`!1h` = 1 hour, `!1db`/`!1d` = 1 day (up to 4 weeks); `!0` or `!at` = at the time (no
+  offset). Only the first one counts; it tints like a time. The Reminder popover's offset presets (At
+  time, 5 min, 15 min, 30 min, 1 hour, 1 day before) write the token and stay open so a time can follow;
+  the time presets below them close it. Stored as `TaskItem.reminderOffsetMinutes` (nil = at the time);
+  the notification goes out at due − offset reading "in 15 min · Haircut" (`NotificationPlan`).
+- Chip popovers live in `PopoutPickers.swift` (date, deadline via `DateChipPopover(title:clearTitle:)`,
+  priority, reminder, group, labels, repeat, location) and are shared by both popouts. `TaskPopout` has
+  the same Reminder offset UI, shows Deadline and Location chips when set (tap to edit, × to remove),
+  and offers Location / Deadline in its `…` menu.
+- Return saves and keeps the card open and empty; Esc, × or a tap on the backdrop closes. Completing in
+  `TaskPopout` plays the usual completion feedback, closes it, and shows the undo toast.
 
 ## Notes for builders
 - `HITMenuRow("Title") { … }` with a statement closure is a tappable row; a closure that returns a

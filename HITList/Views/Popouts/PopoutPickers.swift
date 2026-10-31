@@ -20,7 +20,7 @@ enum PopoutTint {
 
     static func token(_ kind: QuickAddToken.Kind, priority: Priority) -> Color {
         switch kind {
-        case .date, .time, .recurrence: return today
+        case .date, .time, .recurrence, .reminder: return today
         case .priority: return priority.color
         case .project: return project
         case .label: return label
@@ -50,19 +50,26 @@ extension View {
 // MARK: - Date
 
 /// Today, Tomorrow, This weekend, Next week, No date, then a month calendar; optionally a repeat menu.
+/// The Deadline chip uses it too, with `title: "Deadline"` and `clearTitle: "No deadline"`.
 struct DateChipPopover: View {
     var selected: Date?
     var now = Date()
     var onPick: (Date?) -> Void
     var recurrence: RecurrenceRule?
     var onRepeat: ((RecurrenceRule?) -> Void)?
+    /// Shown above the presets when set ("Deadline").
+    var title: String?
+    var clearTitle = "No date"
 
     @State private var calendarDay: Date
 
-    init(selected: Date?, now: Date = Date(), onPick: @escaping (Date?) -> Void,
+    init(selected: Date?, now: Date = Date(), title: String? = nil, clearTitle: String = "No date",
+         onPick: @escaping (Date?) -> Void,
          recurrence: RecurrenceRule? = nil, onRepeat: ((RecurrenceRule?) -> Void)? = nil) {
         self.selected = selected
         self.now = now
+        self.title = title
+        self.clearTitle = clearTitle
         self.onPick = onPick
         self.recurrence = recurrence
         self.onRepeat = onRepeat
@@ -88,7 +95,7 @@ struct DateChipPopover: View {
         if weekend > p.day(1) { list.append(Preset(id: "This weekend", symbol: "sofa", tint: Theme.accent, date: weekend)) }
         list.append(Preset(id: "Next week", symbol: "arrow.right.circle", tint: PopoutTint.later,
                            date: p.day(7, from: p.startOfWeek(containing: now))))
-        if selected != nil { list.append(Preset(id: "No date", symbol: "circle.slash", tint: Theme.secondaryText, date: nil)) }
+        if selected != nil { list.append(Preset(id: clearTitle, symbol: "circle.slash", tint: Theme.secondaryText, date: nil)) }
         return list
     }
 
@@ -99,16 +106,20 @@ struct DateChipPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                Text(title).font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+                    .padding([.horizontal, .top], HITSpacing.m)
+            }
             HITChipRow {
                 ForEach(presets) { preset in
                     HITChip(preset.id, systemImage: preset.symbol, tint: preset.tint, isSelected: isPicked(preset),
                             action: { onPick(preset.date) })
-                        .help(preset.date.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? "Remove the date")
+                        .help(preset.date.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? clearTitle)
                 }
             }
             .padding(HITSpacing.m)
             Rectangle().fill(Theme.separator).frame(height: 1)
-            DatePicker("Due date", selection: $calendarDay, displayedComponents: .date)
+            DatePicker(title ?? "Due date", selection: $calendarDay, displayedComponents: .date)
                 .datePickerStyle(.graphical)
                 .labelsHidden()
                 .padding(.horizontal, HITSpacing.m)
@@ -208,23 +219,65 @@ struct PriorityChipPopover: View {
     }
 }
 
-// MARK: - Reminder (the due time)
+// MARK: - Reminder (the due time, and how long before it)
 
-/// A task reminds at its due time, so the reminder is the time of day: presets, or type one.
+/// What the Reminder chip reads: "11:00 AM", "11:00 AM · 15 min before", "15 min before" (an offset
+/// still waiting for a time), or "Reminder".
+enum ReminderChipText {
+    static func title(time: Date?, offsetMinutes: Int?) -> String {
+        let offset = (offsetMinutes ?? 0) > 0 ? ReminderOffset.label(minutes: offsetMinutes!) : nil
+        guard let time else { return offset ?? "Reminder" }
+        let clock = time.formatted(date: .omitted, time: .shortened)
+        return offset.map { "\(clock) · \($0)" } ?? clock
+    }
+}
+
+/// A task reminds at its due time, or a chosen while before it: offset presets ("At time", "15 min",
+/// "1 day" before, which write `!15mb` in quick add) above the time-of-day presets, or type a time.
+/// Picking an offset leaves the popover open so a time can follow; picking a time closes it.
 struct ReminderChipPopover: View {
     var hour: Int?
     var minute: Int?
+    /// Minutes before the time; nil or 0 is at the time.
+    var offsetMinutes: Int?
     var onPick: (_ hour: Int, _ minute: Int) -> Void
     var onClear: () -> Void
+    /// Nil hides the offset presets.
+    var onOffset: ((Int?) -> Void)?
+
+    init(hour: Int?, minute: Int?, offsetMinutes: Int? = nil, onPick: @escaping (_ hour: Int, _ minute: Int) -> Void,
+         onClear: @escaping () -> Void, onOffset: ((Int?) -> Void)? = nil) {
+        self.hour = hour
+        self.minute = minute
+        self.offsetMinutes = offsetMinutes
+        self.onPick = onPick
+        self.onClear = onClear
+        self.onOffset = onOffset
+    }
 
     @State private var typed = ""
     @State private var invalid = false
 
     private static let presets: [(String, Int, Int)] = [("9:00 AM", 9, 0), ("12:00 PM", 12, 0), ("5:00 PM", 17, 0), ("8:00 PM", 20, 0)]
 
+    /// The offset presets, in minutes before the time.
+    static let offsetPresets: [Int] = [0, 5, 15, 30, 60, 1440]
+
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.s) {
-            Text("Remind me at").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+            if let onOffset {
+                Text("Remind me").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+                HITChipRow {
+                    ForEach(Self.offsetPresets, id: \.self) { minutes in
+                        HITChip(ReminderOffset.label(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
+                                tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
+                                action: { onOffset(minutes == 0 ? nil : minutes) })
+                            .accessibilityIdentifier("reminderOffset\(minutes)")
+                    }
+                }
+                Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, HITSpacing.xs)
+            }
+            Text(onOffset == nil ? "Remind me at" : "Time").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
             HITChipRow {
                 ForEach(Self.presets, id: \.0) { preset in
                     HITChip(preset.0, systemImage: "alarm", tint: Theme.accent,
@@ -238,13 +291,15 @@ struct ReminderChipPopover: View {
                 Button("No reminder", role: .destructive, action: onClear)
                     .buttonStyle(HITButtonStyle(.destructive, size: .small))
             }
-            Text("Reminders arrive at the task’s time when notifications are on in Settings.")
+            Text(hour == nil && (offsetMinutes ?? 0) > 0
+                 ? "Pick a time too: the reminder counts back from the task’s time."
+                 : "Reminders arrive at the task’s time, or that long before it, when notifications are on in Settings.")
                 .font(HITType.caption)
                 .foregroundStyle(Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(HITSpacing.m)
-        .popoverChrome(width: 300)
+        .popoverChrome(width: 320)
     }
 
     private func submitTyped() {
@@ -275,7 +330,7 @@ struct ProjectChipPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HITField("Search projects", text: $search, systemImage: "magnifyingglass", clearable: true)
+            HITField("Search groups", text: $search, systemImage: "magnifyingglass", clearable: true)
                 .padding(HITSpacing.m)
             ScrollView {
                 VStack(spacing: 0) {
@@ -362,5 +417,58 @@ struct LabelsChipPopover: View {
         guard !name.isEmpty else { return }
         if !isSelected(name) { onToggle(labels.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.name ?? name) }
         search = ""
+    }
+}
+
+// MARK: - Location
+
+/// Where the task happens, as plain text (no geofencing). Return or Done keeps it; closing the popover
+/// keeps what was typed too; Remove clears it.
+struct LocationChipPopover: View {
+    var name: String?
+    /// Nil removes the location.
+    var onSave: (String?) -> Void
+
+    @State private var text: String
+    @State private var committed = false
+
+    init(name: String?, onSave: @escaping (String?) -> Void) {
+        self.name = name
+        self.onSave = onSave
+        _text = State(initialValue: name ?? "")
+    }
+
+    private var trimmed: String? {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? nil : t
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HITSpacing.s) {
+            Text("Location").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+            HITField("Where, e.g. Main St Barbers", text: $text, systemImage: "mappin.and.ellipse", clearable: true, autofocus: true)
+                .onSubmit { commit(trimmed) }
+                .accessibilityIdentifier("locationField")
+            HStack {
+                if name != nil {
+                    Button("Remove", role: .destructive) { commit(nil) }
+                        .buttonStyle(HITButtonStyle(.destructive, size: .small))
+                }
+                Spacer()
+                Button("Done") { commit(trimmed) }
+                    .buttonStyle(HITButtonStyle(.primary, size: .small))
+            }
+        }
+        .padding(HITSpacing.m)
+        .onDisappear {
+            // Tapping outside keeps what was typed.
+            if !committed, trimmed != name { onSave(trimmed) }
+        }
+        .popoverChrome(width: 300)
+    }
+
+    private func commit(_ value: String?) {
+        committed = true
+        onSave(value)
     }
 }

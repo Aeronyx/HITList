@@ -14,16 +14,30 @@ struct QuickAddChips: Equatable {
     var projectIsDefault = false
     var labelNames: [String] = []
     var recurrence: RecurrenceRule?
+    /// Minutes before the due time (`!15mb`); nil or 0 is at the time.
+    var reminderOffsetMinutes: Int?
+    var deadline: Date?
+    var locationName: String?
 }
 
 /// The quick-add card's text and the choices typed text can't hold, kept in step both ways like
 /// Todoist: typing "tomorrow p2" fills the chips, and picking a chip writes its token into the text.
 /// Pure; the parser carries `now` and the known project and label names.
 struct QuickAddDraft: Equatable {
+    /// The card's "+" menu: each option, once picked, shows its control in the card.
+    enum Extra: String, Hashable, CaseIterable {
+        case description, labels, location, deadline, repeating
+    }
+
     var context: QuickAddContext
     var text = ""
     var notes = ""
-    var showsNotes = false
+    /// The "+" options revealed in the card.
+    var extras: Set<Extra> = []
+    /// Picked from "+" → Deadline; no text token. Start of day.
+    var deadline: Date?
+    /// Typed in "+" → Location; no text token.
+    var locationName = ""
     /// "No date" picked where the list has a default date.
     private(set) var dateCleared = false
     /// "Inbox" picked where the list has a default project.
@@ -37,6 +51,28 @@ struct QuickAddDraft: Equatable {
     }
 
     var isEmpty: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// The Description line is showing.
+    var showsNotes: Bool {
+        get { extras.contains(.description) }
+        set { if newValue { extras.insert(.description) } else { extras.remove(.description) } }
+    }
+
+    func shows(_ extra: Extra) -> Bool { extras.contains(extra) }
+
+    mutating func reveal(_ extra: Extra) { extras.insert(extra) }
+
+    /// Sets the deadline (its day); nil removes it and hides its chip.
+    mutating func setDeadline(_ day: Date?, calendar: Calendar = .current) {
+        deadline = day.map { calendar.startOfDay(for: $0) }
+        if day == nil { extras.remove(.deadline) }
+    }
+
+    /// The location as it will be saved: trimmed, nil when blank.
+    var trimmedLocation: String? {
+        let trimmed = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
     /// Ready for the next task: empty text, the list's defaults back.
     mutating func reset() {
@@ -57,7 +93,10 @@ struct QuickAddDraft: Equatable {
             projectName: result.projectName,
             projectIsDefault: parsed.projectName == nil && result.projectName != nil,
             labelNames: result.labelNames,
-            recurrence: result.recurrence)
+            recurrence: result.recurrence,
+            reminderOffsetMinutes: result.reminderOffsetMinutes,
+            deadline: result.deadline,
+            locationName: result.locationName)
     }
 
     /// The task to create: the parsed text with the list's defaults wherever the text is silent.
@@ -81,6 +120,8 @@ struct QuickAddDraft: Equatable {
            !result.labelNames.contains(where: { $0.caseInsensitiveCompare(label) == .orderedSame }) {
             result.labelNames.append(label)
         }
+        result.deadline = deadline
+        result.locationName = trimmedLocation
         result.title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return result
     }
@@ -108,6 +149,12 @@ struct QuickAddDraft: Equatable {
 
     mutating func clearTime(_ parser: QuickAddParser) {
         text = Self.removing([.time], from: text, parser)
+    }
+
+    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it.
+    mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
+        text = Self.removing([.reminder], from: text, parser)
+        if let minutes, minutes > 0 { text = Self.appending(ReminderOffset.token(minutes: minutes), to: text) }
     }
 
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {
