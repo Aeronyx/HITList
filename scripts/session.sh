@@ -12,11 +12,23 @@
 # Create it once with:
 #   mkdir -p ~/.config/hitlist && read -s "k?Anthropic API key: " && printf 'export ANTHROPIC_API_KEY=%s\n' "$k" > ~/.config/hitlist/api.env && chmod 600 ~/.config/hitlist/api.env && unset k
 # Pass --plan to use the Claude subscription instead (the key is left unset).
+#
+# Resume a session that stopped (billing hiccup, closed tab): same slug and brief, plus
+#   --continue ["message"]   reopens the most recent Claude Code conversation in that worktree and,
+#                            if a message is given, sends it first.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-usePlan=0
+usePlan=0; resume=0; resumeMsg=""
 args=()
-for a in "$@"; do [[ "$a" == "--plan" ]] && usePlan=1 || args+=("$a"); done
+expectMsg=0
+for a in "$@"; do
+  if (( expectMsg )); then resumeMsg="$a"; expectMsg=0; continue; fi
+  case "$a" in
+    --plan) usePlan=1 ;;
+    --continue) resume=1; expectMsg=1 ;;
+    *) args+=("$a") ;;
+  esac
+done
 (( ${#args} >= 3 )) || { sed -n '2,15p' "$0"; exit 2; }
 slug="${args[1]}"; brief="${args[2]}"; effort="${args[3]}"; model="${args[4]:-claude-opus-5-5}"
 [[ -f "$ROOT/briefs/$brief" ]] || { echo "no such brief: briefs/$brief"; exit 2; }
@@ -39,5 +51,13 @@ else
   echo "Reusing worktree $wt"
 fi
 cd "$wt"
+if (( resume )); then
+  echo "Resuming the last conversation in $wt"
+  if [[ -n "$resumeMsg" ]]; then
+    exec claude --continue --model "$model" --effort "$effort" --permission-mode auto "$resumeMsg"
+  else
+    exec claude --continue --model "$model" --effort "$effort" --permission-mode auto
+  fi
+fi
 exec claude --model "$model" --effort "$effort" --permission-mode auto \
   "Read briefs/COMMON.md, then briefs/$brief, and carry it out completely, following every rule in both."
