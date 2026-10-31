@@ -5,7 +5,7 @@ import HITListCore
 /// One switch on the wall: title in small caps, the LED, the rocker, and the light bar.
 ///
 /// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED goes out,
-/// the bar resets, and only then does the task complete, so the board re-sorts after the flip has
+/// the bar resets, a click plays (`FlipSound`), and only then does the task complete, so the board re-sorts after the flip has
 /// landed. A green switch asks before it is flipped early.
 struct FlipSwitchTile: View {
     let task: TaskItem
@@ -31,20 +31,10 @@ struct FlipSwitchTile: View {
     private var side: Flipboard.Side { Flipboard.side(due: shownDue, now: now) }
     private var isOverdue: Bool { Flipboard.isOverdue(due: shownDue, now: now) }
     private var tilt: Double { dipping ? -0.35 : side == .green ? 1 : -1 }
-    private var fraction: Double { Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) }
-
-    private var caption: String {
-        guard let due = shownDue else { return "Not started" }
-        switch side {
-        case .green:
-            let total = Flipboard.intervalDays(due: due, rule: rule)
-            let done = Flipboard.elapsedDays(due: due, rule: rule, now: now)
-            return "\(done) of \(total) \(total == 1 ? "day" : "days")"
-        case .red:
-            let late = Flipboard.daysOverdue(due: due, now: now)
-            return late == 0 ? "Due today" : "\(late) \(late == 1 ? "day" : "days") overdue"
-        }
-    }
+    /// A flip in progress lands on a started switch.
+    private var started: Bool { flipping || Flipboard.hasStarted(task) }
+    private var fraction: Double { started ? Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) : 0 }
+    private var caption: String { Flipboard.caption(due: shownDue, rule: rule, started: started, now: now) }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -123,6 +113,7 @@ struct FlipSwitchTile: View {
         let wasGreen = side == .green
         let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.52)
         FlipHaptic.play()
+        FlipSound.play()
         if wasGreen && !reduceMotion {
             // Already green: press it through toward red, then let it spring home.
             withAnimation(.easeIn(duration: 0.11)) { dipping = true; flipping = true }

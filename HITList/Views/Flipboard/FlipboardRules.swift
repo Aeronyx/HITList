@@ -38,6 +38,32 @@ enum Flipboard {
         return calendar.startOfDay(for: due) > calendar.startOfDay(for: now) ? .green : .red
     }
 
+    /// True once the switch has been flipped. A new switch is due the day it was created and shows red
+    /// with "Flip to start" and an empty light bar until its first flip moves the due date past that day.
+    /// A switch with no due date has never been flipped either.
+    static func hasStarted(due: Date?, createdAt: Date, calendar: Calendar = .current) -> Bool {
+        guard let due else { return false }
+        return calendar.startOfDay(for: due) > calendar.startOfDay(for: createdAt)
+    }
+
+    static func hasStarted(_ task: TaskItem) -> Bool {
+        hasStarted(due: task.dueDate, createdAt: task.createdAt)
+    }
+
+    /// The line under the light bar: "Flip to start", "2 of 3 days", "Due today" or "3 days overdue".
+    static func caption(due: Date?, rule: RecurrenceRule, started: Bool, now: Date, calendar: Calendar = .current) -> String {
+        guard let due, started else { return "Flip to start" }
+        switch side(due: due, now: now, calendar: calendar) {
+        case .green:
+            let total = intervalDays(due: due, rule: rule, calendar: calendar)
+            let done = elapsedDays(due: due, rule: rule, now: now, calendar: calendar)
+            return "\(done) of \(total) \(total == 1 ? "day" : "days")"
+        case .red:
+            let late = daysOverdue(due: due, now: now, calendar: calendar)
+            return late == 0 ? "Due today" : "\(late) \(late == 1 ? "day" : "days") overdue"
+        }
+    }
+
     /// Red and past its due day (not merely due today). Overdue LEDs pulse.
     static func isOverdue(due: Date?, now: Date, calendar: Calendar = .current) -> Bool {
         guard let due else { return false }
@@ -158,16 +184,18 @@ enum Flipboard {
     }
 
     /// Puts a task on the board, giving it what a switch needs: a repeat (weekly if it had none), a due
-    /// day without a time (one interval from today if it had none), and the label.
+    /// day without a time, and the label. A task without a future due date is due today, so it joins red
+    /// and waits for its first flip; one due in the future keeps that day and joins green.
     @MainActor
     static func add(_ task: TaskItem, in context: ModelContext, now: Date = Date()) throws {
         let cal = Calendar.current
         let rule = task.recurrenceRule ?? defaultRule
         task.recurrenceRule = rule
-        if let due = task.dueDate {
+        let today = cal.startOfDay(for: now)
+        if let due = task.dueDate, cal.startOfDay(for: due) > today {
             task.dueDate = cal.startOfDay(for: due)
         } else {
-            task.dueDate = rule.nextOccurrence(after: cal.startOfDay(for: now), calendar: cal)
+            task.dueDate = today
         }
         task.hasDueTime = false
         task.isCompleted = false
@@ -186,21 +214,21 @@ enum Flipboard {
         try? context.save()
     }
 
-    /// A new switch, green and one interval from today (it starts as if just flipped).
+    /// A new switch, due today: it starts red ("Flip to start") until the chore is first done and flipped.
+    /// George's call, 2026-10-31: a green switch reads as "already done".
     @MainActor
     @discardableResult
     static func createSwitch(title: String, rule: RecurrenceRule, in context: ModelContext, now: Date = Date()) throws -> TaskItem {
-        let cal = Calendar.current
-        let due = rule.nextOccurrence(after: cal.startOfDay(for: now), calendar: cal)
+        let due = Calendar.current.startOfDay(for: now)
         let parsed = QuickAddResult(title: title, dueDate: due, recurrence: rule)
         return try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: try label(in: context), in: context)
     }
 
     /// Changes a switch's interval, keeping when the current interval began: shortening "every 3 days"
-    /// to "every 2 days" pulls the due date one day closer.
+    /// to "every 2 days" pulls the due date one day closer. A switch not yet started stays red.
     @MainActor
     static func setRule(_ rule: RecurrenceRule, for task: TaskItem, in context: ModelContext) {
-        if let due = task.dueDate, let old = task.recurrenceRule {
+        if hasStarted(task), let due = task.dueDate, let old = task.recurrenceRule {
             let start = intervalStart(due: due, rule: old)
             task.dueDate = rule.nextOccurrence(after: start)
         }
