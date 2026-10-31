@@ -281,18 +281,23 @@ struct QuickAddPopout: View {
     }
 
     private func reminderChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        let time = chips.hasDueTime ? chips.dueDate?.formatted(date: .omitted, time: .shortened) : nil
-        return HITChip(time ?? "Reminder", systemImage: "alarm", tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
+        let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes)
+        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
+                       tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
                        isSelected: chips.hasDueTime, size: .compact, action: { openChip = .reminder })
             .popover(isPresented: chipBinding(.reminder)) {
                 let parts = chips.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
                 ReminderChipPopover(hour: chips.hasDueTime ? parts?.hour : nil, minute: chips.hasDueTime ? parts?.minute : nil,
+                                    offsetMinutes: chips.reminderOffsetMinutes,
                                     onPick: { h, m in
                                         draft.setTime(hour: h, minute: m, parser)
                                         done()
                                     }, onClear: {
                                         draft.clearTime(parser)
+                                        draft.setReminderOffset(nil, parser)
                                         done()
+                                    }, onOffset: { minutes in
+                                        draft.setReminderOffset(minutes, parser)
                                     })
             }
             .accessibilityIdentifier("quickAddReminderChip")
