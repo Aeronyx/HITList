@@ -287,7 +287,7 @@ struct FlipSwitchTile: View {
             FlipMenuItem(id: "back", title: "Flip back to red", systemImage: "arrow.uturn.backward",
                          isDisabled: !canFlipBack || flipping) { flipBack() },
             FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit(.interval) },
-            FlipMenuItem(id: "flips", title: "Flips per interval…", systemImage: "circle.grid.3x1") { onEdit(.flips) },
+            FlipMenuItem(id: "flips", title: "Flips per interval…", systemImage: "repeat") { onEdit(.flips) },
             FlipMenuItem(id: "open", title: "Open task", systemImage: "arrow.up.forward.square") { onOpen() },
             FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle",
                          isDisabled: flipping || chargedCharger) { markDone() },
