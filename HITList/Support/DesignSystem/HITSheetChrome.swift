@@ -9,24 +9,27 @@ import SwiftUI
 ///         HITSection("Colour") { HITColorDots(selection: $colorHex) }
 ///     }
 ///
-/// Cancel calls `onCancel`, or dismisses the sheet when that is nil. Present it with `.slateSheet()`
-/// as usual; it needs no `NavigationStack`.
+/// Cancel calls `onCancel`, or dismisses the sheet when that is nil; `cancelTitle: nil` leaves Cancel
+/// out (a sheet with only Done). Present it with `.slateSheet()` as usual; it needs no `NavigationStack`.
 struct HITSheetChrome<Content: View>: View {
     let title: String
     var primaryTitle = "Save"
     var isPrimaryEnabled = true
-    var cancelTitle = "Cancel"
+    var cancelTitle: String? = "Cancel"
     var onCancel: (() -> Void)?
+    var background: Color = Theme.surface
     let onPrimary: () -> Void
     @ViewBuilder var content: Content
 
-    init(_ title: String, primaryTitle: String = "Save", isPrimaryEnabled: Bool = true, cancelTitle: String = "Cancel",
-         onCancel: (() -> Void)? = nil, onPrimary: @escaping () -> Void, @ViewBuilder content: () -> Content) {
+    init(_ title: String, primaryTitle: String = "Save", isPrimaryEnabled: Bool = true, cancelTitle: String? = "Cancel",
+         onCancel: (() -> Void)? = nil, background: Color = Theme.surface, onPrimary: @escaping () -> Void,
+         @ViewBuilder content: () -> Content) {
         self.title = title
         self.primaryTitle = primaryTitle
         self.isPrimaryEnabled = isPrimaryEnabled
         self.cancelTitle = cancelTitle
         self.onCancel = onCancel
+        self.background = background
         self.onPrimary = onPrimary
         self.content = content()
     }
@@ -44,7 +47,7 @@ struct HITSheetChrome<Content: View>: View {
             }
             .scrollDismissesKeyboard(.interactively)
         }
-        .background(Theme.surface)
+        .background(background)
         .foregroundStyle(HITColor.text)
     }
 
@@ -56,9 +59,11 @@ struct HITSheetChrome<Content: View>: View {
                 .padding(.horizontal, 96)
                 .accessibilityAddTraits(.isHeader)
             HStack {
-                Button(cancelTitle) { if let onCancel { onCancel() } else { dismiss() } }
-                    .buttonStyle(.hitGhost)
-                    .keyboardShortcut(.cancelAction)
+                if let cancelTitle {
+                    Button(cancelTitle) { if let onCancel { onCancel() } else { dismiss() } }
+                        .buttonStyle(.hitGhost)
+                        .keyboardShortcut(.cancelAction)
+                }
                 Spacer()
                 Button(primaryTitle, action: onPrimary)
                     .buttonStyle(.hitPrimary)
