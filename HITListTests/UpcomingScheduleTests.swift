@@ -57,13 +57,13 @@ final class UpcomingScheduleTests: XCTestCase {
         XCTAssertEqual(s.days[0].items.map(\.filterTitle), ["Standup"])
     }
 
-    func testOverdueCollectsEverythingBeforeTodayOldestFirst() {
+    func testOverdueCollectsEverythingBeforeTodayByPriorityThenOldestFirst() {
         let s = schedule([
             task("Yesterday 3pm", date(2026, 10, 27, 15), time: true),
             task("Last month", date(2026, 9, 2)),
             task("Yesterday", date(2026, 10, 27), priority: 1),
         ])
-        XCTAssertEqual(s.overdue.map(\.filterTitle), ["Last month", "Yesterday", "Yesterday 3pm"])
+        XCTAssertEqual(s.overdue.map(\.filterTitle), ["Yesterday", "Last month", "Yesterday 3pm"])
         XCTAssertTrue(s.days.allSatisfy(\.items.isEmpty))
     }
 
@@ -72,6 +72,16 @@ final class UpcomingScheduleTests: XCTestCase {
             task("b", date(2026, 10, 30)), task("a", date(2026, 10, 30)), task("urgent", date(2026, 10, 30), priority: 1),
         ])
         XCTAssertEqual(s.days[2].items.map(\.filterTitle), ["urgent", "a", "b"])
+    }
+
+    func testWithinADayPriorityComesBeforeTime() {
+        let s = schedule([
+            task("9am p4", date(2026, 10, 30, 9), time: true),
+            task("6pm p1", date(2026, 10, 30, 18), time: true, priority: 1),
+            task("all day p2", date(2026, 10, 30), priority: 2),
+            task("noon p1", date(2026, 10, 30, 12), time: true, priority: 1),
+        ])
+        XCTAssertEqual(s.days[2].items.map(\.filterTitle), ["noon p1", "6pm p1", "all day p2", "9am p4"])
     }
 
     func testFarFutureIsLeftOutUntilTheListGrows() {

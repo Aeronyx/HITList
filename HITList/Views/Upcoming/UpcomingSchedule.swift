@@ -53,8 +53,8 @@ struct UpcomingDay<Item>: Identifiable {
 
 /// Open dated tasks grouped the way the Upcoming view lists them: everything due before today in
 /// `overdue`, then one entry per day from today for `dayCount` days, empty days included. Undated,
-/// completed, and later tasks are left out. Each group is in `FilterQuery.defaultSort` order, so
-/// all-day tasks come before timed ones and timed ones run in time order.
+/// completed, and later tasks are left out. Each group is in `TaskOrdering` order, the same as Today:
+/// priority first (P1 on top), then all-day before timed and timed in time order, then title.
 struct UpcomingSchedule<Item: FilterableTask> {
     let overdue: [Item]
     let days: [UpcomingDay<Item>]
@@ -73,10 +73,10 @@ struct UpcomingSchedule<Item: FilterableTask> {
             let index = calendar.dateComponents([.day], from: today, to: day).day ?? 0
             if index < dayCount { buckets[index, default: []].append(item) }
         }
-        self.overdue = FilterQuery.defaultSort(overdue)
+        self.overdue = TaskOrdering.sorted(overdue)
         self.days = (0..<max(dayCount, 0)).map { index in
             UpcomingDay(date: calendar.date(byAdding: .day, value: index, to: today)!,
-                        items: FilterQuery.defaultSort(buckets[index] ?? []))
+                        items: TaskOrdering.sorted(buckets[index] ?? []))
         }
     }
 

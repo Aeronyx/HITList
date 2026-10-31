@@ -6,6 +6,9 @@ struct TaskRow: View {
     @Bindable var task: TaskItem
     var now: Date
     var showProject: Bool = true
+    /// Under a header that already names the day (Today's "Oct 31, Saturday"): the row shows only the
+    /// time, or nothing for an all-day task (a recurring one keeps its repeat icon).
+    var hidesDay: Bool = false
     /// Set while the list animates this row's completion (see `CompletionAnimator`).
     var completionPhase: CompletionPhase? = nil
     /// Completes or un-completes the task; the list owns this so it can animate the row out.
@@ -53,9 +56,19 @@ struct TaskRow: View {
                     .animation(.easeOut(duration: 0.2), value: isChecked)
                 HStack(spacing: 8) {
                     if let due = task.dueDate {
-                        Label(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
-                              systemImage: task.recurrence == nil ? "calendar" : "repeat")
-                            .foregroundStyle(task.isCompleted ? Color.secondary : HITColor.due(due, hasTime: task.hasDueTime, now: now))
+                        let tint = task.isCompleted ? Color.secondary : HITColor.due(due, hasTime: task.hasDueTime, now: now)
+                        if !hidesDay {
+                            Label(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
+                                  systemImage: task.recurrence == nil ? "calendar" : "repeat")
+                                .foregroundStyle(tint)
+                        } else if task.hasDueTime {
+                            Label(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat")
+                                .foregroundStyle(tint)
+                        } else if task.recurrence != nil {
+                            Image(systemName: "repeat")
+                                .foregroundStyle(tint)
+                                .accessibilityLabel("Repeats")
+                        }
                     }
                     if showProject, let project = task.project {
                         Label(project.name, systemImage: "circle.fill")
