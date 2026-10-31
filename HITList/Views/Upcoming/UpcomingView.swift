@@ -216,7 +216,7 @@ struct UpcomingView: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
+                        .font(HITType.captionBold)
                         .rotationEffect(.degrees(overdueExpanded ? 90 : 0))
                     Text("Overdue").fontWeight(.semibold)
                     Text("\(overdue.count)").foregroundStyle(Theme.secondaryText)
@@ -451,7 +451,7 @@ private struct DayHeaderStyle: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .font(.subheadline)
+            .font(HITType.subheadline)
             .textCase(nil)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)

@@ -207,7 +207,7 @@ struct SettingsView: View {
             Spacer()
             Text(value).foregroundStyle(Theme.secondaryText).multilineTextAlignment(.trailing)
         }
-        .font(.caption)
+        .font(HITType.caption)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -216,7 +216,7 @@ struct SettingsView: View {
             Text(title)
             Text(value).foregroundStyle(Theme.secondaryText).textSelection(.enabled)
         }
-        .font(.caption)
+        .font(HITType.caption)
         .fixedSize(horizontal: false, vertical: true)
     }
 }

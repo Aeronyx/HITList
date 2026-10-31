@@ -33,10 +33,10 @@ struct InboxZeroView: View {
 
             VStack(spacing: 6) {
                 Text(title)
-                    .font(.title3.weight(.semibold))
+                    .font(HITType.title3)
                     .foregroundStyle(.primary)
                 Text(message)
-                    .font(.subheadline)
+                    .font(HITType.subheadline)
                     .foregroundStyle(Theme.secondaryText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 300)

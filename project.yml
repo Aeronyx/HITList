@@ -21,8 +21,23 @@ targets:
     supportedDestinations: [iOS, macOS]
     sources:
       - path: HITList
-        # Markdown under HITList/ (e.g. Support/DesignSystem/README.md) is documentation, not a resource.
-        excludes: ["**/*.md"]
+        excludes:
+          # Markdown under HITList/ (e.g. Support/DesignSystem/README.md) is documentation, not a resource.
+          - "**/*.md"
+          # Fonts: only six Inter 18 pt static cuts ship (Light, Regular, Medium, SemiBold, Bold, ExtraBold;
+          # see HITFont in HITTokens.swift). iOS resolves a variable font's named weights only for the default
+          # instance, so the static cuts are what both platforms load by PostScript name. The variable files,
+          # the other cuts, Noto Sans and the READMEs stay in the repo, out of the bundle.
+          - "Resources/Fonts/Noto_Sans/**"
+          - "Resources/Fonts/Inter/*VariableFont*"
+          - "Resources/Fonts/Inter/README.txt"
+          - "Resources/Fonts/Inter/static/Inter_24pt-*"
+          - "Resources/Fonts/Inter/static/Inter_28pt-*"
+          - "Resources/Fonts/Inter/static/Inter_18pt-*Italic*"
+          - "Resources/Fonts/Inter/static/Inter_18pt-Thin.ttf"
+          - "Resources/Fonts/Inter/static/Inter_18pt-ExtraLight.ttf"
+          - "Resources/Fonts/Inter/static/Inter_18pt-Black.ttf"
+          - "**/.DS_Store"
     scheme:
       testTargets: [HITListTests]
     dependencies:
@@ -60,6 +75,9 @@ targets:
         # Shows Documents (the daily JSON backups, see LocalBackup.swift) in the iOS Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # Inter is the app typeface; resources are flattened into the bundle root. Keep in step with `includes`.
+        UIAppFonts: [Inter_18pt-Light.ttf, Inter_18pt-Regular.ttf, Inter_18pt-Medium.ttf, Inter_18pt-SemiBold.ttf, Inter_18pt-Bold.ttf, Inter_18pt-ExtraBold.ttf]
+        ATSApplicationFontsPath: "."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.trammells.hitlist

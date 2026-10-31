@@ -33,6 +33,10 @@ CloudKit container come first.
 | Task Flipboard | done 2026-10-28 | Opus 5.5 session, effort High |
 | Design system (custom buttons, toggle, chips, fields, sheet chrome; editors, Settings, sidebar "+", "…" menu) | done 2026-10-31; guide in HITList/Support/DesignSystem/README.md | Opus 5.5 session, effort High |
 | Task popouts (no detail column; quick-add card with live chips, floating "+", inline add rows; task popout; iPhone Upcoming rows no longer drag) | done 2026-10-31; iPhone 17 simulator checked (floating "+", typed tokens → chips, Return keeps the card open, row → task sheet, … menu moves); ⌘←/⌘→ move the open task a day on Mac; Mac panel, inline add row and drag-to-day need George's eyes | Opus 5.5 session, effort High; merged and smoothed by Fable |
+| Inter typeface everywhere, schema V2 (reminder offset, deadline, location, Flipboard charge fields), shared due colours | done 2026-10-31 | Fable |
+| iPhone tabs + four screens (Inbox/Today/Upcoming/Browse, oval "+"; priority-then-due sort, Inbox rule, "Group" wording) | session running (brief 17) | Opus 5.5 session, effort High |
+| Quick-add v2 (oval card, "+" options, reminder offsets `!15mb`, deadline, location) | session running (brief 18) | Opus 5.5 session, effort High |
+| Flipboard: long-press menu, faint-green lamp, charging switches | session running (brief 19) | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 

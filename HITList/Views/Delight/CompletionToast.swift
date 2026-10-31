@@ -22,7 +22,7 @@ struct CompletionToast: View {
                 .help("Undo (⌘Z)")
                 #endif
         }
-        .font(.subheadline)
+        .font(HITType.subheadline)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Theme.elevated, in: Capsule())

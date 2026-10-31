@@ -41,13 +41,13 @@ struct FlipSwitchTile: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(task.title)
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold).smallCaps())
+                        .font(HITType.subheadlineSemibold.smallCaps())
                         .tracking(0.6)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                     Text(rule.displayText.lowercased())
-                        .font(.caption2)
+                        .font(HITType.caption2)
                         .foregroundStyle(Theme.secondaryText)
                         .lineLimit(1)
                 }
@@ -66,7 +66,7 @@ struct FlipSwitchTile: View {
             VStack(spacing: 5) {
                 FlipLightBar(fraction: fraction, side: side)
                 Text(caption)
-                    .font(.caption2.monospacedDigit())
+                    .font(HITType.caption2.monospacedDigit())
                     .foregroundStyle(side == .red ? FlipboardPalette.redTop : Theme.secondaryText)
                     .lineLimit(1)
             }

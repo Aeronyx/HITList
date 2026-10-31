@@ -13,18 +13,19 @@ import SwiftData
 // - `scripts/release.sh` refuses to upload while the Development schema differs from Production
 //   (needs a cktool management token; see the script header).
 //
-// How to add V2: copy the V1 model classes into `enum HITListSchemaV2: VersionedSchema` with the
-// change applied, point the top-level typealiases in Models.swift at V2, append V2 to
-// `HITListMigrationPlan.schemas` and add `.lightweight(fromVersion: HITListSchemaV1.self,
-// toVersion: HITListSchemaV2.self)` to `stages`. V1 stays frozen as the shape of build 1's stores.
+// How to add V3: move the live model classes in Models.swift from `extension HITListSchemaV2` to a new
+// `extension HITListSchemaV3`, leaving a frozen copy of V2's stored properties behind (as
+// SchemaV1Models.swift does for V1), point the typealiases and `HITListSchema.current` at V3, append V3
+// to `HITListMigrationPlan.schemas` and add `.lightweight(fromVersion: HITListSchemaV2.self,
+// toVersion: HITListSchemaV3.self)` to `stages`.
 //
 // `SchemaTests.testV1EntityHashesMatchShippedStore` pins V1's entity version hashes to the ones
-// recorded in build 1's store metadata, so an accidental shape change fails the tests.
+// recorded in build 1's store metadata, so an accidental shape change fails the tests;
+// `testV2OnlyAddsTaskItemAttributes` checks V2 against V1 the same way.
 
-/// Build 1 (0.1.0) schema. The model classes are declared in Models.swift as extensions of this enum
-/// and exposed under their plain names through typealiases; SwiftData names the entities (and so the
+/// Builds 1–4 (0.1.0) schema, frozen in SchemaV1Models.swift. SwiftData names the entities (and so the
 /// CloudKit record types CD_TaskItem, CD_Project, CD_TaskLabel, CD_SavedFilter) after the bare class
-/// name, so nesting them here does not change the store or the CloudKit schema.
+/// name, so nesting the classes in these enums does not change the store or the CloudKit schema.
 enum HITListSchemaV1: VersionedSchema {
     static let versionIdentifier = Schema.Version(1, 0, 0)
     static var models: [any PersistentModel.Type] {
@@ -32,7 +33,20 @@ enum HITListSchemaV1: VersionedSchema {
     }
 }
 
+/// Build 5 (0.1.0) schema: the live models in Models.swift. TaskItem gains `reminderOffsetMinutes`,
+/// `deadline`, `locationName` (quick-add "+" options) and `flipTarget`, `flipCount`, `flipPeriodStart`
+/// (Flipboard charging switches). All optional or defaulted, so the CloudKit change is additive and the
+/// store migrates lightweight. Deploy the schema to Production in the CloudKit dashboard before build 5.
+enum HITListSchemaV2: VersionedSchema {
+    static let versionIdentifier = Schema.Version(2, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [TaskItem.self, Project.self, TaskLabel.self, SavedFilter.self]
+    }
+}
+
 enum HITListMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [HITListSchemaV1.self] }
-    static var stages: [MigrationStage] { [] }
+    static var schemas: [any VersionedSchema.Type] { [HITListSchemaV1.self, HITListSchemaV2.self] }
+    static var stages: [MigrationStage] {
+        [.lightweight(fromVersion: HITListSchemaV1.self, toVersion: HITListSchemaV2.self)]
+    }
 }

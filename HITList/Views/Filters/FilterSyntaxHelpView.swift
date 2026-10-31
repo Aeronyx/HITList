@@ -16,11 +16,11 @@ struct FilterSyntaxHelpView: View {
                                     Text(entry.keyword).font(.callout.monospaced().bold())
                                     Spacer(minLength: 12)
                                     Text(entry.example)
-                                        .font(.caption.monospaced())
+                                        .font(HITType.monoCaption)
                                         .foregroundStyle(Theme.accent)
                                         .multilineTextAlignment(.trailing)
                                 }
-                                Text(entry.summary).font(.caption).foregroundStyle(Theme.secondaryText)
+                                Text(entry.summary).font(HITType.caption).foregroundStyle(Theme.secondaryText)
                             }
                             .textSelection(.enabled)
                             .padding(.vertical, 2)
@@ -30,7 +30,7 @@ struct FilterSyntaxHelpView: View {
                 }
                 Section {
                     Text("Keywords are case-insensitive. Completed tasks are hidden unless the query mentions completed.")
-                        .font(.caption)
+                        .font(HITType.caption)
                         .foregroundStyle(Theme.secondaryText)
                 }
                 .slateRow()
