@@ -180,8 +180,8 @@ struct SidebarView: View {
 }
 
 /// "Filters +": the add button sits 6 pt after the title, never at the trailing edge. On the Mac it
-/// fades in while the pointer is over the header row.
-private struct SidebarSectionHeader: View {
+/// fades in while the pointer is over the header row. The iPhone's Browse page uses it too.
+struct SidebarSectionHeader: View {
     let title: String
     let add: () -> Void
     @State private var isHovered = false
