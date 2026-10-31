@@ -36,7 +36,7 @@ CloudKit container come first.
 | Inter typeface everywhere, schema V2 (reminder offset, deadline, location, Flipboard charge fields), shared due colours | done 2026-10-31 | Fable |
 | iPhone tabs + four screens (Inbox/Today/Upcoming/Browse, oval "+"; priority-then-due sort, Inbox rule, "Group" wording) | session running (brief 17) | Opus 5.5 session, effort High |
 | Quick-add v2 (oval card, "+" options, reminder offsets `!15mb`, deadline, location) | session running (brief 18) | Opus 5.5 session, effort High |
-| Flipboard: long-press menu, faint-green lamp, charging switches | session running (brief 19) | Opus 5.5 session, effort High |
+| Flipboard: long-press menu, faint-green lamp, charging switches | done 2026-10-31; iPhone 17 simulator checked (recorded); Mac long-press popover and right-click menu need George's eyes | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 
@@ -114,7 +114,7 @@ Run `scripts/release.sh --help`.
 EventKit read-only overlay of today's events; theme choices within the dark palette; filter
 defaults. UI sessions own these.
 
-## Task Flipboard (shipped 2026-10-28; start-red and flip sound 2026-10-31)
+## Task Flipboard (shipped 2026-10-28; start-red and flip sound 2026-10-31; charging and long-press menu 2026-10-31)
 
 A Flipboard screen (sidebar, under Upcoming) shows recurring chores as a wall of skeuomorphic
 rocker switches: green while the task is due in the future, red once it is due or overdue (the LED
@@ -130,10 +130,39 @@ created; George's call, 2026-10-31): "Shave" every 2 weeks is red, a flip makes 
 then it is red until flipped again. "Add to Flipboard" makes a task without a future due date due
 today (red); one due in the future keeps that day (green). A green switch asks before being done early. A switch is just a recurring task without a time that carries the
 `flipboard` label (stable seeded id), so there is no schema change and a real board could later be
-driven from the same records. Add switches with "+" (title, every N days/weeks) or "Add to
-Flipboard" in task detail; long-press or right-click edits the interval, opens the task, or removes
-it. Code: `HITList/Views/Flipboard/`, tests in `HITListTests/FlipboardTests.swift`. Not yet built
-from the original idea: widgets and chargeable tasks on the board.
+driven from the same records. Add switches with "+" (title, every N days/weeks, flips per interval)
+or "Add to Flipboard" in task detail. Code: `HITList/Views/Flipboard/`, tests in
+`HITListTests/FlipboardTests.swift` (`FlipboardTests` and `FlipboardRulesTests`). Not yet built from
+the original idea: widgets.
+
+**Long-press menu and the lamp (2026-10-31).** A long press anywhere on a switch, the rocker included,
+opens its menu on iPhone (soft haptic as the hold registers; the rocker is no longer a `Button`, so
+it no longer swallows the press); right-click opens it on the Mac and a long press there opens the
+same items in a popover. Items: Flip back to red (undoes the last flip: a green switch turns red, due
+on the day it was flipped since the old due date isn't stored; a charging switch loses one flip;
+disabled when red with nothing counted), Edit interval…, Flips per interval…, Open task, Mark done,
+Remove from Flipboard. A plain tap still flips. A green switch's LED now glows a faint green with a
+soft halo (flaring once as it turns green) instead of going dark; red and the overdue breathing are
+unchanged; Reduce Motion drops the breathing and the flare.
+
+**Charging switches (2026-10-31).** `TaskItem.flipTarget` > 1 (schema V2, 1 to 10) makes a switch
+need that many flips per interval: "Gym", 3 flips a week. While red each flip adds one to
+`flipCount` (the first sets `flipPeriodStart`) and clicks; the flip that reaches the target charges
+it, moving the due date exactly as a single flip does, with the count left at the target so the
+lamps read full. When the date rule turns it red again, a `flipPeriodStart` from before the interval
+being counted is stale and reads as 0 (for an overdue charger that interval is the due day moved on
+by whole intervals, so last week's flips don't count this week); the next flip starts afresh. Extra
+flips while charged only bounce the rocker; Mark done charges at once; lowering the target to what is
+already counted charges it; editing the interval of a red charger leaves its due date alone. A
+target of 1 follows the same rules and behaves exactly as before. Look: a row of lamps across the top
+of the tile replaces the LED; each flip pops the next lamp on with a glow that spreads to its
+neighbours; the last flip snaps the rocker green, blooms along the row and plays `bubble.caf` after
+the click (both follow the Flip Sound toggle); the lamps drain right to left the first time the board
+shows the next interval (remembered per device in `AppGroup.defaults`, `flipboard.shownFull`).
+Captions: "2 of 3 this week" while charging, "Done this week" when charged ("today", "these 2
+weeks", "this round" for other rules). The editor (now `HITSheetChrome`, with a −/+ stepper and
+`HITSegmented`) has "Flips per interval" and a live preview tile whose rocker can be flipped to try
+the lamps.
 
 ## External TestFlight / App Store prerequisites
 
