@@ -104,6 +104,14 @@ struct UpcomingView: View {
     private func list(_ schedule: UpcomingSchedule<Entry>) -> some View {
         List(selection: $selectedTask) {
             if !schedule.overdue.isEmpty {
+                #if os(iOS)
+                Section {
+                    overdueHeader(schedule.overdue).headerRow()
+                    if overdueExpanded {
+                        ForEach(schedule.overdue) { row($0) }
+                    }
+                }
+                #else
                 Section {
                     if overdueExpanded {
                         ForEach(schedule.overdue) { row($0) }
@@ -111,14 +119,26 @@ struct UpcomingView: View {
                 } header: {
                     overdueHeader(schedule.overdue)
                 }
+                #endif
             }
             ForEach(schedule.days) { day in
+                #if os(iOS)
+                // iPhone: the header is the section's first row, not a pinned header. The week strip
+                // already shows the day on top, and a jump lands exactly on the header (a pinned one
+                // floats over the top of the rows it is scrolled to).
+                Section {
+                    dayHeader(day).headerRow()
+                    ForEach(day.items) { row($0) }
+                    addRow(day.date, isEmpty: day.items.isEmpty)
+                }
+                #else
                 Section {
                     ForEach(day.items) { row($0) }
                     addRow(day.date, isEmpty: day.items.isEmpty)
                 } header: {
                     dayHeader(day)
                 }
+                #endif
             }
             if dayCount < maxDays {
                 // Reaching the end loads the next month of days.
@@ -238,6 +258,9 @@ struct UpcomingView: View {
         .modifier(DayHeaderStyle())
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { headerMoved(.distantPast, to: $0) }
         .onDisappear { headerGone(.distantPast) }
+        #if os(iOS)
+        .id(HeaderID(day: .distantPast))
+        #endif
     }
 
     private func dayHeader(_ day: UpcomingDay<Entry>) -> some View {
@@ -262,6 +285,9 @@ struct UpcomingView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { headerMoved(day.date, to: $0) }
         .onDisappear { headerGone(day.date) }
+        #if os(iOS)
+        .id(HeaderID(day: day.date))
+        #endif
     }
 
     private func addRow(_ day: Date, isEmpty: Bool) -> some View {
@@ -274,15 +300,30 @@ struct UpcomingView: View {
     // MARK: - Week strip ↔ list
 
     private struct AddRowID: Hashable { let day: Date }
+    /// A day header (`.distantPast` is Overdue's), the iPhone's jump target.
+    private struct HeaderID: Hashable { let day: Date }
 
-    /// Scrolls the list to a day: its first task, or its add row when it has none. Days before today
-    /// go to the overdue section.
+    /// Where a day's jump lands: iPhone, the day's header row; the Mac (pinned headers), the first
+    /// task, or the add row of an empty day.
+    private func scrollTarget(for day: Date, firstItem: UUID?) -> AnyHashable {
+        #if os(iOS)
+        AnyHashable(HeaderID(day: day))
+        #else
+        firstItem.map { AnyHashable($0) } ?? AnyHashable(AddRowID(day: day))
+        #endif
+    }
+
+    /// Scrolls the list to a day (see `scrollTarget`). Days before today go to the overdue section.
     private func jump(to day: Date, schedule: UpcomingSchedule<Entry>, proxy: ScrollViewProxy) {
         let animation: Animation? = reduceMotion ? nil : .snappy
         if day < today {
-            guard let first = schedule.overdue.first else { return }
+            guard !schedule.overdue.isEmpty else { return }
             overdueExpanded = true
-            withAnimation(animation) { proxy.scrollTo(first.id, anchor: .top) }
+            #if os(iOS)
+            withAnimation(animation) { proxy.scrollTo(HeaderID(day: .distantPast), anchor: .top) }
+            #else
+            withAnimation(animation) { proxy.scrollTo(schedule.overdue[0].id, anchor: .top) }
+            #endif
             return
         }
         let index = calendar.dateComponents([.day], from: today, to: day).day ?? 0
@@ -291,11 +332,11 @@ struct UpcomingView: View {
             dayCount = min(max(dayCount, index + Self.pageDays), maxDays)
             Task { @MainActor in
                 await Task.yield()
-                withAnimation(animation) { proxy.scrollTo(AddRowID(day: day), anchor: .top) }
+                withAnimation(animation) { proxy.scrollTo(scrollTarget(for: day, firstItem: nil), anchor: .top) }
             }
             return
         }
-        let target: AnyHashable = schedule.days[index].items.first.map { AnyHashable($0.id) } ?? AnyHashable(AddRowID(day: day))
+        let target = scrollTarget(for: day, firstItem: schedule.days[index].items.first?.id)
         withAnimation(animation) { proxy.scrollTo(target, anchor: .top) }
     }
 
@@ -462,6 +503,19 @@ private struct DayHeaderStyle: ViewModifier {
             .listRowInsets(EdgeInsets())
     }
 }
+
+#if os(iOS)
+private extension View {
+    /// A day header drawn as the first row of its section (iPhone): not selectable, no separator,
+    /// on the slate background.
+    func headerRow() -> some View {
+        self
+            .selectionDisabled()
+            .listRowSeparator(.hidden)
+            .listRowBackground(Theme.background)
+    }
+}
+#endif
 
 extension QuickAddResult {
     /// The result due on `day` (all day) when the text named no date of its own.
