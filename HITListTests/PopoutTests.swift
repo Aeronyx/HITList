@@ -380,4 +380,32 @@ final class PopoutTests: XCTestCase {
         popouts.undoCompletions(in: context)
         XCTAssertEqual(task.dueDate, due)
     }
+
+    func testShiftingADayKeepsTheTimeAndCountsUndatedTasksFromToday() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let calendar = Calendar.current
+        let now = Date()
+        let today = calendar.startOfDay(for: now)
+        let undated = TaskItem(title: "Read")
+        let timed = TaskItem(title: "Dentist", dueDate: calendar.date(bySettingHour: 10, minute: 30, second: 0, of: today)!, hasDueTime: true)
+        let done = TaskItem(title: "Done", dueDate: today)
+        for task in [undated, timed, done] { context.insert(task) }
+        TaskActions.toggleCompletion(done, in: context)
+        let popouts = PopoutController()
+
+        popouts.shiftDay(undated, by: 1, in: context, now: now)
+        XCTAssertEqual(undated.dueDate, calendar.date(byAdding: .day, value: 1, to: today), "⌘→ on an undated task: tomorrow")
+        XCTAssertFalse(undated.hasDueTime)
+
+        popouts.shiftDay(timed, by: -1, in: context, now: now)
+        let due = try XCTUnwrap(timed.dueDate)
+        XCTAssertEqual(calendar.dateComponents([.day], from: today, to: calendar.startOfDay(for: due)).day, -1)
+        XCTAssertEqual(calendar.component(.hour, from: due), 10, "the time of day survives the move")
+        XCTAssertEqual(calendar.component(.minute, from: due), 30)
+        XCTAssertTrue(timed.hasDueTime)
+
+        popouts.shiftDay(done, by: 1, in: context, now: now)
+        XCTAssertEqual(done.dueDate, today, "completed tasks stay put")
+    }
 }

@@ -206,37 +206,3 @@ struct FlipSwitchEditor: View {
         }
     }
 }
-
-/// The "Add to Flipboard / Remove from Flipboard" section of the task detail view.
-struct FlipboardDetailSection: View {
-    @Bindable var task: TaskItem
-    @Environment(\.modelContext) private var context
-
-    var body: some View {
-        let isMember = Flipboard.isMember(task)
-        Section {
-            Button {
-                if isMember {
-                    Flipboard.remove(task, in: context)
-                } else {
-                    try? Flipboard.add(task, in: context)
-                }
-                Task { await NotificationScheduler.reschedule(context: context) }
-            } label: {
-                Label(isMember ? "Remove from Flipboard" : "Add to Flipboard", systemImage: "switch.2")
-            }
-        } footer: {
-            Text(footer(isMember: isMember))
-        }
-    }
-
-    private func footer(isMember: Bool) -> String {
-        if isMember { return "Shows as a switch that turns red when it’s due." }
-        var changes: [String] = []
-        if task.recurrence == nil { changes.append("repeats it weekly") }
-        if task.hasDueTime { changes.append("drops its time of day") }
-        if task.isCompleted { changes.append("reopens it") }
-        let base = "Shows it as a switch on the Flipboard"
-        return changes.isEmpty ? base + "." : base + "; " + changes.joined(separator: ", ") + "."
-    }
-}

@@ -53,12 +53,13 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 2 (0.1.0) is live.
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 4 (0.1.0) is live.
 
-## Concurrency note (2026-10-31, round 2)
-Merged on master now: design-system (`HITList/Support/DesignSystem/`, restyled editors, Settings, sidebar,
-`…` toolbar menu), flipboard-polish (start-red rule, flip sound), inbox-polish (`HITList/Views/Inbox/`,
-Process mode). Running next: `task-popouts` (owns `ContentView.swift`, `TaskListView.swift`, `TaskRow.swift`,
-`QuickAddBar.swift`, `TaskDetailView.swift`, new `HITList/Views/Popouts/`, plus one-line hooks in
-`UpcomingView.swift`, `InboxView.swift`, `FlipboardView.swift`). Anything else running at the same time must
-stay out of those files.
+## Where things stand (2026-10-31, after round 2)
+All round-2 sessions are merged on master: design-system (`HITList/Support/DesignSystem/`, with its README
+as the component guide), flipboard-polish (start-red rule, flip sound), inbox-polish (`HITList/Views/Inbox/`,
+Process mode) and task-popouts. There is no detail column any more: adding and opening tasks happens in
+popouts (`HITList/Views/Popouts/`: `PopoutController` in the environment, `QuickAddPopout`, `TaskPopout`,
+`InlineAddRow`, chip popovers in `PopoutPickers.swift`). A list that adds tasks calls `.quickAddEntry(context)`
+and ends with `InlineAddRow`; opening a task is `popouts.open(task)` or a `List(selection: popouts.selection)`.
+`QuickAddBar.swift` and `TaskDetailView.swift` are gone. TestFlight build 4 (0.1.0) carries all of this.
