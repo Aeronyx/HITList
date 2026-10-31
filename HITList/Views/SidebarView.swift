@@ -29,7 +29,7 @@ struct SidebarView: View {
         }.count
     }
 
-    private var inboxCount: Int { openTasks.filter { $0.project == nil }.count }
+    private var inboxCount: Int { openTasks.filter(\.isInInbox).count }
 
     var body: some View {
         List(selection: $selection) {
