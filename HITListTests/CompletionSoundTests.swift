@@ -47,7 +47,7 @@ final class CompletionSoundTests: XCTestCase {
             XCTAssertEqual(CompletionSound(rawValue: sound.rawValue), sound)
             XCTAssertFalse(sound.displayName.isEmpty)
         }
-        XCTAssertEqual(CompletionSound.builtIns.map(\.rawValue), ["pop", "wood", "glass", "swish", "marimba"])
+        XCTAssertEqual(CompletionSound.builtIns.map(\.rawValue), ["bubble", "swish"])
         for sound in CompletionSound.builtIns {
             let url = try XCTUnwrap(sound.bundleURL, "\(sound.rawValue).caf missing from the bundle")
             XCTAssertLessThanOrEqual(try CustomSoundStore.duration(of: url), 0.35)
@@ -58,14 +58,14 @@ final class CompletionSoundTests: XCTestCase {
 
     func testSelectionDefaultsToPopAndPersists() {
         let defaults = makeDefaults()
-        XCTAssertEqual(CompletionSound.selected(in: defaults), .pop)
+        XCTAssertEqual(CompletionSound.selected(in: defaults), .bubble)
 
-        CompletionSound.select(.marimba, in: defaults)
-        XCTAssertEqual(defaults.string(forKey: CompletionSound.key), "marimba")
-        XCTAssertEqual(CompletionSound.selected(in: defaults), .marimba)
+        CompletionSound.select(.swish, in: defaults)
+        XCTAssertEqual(defaults.string(forKey: CompletionSound.key), "swish")
+        XCTAssertEqual(CompletionSound.selected(in: defaults), .swish)
 
         defaults.set("no-such-sound", forKey: CompletionSound.key)
-        XCTAssertEqual(CompletionSound.selected(in: defaults), .pop)
+        XCTAssertEqual(CompletionSound.selected(in: defaults), .bubble)
     }
 
     func testOldToggleOffReadsAsNoneAndPickingASoundTurnsItBackOn() {
@@ -74,7 +74,7 @@ final class CompletionSoundTests: XCTestCase {
         XCTAssertEqual(CompletionSound.selected(in: defaults), .none)
         XCTAssertFalse(CompletionFeedback(defaults: defaults).isSoundEnabled)
 
-        CompletionSound.select(.glass, in: defaults)
+        CompletionSound.select(.swish, in: defaults)
         XCTAssertTrue(CompletionFeedback(defaults: defaults).isSoundEnabled)
 
         CompletionSound.select(.none, in: defaults)
@@ -126,15 +126,15 @@ final class CompletionSoundTests: XCTestCase {
         let defaults = makeDefaults()
         let store = CustomSoundStore(directory: makeDirectory(), defaults: defaults)
         CompletionSound.select(.custom, in: defaults)
-        XCTAssertEqual(CompletionSound.resolvedURL(in: defaults, custom: store), CompletionSound.pop.bundleURL)
+        XCTAssertEqual(CompletionSound.resolvedURL(in: defaults, custom: store), CompletionSound.bubble.bundleURL)
 
         let stored = try store.importSound(from: try makeWav(seconds: 0.3, in: makeDirectory()))
         XCTAssertEqual(CompletionSound.resolvedURL(in: defaults, custom: store), stored)
 
         // Deleted behind the app's back.
         try FileManager.default.removeItem(at: stored)
-        XCTAssertEqual(CompletionSound.resolvedURL(in: defaults, custom: store), CompletionSound.pop.bundleURL)
-        XCTAssertNotNil(CompletionSound.pop.bundleURL)
+        XCTAssertEqual(CompletionSound.resolvedURL(in: defaults, custom: store), CompletionSound.bubble.bundleURL)
+        XCTAssertNotNil(CompletionSound.bubble.bundleURL)
 
         CompletionSound.select(.none, in: defaults)
         XCTAssertNil(CompletionSound.resolvedURL(in: defaults, custom: store))

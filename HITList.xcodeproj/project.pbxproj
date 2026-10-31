@@ -22,7 +22,6 @@
 		29DBD082850E4F48EC9CB314 /* CompletionToastState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520369BF71B18D8B0D28327F /* CompletionToastState.swift */; };
 		2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */; };
 		2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */; };
-		2EF994D843F1DC8AE55B974C /* marimba.caf in Resources */ = {isa = PBXBuildFile; fileRef = EFE28627BF8DF141CC94082B /* marimba.caf */; };
 		384392355165F856C2318A7A /* UpcomingSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A064393556C9800A4628092 /* UpcomingSchedule.swift */; };
 		429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */; };
 		4427C494548C477A0D31DE0F /* NotificationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */; };
@@ -35,7 +34,6 @@
 		50966C1D4A63EBAC1A08B11D /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD69DA3D48DE01A521546D67 /* UpcomingView.swift */; };
 		539A93532A78AA32DB03790F /* swish.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4EC7B932C6B8D510FA4827B9 /* swish.caf */; };
 		54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73ACCF90D84809171E18645 /* Keychain.swift */; };
-		560CD6E3EBEB268BF76F2A1F /* pop.caf in Resources */ = {isa = PBXBuildFile; fileRef = 44D43A48845798B909FF3D5F /* pop.caf */; };
 		5BCC5EB9F77215035E7E5B67 /* FlipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */; };
 		5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4D93807A35FCE5D6C76B9A /* WeekStripView.swift */; };
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
@@ -43,7 +41,6 @@
 		68789767B446111D7C449F59 /* FilterSyntaxHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A78F328265E076A5456E48E /* FilterSyntaxHelpView.swift */; };
 		6E50FF54C3B9C120C602A26E /* BackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06571975348E2AFECA8660F9 /* BackupService.swift */; };
 		6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103542F81B4DB4B92AE55D74 /* RockerSwitch.swift */; };
-		7058E1EA76A84B34F4D4A152 /* wood.caf in Resources */ = {isa = PBXBuildFile; fileRef = ECA3B35FE1E8908A37D29491 /* wood.caf */; };
 		74E66A8FC0FB24F9EE188997 /* FilterEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44155658C8F3884AA9502C5 /* FilterEditorView.swift */; };
 		77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */; };
 		79D44CE11E4002BD0DE04C52 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D3D00811FB7ED869EAE0115 /* CloudKit.framework */; };
@@ -70,9 +67,9 @@
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
 		D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */; };
 		D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08BB24F8F65457496F557A04 /* Deduplicator.swift */; };
+		D531EF7C1FDB3535540C8720 /* bubble.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3EEFA67B186DA52E7B28D2F6 /* bubble.caf */; };
 		D6D05DC0F3BE0D8FEDCE58DD /* CompletionAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89E8ABE1817CBAD4F72AE06 /* CompletionAnimator.swift */; };
 		D6D0CFCCBE7E6A804A288E03 /* QuickAddCreateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */; };
-		D84E20D686D29E6972A4D568 /* glass.caf in Resources */ = {isa = PBXBuildFile; fileRef = 04AECB6DD616BE089D2CF10A /* glass.caf */; };
 		DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC4E971C5262969197F1F3 /* TaskRow.swift */; };
 		E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */; };
 		E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */; };
@@ -99,7 +96,6 @@
 
 /* Begin PBXFileReference section */
 		03340EB6E38EDAB8BB35B0C4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		04AECB6DD616BE089D2CF10A /* glass.caf */ = {isa = PBXFileReference; path = glass.caf; sourceTree = "<group>"; };
 		06571975348E2AFECA8660F9 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
 		08BB24F8F65457496F557A04 /* Deduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deduplicator.swift; sourceTree = "<group>"; };
 		0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlanTests.swift; sourceTree = "<group>"; };
@@ -115,10 +111,10 @@
 		39432755E875F16592EE8188 /* CompletionFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionFeedback.swift; sourceTree = "<group>"; };
 		3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotBuilder.swift; sourceTree = "<group>"; };
 		3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionAnimatorTests.swift; sourceTree = "<group>"; };
+		3EEFA67B186DA52E7B28D2F6 /* bubble.caf */ = {isa = PBXFileReference; path = bubble.caf; sourceTree = "<group>"; };
 		406FA3D585ED8606EA5595AF /* TaskRescheduling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRescheduling.swift; sourceTree = "<group>"; };
 		422E0340B7BAAAB4BAFBB26F /* SyncStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStateTests.swift; sourceTree = "<group>"; };
 		42AC4E971C5262969197F1F3 /* TaskRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRow.swift; sourceTree = "<group>"; };
-		44D43A48845798B909FF3D5F /* pop.caf */ = {isa = PBXFileReference; path = pop.caf; sourceTree = "<group>"; };
 		48F188E277BC60A2CD068AAD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		4A889BC2315D60CA212A38FD /* Debouncer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debouncer.swift; sourceTree = "<group>"; };
 		4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionTests.swift; sourceTree = "<group>"; };
@@ -179,8 +175,6 @@
 		EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncMonitor.swift; sourceTree = "<group>"; };
 		EAAC54705A328613C9AC2A94 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
-		ECA3B35FE1E8908A37D29491 /* wood.caf */ = {isa = PBXFileReference; path = wood.caf; sourceTree = "<group>"; };
-		EFE28627BF8DF141CC94082B /* marimba.caf */ = {isa = PBXFileReference; path = marimba.caf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -333,11 +327,8 @@
 		91F9C5D53DB00E471D5CD504 /* Sounds */ = {
 			isa = PBXGroup;
 			children = (
-				04AECB6DD616BE089D2CF10A /* glass.caf */,
-				EFE28627BF8DF141CC94082B /* marimba.caf */,
-				44D43A48845798B909FF3D5F /* pop.caf */,
+				3EEFA67B186DA52E7B28D2F6 /* bubble.caf */,
 				4EC7B932C6B8D510FA4827B9 /* swish.caf */,
-				ECA3B35FE1E8908A37D29491 /* wood.caf */,
 			);
 			path = Sounds;
 			sourceTree = "<group>";
@@ -511,11 +502,8 @@
 			files = (
 				49985B167209401E0166CB1B /* Assets.xcassets in Resources */,
 				A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */,
-				D84E20D686D29E6972A4D568 /* glass.caf in Resources */,
-				2EF994D843F1DC8AE55B974C /* marimba.caf in Resources */,
-				560CD6E3EBEB268BF76F2A1F /* pop.caf in Resources */,
+				D531EF7C1FDB3535540C8720 /* bubble.caf in Resources */,
 				539A93532A78AA32DB03790F /* swish.caf in Resources */,
-				7058E1EA76A84B34F4D4A152 /* wood.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

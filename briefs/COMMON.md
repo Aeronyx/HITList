@@ -50,10 +50,16 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 - Final message always includes: what changed per commit, test counts before/after, how you verified
   it running (simulator and/or Mac), the branch name, and anything George must do.
 
-## Concurrency note (2026-10-28 evening)
-Four branches are being merged into master while you work: sync-resilience (CloudSyncMonitor,
-SettingsView, SidebarView footer, ModelContainerFactory, HITListApp), reminders (NotificationScheduler,
-one line in HITListApp), tests-ci (HITListTests, scripts/test.sh, .github), completion-delight
-(TaskRow, TaskListView, Resources/CompletionSound.caf, DelightSettingsSection). Do not edit any of
-those files unless your brief explicitly allows a one-line insertion. Prefer new files. Use `TaskRow`
-and `TaskActions` as they are.
+## How sessions run (from 2026-10-31)
+Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
+worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 2 (0.1.0) is live.
+
+## Concurrency note (2026-10-31)
+Running at the same time, each on its own branch: `design-system` (owns `HITList/Support/DesignSystem/`,
+`FilterEditorView.swift`, `ProjectEditorView.swift`, `SettingsView.swift`, `HITList/Views/Delight/`,
+`SidebarView.swift`, and the toolbar block of `TaskListView.swift` only), `flipboard-polish` (owns
+`HITList/Views/Flipboard/` and `HITList/Resources/Sounds/flip.caf`), `inbox-polish` (owns
+`HITList/Views/Inbox/`, one `case .inbox` line in `ContentView.swift`). A later `task-popouts` session
+will own `ContentView.swift`, `TaskListView.swift`, `TaskRow.swift`, `QuickAddBar.swift`,
+`TaskDetailView.swift`. Touch only the files your brief lists; prefer new files.
