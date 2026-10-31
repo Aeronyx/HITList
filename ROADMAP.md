@@ -108,21 +108,26 @@ Run `scripts/release.sh --help`.
 EventKit read-only overlay of today's events; theme choices within the dark palette; filter
 defaults. UI sessions own these.
 
-## Task Flipboard (shipped 2026-10-28)
+## Task Flipboard (shipped 2026-10-28; start-red and flip sound 2026-10-31)
 
 A Flipboard screen (sidebar, under Upcoming) shows recurring chores as a wall of skeuomorphic
 rocker switches: green while the task is due in the future, red once it is due or overdue (the LED
 glows, and pulses slowly when overdue unless Reduce Motion is on), with a thin light bar and
 "2 of 3 days" for time elapsed in the interval. Red sorts first, most overdue on top. Tapping a red
-switch flips it with a sprung 3D rocker animation and a haptic (no sound) and completes the task
+switch flips it with a sprung 3D rocker animation, a haptic and a light-switch click (`flip.caf`,
+110 ms, synthesised; "Flip Sound" toggle in the board's … menu, on by default, silent switch respected)
+and completes the task
 through `TaskActions.toggleCompletion`; like a physical switch, the flip then restarts the interval
 from the flip day (George's decision, 2026-10-28), so a 3-day switch flipped on Thursday is due
-Sunday. A green switch asks before being done early. A switch is just a recurring task without a time that carries the
+Sunday. A new switch starts red with "Flip to start" and an empty light bar (it is due the day it is
+created; George's call, 2026-10-31): "Shave" every 2 weeks is red, a flip makes it green for 14 days,
+then it is red until flipped again. "Add to Flipboard" makes a task without a future due date due
+today (red); one due in the future keeps that day (green). A green switch asks before being done early. A switch is just a recurring task without a time that carries the
 `flipboard` label (stable seeded id), so there is no schema change and a real board could later be
 driven from the same records. Add switches with "+" (title, every N days/weeks) or "Add to
 Flipboard" in task detail; long-press or right-click edits the interval, opens the task, or removes
 it. Code: `HITList/Views/Flipboard/`, tests in `HITListTests/FlipboardTests.swift`. Not yet built
-from the original idea: widgets, a flip sound, and chargeable tasks on the board.
+from the original idea: widgets and chargeable tasks on the board.
 
 ## External TestFlight / App Store prerequisites
 

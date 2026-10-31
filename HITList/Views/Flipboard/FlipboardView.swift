@@ -17,6 +17,7 @@ struct FlipboardView: View {
     @State private var adding = false
     @State private var editing: TaskItem?
     @State private var opened: TaskItem?
+    @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     private static let spacing: CGFloat = 14
@@ -43,7 +44,7 @@ struct FlipboardView: View {
                 ContentUnavailableView {
                     Label("No Switches Yet", systemImage: "switch.2")
                 } description: {
-                    Text("Each switch is a recurring chore. It stays green for its interval, turns red when it’s due, and resets when you flip it back.\n\nTap + to add one, or open any task and choose Add to Flipboard.")
+                    Text("Each switch is a recurring chore. It starts red; flip it when the chore is done and it stays green for its interval, then turns red again.\n\nTap + to add one, or open any task and choose Add to Flipboard.")
                 } actions: {
                     Button("Add a Switch") { adding = true }
                         .buttonStyle(.borderedProminent)
@@ -72,9 +73,20 @@ struct FlipboardView: View {
                 Button { adding = true } label: { Label("Add Switch", systemImage: "plus") }
                     .help("Add a switch")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .help("Flipboard options")
+            }
         }
         .onReceive(clock) { now = $0 }
-        .onAppear { now = Date() }
+        .onAppear {
+            now = Date()
+            FlipSound.prepare()
+        }
         .sheet(isPresented: $adding) {
             FlipSwitchEditor(task: nil).slateSheet()
         }
@@ -162,7 +174,7 @@ struct FlipSwitchEditor: View {
                     if let rule = currentRule, FlipInterval(rule) == nil {
                         Text("Currently “\(rule.displayText)”. Saving replaces it.")
                     } else if task == nil {
-                        Text("Starts green; turns red after the interval.")
+                        Text("Starts red. Flip it when it’s done; it turns red again after the interval.")
                     }
                 }
                 .slateRow()

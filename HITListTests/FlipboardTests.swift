@@ -143,10 +143,12 @@ final class FlipboardTests: XCTestCase {
 
     // MARK: Flipping (model)
 
+    /// A switch due on `due`. `add` would move a past due date to today, so it is set again afterwards.
     private func switchTask(_ title: String = "Shave", due: Date?, rule: RecurrenceRule? = nil) throws -> TaskItem {
         let task = TaskItem(title: title, dueDate: due, recurrence: rule ?? every3Days)
         context.insert(task)
         try Flipboard.add(task, in: context)
+        task.dueDate = due
         return task
     }
 
@@ -217,7 +219,23 @@ final class FlipboardTests: XCTestCase {
         context.insert(other)
         try Flipboard.add(other, in: context)
         XCTAssertEqual(try context.fetch(FetchDescriptor<TaskLabel>()).count, 1, "the label is reused")
-        XCTAssertEqual(other.dueDate, daysFromToday(1), "a dateless task starts one interval out")
+        XCTAssertEqual(other.dueDate, today, "a dateless task joins red, due today")
+        XCTAssertEqual(Flipboard.side(due: other.dueDate, now: Date()), .red)
+        XCTAssertFalse(Flipboard.hasStarted(other))
+    }
+
+    func testAddMovesAPastDueDateToTodayAndKeepsAFutureOne() throws {
+        let overdue = TaskItem(title: "Bins", dueDate: daysFromToday(-5), recurrence: .weekly)
+        let future = TaskItem(title: "Water plants", dueDate: daysFromToday(4), recurrence: .weekly)
+        context.insert(overdue)
+        context.insert(future)
+        try Flipboard.add(overdue, in: context)
+        try Flipboard.add(future, in: context)
+        XCTAssertEqual(overdue.dueDate, today)
+        XCTAssertEqual(Flipboard.side(due: overdue.dueDate, now: Date()), .red)
+        XCTAssertEqual(future.dueDate, daysFromToday(4))
+        XCTAssertEqual(Flipboard.side(due: future.dueDate, now: Date()), .green)
+        XCTAssertTrue(Flipboard.hasStarted(future), "a switch due in the future is running")
     }
 
     func testAddReusesAnExistingLabelByName() throws {
@@ -236,11 +254,63 @@ final class FlipboardTests: XCTestCase {
         XCTAssertEqual(task.dueDate, daysFromToday(1))
     }
 
-    func testCreateSwitchStartsGreen() throws {
+    func testCreateSwitchStartsRed() throws {
         let task = try Flipboard.createSwitch(title: "Shave", rule: every3Days, in: context)
         XCTAssertTrue(Flipboard.isMember(task))
-        XCTAssertEqual(task.dueDate, daysFromToday(3))
-        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: Date()), .green)
+        XCTAssertEqual(task.dueDate, today)
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: Date()), .red)
+        XCTAssertFalse(Flipboard.hasStarted(task))
+        XCTAssertEqual(Flipboard.caption(due: task.dueDate, rule: every3Days, started: false, now: Date()), "Flip to start")
+    }
+
+    /// George's example: "Shave" every two weeks starts red, a flip makes it green for 14 days, then it
+    /// is red until shaved again.
+    func testTwoWeekSwitchStartsRedFlipsGreenAndTurnsRedAfterTwoWeeks() throws {
+        let rule = RecurrenceRule(frequency: .weekly, interval: 2)
+        let now = Date()
+        let task = try Flipboard.createSwitch(title: "Shave", rule: rule, in: context, now: now)
+        func caption(at date: Date) -> String {
+            Flipboard.caption(due: task.dueDate, rule: rule, started: Flipboard.hasStarted(task), now: date)
+        }
+
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: now), .red)
+        XCTAssertEqual(caption(at: now), "Flip to start")
+
+        Flipboard.flip(task, in: context, now: now)
+        XCTAssertEqual(task.dueDate, daysFromToday(14))
+        XCTAssertTrue(Flipboard.hasStarted(task))
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: now), .green)
+        XCTAssertEqual(caption(at: now), "0 of 14 days")
+        XCTAssertEqual(Flipboard.elapsedFraction(due: task.dueDate, rule: rule, now: today), 0, accuracy: 1e-9)
+
+        let day13 = cal.date(byAdding: .day, value: 13, to: now)!
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: day13), .green)
+        XCTAssertEqual(caption(at: day13), "13 of 14 days")
+
+        let day14 = cal.date(byAdding: .day, value: 14, to: now)!
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: day14), .red)
+        XCTAssertEqual(caption(at: day14), "Due today")
+        XCTAssertEqual(Flipboard.elapsedFraction(due: task.dueDate, rule: rule, now: day14), 1, accuracy: 1e-9)
+
+        let day15 = cal.date(byAdding: .day, value: 15, to: now)!
+        XCTAssertEqual(caption(at: day15), "1 day overdue")
+    }
+
+    func testCaptionForSwitchWithoutDueDate() {
+        XCTAssertEqual(Flipboard.caption(due: nil, rule: every3Days, started: true, now: day(10, 28), calendar: utc), "Flip to start")
+    }
+
+    func testHasStartedComparesDueDayWithCreationDay() {
+        XCTAssertFalse(Flipboard.hasStarted(due: day(10, 28), createdAt: day(10, 28, 15), calendar: utc), "created and due today")
+        XCTAssertTrue(Flipboard.hasStarted(due: day(10, 31), createdAt: day(10, 28, 15), calendar: utc))
+        XCTAssertFalse(Flipboard.hasStarted(due: nil, createdAt: day(10, 28), calendar: utc))
+    }
+
+    func testSetRuleOnANewSwitchKeepsItRed() throws {
+        let task = try Flipboard.createSwitch(title: "Shave", rule: every3Days, in: context)
+        Flipboard.setRule(RecurrenceRule(frequency: .weekly, interval: 2), for: task, in: context)
+        XCTAssertEqual(task.dueDate, today)
+        XCTAssertEqual(Flipboard.side(due: task.dueDate, now: Date()), .red)
     }
 
     func testSetRuleKeepsWhenTheIntervalBegan() throws {
