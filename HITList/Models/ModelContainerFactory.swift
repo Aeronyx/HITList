@@ -22,7 +22,19 @@ enum ModelContainerFactory {
     }
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "storage")
-    private static let storeName = "HITList.store"
+
+    /// `HITList.store`, or `HITList-<suffix>.store` when the environment sets `HITLIST_STORE_SUFFIX`.
+    /// Development aid for schema changes: a Development-signed build launched with
+    /// `HITLIST_STORE_SUFFIX=schema` and `-seedSampleData` opens an empty store beside the real one and
+    /// exports a record carrying every field, which creates the new fields in CloudKit Development
+    /// without ever opening the real (Production-mirrored) store under the Development environment.
+    private static var storeName: String {
+        if let suffix = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"],
+           !suffix.isEmpty, suffix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) {
+            return "HITList-\(suffix).store"
+        }
+        return "HITList.store"
+    }
 
     /// Builds the CloudKit-backed container, falling back to local-only storage if CloudKit
     /// can't be set up (not signed in to iCloud, missing entitlement during development, ...).

@@ -8,8 +8,14 @@ import SwiftData
 // - Never rename or delete a model or attribute. Never change an attribute's type.
 // - New attributes must be optional or have a default value. New relationships must be optional.
 // - No `@Attribute(.unique)`. No non-optional relationships.
-// - Every model change: bump `HITListSchemaV<n>`, add a lightweight migration stage, run the app once
-//   against Development, deploy the schema in the CloudKit dashboard, then release.
+// - Every model change: bump `HITListSchemaV<n>`, add a lightweight migration stage, push the new fields
+//   to CloudKit Development, deploy the schema in the CloudKit dashboard, then release. The push, without
+//   touching the real store (never open it under the Development environment):
+//     xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug \
+//       -destination 'platform=macOS' -derivedDataPath build/DerivedData-mac -allowProvisioningUpdates
+//     HITLIST_STORE_SUFFIX=schema build/DerivedData-mac/Build/Products/Debug/HITList.app/Contents/MacOS/HITList -seedSampleData
+//   then wait for "exporting succeeded" in `/usr/bin/log show --info --last 2m --predicate 'subsystem ==
+//   "com.trammells.hitlist"'`, quit it, and deploy in the dashboard (done this way for V2 on 2026-10-31).
 // - `scripts/release.sh` refuses to upload while the Development schema differs from Production
 //   (needs a cktool management token; see the script header).
 //
