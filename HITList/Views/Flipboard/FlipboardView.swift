@@ -17,6 +17,7 @@ struct FlipboardView: View {
     @State private var adding = false
     @State private var editing: TaskItem?
     @State private var opened: TaskItem?
+    @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     private static let spacing: CGFloat = 14
@@ -72,9 +73,20 @@ struct FlipboardView: View {
                 Button { adding = true } label: { Label("Add Switch", systemImage: "plus") }
                     .help("Add a switch")
             }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                }
+                .help("Flipboard options")
+            }
         }
         .onReceive(clock) { now = $0 }
-        .onAppear { now = Date() }
+        .onAppear {
+            now = Date()
+            FlipSound.prepare()
+        }
         .sheet(isPresented: $adding) {
             FlipSwitchEditor(task: nil).slateSheet()
         }

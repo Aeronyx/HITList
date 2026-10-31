@@ -5,7 +5,7 @@ import HITListCore
 /// One switch on the wall: title in small caps, the LED, the rocker, and the light bar.
 ///
 /// Tapping a red switch flips it: the rocker springs over (with a little overshoot), the LED goes out,
-/// the bar resets, and only then does the task complete, so the board re-sorts after the flip has
+/// the bar resets, a click plays (`FlipSound`), and only then does the task complete, so the board re-sorts after the flip has
 /// landed. A green switch asks before it is flipped early.
 struct FlipSwitchTile: View {
     let task: TaskItem
@@ -113,6 +113,7 @@ struct FlipSwitchTile: View {
         let wasGreen = side == .green
         let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.52)
         FlipHaptic.play()
+        FlipSound.play()
         if wasGreen && !reduceMotion {
             // Already green: press it through toward red, then let it spring home.
             withAnimation(.easeIn(duration: 0.11)) { dipping = true; flipping = true }
