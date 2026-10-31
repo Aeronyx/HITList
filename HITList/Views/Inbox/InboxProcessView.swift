@@ -2,10 +2,10 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// Process mode: the inbox one task at a time, oldest first. Each action (a date, a project, a label,
+/// Process mode: the inbox one task at a time, oldest first. Each action (a date, a Group, a label,
 /// delete, skip) moves on to the next task; the last one gives way to the empty state.
 ///
-/// Keys on macOS (and iPad with a keyboard): T today, M tomorrow, D pick date, P project, L label,
+/// Keys on macOS (and iPad with a keyboard): T today, M tomorrow, D pick date, P Group, L label,
 /// ⌫ delete (undo with ⌘Z), → skip, Return edit the title, Esc close. They are off while the title is
 /// being edited or a picker is open, so typing never triggers them.
 struct InboxProcessView: View {
@@ -173,7 +173,7 @@ struct InboxProcessView: View {
                     .autocorrectionDisabled()
                     #endif
                 tokenChips
-                Text("Return saves. Dates, #project, @label and p1–p4 work as in quick add.")
+                Text("Return saves. Dates, #group, @label and p1–p4 work as in quick add.")
                     .font(HITType.caption)
                     .foregroundStyle(Theme.secondaryText)
             }
@@ -267,11 +267,11 @@ struct InboxProcessView: View {
                     schedule(task, to: day)
                 }
             }
-            action("Move to project", "number", key: "P", tint: .purple, shortcut: KeyboardShortcut("p", modifiers: [])) {
+            action("Move to Group", "number", key: "P", tint: .purple, shortcut: KeyboardShortcut("p", modifiers: [])) {
                 open(.project)
             }
             .popover(isPresented: isOpen(.project)) {
-                InboxPicker(title: "Move to project", noun: "project", symbol: "circle.fill",
+                InboxPicker(title: "Move to Group", noun: "Group", symbol: "circle.fill",
                             options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
                     popover = nil
                     move(task, to: choice)

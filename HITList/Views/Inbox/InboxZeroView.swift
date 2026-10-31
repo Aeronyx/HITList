@@ -4,7 +4,7 @@ import SwiftUI
 /// The check bounces once when it appears, unless Reduce Motion is on.
 struct InboxZeroView: View {
     var title = "Inbox zero. Nice."
-    var message = "Everything has a home. New tasks without a project land here."
+    var message = "Everything has a home. Dated tasks and tasks without a Group land here."
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var appeared = false
