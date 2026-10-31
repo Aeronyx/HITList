@@ -21,62 +21,41 @@ struct FilterEditorView: View {
 
     var body: some View {
         let status = status
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("Name", text: $name)
-                    ColorPickerRow(colorHex: $colorHex)
-                } footer: {
-                    // Query errors are shown inline under the query; this covers the rest.
-                    if let saveBlocker, status.error == nil {
-                        Label(saveBlocker, systemImage: "info.circle")
-                            .font(.callout)
-                            .foregroundStyle(Theme.secondaryText)
-                    }
-                }
-                .slateRow()
-
-                Section {
-                    FilterQueryField(query: $query, error: status.error,
-                                     projects: projects.map(\.name), labels: labels.map(\.name))
-                } header: {
-                    HStack {
-                        Text("Query")
-                        Spacer()
-                        Button { showingHelp = true } label: {
-                            Label("Syntax help", systemImage: "questionmark.circle")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.borderless)
-                        .popover(isPresented: $showingHelp) { FilterSyntaxHelpView() }
-                    }
-                }
-                .slateRow()
-
-                Section("Preview") { preview(status) }
-                    .slateRow()
-
-                Section {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 8)], spacing: 8) {
-                        ForEach(FilterTemplate.all) { template in
-                            Button { use(template) } label: { TemplateCard(template: template) }
-                                .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                } header: {
-                    Text("Templates")
-                }
-                .slateRow()
+        HITSheetChrome(filter == nil ? "New Filter" : "Edit Filter", isPrimaryEnabled: saveBlocker == nil, onPrimary: save) {
+            // Query errors are shown inline under the query; this footer covers the rest.
+            HITSection("Name", footer: status.error == nil ? saveBlocker : nil) {
+                HITField("Name", text: $name, autofocus: filter == nil)
+                    .onSubmit(save)
             }
-            .formStyle(.grouped)
-            .slateList()
-            .navigationTitle(filter == nil ? "New Filter" : "Edit Filter")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(saveBlocker != nil)
+
+            HITSection("Colour") { HITColorDots(selection: $colorHex) }
+
+            HITSection("Query") {
+                FilterQueryField(query: $query, error: status.error,
+                                 projects: projects.map(\.name), labels: labels.map(\.name))
+                    .textFieldStyle(HITTextFieldStyle(isInvalid: status.error != nil))
+            } accessory: {
+                Button { showingHelp = true } label: {
+                    Label("Syntax help", systemImage: "questionmark.circle")
+                }
+                .buttonStyle(HITButtonStyle(.ghost, size: .small))
+                .popover(isPresented: $showingHelp) { FilterSyntaxHelpView() }
+            }
+
+            HITSection("Preview") {
+                preview(status)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(HITSpacing.m)
+                    .background(Theme.elevated, in: RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous))
+            }
+
+            HITSection("Templates") {
+                HITChipRow {
+                    ForEach(FilterTemplate.all) { template in
+                        HITChip(template.name, systemImage: template.symbol, tint: Color(hex: template.colorHex),
+                                isSelected: query == template.query) { use(template) }
+                            .help(template.query)
+                    }
                 }
             }
         }
@@ -168,48 +147,6 @@ private struct PreviewRowLabelStyle: LabelStyle {
         HStack(spacing: 6) {
             configuration.icon.font(.system(size: 7)).foregroundStyle(Theme.secondaryText)
             configuration.title.font(.callout).lineLimit(1)
-        }
-    }
-}
-
-private struct TemplateCard: View {
-    let template: FilterTemplate
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(template.name, systemImage: template.symbol)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(Color(hex: template.colorHex))
-            Text(template.query)
-                .font(.caption2.monospaced())
-                .foregroundStyle(Theme.secondaryText)
-                .lineLimit(2)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.separator))
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-struct ColorPickerRow: View {
-    @Binding var colorHex: String
-    var body: some View {
-        HStack(spacing: 8) {
-            Text("Color")
-            Spacer()
-            ForEach(Color.palette, id: \.hex) { entry in
-                Button {
-                    colorHex = entry.hex
-                } label: {
-                    Circle().fill(Color(hex: entry.hex))
-                        .frame(width: 20, height: 20)
-                        .overlay { if entry.hex == colorHex { Image(systemName: "checkmark").font(.caption2.bold()).foregroundStyle(.white) } }
-                }
-                .buttonStyle(.plain)
-                .help(entry.name)
-            }
         }
     }
 }
