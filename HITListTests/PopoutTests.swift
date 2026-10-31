@@ -299,6 +299,126 @@ final class PopoutTests: XCTestCase {
         XCTAssertNil(atTime.reminderOffsetMinutes, "!at is the same as no offset")
     }
 
+    // MARK: Quick-add v2: reminder offsets, "+" options
+
+    func testTypedReminderOffsetFillsTheReminderChip() {
+        let p = parser()
+        let draft = QuickAddDraft(context: .today, text: "Haircut tom 11am p1 !15mb")
+        let chips = draft.chips(p)
+        let eleven = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: day(1))!
+        XCTAssertEqual(draft.result(p).title, "Haircut")
+        XCTAssertEqual(chips.dueDate, eleven)
+        XCTAssertTrue(chips.hasDueTime)
+        XCTAssertFalse(chips.dateIsDefault, "the typed day beats Today's default")
+        XCTAssertEqual(DueFormatter.text(for: eleven, hasTime: false, now: now, calendar: calendar), "Tomorrow")
+        XCTAssertEqual(chips.priority, .p1)
+        XCTAssertEqual(chips.reminderOffsetMinutes, 15)
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 15)
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: chips.reminderOffsetMinutes),
+                       eleven.formatted(date: .omitted, time: .shortened) + " · 15 min before")
+    }
+
+    func testOffsetPresetsWriteTokensThatParseBack() {
+        let p = parser()
+        let expected: [Int: String] = [5: "!5mb", 15: "!15mb", 30: "!30mb", 60: "!1hb", 1440: "!1db"]
+        for minutes in ReminderChipPopover.offsetPresets {
+            var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
+            draft.setReminderOffset(minutes == 0 ? nil : minutes, p)
+            if let token = expected[minutes] {
+                XCTAssertEqual(draft.text, "Haircut tomorrow 11am \(token) ")
+                XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, minutes)
+            } else {
+                XCTAssertEqual(minutes, 0)
+                XCTAssertEqual(draft.text, "Haircut tomorrow 11am", "At time writes nothing")
+                XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
+            }
+            XCTAssertEqual(draft.result(p).title, "Haircut")
+            XCTAssertTrue(draft.chips(p).hasDueTime, "the time survives")
+        }
+    }
+
+    func testOffsetChipReplacesATypedOffsetAndAtTimeRemovesIt() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Haircut tom 11am p1 !15mb")
+        draft.setReminderOffset(60, p)
+        XCTAssertEqual(draft.text, "Haircut tom 11am p1 !1hb ")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
+        draft.setReminderOffset(0, p)
+        XCTAssertEqual(draft.text, "Haircut tom 11am p1 ")
+        XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
+        XCTAssertEqual(draft.chips(p).priority, .p1)
+    }
+
+    func testReminderChipWording() {
+        let eleven = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: day(1))!
+        let clock = eleven.formatted(date: .omitted, time: .shortened)
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil), "Reminder")
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: 30), "30 min before")
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: nil), clock)
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 0), clock)
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 60), clock + " · 1 hour before")
+        XCTAssertEqual(ReminderChipText.title(time: eleven, offsetMinutes: 1440), clock + " · 1 day before")
+    }
+
+    func testPlusOptionsRevealAndResetClearsThem() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .today, text: "Haircut")
+        XCTAssertTrue(draft.extras.isEmpty)
+        draft.reveal(.location)
+        draft.reveal(.deadline)
+        draft.showsNotes = true
+        XCTAssertTrue(draft.shows(.location) && draft.shows(.deadline) && draft.shows(.description))
+        draft.locationName = "  Main St Barbers "
+        draft.setDeadline(day(3).addingTimeInterval(3600))
+        XCTAssertEqual(draft.chips(p).deadline, day(3), "a deadline is a day")
+        XCTAssertEqual(draft.chips(p).locationName, "Main St Barbers")
+        XCTAssertEqual(draft.text, "Haircut", "deadline and location write no token")
+        draft.setDeadline(nil)
+        XCTAssertNil(draft.chips(p).deadline)
+        XCTAssertFalse(draft.shows(.deadline), "No deadline hides its chip")
+        draft.locationName = "   "
+        XCTAssertNil(draft.result(p).locationName, "a blank location is none")
+        draft.reset()
+        XCTAssertEqual(draft, QuickAddDraft(context: .today))
+    }
+
+    func testDeadlineAndLocationSurviveSave() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let p = QuickAddParser()
+        var draft = QuickAddDraft(context: .today, text: "Haircut tom 11am p1 !15mb")
+        let deadline = Calendar.current.date(byAdding: .day, value: 3, to: Calendar.current.startOfDay(for: Date()))!
+        draft.setDeadline(deadline)
+        draft.reveal(.location)
+        draft.locationName = "Main St Barbers"
+        let task = try TaskActions.create(from: draft.result(p), defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(task.title, "Haircut")
+        XCTAssertEqual(task.deadline, deadline)
+        XCTAssertEqual(task.locationName, "Main St Barbers")
+        XCTAssertEqual(task.reminderOffsetMinutes, 15)
+        XCTAssertEqual(task.priority, 1)
+        // And they reach the store.
+        let id = task.id
+        let fetched = try XCTUnwrap(context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        XCTAssertEqual(fetched.deadline, deadline)
+        XCTAssertEqual(fetched.locationName, "Main St Barbers")
+    }
+
+    func testTodayDefaultIsStillTodayWithoutATimeInTheV2Card() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .today)
+        XCTAssertEqual(draft.chips(p).dueDate, today, "the Date chip reads Today before anything is typed")
+        XCTAssertEqual(DueFormatter.text(for: today, hasTime: false, now: now, calendar: calendar), "Today")
+        draft.text = "Buy milk"
+        draft.reveal(.location)
+        draft.locationName = "Costco"
+        let result = draft.result(p)
+        XCTAssertEqual(result.dueDate, today)
+        XCTAssertFalse(result.hasDueTime)
+        XCTAssertNil(result.reminderOffsetMinutes)
+        XCTAssertNil(QuickAddDraft(context: .inbox, text: "Buy milk").chips(p).dueDate, "elsewhere it reads Date")
+    }
+
     // MARK: Presentation
 
     func testQuickAddOpensClosesAndStaysOpenAfterSaving() {
