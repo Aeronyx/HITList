@@ -13,6 +13,7 @@ enum FlipboardPalette {
     static let redTop = Priority.p1.color
     static let redBottom = Color(hex: "#B8333A")
     static let ledOn = Color(hex: "#FF4D4F")
+    static let ledGreen = Color(hex: "#4BEA8F")
     static let bezelTop = Color(hex: "#0B0E13")
     static let bezelBottom = Color(hex: "#1D232E")
 
@@ -109,40 +110,101 @@ struct RockerSwitch: View {
     }
 }
 
-/// The indicator light: dark red glass when off, glowing red when on, breathing slowly when `pulsing`.
+/// The indicator light. Red while the switch is due (breathing slowly when overdue); once the switch is
+/// green it glows a faint green with a soft bloom instead of going dark, so a done switch still reads as
+/// powered. Turning green flares the bloom once and lets it settle. Reduce Motion: no breathing, no flare.
 struct FlipLED: View {
-    var isOn: Bool
-    var pulsing: Bool
-
-    var body: some View {
-        if isOn && pulsing {
-            PhaseAnimator([0.35, 1.0]) { glow in
-                lamp(glow: glow)
-            } animation: { _ in .easeInOut(duration: 1.3) }
-        } else {
-            lamp(glow: isOn ? 1 : 0)
-        }
+    enum Glow: Equatable {
+        /// Due today: steady red.
+        case due
+        /// Past its due day: red, breathing.
+        case overdue
+        /// Green, done for the interval: faint green.
+        case done
     }
 
-    private func lamp(glow: Double) -> some View {
+    var glow: Glow
+    var reduceMotion = false
+    var size: CGFloat = 13
+
+    /// Opacity of the green glass and its bloom at rest: faint, not lit.
+    static let doneLevel = 0.42
+    static let doneBloom = 0.5
+
+    var body: some View {
+        SwiftUI.Group {
+            if glow == .overdue && !reduceMotion {
+                PhaseAnimator([0.35, 1.0]) { level in
+                    FlipLamp(red: level, green: 0, size: size)
+                } animation: { _ in .easeInOut(duration: 1.3) }
+            } else if reduceMotion {
+                lamp(flare: 0)
+            } else {
+                // One flare as the switch turns green; the trigger fires on every change, the flare only
+                // shows on `.done`.
+                lamp(flare: 0)
+                    .keyframeAnimator(initialValue: 0.0, trigger: glow == .done) { _, flare in
+                        lamp(flare: flare)
+                    } keyframes: { _ in
+                        KeyframeTrack {
+                            CubicKeyframe(1, duration: 0.14)
+                            CubicKeyframe(0.35, duration: 0.35)
+                            CubicKeyframe(0, duration: 0.6)
+                        }
+                    }
+            }
+        }
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.35), value: glow)
+    }
+
+    private func lamp(flare: Double) -> FlipLamp {
+        let done = glow == .done
+        return FlipLamp(red: done ? 0 : 1,
+                        green: done ? Self.doneLevel + (1 - Self.doneLevel) * flare : 0,
+                        greenBloom: done ? Self.doneBloom + 0.5 * flare : 0,
+                        size: size)
+    }
+}
+
+/// One glass lamp in a chrome bezel, lit red and/or green by degree (0 = dark glass, 1 = fully lit).
+/// The single switch LED and the charging lamps share it.
+struct FlipLamp: View {
+    var red: Double = 0
+    var green: Double = 0
+    /// Strength of the green halo; follows `green` unless given.
+    var greenBloom: Double?
+    var size: CGFloat = 13
+
+    private var radius: CGFloat { size * 0.62 }
+
+    var body: some View {
+        let bloom = greenBloom ?? green
         Circle()
-            .fill(RadialGradient(colors: [Color(hex: "#4A2B30"), Color(hex: "#1E1316")],
-                                 center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: 8))
+            .fill(RadialGradient(colors: [Color(hex: "#3A2E33"), Color(hex: "#17131A")],
+                                 center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: radius))
             .overlay {
                 Circle()
                     .fill(RadialGradient(colors: [Color(hex: "#FFD0D0"), FlipboardPalette.ledOn, Color(hex: "#8E1A1F")],
-                                         center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: 8))
-                    .opacity(isOn ? 0.55 + 0.45 * glow : 0)
+                                         center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: radius))
+                    .opacity(red > 0 ? 0.55 + 0.45 * red : 0)
+            }
+            .overlay {
+                Circle()
+                    .fill(RadialGradient(colors: [Color(hex: "#DFFFEA"), FlipboardPalette.ledGreen, FlipboardPalette.greenBottom],
+                                         center: .init(x: 0.4, y: 0.35), startRadius: 0, endRadius: radius))
+                    .opacity(green)
             }
             .overlay { Circle().strokeBorder(.black.opacity(0.65), lineWidth: 1) }
-            .frame(width: 13, height: 13)
-            .padding(2.5)
+            .frame(width: size, height: size)
+            .padding(size * 0.19)
             .background {
                 // Chrome bezel.
                 Circle().fill(LinearGradient(colors: [Color(white: 0.42), Color(white: 0.12)],
                                              startPoint: .top, endPoint: .bottom))
             }
-            .shadow(color: FlipboardPalette.ledOn.opacity(isOn ? 0.9 * glow : 0), radius: 4 + 6 * glow)
+            .shadow(color: FlipboardPalette.ledOn.opacity(red > 0 ? 0.9 * red : 0), radius: size * (0.3 + 0.46 * red))
+            .shadow(color: FlipboardPalette.ledGreen.opacity(min(1, 0.8 * bloom)), radius: size * (0.25 + 0.6 * bloom))
+            .accessibilityHidden(true)
     }
 }
 
