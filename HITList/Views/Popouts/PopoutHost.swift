@@ -38,7 +38,8 @@ struct PopoutHost: ViewModifier {
             .overlay(alignment: .bottom) {
                 if popouts.toast.isVisible {
                     CompletionToast(message: popouts.toast.message) { popouts.undoCompletions(in: context) }
-                        .padding(.bottom, 64)
+                        // iPhone: clear of the tab bar and the oval "+" (MobileShell's bottom chrome).
+                        .padding(.bottom, usesPanel ? 64 : 136)
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }

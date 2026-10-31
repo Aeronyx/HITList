@@ -54,11 +54,15 @@ struct TaskPopout: View {
 
     private var isChecked: Bool { task.isCompleted || completing }
 
+    /// One title line; the checkbox and the header buttons centre on it (a long title wraps below).
+    private let headerLine: CGFloat = 26
+
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: HITSpacing.m) {
+        HStack(alignment: .top, spacing: HITSpacing.m) {
             Button(action: toggleCompletion) {
                 Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
+                    .frame(width: 24, height: headerLine)
                     .foregroundStyle(isChecked ? (task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color)
                                      : task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color)
                     .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
@@ -79,6 +83,7 @@ struct TaskPopout: View {
                 .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
                 .strikethrough(task.isCompleted, color: Theme.secondaryText)
                 .lineLimit(1...5)
+                .frame(minHeight: headerLine, alignment: .leading)
                 .focused($titleFocused)
                 .onChange(of: task.title) { _, title in
                     if title.contains(where: \.isNewline) {
@@ -90,8 +95,10 @@ struct TaskPopout: View {
                 }
 
             moreMenu
+                .frame(height: headerLine)
             Button { popouts.closeTask() } label: { Image(systemName: "xmark") }
                 .buttonStyle(HITIconButtonStyle(font: .system(size: 14, weight: .semibold)))
+                .frame(height: headerLine)
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
                 .help("Close (Esc)")
