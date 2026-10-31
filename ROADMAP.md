@@ -32,6 +32,7 @@ CloudKit container come first.
 | Inbox polish (empty state, count, Process mode) | done 2026-10-31 | Opus 5.5 session, effort High |
 | Task Flipboard | done 2026-10-28 | Opus 5.5 session, effort High |
 | Design system (custom buttons, toggle, chips, fields, sheet chrome; editors, Settings, sidebar "+", "…" menu) | done 2026-10-31; guide in HITList/Support/DesignSystem/README.md | Opus 5.5 session, effort High |
+| Task popouts (no detail column; quick-add card with live chips, floating "+", inline add rows; task popout; iPhone Upcoming rows no longer drag) | done 2026-10-31; Mac panel and Mac drag-to-day need George's eyes | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 

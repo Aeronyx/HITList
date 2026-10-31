@@ -85,6 +85,34 @@ HITGroup("Reminders", footer: "Only tasks with a time get a notification.") {
 }
 ```
 
+## Popouts (`HITList/Views/Popouts/`)
+There is no detail column: tasks are added and opened in two popouts, presented by the one
+`PopoutController` that `ContentView` puts in the environment and draws with `PopoutHost`.
+
+| Popout | iPhone | Mac (and iPad) |
+|---|---|---|
+| `QuickAddPopout` (new task) | card docked above the keyboard, slate `Theme.surface`, 14 pt top corners; opened by the floating accent "+" bottom-right | 560 pt panel centred ~18% from the top over a dimmed backdrop; opened by ⌘N and the toolbar "+" |
+| Inline add (same card, in place) | the "Add task" row opens the docked card | the "Add task" row at the end of a list expands into the card |
+| `TaskPopout` (open a task) | bottom sheet, medium/large detents, grabber | the same top-centred panel |
+
+```swift
+// A list that tasks can be added into: ⌘N context, floating "+" (iOS) or toolbar "+" (Mac).
+content.quickAddEntry(.project(name: project.name))
+// The last row of the list.
+Section { InlineAddRow(context: .today, key: "list") }
+// Opening a task: select its row in a List(selection: popouts.selection), or
+popouts.open(task)
+```
+- `QuickAddContext` sets the defaults: Today/Upcoming = today without a time, an Upcoming day = that
+  day, a project = that project, a label = that label, Inbox = undated in the Inbox.
+- `QuickAddDraft` keeps the text and the chips in step (typing fills chips; picking a chip writes its
+  token: `tomorrow`, `5:30pm`, `p2`, `#"Two Words"`, `@label`, `every weekday`). Pure; see `PopoutTests`.
+- The title is `TokenHighlightField`: `HITFieldChrome` around a text field with each token tinted
+  behind the text (`PopoutTint`). Chip popovers live in `PopoutPickers.swift` (date, priority, reminder,
+  project, labels, repeat) and are shared by both popouts.
+- Return saves and keeps the card open; Esc or × closes. Completing in `TaskPopout` plays the usual
+  completion feedback, closes it, and shows the undo toast.
+
 ## Notes for builders
 - `HITMenuRow("Title") { … }` with a statement closure is a tappable row; a closure that returns a
   view is the trailing control. Keep action closures non-empty.
