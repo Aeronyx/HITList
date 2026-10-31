@@ -1,6 +1,7 @@
 #!/bin/zsh
-# Start a delegated Opus 5.5 Claude Code session for one brief, in its own git worktree, on George's
-# API credit.
+# Start a delegated Opus 5.5 session for one brief, in its own git worktree, on George's API credit
+# via the Claude Agent SDK (scripts/sdk_session.py, guarded tool policy); --plan runs the claude CLI
+# on the subscription instead.
 #
 # Usage: scripts/session.sh <slug> <brief-file> <effort> [model]
 #   slug        worktree ../HITList-<slug> and branch <slug>, created from master if missing
@@ -51,6 +52,19 @@ else
   echo "Reusing worktree $wt"
 fi
 cd "$wt"
+# Default path: the Agent SDK, which George's promotional credit covers (Claude Code is not covered,
+# so the CLI on the API key fails with "Credit balance too low"). --plan keeps the CLI on the subscription.
+if (( ! usePlan )); then
+  V=~/.config/hitlist/sdk-venv
+  if [[ ! -x "$V/bin/python" ]]; then
+    echo "Setting up the Agent SDK venv at $V"; uv venv -q "$V" --python python3; uv pip install -q --python "$V/bin/python" claude-agent-sdk
+  fi
+  if (( resume )); then
+    if [[ -n "$resumeMsg" ]]; then exec "$V/bin/python" "$ROOT/scripts/sdk_session.py" "$wt" "$brief" "$effort" --model "$model" --continue "$resumeMsg"
+    else exec "$V/bin/python" "$ROOT/scripts/sdk_session.py" "$wt" "$brief" "$effort" --model "$model" --continue; fi
+  fi
+  exec "$V/bin/python" "$ROOT/scripts/sdk_session.py" "$wt" "$brief" "$effort" --model "$model"
+fi
 if (( resume )); then
   echo "Resuming the last conversation in $wt"
   if [[ -n "$resumeMsg" ]]; then
