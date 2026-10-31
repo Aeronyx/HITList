@@ -31,20 +31,10 @@ struct FlipSwitchTile: View {
     private var side: Flipboard.Side { Flipboard.side(due: shownDue, now: now) }
     private var isOverdue: Bool { Flipboard.isOverdue(due: shownDue, now: now) }
     private var tilt: Double { dipping ? -0.35 : side == .green ? 1 : -1 }
-    private var fraction: Double { Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) }
-
-    private var caption: String {
-        guard let due = shownDue else { return "Not started" }
-        switch side {
-        case .green:
-            let total = Flipboard.intervalDays(due: due, rule: rule)
-            let done = Flipboard.elapsedDays(due: due, rule: rule, now: now)
-            return "\(done) of \(total) \(total == 1 ? "day" : "days")"
-        case .red:
-            let late = Flipboard.daysOverdue(due: due, now: now)
-            return late == 0 ? "Due today" : "\(late) \(late == 1 ? "day" : "days") overdue"
-        }
-    }
+    /// A flip in progress lands on a started switch.
+    private var started: Bool { flipping || Flipboard.hasStarted(task) }
+    private var fraction: Double { started ? Flipboard.elapsedFraction(due: shownDue, rule: rule, now: now) : 0 }
+    private var caption: String { Flipboard.caption(due: shownDue, rule: rule, started: started, now: now) }
 
     var body: some View {
         VStack(spacing: 12) {

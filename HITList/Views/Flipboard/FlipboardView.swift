@@ -43,7 +43,7 @@ struct FlipboardView: View {
                 ContentUnavailableView {
                     Label("No Switches Yet", systemImage: "switch.2")
                 } description: {
-                    Text("Each switch is a recurring chore. It stays green for its interval, turns red when it’s due, and resets when you flip it back.\n\nTap + to add one, or open any task and choose Add to Flipboard.")
+                    Text("Each switch is a recurring chore. It starts red; flip it when the chore is done and it stays green for its interval, then turns red again.\n\nTap + to add one, or open any task and choose Add to Flipboard.")
                 } actions: {
                     Button("Add a Switch") { adding = true }
                         .buttonStyle(.borderedProminent)
@@ -162,7 +162,7 @@ struct FlipSwitchEditor: View {
                     if let rule = currentRule, FlipInterval(rule) == nil {
                         Text("Currently “\(rule.displayText)”. Saving replaces it.")
                     } else if task == nil {
-                        Text("Starts green; turns red after the interval.")
+                        Text("Starts red. Flip it when it’s done; it turns red again after the interval.")
                     }
                 }
                 .slateRow()
