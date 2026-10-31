@@ -151,6 +151,12 @@ struct QuickAddDraft: Equatable {
         text = Self.removing([.time], from: text, parser)
     }
 
+    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it.
+    mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
+        text = Self.removing([.reminder], from: text, parser)
+        if let minutes, minutes > 0 { text = Self.appending(ReminderOffset.token(minutes: minutes), to: text) }
+    }
+
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {
         text = Self.removing([.priority], from: text, parser)
         if priority != .p4 { text = Self.appending(QuickAddTokens.priority(priority), to: text) }
