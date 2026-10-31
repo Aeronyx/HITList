@@ -286,6 +286,19 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).count, 1)
     }
 
+    func testSavingStoresTheTypedReminderOffset() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = try TaskActions.create(from: QuickAddParser().parse("Haircut tom 11am p1 !15mb"),
+                                          defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(task.title, "Haircut")
+        XCTAssertEqual(task.reminderOffsetMinutes, 15)
+        XCTAssertEqual(task.priority, 1)
+        XCTAssertTrue(task.hasDueTime)
+        let atTime = try TaskActions.create(from: QuickAddParser().parse("Call 5pm !at"), defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertNil(atTime.reminderOffsetMinutes, "!at is the same as no offset")
+    }
+
     // MARK: Presentation
 
     func testQuickAddOpensClosesAndStaysOpenAfterSaving() {

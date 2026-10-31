@@ -2,7 +2,7 @@ import Foundation
 
 /// One recognized span inside the quick-add text, so the UI can highlight it.
 public struct QuickAddToken: Equatable, Sendable {
-    public enum Kind: String, Sendable { case priority, project, label, date, time, recurrence }
+    public enum Kind: String, Sendable { case priority, project, label, date, time, recurrence, reminder }
     public var kind: Kind
     public var range: Range<String.Index>
     public var text: String
@@ -16,10 +16,17 @@ public struct QuickAddResult: Equatable, Sendable {
     public var projectName: String?
     public var labelNames: [String]
     public var recurrence: RecurrenceRule?
+    /// Minutes before the due time to remind (`!15mb`); 0 for `!0` / `!at`; nil when nothing was typed.
+    public var reminderOffsetMinutes: Int?
+    /// A deadline picked from the card's "+" menu. It has no text token, so the parser never sets it.
+    public var deadline: Date?
+    /// A location typed from the card's "+" menu. It has no text token, so the parser never sets it.
+    public var locationName: String?
     public var tokens: [QuickAddToken]
 
     public init(title: String = "", dueDate: Date? = nil, hasDueTime: Bool = false, priority: Priority = .p4,
                 projectName: String? = nil, labelNames: [String] = [], recurrence: RecurrenceRule? = nil,
+                reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
                 tokens: [QuickAddToken] = []) {
         self.title = title
         self.dueDate = dueDate
@@ -28,11 +35,14 @@ public struct QuickAddResult: Equatable, Sendable {
         self.projectName = projectName
         self.labelNames = labelNames
         self.recurrence = recurrence
+        self.reminderOffsetMinutes = reminderOffsetMinutes
+        self.deadline = deadline
+        self.locationName = locationName
         self.tokens = tokens
     }
 }
 
-/// Turns "Pay rent tomorrow 5pm p1 #Finance @bills every month" into structured fields.
+/// Turns "Pay rent tomorrow 5pm p1 #Finance @bills every month !1hb" into structured fields.
 public struct QuickAddParser: Sendable {
     public var dateParser: DateExpressionParser
     public var knownProjects: [String]
@@ -107,6 +117,10 @@ public struct QuickAddParser: Sendable {
                     result.labelNames.append(name)
                 }
                 mark(i, n, .label); i += n; continue
+            }
+            // Reminder offset: !15mb, !1hb, !1db (the "b" optional), !0 / !at
+            if result.reminderOffsetMinutes == nil, let minutes = ReminderOffset.minutes(fromToken: w) {
+                result.reminderOffsetMinutes = minutes; mark(i, 1, .reminder); i += 1; continue
             }
             // Recurrence
             if result.recurrence == nil, let (rule, n) = Self.matchRecurrence(lowers, at: i) {
@@ -238,5 +252,61 @@ public struct QuickAddParser: Sendable {
         }
         if !days.isEmpty { return (RecurrenceRule(frequency: .weekly, weekdays: days), j - i) }
         return nil
+    }
+}
+
+/// The reminder-offset grammar, shared by the parser, the chips and the notification copy.
+///
+/// `!15mb` or `!15m` = 15 minutes before the due time, `!1hb` / `!1h` = an hour before, `!1db` / `!1d` =
+/// a day before; `!0` and `!at` = at the due time. The offset only matters for a task with a time.
+public enum ReminderOffset {
+    /// The longest offset accepted: four weeks.
+    public static let maxMinutes = 28 * 24 * 60
+
+    /// The offset in minutes a `!…` word stands for, or nil if it isn't one.
+    public static func minutes(fromToken word: String) -> Int? {
+        var w = DateExpressionParser.normalize(word)
+        guard w.hasPrefix("!"), !w.hasPrefix("!!") else { return nil }
+        w.removeFirst()
+        if w == "0" || w == "at" { return 0 }
+        if w.hasSuffix("b") { w.removeLast() }
+        guard let unit = w.last else { return nil }
+        let scale: Int
+        switch unit {
+        case "m": scale = 1
+        case "h": scale = 60
+        case "d": scale = 24 * 60
+        default: return nil
+        }
+        let digits = w.dropLast()
+        guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), let n = Int(digits), n > 0 else { return nil }
+        let minutes = n * scale
+        return minutes <= maxMinutes ? minutes : nil
+    }
+
+    /// The token a chip writes: "!15mb", "!1hb", "!1db"; "!at" for zero.
+    public static func token(minutes: Int) -> String {
+        guard minutes > 0 else { return "!at" }
+        if minutes % (24 * 60) == 0 { return "!\(minutes / (24 * 60))db" }
+        if minutes % 60 == 0 { return "!\(minutes / 60)hb" }
+        return "!\(minutes)mb"
+    }
+
+    /// "15 min", "1 hour", "2 hours", "1 day", "1 hr 30 min".
+    public static func duration(minutes: Int) -> String {
+        let day = 24 * 60
+        let days = minutes / day, hours = (minutes % day) / 60, mins = minutes % 60
+        if minutes > 0, minutes % day == 0 { return days == 1 ? "1 day" : "\(days) days" }
+        if days == 0, hours > 0, mins == 0 { return hours == 1 ? "1 hour" : "\(hours) hours" }
+        var parts: [String] = []
+        if days > 0 { parts.append(days == 1 ? "1 day" : "\(days) days") }
+        if hours > 0 { parts.append("\(hours) hr") }
+        if mins > 0 || parts.isEmpty { parts.append("\(mins) min") }
+        return parts.joined(separator: " ")
+    }
+
+    /// The chip's wording: "15 min before"; "At time" for zero.
+    public static func label(minutes: Int) -> String {
+        minutes > 0 ? duration(minutes: minutes) + " before" : "At time"
     }
 }
