@@ -34,8 +34,8 @@ struct ContentView: View {
             }
             .navigationSplitViewColumnWidth(min: 420, ideal: 640)
         }
-        .environment(popouts)
         .popoutHost(popouts)
+        .environment(popouts)
         .focusedSceneValue(\.popouts, popouts)
         .onChange(of: selection) { _, _ in popouts.closeAll() }
         .background(Theme.background)

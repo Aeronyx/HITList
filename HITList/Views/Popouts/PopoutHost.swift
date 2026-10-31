@@ -27,22 +27,48 @@ struct PopoutHost: ViewModifier {
         #endif
     }
 
+    @Environment(\.modelContext) private var context
+
     func body(content: Content) -> some View {
         content
+            .overlay(alignment: .bottom) {
+                if popouts.toast.isVisible {
+                    CompletionToast(message: popouts.toast.message) { popouts.undoCompletions(in: context) }
+                        .padding(.bottom, 64)
+                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                }
+            }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
                     floatingQuickAdd(quickAdd.context)
                 }
             }
-            .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: popouts.state.isFloatingQuickAddOpen)
-            .sheet(item: Binding(get: { popouts.task }, set: { if $0 == nil { popouts.closeTask() } })) { task in
-                NavigationStack {
-                    TaskDetailView(task: task) { popouts.closeTask() }
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) { Button("Done") { popouts.closeTask() } }
-                        }
+            .overlay {
+                if usesPanel, let task = popouts.task {
+                    PanelBackdrop(onDismiss: { popouts.closeTask() }) {
+                        TaskPopout(task: task)
+                            .id(task.id)
+                            .panelChrome()
+                    }
+                    .transition(.opacity)
                 }
-                .slateSheet()
+            }
+            .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: popouts.state.isFloatingQuickAddOpen)
+            .animation(.easeOut(duration: 0.18), value: usesPanel && popouts.state.isTaskOpen)
+            .sheet(item: Binding(get: { usesPanel ? nil : popouts.task },
+                                 set: { if $0 == nil, !usesPanel { popouts.closeTask() } })) { task in
+                ScrollView {
+                    TaskPopout(task: task)
+                        .padding(.top, HITSpacing.s)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .environment(popouts)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Theme.surface)
+                .presentationCornerRadius(HITRadius.card + 10)
+                .preferredColorScheme(.dark)
+                .tint(Theme.accent)
             }
     }
 

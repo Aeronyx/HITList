@@ -106,6 +106,42 @@ final class PopoutController {
         state.closeAll()
     }
 
+    /// Completes a task from its popout: saves, closes the popout, and shows the undo toast. (The
+    /// popout has already played the check and the completion feedback.)
+    func complete(_ task: TaskItem, in context: ModelContext) {
+        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
+            .restoreDueDate(due)
+        } else {
+            .uncomplete
+        }
+        TaskActions.toggleCompletion(task, in: context)
+        Task { await NotificationScheduler.reschedule(context: context) }
+        if self.task?.id == task.id { closeTask() }
+        let generation = withAnimation(.snappy) { toast.add(CompletedTask(id: task.id, title: task.title, revert: revert)) }
+        AccessibilityNotification.Announcement(toast.message).post()
+        Task {
+            try? await Task.sleep(for: CompletionToastState.lifetime)
+            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+        }
+    }
+
+    /// The toast's Undo: puts every task it lists back as it was.
+    func undoCompletions(in context: ModelContext) {
+        let records = withAnimation(.snappy) { toast.takeAll() }
+        for record in records {
+            let id = record.id
+            guard let task = try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first else { continue }
+            switch record.revert {
+            case .uncomplete:
+                if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }
+            case .restoreDueDate(let due):
+                // Not toggleCompletion: on a recurring task that would advance the date again.
+                TaskActions.reschedule(task, to: due, keepTime: false, in: context)
+            }
+        }
+        Task { await NotificationScheduler.reschedule(context: context) }
+    }
+
     /// For lists that select rows (`List(selection:)`): selecting a row presents its popout, and the
     /// selection reads back as the task on show, so the row stays highlighted while it is open.
     var selection: Binding<TaskItem?> {
