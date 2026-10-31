@@ -198,17 +198,24 @@ struct TaskListView: View {
         .navigationBarTitleDisplayMode(.large)
         #endif
         .toolbar {
-            if selection != .completed {
-                ToolbarItem(placement: .automatic) {
-                    Toggle(isOn: $showCompleted) {
-                        Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash")
-                            .labelStyle(.iconOnly)
-                            .imageScale(.medium)
-                            .font(.body)
+            // A small "…" menu instead of a big eye button: view options live here.
+            ToolbarItem(placement: .automatic) {
+                Menu {
+                    if selection != .completed {
+                        Toggle("Show completed", isOn: $showCompleted)
+                            .keyboardShortcut("c", modifiers: [.command, .shift])
                     }
-                    .toggleStyle(.button)
-                    .help("Show completed tasks")
+                    Section("Sort") {
+                        Button("By due date") {}.disabled(true)
+                        Button("By priority") {}.disabled(true)
+                        Button("By name") {}.disabled(true)
+                    }
+                } label: {
+                    Label("View options", systemImage: "ellipsis")
+                        .labelStyle(.iconOnly)
                 }
+                .menuIndicator(.hidden)
+                .help("View options")
             }
             if let filter = currentFilter {
                 ToolbarItem(placement: .automatic) {

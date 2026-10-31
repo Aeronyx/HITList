@@ -18,105 +18,136 @@ struct SettingsView: View {
     @State private var showReopenAlert = false
     @State private var lastBackup = AppGroup.defaults.object(forKey: LocalBackup.lastBackupKey) as? Date
     @State private var backupMessage: String?
+    @State private var showSyncDetails = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Form {
-            Section {
-                SyncStatusLine()
-                    .fixedSize(horizontal: false, vertical: true)
-                DisclosureGroup("Details") { syncDetails }
-                Button("Reset local cache and re-download…", role: .destructive) { confirmReset = true }
-                    .disabled(!LocalCacheReset.isAvailable)
-            } header: {
-                Text("iCloud Sync")
-            } footer: {
-                Text("Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows.")
+        page
+            .confirmationDialog("Reset local cache?", isPresented: $confirmReset, titleVisibility: .visible) {
+                Button(resetActionTitle, role: .destructive) { resetLocalCache() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your tasks stay in iCloud and are downloaded again into a fresh copy on this device. Changes made here that haven't synced yet won't come back.")
             }
-            .slateRow()
-
-            Section("Export & Import") {
-                Button("Export JSON…") {
-                    if let snap = try? SnapshotBuilder.build(from: context) { exportDocument = SnapshotDocument(snapshot: snap) }
+            .alert("Quit and reopen HITList to finish", isPresented: $showReopenAlert) {
+                Button("OK") {}
+            } message: {
+                Text(reopenMessage)
+            }
+            .fileExporter(isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
+                          document: exportDocument, contentType: .json,
+                          defaultFilename: "HITList-\(Date().formatted(.iso8601.year().month().day()))") { _ in }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
+                guard case .success(let url) = result else { return }
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let snapshot = try Snapshot.from(json: try Data(contentsOf: url))
+                    let summary = try SnapshotBuilder.restore(snapshot, into: context)
+                    importMessage = "Imported from \(snapshot.deviceName): \(summary.description)"
+                } catch {
+                    importMessage = "Import failed: \(error.localizedDescription)"
                 }
-                Button("Import JSON…") { showImporter = true }
-                if let importMessage { Text(importMessage).font(.caption).foregroundStyle(.secondary) }
             }
-            .slateRow()
+    }
 
-            Section {
-                TimelineView(.periodic(from: .now, by: 60)) { tick in
-                    Text("Last backup: \(lastBackup.map { SyncState.relative($0, now: tick.date) } ?? "never")")
-                }
-                .fixedSize(horizontal: false, vertical: true)
-                Button("Back up now") { backUpNow() }
-                #if os(macOS)
-                Button("Show backups in Finder") {
-                    let newest = LocalBackup.backups(in: LocalBackup.directory).last
-                    NSWorkspace.shared.activateFileViewerSelecting([newest ?? LocalBackup.directory])
-                }
-                #endif
-                if let backupMessage { Text(backupMessage).font(.caption).foregroundStyle(.secondary) }
-            } header: {
-                Text("Backups")
-            } footer: {
-                #if os(macOS)
-                Text("A copy of your data is saved once a day; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON.")
-                #else
-                Text("A copy of your data is saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON.")
-                #endif
-            }
-            .slateRow()
-
-            Section("Reminders") {
-                Toggle("Notify at due time", isOn: $notificationsEnabled)
-                    .onChange(of: notificationsEnabled) { _, on in
-                        Task {
-                            if on, !(await NotificationScheduler.requestPermission()) { notificationsEnabled = false }
-                            NotificationScheduler.isEnabled = notificationsEnabled
-                            await NotificationScheduler.reschedule(context: context)
-                        }
-                    }
-                Text("Only tasks with a specific time get a notification.").font(.caption).foregroundStyle(.secondary)
-            }
-            .slateRow()
-
-            DelightSettingsSection()
-                .slateRow()
+    /// A sheet with Done on iPhone; the Settings window's own frame on the Mac.
+    @ViewBuilder
+    private var page: some View {
+        #if os(iOS)
+        HITSheetChrome("Settings", primaryTitle: "Done", cancelTitle: nil, background: Theme.background,
+                       onPrimary: { dismiss() }) {
+            groups
         }
-        .formStyle(.grouped)
-        .slateList()
+        #else
+        ScrollView {
+            VStack(alignment: .leading, spacing: HITSpacing.xl) { groups }
+                .padding(HITSpacing.xl)
+                .frame(maxWidth: 620)
+                .frame(maxWidth: .infinity)
+        }
+        .background(Theme.background)
+        .foregroundStyle(HITColor.text)
         .navigationTitle("Settings")
-        .toolbar {
-            #if os(iOS)
-            ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
+        #endif
+    }
+
+    @ViewBuilder
+    private var groups: some View {
+        HITGroup("iCloud Sync", footer: "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows.") {
+            SyncStatusLine()
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .hitRowPadding()
+            HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
+            }
+            if showSyncDetails {
+                VStack(alignment: .leading, spacing: HITSpacing.s) { syncDetails }
+                    .padding(.horizontal, HITSpacing.l)
+                    .padding(.vertical, HITSpacing.m)
+            }
+            HITMenuRow("Reset local cache and re-download…", systemImage: "arrow.counterclockwise",
+                       role: .destructive, accessory: .none) { confirmReset = true }
+                .disabled(!LocalCacheReset.isAvailable)
+        }
+
+        HITGroup("Export & Import") {
+            HITMenuRow("Export JSON…", systemImage: "square.and.arrow.up", accessory: .none) {
+                if let snap = try? SnapshotBuilder.build(from: context) { exportDocument = SnapshotDocument(snapshot: snap) }
+            }
+            HITMenuRow("Import JSON…", systemImage: "square.and.arrow.down", accessory: .none) { showImporter = true }
+            if let importMessage { message(importMessage) }
+        }
+
+        HITGroup("Backups", footer: backupsFooter) {
+            TimelineView(.periodic(from: .now, by: 60)) { tick in
+                HITMenuRow("Last backup", systemImage: "clock",
+                           value: lastBackup.map { SyncState.relative($0, now: tick.date) } ?? "never")
+            }
+            HITMenuRow("Back up now", systemImage: "externaldrive", accessory: .none) { backUpNow() }
+            #if os(macOS)
+            HITMenuRow("Show backups in Finder", systemImage: "folder", accessory: .none) {
+                let newest = LocalBackup.backups(in: LocalBackup.directory).last
+                NSWorkspace.shared.activateFileViewerSelecting([newest ?? LocalBackup.directory])
+            }
             #endif
+            if let backupMessage { message(backupMessage) }
         }
-        .confirmationDialog("Reset local cache?", isPresented: $confirmReset, titleVisibility: .visible) {
-            Button(resetActionTitle, role: .destructive) { resetLocalCache() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Your tasks stay in iCloud and are downloaded again into a fresh copy on this device. Changes made here that haven't synced yet won't come back.")
-        }
-        .alert("Quit and reopen HITList to finish", isPresented: $showReopenAlert) {
-            Button("OK") {}
-        } message: {
-            Text(reopenMessage)
-        }
-        .fileExporter(isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
-                      document: exportDocument, contentType: .json,
-                      defaultFilename: "HITList-\(Date().formatted(.iso8601.year().month().day()))") { _ in }
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json]) { result in
-            guard case .success(let url) = result else { return }
-            let accessed = url.startAccessingSecurityScopedResource()
-            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let snapshot = try Snapshot.from(json: try Data(contentsOf: url))
-                let summary = try SnapshotBuilder.restore(snapshot, into: context)
-                importMessage = "Imported from \(snapshot.deviceName): \(summary.description)"
-            } catch {
-                importMessage = "Import failed: \(error.localizedDescription)"
+
+        HITGroup("Reminders") {
+            Toggle(isOn: $notificationsEnabled) {
+                HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a specific time get a notification.",
+                                systemImage: "bell")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .onChange(of: notificationsEnabled) { _, on in
+                Task {
+                    if on, !(await NotificationScheduler.requestPermission()) { notificationsEnabled = false }
+                    NotificationScheduler.isEnabled = notificationsEnabled
+                    await NotificationScheduler.reschedule(context: context)
+                }
             }
         }
+
+        DelightSettingsSection()
+    }
+
+    #if os(macOS)
+    private let backupsFooter = "A copy of your data is saved once a day; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON."
+    #else
+    private let backupsFooter = "A copy of your data is saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON."
+    #endif
+
+    /// The result of the last export, import or backup, under its buttons.
+    private func message(_ text: String) -> some View {
+        Text(text)
+            .font(HITType.caption)
+            .foregroundStyle(Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hitRowPadding()
     }
 
     #if os(macOS)
