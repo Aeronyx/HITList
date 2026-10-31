@@ -29,7 +29,7 @@ CloudKit container come first.
 | Completion delight (sound, strike-through, slide-away, undo toast) | done 2026-10-28 | Opus 5.5 session, effort High |
 | Completion sounds (five built-ins + custom file) | done 2026-10-28, awaiting George's ears | Opus 5.5 session, effort Medium |
 | Upcoming view (week strip, day sections, drag to reschedule) | done 2026-10-28, drag-and-drop not yet verified by hand | Opus 5.5 session, effort High |
-| Inbox polish (empty state, count, Process mode) | not started; brief in briefs/13-inbox.md | Opus 5.5 session, effort High |
+| Inbox polish (empty state, count, Process mode) | done 2026-10-31 | Opus 5.5 session, effort High |
 | Task Flipboard | done 2026-10-28 | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
