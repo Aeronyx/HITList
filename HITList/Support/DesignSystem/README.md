@@ -99,7 +99,7 @@ There is no detail column: tasks are added and opened in two popouts, presented 
 
 | Popout | iPhone | Mac (and iPad) |
 |---|---|---|
-| `QuickAddPopout` (new task) | detached oval (`ovalCardChrome()`: 28 pt continuous corners, slate `Theme.surface`, hairline border, shadow) inset 12 pt from the screen edges, floating 12 pt above the keyboard over a black 0.5 backdrop that closes on tap; 20 pt padding; opened by the floating accent "+" | the same contents in the 560 pt panel centred ~18% from the top over a dimmed backdrop; opened by ⌘N and the toolbar "+" |
+| `QuickAddPopout` (new task) | detached oval (`ovalCardChrome()`: 28 pt continuous corners, slate `Theme.surface`, hairline border, shadow) inset 12 pt from the screen edges, floating 12 pt above the keyboard over a black 0.5 backdrop that closes on tap; 20 pt padding; opened by the oval accent "+" above the tab bar's right end (`MobileShell`; iPad keeps the floating "+") | the same contents in the 560 pt panel centred ~18% from the top over a dimmed backdrop; opened by ⌘N and the toolbar "+" |
 | Inline add (same card, in place) | the "Add task" row opens the oval card | the "Add task" row at the end of a list expands into the card |
 | `TaskPopout` (open a task) | bottom sheet, medium/large detents, grabber | the same top-centred panel |
 

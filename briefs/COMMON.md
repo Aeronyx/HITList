@@ -55,26 +55,22 @@ Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
 main (Fable) session, which reviews, tests, merges and releases. TestFlight build 4 (0.1.0) is live.
 
-## Where things stand (2026-10-31, round 3 starting)
-On master: design system (`HITList/Support/DesignSystem/`, README = component guide), Inbox + Process
-mode (`HITList/Views/Inbox/`), Flipboard start-red + flip sound, task popouts (`HITList/Views/Popouts/`:
-`PopoutController` in the environment, `QuickAddPopout`, `TaskPopout`, `InlineAddRow`, chip popovers in
-`PopoutPickers.swift`; no detail column; a list that adds tasks calls `.quickAddEntry(context)` and ends
-with `InlineAddRow`; opening a task is `popouts.open(task)` or `List(selection: popouts.selection)`).
-TestFlight build 4 (0.1.0) carries all of that.
+## Where things stand (2026-10-31, after round 3)
+On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
+guide), Inter typeface (`HITType` roles only; never `.font(.subheadline)`), schema V2 (`reminderOffsetMinutes`,
+`deadline`, `locationName`, `flipTarget`, `flipCount`, `flipPeriodStart`; V1 frozen in SchemaV1Models.swift),
+shared due colours (`HITColor.due`), popouts (`HITList/Views/Popouts/`: oval quick-add card with the "+"
+options bar, reminder offsets `!15mb`, task popout with Deadline/Location), the iPhone tab shell
+(`HITList/Views/Tabs/`: Inbox, Today, Upcoming, Browse, oval "+" in `MobileShell`; iPad and Mac keep the
+sidebar), Today's Overdue + day sections sorted priority-then-due (`HITListCore/.../TaskOrdering.swift`), the
+Inbox rule (dated tasks in any Group + undated tasks with no Group; undated grouped tasks only inside their
+Group), "Group" as the user-facing word for Project, Flipboard long-press menu, faint-green lamp and charging
+switches. `TaskRow` aligns the checkbox and priority badge on the title's first line and draws its second
+line with `MetaItem` (never `Label`, whose List style reserves a wide icon column).
 
-Added by Fable right before round 3 (also on master):
-- **Schema V2** (`HITListSchemaV2`, Models.swift; V1 frozen in `SchemaV1Models.swift`; lightweight
-  migration in SchemaVersions.swift). `TaskItem` gained `reminderOffsetMinutes: Int?`, `deadline: Date?`,
-  `locationName: String?`, `flipTarget: Int = 1`, `flipCount: Int = 0`, `flipPeriodStart: Date?`. Nobody
-  adds fields this round; use these. `SchemaTests` checks V2 only adds TaskItem attributes.
-- **Inter typeface.** `HITFont.inter(size, weight, relativeTo:)` and the `HITType` roles (title1/2/3,
-  headline, body, callout, subheadline, footnote, caption, caption2, control, title, taskName = 14 bold,
-  sectionHeader, mono). Never `.font(.subheadline)` or `.font(.system(...))` for text; SF Symbols keep
-  `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`.
-- **Due colours.** `HITColor.due(date, hasTime:now:)` → `dueToday` green, `dueTomorrow` orange, `dueLater`
-  purple, `dueOverdue` red; `TaskRow` and the popout chips use it. Use it wherever a date shows.
-- **"Group"** is the user-facing word for Project from this round on (model and filter syntax unchanged).
+Lesson from round 3: commit after every item. Twice the runner's permission stream closed near the end of a
+long session and every write (git, xcodegen) was refused from then on; work left uncommitted had to be
+committed by hand afterwards.
 
 ## Round 3 ownership (three sessions at once; stay inside your files)
 - `17-mobile-tabs` (branch `mobile-tabs`): `ContentView.swift`, new `Views/Tabs/`, `TaskListView.swift`,
