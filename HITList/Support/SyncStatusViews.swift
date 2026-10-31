@@ -31,7 +31,7 @@ struct SyncStatusFooter: View {
         if state.showsInSidebar(hasSyncedBefore: monitor.lastSyncedAt != nil) {
             Button(action: action) {
                 Label(state.summary(), systemImage: state.symbol)
-                    .font(.caption)
+                    .font(HITType.caption)
                     .foregroundStyle(Theme.secondaryText)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,7 +68,7 @@ struct AccountChangeBanner: View {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: "person.crop.circle.badge.exclamationmark").foregroundStyle(Theme.accent)
                 Text(Self.message(for: notice))
-                    .font(.callout)
+                    .font(HITType.callout)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 Button { monitor.dismissAccountNotice() } label: { Image(systemName: "xmark") }

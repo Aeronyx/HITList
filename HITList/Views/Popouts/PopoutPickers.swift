@@ -6,23 +6,16 @@ import HITListCore
 
 /// How each chip and highlighted token is tinted.
 enum PopoutTint {
-    static let today = Color(hex: "#30A46C")
-    static let tomorrow = Color(hex: "#F5A524")
-    static let later = Color(hex: "#B07CF5")
-    static let overdue = HITColor.danger
+    static let today = HITColor.dueToday
+    static let tomorrow = HITColor.dueTomorrow
+    static let later = HITColor.dueLater
+    static let overdue = HITColor.dueOverdue
     static let label = Color(hex: "#E5A05C")
     static let project = Color(hex: "#B07CF5")
 
-    /// Green today, amber tomorrow, purple later, red when overdue.
+    /// Green today, orange tomorrow, purple later, red when overdue (`HITColor.due`).
     static func date(_ date: Date?, hasTime: Bool = false, now: Date = Date(), calendar: Calendar = .current) -> Color {
-        guard let date else { return Theme.secondaryText }
-        if DueFormatter.isOverdue(date, hasTime: hasTime, isCompleted: false, now: now, calendar: calendar) { return overdue }
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date)).day ?? 0
-        switch days {
-        case ...0: return today
-        case 1: return tomorrow
-        default: return later
-        }
+        HITColor.due(date, hasTime: hasTime, now: now, calendar: calendar)
     }
 
     static func token(_ kind: QuickAddToken.Kind, priority: Priority) -> Color {

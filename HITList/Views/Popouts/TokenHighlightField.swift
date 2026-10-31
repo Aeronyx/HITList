@@ -32,7 +32,7 @@ struct TokenHighlightField: View {
             .autocorrectionDisabled()
             #endif
         }
-        .font(.system(size: 17, weight: .medium))
+        .font(HITType.taskName)
         .modifier(HITFieldChrome(isFocused: focus.wrappedValue))
         .onChange(of: text) { _, new in
             // A vertical field takes Return as a newline; treat it as submit.

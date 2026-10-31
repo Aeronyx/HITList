@@ -9,6 +9,7 @@ struct HITListApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        HITFont.installPlatformAppearance()
         // Unit tests run hosted in the app; keep them off the real store and CloudKit.
         isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         if isTesting {
@@ -38,6 +39,7 @@ struct HITListApp: App {
                 .safeAreaInset(edge: .top, spacing: 0) { AccountChangeBanner() }
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                .font(HITType.body)
                 .onChange(of: scenePhase) { _, phase in
                     guard phase == .active else { return }
                     let context = container.mainContext
@@ -50,6 +52,7 @@ struct HITListApp: App {
         #if os(macOS)
         Settings {
             SettingsView()
+                .font(HITType.body)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .frame(minWidth: 520, minHeight: 420)

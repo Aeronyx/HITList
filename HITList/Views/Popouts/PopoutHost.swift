@@ -67,8 +67,7 @@ struct PopoutHost: ViewModifier {
                 return .handled
             }
             #endif
-            .sheet(item: Binding(get: { usesPanel ? nil : popouts.task },
-                                 set: { if $0 == nil, !usesPanel { popouts.closeTask() } })) { task in
+            .sheet(item: sheetTask) { task in
                 ScrollView {
                     TaskPopout(task: task)
                         .padding(.top, HITSpacing.s)
@@ -82,6 +81,12 @@ struct PopoutHost: ViewModifier {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
             }
+    }
+
+    /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
+    private var sheetTask: Binding<TaskItem?> {
+        Binding<TaskItem?>(get: { usesPanel ? nil : popouts.task },
+                           set: { if $0 == nil, !usesPanel { popouts.closeTask() } })
     }
 
     // MARK: Quick add

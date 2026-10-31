@@ -184,7 +184,7 @@ struct TaskListView: View {
                         Label("Filter Error", systemImage: "exclamationmark.triangle")
                     } description: {
                         Text(error.message)
-                        Text(queryString).font(.callout.monospaced()).foregroundStyle(.secondary)
+                        Text(queryString).font(HITType.mono).foregroundStyle(.secondary)
                     }
                     .frame(maxHeight: .infinity)
                 }
@@ -224,7 +224,7 @@ struct TaskListView: View {
             }
             if let filter = currentFilter {
                 ToolbarItem(placement: .automatic) {
-                    Text(filter.query).font(.caption.monospaced()).foregroundStyle(.secondary).lineLimit(1)
+                    Text(filter.query).font(HITType.monoCaption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }

@@ -83,7 +83,7 @@ private struct FilterChip: View {
 
     var body: some View {
         Text(suggestion.title)
-            .font(.callout.monospaced())
+            .font(HITType.mono)
             .foregroundStyle(tint)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
@@ -117,10 +117,10 @@ struct FilterErrorEcho: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(echo)
-                .font(.callout.monospaced())
+                .font(HITType.mono)
                 .textSelection(.enabled)
             Label(error.message, systemImage: "exclamationmark.triangle.fill")
-                .font(.callout)
+                .font(HITType.callout)
                 .foregroundStyle(FilterQueryField.errorColor)
         }
         .accessibilityElement(children: .combine)

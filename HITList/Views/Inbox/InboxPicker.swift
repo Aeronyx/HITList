@@ -44,7 +44,7 @@ struct InboxPicker: View {
         let rows = matches.count + 1
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
-                .font(.headline)
+                .font(HITType.headline)
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
                 .padding(.bottom, 8)

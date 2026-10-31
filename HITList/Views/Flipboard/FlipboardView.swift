@@ -164,7 +164,7 @@ struct FlipSwitchEditor: View {
                 .slateRow()
 
                 if let error {
-                    Text(error).foregroundStyle(.red).font(.callout).slateRow()
+                    Text(error).foregroundStyle(.red).font(HITType.callout).slateRow()
                 }
             }
             .formStyle(.grouped)

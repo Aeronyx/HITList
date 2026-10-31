@@ -82,15 +82,15 @@ struct FilterEditorView: View {
                     Image(systemName: "line.3.horizontal.decrease.circle.fill")
                         .foregroundStyle(Color(hex: colorHex))
                     Text("\(count) matching task\(count == 1 ? "" : "s")")
-                        .font(.headline)
+                        .font(HITType.headline)
                         .contentTransition(.numericText())
                     Spacer()
                     if !includesCompleted {
-                        Text("open only").font(.caption).foregroundStyle(Theme.secondaryText)
+                        Text("open only").font(HITType.caption).foregroundStyle(Theme.secondaryText)
                     }
                 }
                 Text(summary)
-                    .font(.callout)
+                    .font(HITType.callout)
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 if !titles.isEmpty {
@@ -101,7 +101,7 @@ struct FilterEditorView: View {
                         }
                         if count > titles.count {
                             Text("and \(count - titles.count) more")
-                                .font(.caption)
+                                .font(HITType.caption)
                                 .foregroundStyle(Theme.secondaryText)
                         }
                     }
@@ -146,7 +146,7 @@ private struct PreviewRowLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 6) {
             configuration.icon.font(.system(size: 7)).foregroundStyle(Theme.secondaryText)
-            configuration.title.font(.callout).lineLimit(1)
+            configuration.title.font(HITType.callout).lineLimit(1)
         }
     }
 }

@@ -107,7 +107,7 @@ struct InlineAddRow: View {
                             Text(note).foregroundStyle(Theme.secondaryText.opacity(0.7))
                         }
                     }
-                    .font(.subheadline)
+                    .font(HITType.subheadline)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

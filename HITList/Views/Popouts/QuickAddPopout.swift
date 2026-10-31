@@ -115,7 +115,7 @@ struct QuickAddPopout: View {
                         .buttonStyle(SuggestionStyle())
                     }
                     if let autofill {
-                        Image(systemName: "sparkles").font(.caption).foregroundStyle(Theme.secondaryText)
+                        Image(systemName: "sparkles").font(HITType.caption).foregroundStyle(Theme.secondaryText)
                         if let p = autofill.projectName {
                             Button("#\(p)") { appendToken(QuickAddTokens.project(p)) }.buttonStyle(SuggestionStyle())
                         }

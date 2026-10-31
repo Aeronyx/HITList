@@ -105,7 +105,7 @@ struct InboxProcessView: View {
             HStack {
                 if !queue.isFinished {
                     Text(queue.progressText)
-                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                        .font(HITType.subheadlineSemibold.monospacedDigit())
                         .contentTransition(.numericText())
                         .accessibilityLabel("Task \(queue.position) of \(queue.total)")
                 }
@@ -136,7 +136,7 @@ struct InboxProcessView: View {
                     meta(task)
                     if !task.notes.isEmpty {
                         Text(task.notes)
-                            .font(.callout)
+                            .font(HITType.callout)
                             .foregroundStyle(Theme.secondaryText)
                             .lineLimit(12)
                             .textSelection(.enabled)
@@ -162,7 +162,7 @@ struct InboxProcessView: View {
             VStack(alignment: .leading, spacing: 8) {
                 TextField("Task name", text: $titleDraft)
                     .textFieldStyle(.plain)
-                    .font(.title2.weight(.semibold))
+                    .font(HITType.title2)
                     .focused($titleFocused)
                     .onSubmit { submitTitle(task) }
                     .onAppear { titleFocused = true }
@@ -174,7 +174,7 @@ struct InboxProcessView: View {
                     #endif
                 tokenChips
                 Text("Return saves. Dates, #project, @label and p1–p4 work as in quick add.")
-                    .font(.caption)
+                    .font(HITType.caption)
                     .foregroundStyle(Theme.secondaryText)
             }
         } else {
@@ -184,11 +184,11 @@ struct InboxProcessView: View {
             } label: {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(task.title)
-                        .font(.title2.weight(.semibold))
+                        .font(HITType.title2)
                         .foregroundStyle(.primary)
                         .multilineTextAlignment(.leading)
                     Image(systemName: "pencil")
-                        .font(.callout)
+                        .font(HITType.callout)
                         .foregroundStyle(Theme.secondaryText)
                 }
                 .contentShape(Rectangle())
@@ -221,7 +221,7 @@ struct InboxProcessView: View {
             Text("Added \(task.createdAt.formatted(.relative(presentation: .named)))")
                 .foregroundStyle(Theme.secondaryText.opacity(0.8))
         }
-        .font(.caption)
+        .font(HITType.caption)
         .lineLimit(1)
     }
 
@@ -243,7 +243,7 @@ struct InboxProcessView: View {
 
     private func chip(_ text: String, _ symbol: String, _ color: Color) -> some View {
         Label(text, systemImage: symbol)
-            .font(.caption)
+            .font(HITType.caption)
             .padding(.horizontal, 8).padding(.vertical, 4)
             .background(color.opacity(0.15), in: Capsule())
             .foregroundStyle(color)
@@ -308,7 +308,7 @@ struct InboxProcessView: View {
                     .font(.title2)
                     .foregroundStyle(tint)
                 Text(title)
-                    .font(.subheadline.weight(.medium))
+                    .font(HITType.subheadlineMedium)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -340,7 +340,7 @@ struct InboxProcessView: View {
             }
             Button { dismiss() } label: {
                 Text("Done")
-                    .font(.headline)
+                    .font(HITType.headline)
                     .foregroundStyle(Theme.background)
                     .padding(.horizontal, 36)
                     .padding(.vertical, 12)
@@ -530,7 +530,7 @@ private struct DeletedToast: View {
                 .help("Undo (⌘Z)")
                 #endif
         }
-        .font(.subheadline)
+        .font(HITType.subheadline)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(Theme.elevated, in: Capsule())

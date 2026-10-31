@@ -55,11 +55,34 @@ Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
 main (Fable) session, which reviews, tests, merges and releases. TestFlight build 4 (0.1.0) is live.
 
-## Where things stand (2026-10-31, after round 2)
-All round-2 sessions are merged on master: design-system (`HITList/Support/DesignSystem/`, with its README
-as the component guide), flipboard-polish (start-red rule, flip sound), inbox-polish (`HITList/Views/Inbox/`,
-Process mode) and task-popouts. There is no detail column any more: adding and opening tasks happens in
-popouts (`HITList/Views/Popouts/`: `PopoutController` in the environment, `QuickAddPopout`, `TaskPopout`,
-`InlineAddRow`, chip popovers in `PopoutPickers.swift`). A list that adds tasks calls `.quickAddEntry(context)`
-and ends with `InlineAddRow`; opening a task is `popouts.open(task)` or a `List(selection: popouts.selection)`.
-`QuickAddBar.swift` and `TaskDetailView.swift` are gone. TestFlight build 4 (0.1.0) carries all of this.
+## Where things stand (2026-10-31, round 3 starting)
+On master: design system (`HITList/Support/DesignSystem/`, README = component guide), Inbox + Process
+mode (`HITList/Views/Inbox/`), Flipboard start-red + flip sound, task popouts (`HITList/Views/Popouts/`:
+`PopoutController` in the environment, `QuickAddPopout`, `TaskPopout`, `InlineAddRow`, chip popovers in
+`PopoutPickers.swift`; no detail column; a list that adds tasks calls `.quickAddEntry(context)` and ends
+with `InlineAddRow`; opening a task is `popouts.open(task)` or `List(selection: popouts.selection)`).
+TestFlight build 4 (0.1.0) carries all of that.
+
+Added by Fable right before round 3 (also on master):
+- **Schema V2** (`HITListSchemaV2`, Models.swift; V1 frozen in `SchemaV1Models.swift`; lightweight
+  migration in SchemaVersions.swift). `TaskItem` gained `reminderOffsetMinutes: Int?`, `deadline: Date?`,
+  `locationName: String?`, `flipTarget: Int = 1`, `flipCount: Int = 0`, `flipPeriodStart: Date?`. Nobody
+  adds fields this round; use these. `SchemaTests` checks V2 only adds TaskItem attributes.
+- **Inter typeface.** `HITFont.inter(size, weight, relativeTo:)` and the `HITType` roles (title1/2/3,
+  headline, body, callout, subheadline, footnote, caption, caption2, control, title, taskName = 14 bold,
+  sectionHeader, mono). Never `.font(.subheadline)` or `.font(.system(...))` for text; SF Symbols keep
+  `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`.
+- **Due colours.** `HITColor.due(date, hasTime:now:)` → `dueToday` green, `dueTomorrow` orange, `dueLater`
+  purple, `dueOverdue` red; `TaskRow` and the popout chips use it. Use it wherever a date shows.
+- **"Group"** is the user-facing word for Project from this round on (model and filter syntax unchanged).
+
+## Round 3 ownership (three sessions at once; stay inside your files)
+- `17-mobile-tabs` (branch `mobile-tabs`): `ContentView.swift`, new `Views/Tabs/`, `TaskListView.swift`,
+  `TaskRow.swift`, `SidebarView.swift`, `Views/Inbox/*`, `Views/Upcoming/*`, `Popouts/QuickAddEntry.swift`,
+  `Support/Formatting.swift`, new `HITListCore/.../TaskOrdering.swift`.
+- `18-quick-add-v2` (branch `quick-add-v2`): `Views/Popouts/*` except `QuickAddEntry.swift`,
+  `HITListCore/.../QuickAddParser.swift` + `DateExpression.swift`, `Services/NotificationScheduler.swift`,
+  `Services/Notifications/*`, `TaskActions.create`, `DesignSystem/HITChip.swift` (compact size only).
+- `19-flipboard-charge` (branch `flipboard-charge`): `Views/Flipboard/*` and its tests.
+- Nobody: `Models.swift`, `SchemaVersions.swift`, `SchemaV1Models.swift`, `HITTokens.swift`, `project.yml`,
+  `HITListApp.swift`, `SettingsView.swift`, `scripts/`, `briefs/`. ROADMAP: add only the row your brief names.

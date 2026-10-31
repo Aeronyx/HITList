@@ -53,10 +53,9 @@ struct TaskRow: View {
                     .animation(.easeOut(duration: 0.2), value: isChecked)
                 HStack(spacing: 8) {
                     if let due = task.dueDate {
-                        let overdue = DueFormatter.isOverdue(due, hasTime: task.hasDueTime, isCompleted: task.isCompleted, now: now)
                         Label(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
                               systemImage: task.recurrence == nil ? "calendar" : "repeat")
-                            .foregroundStyle(overdue ? .red : .secondary)
+                            .foregroundStyle(task.isCompleted ? Color.secondary : HITColor.due(due, hasTime: task.hasDueTime, now: now))
                     }
                     if showProject, let project = task.project {
                         Label(project.name, systemImage: "circle.fill")
@@ -67,13 +66,13 @@ struct TaskRow: View {
                     }
                     if !task.notes.isEmpty { Image(systemName: "note.text").foregroundStyle(.secondary) }
                 }
-                .font(.caption)
+                .font(HITType.caption)
                 .lineLimit(1)
             }
             Spacer(minLength: 0)
             if task.priorityValue != .p4 {
                 Text(task.priorityValue.shortName)
-                    .font(.caption2.bold())
+                    .font(HITType.caption2Semibold)
                     .padding(.horizontal, 5).padding(.vertical, 2)
                     .background(task.priorityValue.color.opacity(0.15), in: Capsule())
                     .foregroundStyle(task.priorityValue.color)

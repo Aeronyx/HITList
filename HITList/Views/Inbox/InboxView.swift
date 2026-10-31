@@ -119,7 +119,7 @@ struct InboxView: View {
                     Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash")
                         .labelStyle(.iconOnly)
                         .imageScale(.medium)
-                        .font(.body)
+                        .font(HITType.body)
                 }
                 .toggleStyle(.button)
                 .help("Show completed tasks")
@@ -134,7 +134,7 @@ struct InboxView: View {
 
     private var header: some View {
         Text(InboxText.header(count: openCount))
-            .font(.title2.weight(.bold))
+            .font(HITType.title2Bold)
             .contentTransition(.numericText(value: Double(openCount)))
             .animation(reduceMotion ? nil : .snappy, value: openCount)
             .frame(maxWidth: .infinity, alignment: .leading)

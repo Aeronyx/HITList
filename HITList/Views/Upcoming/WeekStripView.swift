@@ -26,14 +26,14 @@ struct WeekStripView: View {
         VStack(spacing: 6) {
             HStack(spacing: 12) {
                 Text(strip.title(forWeekStarting: strip.week(shownWeek, from: today)))
-                    .font(.headline)
+                    .font(HITType.headline)
                     .contentTransition(.numericText())
                 Spacer()
                 Button { show(week: shownWeek - 1) } label: { Image(systemName: "chevron.left") }
                     .disabled(shownWeek <= weeks.lowerBound)
                     .accessibilityLabel("Previous week")
                 Button("Today") { show(week: 0); onSelect(today) }
-                    .font(.subheadline.weight(.medium))
+                    .font(HITType.subheadlineMedium)
                 Button { show(week: shownWeek + 1) } label: { Image(systemName: "chevron.right") }
                     .disabled(shownWeek >= weeks.upperBound)
                     .accessibilityLabel("Next week")
@@ -79,10 +79,10 @@ struct WeekStripView: View {
         return Button { onSelect(day) } label: {
             VStack(spacing: 4) {
                 Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                    .font(.caption2)
+                    .font(HITType.caption2)
                     .foregroundStyle(isToday ? Theme.accent : Theme.secondaryText)
                 Text(day.formatted(.dateTime.day()))
-                    .font(.callout.weight(isToday ? .bold : .medium))
+                    .font(isToday ? HITType.calloutBold : HITType.calloutMedium)
                     .monospacedDigit()
                     .foregroundStyle(isToday ? Theme.background : .primary)
                     .frame(width: 32, height: 32)

@@ -7,8 +7,16 @@ is in `DesignSystemGallery` (open it in the Xcode canvas) and rendered by `Desig
 
 ## Tokens (`HITTokens.swift`)
 `HITSpacing.xs/s/m/l/xl` = 4/8/12/16/24. `HITRadius.chip/field/card/pill` = 6/10/14/999.
-`HITType.title` (semibold 17), `.body`, `.control` (button/chip labels), `.caption`, `.sectionHeader`,
-`.mono` (queries). `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red).
+Type is **Inter** everywhere (`HITFont.inter(size, weight, relativeTo:)`; six static 18 pt cuts ship in the
+bundle and `UIAppFonts`/`ATSApplicationFontsPath` register them). Use the `HITType` roles, never
+`.font(.subheadline)`: `.largeTitle`, `.title1/2/3` (+ `.title2Bold`), `.headline`, `.body`, `.callout`
+(+ `Medium`/`Bold`), `.subheadline` (+ `Medium`/`Semibold`), `.footnote`, `.caption` (+ `Bold`),
+`.caption2` (+ `Semibold`), `.control` (button/chip labels), `.title` (sheet titles, fixed 17 semibold),
+`.taskName` (quick-add title, fixed 14 bold), `.sectionHeader`, `.mono`/`.monoCaption` (system mono for
+queries). SF Symbols keep `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`, so
+unstyled `Text` is Inter. `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
+and the due colours `.dueToday` (green) / `.dueTomorrow` (orange) / `.dueLater` (purple) /
+`.dueOverdue` (red) with `HITColor.due(date, hasTime:now:)` choosing among them.
 `HITMotion.standard(reduceMotion:)` (150 ms ease) and `.spring(reduceMotion:)`; pass
 `@Environment(\.accessibilityReduceMotion)`. `Color.darkened(by:)` for pressed fills.
 
