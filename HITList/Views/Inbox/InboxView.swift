@@ -3,7 +3,8 @@ import SwiftData
 import HITListCore
 
 /// The inbox: tasks without a project, under an "Inbox · 7" header, with an "Inbox zero" state when
-/// it's empty. Rows, completion, and the undo toast behave as in every other task list.
+/// it's empty and a Process button that steps through it one task at a time. Rows, completion, and
+/// the undo toast behave as in every other task list.
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -15,6 +16,7 @@ struct InboxView: View {
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
+    @State private var processing = false
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -47,7 +49,7 @@ struct InboxView: View {
     }
 
     /// Open inbox tasks, for the header.
-    private var openCount: Int { allTasks.filter { $0.project == nil && !$0.isCompleted }.count }
+    private var openCount: Int { allTasks.filter(\.isInInbox).count }
 
     /// The matched tasks plus the recently completed ones, grouped by due day in list order.
     private var groups: [Group] {
@@ -106,6 +108,14 @@ struct InboxView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { processing = true } label: {
+                    Label("Process", systemImage: "tray.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
+                }
+                .disabled(openCount == 0)
+                .help("Go through the inbox one task at a time")
+            }
             ToolbarItem(placement: .automatic) {
                 Toggle(isOn: $showCompleted) {
                     Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash")
@@ -116,6 +126,9 @@ struct InboxView: View {
                 .toggleStyle(.button)
                 .help("Show completed tasks")
             }
+        }
+        .sheet(isPresented: $processing) {
+            InboxProcessView(selectedTask: $selectedTask)
         }
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
