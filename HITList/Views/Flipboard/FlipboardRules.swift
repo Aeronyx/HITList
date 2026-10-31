@@ -46,8 +46,9 @@ enum Flipboard {
         return calendar.startOfDay(for: due) > calendar.startOfDay(for: createdAt)
     }
 
-    static func hasStarted(_ task: TaskItem) -> Bool {
-        hasStarted(due: task.dueDate, createdAt: task.createdAt)
+    /// A charger has also started once its first flip is counted, though its due date hasn't moved.
+    static func hasStarted(_ task: TaskItem, now: Date = Date()) -> Bool {
+        hasStarted(due: task.dueDate, createdAt: task.createdAt) || effectiveCount(task, now: now) > 0
     }
 
     /// The line under the light bar: "Flip to start", "2 of 3 days", "Due today" or "3 days overdue".
@@ -156,19 +157,182 @@ enum Flipboard {
         return next
     }
 
-    /// Flips a switch back to green through `TaskActions.toggleCompletion`.
+    /// Flips a switch (see `afterFlip`). A flip that charges it rolls the task on through
+    /// `TaskActions.toggleCompletion`, as a plain switch always has; a flip that only counts toward a
+    /// charger's target leaves the due date alone.
     @MainActor
-    static func flip(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
-        guard let rule = task.recurrenceRule else { return }
-        let target = dueAfterFlip(due: task.dueDate, rule: rule, now: now)
-        // Without a due date toggleCompletion would mark a recurring task done instead of rolling it.
-        if task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
-        TaskActions.toggleCompletion(task, in: context)
-        // toggleCompletion continues the old schedule; a flip restarts it from today (see dueAfterFlip).
-        if task.dueDate != target { TaskActions.reschedule(task, to: target, keepTime: false, in: context) }
+    @discardableResult
+    static func flip(_ task: TaskItem, in context: ModelContext, now: Date = Date()) -> FlipOutcome {
+        guard let rule = task.recurrenceRule else { return .ignored }
+        let (next, outcome) = afterFlip(Charge(task), target: task.flipTarget, rule: rule, now: now)
+        apply(next, outcome: outcome, to: task, in: context, now: now)
+        return outcome
     }
 
-    // MARK: Flipping back
+    /// "Mark done" from the switch's menu (see `afterMarkDone`).
+    @MainActor
+    @discardableResult
+    static func markDone(_ task: TaskItem, in context: ModelContext, now: Date = Date()) -> FlipOutcome {
+        guard let rule = task.recurrenceRule else { return .ignored }
+        let (next, outcome) = afterMarkDone(Charge(task), target: task.flipTarget, rule: rule, now: now)
+        apply(next, outcome: outcome, to: task, in: context, now: now)
+        return outcome
+    }
+
+    @MainActor
+    private static func apply(_ next: Charge, outcome: FlipOutcome, to task: TaskItem, in context: ModelContext, now: Date) {
+        switch outcome {
+        case .ignored:
+            return
+        case .counted:
+            task.dueDate = next.due
+        case .charged:
+            // Without a due date toggleCompletion would mark a recurring task done instead of rolling it.
+            if task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
+            TaskActions.toggleCompletion(task, in: context)
+            // toggleCompletion continues the old schedule; a flip restarts it from today (see dueAfterFlip).
+            if task.dueDate != next.due { TaskActions.reschedule(task, to: next.due, keepTime: false, in: context) }
+        }
+        task.flipCount = next.count
+        task.flipPeriodStart = next.periodStart
+        task.touch()
+        try? context.save()
+    }
+
+    /// Undoes the last flip (see `afterFlipBack`).
+    @MainActor
+    static func flipBack(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        guard let rule = task.recurrenceRule,
+              let next = afterFlipBack(Charge(task), target: task.flipTarget, rule: rule, now: now) else { return }
+        task.dueDate = next.due
+        task.flipCount = next.count
+        task.flipPeriodStart = next.periodStart
+        task.touch()
+        try? context.save()
+    }
+
+    /// Sets "flips per interval", 1 to `maxFlipTarget` (see `afterTargetChange`).
+    @MainActor
+    static func setTarget(_ target: Int, for task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        let target = clampedTarget(target)
+        guard target != task.flipTarget else { return }
+        if let rule = task.recurrenceRule {
+            let next = afterTargetChange(Charge(task), from: task.flipTarget, to: target, rule: rule, now: now)
+            task.dueDate = next.due
+            task.flipCount = next.count
+            task.flipPeriodStart = next.periodStart
+        }
+        task.flipTarget = target
+        task.touch()
+        try? context.save()
+    }
+
+    static func effectiveCount(_ task: TaskItem, now: Date = Date()) -> Int {
+        effectiveCount(Charge(task), target: task.flipTarget, rule: task.recurrenceRule ?? defaultRule, now: now)
+    }
+
+    // MARK: Charging
+
+    /// A switch with `flipTarget` > 1 is a charger: it needs that many flips within one interval before
+    /// it turns green ("go to the gym 3 times a week"). Each flip while red adds one to `flipCount`; the
+    /// flip that reaches the target charges it, and the due date moves on exactly as a single flip moves
+    /// it. `flipCount` then stays at the target, so the lamps read full while green. When the date rule
+    /// turns the switch red again, a `flipPeriodStart` from before the current interval makes the count
+    /// stale: it reads as 0 and the next flip starts counting afresh. A plain switch is a charger with a
+    /// target of 1, so it follows the same rules and behaves as it always has.
+    static let maxFlipTarget = 10
+
+    static func clampedTarget(_ target: Int) -> Int { min(maxFlipTarget, max(1, target)) }
+
+    /// The parts of a switch that flipping changes.
+    struct Charge: Equatable {
+        var due: Date?
+        var count: Int
+        var periodStart: Date?
+    }
+
+    enum FlipOutcome: Equatable {
+        /// A charger took one more flip and is still red: `n` of its target now.
+        case counted(Int)
+        /// The switch turned (or, flipped early, stayed) green for a new interval.
+        case charged
+        /// A charger that is already green: nothing changes, the rocker just bounces.
+        case ignored
+    }
+
+    /// The start of the interval a red switch is counting flips for: its due day, moved on by the rule
+    /// for every whole interval that has since gone by, so an overdue weekly charger counts this week's
+    /// flips only. Nil without a due date.
+    static func countingIntervalStart(due: Date?, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Date? {
+        guard let due else { return nil }
+        let today = calendar.startOfDay(for: now)
+        var start = calendar.startOfDay(for: due)
+        var steps = 0
+        while steps < 1000 {
+            let next = calendar.startOfDay(for: rule.nextOccurrence(after: start, calendar: calendar))
+            guard next > start, next <= today else { break }
+            start = next
+            steps += 1
+        }
+        return start
+    }
+
+    /// True when `periodStart` belongs to an earlier interval than the one a red switch is counting.
+    static func isStale(periodStart: Date?, due: Date?, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
+        guard let periodStart else { return true }
+        guard let start = countingIntervalStart(due: due, rule: rule, now: now, calendar: calendar) else { return false }
+        return calendar.startOfDay(for: periodStart) < start
+    }
+
+    /// The flips that count right now: the full target while green (done for the interval), otherwise
+    /// the stored count unless it is stale, never reaching the target while red.
+    static func effectiveCount(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Int {
+        let target = clampedTarget(target)
+        if side(due: charge.due, now: now, calendar: calendar) == .green { return target }
+        if isStale(periodStart: charge.periodStart, due: charge.due, rule: rule, now: now, calendar: calendar) { return 0 }
+        return min(target - 1, max(0, charge.count))
+    }
+
+    /// A red switch with at least one flip counted in the current interval.
+    static func isCharging(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
+        side(due: charge.due, now: now, calendar: calendar) == .red
+            && effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar) > 0
+    }
+
+    /// What one flip does. Red: count one more (the first flip of an interval resets a stale count and
+    /// sets `periodStart`), charging at the target. Green: a plain switch is flipped early (the interval
+    /// restarts from today, as before); a charger ignores it.
+    static func afterFlip(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                          calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
+        let target = clampedTarget(target)
+        if side(due: charge.due, now: now, calendar: calendar) == .green {
+            guard target == 1 else { return (charge, .ignored) }
+            return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: 1, periodStart: now),
+                    .charged)
+        }
+        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
+        let periodStart = counted == 0 ? now : charge.periodStart ?? now
+        let flips = counted + 1
+        if flips >= target {
+            return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: target,
+                           periodStart: periodStart), .charged)
+        }
+        // A dateless switch gets today, so the interval it is counting has a start.
+        return (Charge(due: charge.due ?? calendar.startOfDay(for: now), count: flips, periodStart: periodStart), .counted(flips))
+    }
+
+    /// "Mark done": charges a red switch at once, whatever its count. Green, a plain switch is flipped
+    /// early and a charger is left alone (the menu disables it).
+    static func afterMarkDone(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                              calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
+        let target = clampedTarget(target)
+        guard side(due: charge.due, now: now, calendar: calendar) == .red else {
+            return afterFlip(charge, target: target, rule: rule, now: now, calendar: calendar)
+        }
+        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
+        return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: target,
+                       periodStart: counted == 0 ? now : charge.periodStart ?? now), .charged)
+    }
 
     /// Where "Flip back to red" puts a green switch's due date: the day its interval began, which is the
     /// day it was flipped (a flip restarts the interval from the flip day), and never later than today,
@@ -179,18 +343,71 @@ enum Flipboard {
         return min(start, calendar.startOfDay(for: now))
     }
 
-    /// "Flip back to red" undoes the last flip; a red switch has nothing to undo.
-    static func canFlipBack(due: Date?, now: Date, calendar: Calendar = .current) -> Bool {
-        side(due: due, now: now, calendar: calendar) == .green
+    /// "Flip back to red" undoes the last flip. Green: the switch turns red, due on the day it was flipped
+    /// (or on the day the interval's first flip was counted, so those flips still count), one flip short
+    /// of its target. Red: a charger loses one counted flip. Nil when there is nothing to undo (red with
+    /// no flips counted).
+    static func afterFlipBack(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                              calendar: Calendar = .current) -> Charge? {
+        let target = clampedTarget(target)
+        if side(due: charge.due, now: now, calendar: calendar) == .green, let due = charge.due {
+            let flips = charge.periodStart == nil ? 0 : min(target - 1, max(0, charge.count - 1))
+            var back = dueAfterFlipBack(due: due, rule: rule, now: now, calendar: calendar)
+            if flips > 0, let periodStart = charge.periodStart { back = min(back, calendar.startOfDay(for: periodStart)) }
+            return Charge(due: back, count: flips, periodStart: flips > 0 ? charge.periodStart : nil)
+        }
+        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
+        guard counted > 0 else { return nil }
+        return Charge(due: charge.due, count: counted - 1, periodStart: counted > 1 ? charge.periodStart : nil)
     }
 
-    /// Undoes the last flip of a green switch: it turns red, due on the day it was flipped.
-    @MainActor
-    static func flipBack(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
-        guard let rule = task.recurrenceRule, let due = task.dueDate, canFlipBack(due: due, now: now) else { return }
-        task.dueDate = dueAfterFlipBack(due: due, rule: rule, now: now)
-        task.touch()
-        try? context.save()
+    static func canFlipBack(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
+        afterFlipBack(charge, target: target, rule: rule, now: now, calendar: calendar) != nil
+    }
+
+    /// A new "flips per interval". Green stays green (full at the new target if it was full). Red with
+    /// at least the new target already counted charges now; otherwise the count carries over.
+    static func afterTargetChange(_ charge: Charge, from oldTarget: Int, to newTarget: Int, rule: RecurrenceRule, now: Date,
+                                  calendar: Calendar = .current) -> Charge {
+        let oldTarget = clampedTarget(oldTarget), newTarget = clampedTarget(newTarget)
+        if side(due: charge.due, now: now, calendar: calendar) == .green {
+            return Charge(due: charge.due, count: charge.count >= oldTarget ? newTarget : min(charge.count, newTarget),
+                          periodStart: charge.periodStart)
+        }
+        let counted = effectiveCount(charge, target: oldTarget, rule: rule, now: now, calendar: calendar)
+        guard counted > 0, counted >= newTarget else { return charge }
+        return Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: newTarget,
+                      periodStart: charge.periodStart)
+    }
+
+    /// The span a charger counts within, for its caption: "this week", "today", "these 2 weeks".
+    static func periodPhrase(_ rule: RecurrenceRule) -> String {
+        if let weekdays = rule.weekdays, !weekdays.isEmpty { return "this round" }
+        let n = rule.interval
+        switch rule.frequency {
+        case .daily: return n == 1 ? "today" : "these \(n) days"
+        case .weekly: return n == 1 ? "this week" : "these \(n) weeks"
+        case .monthly: return n == 1 ? "this month" : "these \(n) months"
+        case .yearly: return n == 1 ? "this year" : "these \(n) years"
+        }
+    }
+
+    /// The caption of any switch. A plain switch reads as before; a charger reads "Flip to start",
+    /// "2 of 3 this week" while red and "Done this week" once charged.
+    static func caption(due: Date?, rule: RecurrenceRule, started: Bool, count: Int, target: Int, now: Date,
+                        calendar: Calendar = .current) -> String {
+        let target = clampedTarget(target)
+        guard target > 1 else { return caption(due: due, rule: rule, started: started, now: now, calendar: calendar) }
+        if side(due: due, now: now, calendar: calendar) == .green { return "Done \(periodPhrase(rule))" }
+        guard started else { return "Flip to start" }
+        return "\(count) of \(target) \(periodPhrase(rule))"
+    }
+
+    /// The lamps showed full for the interval ending on `recordedDue` the last time the board was on
+    /// screen; now that interval is over and nothing is counted yet, so the lamps should drain once.
+    static func shouldDrain(recordedDue: Date?, due: Date?, count: Int, now: Date, calendar: Calendar = .current) -> Bool {
+        guard let recordedDue, let due, count == 0, side(due: due, now: now, calendar: calendar) == .red else { return false }
+        return recordedDue == due
     }
 
     // MARK: Joining and leaving
@@ -241,25 +458,43 @@ enum Flipboard {
 
     /// A new switch, due today: it starts red ("Flip to start") until the chore is first done and flipped.
     /// George's call, 2026-10-31: a green switch reads as "already done".
+    /// `flipTarget` above 1 makes it a charger.
     @MainActor
     @discardableResult
-    static func createSwitch(title: String, rule: RecurrenceRule, in context: ModelContext, now: Date = Date()) throws -> TaskItem {
+    static func createSwitch(title: String, rule: RecurrenceRule, flipTarget: Int = 1, in context: ModelContext,
+                             now: Date = Date()) throws -> TaskItem {
         let due = Calendar.current.startOfDay(for: now)
         let parsed = QuickAddResult(title: title, dueDate: due, recurrence: rule)
-        return try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: try label(in: context), in: context)
+        let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: try label(in: context), in: context)
+        let target = clampedTarget(flipTarget)
+        if task.flipTarget != target {
+            task.flipTarget = target
+            try context.save()
+        }
+        return task
     }
 
     /// Changes a switch's interval, keeping when the current interval began: shortening "every 3 days"
     /// to "every 2 days" pulls the due date one day closer. A switch not yet started stays red.
+    /// A red charger keeps its due date (and its count): moving it could turn the switch green without
+    /// the flips.
     @MainActor
-    static func setRule(_ rule: RecurrenceRule, for task: TaskItem, in context: ModelContext) {
-        if hasStarted(task), let due = task.dueDate, let old = task.recurrenceRule {
+    static func setRule(_ rule: RecurrenceRule, for task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        let redCharger = clampedTarget(task.flipTarget) > 1 && side(due: task.dueDate, now: now) == .red
+        if !redCharger, hasStarted(due: task.dueDate, createdAt: task.createdAt), let due = task.dueDate,
+           let old = task.recurrenceRule {
             let start = intervalStart(due: due, rule: old)
             task.dueDate = rule.nextOccurrence(after: start)
         }
         task.recurrenceRule = rule
         task.touch()
         try? context.save()
+    }
+}
+
+extension Flipboard.Charge {
+    init(_ task: TaskItem) {
+        self.init(due: task.dueDate, count: task.flipCount, periodStart: task.flipPeriodStart)
     }
 }
 

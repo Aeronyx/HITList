@@ -19,17 +19,55 @@ enum FlipSound {
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "delight")
     private static let player = CompletionSoundPlayer { Bundle.main.url(forResource: "flip", withExtension: "caf") }
+    /// George's `bubble.caf` (the default completion sound), played when a charger fills up.
+    private static let chargedPlayer = CompletionSoundPlayer { Bundle.main.url(forResource: "bubble", withExtension: "caf") }
 
     static var isEnabled: Bool { AppGroup.defaults.object(forKey: key) as? Bool ?? true }
 
     /// Call when the board appears so the first flip plays without a loading hitch.
     static func prepare() {
-        if isEnabled { player.prepare() }
+        guard isEnabled else { return }
+        player.prepare()
+        chargedPlayer.prepare()
     }
 
     static func play() {
         guard isEnabled else { return }
         player.play()
         log.info("Flip sound played")
+    }
+
+    /// The last flip of a charger: the bubble, just after the click.
+    static func playCharged() {
+        guard isEnabled else { return }
+        chargedPlayer.play()
+        log.info("Charged sound played")
+    }
+}
+
+/// Which chargers the board last showed full, by task id, with the due date of that full interval:
+/// the first time the board shows the next interval (count 0, red) the lamps drain right to left once.
+/// Kept per device in `AppGroup.defaults`; it only drives an animation.
+@MainActor
+enum FlipDrainMemory {
+    nonisolated static let key = "flipboard.shownFull"
+
+    private static var entries: [String: Double] {
+        get { AppGroup.defaults.dictionary(forKey: key) as? [String: Double] ?? [:] }
+        set { AppGroup.defaults.set(newValue, forKey: key) }
+    }
+
+    static func recordedDue(for id: UUID) -> Date? {
+        entries[id.uuidString].map { Date(timeIntervalSinceReferenceDate: $0) }
+    }
+
+    static func recordFull(_ id: UUID, due: Date?) {
+        guard let due else { return forget(id) }
+        let value = due.timeIntervalSinceReferenceDate
+        if entries[id.uuidString] != value { entries[id.uuidString] = value }
+    }
+
+    static func forget(_ id: UUID) {
+        if entries[id.uuidString] != nil { entries[id.uuidString] = nil }
     }
 }
