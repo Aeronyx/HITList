@@ -169,7 +169,10 @@ struct UpcomingView: View {
                 Button { pickingDateFor = task.id } label: { Label("Pick Date", systemImage: "calendar") }
                     .tint(Theme.accent)
             }
+            // iPhone: a long press is the context menu, so rows don't drag there (swipe → Pick Date instead).
+            #if os(macOS)
             .draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
+            #endif
             .contextMenu { rowMenu(task) }
             .popover(isPresented: Binding(get: { pickingDateFor == task.id },
                                           set: { if !$0, pickingDateFor == task.id { pickingDateFor = nil } })) {
