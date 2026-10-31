@@ -46,12 +46,7 @@ struct HITListApp: App {
                 }
         }
         .modelContainer(container)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Task") { NotificationCenter.default.post(name: .focusQuickAdd, object: nil) }
-                    .keyboardShortcut("n", modifiers: .command)
-            }
-        }
+        .commands { NewTaskCommands() }
         #if os(macOS)
         Settings {
             SettingsView()
@@ -62,8 +57,4 @@ struct HITListApp: App {
         .modelContainer(container)
         #endif
     }
-}
-
-extension Notification.Name {
-    static let focusQuickAdd = Notification.Name("HITList.focusQuickAdd")
 }

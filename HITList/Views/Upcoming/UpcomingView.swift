@@ -18,8 +18,6 @@ struct UpcomingView: View {
     @State private var visibleWeek: Int? = 0
     /// The day whose header is at the top of the list.
     @State private var focusedDay: Date?
-    /// The day whose "+ Add task" row is an open text field.
-    @State private var addingDay: Date?
     /// The day a dragged task is hovering over, in the strip or on a header.
     @State private var dropTarget: Date?
     /// The task whose Pick Date popover is open.
@@ -90,13 +88,8 @@ struct UpcomingView: View {
                         .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
                 }
             }
-
-            Divider()
-            QuickAddBar(defaultProject: nil, defaultLabel: nil)
-                .padding(.horizontal)
-                .padding(.vertical, 10)
-                .background(Theme.surface)
         }
+        .quickAddEntry(.upcoming)
         .background(Theme.background)
         .navigationTitle("Upcoming")
         #if os(iOS)
@@ -278,23 +271,7 @@ struct UpcomingView: View {
     }
 
     private func addRow(_ day: Date, isEmpty: Bool) -> some View {
-        SwiftUI.Group {
-            if addingDay == day {
-                InlineAddField(day: day) { if addingDay == day { addingDay = nil } }
-            } else {
-                HStack {
-                    Button { addingDay = day } label: {
-                        Label("Add task", systemImage: "plus").foregroundStyle(Theme.accent)
-                    }
-                    .buttonStyle(.plain)
-                    Spacer()
-                    if isEmpty {
-                        Text("Nothing due").foregroundStyle(Theme.secondaryText.opacity(0.7))
-                    }
-                }
-                .font(.subheadline)
-            }
-        }
+        InlineAddRow(context: .day(day), key: "day-\(day.timeIntervalSinceReferenceDate)", note: isEmpty ? "Nothing due" : nil)
         .id(AddRowID(day: day))
         .selectionDisabled()
         .slateRow()
@@ -489,64 +466,6 @@ private struct DayHeaderStyle: ViewModifier {
             .background(Theme.accent.opacity(highlighted ? 0.18 : 0))
             .overlay(alignment: .bottom) { (highlighted ? Theme.accent : Theme.separator).frame(height: highlighted ? 2 : 0.5) }
             .listRowInsets(EdgeInsets())
-    }
-}
-
-/// The "+ Add task" row once tapped: quick-add syntax, due on the row's day unless the text names
-/// another date. Stays open for the next task; closes when submitted empty, on Escape, or on losing
-/// focus while empty.
-private struct InlineAddField: View {
-    let day: Date
-    var onClose: () -> Void
-
-    @Environment(\.modelContext) private var context
-    @Query(sort: \Project.name) private var projects: [Project]
-    @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
-    @State private var text = ""
-    @State private var errorMessage: String?
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 8) {
-                Image(systemName: "plus.circle.fill").foregroundStyle(Theme.accent)
-                TextField("Task for \(day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))", text: $text)
-                    .textFieldStyle(.plain)
-                    .focused($focused)
-                    .onSubmit(add)
-                    #if os(iOS)
-                    .submitLabel(.done)
-                    .autocorrectionDisabled()
-                    #endif
-                Button(action: onClose) { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.secondaryText) }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Cancel")
-            }
-            if let errorMessage {
-                Text(errorMessage).font(.caption).foregroundStyle(.red)
-            }
-        }
-        .onAppear { focused = true }
-        .onChange(of: focused) { _, isFocused in
-            if !isFocused, text.trimmingCharacters(in: .whitespaces).isEmpty { onClose() }
-        }
-        #if os(macOS)
-        .onExitCommand(perform: onClose)
-        #endif
-    }
-
-    private func add() {
-        guard !text.trimmingCharacters(in: .whitespaces).isEmpty else { onClose(); return }
-        let parser = QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name))
-        do {
-            try TaskActions.create(from: parser.parse(text).dueDefaulting(to: day), defaultProject: nil, defaultLabel: nil, in: context)
-            text = ""
-            errorMessage = nil
-            focused = true
-            Task { await NotificationScheduler.reschedule(context: context) }
-        } catch {
-            errorMessage = error.localizedDescription
-        }
     }
 }
 
