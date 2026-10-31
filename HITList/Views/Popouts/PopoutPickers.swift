@@ -20,7 +20,7 @@ enum PopoutTint {
 
     static func token(_ kind: QuickAddToken.Kind, priority: Priority) -> Color {
         switch kind {
-        case .date, .time, .recurrence: return today
+        case .date, .time, .recurrence, .reminder: return today
         case .priority: return priority.color
         case .project: return project
         case .label: return label
