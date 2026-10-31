@@ -55,11 +55,10 @@ Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
 main (Fable) session, which reviews, tests, merges and releases. TestFlight build 2 (0.1.0) is live.
 
-## Concurrency note (2026-10-31)
-Running at the same time, each on its own branch: `design-system` (owns `HITList/Support/DesignSystem/`,
-`FilterEditorView.swift`, `ProjectEditorView.swift`, `SettingsView.swift`, `HITList/Views/Delight/`,
-`SidebarView.swift`, and the toolbar block of `TaskListView.swift` only), `flipboard-polish` (owns
-`HITList/Views/Flipboard/` and `HITList/Resources/Sounds/flip.caf`), `inbox-polish` (owns
-`HITList/Views/Inbox/`, one `case .inbox` line in `ContentView.swift`). A later `task-popouts` session
-will own `ContentView.swift`, `TaskListView.swift`, `TaskRow.swift`, `QuickAddBar.swift`,
-`TaskDetailView.swift`. Touch only the files your brief lists; prefer new files.
+## Concurrency note (2026-10-31, round 2)
+Merged on master now: design-system (`HITList/Support/DesignSystem/`, restyled editors, Settings, sidebar,
+`…` toolbar menu), flipboard-polish (start-red rule, flip sound), inbox-polish (`HITList/Views/Inbox/`,
+Process mode). Running next: `task-popouts` (owns `ContentView.swift`, `TaskListView.swift`, `TaskRow.swift`,
+`QuickAddBar.swift`, `TaskDetailView.swift`, new `HITList/Views/Popouts/`, plus one-line hooks in
+`UpcomingView.swift`, `InboxView.swift`, `FlipboardView.swift`). Anything else running at the same time must
+stay out of those files.
