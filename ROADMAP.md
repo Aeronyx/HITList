@@ -167,3 +167,8 @@ Not scheduled. Each becomes a roadmap item when picked up.
   `workspace`), `subtask`, `/sections` and `deadline:`: HITList is single-user and has no sub-tasks,
   sections or deadlines, so they get explanatory errors instead. `,` stays an AND (one list per view)
   rather than Todoist's "separate lists".
+- 2026-10-31 (round 3): "Group" is the user-facing word for Project; the model and `#name`/`project:` syntax
+  stay. Inbox = every dated task plus undated tasks with no Group; undated tasks in a Group show only inside
+  it (notes). Today and Inbox sort priority-then-due; saved filters keep due-then-priority. Due colours:
+  today green, tomorrow orange, later purple, overdue red (`HITColor.due`). Inter ships as six static 18 pt
+  cuts because iOS resolves only a variable font's default instance by PostScript name.
