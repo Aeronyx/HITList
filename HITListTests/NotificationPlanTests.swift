@@ -131,6 +131,102 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertEqual(result.requests.map(\.title), ["late", "More tasks due"])
     }
 
+    // MARK: Reminder offsets
+
+    private func item(_ title: String, in offset: TimeInterval, remindMinutesBefore minutes: Int?,
+                      updated: TimeInterval = -86_400) -> NotificationPlan.Item {
+        var result = item(title, in: offset, updated: updated)
+        result.reminderOffsetMinutes = minutes
+        return result
+    }
+
+    func testHaircutTomorrow11amWith15MinOffsetFiresAt1045() throws {
+        // "Haircut tom 11am p1 !15mb", typed at 9:00 on Wednesday, through the real parser.
+        let parsed = QuickAddParser(now: now, calendar: calendar).parse("Haircut tom 11am p1 !15mb")
+        let haircut = NotificationPlan.Item(id: UUID(), title: parsed.title, projectName: nil, priority: parsed.priority,
+                                            dueDate: parsed.dueDate, hasDueTime: parsed.hasDueTime, isCompleted: false,
+                                            updatedAt: now, reminderOffsetMinutes: parsed.reminderOffsetMinutes)
+        let request = try XCTUnwrap(plan([haircut]).requests.first)
+        XCTAssertEqual(request.kind, .due)
+        XCTAssertEqual(request.title, "in 15 min · Haircut")
+        XCTAssertEqual(request.body, "P1")
+        XCTAssertEqual(request.dueDate, calendar.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 11)))
+        let fire = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: request.triggerDate)
+        XCTAssertEqual(fire, DateComponents(year: 2026, month: 10, day: 29, hour: 10, minute: 45))
+        let trigger = NotificationScheduler.calendarTrigger(for: request.triggerDate, calendar: calendar)
+        XCTAssertEqual(trigger.dateComponents.hour, 10)
+        XCTAssertEqual(trigger.dateComponents.minute, 45)
+    }
+
+    func testOffsetCopyForHoursAndDaysAndNoneAtTheDueTime() {
+        let result = plan([
+            item("Flight", in: 3 * 24 * hour, remindMinutesBefore: 24 * 60),
+            item("Call", in: 5 * hour, remindMinutesBefore: 60),
+            item("Plain", in: 6 * hour, remindMinutesBefore: nil),
+            item("At time", in: 7 * hour, remindMinutesBefore: 0),
+        ])
+        XCTAssertEqual(result.requests.map(\.title), ["in 1 hour · Call", "Plain", "At time", "in 1 day · Flight"])
+        XCTAssertEqual(result.requests.map(\.triggerDate), [4 * hour, 6 * hour, 7 * hour, 2 * 24 * hour].map(now.addingTimeInterval))
+    }
+
+    func testOffsetPastButDueAheadFiresNowOnce() throws {
+        // Due in 10 minutes with a 15-minute offset: the offset moment is gone, so remind now.
+        let soon = item("Haircut", in: 10 * 60, remindMinutesBefore: 15, updated: -60)
+        let request = try XCTUnwrap(plan([soon]).requests.first)
+        XCTAssertEqual(request.kind, .early)
+        XCTAssertEqual(request.triggerDate, now)
+        XCTAssertEqual(request.title, "in 10 min · Haircut")
+        XCTAssertEqual(request.body, "", "not overdue")
+        // Once it has gone out, a later pass inside the window doesn't repeat it.
+        let key = try XCTUnwrap(request.ledgerKey)
+        XCTAssertEqual(key, NotificationPlan.ledgerKey(taskID: soon.id, dueDate: now.addingTimeInterval(-5 * 60)))
+        XCTAssertTrue(plan([soon], alreadyScheduled: [key]).requests.isEmpty)
+    }
+
+    func testScheduledOffsetReminderIsNotRepeatedInsideTheWindow() throws {
+        // Scheduled for 8:45 (due 9:00, 15 min before); now it's 8:50 and it has gone out.
+        let task = item("Standup", in: 10 * 60, remindMinutesBefore: 15)
+        let scheduledAt = NotificationPlan.ledgerKey(taskID: task.id, dueDate: now.addingTimeInterval(-5 * 60))
+        XCTAssertTrue(plan([task], alreadyScheduled: [scheduledAt]).requests.isEmpty)
+    }
+
+    func testBothPassedFollowsTheLateGraceRule() throws {
+        // Due 10 minutes ago with a 15-minute offset, set up long before, never scheduled here: overdue now.
+        let late = item("Pills", in: -10 * 60, remindMinutesBefore: 15)
+        let request = try XCTUnwrap(plan([late]).requests.first)
+        XCTAssertEqual(request.kind, .overdue)
+        XCTAssertEqual(request.triggerDate, now)
+        XCTAssertEqual(request.title, "Pills")
+        XCTAssertEqual(request.body, "Overdue")
+        // Its offset reminder was scheduled here: not announced again.
+        let offsetKey = NotificationPlan.ledgerKey(taskID: late.id, dueDate: now.addingTimeInterval(-25 * 60))
+        XCTAssertTrue(plan([late], alreadyScheduled: [offsetKey]).requests.isEmpty)
+        // Typed in after the due time: the user knows.
+        XCTAssertTrue(plan([item("Typed late", in: -10 * 60, remindMinutesBefore: 15, updated: -60)]).requests.isEmpty)
+        // Beyond the grace window: nothing.
+        XCTAssertTrue(plan([item("Old", in: -2 * hour, remindMinutesBefore: 15)]).requests.isEmpty)
+    }
+
+    func testChangingTheOffsetReplacesThePendingRequest() {
+        let base = item("Dentist", in: 5 * hour)
+        var offset = base
+        offset.reminderOffsetMinutes = 30
+        let before = plan([base]).requests[0]
+        let after = plan([offset]).requests[0]
+        XCTAssertEqual(before.identifier, after.identifier)
+        XCTAssertNotEqual(before.fingerprint, after.fingerprint)
+        XCTAssertEqual(plan([offset]).diff(pending: [before.identifier: before.fingerprint]).add, [after])
+        // No offset: the request (and its ledger key) is exactly build 4's.
+        XCTAssertEqual(before.triggerDate, base.dueDate)
+        XCTAssertEqual(before.ledgerKey, NotificationPlan.ledgerKey(taskID: base.id, dueDate: base.dueDate!))
+    }
+
+    func testOffsetsOrderByWhenTheyFire() {
+        let result = plan([item("later due, earlier reminder", in: 3 * hour, remindMinutesBefore: 180 - 30),
+                           item("sooner due", in: hour, remindMinutesBefore: nil)])
+        XCTAssertEqual(result.requests.map(\.triggerDate), [now.addingTimeInterval(30 * 60), now.addingTimeInterval(hour)])
+    }
+
     // MARK: Diff
 
     func testDiffAddsNewAndChangedRemovesStaleAndLeavesUnchangedAlone() {

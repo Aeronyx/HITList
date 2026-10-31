@@ -16,12 +16,23 @@ struct NotificationPlan: Equatable {
         var isCompleted: Bool
         /// Distinguishes "set up before it was due" (a missed reminder) from "entered already late".
         var updatedAt: Date
+        /// Minutes before the due time to remind ("!15mb"); nil or 0 reminds at the due time.
+        var reminderOffsetMinutes: Int? = nil
+
+        /// The offset in seconds, never negative.
+        var offset: TimeInterval { TimeInterval(max(0, reminderOffsetMinutes ?? 0) * 60) }
+
+        /// When the reminder is meant to go off: the due time minus the offset.
+        var remindAt: Date? { dueDate.map { $0.addingTimeInterval(-offset) } }
     }
 
     struct Request: Equatable {
         enum Kind: Equatable {
-            /// Fires at the due time.
+            /// Fires at the reminder time: the due time, or the offset before it.
             case due
+            /// The offset time had already passed when it was planned but the due time hasn't (it was
+            /// added or synced in inside the offset window); fires immediately, once.
+            case early
             /// Became due within `lateGrace` without this device having scheduled it (it synced in
             /// late, or reminders were off); fires immediately.
             case overdue
@@ -34,16 +45,19 @@ struct NotificationPlan: Equatable {
         let taskID: UUID?
         let title: String
         let body: String
-        /// When to deliver; for `.overdue` it is `now`, meaning immediately.
+        /// When to deliver; for `.early` and `.overdue` it is `now`, meaning immediately.
         let triggerDate: Date
         let dueDate: Date?
         /// Stored in the request's userInfo; a different value means the request must be replaced.
         let fingerprint: String
+        /// The moment the reminder stands for (`Item.remindAt`); the due time when there is no offset.
+        var reminderDate: Date? = nil
 
-        /// Remembers that a reminder for this task at this due time was scheduled, so it is never repeated.
+        /// Remembers that this task's reminder for this moment was scheduled, so it is never repeated.
+        /// Without an offset that is the due time, as in build 1.
         var ledgerKey: String? {
-            guard let taskID, let dueDate else { return nil }
-            return NotificationPlan.ledgerKey(taskID: taskID, dueDate: dueDate)
+            guard let taskID, let at = reminderDate ?? dueDate else { return nil }
+            return NotificationPlan.ledgerKey(taskID: taskID, dueDate: at)
         }
     }
 
@@ -63,42 +77,68 @@ struct NotificationPlan: Equatable {
     /// Tasks left out by the limit.
     let droppedCount: Int
 
-    /// `alreadyScheduled` holds the `ledgerKey`s this device has scheduled before; a late task whose
+    /// One task that gets a reminder, and when it goes out.
+    private struct Candidate {
+        let item: Item
+        let due: Date
+        let remindAt: Date
+        let kind: Request.Kind
+        /// `remindAt` for `.due`; `now` for the ones that go out immediately.
+        let fireDate: Date
+    }
+
+    /// `alreadyScheduled` holds the `ledgerKey`s this device has scheduled before; a task whose
     /// reminder was among them already fired (or was due to) and is not announced again.
+    ///
+    /// A reminder goes out at `due − offset`, never in the past: if that moment has passed but the due
+    /// time hasn't, it goes out now (once); if both have passed, the late-grace rule applies.
     static func make(tasks: [Item], now: Date, limit: Int = defaultLimit, alreadyScheduled: Set<String> = [],
                      calendar: Calendar = .current) -> NotificationPlan {
         let horizon = calendar.date(byAdding: .day, value: horizonDays, to: now)!
         let earliest = now.addingTimeInterval(-lateGrace)
         let candidates = tasks
-            .compactMap { item -> (Item, Date)? in
+            .compactMap { item -> Candidate? in
                 guard !item.isCompleted, item.hasDueTime, let due = item.dueDate, due < horizon else { return nil }
-                if due > now { return (item, due) }
+                let remindAt = due.addingTimeInterval(-item.offset)
+                let key = ledgerKey(taskID: item.id, dueDate: remindAt)
+                if remindAt > now {
+                    return Candidate(item: item, due: due, remindAt: remindAt, kind: .due, fireDate: remindAt)
+                }
+                if due > now {
+                    // Inside the offset window: remind now, unless this reminder already went out.
+                    guard !alreadyScheduled.contains(key) else { return nil }
+                    return Candidate(item: item, due: due, remindAt: remindAt, kind: .early, fireDate: now)
+                }
                 // Late: only if it was set up before it was due (an edit made after the due time means the
                 // user knows) and no reminder for this due time was ever scheduled here.
-                guard due >= earliest, item.updatedAt < due,
+                guard due >= earliest, item.updatedAt < due, !alreadyScheduled.contains(key),
                       !alreadyScheduled.contains(ledgerKey(taskID: item.id, dueDate: due)) else { return nil }
-                return (item, due)
+                return Candidate(item: item, due: due, remindAt: remindAt, kind: .overdue, fireDate: now)
             }
             .sorted { a, b in
-                if a.1 != b.1 { return a.1 < b.1 }
-                if a.0.priority != b.0.priority { return a.0.priority.rawValue < b.0.priority.rawValue }
-                if a.0.title != b.0.title { return a.0.title < b.0.title }
-                return a.0.id.uuidString < b.0.id.uuidString
+                if a.fireDate != b.fireDate { return a.fireDate < b.fireDate }
+                if a.due != b.due { return a.due < b.due }
+                if a.item.priority != b.item.priority { return a.item.priority.rawValue < b.item.priority.rawValue }
+                if a.item.title != b.item.title { return a.item.title < b.item.title }
+                return a.item.id.uuidString < b.item.id.uuidString
             }
 
         let kept = candidates.prefix(max(0, limit))
         let dropped = candidates.dropFirst(max(0, limit))
         let zone = calendar.timeZone.identifier
-        var requests = kept.map { item, due -> Request in
-            let overdue = due <= now
-            let body = self.body(projectName: item.projectName, priority: item.priority, overdue: overdue)
-            let fingerprint = self.fingerprint([item.title, body, String(Int(due.timeIntervalSince1970)), zone, overdue ? "overdue" : "due"])
-            return Request(identifier: item.id.uuidString, kind: overdue ? .overdue : .due, taskID: item.id,
-                           title: item.title, body: body, triggerDate: overdue ? now : due, dueDate: due,
-                           fingerprint: fingerprint)
+        var requests = kept.map { c -> Request in
+            let overdue = c.kind == .overdue
+            let body = self.body(projectName: c.item.projectName, priority: c.item.priority, overdue: overdue)
+            let title = self.title(c.item.title, due: c.due, remindAt: c.remindAt, now: now, overdue: overdue)
+            var parts = [title, body, String(Int(c.due.timeIntervalSince1970)), zone, overdue ? "overdue" : "due"]
+            // Without an offset the fingerprint is build 4's, so upgrading replaces nothing.
+            if c.remindAt != c.due { parts.append(String(Int(c.remindAt.timeIntervalSince1970))) }
+            return Request(identifier: c.item.id.uuidString, kind: c.kind, taskID: c.item.id,
+                           title: title, body: body, triggerDate: c.fireDate, dueDate: c.due,
+                           fingerprint: fingerprint(parts), reminderDate: c.remindAt)
         }
-        if let first = dropped.first?.1 {
-            let sameDay = dropped.filter { calendar.isDate($0.1, inSameDayAs: first) }.count
+        if let first = dropped.first?.fireDate {
+            let sameDay = dropped.filter { calendar.isDate($0.fireDate, inSameDayAs: first) }.count
             var body = "\(sameDay) more \(sameDay == 1 ? "task" : "tasks") due later today"
             if dropped.count > sameDay { body += " · \(dropped.count - sameDay) more after that" }
             requests.append(Request(
@@ -107,6 +147,16 @@ struct NotificationPlan: Equatable {
                 fingerprint: fingerprint([body, String(Int(first.timeIntervalSince1970)), zone])))
         }
         return NotificationPlan(requests: requests, droppedCount: dropped.count)
+    }
+
+    /// The task's title; "in 15 min · Haircut" when the reminder goes out ahead of the due time (the
+    /// time left, rounded up to the minute, if it goes out late inside the offset window).
+    static func title(_ title: String, due: Date, remindAt: Date, now: Date, overdue: Bool) -> String {
+        guard !overdue, due > remindAt, due > now else { return title }
+        let from = max(remindAt, now)
+        let minutes = Int((due.timeIntervalSince(from) / 60).rounded(.up))
+        guard minutes > 0 else { return title }
+        return "in \(ReminderOffset.duration(minutes: minutes)) · \(title)"
     }
 
     /// "Work · P1" as in build 1; "Overdue · Work · P1" for a reminder that is already late.
@@ -172,6 +222,6 @@ extension NotificationPlan.Item {
     init(_ task: TaskItem) {
         self.init(id: task.id, title: task.title, projectName: task.project?.name, priority: task.priorityValue,
                   dueDate: task.dueDate, hasDueTime: task.hasDueTime, isCompleted: task.isCompleted,
-                  updatedAt: task.updatedAt)
+                  updatedAt: task.updatedAt, reminderOffsetMinutes: task.reminderOffsetMinutes)
     }
 }

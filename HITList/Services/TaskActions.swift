@@ -20,6 +20,12 @@ enum TaskActions {
 
         let task = TaskItem(title: title, priority: parsed.priority.rawValue, dueDate: parsed.dueDate, hasDueTime: parsed.hasDueTime,
                             project: project, labels: labels, recurrence: parsed.recurrence)
+        // Zero ("!at") is the same as no offset: remind at the due time.
+        if let offset = parsed.reminderOffsetMinutes, offset > 0 { task.reminderOffsetMinutes = offset }
+        if let deadline = parsed.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
+        if let location = parsed.locationName?.trimmingCharacters(in: .whitespacesAndNewlines), !location.isEmpty {
+            task.locationName = location
+        }
         context.insert(task)
         try context.save()
         return task

@@ -110,4 +110,78 @@ final class QuickAddParserTests: XCTestCase {
             XCTAssertEqual(String(input[token.range]), token.text)
         }
     }
+
+    // MARK: Reminder offsets
+
+    func testGeorgesHaircutExample() {
+        let r = parser.parse("Haircut tom 11am p1 !15mb")
+        XCTAssertEqual(r.title, "Haircut")
+        assertDate(r.dueDate, 2026, 10, 22, 11, 0)
+        XCTAssertTrue(r.hasDueTime)
+        XCTAssertEqual(r.priority, .p1)
+        XCTAssertEqual(r.reminderOffsetMinutes, 15)
+        XCTAssertEqual(r.tokens.map(\.kind), [.date, .time, .priority, .reminder])
+        XCTAssertEqual(r.tokens.last?.text, "!15mb")
+        XCTAssertNil(r.deadline)
+        XCTAssertNil(r.locationName)
+    }
+
+    func testReminderOffsetForms() {
+        let cases: [(String, Int)] = [
+            ("!15mb", 15), ("!15m", 15), ("!5M", 5), ("!1hb", 60), ("!1h", 60), ("!2hb", 120),
+            ("!1db", 1440), ("!1d", 1440), ("!3d", 4320), ("!0", 0), ("!at", 0), ("!AT", 0), ("!90m,", 90),
+        ]
+        for (token, minutes) in cases {
+            let r = parser.parse("Call 5pm \(token)")
+            XCTAssertEqual(r.reminderOffsetMinutes, minutes, token)
+            XCTAssertEqual(r.title, "Call", token)
+            XCTAssertEqual(r.tokens.first { $0.kind == .reminder }?.text, token, token)
+        }
+    }
+
+    func testNonReminderBangWordsStayInTheTitle() {
+        for text in ["Wow!", "!", "!b", "!mb", "!15", "!15x", "!-5m", "!0m", "!1.5h", "!30d", "Yay !important"] {
+            let r = parser.parse(text)
+            XCTAssertNil(r.reminderOffsetMinutes, text)
+            XCTAssertEqual(r.title, text, text)
+        }
+        // "!!2" is still a priority, not a reminder.
+        XCTAssertEqual(parser.parse("x !!2").priority, .p2)
+        XCTAssertNil(parser.parse("x !!2").reminderOffsetMinutes)
+    }
+
+    func testOnlyTheFirstReminderTokenCounts() {
+        let r = parser.parse("Pills 9pm !10m !1h")
+        XCTAssertEqual(r.reminderOffsetMinutes, 10)
+        XCTAssertEqual(r.title, "Pills !1h")
+    }
+
+    func testReminderWithoutATimeStillParses() {
+        let r = parser.parse("Pack tomorrow !1db")
+        XCTAssertEqual(r.reminderOffsetMinutes, 1440)
+        XCTAssertFalse(r.hasDueTime)
+        XCTAssertEqual(r.title, "Pack")
+    }
+
+    func testReminderTokensRoundTrip() {
+        for minutes in [0, 5, 15, 30, 45, 60, 90, 120, 1440, 2880, 4320] {
+            let token = ReminderOffset.token(minutes: minutes)
+            XCTAssertEqual(ReminderOffset.minutes(fromToken: token), minutes, token)
+        }
+        XCTAssertEqual(ReminderOffset.token(minutes: 15), "!15mb")
+        XCTAssertEqual(ReminderOffset.token(minutes: 60), "!1hb")
+        XCTAssertEqual(ReminderOffset.token(minutes: 1440), "!1db")
+        XCTAssertEqual(ReminderOffset.token(minutes: 0), "!at")
+    }
+
+    func testReminderOffsetWording() {
+        XCTAssertEqual(ReminderOffset.label(minutes: 0), "At time")
+        XCTAssertEqual(ReminderOffset.label(minutes: 15), "15 min before")
+        XCTAssertEqual(ReminderOffset.label(minutes: 60), "1 hour before")
+        XCTAssertEqual(ReminderOffset.label(minutes: 120), "2 hours before")
+        XCTAssertEqual(ReminderOffset.label(minutes: 1440), "1 day before")
+        XCTAssertEqual(ReminderOffset.duration(minutes: 90), "1 hr 30 min")
+        XCTAssertEqual(ReminderOffset.duration(minutes: 1500), "1 day 1 hr")
+        XCTAssertEqual(ReminderOffset.duration(minutes: 2880), "2 days")
+    }
 }
