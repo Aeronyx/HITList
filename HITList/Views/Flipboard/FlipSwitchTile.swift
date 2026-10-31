@@ -61,7 +61,7 @@ struct FlipSwitchTile: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
-                FlipLED(isOn: side == .red, pulsing: isOverdue && !reduceMotion)
+                FlipLED(glow: side == .green ? .done : isOverdue ? .overdue : .due, reduceMotion: reduceMotion)
             }
 
             rocker
