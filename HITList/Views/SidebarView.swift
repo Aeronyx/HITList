@@ -75,12 +75,12 @@ struct SidebarView: View {
                     .tag(SidebarItem.project(project.id))
                     .slateRow()
                     .contextMenu {
-                        Button("Edit Project…") { editingProject = project }
+                        Button("Edit Group…") { editingProject = project }
                         Button("Delete", role: .destructive) { delete(project) }
                     }
                 }
             } header: {
-                sectionHeader("Projects") { creatingProject = true }
+                sectionHeader("Groups") { creatingProject = true }
             }
 
             Section {

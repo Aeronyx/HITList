@@ -12,7 +12,7 @@ struct ProjectEditorView: View {
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
     var body: some View {
-        HITSheetChrome(project == nil ? "New Project" : "Edit Project", isPrimaryEnabled: !trimmedName.isEmpty, onPrimary: save) {
+        HITSheetChrome(project == nil ? "New Group" : "Edit Group", isPrimaryEnabled: !trimmedName.isEmpty, onPrimary: save) {
             NameAndColorFields(name: $name, colorHex: $colorHex, autofocus: project == nil, onSubmit: save)
         }
         .onAppear {
