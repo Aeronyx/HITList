@@ -5,33 +5,29 @@ import OSLog
 /// The sound played when a task is completed, chosen in Settings (`DelightSettingsSection`) and stored
 /// as its raw value under `delight.soundName` in `AppGroup.defaults`.
 ///
-/// The built-ins live in `HITList/Resources/Sounds/`: 44.1 kHz mono .caf generated with numpy and
-/// `afconvert`, each normalised to -14 LUFS (K-weighted, ungated) and soft-limited under -1 dBFS.
-/// `pop` 140 ms: bandpassed noise burst sliding 1.6 kHz → 500 Hz over a damped sine thunk 900 → 350 Hz.
-/// `wood` 300 ms: A5 bar with free-bar partials (1, 2.76, 5.4) and a noise mallet knock.
-/// `glass` 320 ms: C7 bell, inharmonic partials (1, 2.32, 4.25, 6.63), brightest fastest.
-/// `swish` 220 ms: noise through a bandpass sweeping 1.5 → 6 kHz.
-/// `marimba` 340 ms: C5 then G5 90 ms later, fundamental plus tuned 4th partial.
+/// The built-ins live in `HITList/Resources/Sounds/`, 44.1 kHz mono .caf:
+/// `bubble` 320 ms: George's own sound (added 2026-10-31), trimmed from a 0.9 s stereo file to its
+///   audible 80-400 ms with a 30 ms fade and downmixed to mono. The default.
+/// `swish` 220 ms: noise through a bandpass sweeping 1.5 → 6 kHz, generated with numpy, -14 LUFS.
+/// Earlier generated sounds (pop, wood, glass, marimba) were removed on 2026-10-31; a stored choice
+/// naming one of them falls back to `bubble`.
 enum CompletionSound: String, CaseIterable, Identifiable {
-    case pop, wood, glass, swish, marimba
+    case bubble, swish
     /// The file the user imported (`CustomSoundStore`).
     case custom
     case none
 
     nonisolated static let key = "delight.soundName"
-    static let fallback = CompletionSound.pop
+    static let fallback = CompletionSound.bubble
 
-    static let builtIns: [CompletionSound] = [.pop, .wood, .glass, .swish, .marimba]
+    static let builtIns: [CompletionSound] = [.bubble, .swish]
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .pop: "Pop"
-        case .wood: "Wood"
-        case .glass: "Glass"
+        case .bubble: "Bubble"
         case .swish: "Swish"
-        case .marimba: "Marimba"
         case .custom: "Your Sound"
         case .none: "None"
         }
@@ -43,7 +39,7 @@ enum CompletionSound: String, CaseIterable, Identifiable {
         return Bundle.main.url(forResource: rawValue, withExtension: "caf")
     }
 
-    /// The stored choice. Unset means `pop`, unless the sound was switched off with the old
+    /// The stored choice. Unset means `bubble`, unless the sound was switched off with the old
     /// on/off toggle (`CompletionFeedback.soundKey`), which reads as `none`.
     static func selected(in defaults: UserDefaults) -> CompletionSound {
         if let raw = defaults.string(forKey: key) { return CompletionSound(rawValue: raw) ?? fallback }
