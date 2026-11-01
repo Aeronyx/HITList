@@ -29,6 +29,16 @@ final class QuickAddCreateTests: XCTestCase {
 
     private func fetch<M: PersistentModel>(_ type: M.Type) throws -> [M] { try context.fetch(FetchDescriptor<M>()) }
 
+    func testTitlesAreCappedAtFiveHundredCharacters() throws {
+        let long = String(repeating: "a", count: TaskLimits.titleCharacters + 40)
+        let task = try create(long)
+        XCTAssertEqual(task.title.count, TaskLimits.titleCharacters)
+        XCTAssertEqual(TaskLimits.titleCharacters, 500)
+        XCTAssertEqual(TaskLimits.clampedTitle("  short  "), "short")
+        XCTAssertEqual(TaskLimits.firstLine(of: "First line\nsecond line"), "First line")
+        XCTAssertEqual(TaskLimits.firstLine(of: ""), "")
+    }
+
     func testCreatesProjectAndLabelsOnDemand() throws {
         let parsed = parse("Pay rent tomorrow 5pm p1 #Finance @bills @home every month")
         let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: nil, in: context)

@@ -24,6 +24,9 @@ struct QuickAddPopout: View {
     var style: Style = .floating
     /// iPhone: the host is putting the card away; drop the keyboard so it goes down with the card.
     var isClosing = false
+    /// iPhone: the host closes the card after a save, so the card leaves its contents as they are while it
+    /// fades (clearing them re-laid the card out mid-fade). The Mac panel stays open and resets for the next task.
+    var closesAfterSave = false
     var onClose: () -> Void
     var onSaved: () -> Void = {}
 
@@ -45,9 +48,10 @@ struct QuickAddPopout: View {
 
     enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
-    init(context: QuickAddContext, style: Style = .floating, isClosing: Bool = false,
+    init(context: QuickAddContext, style: Style = .floating, isClosing: Bool = false, closesAfterSave: Bool = false,
          onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {}) {
         self.isClosing = isClosing
+        self.closesAfterSave = closesAfterSave
         self.context = context
         self.style = style
         self.onClose = onClose
@@ -431,17 +435,19 @@ struct QuickAddPopout: View {
                 try? modelContext.save()
             }
             errorMessage = nil
-            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-                draft.reset()
-                added = "Added ‘\(result.title)’"
+            if !closesAfterSave {
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+                    draft.reset()
+                    added = "Added ‘\(result.title)’"
+                }
+                addedGeneration += 1
+                let generation = addedGeneration
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    if generation == addedGeneration { withAnimation { added = nil } }
+                }
+                titleFocused = true
             }
-            addedGeneration += 1
-            let generation = addedGeneration
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                if generation == addedGeneration { withAnimation { added = nil } }
-            }
-            titleFocused = true
             onSaved()
             AccessibilityNotification.Announcement("Added \(result.title)").post()
             Task { await NotificationScheduler.reschedule(context: modelContext) }

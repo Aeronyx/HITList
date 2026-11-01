@@ -69,13 +69,24 @@ struct TaskRow: View {
             .accessibilityLabel(isChecked ? "Mark incomplete" : "Complete task")
 
             VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
+                // A long title wraps in full (titles are capped at `TaskLimits.titleCharacters`); the
+                // checkbox stays on its first line.
                 Text(task.title)
                     .font(HITType.body)
                     .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
-                    .lineLimit(2)
                     .overlay { strikeLine }
                     .animation(CompletionMotion.strike, value: isChecked)
                     .frame(minHeight: lineHeight, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                // The description's first line, Todoist style; the popout shows the rest.
+                if !task.notes.isEmpty {
+                    Text(TaskLimits.firstLine(of: task.notes))
+                        .font(HITType.subheadline)
+                        .foregroundStyle(Theme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .accessibilityLabel("Description: \(TaskLimits.firstLine(of: task.notes))")
+                }
                 // The second line is always laid out, so rows with and without dates are the same height
                 // and line up; the Group sits at its trailing end, Todoist style.
                 HStack(spacing: HITSpacing.s + 2) {
@@ -96,10 +107,6 @@ struct TaskRow: View {
                             }
                             ForEach(task.labelList) { label in
                                 MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
-                            }
-                            if !task.notes.isEmpty {
-                                MetaItem(nil, systemImage: "text.alignleft", tint: Theme.secondaryText)
-                                    .accessibilityLabel("Has a description")
                             }
                         }
                     }
@@ -154,7 +161,7 @@ struct TaskRow: View {
     private var hasMeta: Bool {
         if let _ = task.dueDate, !hidesDay || task.hasDueTime || task.recurrence != nil { return true }
         if showProject, task.project != nil { return true }
-        return !task.labelList.isEmpty || !task.notes.isEmpty
+        return !task.labelList.isEmpty
     }
 
     /// The title's strike-through, drawn on its own so it can sweep left to right when the task is
@@ -162,7 +169,6 @@ struct TaskRow: View {
     /// and only cross-fades with Reduce Motion on.
     private var strikeLine: some View {
         Text(task.title)
-            .lineLimit(2)
             .foregroundStyle(.clear)
             .strikethrough(color: Theme.secondaryText)
             .mask(alignment: .leading) {

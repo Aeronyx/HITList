@@ -543,7 +543,8 @@ private struct DayHeaderStyle: ViewModifier {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.background)
             .background(Theme.accent.opacity(highlighted ? 0.18 : 0))
-            .overlay(alignment: .bottom) { (highlighted ? Theme.accent : Theme.separator).frame(height: highlighted ? 2 : 0.5) }
+            // Only the drop target draws a line of its own (the list draws the header's separator).
+            .overlay(alignment: .bottom) { Theme.accent.frame(height: highlighted ? 2 : 0) }
             .listRowInsets(EdgeInsets())
     }
 }

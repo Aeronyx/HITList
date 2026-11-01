@@ -6,15 +6,19 @@ TestFlight iterations; the heading lists the last build that shipped it.
 
 ## 0.3.3 — build 10, 2026-11-01
 
-- Task rows are slimmer and all the same height, with the same air above and below (`ListMetrics`), on
-  both platforms; Compact rows trims it further. The "P1"/"P2" badge is gone: the checkbox's colour is
-  the priority.
+- Task rows measure like Todoist's (`ListMetrics`: 12 pt above the title, 10 below the second line, on
+  both platforms; Compact rows trims it), every row the same height unless a long title wraps. Titles are
+  capped at 500 characters; a description shows its first line under the title. The "P1"/"P2" badge is
+  gone: the checkbox's colour is the priority.
 - Section headers ("Overdue", "Nov 1, Sunday", "Priority 1") share one type size and one padding on
   every list, so the gap to the first row is the same under every header; the Inbox's priority headers
   are no longer caption-sized.
 - Mac: Settings uses the window's sidebar for its sections, System Settings style, with Back on top; the
-  sidebar column no longer collapses and reopens, which stuttered.
-- The "+" oval is a little shorter on both platforms; the sync bolt sits nearer the two controls.
+  sidebar column no longer collapses and reopens, and the lists' sidebar only fades under the sections
+  (it stays built), so nothing stutters.
+- iPhone: after adding a task the card holds still and fades while the keyboard drops; nothing rides the
+  keyboard or re-lays out on the way.
+- The iPhone "+" oval is a little shorter; the sync bolt sits nearer the two controls.
 
 ## 0.3.2 — build 9, 2026-11-01
 

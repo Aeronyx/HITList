@@ -37,11 +37,10 @@ private struct QuickAddEntry: ViewModifier {
                         Button { popouts.openQuickAdd(context) } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 13, weight: .bold))
-                                .frame(width: 22, height: 14)
+                                .frame(width: 22, height: 16)
                         }
-                        // The small control size keeps the oval a little shorter than the toolbar's
-                        // other buttons (George, build 9).
-                        .controlSize(.small)
+                        // Not `.controlSize(.small)`: on macOS 26 that drew the glass oval in two halves
+                        // (build 10). The toolbar sets this button's height.
                         .modifier(ProminentToolbarButton())
                         .accessibilityLabel("Add task")
                         .help("Add a task (⌘N)")

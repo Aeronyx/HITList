@@ -8,7 +8,7 @@ enum TaskActions {
     /// Creates a task from a parsed quick-add result, creating any project/labels that don't exist yet.
     @discardableResult
     static func create(from parsed: QuickAddResult, defaultProject: Project?, defaultLabel: TaskLabel?, in context: ModelContext) throws -> TaskItem {
-        let title = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = TaskLimits.clampedTitle(parsed.title)
         guard !title.isEmpty else { throw ActionError.emptyTitle }
 
         var project = defaultProject
