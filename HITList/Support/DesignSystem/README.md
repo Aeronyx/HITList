@@ -2,7 +2,7 @@
 
 HITList draws its own controls. Never use `.bordered`, `.borderedProminent`, a default `Toggle`,
 a segmented `Picker`, or a `Form` in new UI; use the components below. Colours come from `Theme`
-(slate + `#6C9EFF` accent) and `Priority.color`; numbers come from `HITTokens.swift`. Every component
+(the current dark palette; see Themes below) and `Priority.color`; numbers come from `HITTokens.swift`. Every component
 is in `DesignSystemGallery` (open it in the Xcode canvas) and rendered by `DesignSystemTests`.
 
 ## Tokens (`HITTokens.swift`)
@@ -55,6 +55,20 @@ header.hitGlass(in: Rectangle())                                  // a bar
 plus.hitGlass(in: Circle(), tint: Theme.accent, interactive: true) // a floating control
 highlight.hitGlass(in: Capsule(), fallback: Theme.separator)      // keeps today's slate when glass is off
 ```
+
+Where the components use glass (iOS 26 / macOS 26, effects allowed; build 5's slate look otherwise):
+`HITSheetChrome`'s header bar (the content scrolls under it, `scrollEdgeEffectStyle(.soft, for: .top)`; this is
+also the iPhone Settings sheet's bar), `HITSegmented`'s moving highlight, and the hover fill of an unselected
+`HITChip`. Everything else stays slate.
+
+## Themes (`Theme.swift`)
+Four dark palettes (`ThemePalette.all`): **Slate** (default, build 5's colours), **Graphite** (neutral greys,
+off-white `#E6E1D6` accent), **Midnight** (blue-black, cyan `#4FD1E8`), **Moss** (green-black, `#8FD694`). Each
+has eight colours: `background`, `surface`, `elevated`, `separator`, `accent`, `secondaryText`, `text`,
+`onAccent`. `Theme.background` etc. and `HITColor.text`/`.onAccent` read the current one from
+`ThemeStore.shared` (`@Observable`, saved at `Preferences.theme`), so views redraw live when it changes. Never
+cache a `Theme` colour in a `static let` or `@State`; read it in `body`. Due and priority colours are the same in
+every theme. Every text/surface pair passes WCAG AA (`ThemeTests`).
 
 ## Which component
 | Need | Use |
