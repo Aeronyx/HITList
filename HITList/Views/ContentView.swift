@@ -1,11 +1,20 @@
 import SwiftUI
 import SwiftData
+import HITListCore
 
 enum SidebarItem: Hashable {
     case inbox, today, upcoming, completed
     case filter(UUID)
     case project(UUID)
     case label(UUID)
+}
+
+extension SidebarItem {
+    /// The Mac's in-window Settings page (`MacSettingsPage`), chosen by the sidebar gear, ⌘,, the "…"
+    /// menu's Settings… and the sync bolt. Like `.flipboard`, a reserved id rather than a new case, so the
+    /// task list's exhaustive switches (TaskListView) stay as they are; `ListScreen` routes it before
+    /// `TaskListView` ever sees it. No saved filter can have this id.
+    static let settings = SidebarItem.filter(SeedIdentity.uuid(for: "SidebarItem/settings"))
 }
 
 /// Mac and iPad: sidebar + list, Todoist style, no detail column. iPhone (compact width): the four-tab
@@ -40,11 +49,13 @@ struct ContentView: View {
     }
 }
 
-/// The sidebar and the selected list, side by side.
+/// The sidebar and the selected list, side by side. On the Mac, Settings is one more destination here
+/// (`SidebarItem.settings`), opened through this window's `SettingsRouter`.
 private struct SplitContent: View {
     @Environment(PopoutController.self) private var popouts
     @State private var selection: SidebarItem? = .today
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var settingsRouter = SettingsRouter()
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -55,6 +66,11 @@ private struct SplitContent: View {
                 .navigationSplitViewColumnWidth(min: 420, ideal: 640)
         }
         .onChange(of: selection) { _, _ in popouts.closeAll() }
+        #if os(macOS)
+        .environment(settingsRouter)
+        .focusedSceneValue(\.settingsRouter, settingsRouter)
+        .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
+        #endif
     }
 }
 
@@ -65,6 +81,8 @@ struct ListScreen: View {
 
     var body: some View {
         switch item {
+        case .settings:
+            MacSettingsPage()
         case .flipboard:
             // Adding from the Flipboard has no defaults (switches are added with its own "+").
             FlipboardView(selectedTask: popouts.selection)
