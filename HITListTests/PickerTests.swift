@@ -231,8 +231,8 @@ final class PickerTests: XCTestCase {
 
     func testReminderOffsetsIncludeTenMinutesAndACustomField() {
         XCTAssertEqual(ReminderPickerCard.offsetPresets, [0, 5, 10, 15, 30, 60, 1440])
-        XCTAssertEqual(ReminderPickerCard.offsetPresets.map { ReminderOffset.label(minutes: $0) },
-                       ["At time", "5 min before", "10 min before", "15 min before", "30 min before", "1 hour before", "1 day before"])
+        XCTAssertEqual(ReminderPickerCard.offsetPresets.map { ReminderPickerCard.chipTitle(minutes: $0) },
+                       ["At time", "5 min", "10 min", "15 min", "30 min", "1 hour", "1 day"])
         XCTAssertEqual(ReminderPickerCard.customOffset("45"), 45)
         XCTAssertEqual(ReminderPickerCard.customOffset(" 90 "), 90)
         XCTAssertEqual(ReminderPickerCard.customOffset(String(ReminderOffset.maxMinutes)), ReminderOffset.maxMinutes)
