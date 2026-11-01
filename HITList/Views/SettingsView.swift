@@ -20,6 +20,8 @@ struct SettingsView: View {
     @State private var showSyncDetails = false
     @State private var isCheckingICloud = false
     @State private var iCloudCheck: ICloudCheck?
+    @State private var showWhatsNew = false
+    @State private var diagnosticsCopied = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -146,6 +148,14 @@ struct SettingsView: View {
         HITGroup("About") {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
+            HITMenuRow("Copy diagnostics", systemImage: "doc.on.doc", value: diagnosticsCopied ? "Copied" : nil,
+                       accessory: .none) { copyDiagnostics() }
+                .accessibilityIdentifier("settings-copy-diagnostics")
+            HITMenuRow("What's new", systemImage: "sparkles") { showWhatsNew = true }
+                .accessibilityIdentifier("settings-whats-new")
+        }
+        .sheet(isPresented: $showWhatsNew) {
+            WhatsNewSheet().slateSheet()
         }
     }
 
@@ -183,6 +193,16 @@ struct SettingsView: View {
             }
         } catch {
             backupMessage = "Backup failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func copyDiagnostics() {
+        let store = context.container.configurations.first?.url.path ?? "unknown"
+        Task {
+            Diagnostics.copy(await Diagnostics.current(storePath: store).text)
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { diagnosticsCopied = true }
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { diagnosticsCopied = false }
         }
     }
 
