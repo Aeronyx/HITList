@@ -12,6 +12,9 @@ struct TaskListView: View {
     @Query private var labels: [TaskLabel]
     @Query private var filters: [SavedFilter]
     @State private var showCompleted = false
+    @State private var editingProject: Project?
+    @State private var editingLabel: TaskLabel?
+    @State private var editingFilter: SavedFilter?
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
@@ -196,8 +199,10 @@ struct TaskListView: View {
                                             .completionRowBackground(flashing: phase == .pending)
                                             .swipeActions(edge: .trailing) {
                                                 Button(role: .destructive) {
-                                                    if popouts.task?.id == task.id { popouts.closeTask() }
-                                                    TaskActions.delete(task, in: context)
+                                                    popouts.requestDelete(task) {
+                                                        if popouts.task?.id == task.id { popouts.closeTask() }
+                                                        TaskActions.delete(task, in: context)
+                                                    }
                                                 } label: { Label("Delete", systemImage: "trash") }
                                             }
                                             .swipeActions(edge: .leading) {
@@ -236,7 +241,7 @@ struct TaskListView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
         }
@@ -246,32 +251,43 @@ struct TaskListView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        .toolbar {
-            // A small "…" menu instead of a big eye button: view options live here.
-            ToolbarItem(placement: .automatic) {
-                Menu {
-                    if selection != .completed {
-                        Toggle("Show completed", isOn: $showCompleted)
-                            .keyboardShortcut("c", modifiers: [.command, .shift])
-                    }
-                    Section("Sort") {
-                        Button("By due date") {}.disabled(true)
-                        Button("By priority") {}.disabled(true)
-                        Button("By name") {}.disabled(true)
-                    }
-                } label: {
-                    Label("View options", systemImage: "ellipsis")
-                        .labelStyle(.iconOnly)
+        // The filter-lines icon holds the view options; the "…" beside it (iPhone, iPad) holds this
+        // screen's actions, and on iPhone Settings and the sync dot too (`screenChrome`).
+        .screenChrome {
+            ViewOptionsMenu {
+                if selection != .completed {
+                    Toggle("Show completed", isOn: $showCompleted)
+                        .keyboardShortcut("c", modifiers: [.command, .shift])
                 }
-                .menuIndicator(.hidden)
-                .help("View options")
+                Section("Sort") {
+                    Button("By due date") {}.disabled(true)
+                    Button("By priority") {}.disabled(true)
+                    Button("By name") {}.disabled(true)
+                }
             }
+        } menu: {
+            if let project = currentProject {
+                Button { editingProject = project } label: { Label("Edit Group…", systemImage: "pencil") }
+            }
+            if let label = currentLabel {
+                Button { editingLabel = label } label: { Label("Edit Label…", systemImage: "pencil") }
+            }
+            if let filter = currentFilter {
+                Button { editingFilter = filter } label: { Label("Edit Filter…", systemImage: "pencil") }
+            }
+        }
+        #if os(macOS)
+        .toolbar {
             if let filter = currentFilter {
                 ToolbarItem(placement: .automatic) {
                     Text(filter.query).font(HITType.monoCaption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }
+        #endif
+        .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
+        .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
+        .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
         // Held rows belong to the list they were completed in.
@@ -287,12 +303,12 @@ struct TaskListView: View {
         if checked, let record = toast.record(for: task.id) {
             // Un-checking a row the toast still offers to undo is that undo (it knows how to put a
             // recurring task's date back).
-            withAnimation(.snappy) { toast.remove(task.id) }
+            withAnimation(HITMotion.exit) { toast.remove(task.id) }
             revert([record])
             return
         }
         if task.isCompleted {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(HITMotion.standard) {
                 completions.cancel(task.id)
                 TaskActions.toggleCompletion(task, in: context)
             }
@@ -306,7 +322,7 @@ struct TaskListView: View {
         } else {
             .uncomplete
         }
-        let token = withAnimation(.easeOut(duration: 0.12)) { completions.begin(task.id, anchor: task.dueDate) }
+        let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
         TaskActions.toggleCompletion(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task.id, token: token) }
@@ -314,23 +330,23 @@ struct TaskListView: View {
     }
 
     private func showToast(_ completed: CompletedTask) {
-        let generation = withAnimation(.snappy) { toast.add(completed) }
+        let generation = withAnimation(HITMotion.enter) { toast.add(completed) }
         AccessibilityNotification.Announcement(toast.message).post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)
-            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+            withAnimation(HITMotion.exit) { _ = toast.expire(generation: generation) }
         }
     }
 
     private func undoToast() {
-        let records = withAnimation(.snappy) { toast.takeAll() }
+        let records = withAnimation(HITMotion.exit) { toast.takeAll() }
         revert(records)
     }
 
     /// Puts tasks back the way they were before they were completed; their rows reappear (or stop
     /// animating out) because they match the list again.
     private func revert(_ records: [CompletedTask]) {
-        withAnimation(.easeInOut(duration: 0.25)) {
+        withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
@@ -351,10 +367,10 @@ struct TaskListView: View {
     private func finishCompletion(of id: UUID, token: Int) async {
         try? await Task.sleep(for: .milliseconds(600))
         if (try? matchedTasks())?.contains(where: { $0.id == id }) == true {
-            withAnimation(.easeOut(duration: 0.25)) { _ = completions.remove(id, token: token) }
+            withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }
-        guard withAnimation(.easeIn(duration: 0.18), { completions.collapse(id, token: token) }) else { return }
+        guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
         try? await Task.sleep(for: .milliseconds(180))
         if reduceMotion {
             // Reduce Motion: the fade above is the whole effect; the gap closes without sliding.
@@ -362,7 +378,7 @@ struct TaskListView: View {
             transaction.disablesAnimations = true
             withTransaction(transaction) { _ = completions.remove(id, token: token) }
         } else {
-            withAnimation(.snappy(duration: 0.3)) { _ = completions.remove(id, token: token) }
+            withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
         }
     }
 

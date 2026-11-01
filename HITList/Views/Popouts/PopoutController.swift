@@ -77,6 +77,34 @@ final class PopoutController {
     var listContext: QuickAddContext = .today
     /// "Completed ‘Title’ · Undo" after completing a task from its popout (the lists keep their own).
     var toast = CompletionToastState()
+    /// A deletion waiting for the user's yes (Settings → General → Confirm before deleting); `PopoutHost`
+    /// shows the dialog. Nil when nothing is pending.
+    private(set) var pendingDelete: PendingDelete?
+
+    struct PendingDelete {
+        let title: String
+        let perform: () -> Void
+    }
+
+    // MARK: Delete
+
+    /// Every delete path comes through here with what deleting means for it (`perform`): it runs at
+    /// once, or after the confirmation dialog when the preference asks for one.
+    func requestDelete(_ task: TaskItem, perform: @escaping () -> Void) {
+        if Preferences.value(Preferences.confirmDelete, default: Preferences.confirmDeleteDefault) {
+            pendingDelete = PendingDelete(title: task.title, perform: perform)
+        } else {
+            perform()
+        }
+    }
+
+    func confirmPendingDelete() {
+        let pending = pendingDelete
+        pendingDelete = nil
+        pending?.perform()
+    }
+
+    func cancelPendingDelete() { pendingDelete = nil }
 
     // MARK: Quick add
 
@@ -117,11 +145,11 @@ final class PopoutController {
         TaskActions.toggleCompletion(task, in: context)
         Task { await NotificationScheduler.reschedule(context: context) }
         if self.task?.id == task.id { closeTask() }
-        let generation = withAnimation(.snappy) { toast.add(CompletedTask(id: task.id, title: task.title, revert: revert)) }
+        let generation = withAnimation(HITMotion.enter) { toast.add(CompletedTask(id: task.id, title: task.title, revert: revert)) }
         AccessibilityNotification.Announcement(toast.message).post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)
-            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+            withAnimation(HITMotion.exit) { _ = toast.expire(generation: generation) }
         }
     }
 
@@ -136,7 +164,7 @@ final class PopoutController {
 
     /// The toast's Undo: puts every task it lists back as it was.
     func undoCompletions(in context: ModelContext) {
-        let records = withAnimation(.snappy) { toast.takeAll() }
+        let records = withAnimation(HITMotion.exit) { toast.takeAll() }
         for record in records {
             let id = record.id
             guard let task = try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first else { continue }

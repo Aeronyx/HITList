@@ -38,9 +38,9 @@ struct PopoutHost: ViewModifier {
             .overlay(alignment: .bottom) {
                 if popouts.toast.isVisible {
                     CompletionToast(message: popouts.toast.message) { popouts.undoCompletions(in: context) }
-                        // iPhone: clear of the tab bar and the oval "+" (MobileShell's bottom chrome).
-                        .padding(.bottom, usesPanel ? 64 : 136)
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        // iPhone: clear of the island and the oval "+" (MobileShell's bottom chrome).
+                        .padding(.bottom, usesPanel ? 64 : IslandMetrics.chromeHeight + HITSpacing.xs)
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
             .overlay {
@@ -58,8 +58,19 @@ struct PopoutHost: ViewModifier {
                     .transition(.opacity)
                 }
             }
-            .animation(reduceMotion ? .easeOut(duration: 0.15) : .snappy(duration: 0.28), value: popouts.state.isFloatingQuickAddOpen)
-            .animation(.easeOut(duration: 0.18), value: usesPanel && popouts.state.isTaskOpen)
+            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: popouts.state.isFloatingQuickAddOpen)
+            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
+            // Settings → General → Confirm before deleting: every delete path asks through the controller,
+            // and this one dialog answers for all of them.
+            .confirmationDialog(popouts.pendingDelete.map { "Delete “\($0.title)”?" } ?? "Delete?",
+                                isPresented: Binding(get: { popouts.pendingDelete != nil },
+                                                     set: { if !$0 { popouts.cancelPendingDelete() } }),
+                                titleVisibility: .visible) {
+                Button("Delete", role: .destructive) { popouts.confirmPendingDelete() }
+                Button("Cancel", role: .cancel) { popouts.cancelPendingDelete() }
+            } message: {
+                Text("This can't be undone.")
+            }
             #if os(macOS)
             // ⌘← / ⌘→ move the popped-out task a day, from any list; a text field being edited keeps them.
             .onKeyPress(keys: [.leftArrow, .rightArrow]) { press in
@@ -115,7 +126,7 @@ struct PopoutHost: ViewModifier {
                     .ovalCardChrome()
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset)
-                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                    .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
             }
         }
     }
@@ -134,7 +145,7 @@ extension View {
         let shape = RoundedRectangle(cornerRadius: QuickAddPopout.cardRadius, style: .continuous)
         return self
             .clipShape(shape)
-            .mobileGlass(in: shape, tint: Theme.surface.opacity(0.75), fallback: Theme.surface, shadow: .card)
+            .hitGlass(in: shape, tint: Theme.surface.opacity(0.75), fallback: Theme.surface, fallbackShadow: .card)
             .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
     }
 }

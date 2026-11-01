@@ -43,13 +43,16 @@ enum IslandMetrics {
     static var pillRadius: CGFloat { cornerRadius - pillInset }
     /// Between the top of the island and the bottom of the "+".
     static let addButtonGap: CGFloat = HITSpacing.m
+    /// Everything the shell adds at the bottom, from the home indicator to the top of the "+"; the toast
+    /// (`PopoutHost`) rises above it.
+    static var chromeHeight: CGFloat { bottomGap + height + addButtonGap + FloatingAddButton.size.height }
 }
 
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
 /// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
 /// with Inter labels, the selected one in accent on a faint pill. Tapping the selected tab again calls
 /// `onReselect` (the shell pops that tab to its root). The island is Liquid Glass tinted slate on iOS 26
-/// (`mobileGlass`), plain `Theme.surface` before that and under Reduce Transparency / Reduce Effects.
+/// (`hitGlass`), plain `Theme.surface` before that and under Reduce Transparency / Reduce Effects.
 struct MobileTabBar: View {
     @Binding var selection: MobileTab
     /// Today's day of the month, for the Today icon.
@@ -72,7 +75,8 @@ struct MobileTabBar: View {
         }
         .padding(.horizontal, IslandMetrics.pillInset)
         .frame(height: IslandMetrics.height)
-        .mobileGlass(in: Capsule(style: .continuous), tint: Theme.surface.opacity(0.6), fallback: Theme.surface)
+        .hitGlass(in: Capsule(style: .continuous), tint: Theme.surface.opacity(0.6), fallback: Theme.surface,
+                  fallbackShadow: .chrome)
         .overlay { Capsule(style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5) }
         .contentShape(Capsule(style: .continuous))
         .padding(.horizontal, IslandMetrics.sideInset)
@@ -136,6 +140,6 @@ private struct TabItemPressStyle: ButtonStyle {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(HITMotion.quick, value: configuration.isPressed)
     }
 }

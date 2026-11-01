@@ -48,8 +48,9 @@ public struct QuickAddParser: Sendable {
     public var knownProjects: [String]
     public var knownLabels: [String]
 
-    public init(now: Date = Date(), calendar: Calendar = .current, knownProjects: [String] = [], knownLabels: [String] = []) {
-        self.dateParser = DateExpressionParser(calendar: calendar, now: now)
+    public init(now: Date = Date(), calendar: Calendar = .current, knownProjects: [String] = [], knownLabels: [String] = [],
+                weekStart: Int = 2) {
+        self.dateParser = DateExpressionParser(calendar: calendar, now: now, weekStart: weekStart)
         self.knownProjects = knownProjects
         self.knownLabels = knownLabels
     }

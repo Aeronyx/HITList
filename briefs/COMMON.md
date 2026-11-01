@@ -83,21 +83,15 @@ anything is archived and refuses a version without a changelog section. Liquid G
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
 
-## Round 4 ownership (three sessions at once; stay inside your files)
-- `20-iphone-chrome` (branch `iphone-chrome`): `Views/Tabs/*` (+ new `ScreenMenu.swift`),
-  `Popouts/QuickAddEntry.swift`, `Popouts/PopoutHost.swift`, `Popouts/QuickAddPopout.swift` (card material
-  only), the `.toolbar` blocks of `TaskListView.swift`, `Inbox/InboxView.swift`, `Upcoming/UpcomingView.swift`,
-  `Flipboard/FlipboardView.swift`; new `HITListTests/MobileChromeTests.swift`.
-- `21-settings-sync-notifications` (branch `settings-v2`): `SettingsView.swift`, `Views/Settings/*` except
-  `AppearanceSettingsSection.swift`, `Support/SyncStatusViews.swift`, `Support/AppInfo.swift`,
-  `Services/CloudSyncMonitor.swift`, `Services/SyncState.swift`, `Services/NotificationScheduler.swift`,
-  `Services/Notifications/*`, their tests.
-- `22-motion-themes` (branch `motion-themes`): `Support/Theme.swift`, `Support/DesignSystem/*`,
-  `Views/Settings/AppearanceSettingsSection.swift`, `TaskRow.swift` (animations/colours only), `Views/Delight/*`,
-  `DesignSystemTests`, `CompletionAnimatorTests`, new `ThemeTests`.
-- Nobody: `Models.swift`, `SchemaVersions.swift`, `SchemaV1Models.swift`, `Support/Preferences.swift`,
-  `project.yml`, `HITListApp.swift`, `ContentView.swift`, `scripts/`, `briefs/`, `CHANGELOG.md`. ROADMAP: add
-  only the row your brief names.
+## Round 4 (finished 2026-11-01; kept for the record)
+Sessions 20 (iphone-chrome), 21 (settings-v2) and 22 (motion-themes) are merged. 20 and 21 stopped early
+when the runner's 1 MB message buffer overflowed on a screenshot Read; the runner now allows 64 MB. Fable
+finished brief 20's items 3–9 on master: `Views/Tabs/ScreenMenu.swift` (`screenChrome` = view-options
+icon + "…" on every screen; iPhone "…" has Settings, the version and `SyncIndicatorDot`), `hitGlass` and
+`HITGlassContainer` replace session 20's own guard, `IslandMetrics.chromeHeight` positions the toast,
+`PopoutController.requestDelete` + one dialog in `PopoutHost` honour Confirm before deleting, the week
+start preference reaches Upcoming, quick add and rescheduling, and the toast/collapse curves use the
+`HITMotion` roles.
 
 ## Round 3 ownership (finished 2026-10-31; kept for the record)
 - `17-mobile-tabs` (branch `mobile-tabs`): `ContentView.swift`, new `Views/Tabs/`, `TaskListView.swift`,

@@ -46,6 +46,7 @@ struct BrowseView: View {
         .background(Theme.background)
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
+        .screenChrome(menu: {})
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
