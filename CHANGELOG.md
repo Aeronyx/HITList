@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.4
+## 0.3.4 — build 11, 2026-11-01
 
 - Task rows measure like Todoist's (`ListMetrics`: 12 pt above the title, 10 below the second line, on
   both platforms; Compact rows trims it), every row the same height unless a long title wraps. Titles are
