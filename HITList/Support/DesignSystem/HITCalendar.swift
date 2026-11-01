@@ -20,7 +20,7 @@ struct HITCalendar: View {
     /// How many weeks the grid always shows, so the card never changes height between months.
     static let weeksShown = 6
     static let cellSize: CGFloat = 32
-    static let rowSpacing: CGFloat = 2
+    static let rowSpacing: CGFloat = 1
 
     var selection: Date?
     var today: Date
@@ -99,7 +99,7 @@ struct HITCalendar: View {
     private var shownSelection: Date? { cursor ?? selection }
 
     var body: some View {
-        VStack(spacing: HITSpacing.s) {
+        VStack(spacing: HITSpacing.xs) {
             header
             grid
         }
@@ -142,7 +142,7 @@ struct HITCalendar: View {
                 .accessibilityLabel("Next month")
                 .help("Next month")
         }
-        .frame(height: 24)
+        .frame(height: 22)
     }
 
     private var grid: some View {
@@ -157,7 +157,7 @@ struct HITCalendar: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 18)
+            .frame(height: 16)
             .accessibilityHidden(true)
             ForEach(weeks, id: \.first!.date) { week in
                 HStack(spacing: 0) {

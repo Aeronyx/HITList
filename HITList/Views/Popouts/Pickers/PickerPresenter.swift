@@ -140,13 +140,11 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 }
 
 private struct PickerOverlayModifier: ViewModifier {
-    @State private var coordinator = PickerPortalCoordinator()
-
     func body(content: Content) -> some View {
         content
             .overlayPreferenceValue(PickerRequestKey.self) { request in
                 GeometryReader { proxy in
-                    PickerPortal(coordinator: coordinator, request: request.map {
+                    PickerPortal(request: request.map {
                         PickerPortal.Resolved(kind: $0.kind, anchor: proxy[$0.anchor], dismiss: $0.dismiss, card: $0.card)
                     })
                 }
@@ -155,28 +153,6 @@ private struct PickerOverlayModifier: ViewModifier {
             }
             // The request stops here; nothing above needs it.
             .transformPreference(PickerRequestKey.self) { $0 = nil }
-            // While a card is open, Escape closes it rather than the popout, and Tab moves into it.
-            .onKeyPress(.escape) { coordinator.dismiss() ? .handled : .ignored }
-            .onKeyPress(.tab) { coordinator.focusCard() ? .handled : .ignored }
-    }
-}
-
-/// Lets the root's key handlers reach the portal.
-@MainActor
-final class PickerPortalCoordinator {
-    weak var portal: PickerPortalView?
-
-    /// Closes the open card; false if none is open.
-    func dismiss() -> Bool {
-        guard let portal, portal.request != nil else { return false }
-        portal.request?.dismiss()
-        return true
-    }
-
-    /// Makes the open card the key view; false if none is open.
-    func focusCard() -> Bool {
-        guard let portal, portal.request != nil else { return false }
-        return portal.focusCard()
     }
 }
 
@@ -191,17 +167,13 @@ struct PickerPortal: NSViewRepresentable {
         let card: AnyView
     }
 
-    let coordinator: PickerPortalCoordinator
     let request: Resolved?
 
     func makeNSView(context: Context) -> PickerPortalView {
-        let view = PickerPortalView()
-        coordinator.portal = view
-        return view
+        PickerPortalView()
     }
 
     func updateNSView(_ view: PickerPortalView, context: Context) {
-        coordinator.portal = view
         view.request = request
     }
 
@@ -213,7 +185,14 @@ struct PickerPortal: NSViewRepresentable {
 
 final class PickerPortalView: NSView {
     var request: PickerPortal.Resolved? {
-        didSet { scheduleSync() }
+        didSet { if request != nil || oldValue != nil { scheduleSync() } }
+    }
+
+    deinit {
+        // A popout torn down without dismantling its portal must not leave its card behind.
+        let id = ObjectIdentifier(self)
+        let host = layerHost
+        MainActor.assumeIsolated { host?.hide(ownerID: id) }
     }
 
     private weak var layerHost: PickerLayerHost?
@@ -228,13 +207,15 @@ final class PickerPortalView: NSView {
     }
 
     override func setFrameOrigin(_ newOrigin: NSPoint) {
+        let moved = newOrigin != frame.origin
         super.setFrameOrigin(newOrigin)
-        scheduleSync()
+        if moved, request != nil { scheduleSync() }
     }
 
     override func setFrameSize(_ newSize: NSSize) {
+        let resized = newSize != frame.size
         super.setFrameSize(newSize)
-        scheduleSync()
+        if resized, request != nil { scheduleSync() }
     }
 
     /// Coalesces updates and runs after SwiftUI has laid this view out, so the conversion uses its
@@ -261,12 +242,7 @@ final class PickerPortalView: NSView {
     }
 
     func releaseLayer() {
-        layerHost?.hide(owner: self)
-    }
-
-    func focusCard() -> Bool {
-        guard let layerHost else { return false }
-        return layerHost.focusCard()
+        layerHost?.hide(ownerID: ObjectIdentifier(self))
     }
 }
 
@@ -283,17 +259,24 @@ final class PickerLayerModel {
     var generation = 0
     var focusRequest = 0
     @ObservationIgnored var dismiss: (() -> Void)?
+    /// Where the card was last placed, in the layer's coordinates (for click-outside).
+    @ObservationIgnored var cardFrame: CGRect = .zero
 
     func dismissCard() { dismiss?() }
 }
 
-/// One per window: a transparent hosting view over the window's content that draws the open card and,
-/// while one is open, a clear backdrop that closes it on click. It lets every click through otherwise.
+/// One per window: a transparent hosting view over the window's content that draws the open card. It
+/// lets every click through while no card is open. While one is, a local event monitor sees the
+/// window's events before anything else (the popouts' × answers Escape as a shortcut even when nothing
+/// in the popout has focus): Escape and a click outside the card close it, and Tab moves into it.
 final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     var model: PickerLayerModel { rootView.model }
     private weak var owner: PickerPortalView?
+    /// The owner's identity, which outlives it (its `deinit` still has to match).
+    private var ownerID: ObjectIdentifier?
     /// Where the keyboard was before the card took it, to give it back on close.
     private weak var previousResponder: NSResponder?
+    private var monitor: Any?
 
     required init(rootView: PickerLayerRoot) {
         super.init(rootView: rootView)
@@ -324,8 +307,13 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         model.card == nil ? nil : super.hitTest(point)
     }
 
+    private var laidOutSize: NSSize = .zero
+
     override func layout() {
         super.layout()
+        // Only a resized window matters (re-syncing on every layout would loop: sync → render → layout).
+        guard bounds.size != laidOutSize else { return }
+        laidOutSize = bounds.size
         refreshBounds()
         // A resized window moves the popout; let the open card follow its chip.
         owner?.scheduleSync()
@@ -339,36 +327,96 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
 
     func show(owner: PickerPortalView, kind: PickerKind, anchor: CGRect, card: AnyView, dismiss: @escaping () -> Void) {
         refreshBounds()
-        let isNew = model.card == nil || self.owner !== owner || model.kind != kind
+        let isNew = model.card == nil || ownerID != ObjectIdentifier(owner) || model.kind != kind
         if isNew {
-            let responder = window?.firstResponder
-            if !((responder as? NSView)?.isDescendant(of: self) ?? false) { previousResponder = responder }
+            if !keyboardIsInCard { previousResponder = Self.restorable(window?.firstResponder) }
             model.generation += 1
         }
         self.owner = owner
+        ownerID = ObjectIdentifier(owner)
         model.dismiss = dismiss
         model.kind = kind
         if model.anchor != anchor { model.anchor = anchor }
         model.card = card
+        installMonitor()
     }
 
-    func hide(owner: PickerPortalView) {
-        guard self.owner === owner, model.card != nil else { return }
-        self.owner = nil
+    func hide(ownerID: ObjectIdentifier) {
+        guard self.ownerID == ownerID, model.card != nil else { return }
+        owner = nil
+        self.ownerID = nil
         model.card = nil
         model.dismiss = nil
+        model.cardFrame = .zero
+        removeMonitor()
         restoreKeyboard()
     }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { removeMonitor() }
+    }
+
+    // MARK: Keyboard and clicks
+
+    private var keyboardIsInCard: Bool {
+        (window?.firstResponder as? NSView)?.isDescendant(of: self) ?? false
+    }
+
     /// Tab: the card becomes the key view and focuses its main control.
-    func focusCard() -> Bool {
-        guard model.card != nil, let window else { return false }
-        if let responder = window.firstResponder, !((responder as? NSView)?.isDescendant(of: self) ?? false) {
-            previousResponder = responder
-        }
+    func focusCard() {
+        guard model.card != nil, let window else { return }
+        if !keyboardIsInCard { previousResponder = Self.restorable(window.firstResponder) }
         window.makeFirstResponder(self)
         model.focusRequest += 1
-        return true
+    }
+
+    private func installMonitor() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] event in
+            MainActor.assumeIsolated {
+                guard let self else { return event }
+                return self.intercept(event)
+            }
+        }
+    }
+
+    private func removeMonitor() {
+        if let monitor { NSEvent.removeMonitor(monitor) }
+        monitor = nil
+    }
+
+    /// Nil swallows the event.
+    private func intercept(_ event: NSEvent) -> NSEvent? {
+        guard model.card != nil, let window, event.window === window else { return event }
+        switch event.type {
+        case .keyDown:
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option])
+            if event.keyCode == Self.escapeKey, modifiers.isEmpty {
+                model.dismissCard()
+                return nil
+            }
+            if event.keyCode == Self.tabKey, modifiers.isEmpty, !keyboardIsInCard {
+                focusCard()
+                return nil
+            }
+            return event
+        default:
+            if model.cardFrame.contains(convert(event.locationInWindow, from: nil)) { return event }
+            model.dismissCard()
+            return nil
+        }
+    }
+
+    private static let escapeKey: UInt16 = 53
+    private static let tabKey: UInt16 = 48
+
+    /// What to give the keyboard back to: a text field's shared field editor stands for its field.
+    private static func restorable(_ responder: NSResponder?) -> NSResponder? {
+        if let editor = responder as? NSTextView, editor.isFieldEditor, let field = editor.delegate as? NSView {
+            return field
+        }
+        return responder
     }
 
     /// Gives the keyboard back if the card had it.
@@ -394,12 +442,14 @@ struct PickerLayerRoot: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             if model.card != nil {
+                // Holds the hover and scroll of what is underneath while a card is open (clicks outside
+                // are the event monitor's).
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { model.dismissCard() }
                     .accessibilityHidden(true)
             }
-            PickerCardLayout(anchor: model.anchor, bounds: model.bounds) {
+            PickerCardLayout(model: model) {
                 if let card = model.card {
                     card
                         .pickerCardChrome(width: model.kind.width)
@@ -411,8 +461,6 @@ struct PickerLayerRoot: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .ignoresSafeArea()
-        // Escape with the keyboard in the card.
-        .onExitCommand { model.dismissCard() }
         .environment(\.colorScheme, .dark)
         .tint(Theme.accent)
         .font(HITType.body)
@@ -435,6 +483,16 @@ struct PickerLayerRoot: View {
 struct PickerCardLayout: Layout {
     var anchor: CGRect
     var bounds: CGRect
+    /// Told where the card went (click-outside needs it).
+    var model: PickerLayerModel
+
+    /// Reads the anchor and bounds here, in the body, so the layer redraws when they change.
+    @MainActor
+    init(model: PickerLayerModel) {
+        anchor = model.anchor
+        bounds = model.bounds
+        self.model = model
+    }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         proposal.replacingUnspecifiedDimensions()
@@ -445,8 +503,10 @@ struct PickerCardLayout: Layout {
         for subview in subviews {
             let ideal = subview.sizeThatFits(.unspecified)
             let frame = PickerPlacement.frame(anchor: anchor, cardSize: ideal, bounds: area)
-            subview.place(at: CGPoint(x: rect.minX + frame.minX, y: rect.minY + frame.minY),
-                          proposal: ProposedViewSize(frame.size))
+            let origin = CGPoint(x: rect.minX + frame.minX, y: rect.minY + frame.minY)
+            let model = model
+            MainActor.assumeIsolated { model.cardFrame = CGRect(origin: origin, size: frame.size) }
+            subview.place(at: origin, proposal: ProposedViewSize(frame.size))
         }
     }
 }
