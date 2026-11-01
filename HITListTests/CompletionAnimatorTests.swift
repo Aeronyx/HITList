@@ -98,6 +98,23 @@ final class CompletionAnimatorTests: XCTestCase {
         XCTAssertEqual(animator.anchors, [ids[1]: 1, ids[2]: 2, ids[4]: 4])
     }
 
+    // MARK: - Timing (CompletionMotion)
+
+    func testStrikeStaysAt200msAndTheStepsUseTheirRoles() {
+        XCTAssertEqual(CompletionMotion.strikeDuration, 0.2)
+        XCTAssertEqual(CompletionMotion.slideAway(calmMotion: false), HITMotion.exit)
+        XCTAssertEqual(CompletionMotion.slideAway(calmMotion: true), HITMotion.Role.exit.reducedAnimation)
+        XCTAssertGreaterThan(CompletionMotion.slideDistance, 0)
+    }
+
+    /// The lists hold a completed row for 600 ms before collapsing it; the pop and the strike must be
+    /// over by then so the celebration is seen whole.
+    func testCelebrationFinishesBeforeTheRowCollapses() {
+        let hold: TimeInterval = 0.6
+        XCTAssertLessThan(HITMotion.Celebrate.totalDuration, hold)
+        XCTAssertLessThan(CompletionMotion.strikeDuration, hold)
+    }
+
     func testCancelAllReleasesEveryRow() {
         var animator = CompletionAnimator<String>()
         let token = animator.begin(a, anchor: "")
