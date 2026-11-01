@@ -219,6 +219,35 @@ final class MacSettingsTests: XCTestCase {
         }
     }
 
+    // MARK: About
+
+    func testChangelogLinksToTheVersionsRelease() {
+        XCTAssertEqual(AboutInfo.changelogURL(version: "0.3.0").absoluteString,
+                       "https://github.com/Aeronyx/HITList/releases/tag/v0.3.0")
+        XCTAssertEqual(AboutInfo.changelogURL(version: "0.10.2").absoluteString,
+                       "https://github.com/Aeronyx/HITList/releases/tag/v0.10.2")
+        XCTAssertEqual(AboutInfo.changelogURL(version: ""), AboutInfo.releasesURL)
+        XCTAssertEqual(AboutInfo.changelogURL(version: "0"), AboutInfo.releasesURL.appending(path: "tag").appending(path: "v0"))
+        XCTAssertEqual(AboutInfo.changelogURL(version: "beta/../x"), AboutInfo.releasesURL, "only digits and dots")
+    }
+
+    func testBuildDateIsTheExecutablesModificationDate() throws {
+        let date = try XCTUnwrap(AboutInfo.buildDate(), "the test host app has an executable")
+        XCTAssertLessThanOrEqual(date, Date())
+        XCTAssertGreaterThan(date, Date(timeIntervalSinceNow: -365 * 86_400), "built this year, not a placeholder")
+        let path = try XCTUnwrap(Bundle.main.executableURL?.path)
+        let modified = try FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date
+        XCTAssertEqual(date, modified)
+        XCTAssertFalse(AboutInfo.buildDateText(date).isEmpty)
+    }
+
+    func testWhatsNewInlineShowsTheCurrentListFirst() throws {
+        let current = try XCTUnwrap(WhatsNew.current)
+        XCTAssertEqual(current, WhatsNew.entries.first)
+        render(MacAboutSection(), "about section")
+        render(WhatsNewItems(entry: current), "what's new rows")
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
