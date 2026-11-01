@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.2.0
+## 0.2.0 — build 6, 2026-10-31
 
 - Quick-add title one step larger than the list text (14 pt was too small): Inter 20 bold on iPhone.
 - iPhone chrome: the tab bar is a floating island (a 64 pt capsule inset from the edges, lists scroll
