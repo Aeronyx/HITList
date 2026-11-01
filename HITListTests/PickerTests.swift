@@ -72,6 +72,89 @@ final class PickerTests: XCTestCase {
         }
     }
 
+    // MARK: HITCalendar
+
+    private let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .current
+        c.locale = Locale(identifier: "en_US")
+        return c
+    }()
+
+    private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    private func grid(_ year: Int, _ month: Int, weekStart: Int) -> [[HITCalendar.Day]] {
+        HITCalendar.weeks(for: year, month: month, weekStart: weekStart, calendar: calendar)
+    }
+
+    private func assertShape(_ weeks: [[HITCalendar.Day]], weekStart: Int, inMonth: Int, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(weeks.count, HITCalendar.weeksShown, file: file, line: line)
+        XCTAssertTrue(weeks.allSatisfy { $0.count == 7 }, file: file, line: line)
+        XCTAssertTrue(weeks.allSatisfy { calendar.component(.weekday, from: $0[0].date) == weekStart }, "every week starts on the week start", file: file, line: line)
+        let days = weeks.flatMap { $0 }
+        XCTAssertEqual(days.filter(\.isInMonth).count, inMonth, file: file, line: line)
+        for (a, b) in zip(days, days.dropFirst()) {
+            XCTAssertEqual(calendar.dateComponents([.day], from: a.date, to: b.date).day, 1, "consecutive days", file: file, line: line)
+        }
+    }
+
+    func testJanuaryGridBothWeekStarts() {
+        // 1 January 2026 is a Thursday.
+        let monday = grid(2026, 1, weekStart: 2)
+        assertShape(monday, weekStart: 2, inMonth: 31)
+        XCTAssertEqual(monday[0][0], HITCalendar.Day(date: date(2025, 12, 29), isInMonth: false), "the old year's last days lead in")
+        XCTAssertEqual(monday[0][3], HITCalendar.Day(date: date(2026, 1, 1), isInMonth: true))
+        XCTAssertEqual(monday[5][6].date, date(2026, 2, 8))
+        let sunday = grid(2026, 1, weekStart: 1)
+        assertShape(sunday, weekStart: 1, inMonth: 31)
+        XCTAssertEqual(sunday[0][0].date, date(2025, 12, 28))
+        XCTAssertEqual(sunday[0][4].date, date(2026, 1, 1))
+    }
+
+    func testDecemberGridRunsIntoNextYear() {
+        // 1 December 2026 is a Tuesday.
+        let weeks = grid(2026, 12, weekStart: 2)
+        assertShape(weeks, weekStart: 2, inMonth: 31)
+        XCTAssertEqual(weeks[0][0], HITCalendar.Day(date: date(2026, 11, 30), isInMonth: false))
+        XCTAssertEqual(weeks[0][1].date, date(2026, 12, 1))
+        XCTAssertEqual(weeks[5][6], HITCalendar.Day(date: date(2027, 1, 10), isInMonth: false))
+        XCTAssertFalse(weeks.flatMap { $0 }.contains { $0.isInMonth && calendar.component(.year, from: $0.date) == 2027 },
+                       "January 2027 is not December 2026")
+        assertShape(grid(2026, 12, weekStart: 1), weekStart: 1, inMonth: 31)
+    }
+
+    func testLeapYearFebruary() {
+        let leap = grid(2028, 2, weekStart: 2)
+        assertShape(leap, weekStart: 2, inMonth: 29)
+        XCTAssertTrue(leap.flatMap { $0 }.contains(HITCalendar.Day(date: date(2028, 2, 29), isInMonth: true)))
+        assertShape(grid(2028, 2, weekStart: 1), weekStart: 1, inMonth: 29)
+        assertShape(grid(2027, 2, weekStart: 2), weekStart: 2, inMonth: 28)
+        assertShape(grid(2100, 2, weekStart: 2), weekStart: 2, inMonth: 28) // not a leap year
+    }
+
+    func testAMonthStartingOnTheWeekStartBeginsWithTheFirst() {
+        // 1 February 2026 is a Sunday.
+        XCTAssertEqual(grid(2026, 2, weekStart: 1)[0][0], HITCalendar.Day(date: date(2026, 2, 1), isInMonth: true))
+        XCTAssertEqual(grid(2026, 2, weekStart: 2)[0][0].date, date(2026, 1, 26), "Monday start: a week of January first")
+    }
+
+    func testWeekdayInitialsFollowTheWeekStart() {
+        XCTAssertEqual(HITCalendar.weekdayInitials(weekStart: 2, calendar: calendar), ["M", "T", "W", "T", "F", "S", "S"])
+        XCTAssertEqual(HITCalendar.weekdayInitials(weekStart: 1, calendar: calendar), ["S", "M", "T", "W", "T", "F", "S"])
+        XCTAssertEqual(HITCalendar.weekdayInitials(weekStart: 7, calendar: calendar).first, "S")
+    }
+
+    func testArrowKeysCrossMonthsAndYears() {
+        XCTAssertEqual(HITCalendar.moved(date(2026, 1, 31), .nextDay, calendar: calendar), date(2026, 2, 1))
+        XCTAssertEqual(HITCalendar.moved(date(2028, 3, 1), .previousDay, calendar: calendar), date(2028, 2, 29))
+        XCTAssertEqual(HITCalendar.moved(date(2026, 12, 28), .nextWeek, calendar: calendar), date(2027, 1, 4))
+        XCTAssertEqual(HITCalendar.moved(date(2026, 1, 3), .previousWeek, calendar: calendar), date(2025, 12, 27))
+        XCTAssertEqual(HITCalendar.month(date(2026, 12, 1), adding: 1, calendar: calendar), date(2027, 1, 1))
+        XCTAssertEqual(HITCalendar.firstOfMonth(date(2026, 1, 31).addingTimeInterval(3600 * 15), calendar: calendar), date(2026, 1, 1))
+    }
+
     func testCardsFitTheQuickAddPanel() {
         for kind in PickerKind.allCases {
             XCTAssertLessThanOrEqual(kind.width, 560 - 2 * 20, "\(kind) is wider than the panel's content")

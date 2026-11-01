@@ -85,6 +85,7 @@ every theme. Every text/surface pair passes WCAG AA (`ThemeTests`).
 | Text input | `HITField` (single or `axis: .vertical`); a `TextField` you can't replace: `.textFieldStyle(HITTextFieldStyle())` |
 | 2-4 exclusive options (P1-P4, date presets) | `HITSegmented` + `HITSegment` |
 | Colour choice | `HITColorDots(selection: $hex)` |
+| A day (due date, deadline) | `HITCalendar` (never the system `DatePicker`) |
 | An editor sheet | `HITSheetChrome` with `HITSection`s inside |
 | Settings-style lists | `HITGroup` of `HITMenuRow`s |
 
@@ -141,6 +142,22 @@ HITGroup("Reminders", footer: "Only tasks with a time get a notification.") {
     Toggle(isOn: $on) { HITMenuRowLabel("Notify", subtitle: "…", systemImage: "bell") }
         .toggleStyle(.hit).hitRowPadding()   // any other content in a group: .hitRowPadding()
 }
+```
+
+## Calendar (`HITCalendar.swift`)
+A month grid in Inter, drawn by us instead of the system graphical `DatePicker`: "November 2026" in
+`HITType.headline`, ‹ and › with a dot between them that returns to this month (accent while another month
+shows), weekday initials in `Theme.secondaryText`, then always six weeks of 32 pt day circles so the height
+never changes. Today is ringed in the accent; the selected day is filled with it and its number is
+`HITColor.onAccent`; the neighbouring months' days are dimmed and past days a little dimmer; hover fills
+`Theme.elevated` (`quick`). With keyboard focus, the arrow keys move the selection (crossing months) and
+Return picks it; a click picks at once. Weeks start on the user's choice (`Preferences.weekStartWeekday()`).
+The grid maths is pure and tested: `HITCalendar.weeks(for:month:weekStart:calendar:)`,
+`weekdayInitials(weekStart:calendar:)`, `moved(_:_:calendar:)`.
+
+```swift
+HITCalendar(selection: due, today: now, weekStart: Preferences.weekStartWeekday(),
+            focusTrigger: focusRequest) { day in onPick(day) }
 ```
 
 ## Popouts (`HITList/Views/Popouts/`)

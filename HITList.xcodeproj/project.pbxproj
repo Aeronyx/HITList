@@ -24,6 +24,7 @@
 		27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528485A27E1D787530779DBE /* LocalCacheReset.swift */; };
 		29DBD082850E4F48EC9CB314 /* CompletionToastState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520369BF71B18D8B0D28327F /* CompletionToastState.swift */; };
 		2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */; };
+		2B4928700AAE525B3F71005E /* HITCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */; };
 		2D9B3165524E299CDC86304B /* QuickAddContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E609CA10C57C69771BB15C /* QuickAddContext.swift */; };
 		2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */; };
 		2F12AFD28F5482882F03955C /* FlipSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F69C7AD0F70F6C933CC821D /* FlipSound.swift */; };
@@ -294,6 +295,7 @@
 		EAAC54705A328613C9AC2A94 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
 		EE7D144EABFA55D287380F2D /* MorningSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorningSummary.swift; sourceTree = "<group>"; };
+		F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITCalendar.swift; sourceTree = "<group>"; };
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
 		FDE419EFB9497F9FB13FE74B /* HITTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTokens.swift; sourceTree = "<group>"; };
@@ -655,6 +657,7 @@
 			children = (
 				8BA460FC5A3651A663287601 /* DesignSystemGallery.swift */,
 				D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */,
+				F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */,
 				C52D4DEDC8BFB16C07252D16 /* HITChip.swift */,
 				B3DE63E2D5D5BA8429AB8933 /* HITField.swift */,
 				29800AE3317F5D97333D1CDF /* HITMaterial.swift */,
@@ -808,6 +811,7 @@
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
 				66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */,
 				D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */,
+				2B4928700AAE525B3F71005E /* HITCalendar.swift in Sources */,
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
 				92973FBF19DB570087754456 /* HITField.swift in Sources */,
 				2627D544E45DE46036EB040C /* HITListApp.swift in Sources */,
