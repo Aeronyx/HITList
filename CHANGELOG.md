@@ -4,6 +4,21 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.3.2
+
+- The sync bolt says its state by shape: filled when synced, hollow and breathing while syncing, struck
+  through when it cannot sync or has not synced in a day. Each theme has its own pastel bolt colour
+  (Slate's is a soft yellow); errors and sign-out turn it red.
+- Mac: Settings is a full-window page with its own Back; the sidebar slides away while it shows. ⌘,, the
+  gear, the "…" and the bolt all open it. Sections: General (with every keyboard shortcut), iCloud,
+  Reminders, Completing tasks, Appearance (theme previews, Reduce effects, Compact rows), Data, About.
+- Flipboard: a dashed switch-shaped tile with a big + adds a switch, in the grid itself.
+- Inbox: one section per priority, Priority 1 first.
+- Upcoming: the filter-lines menu holds Show overdue and Days shown (2 weeks, 1 month, 2 months); Jump to
+  today moved into the "…".
+- Mac: the quick-add title no longer draws a grey box behind the words; the Add task row reads at body size.
+- iPhone: the theme swatches in Settings wrap to two rows (they overflowed the sheet in 0.3.1).
+
 ## 0.3.1 — build 8, 2026-11-01
 
 - Sync status is a small bolt in the toolbar's empty space, soft accent when synced, breathing while it

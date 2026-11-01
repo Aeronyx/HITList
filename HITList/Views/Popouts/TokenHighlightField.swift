@@ -29,6 +29,7 @@ struct TokenHighlightField: View {
                 .lineLimit(1...4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityHidden(true)
+            #if os(iOS)
             TextField(text: $text, axis: .vertical) {
                 Text(placeholder).foregroundStyle(Theme.secondaryText)
             }
@@ -37,13 +38,29 @@ struct TokenHighlightField: View {
             .foregroundStyle(HITColor.text)
             .focused(focus)
             .onSubmit(onSubmit)
-            #if os(iOS)
             .submitLabel(.done)
             .autocorrectionDisabled()
             #else
-            // A vertical-axis field is a text view on the Mac: no grey box or focus ring behind the words.
-            .scrollContentBackground(.hidden)
-            .focusEffectDisabled()
+            // On the Mac a vertical-axis TextField kept drawing its text view's grey box behind the
+            // words whatever was asked of it; a plain TextEditor honours a hidden background. Return
+            // still submits (the newline check below), and the placeholder is drawn by hand.
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
+                        .foregroundStyle(Theme.secondaryText)
+                        .padding(.leading, 5)
+                        .allowsHitTesting(false)
+                }
+                TextEditor(text: $text)
+                    .textEditorStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .focusEffectDisabled()
+                    .foregroundStyle(HITColor.text)
+                    .focused(focus)
+                    .frame(minHeight: 24, maxHeight: 96)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             #endif
         }
         .font(HITType.taskName)

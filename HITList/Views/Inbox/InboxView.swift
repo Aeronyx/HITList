@@ -118,10 +118,25 @@ struct InboxView: View {
             .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
     }
 
+    /// Rows grouped by priority, in priority order; each group keeps `TaskOrdering.inbox`'s due order.
+    private func prioritySections(_ rows: [TaskItem]) -> [(priority: Priority, tasks: [TaskItem])] {
+        Priority.allCases.compactMap { p in
+            let tasks = rows.filter { $0.priorityValue == p }
+            return tasks.isEmpty ? nil : (p, tasks)
+        }
+    }
+
     private func list(_ rows: [TaskItem]) -> some View {
         List(selection: $selectedTask) {
-            Section {
-                ForEach(rows) { row($0) }
+            ForEach(prioritySections(rows), id: \.priority) { group in
+                Section {
+                    ForEach(group.tasks) { row($0) }
+                } header: {
+                    Text("Priority \(group.priority.rawValue)")
+                        .font(HITType.sectionHeader)
+                        .foregroundStyle(group.priority == .p4 ? Theme.secondaryText : group.priority.color)
+                        .textCase(nil)
+                }
             }
             if !isCompact {
                 Section { InlineAddRow(context: .inbox, key: "inbox") }
