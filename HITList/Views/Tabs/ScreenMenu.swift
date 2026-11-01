@@ -24,15 +24,15 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     let menu: () -> Items
     @State private var showSettings = false
     #if os(macOS)
-    @Environment(\.openSettings) private var openSettings
+    @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
     #endif
 
-    /// Settings: a sheet on iPhone and iPad, the Settings window on the Mac.
+    /// Settings: a sheet on iPhone and iPad, the Settings page in this window's detail column on the Mac.
     private func openAppSettings() {
         #if os(iOS)
         showSettings = true
         #else
-        openSettings()
+        settingsRouter?.open()
         #endif
     }
 

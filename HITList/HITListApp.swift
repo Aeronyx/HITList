@@ -48,16 +48,12 @@ struct HITListApp: App {
                 }
         }
         .modelContainer(container)
-        .commands { NewTaskCommands() }
-        #if os(macOS)
-        Settings {
-            SettingsView()
-                .font(HITType.body)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
-                .frame(minWidth: 520, minHeight: 420)
+        .commands {
+            NewTaskCommands()
+            #if os(macOS)
+            // ⌘, opens Settings inside the window (`MacSettingsPage`); there is no Settings window.
+            SettingsCommands()
+            #endif
         }
-        .modelContainer(container)
-        #endif
     }
 }

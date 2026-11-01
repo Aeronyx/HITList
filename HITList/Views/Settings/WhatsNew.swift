@@ -58,24 +58,34 @@ struct WhatsNewSheet: View {
                        onPrimary: { dismiss() }) {
             if let entry {
                 HITGroup("Version \(entry.version)") {
-                    ForEach(entry.items, id: \.self) { item in
-                        HStack(alignment: .firstTextBaseline, spacing: HITSpacing.m) {
-                            Image(systemName: "sparkle")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.accent)
-                                .frame(width: 22)
-                            Text(item)
-                                .font(HITType.body)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Spacer(minLength: 0)
-                        }
-                        .hitRowPadding()
-                    }
+                    WhatsNewItems(entry: entry)
                 }
             }
         }
         #if os(macOS)
         .frame(minWidth: 460, minHeight: 420)
         #endif
+    }
+}
+
+/// One version's bullet rows (a sparkle in the accent, then the line), for a `HITGroup`: the sheet's,
+/// and the Mac About section's inline list.
+struct WhatsNewItems: View {
+    let entry: WhatsNew.Entry
+
+    var body: some View {
+        ForEach(entry.items, id: \.self) { item in
+            HStack(alignment: .firstTextBaseline, spacing: HITSpacing.m) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                    .frame(width: 22)
+                Text(item)
+                    .font(HITType.body)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .hitRowPadding()
+        }
     }
 }
