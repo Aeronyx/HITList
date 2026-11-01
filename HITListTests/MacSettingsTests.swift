@@ -248,6 +248,16 @@ final class MacSettingsTests: XCTestCase {
         render(WhatsNewItems(entry: current), "what's new rows")
     }
 
+    func testIPhoneSwatchRowFitsAPhoneWidth() throws {
+        // The iPhone sheet's Appearance group is 402 - 2 × 16 (page) - 2 × 16 (row) = 338 pt wide.
+        let renderer = ImageRenderer(content: ThemeSwatchRow(selection: .slate) { _ in }.preferredColorScheme(.dark))
+        renderer.proposedSize = ProposedViewSize(width: 338, height: nil)
+        renderer.scale = 1
+        let image = try XCTUnwrap(renderer.cgImage)
+        XCTAssertLessThanOrEqual(image.width, 338, "eight swatches in one row pushed the sheet past the screen")
+        XCTAssertEqual(ThemeSwatchRow.columns, 4)
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
