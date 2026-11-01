@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 
 /// Settings → iCloud Sync: the status line, Details, Check iCloud…. Shared by the iPhone sheet and the
-/// Mac page's iCloud section.
+/// Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
 struct ICloudSyncGroup: View {
+    var showsLastChange = false
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSyncDetails = false
@@ -18,6 +19,9 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
+            if showsLastChange {
+                LastSyncChangeRow()
+            }
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
