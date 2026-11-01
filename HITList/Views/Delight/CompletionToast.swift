@@ -1,6 +1,8 @@
 import SwiftUI
 
 /// "Completed ‘Title’ · Undo", floating at the bottom of a task list, above the quick-add bar.
+/// Insert it with `.transition(CompletionMotion.toastTransition(reduceMotion:))` so it enters with
+/// `HITMotion.enter` and leaves with `exit`.
 struct CompletionToast: View {
     let message: String
     let onUndo: () -> Void

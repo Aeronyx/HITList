@@ -15,6 +15,7 @@ struct TaskRow: View {
     var onToggleCompletion: () -> Void
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @HITEffectsSetting private var effects
     @State private var pops = 0
 
     /// A recurring task never becomes completed (its date advances), so the row also counts as checked
@@ -23,7 +24,12 @@ struct TaskRow: View {
 
     private var checkColor: Color {
         if completionPhase != nil { return task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color }
-        return task.isCompleted ? Color.secondary : task.priorityValue.color
+        return task.isCompleted ? Theme.secondaryText : task.priorityValue.color
+    }
+
+    /// The row slides toward the trailing edge while the list fades it out (see `CompletionMotion`).
+    private var slideOffset: CGFloat {
+        completionPhase == .animating && !effects.calmMotion ? CompletionMotion.slideDistance : 0
     }
 
     /// The height of one title line. The checkbox and the priority badge centre on it, so a one-line
@@ -39,21 +45,18 @@ struct TaskRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: HITSpacing.m) {
             Button {
-                if !isChecked && !reduceMotion { pops += 1 }
+                if !isChecked && !effects.calmMotion { pops += 1 }
                 onToggleCompletion()
             } label: {
                 Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: checkSize, weight: .regular))
                     .foregroundStyle(checkColor)
                     // The symbol swap only on completing; un-completing (and Reduce Motion) just cross-fades.
+                    // No .symbolEffect(.bounce): the celebrate pop already scales this glyph, and a bounce
+                    // on top of it overshoots twice.
                     .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
-                    .keyframeAnimator(initialValue: 1.0, trigger: pops) { content, scale in
-                        content.scaleEffect(scale)
-                    } keyframes: { _ in
-                        SpringKeyframe(1.15, duration: 0.1, spring: .snappy)
-                        SpringKeyframe(1.0, duration: 0.15, spring: .smooth)
-                    }
-                    .animation(.easeOut(duration: 0.15), value: isChecked)
+                    .hitCelebratePop(trigger: pops)
+                    .animation(HITMotion.standard, value: isChecked)
                     .frame(width: checkSize + 2, height: lineHeight)
                     .contentShape(Rectangle())
             }
@@ -63,15 +66,15 @@ struct TaskRow: View {
             VStack(alignment: .leading, spacing: HITSpacing.xs) {
                 Text(task.title)
                     .font(HITType.body)
-                    .foregroundStyle(isChecked ? Color.secondary : Color.primary)
+                    .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
                     .lineLimit(2)
                     .overlay { strikeLine }
-                    .animation(.easeOut(duration: 0.2), value: isChecked)
+                    .animation(CompletionMotion.strike, value: isChecked)
                     .frame(minHeight: lineHeight, alignment: .leading)
                 if hasMeta {
                     HStack(spacing: HITSpacing.s + 2) {
                         if let due = task.dueDate {
-                            let tint = task.isCompleted ? Color.secondary : HITColor.due(due, hasTime: task.hasDueTime, now: now)
+                            let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
                             if !hidesDay {
                                 MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
                                          systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
@@ -108,6 +111,9 @@ struct TaskRow: View {
         }
         .padding(.vertical, HITSpacing.xs)
         .contentShape(Rectangle())
+        // The slide-away: a render offset only, so the row's layout doesn't move.
+        .offset(x: slideOffset)
+        .animation(CompletionMotion.slideAway(calmMotion: effects.calmMotion), value: slideOffset)
         .contextMenu {
             Menu("Priority") {
                 ForEach(Priority.allCases, id: \.self) { p in
@@ -144,14 +150,15 @@ struct TaskRow: View {
         Text(task.title)
             .lineLimit(2)
             .foregroundStyle(.clear)
-            .strikethrough(color: .secondary)
+            .strikethrough(color: Theme.secondaryText)
             .mask(alignment: .leading) {
                 Rectangle().scaleEffect(x: isChecked || reduceMotion ? 1 : 0, y: 1, anchor: .leading)
             }
             // Sweep in; on un-complete, reset only after the fade below has hidden the line.
-            .animation(reduceMotion ? nil : isChecked ? .easeOut(duration: 0.2) : .linear(duration: 0).delay(0.2), value: isChecked)
+            .animation(reduceMotion ? nil : isChecked ? CompletionMotion.strike
+                       : .linear(duration: 0).delay(CompletionMotion.strikeDuration), value: isChecked)
             .opacity(isChecked ? 1 : 0)
-            .animation(isChecked && !reduceMotion ? nil : .easeOut(duration: 0.2), value: isChecked)
+            .animation(isChecked && !reduceMotion ? nil : CompletionMotion.strike, value: isChecked)
             .accessibilityHidden(true)
     }
 }
