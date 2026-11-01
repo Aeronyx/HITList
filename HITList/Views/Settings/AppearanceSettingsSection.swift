@@ -24,14 +24,18 @@ struct AppearanceSettingsSection: View {
     }
 }
 
-/// The themes side by side, each a `ThemeSwatch` with its name under it.
+/// The themes in rows of four, each a `ThemeSwatch` with its name under it. (Eight 44 pt swatches in one
+/// row are ~490 pt wide, which pushed the whole iPhone sheet past the screen's edges.)
 struct ThemeSwatchRow: View {
     var selection: ThemePalette
     var palettes: [ThemePalette] = ThemePalette.all
     let onSelect: (ThemePalette) -> Void
 
+    static let columns = 4
+
     var body: some View {
-        HStack(alignment: .top, spacing: HITSpacing.s) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: HITSpacing.s, alignment: .top), count: Self.columns),
+                  spacing: HITSpacing.m) {
             ForEach(palettes) { palette in
                 ThemeSwatchButton(palette: palette, isSelected: palette.id == selection.id) { onSelect(palette) }
             }
