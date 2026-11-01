@@ -14,7 +14,8 @@ struct GeneralSettingsSection: View {
     var body: some View {
         HITGroup("General", footer: footer) {
             #if os(iOS)
-            HITMenuRow("Start screen", systemImage: "house") {
+            // `trailing:` spelled out: a bare trailing closure picks HITMenuRow's action initializer.
+            HITMenuRow("Start screen", systemImage: "house", trailing: {
                 Menu {
                     Picker("Start screen", selection: $startTab) {
                         ForEach(MobileTab.allCases) { tab in Text(tab.title).tag(tab.rawValue) }
@@ -27,9 +28,9 @@ struct GeneralSettingsSection: View {
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityIdentifier("settings-start-screen")
-            }
+            })
             #endif
-            HITMenuRow("Week starts on", systemImage: "calendar") {
+            HITMenuRow("Week starts on", systemImage: "calendar", trailing: {
                 Menu {
                     Picker("Week starts on", selection: $weekStart) {
                         ForEach(Preferences.weekStartChoices, id: \.self) { choice in
@@ -44,7 +45,7 @@ struct GeneralSettingsSection: View {
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityIdentifier("settings-week-start")
-            }
+            })
             Toggle(isOn: $showBadge) {
                 HITMenuRowLabel("Show task count on the app icon", subtitle: "Overdue and today's open tasks.",
                                 systemImage: "app.badge")
