@@ -51,14 +51,15 @@ struct DatePickerCard: View {
                         .disabled(preset.kind == .none && selected == nil)
                 }
             }
-            .padding(HITSpacing.m)
+            .padding(.horizontal, HITSpacing.m)
+            .padding(.vertical, HITSpacing.s)
             separator
             HITCalendar(selection: selected, today: now, weekStart: weekStart, focusTrigger: focusRequest) { day in
                 onPick(day)
             }
             .padding(.horizontal, HITSpacing.m)
-            .padding(.top, HITSpacing.s + 2)
-            .padding(.bottom, HITSpacing.s)
+            .padding(.top, HITSpacing.s)
+            .padding(.bottom, HITSpacing.xs)
             if onTime != nil || onRepeat != nil {
                 separator
                 HStack(spacing: HITSpacing.s) {
@@ -70,7 +71,8 @@ struct DatePickerCard: View {
                         RepeatMenu(rule: recurrence, onPick: onRepeat)
                     }
                 }
-                .padding(HITSpacing.m)
+                .padding(.horizontal, HITSpacing.m)
+                .padding(.vertical, HITSpacing.s)
             }
         }
     }
@@ -155,7 +157,7 @@ private struct DatePresetTile: View {
                     .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 44)
+            .frame(height: 40)
             .background(shape.fill(look.fill))
             .overlay(shape.strokeBorder(look.border, lineWidth: 1))
             .contentShape(shape)
