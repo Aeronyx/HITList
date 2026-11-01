@@ -268,11 +268,33 @@ enum HITMotion {
     static func emphasis(reduceMotion: Bool) -> Animation? { Role.emphasis.animation(reduceMotion: reduceMotion) }
     static func celebrate(reduceMotion: Bool) -> Animation? { Role.celebrate.animation(reduceMotion: reduceMotion) }
 
+    /// The celebrate keyframes: a fast pop to `Celebrate.peakScale`, then a spring settle back to 1.
+    @KeyframesBuilder<CGFloat>
+    static func celebrateKeyframes() -> some Keyframes<CGFloat> {
+        SpringKeyframe(Celebrate.peakScale, duration: Celebrate.popDuration, spring: .snappy)
+        SpringKeyframe(1.0, duration: Celebrate.settleDuration,
+                       spring: Spring(response: SpringSpec.celebrate.response, dampingRatio: SpringSpec.celebrate.damping))
+    }
+
     /// Build 5's name for `emphasis`, kept so code written against it still compiles.
     @available(*, deprecated, renamed: "emphasis")
     static var spring: Animation { emphasis }
     @available(*, deprecated, renamed: "emphasis(reduceMotion:)")
     static func spring(reduceMotion: Bool) -> Animation? { emphasis(reduceMotion: reduceMotion) }
+}
+
+extension View {
+    /// The `celebrate` pop, played each time `trigger` changes. Only the completion check uses it; skip
+    /// changing the trigger under Reduce Motion.
+    ///
+    ///     Image(systemName: "checkmark.circle.fill").hitCelebratePop(trigger: pops)
+    func hitCelebratePop<T: Equatable>(trigger: T) -> some View {
+        keyframeAnimator(initialValue: CGFloat(1), trigger: trigger) { content, scale in
+            content.scaleEffect(scale)
+        } keyframes: { _ in
+            HITMotion.celebrateKeyframes()
+        }
+    }
 }
 
 extension Color {

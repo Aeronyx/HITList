@@ -32,14 +32,14 @@ struct HITSegmented<Value: Hashable>: View {
 
     @Namespace private var highlight
     @Environment(\.isEnabled) private var isEnabled
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @HITEffectsSetting private var effects
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(segments) { segment in
                 let selected = segment.value == selection
                 Button {
-                    withAnimation(HITMotion.spring(reduceMotion: reduceMotion)) { selection = segment.value }
+                    withAnimation(effects.animation(.emphasis)) { selection = segment.value }
                 } label: {
                     HStack(spacing: 5) {
                         if let systemImage = segment.systemImage {

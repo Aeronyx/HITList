@@ -197,7 +197,7 @@ private struct HITRowButtonBody: View {
             .background(configuration.isPressed ? Theme.separator.opacity(0.6) : isHovered ? Theme.elevated : .clear)
             .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
             .onHover { isHovered = $0 && isEnabled }
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: configuration.isPressed)
     }
 }

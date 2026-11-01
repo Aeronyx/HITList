@@ -42,7 +42,7 @@ private struct HITToggleBody: View {
         .buttonStyle(.plain)
         .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
         .onHover { isHovered = $0 }
-        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
         .accessibilityRepresentation {
             Toggle(isOn: configuration.$isOn) { configuration.label }
         }
@@ -53,7 +53,7 @@ private struct HITToggleBody: View {
 struct HITSwitchTrack: View {
     var isOn: Bool
     var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @HITEffectsSetting private var effects
 
     var body: some View {
         let size = HITToggleStyle.trackSize
@@ -75,7 +75,7 @@ struct HITSwitchTrack: View {
         .frame(width: size.width, height: size.height)
         // Animated here rather than at the tap so a change made elsewhere (a permission refusal
         // switching it back off) slides too.
-        .animation(HITMotion.spring(reduceMotion: reduceMotion), value: isOn)
+        .animation(effects.animation(.emphasis), value: isOn)
     }
 }
 

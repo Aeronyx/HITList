@@ -68,7 +68,7 @@ struct HITChip: View {
         .modifier(HITChipBackground(tint: tint, isSelected: isSelected, isHovered: isHovered && isEnabled, size: size))
         .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
         .onHover { isHovered = $0 }
-        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }

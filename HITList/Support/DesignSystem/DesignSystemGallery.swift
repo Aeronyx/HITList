@@ -76,6 +76,9 @@ struct DesignSystemGalleryContent: View {
                 }
             }
             HITSection("Colour dots") { HITColorDots(selection: $colorHex) }
+            HITGroup("Motion", footer: "Tap a row to play its role.") {
+                ForEach(HITMotion.Role.allCases, id: \.self) { role in HITMotionSample(role: role) }
+            }
             HITGroup("Menu rows", footer: "A group is a card of rows.") {
                 HITMenuRow("Completion sound", systemImage: "speaker.wave.2", value: "Bubble") {}
                 Toggle(isOn: $toggleOn) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }
@@ -88,6 +91,50 @@ struct DesignSystemGalleryContent: View {
                 HITMenuRow("Reset local cache…", systemImage: "arrow.counterclockwise", role: .destructive, accessory: .none) {}
             }
         }
+    }
+}
+
+/// One `HITMotion` role in the gallery: its name and timing, and a dot that crosses a track with that
+/// role when tapped (`celebrate` pops a check instead, the only place it is used).
+struct HITMotionSample: View {
+    let role: HITMotion.Role
+    @State private var moved = false
+    @State private var pops = 0
+
+    private static let travel: CGFloat = 40
+
+    var body: some View {
+        Button {
+            moved.toggle()
+            pops += 1
+        } label: {
+            HStack(spacing: HITSpacing.m) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(role.rawValue).font(HITType.calloutMedium).foregroundStyle(HITColor.text)
+                    Text(role.usage).font(HITType.caption).foregroundStyle(Theme.secondaryText)
+                }
+                Spacer(minLength: HITSpacing.s)
+                if role == .celebrate {
+                    Image(systemName: moved ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 20))
+                        .foregroundStyle(Theme.accent)
+                        .contentTransition(.symbolEffect(.replace))
+                        .hitCelebratePop(trigger: pops)
+                        .frame(width: 2 * Self.travel + 14)
+                } else {
+                    ZStack {
+                        Capsule().fill(Theme.elevated).frame(width: 2 * Self.travel + 14, height: 6)
+                        Circle().fill(Theme.accent).frame(width: 14, height: 14)
+                            .offset(x: moved ? Self.travel : -Self.travel)
+                    }
+                    .animation(role.animation, value: moved)
+                }
+            }
+            .hitRowPadding()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(role.rawValue), \(role.usage)")
     }
 }
 
