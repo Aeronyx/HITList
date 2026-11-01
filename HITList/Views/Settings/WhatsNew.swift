@@ -11,11 +11,17 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.3.3", items: [
-            "Task rows measure like Todoist's, all the same height; a description shows its first line.",
-            "Priority is the checkbox's colour, with no badge; section headers line up on every list.",
-            "Mac: Settings sections live in the sidebar, System Settings style, with Back on top.",
+        Entry(version: "0.3.4", items: [
+            "Task rows measure like Todoist's; a description shows its first line under the title.",
+            "Mac: one line under section headers, and the toolbar + as before.",
+            "Mac: the sidebar fades under the Settings sections instead of being rebuilt.",
             "iPhone: the quick-add card fades away in place with the keyboard after adding a task.",
+        ]),
+        Entry(version: "0.3.3", items: [
+            "Slimmer task rows, all the same height; priority is the checkbox's colour, with no badge.",
+            "Section headers line up the same on every list; the Inbox's priority headers are readable.",
+            "Mac: Settings sections live in the sidebar, System Settings style, with Back on top.",
+            "A slightly shorter + oval, and the sync bolt sits nearer its neighbours.",
         ]),
         Entry(version: "0.3.2", items: [
             "The sync bolt's shape says its state: filled, hollow while syncing, struck through when it can't.",
