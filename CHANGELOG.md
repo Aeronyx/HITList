@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.3
+## 0.3.3 — build 10, 2026-11-01
 
 - Task rows are slimmer and all the same height, with the same air above and below (`ListMetrics`), on
   both platforms; Compact rows trims it further. The "P1"/"P2" badge is gone: the checkbox's colour is
