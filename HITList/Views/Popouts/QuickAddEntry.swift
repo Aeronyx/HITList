@@ -45,10 +45,13 @@ private struct QuickAddEntry: ViewModifier {
     }
 }
 
-/// The thumb-sized accent oval "+" bottom-right, above the iPhone tab bar (and floating over a list on
-/// iPad). It shrinks away while a popout is up; `popouts.openQuickAdd()` adds into the list on screen.
+/// The thumb-sized accent oval "+" bottom-right, above the iPhone's island tab bar (and floating over a
+/// list on iPad). It shrinks away while a popout is up; `popouts.openQuickAdd()` adds into the list on
+/// screen. With `glass` (the iPhone shell) it is accent-tinted interactive Liquid Glass on iOS 26.
 struct FloatingAddButton: View {
     static let size = CGSize(width: 64, height: 48)
+    /// iPhone: glass on iOS 26 (see `mobileGlass`); iPad keeps the plain accent oval.
+    var glass = false
     var action: () -> Void
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -57,13 +60,17 @@ struct FloatingAddButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(HITColor.onAccent)
-                .frame(width: Self.size.width, height: Self.size.height)
-                .background(Capsule().fill(Theme.accent))
-                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
-                .contentShape(Capsule())
+            SwiftUI.Group {
+                if glass {
+                    plus.mobileGlass(in: Capsule(), tint: Theme.accent, fallback: Theme.accent,
+                                     interactive: true, shadow: .addButton)
+                } else {
+                    plus
+                        .background(Capsule().fill(Theme.accent))
+                        .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                }
+            }
+            .contentShape(Capsule())
         }
         .buttonStyle(FloatingAddPressStyle())
         .accessibilityLabel("Add task")
@@ -73,6 +80,13 @@ struct FloatingAddButton: View {
         .allowsHitTesting(shown)
         .accessibilityHidden(!shown)
         .animation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.2), value: shown)
+    }
+
+    private var plus: some View {
+        Image(systemName: "plus")
+            .font(.system(size: 24, weight: .semibold))
+            .foregroundStyle(HITColor.onAccent)
+            .frame(width: Self.size.width, height: Self.size.height)
     }
 }
 
