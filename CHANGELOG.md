@@ -4,6 +4,19 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.2.1
+
+- iPhone: adding a task puts the quick-add card away (sliding back down behind the keyboard); lists show
+  no "Add task" row, only the oval "+", and an empty list says "No tasks" (or "All clear for today",
+  "Nothing due") in grey; every list leaves room for the floating island, so the last row (Browse →
+  Settings) is reachable again.
+- Task rows: the second line is always laid out, so rows with and without dates line up; the Group sits
+  at its trailing end with its colour dot after the name.
+- Mac: the toolbar "Add task" is the same accent oval as the iPhone's; the quick-add title no longer shows
+  a grey text-view box when focused; Inbox review ("Review Inbox…") and the Flipboard's actions live in
+  the "…" menu on every platform; the review sheet's Done buttons use the design system; the popout
+  panel's shadow is flattened before animating.
+
 ## 0.2.0 — build 6, 2026-10-31
 
 - Quick-add title one step larger than the list text (14 pt was too small): Inter 20 bold on iPhone.

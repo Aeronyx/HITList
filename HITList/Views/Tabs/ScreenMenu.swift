@@ -4,8 +4,7 @@ import SwiftUI
 /// everywhere: the view-options control (`ViewOptionsMenu`, the filter-lines icon; optional) and, to its
 /// right, the "…" menu. On iPhone the "…" is `ScreenMenu`: this screen's own actions, then Settings…
 /// with the version, and the 6 pt sync dot on its corner. On iPad the "…" holds the screen's actions
-/// only (Settings is behind the sidebar's gear); the Mac shows the view options alone, since its
-/// screens keep their own toolbar buttons and Settings is in the app menu.
+/// only (Settings is behind the sidebar's gear), and so does the Mac (Settings is in the app menu).
 ///
 ///     .screenChrome {
 ///         ViewOptionsMenu { Toggle("Show completed", isOn: $showCompleted) }
@@ -51,6 +50,12 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 }
                 #else
                 ToolbarItem(placement: .automatic) { viewOptions() }
+                ToolbarItem(placement: .automatic) {
+                    Menu { menu() } label: { Image(systemName: "ellipsis.circle") }
+                        .menuIndicator(.hidden)
+                        .accessibilityLabel("More")
+                        .help("More")
+                }
                 #endif
             }
             .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }

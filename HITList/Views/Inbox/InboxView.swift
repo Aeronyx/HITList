@@ -19,6 +19,13 @@ struct InboxView: View {
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
     @State private var processing = false
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
+    private var isCompact: Bool { sizeClass == .compact }
+    #else
+    private let isCompact = false
+    #endif
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -81,29 +88,14 @@ struct InboxView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        #if os(macOS)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { processing = true } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "tray.and.arrow.down")
-                        Text("Process")
-                    }
-                }
-                .accessibilityLabel("Process")
-                .disabled(openCount == 0)
-                .help("Go through the inbox one task at a time")
-            }
-        }
-        #endif
-        // iPhone and iPad: Show completed behind the filter-lines icon, Process in the "…" beside it.
+        // Show completed behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         } menu: {
-            Button { processing = true } label: { Label("Process…", systemImage: "tray.and.arrow.down") }
+            Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
                 .disabled(openCount == 0)
         }
         .sheet(isPresented: $processing) {
@@ -131,7 +123,9 @@ struct InboxView: View {
             Section {
                 ForEach(rows) { row($0) }
             }
-            Section { InlineAddRow(context: .inbox, key: "inbox") }
+            if !isCompact {
+                Section { InlineAddRow(context: .inbox, key: "inbox") }
+            }
         }
         #if os(macOS)
         .listStyle(.inset)

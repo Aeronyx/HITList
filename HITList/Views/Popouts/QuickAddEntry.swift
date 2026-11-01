@@ -32,9 +32,17 @@ private struct QuickAddEntry: ViewModifier {
             .toolbar {
                 if showsButton {
                     ToolbarItem(placement: .primaryAction) {
+                        // The iPhone's accent oval, toolbar-sized, so both platforms add the same way.
                         Button { popouts.openQuickAdd(context) } label: {
-                            Label("Add Task", systemImage: "plus")
+                            Image(systemName: "plus")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundStyle(HITColor.onAccent)
+                                .frame(width: 40, height: 26)
+                                .background(Capsule().fill(Theme.accent))
+                                .contentShape(Capsule())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Add task")
                         .help("Add a task (⌘N)")
                     }
                 }

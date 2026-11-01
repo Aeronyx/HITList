@@ -73,33 +73,44 @@ struct TaskRow: View {
                     .overlay { strikeLine }
                     .animation(CompletionMotion.strike, value: isChecked)
                     .frame(minHeight: lineHeight, alignment: .leading)
-                if hasMeta {
+                // The second line is always laid out, so rows with and without dates are the same height
+                // and line up; the Group sits at its trailing end, Todoist style.
+                HStack(spacing: HITSpacing.s + 2) {
+                    // The date, labels and note icon keep their full width; a long Group name truncates.
                     HStack(spacing: HITSpacing.s + 2) {
-                        if let due = task.dueDate {
-                            let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
-                            if !hidesDay {
-                                MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
-                                         systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
-                            } else if task.hasDueTime {
-                                MetaItem(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat", tint: tint)
-                            } else if task.recurrence != nil {
-                                MetaItem(nil, systemImage: "repeat", tint: tint)
-                                    .accessibilityLabel("Repeats")
+                        if hasMeta {
+                            if let due = task.dueDate {
+                                let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
+                                if !hidesDay {
+                                    MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
+                                             systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
+                                } else if task.hasDueTime {
+                                    MetaItem(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat", tint: tint)
+                                } else if task.recurrence != nil {
+                                    MetaItem(nil, systemImage: "repeat", tint: tint)
+                                        .accessibilityLabel("Repeats")
+                                }
+                            }
+                            ForEach(task.labelList) { label in
+                                MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
+                            }
+                            if !task.notes.isEmpty {
+                                MetaItem(nil, systemImage: "text.alignleft", tint: Theme.secondaryText)
+                                    .accessibilityLabel("Has a description")
                             }
                         }
-                        if showProject, let project = task.project {
-                            MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex), iconSize: 8)
-                        }
-                        ForEach(task.labelList) { label in
-                            MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
-                        }
-                        if !task.notes.isEmpty {
-                            MetaItem(nil, systemImage: "text.alignleft", tint: Theme.secondaryText)
-                                .accessibilityLabel("Has a description")
-                        }
                     }
-                    .lineLimit(1)
+                    .layoutPriority(1)
+                    Spacer(minLength: HITSpacing.s)
+                    if showProject, let project = task.project {
+                        MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex),
+                                 iconSize: 8, iconTrailing: true)
+                    } else {
+                        // Keeps the line's height when there is nothing to show.
+                        Text(" ").font(HITType.caption).hidden()
+                    }
                 }
+                .lineLimit(1)
             }
             Spacer(minLength: 0)
             if task.priorityValue != .p4 {
@@ -175,25 +186,34 @@ struct MetaItem: View {
     let systemImage: String?
     let tint: Color
     var iconSize: CGFloat = 11
+    /// The icon after the text (the Group at the trailing end of the line).
+    var iconTrailing = false
 
-    init(_ text: String?, systemImage: String?, tint: Color, iconSize: CGFloat = 11) {
+    init(_ text: String?, systemImage: String?, tint: Color, iconSize: CGFloat = 11, iconTrailing: Bool = false) {
         self.text = text
         self.systemImage = systemImage
         self.tint = tint
         self.iconSize = iconSize
+        self.iconTrailing = iconTrailing
     }
 
     var body: some View {
         HStack(spacing: 4) {
-            if let systemImage {
-                Image(systemName: systemImage)
-                    .font(.system(size: iconSize, weight: .semibold))
-                    .frame(width: 12)
-            }
+            if !iconTrailing { icon }
             if let text {
                 Text(text).font(HITType.caption)
             }
+            if iconTrailing { icon }
         }
         .foregroundStyle(tint)
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if let systemImage {
+            Image(systemName: systemImage)
+                .font(.system(size: iconSize, weight: .semibold))
+                .frame(width: 12)
+        }
     }
 }

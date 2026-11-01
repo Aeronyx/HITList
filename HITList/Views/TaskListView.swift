@@ -20,6 +20,13 @@ struct TaskListView: View {
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
+    private var isCompact: Bool { sizeClass == .compact }
+    #else
+    private let isCompact = false
+    #endif
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -174,7 +181,16 @@ struct TaskListView: View {
             SwiftUI.Group {
                 switch result {
                 case .success(let groups):
-                    if groups.isEmpty {
+                    if groups.isEmpty, isCompact {
+                        // iPhone: one quiet grey line; the "+" is right there.
+                        Text(emptyTitle)
+                            .font(HITType.subheadline)
+                            .foregroundStyle(Theme.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, HITSpacing.xl)
+                            .padding(.top, HITSpacing.l)
+                            .frame(maxHeight: .infinity, alignment: .top)
+                    } else if groups.isEmpty {
                         ContentUnavailableView {
                             Label(emptyTitle, systemImage: "checkmark.circle")
                         } description: {
@@ -219,7 +235,7 @@ struct TaskListView: View {
                                     }
                                 }
                             }
-                            if selection != .completed {
+                            if selection != .completed, !isCompact {
                                 Section { InlineAddRow(context: addContext, key: "list") }
                             }
                         }

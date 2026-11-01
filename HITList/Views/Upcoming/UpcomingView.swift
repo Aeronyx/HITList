@@ -12,6 +12,13 @@ struct UpcomingView: View {
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
 
     @Environment(PopoutController.self) private var popouts
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
+    private var isCompact: Bool { sizeClass == .compact }
+    #else
+    private let isCompact = false
+    #endif
     @State private var now = Date()
     @State private var dayCount = UpcomingView.pageDays
     @State private var overdueExpanded = true
@@ -296,11 +303,25 @@ struct UpcomingView: View {
         #endif
     }
 
+    @ViewBuilder
     private func addRow(_ day: Date, isEmpty: Bool) -> some View {
-        InlineAddRow(context: .day(day), key: "day-\(day.timeIntervalSinceReferenceDate)", note: isEmpty ? "Nothing due" : nil)
-        .id(AddRowID(day: day))
-        .selectionDisabled()
-        .slateRow()
+        if isCompact {
+            // iPhone: the "+" adds; an empty day just says so.
+            if isEmpty {
+                Text("Nothing due")
+                    .font(HITType.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
+                    .id(AddRowID(day: day))
+                    .selectionDisabled()
+                    .listRowSeparator(.hidden)
+                    .slateRow()
+            }
+        } else {
+            InlineAddRow(context: .day(day), key: "day-\(day.timeIntervalSinceReferenceDate)", note: isEmpty ? "Nothing due" : nil)
+                .id(AddRowID(day: day))
+                .selectionDisabled()
+                .slateRow()
+        }
     }
 
     // MARK: - Week strip ↔ list
