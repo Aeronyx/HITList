@@ -196,6 +196,7 @@ struct MacSettingsSectionContent: View {
             switch section {
             case .general:
                 GeneralSettingsSection()
+                KeyboardShortcutsGroups()
             case .iCloud:
                 ICloudSyncGroup()
                 ResetLocalCacheGroup()

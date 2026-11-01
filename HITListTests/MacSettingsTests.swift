@@ -75,6 +75,53 @@ final class MacSettingsTests: XCTestCase {
         XCTAssertEqual(SidebarItem.settings, SidebarItem.settings, "a fixed id, the same every launch")
     }
 
+    // MARK: Keyboard shortcuts
+
+    func testShortcutsHaveNoDuplicateKeysOrIds() {
+        let all = HITShortcuts.all
+        XCTAssertEqual(Set(all.map(\.id)).count, all.count, "ids are unique")
+        // The same keys may mean different things in different places (Return in a card and in Inbox
+        // review), never twice in one place.
+        for group in HITShortcuts.byContext {
+            let keys = group.shortcuts.map { $0.keys.joined(separator: " ") }
+            XCTAssertEqual(Set(keys).count, keys.count, "duplicate keys in \(group.context.title): \(keys)")
+        }
+        let sharedShortcuts = all.compactMap(\.shortcut)
+        for context in HITShortcut.Context.allCases {
+            let inContext = all.filter { $0.context == context }.compactMap(\.shortcut)
+            XCTAssertEqual(Set(inContext.map(HITShortcuts.symbols)).count, inContext.count, "\(context)")
+        }
+        XCTAssertFalse(sharedShortcuts.isEmpty)
+        XCTAssertTrue(all.allSatisfy { !$0.keys.isEmpty && !$0.title.isEmpty })
+        XCTAssertEqual(HITShortcuts.byContext.flatMap(\.shortcuts).map(\.id), all.map(\.id),
+                       "every shortcut shows in exactly one group, in order")
+    }
+
+    func testShortcutListCoversTheAppsShortcuts() {
+        // The values the commands and views use (NewTaskCommands ⌘N, the Settings command ⌘,, Show completed
+        // ⇧⌘C, PopoutHost ⌘← ⌘→, the toast's ⌘Z, the editor sheets' ⌘Return, Inbox review's letter keys).
+        let symbols = Set(HITShortcuts.all.compactMap(\.shortcut).map(HITShortcuts.symbols))
+        for expected in ["⌘N", "⌘,", "⇧⌘C", "⌘←", "⌘→", "⌘Z", "⌘Return", "Esc", "Return", "Tab",
+                         "T", "M", "D", "P", "L", "→", "⌫"] {
+            XCTAssertTrue(symbols.contains(expected), "missing \(expected)")
+        }
+        XCTAssertEqual(HITShortcuts.settings.shortcut?.key, KeyEquivalent(","))
+        XCTAssertEqual(HITShortcuts.settings.shortcut?.modifiers, .command)
+        XCTAssertEqual(HITShortcuts.newTask.shortcut?.key, KeyEquivalent("n"))
+        XCTAssertEqual(HITShortcuts.calendarMove.keys, ["←", "→", "↑", "↓"])
+        XCTAssertNil(HITShortcuts.calendarMove.shortcut)
+    }
+
+    func testKeycapsUseTheMenuOrder() {
+        XCTAssertEqual(HITShortcuts.keycaps(KeyboardShortcut("c", modifiers: [.command, .shift])), ["⇧", "⌘", "C"])
+        XCTAssertEqual(HITShortcuts.keycaps(KeyboardShortcut("k", modifiers: [.command, .option, .control, .shift])),
+                       ["⌃", "⌥", "⇧", "⌘", "K"])
+        XCTAssertEqual(HITShortcuts.symbols(KeyboardShortcut(.escape, modifiers: [])), "Esc")
+        XCTAssertEqual(HITShortcuts.symbols(KeyboardShortcut(.delete, modifiers: [])), "⌫")
+        XCTAssertEqual(HITShortcuts.symbols(KeyboardShortcut(.leftArrow, modifiers: .command)), "⌘←")
+        XCTAssertEqual(HITShortcuts.symbols(KeyboardShortcut(.return, modifiers: .command)), "⌘Return")
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
@@ -95,6 +142,8 @@ final class MacSettingsTests: XCTestCase {
             render(MacSettingsHeader(section: section), "header \(section)")
         }
         render(MacSettingsSectionList(selection: .data) { _ in }, "section list", width: 200, height: 560)
+        render(KeyboardShortcutsGroups(), "shortcuts table")
+        render(KeyCaps(keys: ["⇧", "⌘", "C"]), "keycaps", width: 120)
     }
 
     func testPageRendersAtTheWindowsMinimumAndWide() {
