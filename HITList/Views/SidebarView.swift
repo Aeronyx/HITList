@@ -16,9 +16,6 @@ struct SidebarView: View {
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var showSettings = false
-    #if os(macOS)
-    @Environment(\.openSettings) private var openSettings
-    #endif
 
     private var todayCount: Int {
         let now = Date(), start = Calendar.current.startOfDay(for: now)
@@ -115,6 +112,10 @@ struct SidebarView: View {
         .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
         #else
         .listStyle(.sidebar)
+        // The gear at the foot of the sidebar opens Settings in this window's detail column.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
+        }
         #endif
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
@@ -170,6 +171,51 @@ struct SidebarView: View {
         context.delete(label); try? context.save()
     }
 }
+
+#if os(macOS)
+/// The Mac sidebar's foot: a gear and "Settings", drawn like a sidebar row (hover fill, a filled pill
+/// while the Settings page is showing). It selects `SidebarItem.settings`; there is no Settings window.
+struct SidebarSettingsButton: View {
+    var isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: HITSpacing.s) {
+                Image(systemName: isSelected ? "gearshape.fill" : "gearshape")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(isSelected ? Theme.accent : Theme.secondaryText)
+                    .frame(width: 18)
+                Text("Settings")
+                    .font(HITType.body)
+                    .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, HITSpacing.s)
+            .frame(height: 28)
+            .background {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(isSelected ? Theme.elevated : isHovered ? Theme.elevated.opacity(0.55) : .clear)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isSelected)
+        .padding(.horizontal, HITSpacing.s + 2)
+        .padding(.vertical, HITSpacing.s)
+        .background(Theme.surface)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.separator.opacity(0.6)).frame(height: 1) }
+        .help("Settings (⌘,)")
+        .accessibilityLabel("Settings")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("sidebar-settings")
+    }
+}
+#endif
 
 /// "Filters +": the add button sits 6 pt after the title, never at the trailing edge. On the Mac it
 /// fades in while the pointer is over the header row. The iPhone's Browse page uses it too.
