@@ -76,7 +76,7 @@ struct DateChipPopover: View {
         _calendarDay = State(initialValue: selected ?? now)
     }
 
-    private var parser: DateExpressionParser { DateExpressionParser(now: now) }
+    private var parser: DateExpressionParser { DateExpressionParser(now: now, weekStart: Preferences.weekStartWeekday()) }
 
     private struct Preset: Identifiable {
         let id: String

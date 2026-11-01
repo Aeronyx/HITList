@@ -61,6 +61,17 @@ struct HITEffectsSetting: DynamicProperty {
     }
 }
 
+/// The shadow under a slate fallback (glass draws its own depth): the iPhone chrome's three weights.
+struct HITGlassShadow: Equatable {
+    var opacity: Double
+    var radius: CGFloat
+    var y: CGFloat
+
+    static let chrome = HITGlassShadow(opacity: 0.35, radius: 16, y: 6)
+    static let addButton = HITGlassShadow(opacity: 0.4, radius: 10, y: 4)
+    static let card = HITGlassShadow(opacity: 0.45, radius: 24, y: 8)
+}
+
 /// `hitGlass(in:tint:)`: see the extension below.
 struct HITGlassModifier<S: Shape>: ViewModifier {
     let shape: S
@@ -68,6 +79,8 @@ struct HITGlassModifier<S: Shape>: ViewModifier {
     var interactive = false
     /// The slate fill when glass is off. Nil: the tint (a tinted control stays that colour), else `Theme.surface`.
     var fallback: Color?
+    /// A shadow under the slate fill only (floating chrome keeps its lift without glass).
+    var fallbackShadow: HITGlassShadow?
     @HITEffectsSetting private var effects
 
     func body(content: Content) -> some View {
@@ -83,7 +96,14 @@ struct HITGlassModifier<S: Shape>: ViewModifier {
     }
 
     private func slate(_ content: Content) -> some View {
-        content.background(fallback ?? tint ?? Theme.surface, in: shape)
+        content.background {
+            if let fallbackShadow {
+                shape.fill(fallback ?? tint ?? Theme.surface)
+                    .shadow(color: .black.opacity(fallbackShadow.opacity), radius: fallbackShadow.radius, y: fallbackShadow.y)
+            } else {
+                shape.fill(fallback ?? tint ?? Theme.surface)
+            }
+        }
     }
 
     @available(iOS 26, macOS 26, *)
@@ -103,7 +123,24 @@ extension View {
     ///     header.hitGlass(in: Rectangle())
     ///     plus.hitGlass(in: Circle(), tint: Theme.accent, interactive: true)
     ///     highlight.hitGlass(in: Capsule(), fallback: Theme.separator)
-    func hitGlass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false, fallback: Color? = nil) -> some View {
-        modifier(HITGlassModifier(shape: shape, tint: tint, interactive: interactive, fallback: fallback))
+    func hitGlass<S: Shape>(in shape: S, tint: Color? = nil, interactive: Bool = false, fallback: Color? = nil,
+                            fallbackShadow: HITGlassShadow? = nil) -> some View {
+        modifier(HITGlassModifier(shape: shape, tint: tint, interactive: interactive, fallback: fallback,
+                                  fallbackShadow: fallbackShadow))
+    }
+}
+
+/// Neighbouring glass shapes (the iPhone's island and "+") rendered together: a `GlassEffectContainer`
+/// on iOS 26 / macOS 26, a plain wrapper before. `spacing` below the gap between them keeps them separate.
+struct HITGlassContainer<Content: View>: View {
+    var spacing: CGFloat = HITSpacing.s
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        if #available(iOS 26, macOS 26, *) {
+            GlassEffectContainer(spacing: spacing) { content }
+        } else {
+            content
+        }
     }
 }

@@ -50,7 +50,7 @@ private struct QuickAddEntry: ViewModifier {
 /// screen. With `glass` (the iPhone shell) it is accent-tinted interactive Liquid Glass on iOS 26.
 struct FloatingAddButton: View {
     static let size = CGSize(width: 64, height: 48)
-    /// iPhone: glass on iOS 26 (see `mobileGlass`); iPad keeps the plain accent oval.
+    /// iPhone: glass on iOS 26 (see `hitGlass`); iPad keeps the plain accent oval.
     var glass = false
     var action: () -> Void
     @Environment(PopoutController.self) private var popouts
@@ -62,8 +62,7 @@ struct FloatingAddButton: View {
         Button(action: action) {
             SwiftUI.Group {
                 if glass {
-                    plus.mobileGlass(in: Capsule(), tint: Theme.accent, fallback: Theme.accent,
-                                     interactive: true, shadow: .addButton)
+                    plus.hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
                 } else {
                     plus
                         .background(Capsule().fill(Theme.accent))
@@ -79,7 +78,7 @@ struct FloatingAddButton: View {
         .scaleEffect(shown ? 1 : 0.6)
         .allowsHitTesting(shown)
         .accessibilityHidden(!shown)
-        .animation(reduceMotion ? .easeOut(duration: 0.12) : .snappy(duration: 0.2), value: shown)
+        .animation(HITMotion.enter(reduceMotion: reduceMotion), value: shown)
     }
 
     private var plus: some View {
@@ -142,6 +141,8 @@ struct InlineAddRow: View {
         }
         .selectionDisabled()
         .listRowSeparator(.hidden)
+        // Without this the row takes the system grey, which stands out in the darker themes.
+        .slateRow()
     }
 
     private func open() {

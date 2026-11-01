@@ -69,6 +69,7 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
+        #if os(macOS)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { adding = true } label: { Label("Add Switch", systemImage: "plus") }
@@ -82,6 +83,12 @@ struct FlipboardView: View {
                 }
                 .help("Flipboard options")
             }
+        }
+        #endif
+        // iPhone and iPad: both actions in the "…".
+        .screenChrome {
+            Button { adding = true } label: { Label("Add Switch…", systemImage: "plus") }
+            Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
         }
         .onReceive(clock) { now = $0 }
         .onAppear {

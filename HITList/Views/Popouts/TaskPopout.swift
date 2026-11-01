@@ -66,12 +66,7 @@ struct TaskPopout: View {
                     .foregroundStyle(isChecked ? (task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color)
                                      : task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color)
                     .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
-                    .keyframeAnimator(initialValue: 1.0, trigger: pops) { content, scale in
-                        content.scaleEffect(scale)
-                    } keyframes: { _ in
-                        SpringKeyframe(1.2, duration: 0.12, spring: .snappy)
-                        SpringKeyframe(1.0, duration: 0.18, spring: .smooth)
-                    }
+                    .hitCelebratePop(trigger: pops)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(task.isCompleted ? "Mark incomplete" : "Complete task")
@@ -432,12 +427,14 @@ struct TaskPopout: View {
 
     private func delete() {
         let doomed = task
-        popouts.closeTask()
-        // Delete once the popout has gone, so nothing draws a deleted task while it animates out.
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(450))
-            TaskActions.delete(doomed, in: context)
-            rescheduleNotifications()
+        popouts.requestDelete(doomed) {
+            popouts.closeTask()
+            // Delete once the popout has gone, so nothing draws a deleted task while it animates out.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(450))
+                TaskActions.delete(doomed, in: context)
+                rescheduleNotifications()
+            }
         }
     }
 

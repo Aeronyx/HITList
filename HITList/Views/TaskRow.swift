@@ -14,6 +14,8 @@ struct TaskRow: View {
     /// Completes or un-completes the task; the list owns this so it can animate the row out.
     var onToggleCompletion: () -> Void
     @Environment(\.modelContext) private var context
+    /// Optional: a row rendered outside the app shell (tests, previews) deletes at once.
+    @Environment(PopoutController.self) private var popouts: PopoutController?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @HITEffectsSetting private var effects
     @State private var pops = 0
@@ -126,13 +128,16 @@ struct TaskRow: View {
                 Button("Today") { TaskActions.reschedule(task, to: Calendar.current.startOfDay(for: now), in: context) }
                 Button("Tomorrow") { TaskActions.reschedule(task, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), in: context) }
                 Button("Next Week") {
-                    let p = DateExpressionParser(now: now)
+                    let p = DateExpressionParser(now: now, weekStart: Preferences.weekStartWeekday())
                     TaskActions.reschedule(task, to: p.day(7, from: p.startOfWeek(containing: now)), in: context)
                 }
                 Button("Remove Date") { TaskActions.reschedule(task, to: nil, in: context) }
             }
             Divider()
-            Button(role: .destructive) { TaskActions.delete(task, in: context) } label: { Label("Delete", systemImage: "trash") }
+            Button(role: .destructive) {
+                let delete = { TaskActions.delete(task, in: context) }
+                if let popouts { popouts.requestDelete(task, perform: delete) } else { delete() }
+            } label: { Label("Delete", systemImage: "trash") }
         }
     }
 

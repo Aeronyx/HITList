@@ -37,7 +37,7 @@ enum TaskRescheduling {
 
         /// Next week is the Monday after this week, as in quick add's "next week".
         func date(now: Date, calendar: Calendar = .current) -> Date {
-            let parser = DateExpressionParser(calendar: calendar, now: now)
+            let parser = DateExpressionParser(calendar: calendar, now: now, weekStart: Preferences.weekStartWeekday())
             switch self {
             case .today: return parser.today
             case .tomorrow: return parser.day(1)

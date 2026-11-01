@@ -50,7 +50,8 @@ struct InboxProcessView: View {
     private var shortcutsEnabled: Bool { !editingTitle && popover == nil && current != nil }
 
     private var parser: QuickAddParser {
-        QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name))
+        QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name),
+                       weekStart: Preferences.weekStartWeekday())
     }
 
     private var stepAnimation: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.3) }

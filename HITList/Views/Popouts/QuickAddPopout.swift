@@ -52,7 +52,8 @@ struct QuickAddPopout: View {
     }
 
     private var parser: QuickAddParser {
-        QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name))
+        QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name),
+                       weekStart: Preferences.weekStartWeekday())
     }
 
     var body: some View {

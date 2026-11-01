@@ -11,6 +11,7 @@ struct UpcomingView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
 
+    @Environment(PopoutController.self) private var popouts
     @State private var now = Date()
     @State private var dayCount = UpcomingView.pageDays
     @State private var overdueExpanded = true
@@ -29,7 +30,7 @@ struct UpcomingView: View {
     private static let pageDays = 30
     /// The strip's pages: a month back, a year ahead.
     private static let weeks = -4...52
-    private let strip = WeekStrip()
+    private let strip = WeekStrip(weekStart: Preferences.weekStartWeekday())
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var calendar: Calendar { strip.calendar }
@@ -85,7 +86,7 @@ struct UpcomingView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
         }
@@ -95,6 +96,7 @@ struct UpcomingView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        .screenChrome(menu: {})
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
     }
@@ -168,8 +170,10 @@ struct UpcomingView: View {
             .completionRowBackground(flashing: phase == .pending)
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
-                    if selectedTask?.id == task.id { selectedTask = nil }
-                    TaskActions.delete(task, in: context)
+                    popouts.requestDelete(task) {
+                        if selectedTask?.id == task.id { selectedTask = nil }
+                        TaskActions.delete(task, in: context)
+                    }
                 } label: { Label("Delete", systemImage: "trash") }
             }
             .swipeActions(edge: .leading) {
@@ -224,8 +228,10 @@ struct UpcomingView: View {
         }
         Divider()
         Button("Delete", systemImage: "trash", role: .destructive) {
-            if selectedTask?.id == task.id { selectedTask = nil }
-            TaskActions.delete(task, in: context)
+            popouts.requestDelete(task) {
+                if selectedTask?.id == task.id { selectedTask = nil }
+                TaskActions.delete(task, in: context)
+            }
         }
     }
 
@@ -403,12 +409,12 @@ struct UpcomingView: View {
     private func toggleCompletion(_ task: TaskItem) {
         let checked = task.isCompleted || completions.phase(of: task.id) != nil
         if checked, let record = toast.record(for: task.id) {
-            withAnimation(.snappy) { toast.remove(task.id) }
+            withAnimation(HITMotion.exit) { toast.remove(task.id) }
             revert([record])
             return
         }
         if task.isCompleted {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(HITMotion.standard) {
                 completions.cancel(task.id)
                 TaskActions.toggleCompletion(task, in: context)
             }
@@ -422,7 +428,7 @@ struct UpcomingView: View {
         } else {
             .uncomplete
         }
-        let token = withAnimation(.easeOut(duration: 0.12)) { completions.begin(task.id, anchor: task.dueDate) }
+        let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
         TaskActions.toggleCompletion(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task, token: token) }
@@ -430,21 +436,21 @@ struct UpcomingView: View {
     }
 
     private func showToast(_ completed: CompletedTask) {
-        let generation = withAnimation(.snappy) { toast.add(completed) }
+        let generation = withAnimation(HITMotion.enter) { toast.add(completed) }
         AccessibilityNotification.Announcement(toast.message).post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)
-            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+            withAnimation(HITMotion.exit) { _ = toast.expire(generation: generation) }
         }
     }
 
     private func undoToast() {
-        let records = withAnimation(.snappy) { toast.takeAll() }
+        let records = withAnimation(HITMotion.exit) { toast.takeAll() }
         revert(records)
     }
 
     private func revert(_ records: [CompletedTask]) {
-        withAnimation(.easeInOut(duration: 0.25)) {
+        withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
@@ -467,14 +473,14 @@ struct UpcomingView: View {
             withAnimation(reduceMotion ? nil : .snappy) { _ = completions.remove(id, token: token) }
             return
         }
-        guard withAnimation(.easeIn(duration: 0.18), { completions.collapse(id, token: token) }) else { return }
+        guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
         try? await Task.sleep(for: .milliseconds(180))
         if reduceMotion {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { _ = completions.remove(id, token: token) }
         } else {
-            withAnimation(.snappy(duration: 0.3)) { _ = completions.remove(id, token: token) }
+            withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
         }
     }
 }

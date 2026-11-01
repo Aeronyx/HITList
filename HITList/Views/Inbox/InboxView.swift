@@ -11,6 +11,7 @@ struct InboxView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @State private var showCompleted = false
     @State private var now = Date()
@@ -70,7 +71,7 @@ struct InboxView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
-                        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
         }
@@ -80,6 +81,7 @@ struct InboxView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
+        #if os(macOS)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { processing = true } label: {
@@ -92,16 +94,17 @@ struct InboxView: View {
                 .disabled(openCount == 0)
                 .help("Go through the inbox one task at a time")
             }
-            ToolbarItem(placement: .automatic) {
-                Toggle(isOn: $showCompleted) {
-                    Label("Show Completed", systemImage: showCompleted ? "eye" : "eye.slash")
-                        .labelStyle(.iconOnly)
-                        .imageScale(.medium)
-                        .font(HITType.body)
-                }
-                .toggleStyle(.button)
-                .help("Show completed tasks")
+        }
+        #endif
+        // iPhone and iPad: Show completed behind the filter-lines icon, Process in the "…" beside it.
+        .screenChrome {
+            ViewOptionsMenu {
+                Toggle("Show completed", isOn: $showCompleted)
+                    .keyboardShortcut("c", modifiers: [.command, .shift])
             }
+        } menu: {
+            Button { processing = true } label: { Label("Process…", systemImage: "tray.and.arrow.down") }
+                .disabled(openCount == 0)
         }
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
@@ -144,8 +147,10 @@ struct InboxView: View {
             .completionRowBackground(flashing: phase == .pending)
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
-                    if selectedTask?.id == task.id { selectedTask = nil }
-                    TaskActions.delete(task, in: context)
+                    popouts.requestDelete(task) {
+                        if selectedTask?.id == task.id { selectedTask = nil }
+                        TaskActions.delete(task, in: context)
+                    }
                 } label: { Label("Delete", systemImage: "trash") }
             }
             .swipeActions(edge: .leading) {
@@ -162,12 +167,12 @@ struct InboxView: View {
     private func toggleCompletion(_ task: TaskItem) {
         let checked = task.isCompleted || completions.phase(of: task.id) != nil
         if checked, let record = toast.record(for: task.id) {
-            withAnimation(.snappy) { toast.remove(task.id) }
+            withAnimation(HITMotion.exit) { toast.remove(task.id) }
             revert([record])
             return
         }
         if task.isCompleted {
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(HITMotion.standard) {
                 completions.cancel(task.id)
                 TaskActions.toggleCompletion(task, in: context)
             }
@@ -181,7 +186,7 @@ struct InboxView: View {
         } else {
             .uncomplete
         }
-        let token = withAnimation(.easeOut(duration: 0.12)) { completions.begin(task.id, anchor: task.dueDate) }
+        let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
         TaskActions.toggleCompletion(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task.id, token: token) }
@@ -189,21 +194,21 @@ struct InboxView: View {
     }
 
     private func showToast(_ completed: CompletedTask) {
-        let generation = withAnimation(.snappy) { toast.add(completed) }
+        let generation = withAnimation(HITMotion.enter) { toast.add(completed) }
         AccessibilityNotification.Announcement(toast.message).post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)
-            withAnimation(.easeOut(duration: 0.25)) { _ = toast.expire(generation: generation) }
+            withAnimation(HITMotion.exit) { _ = toast.expire(generation: generation) }
         }
     }
 
     private func undoToast() {
-        let records = withAnimation(.snappy) { toast.takeAll() }
+        let records = withAnimation(HITMotion.exit) { toast.takeAll() }
         revert(records)
     }
 
     private func revert(_ records: [CompletedTask]) {
-        withAnimation(.easeInOut(duration: 0.25)) {
+        withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
@@ -222,17 +227,17 @@ struct InboxView: View {
     private func finishCompletion(of id: UUID, token: Int) async {
         try? await Task.sleep(for: .milliseconds(600))
         if matchedTasks().contains(where: { $0.id == id }) {
-            withAnimation(.easeOut(duration: 0.25)) { _ = completions.remove(id, token: token) }
+            withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }
-        guard withAnimation(.easeIn(duration: 0.18), { completions.collapse(id, token: token) }) else { return }
+        guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
         try? await Task.sleep(for: .milliseconds(180))
         if reduceMotion {
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) { _ = completions.remove(id, token: token) }
         } else {
-            withAnimation(.snappy(duration: 0.3)) { _ = completions.remove(id, token: token) }
+            withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
         }
     }
 }
