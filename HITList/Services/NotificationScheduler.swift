@@ -29,6 +29,48 @@ enum NotificationScheduler {
         }
     }
 
+    // MARK: - Settings: status, pending summary, test
+
+    /// The identifier of Settings' test notification; rescheduling leaves it alone.
+    static let testIdentifier = "HITList.test"
+    static let testDelay: TimeInterval = 5
+
+    static func authorizationStatus() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// Settings' "Scheduled" row: "12 · next 10:45 AM" (`NotificationStatus.pendingText`).
+    static func pendingSummary(now: Date = Date()) async -> String {
+        let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        return NotificationStatus.pendingText(fireDates: NotificationStatus.fireDates(pending), now: now)
+    }
+
+    /// Schedules one notification `testDelay` seconds out in the reminder category, so it shows Complete
+    /// and Snooze (which do nothing for it: it has no task). Asks for permission first if never asked.
+    static func sendTest() async -> NotificationTestResult {
+        let center = UNUserNotificationCenter.current()
+        switch await center.notificationSettings().authorizationStatus {
+        case .denied: return .denied
+        case .notDetermined:
+            guard await requestPermission() else { return .denied }
+        default: break
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "in 15 min · Test reminder"
+        content.body = "This is how a HITList reminder looks"
+        content.sound = .default
+        content.categoryIdentifier = NotificationResponder.categoryIdentifier
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: testDelay, repeats: false)
+        do {
+            try await center.add(UNNotificationRequest(identifier: testIdentifier, content: content, trigger: trigger))
+            log.notice("Test notification scheduled for \(Int(testDelay)) s from now")
+            return .scheduled
+        } catch {
+            log.error("Test notification failed: \(error.localizedDescription, privacy: .public)")
+            return .failed(error.localizedDescription)
+        }
+    }
+
     // MARK: - Bootstrap and triggers
 
     @MainActor private static var container: ModelContainer?
@@ -142,7 +184,8 @@ enum NotificationScheduler {
     @MainActor
     private static func performReschedule(context: ModelContext, reason: String) async {
         let center = UNUserNotificationCenter.current()
-        let pending = await center.pendingNotificationRequests()
+        // Settings' test notification is not the plan's to manage.
+        let pending = await center.pendingNotificationRequests().filter { $0.identifier != testIdentifier }
         guard isEnabled else {
             if !pending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier)) }
             log.info("Rescheduled (\(reason, privacy: .public)): reminders off, removed \(pending.count) pending")
