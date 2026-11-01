@@ -40,7 +40,7 @@ CloudKit container come first.
 | Versioned releases: CHANGELOG.md, `release.sh --version`, preflight tests (core, macOS, iOS) before any archive, version in Settings → About; quick-add title 20 pt; `Preferences` keys; 6 pt sync dot | done 2026-10-31 | Fable |
 | iPhone chrome v2 (floating island bar, "…" menu with Settings and the sync dot on every screen, Liquid Glass on iOS 26) | brief 20, in progress | Opus 5.5 session, effort High |
 | Settings v2 (sync confirmation and check, notification test, default reminder offset, morning summary, start screen, diagnostics, What's new) | brief 21, in progress | Opus 5.5 session, effort High |
-| Motion roles, four dark themes, Liquid Glass in the design system | brief 22, in progress | Opus 5.5 session, effort High |
+| Motion roles, four dark themes, Liquid Glass in the design system | done 2026-10-31 on branch `motion-themes`; `hitGlass` + six `HITMotion` roles; Slate/Graphite/Midnight/Moss switch live (WCAG AA tested); glass on the sheet header, segment highlight and chip hover; crisper completion pop + slide-away. iPhone 17 simulator checked (all four themes on Today, a Group, Settings/Appearance and the Flipboard; one Slate completion; glass header vs Reduce Effects). The list views' toast/collapse curves (not this session's files) and the Mac need George's eyes | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 
