@@ -35,6 +35,7 @@
 		384392355165F856C2318A7A /* UpcomingSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A064393556C9800A4628092 /* UpcomingSchedule.swift */; };
 		387803982AF7D6BED443125C /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC723FC9CBCD716C406511B /* AppInfo.swift */; };
 		3AC80CE57BD7C51458E81210 /* InboxPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */; };
+		3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */; };
 		3F58DD5F0B30EBAAC935ECAD /* HITToggleStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */; };
 		3FAF9663D7052B94C5C1C2BF /* Inter_18pt-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4232FDAE8D59CD8804FC62FC /* Inter_18pt-Regular.ttf */; };
 		429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */; };
@@ -156,6 +157,7 @@
 		165FA6D62560AF712E0AB48D /* HITSegmented.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITSegmented.swift; sourceTree = "<group>"; };
 		172507FC4FF599F803EE8248 /* TaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopout.swift; sourceTree = "<group>"; };
 		179EC0133891B8DCC4B358ED /* MobileTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTabBar.swift; sourceTree = "<group>"; };
+		1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPreferences.swift; sourceTree = "<group>"; };
 		2126889A9D7B6886FF5AE480 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		32E6B3699676B4892851C4C9 /* FlipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardView.swift; sourceTree = "<group>"; };
@@ -524,6 +526,7 @@
 				A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */,
 				E4744E706011D5D130E88452 /* ICloudCheck.swift */,
 				B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */,
+				1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -797,6 +800,7 @@
 				6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */,
 				3823282AA34F38C7D2FBB63C /* SchemaV1Models.swift in Sources */,
 				D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */,
+				3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */,
 				E2EDC1033F73BA817EFF8FA9 /* SettingsView.swift in Sources */,
 				233658D322415C6CB9EC8B8A /* SidebarView.swift in Sources */,
 				E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */,

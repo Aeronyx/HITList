@@ -227,6 +227,43 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertEqual(result.requests.map(\.triggerDate), [now.addingTimeInterval(30 * 60), now.addingTimeInterval(hour)])
     }
 
+    // MARK: Default reminder offset (Settings)
+
+    func testDefaultOffsetAppliesToTasksWithoutTheirOwn() throws {
+        let plain = item("Dentist", in: 5 * hour, remindMinutesBefore: nil)
+        let result = NotificationPlan.make(tasks: [plain], now: now, defaultOffsetMinutes: 15, calendar: calendar)
+        let request = try XCTUnwrap(result.requests.first)
+        XCTAssertEqual(request.triggerDate, now.addingTimeInterval(5 * hour - 15 * 60))
+        XCTAssertEqual(request.title, "in 15 min · Dentist")
+        XCTAssertEqual(request.dueDate, plain.dueDate)
+    }
+
+    func testTasksOwnOffsetWinsOverTheDefault() {
+        let own = item("Flight", in: 5 * hour, remindMinutesBefore: 60)
+        let explicitAtTime = item("Call", in: 6 * hour, remindMinutesBefore: 0)
+        let result = NotificationPlan.make(tasks: [own, explicitAtTime], now: now, defaultOffsetMinutes: 15, calendar: calendar)
+        XCTAssertEqual(result.requests.map(\.title), ["in 1 hour · Flight", "Call"])
+        XCTAssertEqual(result.requests.map(\.triggerDate), [4 * hour, 6 * hour].map(now.addingTimeInterval))
+    }
+
+    func testNoDefaultIsBuildFoursPlan() {
+        let tasks = [item("a", in: hour), item("b", in: 2 * hour, remindMinutesBefore: 30)]
+        XCTAssertEqual(NotificationPlan.make(tasks: tasks, now: now, defaultOffsetMinutes: 0, calendar: calendar),
+                       plan(tasks))
+        XCTAssertEqual(tasks[0].withDefaultOffset(0), tasks[0])
+        XCTAssertEqual(tasks[0].withDefaultOffset(-5), tasks[0], "never negative")
+        XCTAssertEqual(tasks[0].withDefaultOffset(10).reminderOffsetMinutes, 10)
+        XCTAssertEqual(tasks[1].withDefaultOffset(10).reminderOffsetMinutes, 30)
+    }
+
+    func testChangingTheDefaultReplacesThePendingRequest() {
+        let task = item("Standup", in: 3 * hour)
+        let before = plan([task]).requests[0]
+        let after = NotificationPlan.make(tasks: [task], now: now, defaultOffsetMinutes: 10, calendar: calendar).requests[0]
+        XCTAssertEqual(before.identifier, after.identifier)
+        XCTAssertNotEqual(before.fingerprint, after.fingerprint)
+    }
+
     // MARK: Diff
 
     func testDiffAddsNewAndChangedRemovesStaleAndLeavesUnchangedAlone() {
