@@ -110,7 +110,13 @@ enum HITType {
     /// Sheet and popout titles: fixed semibold 17.
     static let title = HITFont.inter(17, .semibold)
     /// Naming a task in the quick-add card: fixed bold 14 (George's spec).
-    static let taskName = HITFont.inter(14, .bold)
+    /// The quick-add card's title field: one step above `body` (the ratio of 14 pt to 12 pt), bold, so the
+    /// task being typed reads larger than the tasks in the list behind it. Fixed size, like `title`.
+    #if os(macOS)
+    static let taskName = HITFont.inter(15, .bold)
+    #else
+    static let taskName = HITFont.inter(20, .bold)
+    #endif
     /// Section headers above a group of rows or fields.
     static let sectionHeader = caption2Semibold
     /// Filter queries and other code-like text stay in the system mono; Inter has no mono cut.

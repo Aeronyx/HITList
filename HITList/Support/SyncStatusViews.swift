@@ -93,3 +93,27 @@ struct AccountChangeBanner: View {
         }
     }
 }
+
+/// The smallest possible sync confirmation: a 6 pt dot for the corner of a toolbar button. Green once
+/// everything has synced, grey while syncing or offline, orange when sync needs attention. It is a view
+/// of `CloudSyncMonitor.state` only; place it with `.overlay(alignment: .topTrailing)`.
+struct SyncIndicatorDot: View {
+    static let size: CGFloat = 6
+    private var monitor: CloudSyncMonitor { .shared }
+
+    var body: some View {
+        let state = monitor.state
+        Circle()
+            .fill(Self.color(for: state))
+            .frame(width: Self.size, height: Self.size)
+            .accessibilityLabel(state.summary())
+    }
+
+    static func color(for state: SyncState) -> Color {
+        switch state {
+        case .synced: return HITColor.dueToday
+        case .syncing, .offline: return Theme.secondaryText
+        case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
+        }
+    }
+}

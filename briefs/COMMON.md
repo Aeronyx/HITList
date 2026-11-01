@@ -53,9 +53,9 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 4 (0.1.0) is live.
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 5 (0.1.0) is live; the next upload is 0.2.0 (6).
 
-## Where things stand (2026-10-31, after round 3)
+## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
 guide), Inter typeface (`HITType` roles only; never `.font(.subheadline)`), schema V2 (`reminderOffsetMinutes`,
 `deadline`, `locationName`, `flipTarget`, `flipCount`, `flipPeriodStart`; V1 frozen in SchemaV1Models.swift),
@@ -72,7 +72,34 @@ Lesson from round 3: commit after every item. Twice the runner's permission stre
 long session and every write (git, xcodegen) was refused from then on; work left uncommitted had to be
 committed by hand afterwards.
 
-## Round 3 ownership (three sessions at once; stay inside your files)
+Also on master since build 5 (Fable, 2026-10-31): `HITType.taskName` is one step above body (20 bold on
+iPhone, 15 on Mac; George found 14 too small). `HITList/Support/AppInfo.swift` (`AppInfo.versionLabel` =
+"0.2.0 (6)"), shown in Settings → About. `HITList/Support/Preferences.swift`: shared preference keys
+(`startTab`, `defaultReminderOffsetMinutes`, `theme`, `reduceEffects`); add your own keys only as an
+`extension Preferences` in a file you own. `SyncIndicatorDot` (6 pt, in `SyncStatusViews.swift`).
+`Views/Settings/AppearanceSettingsSection.swift` is a stub for session 22. `CHANGELOG.md` has a section per
+version; `scripts/release.sh --version X.Y.Z` (Fable only) runs the preflight tests (core, macOS, iOS) before
+anything is archived and refuses a version without a changelog section. Liquid Glass (iOS 26 / macOS 26)
+is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
+the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
+
+## Round 4 ownership (three sessions at once; stay inside your files)
+- `20-iphone-chrome` (branch `iphone-chrome`): `Views/Tabs/*` (+ new `ScreenMenu.swift`),
+  `Popouts/QuickAddEntry.swift`, `Popouts/PopoutHost.swift`, `Popouts/QuickAddPopout.swift` (card material
+  only), the `.toolbar` blocks of `TaskListView.swift`, `Inbox/InboxView.swift`, `Upcoming/UpcomingView.swift`,
+  `Flipboard/FlipboardView.swift`; new `HITListTests/MobileChromeTests.swift`.
+- `21-settings-sync-notifications` (branch `settings-v2`): `SettingsView.swift`, `Views/Settings/*` except
+  `AppearanceSettingsSection.swift`, `Support/SyncStatusViews.swift`, `Support/AppInfo.swift`,
+  `Services/CloudSyncMonitor.swift`, `Services/SyncState.swift`, `Services/NotificationScheduler.swift`,
+  `Services/Notifications/*`, their tests.
+- `22-motion-themes` (branch `motion-themes`): `Support/Theme.swift`, `Support/DesignSystem/*`,
+  `Views/Settings/AppearanceSettingsSection.swift`, `TaskRow.swift` (animations/colours only), `Views/Delight/*`,
+  `DesignSystemTests`, `CompletionAnimatorTests`, new `ThemeTests`.
+- Nobody: `Models.swift`, `SchemaVersions.swift`, `SchemaV1Models.swift`, `Support/Preferences.swift`,
+  `project.yml`, `HITListApp.swift`, `ContentView.swift`, `scripts/`, `briefs/`, `CHANGELOG.md`. ROADMAP: add
+  only the row your brief names.
+
+## Round 3 ownership (finished 2026-10-31; kept for the record)
 - `17-mobile-tabs` (branch `mobile-tabs`): `ContentView.swift`, new `Views/Tabs/`, `TaskListView.swift`,
   `TaskRow.swift`, `SidebarView.swift`, `Views/Inbox/*`, `Views/Upcoming/*`, `Popouts/QuickAddEntry.swift`,
   `Support/Formatting.swift`, new `HITListCore/.../TaskOrdering.swift`.
