@@ -124,14 +124,15 @@ enum HITType {
     static let monoCaption = Font.caption.monospaced()
 }
 
-/// Colours the controls need beyond `Theme`.
+/// Colours the controls need beyond `Theme`. `onAccent`, `text` and `trackOff` follow the theme; the thumb,
+/// danger and due colours are the same in every theme.
 enum HITColor {
-    /// Text and icons on an accent fill: near-black, so the blue reads as a light surface.
-    static let onAccent = Color(hex: "#0B0E14")
-    /// Primary text on slate.
-    static let text = Color(hex: "#E8ECF3")
-    /// Toggle track when off (the same slate as `Theme.separator`).
-    static let trackOff = Color(hex: "#303948")
+    /// Text and icons on an accent fill: near-black in every theme, so the accent reads as a light surface.
+    static var onAccent: Color { Theme.palette.onAccent }
+    /// Primary text on the theme's surfaces.
+    static var text: Color { Theme.palette.text }
+    /// Toggle track when off (the theme's separator).
+    static var trackOff: Color { Theme.separator }
     /// Toggle thumb.
     static let thumb = Color(hex: "#F4F6FA")
     /// Destructive actions and invalid input: the P1 red.
