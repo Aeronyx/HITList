@@ -37,8 +37,11 @@ private struct QuickAddEntry: ViewModifier {
                         Button { popouts.openQuickAdd(context) } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 13, weight: .bold))
-                                .frame(width: 22, height: 16)
+                                .frame(width: 22, height: 14)
                         }
+                        // The small control size keeps the oval a little shorter than the toolbar's
+                        // other buttons (George, build 9).
+                        .controlSize(.small)
                         .modifier(ProminentToolbarButton())
                         .accessibilityLabel("Add task")
                         .help("Add a task (⌘N)")
@@ -55,7 +58,8 @@ private struct QuickAddEntry: ViewModifier {
 /// list on iPad). It shrinks away while a popout is up; `popouts.openQuickAdd()` adds into the list on
 /// screen. With `glass` (the iPhone shell) it is accent-tinted interactive Liquid Glass on iOS 26.
 struct FloatingAddButton: View {
-    static let size = CGSize(width: 64, height: 48)
+    /// A wide oval: 64 × 42, a little shorter than its first cut (George, build 9).
+    static let size = CGSize(width: 64, height: 42)
     /// iPhone: glass on iOS 26 (see `hitGlass`); iPad keeps the plain accent oval.
     var glass = false
     var action: () -> Void
@@ -161,6 +165,8 @@ struct InlineAddRow: View {
         }
         .selectionDisabled()
         .listRowSeparator(.hidden)
+        // The task rows' insets, so "+ Add task" lines up under the checkboxes.
+        .listRowInsets(ListMetrics.rowInsets(compact: false))
         // Without this the row takes the system grey, which stands out in the darker themes.
         .slateRow()
     }

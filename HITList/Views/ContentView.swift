@@ -50,19 +50,19 @@ struct ContentView: View {
 }
 
 /// The sidebar and the selected list, side by side. On the Mac, Settings is one more destination here
-/// (`SidebarItem.settings`), opened through this window's `SettingsRouter`.
+/// (`SidebarItem.settings`), opened through this window's `SettingsRouter`: the sidebar column shows the
+/// Settings sections while it is selected (`MacSettingsSidebar`) and the detail column the chosen section.
 private struct SplitContent: View {
     @Environment(PopoutController.self) private var popouts
     @State private var selection: SidebarItem? = .today
-    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var settingsRouter = SettingsRouter()
     /// Where to go back to when the Settings page is closed.
     @State private var beforeSettings: SidebarItem? = .today
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
-            SidebarView(selection: $selection)
+        NavigationSplitView {
+            sidebar
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240)
         } detail: {
             ListScreen(item: selection ?? .today)
@@ -70,19 +70,35 @@ private struct SplitContent: View {
         }
         .onChange(of: selection) { old, new in
             popouts.closeAll()
-            // Settings is a page of its own: the sidebar slides away while it shows and comes back after.
-            if new == .settings {
-                if old != .settings { beforeSettings = old }
-                withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { columnVisibility = .detailOnly }
-            } else if old == .settings {
-                withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { columnVisibility = .all }
-            }
+            if new == .settings, old != .settings { beforeSettings = old }
         }
         #if os(macOS)
         .environment(settingsRouter)
         .focusedSceneValue(\.settingsRouter, settingsRouter)
         .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
         .onChange(of: settingsRouter.closeRequests) { _, _ in selection = beforeSettings ?? .today }
+        #endif
+    }
+
+    /// The sidebar column's content: the lists, or while Settings is selected, its sections with a Back
+    /// button, the way System Settings uses its sidebar. The column itself never collapses: build 9 slid
+    /// it away and back, and the reopening stuttered, so the swap is a push inside the column instead.
+    @ViewBuilder
+    private var sidebar: some View {
+        #if os(macOS)
+        ZStack {
+            if selection == .settings {
+                MacSettingsSidebar { settingsRouter.close() }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            } else {
+                SidebarView(selection: $selection)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+        }
+        .clipped()
+        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: selection == .settings)
+        #else
+        SidebarView(selection: $selection)
         #endif
     }
 }

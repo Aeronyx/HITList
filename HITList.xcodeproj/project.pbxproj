@@ -125,6 +125,7 @@
 		C9EE236E00D4759FE273ECD6 /* SeedingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C4883652158CAEF157D321 /* SeedingTests.swift */; };
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
 		CBC9B3B7528A150F91703102 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF96EABAFDE73C7753F296E /* Diagnostics.swift */; };
+		D0EF53976903B23E0A90B324 /* ListChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67740874FB15E62462511914 /* ListChrome.swift */; };
 		D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4744E706011D5D130E88452 /* ICloudCheck.swift */; };
 		D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */; };
 		D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08BB24F8F65457496F557A04 /* Deduplicator.swift */; };
@@ -233,6 +234,7 @@
 		5E0F881764310827D1A610F1 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		659074BDF3973B67D923222D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		65DBCFC9B67D1B0D889D68A7 /* Inter_18pt-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-SemiBold.ttf"; sourceTree = "<group>"; };
+		67740874FB15E62462511914 /* ListChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListChrome.swift; sourceTree = "<group>"; };
 		6799510B16E63B8CCC4071C7 /* HITList.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = HITList.entitlements; sourceTree = "<group>"; };
 		68E88EA4F6FA56F39D594F41 /* ICloudSettingsGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSettingsGroups.swift; sourceTree = "<group>"; };
 		6A064393556C9800A4628092 /* UpcomingSchedule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingSchedule.swift; sourceTree = "<group>"; };
@@ -388,6 +390,7 @@
 			children = (
 				899E17FD4EC8DCCC11FD290D /* ContentView.swift */,
 				E44155658C8F3884AA9502C5 /* FilterEditorView.swift */,
+				67740874FB15E62462511914 /* ListChrome.swift */,
 				CB8ABD5B832600BB422B2240 /* ProjectEditorView.swift */,
 				48F188E277BC60A2CD068AAD /* SettingsView.swift */,
 				BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */,
@@ -891,6 +894,7 @@
 				B7E484557E8DFB00AFE65C32 /* KeyboardShortcuts.swift in Sources */,
 				54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */,
 				A1A8673E5F354361A23B5ED8 /* LastSyncChange.swift in Sources */,
+				D0EF53976903B23E0A90B324 /* ListChrome.swift in Sources */,
 				EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */,
 				27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */,
 				25867322B5DBFEA293437AF1 /* MacAboutSection.swift in Sources */,

@@ -12,7 +12,7 @@ bundle and `UIAppFonts`/`ATSApplicationFontsPath` register them). Use the `HITTy
 `.font(.subheadline)`: `.largeTitle`, `.title1/2/3` (+ `.title2Bold`), `.headline`, `.body`, `.callout`
 (+ `Medium`/`Bold`), `.subheadline` (+ `Medium`/`Semibold`), `.footnote`, `.caption` (+ `Bold`),
 `.caption2` (+ `Semibold`), `.control` (button/chip labels), `.title` (sheet titles, fixed 17 semibold),
-`.taskName` (quick-add title, bold, one step above body: 20 on iOS, 15 on Mac), `.sectionHeader`, `.mono`/`.monoCaption` (system mono for
+`.taskName` (quick-add title, bold, one step above body: 20 on iOS, 15 on Mac), `.sectionHeader`, `.listSectionHeader` (task-list headers, applied by `taskSectionHeader`; rows and headers measure from `ListMetrics`), `.mono`/`.monoCaption` (system mono for
 queries). SF Symbols keep `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`, so
 unstyled `Text` is Inter. `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
 and the due colours `.dueToday` (green) / `.dueTomorrow` (orange) / `.dueLater` (purple) /

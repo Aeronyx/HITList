@@ -16,7 +16,7 @@ struct TaskRow: View {
     @Environment(\.modelContext) private var context
     /// Optional: a row rendered outside the app shell (tests, previews) deletes at once.
     @Environment(PopoutController.self) private var popouts: PopoutController?
-    /// Settings → Appearance → Compact rows: less air above and below each row.
+    /// Settings → Appearance → Compact rows: less air above and below each row (`ListMetrics`).
     @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @HITEffectsSetting private var effects
@@ -36,13 +36,14 @@ struct TaskRow: View {
         completionPhase == .animating && !effects.calmMotion ? CompletionMotion.slideDistance : 0
     }
 
-    /// The height of one title line. The checkbox and the priority badge centre on it, so a one-line
-    /// title reads as one aligned row and a two-line title keeps them on its first line.
+    /// The height of one title line: the checkbox centres on it, so a one-line title reads as one aligned
+    /// row and a two-line title keeps the checkbox on its first line. It is the checkbox's size, so the
+    /// title has no spare air above or below it (the row's insets are `ListMetrics`').
     #if os(macOS)
     private let lineHeight: CGFloat = 20
     private let checkSize: CGFloat = 18
     #else
-    private let lineHeight: CGFloat = 24
+    private let lineHeight: CGFloat = 22
     private let checkSize: CGFloat = 22
     #endif
 
@@ -67,7 +68,7 @@ struct TaskRow: View {
             .buttonStyle(.plain)
             .accessibilityLabel(isChecked ? "Mark incomplete" : "Complete task")
 
-            VStack(alignment: .leading, spacing: HITSpacing.xs) {
+            VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
                 Text(task.title)
                     .font(HITType.body)
                     .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
@@ -114,17 +115,12 @@ struct TaskRow: View {
                 }
                 .lineLimit(1)
             }
+            // Priority shows as the checkbox's colour alone; no "P1" badge.
             Spacer(minLength: 0)
-            if task.priorityValue != .p4 {
-                Text(task.priorityValue.shortName)
-                    .font(HITType.caption2Semibold)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(task.priorityValue.color.opacity(0.15), in: Capsule())
-                    .foregroundStyle(task.priorityValue.color)
-                    .frame(height: lineHeight)
-            }
         }
-        .padding(.vertical, compactRows ? 0 : HITSpacing.xs)
+        // The row owns its insets (the same above and below, and the same on every list) so rows are
+        // equal heights and sit the same distance under every header.
+        .listRowInsets(ListMetrics.rowInsets(compact: compactRows))
         .contentShape(Rectangle())
         // The slide-away: a render offset only, so the row's layout doesn't move.
         .offset(x: slideOffset)

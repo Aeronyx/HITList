@@ -11,6 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.3.3", items: [
+            "Slimmer task rows, all the same height; priority is the checkbox's colour, with no badge.",
+            "Section headers line up the same on every list; the Inbox's priority headers are readable.",
+            "Mac: Settings sections live in the sidebar, System Settings style, with Back on top.",
+            "A slightly shorter + oval, and the sync bolt sits nearer its neighbours.",
+        ]),
         Entry(version: "0.3.2", items: [
             "The sync bolt's shape says its state: filled, hollow while syncing, struck through when it can't.",
             "Mac: Settings is a full page of its own, with keyboard shortcuts, data counts and theme previews.",

@@ -285,8 +285,11 @@ final class MacSettingsTests: XCTestCase {
     }
 
     func testPageRendersAtTheWindowsMinimumAndWide() {
-        // The detail column at the 760 × 560 minimum window (sidebar 200) and at 1200 wide (sidebar 240).
+        // The detail column at the 760 × 560 minimum window (sidebar 200) and at 1200 wide (sidebar 240),
+        // and the sections in the sidebar column at both of its widths.
         render(MacSettingsPage(), "page at minimum", width: 560, height: 560)
         render(MacSettingsPage(), "page wide", width: 960, height: 700)
+        render(MacSettingsSidebar {}, "sidebar at minimum", width: 200, height: 560)
+        render(MacSettingsSidebar {}, "sidebar ideal", width: 240, height: 700)
     }
 }

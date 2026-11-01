@@ -140,7 +140,8 @@ struct UpcomingView: View {
                         ForEach(schedule.overdue) { row($0) }
                     }
                 } header: {
-                    overdueHeader(schedule.overdue)
+                    // Outermost, like `headerRow()`: zero insets so the header text starts over the checkboxes.
+                    overdueHeader(schedule.overdue).listRowInsets(EdgeInsets())
                 }
                 #endif
             }
@@ -159,7 +160,7 @@ struct UpcomingView: View {
                     ForEach(day.items) { row($0) }
                     addRow(day.date, isEmpty: day.items.isEmpty)
                 } header: {
-                    dayHeader(day)
+                    dayHeader(day).listRowInsets(EdgeInsets())
                 }
                 #endif
             }
@@ -265,7 +266,7 @@ struct UpcomingView: View {
                     Image(systemName: "chevron.right")
                         .font(HITType.captionBold)
                         .rotationEffect(.degrees(overdueExpanded ? 90 : 0))
-                    Text("Overdue").fontWeight(.semibold)
+                    Text("Overdue")
                     Text("\(overdue.count)").foregroundStyle(Theme.secondaryText)
                 }
                 .foregroundStyle(.red)
@@ -294,7 +295,6 @@ struct UpcomingView: View {
         let isToday = day.date == today
         return HStack(spacing: 6) {
             Text(UpcomingFormat.header(for: day.date, now: now, calendar: calendar))
-                .fontWeight(.semibold)
                 .foregroundStyle(isToday ? Theme.accent : .primary)
             if !day.items.isEmpty {
                 Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
@@ -328,6 +328,7 @@ struct UpcomingView: View {
                     .id(AddRowID(day: day))
                     .selectionDisabled()
                     .listRowSeparator(.hidden)
+                    .listRowInsets(ListMetrics.rowInsets(compact: false))
                     .slateRow()
             }
         } else {
@@ -532,11 +533,13 @@ private struct DayHeaderStyle: ViewModifier {
     var highlighted = false
 
     func body(content: Content) -> some View {
+        // The same type and padding as every other list's headers (`taskSectionHeader`), plus the drop tint.
         content
-            .font(HITType.subheadline)
+            .font(HITType.listSectionHeader)
             .textCase(nil)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ListMetrics.horizontalInset)
+            .padding(.top, ListMetrics.headerTop)
+            .padding(.bottom, ListMetrics.headerBottom)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.background)
             .background(Theme.accent.opacity(highlighted ? 0.18 : 0))
@@ -554,6 +557,10 @@ private extension View {
             .selectionDisabled()
             .listRowSeparator(.hidden)
             .listRowBackground(Theme.background)
+            // Set here, outermost: set only inside `DayHeaderStyle` the zero insets were lost on the way
+            // out through the header's drop and geometry modifiers, and the header text sat 17 pt to the
+            // right of the checkboxes under it.
+            .listRowInsets(EdgeInsets())
     }
 }
 #endif

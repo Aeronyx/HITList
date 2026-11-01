@@ -230,8 +230,7 @@ struct TaskListView: View {
                                     }
                                 } header: {
                                     if !group.title.isEmpty {
-                                        Text(group.title)
-                                            .foregroundStyle(group.color)
+                                        Text(group.title).taskSectionHeader(color: group.color)
                                     }
                                 }
                             }
@@ -242,6 +241,7 @@ struct TaskListView: View {
                         #if os(macOS)
                         .listStyle(.inset)
                         #endif
+                        .environment(\.defaultMinListHeaderHeight, 0)
                         .slateList()
                     }
                 case .failure(let error):

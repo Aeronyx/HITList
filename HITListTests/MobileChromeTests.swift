@@ -17,7 +17,8 @@ final class MobileChromeTests: XCTestCase {
     func testChromeHeightIsTheIslandPlusThePlus() {
         XCTAssertEqual(IslandMetrics.chromeHeight,
                        IslandMetrics.bottomGap + IslandMetrics.height + IslandMetrics.addButtonGap + FloatingAddButton.size.height)
-        XCTAssertEqual(IslandMetrics.chromeHeight, 132)
+        XCTAssertEqual(IslandMetrics.chromeHeight, 126)
+        XCTAssertEqual(FloatingAddButton.size, CGSize(width: 64, height: 42), "a wide oval, a little shorter than build 8's")
     }
 
     func testGlassNeedsTheOSAndBothSwitchesOff() {
