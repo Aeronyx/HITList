@@ -53,7 +53,7 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 6 (0.2.0) is live; the next upload is 0.3.0 (7).
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 7 (0.3.0) is live; the next upload is 0.3.1 (8).
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
@@ -82,6 +82,21 @@ version; `scripts/release.sh --version X.Y.Z` (Fable only) runs the preflight te
 anything is archived and refuses a version without a changelog section. Liquid Glass (iOS 26 / macOS 26)
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
+
+## Round 6 ownership (one session; stay inside your files)
+- `24-mac-settings-page` (branch `mac-settings`): `SettingsView.swift`, `Views/Settings/*`, new
+  `Views/Settings/Mac/*`, `HITListApp.swift` (Settings scene + appSettings command only), `ContentView.swift`
+  (`.settings` item + screen), `SidebarView.swift`, `openAppSettings` in `Tabs/ScreenMenu.swift`,
+  `SettingsTests`, new `MacSettingsTests`, its ROADMAP row.
+- Nobody: everything else. Fable's build-7 polish is already on master (`Tabs/ScreenMenu.swift` layout,
+  `SyncStatusViews.swift`, `Popouts/*`, `Theme.swift`, `Upcoming/*`, `Browse`, `Flipboard`).
+
+Also on master since build 7: `screenChrome` draws the small `SyncBolt` outside the toolbar's shared glass
+(`sharedBackgroundVisibility(.hidden)` on iOS 26 / macOS 26) and then exactly two controls: the screen's
+own (`viewOptions`) and the "…" with Settings… and the version on every platform; eight theme palettes;
+the iPhone quick-add card is put away in one motion (`PopoutHost.retireQuickAdd`); build output lives in
+`build.noindex/` and Xcode's DerivedData in `~/Library/Developer/Xcode/DerivedData.noindex` so Spotlight
+never offers a stale HITList.app.
 
 ## Round 5 (finished 2026-11-01; kept for the record)
 - `23-mac-pickers` (branch `mac-pickers`): `Views/Popouts/PopoutPickers.swift`, new `Views/Popouts/Pickers/*`,

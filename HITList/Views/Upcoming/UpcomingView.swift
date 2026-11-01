@@ -26,6 +26,8 @@ struct UpcomingView: View {
     @State private var visibleWeek: Int? = 0
     /// The day whose header is at the top of the list.
     @State private var focusedDay: Date?
+    /// The toolbar's "Jump to today": bumped there, acted on inside the ScrollViewReader.
+    @State private var jumpToTodayRequest = 0
     /// The day a dragged task is hovering over, in the strip or on a header.
     @State private var dropTarget: Date?
     /// The task whose Pick Date popover is open.
@@ -89,6 +91,7 @@ struct UpcomingView: View {
                     Divider()
                     list(schedule)
                 }
+                .onChange(of: jumpToTodayRequest) { _, _ in jump(to: today, schedule: schedule, proxy: proxy) }
             }
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
@@ -103,7 +106,13 @@ struct UpcomingView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        .screenChrome(menu: {})
+        .screenChrome {
+            Button { jumpToTodayRequest += 1 } label: {
+                Label("Jump to today", systemImage: "scope").labelStyle(.iconOnly)
+            }
+            .help("Jump to today")
+            .accessibilityIdentifier("jumpToToday")
+        } menu: {}
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
     }

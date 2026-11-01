@@ -46,7 +46,18 @@ struct BrowseView: View {
         .background(Theme.background)
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
-        .screenChrome(menu: {})
+        .screenChrome {
+            Menu {
+                Button { creatingProject = true } label: { Label("New Group…", systemImage: "circle.fill") }
+                Button { creatingLabel = true } label: { Label("New Label…", systemImage: "tag") }
+                Button { creatingFilter = true } label: { Label("New Filter…", systemImage: "line.3.horizontal.decrease.circle") }
+            } label: {
+                Label("New", systemImage: "folder.badge.plus").labelStyle(.iconOnly)
+            }
+            .menuIndicator(.hidden)
+            .help("New Group, label or filter")
+            .accessibilityIdentifier("browseNew")
+        } menu: {}
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }

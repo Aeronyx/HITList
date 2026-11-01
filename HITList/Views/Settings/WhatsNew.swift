@@ -11,6 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.3.1", items: [
+            "A small bolt in the toolbar shows sync at a glance; tap it for Settings.",
+            "Every screen has the same two controls: Upcoming jumps to today, Browse adds a Group, label or filter.",
+            "iPhone: the quick-add card goes away in one motion with the keyboard.",
+            "Four more themes: Nord, Tokyo Night, Mocha, Rosé.",
+        ]),
         Entry(version: "0.3.0", items: [
             "Mac: date, time, reminder and every other picker open as cards inside the window, with a HITList calendar.",
             "Sync status is a small cloud icon in every screen's toolbar; tap it for Settings.",

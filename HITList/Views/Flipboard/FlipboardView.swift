@@ -69,9 +69,12 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // Both actions in the "…", on every platform.
+        // Add switch is the screen's control; the sound toggle sits in the "…". Same on every platform.
         .screenChrome {
-            Button { adding = true } label: { Label("Add Switch…", systemImage: "plus") }
+            Button { adding = true } label: { Label("Add switch", systemImage: "plus.app").labelStyle(.iconOnly) }
+                .help("Add a switch")
+                .accessibilityIdentifier("addSwitch")
+        } menu: {
             Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
         }
         .onReceive(clock) { now = $0 }

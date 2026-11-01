@@ -69,7 +69,7 @@ fi
 CURRENT=$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | awk '{print $2}')
 MARKETING=$(grep -E '^[[:space:]]+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
 [[ "$CURRENT" =~ ^[0-9]+$ ]] || fail "could not read CURRENT_PROJECT_VERSION from project.yml"
-LOGDIR="$ROOT/build/logs"; mkdir -p "$LOGDIR"
+LOGDIR="$ROOT/build.noindex/logs"; mkdir -p "$LOGDIR"
 if [[ -n "$NEW_VERSION" && "$NEW_VERSION" != "$MARKETING" ]]; then
   step "Version $MARKETING -> $NEW_VERSION"
   sed -i '' -E "s/^([[:space:]]+MARKETING_VERSION:) .*/\1 \"$NEW_VERSION\"/" project.yml
@@ -131,12 +131,13 @@ if (( SCHEMA_CHECK && UPLOAD )); then
 fi
 
 # ---- archive / export / verify ------------------------------------------------------------------
-ARCHIVES="$ROOT/build/archives"
+# .noindex: Spotlight must not offer these app copies when George types "HITList".
+ARCHIVES="$ROOT/build.noindex/archives"
 mkdir -p "$ARCHIVES"
 for p in $PLATFORMS; do
   case $p in
-    ios)   DEST='generic/platform=iOS';   OUT="$ROOT/build/ios";   ARTIFACT="$OUT/HITList.ipa" ;;
-    macos) DEST='generic/platform=macOS'; OUT="$ROOT/build/mac";   ARTIFACT="$OUT/HITList.pkg" ;;
+    ios)   DEST='generic/platform=iOS';   OUT="$ROOT/build.noindex/ios";   ARTIFACT="$OUT/HITList.ipa" ;;
+    macos) DEST='generic/platform=macOS'; OUT="$ROOT/build.noindex/mac";   ARTIFACT="$OUT/HITList.pkg" ;;
   esac
   ARCHIVE="$ARCHIVES/HITList-$p.xcarchive"
   rm -rf "$ARCHIVE" "$OUT"
@@ -179,8 +180,8 @@ done
 if (( UPLOAD )); then
   for p in $PLATFORMS; do
     case $p in
-      ios)   ARTIFACT="$ROOT/build/ios/HITList.ipa" ;;
-      macos) ARTIFACT="$ROOT/build/mac/HITList.pkg" ;;
+      ios)   ARTIFACT="$ROOT/build.noindex/ios/HITList.ipa" ;;
+      macos) ARTIFACT="$ROOT/build.noindex/mac/HITList.pkg" ;;
     esac
     step "Upload $p"
     LOG=$(mktemp)

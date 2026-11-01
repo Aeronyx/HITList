@@ -118,42 +118,66 @@ struct AccountChangeBanner: View {
     }
 }
 
-/// The sync state as one small toolbar icon (`SyncState.symbol`: a cloud with a check, arrows, a slash
-/// or an exclamation mark), green once everything has synced, grey while syncing or offline, orange when
-/// sync needs attention. It pulses once when a change reaches iCloud, like `SyncIndicatorDot`, and
-/// tapping it opens Settings. Sits at the left of every screen's trailing toolbar on every platform.
-struct SyncToolbarIcon: View {
+/// Sync status as one small bolt in the toolbar's empty space, on every screen and platform: a soft
+/// accent bolt once everything has synced, a slowly breathing bolt while syncing, a slashed grey bolt
+/// offline, an orange bolt when sync needs attention (signed out, restricted, an error, local only).
+/// It flicks brighter once when a change lands, and tapping it opens Settings.
+struct SyncBolt: View {
     var action: () -> Void
+    static let size: CGFloat = 11
     private var monitor: CloudSyncMonitor { .shared }
-    @State private var scale: CGFloat = 1
+    @State private var flash = false
     @State private var lastPulse: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let state = monitor.state
         Button(action: action) {
-            Image(systemName: state.symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(SyncIndicatorDot.color(for: state))
-                .scaleEffect(scale)
+            Image(systemName: Self.symbol(for: state))
+                .font(.system(size: Self.size, weight: .bold))
+                .foregroundStyle(Self.color(for: state).opacity(flash ? 1 : Self.opacity(for: state)))
+                .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 24, height: 24)
+                .frame(width: 20, height: 20)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(state.summary())
-        .accessibilityIdentifier("syncIcon")
+        .accessibilityIdentifier("syncBolt")
         .help(state.summary())
         .onChange(of: monitor.lastChangeAt) { old, new in
             let now = Date()
             guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
                                                reduceMotion: reduceMotion) else { return }
             lastPulse = now
-            withAnimation(HITMotion.emphasis) { scale = 1.3 }
+            withAnimation(HITMotion.quick) { flash = true }
             Task {
-                try? await Task.sleep(for: .milliseconds(180))
-                withAnimation(HITMotion.emphasis) { scale = 1 }
+                try? await Task.sleep(for: .milliseconds(260))
+                withAnimation(HITMotion.standard) { flash = false }
             }
+        }
+    }
+
+    static func symbol(for state: SyncState) -> String {
+        switch state {
+        case .offline: return "bolt.slash.fill"
+        default: return "bolt.fill"
+        }
+    }
+
+    /// Soft, not bright: the accent at 0.75 when synced; attention states use the orange due colour.
+    static func color(for state: SyncState) -> Color {
+        switch state {
+        case .synced, .syncing: return Theme.accent
+        case .offline: return Theme.secondaryText
+        case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
+        }
+    }
+
+    static func opacity(for state: SyncState) -> Double {
+        switch state {
+        case .synced, .syncing: return 0.75
+        default: return 0.9
         }
     }
 }
