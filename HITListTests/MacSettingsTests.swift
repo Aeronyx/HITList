@@ -122,6 +122,58 @@ final class MacSettingsTests: XCTestCase {
         XCTAssertEqual(HITShortcuts.symbols(KeyboardShortcut(.return, modifiers: .command)), "⌘Return")
     }
 
+    // MARK: Data
+
+    func testDataCountsFromAnInMemoryContainer() throws {
+        let context = container.mainContext
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 11, day: 1, hour: 15))!
+        let today = cal.startOfDay(for: now)
+        func day(_ offset: Int, hour: Int? = nil) -> Date {
+            let d = cal.date(byAdding: .day, value: offset, to: today)!
+            return hour.map { cal.date(bySettingHour: $0, minute: 0, second: 0, of: d)! } ?? d
+        }
+
+        XCTAssertEqual(try DataStats.count(in: context, now: now, calendar: cal), DataStats(), "empty store")
+
+        let home = Project(name: "Home")
+        context.insert(home)
+        context.insert(Project(name: "Work"))
+        context.insert(TaskLabel(name: "calls"))
+        context.insert(SavedFilter(name: "P1", query: "p1"))
+        context.insert(TaskItem(title: "yesterday, all day", dueDate: day(-1)))             // overdue
+        context.insert(TaskItem(title: "today 9 am", dueDate: day(0, hour: 9), hasDueTime: true)) // overdue at 3 pm
+        context.insert(TaskItem(title: "today, all day", dueDate: day(0)))                  // not yet
+        context.insert(TaskItem(title: "today 6 pm", dueDate: day(0, hour: 18), hasDueTime: true))
+        context.insert(TaskItem(title: "no date", project: home))
+        let done = TaskItem(title: "done last week", dueDate: day(-7))
+        done.isCompleted = true
+        context.insert(done)
+        try context.save()
+
+        let stats = try DataStats.count(in: context, now: now, calendar: cal)
+        XCTAssertEqual(stats, DataStats(openTasks: 5, completedTasks: 1, overdueTasks: 2, groups: 2, labels: 1, filters: 1))
+    }
+
+    func testStoreSizeAddsTheWalAndShmFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appending(path: "MacSettingsTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = dir.appending(path: "HITList.store")
+
+        XCTAssertNil(DataStats.storeSize(at: store), "no file yet")
+        XCTAssertNil(DataStats.storeSize(at: nil))
+        XCTAssertNil(DataStats.storeSize(at: URL(fileURLWithPath: "/dev/null")), "an in-memory store's URL")
+        XCTAssertNil(DataStats.storeSize(at: dir), "a folder isn't a store")
+        try Data(count: 4096).write(to: store)
+        XCTAssertEqual(DataStats.storeSize(at: store), 4096)
+        try Data(count: 1000).write(to: URL(fileURLWithPath: store.path + "-wal"))
+        try Data(count: 24).write(to: URL(fileURLWithPath: store.path + "-shm"))
+        XCTAssertEqual(DataStats.storeSize(at: store), 5120)
+        XCTAssertFalse(DataStats.sizeText(5120).isEmpty)
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
@@ -144,6 +196,8 @@ final class MacSettingsTests: XCTestCase {
         render(MacSettingsSectionList(selection: .data) { _ in }, "section list", width: 200, height: 560)
         render(KeyboardShortcutsGroups(), "shortcuts table")
         render(KeyCaps(keys: ["⇧", "⌘", "C"]), "keycaps", width: 120)
+        render(DataCountTiles(stats: DataStats(openTasks: 12, completedTasks: 340, overdueTasks: 2, groups: 4,
+                                               labels: 6, filters: 3)), "count tiles", width: 312)
     }
 
     func testPageRendersAtTheWindowsMinimumAndWide() {
