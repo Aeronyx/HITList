@@ -10,7 +10,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @State private var notificationsEnabled = NotificationScheduler.isEnabled
     @State private var exportDocument: SnapshotDocument?
     @State private var showImporter = false
     @State private var importMessage: String?
@@ -19,6 +18,10 @@ struct SettingsView: View {
     @State private var lastBackup = AppGroup.defaults.object(forKey: LocalBackup.lastBackupKey) as? Date
     @State private var backupMessage: String?
     @State private var showSyncDetails = false
+    @State private var isCheckingICloud = false
+    @State private var iCloudCheck: ICloudCheck?
+    @State private var showWhatsNew = false
+    @State private var diagnosticsCopied = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -74,6 +77,8 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var groups: some View {
+        GeneralSettingsSection()
+
         HITGroup("iCloud Sync", footer: "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows.") {
             SyncStatusLine()
                 .fixedSize(horizontal: false, vertical: true)
@@ -87,6 +92,25 @@ struct SettingsView: View {
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.vertical, HITSpacing.m)
             }
+            HITMenuRow("Check iCloud…", systemImage: "checkmark.icloud", accessory: .none) { runICloudCheck() }
+                .disabled(isCheckingICloud)
+                .overlay(alignment: .trailing) {
+                    if isCheckingICloud { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
+                }
+                .accessibilityIdentifier("settings-check-icloud")
+            if let iCloudCheck {
+                Label(iCloudCheck.summary, systemImage: iCloudCheck.isHealthy ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(HITType.caption)
+                    .foregroundStyle(iCloudCheck.isHealthy ? Theme.secondaryText : HITColor.dueTomorrow)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .hitRowPadding()
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("settings-check-icloud-result")
+            }
+        }
+        // The end of the iCloud block, set apart so it isn't tapped on the way to Check iCloud.
+        HITGroup(footer: "Danger: this throws away this device's copy and downloads everything again from iCloud. Changes that haven't synced yet are lost.") {
             HITMenuRow("Reset local cache and re-download…", systemImage: "arrow.counterclockwise",
                        role: .destructive, accessory: .none) { confirmReset = true }
                 .disabled(!LocalCacheReset.isAvailable)
@@ -115,21 +139,7 @@ struct SettingsView: View {
             if let backupMessage { message(backupMessage) }
         }
 
-        HITGroup("Reminders") {
-            Toggle(isOn: $notificationsEnabled) {
-                HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a specific time get a notification.",
-                                systemImage: "bell")
-            }
-            .toggleStyle(.hit)
-            .hitRowPadding()
-            .onChange(of: notificationsEnabled) { _, on in
-                Task {
-                    if on, !(await NotificationScheduler.requestPermission()) { notificationsEnabled = false }
-                    NotificationScheduler.isEnabled = notificationsEnabled
-                    await NotificationScheduler.reschedule(context: context)
-                }
-            }
-        }
+        RemindersSettingsSection()
 
         DelightSettingsSection()
 
@@ -138,6 +148,14 @@ struct SettingsView: View {
         HITGroup("About") {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
+            HITMenuRow("Copy diagnostics", systemImage: "doc.on.doc", value: diagnosticsCopied ? "Copied" : nil,
+                       accessory: .none) { copyDiagnostics() }
+                .accessibilityIdentifier("settings-copy-diagnostics")
+            HITMenuRow("What's new", systemImage: "sparkles") { showWhatsNew = true }
+                .accessibilityIdentifier("settings-whats-new")
+        }
+        .sheet(isPresented: $showWhatsNew) {
+            WhatsNewSheet().slateSheet()
         }
     }
 
@@ -175,6 +193,28 @@ struct SettingsView: View {
             }
         } catch {
             backupMessage = "Backup failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func copyDiagnostics() {
+        let store = context.container.configurations.first?.url.path ?? "unknown"
+        Task {
+            Diagnostics.copy(await Diagnostics.current(storePath: store).text)
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { diagnosticsCopied = true }
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { diagnosticsCopied = false }
+        }
+    }
+
+    private func runICloudCheck() {
+        guard !isCheckingICloud else { return }
+        isCheckingICloud = true
+        Task {
+            let result = await ICloudCheck.run()
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+                iCloudCheck = result
+                isCheckingICloud = false
+            }
         }
     }
 

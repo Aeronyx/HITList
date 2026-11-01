@@ -24,6 +24,15 @@ struct NotificationPlan: Equatable {
 
         /// When the reminder is meant to go off: the due time minus the offset.
         var remindAt: Date? { dueDate.map { $0.addingTimeInterval(-offset) } }
+
+        /// Settings' default reminder applied: a task with no offset of its own (nil) takes `minutes`;
+        /// a task's own offset wins, including an explicit 0 ("at the due time").
+        func withDefaultOffset(_ minutes: Int) -> Item {
+            guard reminderOffsetMinutes == nil, minutes > 0 else { return self }
+            var copy = self
+            copy.reminderOffsetMinutes = minutes
+            return copy
+        }
     }
 
     struct Request: Equatable {
@@ -38,6 +47,8 @@ struct NotificationPlan: Equatable {
             case overdue
             /// Stands in for the tasks the limit cut off.
             case summary
+            /// Settings' daily summary of today's and overdue tasks (`summaryRequest(tasks:at:now:)`).
+            case morningSummary
         }
 
         let identifier: String
@@ -92,11 +103,15 @@ struct NotificationPlan: Equatable {
     ///
     /// A reminder goes out at `due − offset`, never in the past: if that moment has passed but the due
     /// time hasn't, it goes out now (once); if both have passed, the late-grace rule applies.
+    ///
+    /// `defaultOffsetMinutes` (Settings → Reminders → Default reminder) applies to tasks whose
+    /// `reminderOffsetMinutes` is nil (`Item.withDefaultOffset`).
     static func make(tasks: [Item], now: Date, limit: Int = defaultLimit, alreadyScheduled: Set<String> = [],
-                     calendar: Calendar = .current) -> NotificationPlan {
+                     defaultOffsetMinutes: Int = 0, calendar: Calendar = .current) -> NotificationPlan {
         let horizon = calendar.date(byAdding: .day, value: horizonDays, to: now)!
         let earliest = now.addingTimeInterval(-lateGrace)
         let candidates = tasks
+            .map { $0.withDefaultOffset(defaultOffsetMinutes) }
             .compactMap { item -> Candidate? in
                 guard !item.isCompleted, item.hasDueTime, let due = item.dueDate, due < horizon else { return nil }
                 let remindAt = due.addingTimeInterval(-item.offset)

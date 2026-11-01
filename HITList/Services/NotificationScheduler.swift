@@ -29,6 +29,48 @@ enum NotificationScheduler {
         }
     }
 
+    // MARK: - Settings: status, pending summary, test
+
+    /// The identifier of Settings' test notification; rescheduling leaves it alone.
+    static let testIdentifier = "HITList.test"
+    static let testDelay: TimeInterval = 5
+
+    static func authorizationStatus() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
+    /// Settings' "Scheduled" row: "12 · next 10:45 AM" (`NotificationStatus.pendingText`).
+    static func pendingSummary(now: Date = Date()) async -> String {
+        let pending = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        return NotificationStatus.pendingText(fireDates: NotificationStatus.fireDates(pending), now: now)
+    }
+
+    /// Schedules one notification `testDelay` seconds out in the reminder category, so it shows Complete
+    /// and Snooze (which do nothing for it: it has no task). Asks for permission first if never asked.
+    static func sendTest() async -> NotificationTestResult {
+        let center = UNUserNotificationCenter.current()
+        switch await center.notificationSettings().authorizationStatus {
+        case .denied: return .denied
+        case .notDetermined:
+            guard await requestPermission() else { return .denied }
+        default: break
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "in 15 min · Test reminder"
+        content.body = "This is how a HITList reminder looks"
+        content.sound = .default
+        content.categoryIdentifier = NotificationResponder.categoryIdentifier
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: testDelay, repeats: false)
+        do {
+            try await center.add(UNNotificationRequest(identifier: testIdentifier, content: content, trigger: trigger))
+            log.notice("Test notification scheduled for \(Int(testDelay)) s from now")
+            return .scheduled
+        } catch {
+            log.error("Test notification failed: \(error.localizedDescription, privacy: .public)")
+            return .failed(error.localizedDescription)
+        }
+    }
+
     // MARK: - Bootstrap and triggers
 
     @MainActor private static var container: ModelContainer?
@@ -49,7 +91,7 @@ enum NotificationScheduler {
         self.responder = responder
         let center = UNUserNotificationCenter.current()
         center.delegate = responder
-        center.setNotificationCategories([NotificationResponder.category])
+        center.setNotificationCategories([NotificationResponder.category, NotificationResponder.summaryCategory])
 
         var triggers: [(Notification.Name, String)] = [
             (.cloudKitImportSucceeded, "import"),
@@ -142,8 +184,30 @@ enum NotificationScheduler {
     @MainActor
     private static func performReschedule(context: ModelContext, reason: String) async {
         let center = UNUserNotificationCenter.current()
-        let pending = await center.pendingNotificationRequests()
-        guard isEnabled else {
+        let now = Date()
+        let calendar = Calendar.current
+        let summaryOn = Preferences.isMorningSummaryOn
+        let badgeOn = Preferences.isBadgeOn
+
+        // Every open dated task: the badge and the morning summary count untimed ones too; reminders
+        // need a time. Nothing is fetched when all three are off (as before this setting existed).
+        var dated: [NotificationPlan.Item] = []
+        if isEnabled || summaryOn || badgeOn {
+            let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+                task.isCompleted == false && task.dueDate != nil
+            })
+            do {
+                dated = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+            } catch {
+                log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+        }
+        await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: dated, now: now, calendar: calendar) : 0)
+
+        // Settings' test notification is not the plan's to manage.
+        let pending = await center.pendingNotificationRequests().filter { $0.identifier != testIdentifier }
+        guard isEnabled || summaryOn else {
             if !pending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier)) }
             log.info("Rescheduled (\(reason, privacy: .public)): reminders off, removed \(pending.count) pending")
             return
@@ -162,18 +226,8 @@ enum NotificationScheduler {
             break
         }
 
-        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-            task.isCompleted == false && task.hasDueTime == true && task.dueDate != nil
-        })
-        let items: [NotificationPlan.Item]
-        do {
-            items = try context.fetch(descriptor).map(NotificationPlan.Item.init)
-        } catch {
-            log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        let now = Date()
-        let calendar = Calendar.current
+        let defaultOffset = Preferences.defaultReminderOffset
+        let items = dated.filter(\.hasDueTime).map { $0.withDefaultOffset(defaultOffset) }
         // No ledger yet (first run of this build): count tasks that just became due as announced, so
         // upgrading doesn't re-announce reminders build 1 already delivered.
         var ledger = AppGroup.defaults.stringArray(forKey: ledgerKey).map(Set.init) ?? Set(items.compactMap { item in
@@ -181,7 +235,15 @@ enum NotificationScheduler {
                   due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
             return NotificationPlan.ledgerKey(taskID: item.id, dueDate: remindAt)
         })
-        let plan = NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
+        // `items` already carry the default offset (the ledger seed above needs it too).
+        var plan = isEnabled
+            ? NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
+            : NotificationPlan(requests: [], droppedCount: 0)
+        // One more request at most (61 + 1 stays under the system's 64), its text computed now.
+        let summary = summaryOn
+            ? NotificationPlan.summaryRequest(tasks: dated, at: Preferences.morningSummaryTime, now: now, calendar: calendar)
+            : nil
+        if let summary { plan = NotificationPlan(requests: plan.requests + [summary], droppedCount: plan.droppedCount) }
         let pendingFingerprints = Dictionary(
             pending.map { ($0.identifier, $0.content.userInfo[fingerprintKey] as? String ?? "") },
             uniquingKeysWith: { first, _ in first })
@@ -215,8 +277,32 @@ enum NotificationScheduler {
         log.info("""
             Rescheduled (\(reason, privacy: .public)): \(plan.requests.count) wanted, +\(diff.add.count) \
             −\(diff.remove.count), \(overdue) overdue now, \(plan.droppedCount) over the limit, \
-            \(stale.count) delivered cleared
+            \(stale.count) delivered cleared\(summaryLog(summary, on: summaryOn), privacy: .public)
             """)
+    }
+
+    /// The last badge number set, so an unchanged count isn't written again on every reschedule.
+    @MainActor private static var lastBadge: Int?
+
+    /// Settings → General → "Show task count on the app icon": overdue + today's open tasks
+    /// (`NotificationPlan.badgeCount`), or no badge when the setting is off. Needs the `.badge`
+    /// authorization `requestPermission()` asks for.
+    @MainActor
+    private static func updateBadge(count: Int) async {
+        guard count != lastBadge else { return }
+        do {
+            try await UNUserNotificationCenter.current().setBadgeCount(count)
+            lastBadge = count
+            log.info("Badge: \(count)")
+        } catch {
+            log.error("Setting the badge failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private static func summaryLog(_ summary: NotificationPlan.Request?, on: Bool) -> String {
+        guard on else { return "" }
+        guard let summary else { return "; morning summary skipped (nothing due)" }
+        return "; morning summary at \(summary.triggerDate.formatted(date: .abbreviated, time: .shortened)): \(summary.body)"
     }
 
     private static func systemRequest(for request: NotificationPlan.Request, now: Date, calendar: Calendar) -> UNNotificationRequest {
@@ -228,6 +314,8 @@ enum NotificationScheduler {
         if let taskID = request.taskID {
             content.categoryIdentifier = NotificationResponder.categoryIdentifier
             userInfo[taskIDKey] = taskID.uuidString
+        } else if request.kind == .morningSummary {
+            content.categoryIdentifier = NotificationResponder.summaryCategoryIdentifier
         }
         if let due = request.dueDate { userInfo[dueKey] = due.timeIntervalSince1970 }
         content.userInfo = userInfo
