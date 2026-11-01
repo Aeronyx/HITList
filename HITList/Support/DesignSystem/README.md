@@ -17,8 +17,44 @@ queries). SF Symbols keep `.font(.system(size:weight:))`. The window root sets `
 unstyled `Text` is Inter. `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
 and the due colours `.dueToday` (green) / `.dueTomorrow` (orange) / `.dueLater` (purple) /
 `.dueOverdue` (red) with `HITColor.due(date, hasTime:now:)` choosing among them.
-`HITMotion.standard(reduceMotion:)` (150 ms ease) and `.spring(reduceMotion:)`; pass
-`@Environment(\.accessibilityReduceMotion)`. `Color.darkened(by:)` for pressed fills.
+`Color.darkened(by:)` for pressed fills.
+
+## Motion (`HITMotion`)
+Six roles; pick by what is happening. Nothing outside `celebrate` bounces or takes over 250 ms to arrive.
+
+| Role | Curve | Use for |
+|---|---|---|
+| `quick` | 100 ms ease-out | hover highlights, press feedback |
+| `standard` | 150 ms ease-in-out | state changes: selection, focus ring, enabled, a row expanding |
+| `enter` | 200 ms ease-out | something appearing: toast, popout, revealed field |
+| `exit` | 150 ms ease-in | something leaving: a completed row sliding away, a toast expiring |
+| `emphasis` | spring, response 0.28, damping 0.8 (arrives in ~233 ms, 1.5% overshoot) | moving parts: toggle thumb, segment highlight |
+| `celebrate` | scale to 1.2 in 90 ms, spring settle (0.3 / 0.62) | the completion check, nothing else |
+
+Each has a `(reduceMotion:)` variant (`HITMotion.emphasis(reduceMotion:)`): `quick`/`standard` become instant,
+`enter`/`exit`/`emphasis` a 100 ms ease, `celebrate` nil. Pass `@Environment(\.accessibilityReduceMotion)`, or
+read `@HITEffectsSetting private var effects` and use `effects.animation(.emphasis)`, which also calms the
+larger movements when the app's Reduce Effects switch is on. `HITMotion.spring` is the deprecated old name of
+`emphasis`.
+
+```swift
+.animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
+.animation(effects.animation(.emphasis), value: isOn)
+withAnimation(effects.animation(.enter)) { showToast = true }
+```
+
+## Material (`HITMaterial.swift`)
+`hitGlass(in:tint:interactive:fallback:)` is the one way to draw Liquid Glass: glass on iOS 26 / macOS 26 when
+effects are allowed, the slate fill otherwise (`fallback`, else the tint, else `Theme.surface`). Glass is off
+under Settings → Appearance → Reduce effects (`Preferences.reduceEffects`) and the system's Reduce
+Transparency (`HITEffects.allowsGlass(osSupportsGlass:reduceEffects:reduceTransparency:)`, pure). Glass is a
+highlight, not a wallpaper: bars, floating controls and moving highlights, never list rows or page backgrounds.
+
+```swift
+header.hitGlass(in: Rectangle())                                  // a bar
+plus.hitGlass(in: Circle(), tint: Theme.accent, interactive: true) // a floating control
+highlight.hitGlass(in: Capsule(), fallback: Theme.separator)      // keeps today's slate when glass is off
+```
 
 ## Which component
 | Need | Use |

@@ -109,6 +109,7 @@
 		D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */; };
 		DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC4E971C5262969197F1F3 /* TaskRow.swift */; };
 		DCA7614EFC1A44317747D39E /* Inter_18pt-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 65DBCFC9B67D1B0D889D68A7 /* Inter_18pt-SemiBold.ttf */; };
+		DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29800AE3317F5D97333D1CDF /* HITMaterial.swift */; };
 		DD66C2518E7D8BA9BB922633 /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50BDDCE5CD3BBAE4215CFE6 /* BrowseView.swift */; };
 		E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */; };
 		E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */; };
@@ -153,6 +154,7 @@
 		172507FC4FF599F803EE8248 /* TaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopout.swift; sourceTree = "<group>"; };
 		179EC0133891B8DCC4B358ED /* MobileTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTabBar.swift; sourceTree = "<group>"; };
 		2126889A9D7B6886FF5AE480 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
+		29800AE3317F5D97333D1CDF /* HITMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMaterial.swift; sourceTree = "<group>"; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		32E6B3699676B4892851C4C9 /* FlipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardView.swift; sourceTree = "<group>"; };
 		32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeduplicatorTests.swift; sourceTree = "<group>"; };
@@ -599,6 +601,7 @@
 				D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */,
 				C52D4DEDC8BFB16C07252D16 /* HITChip.swift */,
 				B3DE63E2D5D5BA8429AB8933 /* HITField.swift */,
+				29800AE3317F5D97333D1CDF /* HITMaterial.swift */,
 				8DC5CAB524A97500619271F4 /* HITMenuRow.swift */,
 				165FA6D62560AF712E0AB48D /* HITSegmented.swift */,
 				A5B79B5899E57F6F2200F5AD /* HITSheetChrome.swift */,
@@ -749,6 +752,7 @@
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
 				92973FBF19DB570087754456 /* HITField.swift in Sources */,
 				2627D544E45DE46036EB040C /* HITListApp.swift in Sources */,
+				DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */,
 				348542A3EA0C03CA7BF3E6D0 /* HITMenuRow.swift in Sources */,
 				640EED72AFC56C6A4E158F26 /* HITSegmented.swift in Sources */,
 				5C5E91D28A1DDFA63FAE4B45 /* HITSheetChrome.swift in Sources */,

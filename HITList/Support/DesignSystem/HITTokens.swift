@@ -157,15 +157,122 @@ enum HITColor {
     }
 }
 
-/// Motion. Every control animates state changes with `standard` (150 ms ease) and moving parts
-/// (toggle thumb, segment highlight) with `spring`; both collapse to nil under Reduce Motion.
+/// Motion. Six named roles, each quick and deliberate; pick by what is happening, never by feel:
+///
+/// | Role | Curve | For |
+/// |---|---|---|
+/// | `quick` | 100 ms ease-out | hover and press feedback |
+/// | `standard` | 150 ms ease-in-out | state changes (selection, focus, enabled, expanding a row) |
+/// | `enter` | 200 ms ease-out | something appearing (a toast, a popout, a revealed field) |
+/// | `exit` | 150 ms ease-in | something leaving (a completed row sliding away, a toast expiring) |
+/// | `emphasis` | spring, response 0.28, damping 0.8 | the moving parts: toggle thumb, segment highlight |
+/// | `celebrate` | the check pop (scale 1.2 in 90 ms, spring settle) | the completion check only |
+///
+/// Nothing outside `celebrate` bounces or takes longer than 250 ms to arrive (`Role.arrival`). Each role
+/// has a `(reduceMotion:)` variant: `quick`/`standard` become instant, `enter`/`exit`/`emphasis` a 100 ms
+/// ease with no overshoot, `celebrate` nil (the check just swaps). Pass
+/// `@Environment(\.accessibilityReduceMotion)`, or `HITEffects.calmMotion` (which adds the app's Reduce
+/// Effects switch) for the larger movements.
 enum HITMotion {
-    static let standard = Animation.easeInOut(duration: 0.15)
-    static let spring = Animation.spring(response: 0.3, dampingFraction: 0.72)
+    enum Role: String, CaseIterable {
+        case quick, standard, enter, exit, emphasis, celebrate
 
-    static func standard(reduceMotion: Bool) -> Animation? { reduceMotion ? nil : standard }
-    /// Reduce Motion keeps a quick fade instead of sliding.
-    static func spring(reduceMotion: Bool) -> Animation? { reduceMotion ? .linear(duration: 0.1) : spring }
+        var animation: Animation {
+            switch self {
+            case .quick: .easeOut(duration: 0.1)
+            case .standard: .easeInOut(duration: 0.15)
+            case .enter: .easeOut(duration: 0.2)
+            case .exit: .easeIn(duration: 0.15)
+            case .emphasis: .spring(response: SpringSpec.emphasis.response, dampingFraction: SpringSpec.emphasis.damping)
+            case .celebrate: .spring(response: SpringSpec.celebrate.response, dampingFraction: SpringSpec.celebrate.damping)
+            }
+        }
+
+        /// The calm stand-in under Reduce Motion (or Reduce Effects, for the larger movements).
+        var reducedAnimation: Animation? {
+            switch self {
+            case .quick, .standard, .celebrate: nil
+            case .enter, .exit, .emphasis: .easeOut(duration: 0.1)
+            }
+        }
+
+        func animation(reduceMotion: Bool) -> Animation? { reduceMotion ? reducedAnimation : animation }
+
+        /// Seconds until the animated value first reaches its target: the curve's duration, or for a
+        /// spring the time to its first peak (emphasis arrives at ~233 ms and overshoots 1.5%, under half
+        /// a point on a 30 pt move, so it reads as a firm stop rather than a bounce).
+        var arrival: TimeInterval {
+            switch self {
+            case .quick: 0.1
+            case .standard: 0.15
+            case .enter: 0.2
+            case .exit: 0.15
+            case .emphasis: SpringSpec.emphasis.timeToPeak
+            case .celebrate: Celebrate.totalDuration
+            }
+        }
+
+        /// What the gallery and the README call it.
+        var usage: String {
+            switch self {
+            case .quick: "100 ms · hover, press"
+            case .standard: "150 ms · state changes"
+            case .enter: "200 ms ease-out · appearing"
+            case .exit: "150 ms ease-in · leaving"
+            case .emphasis: "spring 0.28 / 0.8 · thumbs, highlights"
+            case .celebrate: "the completion check"
+            }
+        }
+    }
+
+    /// Spring parameters, kept as numbers so tests can check them.
+    struct SpringSpec {
+        let response: Double
+        let damping: Double
+
+        static let emphasis = SpringSpec(response: 0.28, damping: 0.8)
+        /// The check's settle after its pop: a little life, still under 15% overshoot.
+        static let celebrate = SpringSpec(response: 0.3, damping: 0.62)
+
+        /// Time to the first peak of an underdamped spring: π / ω_d, with ω_0 = 2π / response.
+        var timeToPeak: TimeInterval {
+            let omega0 = 2 * Double.pi / response
+            let omegaD = omega0 * (1 - damping * damping).squareRoot()
+            return Double.pi / omegaD
+        }
+
+        /// The fraction it overshoots its target by: e^(-ζπ / √(1-ζ²)).
+        var overshoot: Double { exp(-damping * Double.pi / (1 - damping * damping).squareRoot()) }
+    }
+
+    /// The completion check's pop (`TaskRow`, `TaskPopout`): up to `peakScale` fast, then a spring settle.
+    /// Crisper than build 5's (1.15 over 100 ms, then 150 ms back), and a touch bigger.
+    enum Celebrate {
+        static let peakScale: CGFloat = 1.2
+        static let popDuration: TimeInterval = 0.09
+        static let settleDuration: TimeInterval = 0.24
+        static var totalDuration: TimeInterval { popDuration + settleDuration }
+    }
+
+    static let quick = Role.quick.animation
+    static let standard = Role.standard.animation
+    static let enter = Role.enter.animation
+    static let exit = Role.exit.animation
+    static let emphasis = Role.emphasis.animation
+    static let celebrate = Role.celebrate.animation
+
+    static func quick(reduceMotion: Bool) -> Animation? { Role.quick.animation(reduceMotion: reduceMotion) }
+    static func standard(reduceMotion: Bool) -> Animation? { Role.standard.animation(reduceMotion: reduceMotion) }
+    static func enter(reduceMotion: Bool) -> Animation? { Role.enter.animation(reduceMotion: reduceMotion) }
+    static func exit(reduceMotion: Bool) -> Animation? { Role.exit.animation(reduceMotion: reduceMotion) }
+    static func emphasis(reduceMotion: Bool) -> Animation? { Role.emphasis.animation(reduceMotion: reduceMotion) }
+    static func celebrate(reduceMotion: Bool) -> Animation? { Role.celebrate.animation(reduceMotion: reduceMotion) }
+
+    /// Build 5's name for `emphasis`, kept so code written against it still compiles.
+    @available(*, deprecated, renamed: "emphasis")
+    static var spring: Animation { emphasis }
+    @available(*, deprecated, renamed: "emphasis(reduceMotion:)")
+    static func spring(reduceMotion: Bool) -> Animation? { emphasis(reduceMotion: reduceMotion) }
 }
 
 extension Color {
