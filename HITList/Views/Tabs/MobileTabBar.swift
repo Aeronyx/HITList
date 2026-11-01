@@ -26,9 +26,30 @@ enum MobileTab: String, CaseIterable, Identifiable, Hashable {
     }
 }
 
-/// HITList's bottom bar on iPhone (not the system `TabView` look): slate `Theme.surface` with a hairline
-/// on top, four icons with Inter labels under them, the selected one in accent. Tapping the selected
-/// tab again calls `onReselect` (the shell pops that tab to its root).
+/// The floating island's measurements, as plain values (`MobileChromeTests` pins them). The island is a
+/// continuous capsule inset from both sides of the screen and lifted off the home indicator, so lists
+/// show through the gap around it.
+enum IslandMetrics {
+    /// Tall enough that each of the four targets is thumb-sized.
+    static let height: CGFloat = 64
+    /// From each side of the screen; the "+" above shares the trailing one.
+    static let sideInset: CGFloat = HITSpacing.l
+    /// Between the island and the home indicator (the top of the bottom safe area).
+    static let bottomGap: CGFloat = HITSpacing.s
+    /// A capsule: half the height.
+    static var cornerRadius: CGFloat { height / 2 }
+    /// The selected tab's pill sits this far inside the island, so the two curves are concentric.
+    static let pillInset: CGFloat = 6
+    static var pillRadius: CGFloat { cornerRadius - pillInset }
+    /// Between the top of the island and the bottom of the "+".
+    static let addButtonGap: CGFloat = HITSpacing.m
+}
+
+/// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
+/// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
+/// with Inter labels, the selected one in accent on a faint pill. Tapping the selected tab again calls
+/// `onReselect` (the shell pops that tab to its root). The island's own fill (glass or slate) comes from
+/// `MobileShell`, which draws it with the "+".
 struct MobileTabBar: View {
     @Binding var selection: MobileTab
     /// Today's day of the month, for the Today icon.
@@ -49,9 +70,17 @@ struct MobileTabBar: View {
                 .accessibilityIdentifier("tab-\(tab.rawValue)")
             }
         }
-        .padding(.horizontal, HITSpacing.xs)
-        .background(Theme.surface.ignoresSafeArea(.container, edges: .bottom))
-        .overlay(alignment: .top) { Theme.separator.frame(height: 0.5) }
+        .padding(.horizontal, IslandMetrics.pillInset)
+        .frame(height: IslandMetrics.height)
+        .background {
+            Capsule(style: .continuous)
+                .fill(Theme.surface)
+                .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
+        }
+        .overlay { Capsule(style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5) }
+        .contentShape(Capsule(style: .continuous))
+        .padding(.horizontal, IslandMetrics.sideInset)
+        .padding(.bottom, IslandMetrics.bottomGap)
     }
 
     private func item(_ tab: MobileTab, selected: Bool) -> some View {
@@ -72,9 +101,7 @@ struct MobileTabBar: View {
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
         .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 7)
-        .padding(.bottom, 3)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
     }
 }
