@@ -1,14 +1,19 @@
 #!/bin/zsh
-# HITList release: bump build number, regenerate, test, archive + export iOS and macOS,
-# verify entitlements, upload to App Store Connect, commit and tag.
+# HITList release: bump the build number (and optionally the version), regenerate, run the preflight
+# tests, archive + export iOS and macOS, verify entitlements, upload to App Store Connect, commit and tag.
 #
 # Usage:
-#   scripts/release.sh                 # full run, both platforms
+#   scripts/release.sh                 # full run, both platforms; preflight = core + macOS + iOS tests
+#   scripts/release.sh --version 0.2.0 # also set MARKETING_VERSION; needs a "## 0.2.0" section in CHANGELOG.md
 #   scripts/release.sh ios|macos       # one platform
+#   scripts/release.sh --quick         # preflight runs core + macOS tests only (skips the ~10 min iOS suite)
 #   scripts/release.sh --no-upload     # build and verify only
 #   scripts/release.sh --no-bump       # keep the current build number
-#   scripts/release.sh --skip-tests    # skip HITListCore tests
+#   scripts/release.sh --skip-tests    # no preflight at all (emergencies only)
 #   scripts/release.sh --skip-schema-check
+#
+# Tags: every upload is tagged build-N; a run with --version also tags vX.Y.Z. CHANGELOG.md's section for
+# the version gets the build number and date appended to its heading.
 #
 # Environment overrides: ASC_KEY_ID, ASC_ISSUER_ID (App Store Connect API key, .p8 must live in
 # ~/.appstoreconnect/private_keys/). Defaults are George's "hitlist-upload" key.
@@ -29,19 +34,29 @@ KEY_ID="${ASC_KEY_ID:-RWK3KKN75R}"
 ISSUER_ID="${ASC_ISSUER_ID:-1858583d-d6ee-4039-968e-e9c2c66e3ddd}"
 
 PLATFORMS=(ios macos)
-UPLOAD=1; BUMP=1; TESTS=1; SCHEMA_CHECK=1
+UPLOAD=1; BUMP=1; TESTS=1; QUICK=0; SCHEMA_CHECK=1; NEW_VERSION=""
+expect_version=0
 for arg in "$@"; do
+  if (( expect_version )); then NEW_VERSION="$arg"; expect_version=0; continue; fi
   case "$arg" in
     ios) PLATFORMS=(ios) ;;
     macos) PLATFORMS=(macos) ;;
+    --version) expect_version=1 ;;
+    --version=*) NEW_VERSION="${arg#--version=}" ;;
+    --quick) QUICK=1 ;;
     --no-upload) UPLOAD=0 ;;
     --no-bump) BUMP=0 ;;
     --skip-tests) TESTS=0 ;;
     --skip-schema-check) SCHEMA_CHECK=0 ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown argument: $arg"; exit 2 ;;
   esac
 done
+(( expect_version )) && { echo "--version needs a value, e.g. --version 0.2.0"; exit 2; }
+if [[ -n "$NEW_VERSION" ]]; then
+  [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must look like 0.2.0, got: $NEW_VERSION"; exit 2; }
+  grep -qE "^## $NEW_VERSION( |\$)" CHANGELOG.md || { echo "CHANGELOG.md has no '## $NEW_VERSION' section; write what changed first"; exit 2; }
+fi
 
 step() { print -P "\n%F{cyan}== $1%f"; }
 fail() { print -P "%F{red}✗ $1%f"; exit 1; }
@@ -55,6 +70,14 @@ CURRENT=$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | awk '{pr
 MARKETING=$(grep -E '^[[:space:]]+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
 [[ "$CURRENT" =~ ^[0-9]+$ ]] || fail "could not read CURRENT_PROJECT_VERSION from project.yml"
 LOGDIR="$ROOT/build/logs"; mkdir -p "$LOGDIR"
+if [[ -n "$NEW_VERSION" && "$NEW_VERSION" != "$MARKETING" ]]; then
+  step "Version $MARKETING -> $NEW_VERSION"
+  sed -i '' -E "s/^([[:space:]]+MARKETING_VERSION:) .*/\1 \"$NEW_VERSION\"/" project.yml
+  sed -i '' -E "s/^([[:space:]]+CFBundleShortVersionString:) .*/\1 \"$NEW_VERSION\"/" project.yml
+  grep -qE "^[[:space:]]+MARKETING_VERSION: \"$NEW_VERSION\"\$" project.yml || fail "MARKETING_VERSION change did not apply"
+  grep -qE "^[[:space:]]+CFBundleShortVersionString: \"$NEW_VERSION\"\$" project.yml || fail "CFBundleShortVersionString change did not apply"
+  MARKETING="$NEW_VERSION"
+fi
 if (( BUMP )); then
   NEXT=$((CURRENT + 1))
   step "Bump build $CURRENT -> $NEXT (version $MARKETING)"
@@ -71,9 +94,22 @@ fi
 step "Generate Xcode project"
 xcodegen generate >/dev/null
 
+# ---- preflight ----------------------------------------------------------------------------------
+# Nothing is archived until every suite passes: HITListCore, the app tests on the Mac and (unless --quick)
+# on the iPhone simulator. The upload that follows cannot be taken back, so the bump is reverted on failure.
+revert_bump() {
+  git checkout -q -- project.yml
+  xcodegen generate >/dev/null 2>&1 || true
+}
 if (( TESTS )); then
-  step "HITListCore tests"
-  (cd HITListCore && swift test 2>&1 | tail -3)
+  SUITES=(core macos ios); (( QUICK )) && SUITES=(core macos)
+  step "Preflight tests: ${SUITES[*]}"
+  if ! scripts/test.sh "${SUITES[@]}"; then
+    revert_bump
+    fail "preflight tests failed; nothing was built or uploaded (build number reverted)"
+  fi
+else
+  print -P "%F{yellow}Preflight tests skipped (--skip-tests).%f"
 fi
 
 # ---- schema drift -------------------------------------------------------------------------------
@@ -160,6 +196,11 @@ fi
 # ---- commit + tag -------------------------------------------------------------------------------
 if (( BUMP )); then
   step "Commit and tag build $NEXT"
+  if [[ -n "$NEW_VERSION" ]]; then
+    # "## 0.2.0" becomes "## 0.2.0 — build 6, 2026-11-01" so the changelog says what shipped when.
+    sed -i '' -E "s/^## $NEW_VERSION\$/## $NEW_VERSION — build $NEXT, $(date +%Y-%m-%d)/" CHANGELOG.md
+    git add CHANGELOG.md
+  fi
   # The bump regenerates the project and Info.plist; commit them with it so the tag is reproducible.
   git add project.yml HITList.xcodeproj HITList/Info.plist
   git commit -q -m "Release $MARKETING ($NEXT)
@@ -167,6 +208,10 @@ if (( BUMP )); then
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   git tag -f "build-$NEXT"
   echo "tagged build-$NEXT"
+  if [[ -n "$NEW_VERSION" ]]; then
+    git tag -f "v$NEW_VERSION"
+    echo "tagged v$NEW_VERSION"
+  fi
 fi
 
 print -P "\n%F{green}Done. Version $MARKETING build $NEXT.%f"

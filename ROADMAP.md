@@ -37,6 +37,10 @@ CloudKit container come first.
 | iPhone tabs + four screens (Inbox/Today/Upcoming/Browse, oval "+"; priority-then-due sort, Inbox rule, "Group" wording) | done 2026-10-31; iPhone 17 simulator checked (all four tabs, Group pushed from Browse with the "+", search finds a completed task, Today's two sections with time-only rows, Group note absent from Inbox, strip jump); real taps on the bar and Mac sidebar wording need George's eyes | Opus 5.5 session, effort High |
 | Quick-add v2 (oval card, '+' options, reminder offsets, deadline, location) | done 2026-10-31; iPhone 17 simulator recorded (type "Haircut tom 11am p1 !15mb" → Tomorrow / P1 / 11:00 AM · 15 min before, location from "+", save, task popout deadline + offset change); notification at due − offset ("in 15 min · Haircut") unit-tested; Mac panel and the "+" menu tap need George's eyes | Opus 5.5 session, effort High |
 | Flipboard: long-press menu, faint-green lamp, charging switches | done 2026-10-31; iPhone 17 simulator checked (recorded); Mac long-press popover and right-click menu need George's eyes | Opus 5.5 session, effort High |
+| Versioned releases: CHANGELOG.md, `release.sh --version`, preflight tests (core, macOS, iOS) before any archive, version in Settings → About; quick-add title 20 pt; `Preferences` keys; 6 pt sync dot | done 2026-10-31 | Fable |
+| iPhone chrome v2 (floating island bar, "…" menu with Settings and the sync dot on every screen, Liquid Glass on iOS 26) | brief 20, in progress | Opus 5.5 session, effort High |
+| Settings v2 (sync confirmation and check, notification test, default reminder offset, morning summary, start screen, diagnostics, What's new) | brief 21, in progress | Opus 5.5 session, effort High |
+| Motion roles, four dark themes, Liquid Glass in the design system | brief 22, in progress | Opus 5.5 session, effort High |
 
 ## 1. Multi-device dedupe
 

@@ -132,6 +132,13 @@ struct SettingsView: View {
         }
 
         DelightSettingsSection()
+
+        AppearanceSettingsSection()
+
+        HITGroup("About") {
+            HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
+                .accessibilityIdentifier("settings-version")
+        }
     }
 
     #if os(macOS)

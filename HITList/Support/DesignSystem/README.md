@@ -12,7 +12,7 @@ bundle and `UIAppFonts`/`ATSApplicationFontsPath` register them). Use the `HITTy
 `.font(.subheadline)`: `.largeTitle`, `.title1/2/3` (+ `.title2Bold`), `.headline`, `.body`, `.callout`
 (+ `Medium`/`Bold`), `.subheadline` (+ `Medium`/`Semibold`), `.footnote`, `.caption` (+ `Bold`),
 `.caption2` (+ `Semibold`), `.control` (button/chip labels), `.title` (sheet titles, fixed 17 semibold),
-`.taskName` (quick-add title, fixed 14 bold), `.sectionHeader`, `.mono`/`.monoCaption` (system mono for
+`.taskName` (quick-add title, bold, one step above body: 20 on iOS, 15 on Mac), `.sectionHeader`, `.mono`/`.monoCaption` (system mono for
 queries). SF Symbols keep `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`, so
 unstyled `Text` is Inter. `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
 and the due colours `.dueToday` (green) / `.dueTomorrow` (orange) / `.dueLater` (purple) /
@@ -113,7 +113,7 @@ popouts.open(task)
 ```
 - `QuickAddContext` sets the defaults: Today/Upcoming = today without a time, an Upcoming day = that
   day, a project = that project, a label = that label, Inbox = undated in the Inbox.
-- The quick-add card, top to bottom: the title (placeholder "Task Name", `HITType.taskName` = Inter 14
+- The quick-add card, top to bottom: the title (placeholder "Task Name", `HITType.taskName`, Inter 20
   bold, `TokenHighlightField(bordered: false)` since the card is the frame), any revealed Description /
   Location fields, the autocomplete row (only while it has suggestions), then one slim horizontally
   scrolling bar of `HITChip(size: .compact)` chips (30 pt capsules; an untitled chip is a 30 pt icon
