@@ -93,6 +93,10 @@ final class ThemeTests: XCTestCase {
         }
     }
 
+    func testOnlyGraphiteHasALightAccent() {
+        XCTAssertEqual(ThemePalette.all.filter(\.hasLightAccent).map(\.id), ["graphite"])
+    }
+
     func testContrastHelperMatchesWCAGReferenceValues() {
         XCTAssertEqual(contrast(.white, .black), 21, accuracy: 0.05)
         XCTAssertEqual(contrast(Color(hex: "#777777"), .white), 4.48, accuracy: 0.02)

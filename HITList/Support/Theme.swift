@@ -42,6 +42,14 @@ struct ThemePalette: Identifiable, Equatable {
         onAccent = Color(hex: hex.onAccent)
     }
 
+    /// True when the accent is light enough that white on it disappears (Graphite's off-white): controls
+    /// that put a white part on the accent (the toggle thumb) use `onAccent` instead.
+    var hasLightAccent: Bool {
+        let r = accent.resolve(in: EnvironmentValues())
+        let luminance = 0.2126 * Double(r.linearRed) + 0.7152 * Double(r.linearGreen) + 0.0722 * Double(r.linearBlue)
+        return luminance > 0.6
+    }
+
     /// The eight colours, in the order of `Hexes.all`.
     var colors: [Color] { [background, surface, elevated, separator, accent, secondaryText, text, onAccent] }
 
