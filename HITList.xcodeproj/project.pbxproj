@@ -100,6 +100,7 @@
 		C5EA9C5C8300AC4BFFDBE6D7 /* flip.caf in Resources */ = {isa = PBXBuildFile; fileRef = 46C5F20012A7AE765F02805B /* flip.caf */; };
 		C9EE236E00D4759FE273ECD6 /* SeedingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C4883652158CAEF157D321 /* SeedingTests.swift */; };
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
+		D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4744E706011D5D130E88452 /* ICloudCheck.swift */; };
 		D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */; };
 		D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08BB24F8F65457496F557A04 /* Deduplicator.swift */; };
 		D531EF7C1FDB3535540C8720 /* bubble.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3EEFA67B186DA52E7B28D2F6 /* bubble.caf */; };
@@ -258,6 +259,7 @@
 		E098101387CC4E17342476ED /* InboxZeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxZeroView.swift; sourceTree = "<group>"; };
 		E3B995BCBE5A70A04406E507 /* SnapshotRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotRoundTripTests.swift; sourceTree = "<group>"; };
 		E44155658C8F3884AA9502C5 /* FilterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterEditorView.swift; sourceTree = "<group>"; };
+		E4744E706011D5D130E88452 /* ICloudCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudCheck.swift; sourceTree = "<group>"; };
 		E794A04C45093448EE7DE18B /* FilterDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDraft.swift; sourceTree = "<group>"; };
 		E89E8ABE1817CBAD4F72AE06 /* CompletionAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionAnimator.swift; sourceTree = "<group>"; };
 		EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncMonitor.swift; sourceTree = "<group>"; };
@@ -515,6 +517,7 @@
 			isa = PBXGroup;
 			children = (
 				A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */,
+				E4744E706011D5D130E88452 /* ICloudCheck.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -757,6 +760,7 @@
 				5C5E91D28A1DDFA63FAE4B45 /* HITSheetChrome.swift in Sources */,
 				3F58DD5F0B30EBAAC935ECAD /* HITToggleStyle.swift in Sources */,
 				926274475D6599BDD81C3CF2 /* HITTokens.swift in Sources */,
+				D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */,
 				3AC80CE57BD7C51458E81210 /* InboxPicker.swift in Sources */,
 				1C38EE460A421664F56305F4 /* InboxProcessQueue.swift in Sources */,
 				31BBC88473658DE0A316EBC6 /* InboxProcessView.swift in Sources */,

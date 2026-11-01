@@ -19,6 +19,8 @@ struct SettingsView: View {
     @State private var lastBackup = AppGroup.defaults.object(forKey: LocalBackup.lastBackupKey) as? Date
     @State private var backupMessage: String?
     @State private var showSyncDetails = false
+    @State private var isCheckingICloud = false
+    @State private var iCloudCheck: ICloudCheck?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -86,6 +88,22 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: HITSpacing.s) { syncDetails }
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.vertical, HITSpacing.m)
+            }
+            HITMenuRow("Check iCloud…", systemImage: "checkmark.icloud", accessory: .none) { runICloudCheck() }
+                .disabled(isCheckingICloud)
+                .overlay(alignment: .trailing) {
+                    if isCheckingICloud { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
+                }
+                .accessibilityIdentifier("settings-check-icloud")
+            if let iCloudCheck {
+                Label(iCloudCheck.summary, systemImage: iCloudCheck.isHealthy ? "checkmark.circle" : "exclamationmark.circle")
+                    .font(HITType.caption)
+                    .foregroundStyle(iCloudCheck.isHealthy ? Theme.secondaryText : HITColor.dueTomorrow)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .hitRowPadding()
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("settings-check-icloud-result")
             }
             HITMenuRow("Reset local cache and re-download…", systemImage: "arrow.counterclockwise",
                        role: .destructive, accessory: .none) { confirmReset = true }
@@ -175,6 +193,18 @@ struct SettingsView: View {
             }
         } catch {
             backupMessage = "Backup failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func runICloudCheck() {
+        guard !isCheckingICloud else { return }
+        isCheckingICloud = true
+        Task {
+            let result = await ICloudCheck.run()
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+                iCloudCheck = result
+                isCheckingICloud = false
+            }
         }
     }
 
