@@ -203,10 +203,20 @@ struct TaskPopout: View {
                     tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: task.hasDueTime, now: now),
                     isSelected: due != nil, action: { openChip = .date })
                 .pickerAnchor(.date, isPresented: chipBinding(.date)) {
-                    DateChipPopover(selected: due, now: now) { day in
+                    DatePickerCard(selected: due, now: now, onPick: { day in
                         openChip = nil
                         setDate(day)
-                    }
+                    }, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) }, onTime: { time in
+                        if let time {
+                            openChip = nil
+                            setTime(hour: time.hour, minute: time.minute)
+                        } else {
+                            clearTime()
+                        }
+                    }, recurrence: task.recurrenceRule, onRepeat: { rule in
+                        openChip = nil
+                        setRecurrence(rule)
+                    })
                 }
                 .accessibilityIdentifier("popoutDateChip")
 
@@ -278,7 +288,7 @@ struct TaskPopout: View {
                        onDismiss: deadline == nil ? nil : { setDeadline(nil) },
                        action: { openChip = .deadline })
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
-                DateChipPopover(selected: deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
+                DatePickerCard(selected: deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
                     openChip = nil
                     setDeadline(day)
                 }

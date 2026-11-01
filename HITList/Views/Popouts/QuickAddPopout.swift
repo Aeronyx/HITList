@@ -259,9 +259,17 @@ struct QuickAddPopout: View {
                        tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
                        isSelected: chips.dueDate != nil, size: .compact, action: { openChip = .date })
             .pickerAnchor(.date, isPresented: chipBinding(.date)) {
-                DateChipPopover(selected: chips.dueDate, now: now, onPick: { day in
+                DatePickerCard(selected: chips.dueDate, now: now, onPick: { day in
                     draft.setDate(day, parser)
                     done()
+                }, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil, onTime: { time in
+                    if let time {
+                        draft.setTime(hour: time.hour, minute: time.minute, parser)
+                        done()
+                    } else {
+                        draft.clearTime(parser)
+                        draft.setReminderOffset(nil, parser)
+                    }
                 }, recurrence: chips.recurrence, onRepeat: { rule in
                     draft.setRecurrence(rule, parser)
                     done()
@@ -340,7 +348,7 @@ struct QuickAddPopout: View {
                        onDismiss: chips.deadline == nil ? nil : { draft.setDeadline(nil) },
                        action: { openChip = .deadline })
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
-                DateChipPopover(selected: chips.deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
+                DatePickerCard(selected: chips.deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
                     draft.setDeadline(day)
                     done()
                 }

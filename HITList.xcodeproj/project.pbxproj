@@ -56,6 +56,7 @@
 		539A93532A78AA32DB03790F /* swish.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4EC7B932C6B8D510FA4827B9 /* swish.caf */; };
 		54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73ACCF90D84809171E18645 /* Keychain.swift */; };
 		5530F11C224FC2EB6213122B /* HITChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52D4DEDC8BFB16C07252D16 /* HITChip.swift */; };
+		5720041FAE6A032A7066DF4D /* DatePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */; };
 		5849B1C50CCFC964844E2ACB /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543B0A056452AA86090ECAD8 /* InboxView.swift */; };
 		5AB1564F606D8B7271F6E8F6 /* Inter_18pt-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BDBD761482A5F9B84F96433A /* Inter_18pt-Medium.ttf */; };
 		5BCC5EB9F77215035E7E5B67 /* FlipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */; };
@@ -98,6 +99,7 @@
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		A5CB417B22951B64EABA4A8F /* AccountWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */; };
 		A8CEEB66309F56025E17DD1C /* QuickAddPopout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D500F169967494D4FCCD6B /* QuickAddPopout.swift */; };
+		AAE316B3515708BCEF1AC95D /* PickerTimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315D24154A9ABD69200C164B /* PickerTimeField.swift */; };
 		B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */; };
 		B11AC0DEEDDF3FCEC2253ABC /* DelightSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */; };
 		B1E563539EBD540721DDA15C /* CompletionMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2B9A3C265599BBA1928813 /* CompletionMotion.swift */; };
@@ -122,6 +124,7 @@
 		D8DC35F42D40D8941CBBA440 /* PickerPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */; };
 		D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */; };
 		DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC4E971C5262969197F1F3 /* TaskRow.swift */; };
+		DB2233C69DF38E7D751C4A4B /* PickerTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92811CBB96DCB3B993F65CEF /* PickerTime.swift */; };
 		DCA7614EFC1A44317747D39E /* Inter_18pt-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 65DBCFC9B67D1B0D889D68A7 /* Inter_18pt-SemiBold.ttf */; };
 		DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29800AE3317F5D97333D1CDF /* HITMaterial.swift */; };
 		DD66C2518E7D8BA9BB922633 /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50BDDCE5CD3BBAE4215CFE6 /* BrowseView.swift */; };
@@ -175,10 +178,12 @@
 		2126889A9D7B6886FF5AE480 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		29800AE3317F5D97333D1CDF /* HITMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMaterial.swift; sourceTree = "<group>"; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		315D24154A9ABD69200C164B /* PickerTimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTimeField.swift; sourceTree = "<group>"; };
 		32E6B3699676B4892851C4C9 /* FlipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardView.swift; sourceTree = "<group>"; };
 		32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeduplicatorTests.swift; sourceTree = "<group>"; };
 		375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCreateTests.swift; sourceTree = "<group>"; };
 		379D57D8772CB122DAF2854C /* InboxProcessQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessQueue.swift; sourceTree = "<group>"; };
+		37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePickerCard.swift; sourceTree = "<group>"; };
 		38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionFeedbackTests.swift; sourceTree = "<group>"; };
 		39432755E875F16592EE8188 /* CompletionFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionFeedback.swift; sourceTree = "<group>"; };
 		3AB0E811BC8B9E3BBF492DED /* ThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeTests.swift; sourceTree = "<group>"; };
@@ -236,6 +241,7 @@
 		8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListApp.swift; sourceTree = "<group>"; };
 		8DC5CAB524A97500619271F4 /* HITMenuRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMenuRow.swift; sourceTree = "<group>"; };
 		8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersions.swift; sourceTree = "<group>"; };
+		92811CBB96DCB3B993F65CEF /* PickerTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTime.swift; sourceTree = "<group>"; };
 		966FF672CF1AE97484CD00CE /* TaskActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActions.swift; sourceTree = "<group>"; };
 		99F5C84701529B786312B4FD /* AppGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupTests.swift; sourceTree = "<group>"; };
 		9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Light.ttf"; sourceTree = "<group>"; };
@@ -593,8 +599,11 @@
 		B0086F5F457433F903F429E0 /* Pickers */ = {
 			isa = PBXGroup;
 			children = (
+				37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */,
 				D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */,
 				3FA5FE89666E08171E6365A7 /* PickerPresenter.swift */,
+				92811CBB96DCB3B993F65CEF /* PickerTime.swift */,
+				315D24154A9ABD69200C164B /* PickerTimeField.swift */,
 			);
 			path = Pickers;
 			sourceTree = "<group>";
@@ -795,6 +804,7 @@
 				CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */,
 				29DBD082850E4F48EC9CB314 /* CompletionToastState.swift in Sources */,
 				A11E01F132BD9E7D649C8BD7 /* ContentView.swift in Sources */,
+				5720041FAE6A032A7066DF4D /* DatePickerCard.swift in Sources */,
 				F731493FD4E1A807845123C1 /* Debouncer.swift in Sources */,
 				D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */,
 				B11AC0DEEDDF3FCEC2253ABC /* DelightSettingsSection.swift in Sources */,
@@ -842,6 +852,8 @@
 				ECCFD227CF85F94C563A169D /* NotificationStatus.swift in Sources */,
 				D8DC35F42D40D8941CBBA440 /* PickerPlacement.swift in Sources */,
 				6AD7741C195C9973401AB7E3 /* PickerPresenter.swift in Sources */,
+				DB2233C69DF38E7D751C4A4B /* PickerTime.swift in Sources */,
+				AAE316B3515708BCEF1AC95D /* PickerTimeField.swift in Sources */,
 				6DD1C8088F425E2C7D82BA4D /* PopoutController.swift in Sources */,
 				6B070ADB5812F73B071950DC /* PopoutHost.swift in Sources */,
 				7FAF1E998F06E600F7C27C6A /* PopoutPickers.swift in Sources */,
