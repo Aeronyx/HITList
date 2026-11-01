@@ -52,7 +52,7 @@ struct RemindersSettingsSection: View {
             }
 
             HITMenuRow("Default reminder", subtitle: "For timed tasks without a ! offset of their own.",
-                       systemImage: "bell.badge") {
+                       systemImage: "bell.badge", trailing: {
                 Menu {
                     Picker("Default reminder", selection: $defaultOffset) {
                         ForEach(Preferences.defaultReminderOffsetChoices, id: \.self) { minutes in
@@ -67,7 +67,7 @@ struct RemindersSettingsSection: View {
                 .buttonStyle(.plain)
                 .fixedSize()
                 .accessibilityIdentifier("settings-default-reminder")
-            }
+            })
             .onChange(of: defaultOffset) { _, _ in Task { await rescheduleAndRefresh() } }
 
             Toggle(isOn: $morningSummary) {
@@ -85,11 +85,11 @@ struct RemindersSettingsSection: View {
                 }
             }
             if morningSummary {
-                HITMenuRow("Summary time", systemImage: "clock") {
+                HITMenuRow("Summary time", systemImage: "clock", trailing: {
                     DatePicker("Summary time", selection: morningTime, displayedComponents: .hourAndMinute)
                         .labelsHidden()
                         .fixedSize()
-                }
+                })
                 .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
             }
 
