@@ -297,19 +297,23 @@ struct QuickAddPopout: View {
                        tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
                        isSelected: chips.hasDueTime, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
-                let parts = chips.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
-                ReminderChipPopover(hour: chips.hasDueTime ? parts?.hour : nil, minute: chips.hasDueTime ? parts?.minute : nil,
-                                    offsetMinutes: chips.reminderOffsetMinutes,
-                                    onPick: { h, m in
-                                        draft.setTime(hour: h, minute: m, parser)
-                                        done()
-                                    }, onClear: {
-                                        draft.clearTime(parser)
-                                        draft.setReminderOffset(nil, parser)
-                                        done()
-                                    }, onOffset: { minutes in
-                                        draft.setReminderOffset(minutes, parser)
-                                    })
+                ReminderPickerCard(day: chips.dueDate, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil,
+                                   offsetMinutes: chips.reminderOffsetMinutes, now: parser.dateParser.now,
+                                   onTime: { time in
+                                       if let time {
+                                           draft.setTime(hour: time.hour, minute: time.minute, parser)
+                                           done()
+                                       } else {
+                                           draft.clearTime(parser)
+                                           draft.setReminderOffset(nil, parser)
+                                       }
+                                   }, onClear: {
+                                       draft.clearTime(parser)
+                                       draft.setReminderOffset(nil, parser)
+                                       done()
+                                   }, onOffset: { minutes in
+                                       draft.setReminderOffset(minutes, parser)
+                                   })
             }
             .accessibilityIdentifier("quickAddReminderChip")
     }

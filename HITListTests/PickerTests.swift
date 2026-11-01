@@ -209,6 +209,44 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(DatePreset.all(now: wednesday, weekStart: 2, calendar: calendar)[3].date, date(2026, 11, 7))
     }
 
+    // MARK: The reminder card
+
+    func testReminderCardSaysWhenItFires() {
+        let day = date(2026, 11, 3)
+        let eleven = PickerTime(hour: 11, minute: 0)
+        func clock(_ hour: Int, _ minute: Int, on d: Date? = nil) -> String {
+            calendar.date(bySettingHour: hour, minute: minute, second: 0, of: d ?? day)!.formatted(date: .omitted, time: .shortened)
+        }
+        XCTAssertNil(ReminderPickerCard.fireText(day: day, time: nil, offsetMinutes: 15, calendar: calendar), "no time, no fire time")
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: eleven, offsetMinutes: nil, calendar: calendar), "Fires " + clock(11, 0))
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: eleven, offsetMinutes: 15, calendar: calendar), "Fires " + clock(10, 45))
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: eleven, offsetMinutes: 60, calendar: calendar), "Fires " + clock(10, 0))
+        let monday = date(2026, 11, 2)
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: eleven, offsetMinutes: 1440, calendar: calendar),
+                       "Fires " + monday.formatted(.dateTime.weekday(.abbreviated)) + " " + clock(11, 0, on: monday),
+                       "a day before names the day")
+        XCTAssertEqual(ReminderPickerCard.fireText(day: day, time: PickerTime(hour: 0, minute: 10), offsetMinutes: 30, calendar: calendar),
+                       "Fires " + monday.formatted(.dateTime.weekday(.abbreviated)) + " " + clock(23, 40, on: monday))
+    }
+
+    func testReminderOffsetsIncludeTenMinutesAndACustomField() {
+        XCTAssertEqual(ReminderPickerCard.offsetPresets, [0, 5, 10, 15, 30, 60, 1440])
+        XCTAssertEqual(ReminderPickerCard.offsetPresets.map { ReminderOffset.label(minutes: $0) },
+                       ["At time", "5 min before", "10 min before", "15 min before", "30 min before", "1 hour before", "1 day before"])
+        XCTAssertEqual(ReminderPickerCard.customOffset("45"), 45)
+        XCTAssertEqual(ReminderPickerCard.customOffset(" 90 "), 90)
+        XCTAssertEqual(ReminderPickerCard.customOffset(String(ReminderOffset.maxMinutes)), ReminderOffset.maxMinutes)
+        for bad in ["", "0", "-5", "abc", "1.5", String(ReminderOffset.maxMinutes + 1)] {
+            XCTAssertNil(ReminderPickerCard.customOffset(bad), bad)
+        }
+        // A custom offset writes a token that parses back.
+        let p = QuickAddParser(now: date(2026, 10, 31), calendar: calendar)
+        var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
+        draft.setReminderOffset(45, p)
+        XCTAssertEqual(draft.text, "Haircut tomorrow 11am !45mb ")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 45)
+    }
+
     func testCardsFitTheQuickAddPanel() {
         for kind in PickerKind.allCases {
             XCTAssertLessThanOrEqual(kind.width, 560 - 2 * 20, "\(kind) is wider than the panel's content")

@@ -253,10 +253,14 @@ struct TaskPopout: View {
                     tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
                     isSelected: timeParts != nil, action: { openChip = .reminder })
                 .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
-                    ReminderChipPopover(hour: timeParts?.hour, minute: timeParts?.minute,
-                                        offsetMinutes: task.reminderOffsetMinutes, onPick: { h, m in
-                        openChip = nil
-                        setTime(hour: h, minute: m)
+                    ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
+                                       offsetMinutes: task.reminderOffsetMinutes, now: now, onTime: { time in
+                        if let time {
+                            openChip = nil
+                            setTime(hour: time.hour, minute: time.minute)
+                        } else {
+                            clearTime()
+                        }
                     }, onClear: {
                         openChip = nil
                         clearTime()

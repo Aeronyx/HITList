@@ -320,8 +320,8 @@ final class PopoutTests: XCTestCase {
 
     func testOffsetPresetsWriteTokensThatParseBack() {
         let p = parser()
-        let expected: [Int: String] = [5: "!5mb", 15: "!15mb", 30: "!30mb", 60: "!1hb", 1440: "!1db"]
-        for minutes in ReminderChipPopover.offsetPresets {
+        let expected: [Int: String] = [5: "!5mb", 10: "!10mb", 15: "!15mb", 30: "!30mb", 60: "!1hb", 1440: "!1db"]
+        for minutes in ReminderPickerCard.offsetPresets {
             var draft = QuickAddDraft(context: .inbox, text: "Haircut tomorrow 11am")
             draft.setReminderOffset(minutes == 0 ? nil : minutes, p)
             if let token = expected[minutes] {
