@@ -57,16 +57,19 @@ struct HITSwitchTrack: View {
 
     var body: some View {
         let size = HITToggleStyle.trackSize
+        // A white thumb vanishes on a light accent (Graphite): there it turns dark when on.
+        let thumb = isOn && Theme.palette.hasLightAccent ? HITColor.onAccent : HITColor.thumb
         ZStack {
             Capsule()
                 .fill(isOn ? Theme.accent : HITColor.trackOff)
                 .overlay(Capsule().fill(Color.white.opacity(isHovered ? 0.06 : 0)))
             Circle()
-                .fill(LinearGradient(colors: [HITColor.thumb, HITColor.thumb.darkened(by: 0.07)],
+                .fill(LinearGradient(colors: [thumb, thumb.darkened(by: 0.07)],
                                      startPoint: .top, endPoint: .bottom))
                 // 1 pt inner highlight along the top edge.
                 .overlay(Circle().strokeBorder(
-                    LinearGradient(colors: [.white, .white.opacity(0)], startPoint: .top, endPoint: .center),
+                    LinearGradient(colors: [.white.opacity(thumb == HITColor.thumb ? 1 : 0.18), .white.opacity(0)],
+                                   startPoint: .top, endPoint: .center),
                     lineWidth: 1))
                 .frame(width: HITToggleStyle.thumbDiameter, height: HITToggleStyle.thumbDiameter)
                 .shadow(color: .black.opacity(0.35), radius: 1.5, y: 1)
