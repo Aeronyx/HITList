@@ -101,15 +101,7 @@ struct SidebarView: View {
                 sectionHeader("Labels") { creatingLabel = true }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SyncStatusFooter {
-                #if os(macOS)
-                openSettings()
-                #else
-                showSettings = true
-                #endif
-            }
-        }
+        // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
         .navigationTitle("HITList")
         .scrollContentBackground(.hidden)
         .background(Theme.surface)

@@ -53,7 +53,7 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 6 (0.2.0) is live; the next upload is 0.2.1 (7).
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 6 (0.2.0) is live; the next upload is 0.3.0 (7).
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
@@ -83,7 +83,7 @@ anything is archived and refuses a version without a changelog section. Liquid G
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
 
-## Round 5 ownership (one session; stay inside your files)
+## Round 5 (finished 2026-11-01; kept for the record)
 - `23-mac-pickers` (branch `mac-pickers`): `Views/Popouts/PopoutPickers.swift`, new `Views/Popouts/Pickers/*`,
   new `Support/DesignSystem/HITCalendar.swift` (+ README section, gallery entry), the chip `.popover` call
   sites and `chipBinding` plumbing in `QuickAddPopout.swift` and `TaskPopout.swift`, `PopoutTests`, new

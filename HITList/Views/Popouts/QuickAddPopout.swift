@@ -398,10 +398,12 @@ struct QuickAddPopout: View {
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
                 .help("Close (Esc)")
+            // A capsule outlined in the accent, so it reads as "send" and not as a second solid "+".
             Button(action: save) {
                 Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
+                    .frame(width: 24)
             }
-            .buttonStyle(HITButtonStyle(.primary, shape: .circle))
+            .buttonStyle(HITButtonStyle(.secondary, shape: .pill))
             .disabled(draft.result(parser).title.isEmpty)
             .accessibilityLabel("Add task")
             .accessibilityIdentifier("quickAddSave")

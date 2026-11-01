@@ -32,16 +32,14 @@ private struct QuickAddEntry: ViewModifier {
             .toolbar {
                 if showsButton {
                     ToolbarItem(placement: .primaryAction) {
-                        // The iPhone's accent oval, toolbar-sized, so both platforms add the same way.
+                        // The iPhone's accent oval as a prominent toolbar button, so the toolbar sizes and
+                        // aligns it with its neighbours (a hand-drawn capsule sat off-centre on macOS 26).
                         Button { popouts.openQuickAdd(context) } label: {
                             Image(systemName: "plus")
                                 .font(.system(size: 13, weight: .bold))
-                                .foregroundStyle(HITColor.onAccent)
-                                .frame(width: 40, height: 26)
-                                .background(Capsule().fill(Theme.accent))
-                                .contentShape(Capsule())
+                                .frame(width: 22, height: 16)
                         }
-                        .buttonStyle(.plain)
+                        .modifier(ProminentToolbarButton())
                         .accessibilityLabel("Add task")
                         .help("Add a task (⌘N)")
                     }
@@ -96,6 +94,19 @@ struct FloatingAddButton: View {
             .frame(width: Self.size.width, height: Self.size.height)
     }
 }
+
+#if os(macOS)
+/// Accent-filled capsule in the Mac toolbar: Liquid Glass on macOS 26, bordered-prominent before.
+private struct ProminentToolbarButton: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content.buttonStyle(.glassProminent).tint(Theme.accent)
+        } else {
+            content.buttonStyle(.borderedProminent).tint(Theme.accent)
+        }
+    }
+}
+#endif
 
 private struct FloatingAddPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
