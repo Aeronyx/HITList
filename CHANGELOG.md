@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.0
+## 0.3.0 — build 7, 2026-11-01
 
 - Mac: every chip in the quick-add and task popouts opens a card drawn inside the window (no more system
   popovers hanging past the edge): a HITList month calendar, a time row that reads "9am", "17:30" or
