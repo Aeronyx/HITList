@@ -21,6 +21,7 @@ struct DesignSystemGalleryContent: View {
     @State private var priority = Priority.p2
     @State private var preset = "Today"
     @State private var colorHex = "#5E81F4"
+    @State private var calendarDay: Date? = Calendar.current.date(byAdding: .day, value: 2, to: Date())
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.xl) {
@@ -76,6 +77,10 @@ struct DesignSystemGalleryContent: View {
                 }
             }
             HITSection("Colour dots") { HITColorDots(selection: $colorHex) }
+            HITSection("Calendar", footer: "Today ringed, the pick filled; arrows and Return with focus.") {
+                HITCalendar(selection: calendarDay, weekStart: 2) { calendarDay = $0 }
+                    .frame(width: 296)
+            }
             HITGroup("Motion", footer: "Tap a row to play its role.") {
                 ForEach(HITMotion.Role.allCases, id: \.self) { role in HITMotionSample(role: role) }
             }
