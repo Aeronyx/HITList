@@ -20,6 +20,9 @@ struct PopoutHost: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// The keyboard the card sits above; `heldKeyboardHeight` is its height when the card began closing.
+    private var keyboard: KeyboardObserver { .shared }
+    @State private var heldKeyboardHeight: CGFloat = 0
     #endif
 
     /// The Mac's panel style; iPad gets it too.
@@ -97,8 +100,8 @@ struct PopoutHost: ViewModifier {
     }
 
     /// The oval card rises from the bottom edge with the keyboard (`enter`). Going away it has already
-    /// faded while riding the keyboard down (`retireQuickAdd`), so its removal is a plain quick fade; that
-    /// also covers the instant closes (switching tabs).
+    /// faded in place (`retireQuickAdd`), so its removal is a plain quick fade; that also covers the
+    /// instant closes (switching tabs).
     private var cardTransition: AnyTransition {
         let rise: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
         return .asymmetric(insertion: rise.animation(HITMotion.enter(reduceMotion: reduceMotion)),
@@ -113,17 +116,21 @@ struct PopoutHost: ViewModifier {
 
     // MARK: Quick add
 
-    /// iPhone: how long the card takes to go, matched to the keyboard's own dismissal.
-    static let retractDuration: TimeInterval = 0.25
+    /// iPhone: how long the card takes to fade; the keyboard's own dismissal takes about as long.
+    static let retractDuration: TimeInterval = 0.2
 
-    /// iPhone: puts the card away in one motion with the keyboard. The card drops focus (the keyboard
-    /// starts down), fades while it rides the shrinking keyboard safe area down, and is removed once the
-    /// keyboard has gone, so nothing moves in two parts.
+    /// iPhone: puts the card away. The card holds the height it has (`heldKeyboardHeight`), drops focus
+    /// so the keyboard starts down, and fades where it is with a small settle downward; it is removed
+    /// once the keyboard has gone. Nothing rides the keyboard and nothing re-lays out, so the two
+    /// motions read as one.
     private func retireQuickAdd() {
         guard !popouts.state.isQuickAddClosing else { return }
-        withAnimation(.easeInOut(duration: Self.retractDuration)) { popouts.beginClosingQuickAdd() }
+        #if os(iOS)
+        heldKeyboardHeight = keyboard.height
+        #endif
+        withAnimation(.easeIn(duration: Self.retractDuration)) { popouts.beginClosingQuickAdd() }
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(Self.retractDuration + 0.05))
+            try? await Task.sleep(for: .seconds(Self.retractDuration + 0.1))
             if popouts.state.isQuickAddClosing { popouts.closeQuickAdd() }
         }
     }
@@ -133,7 +140,7 @@ struct PopoutHost: ViewModifier {
         // iPhone: adding puts the card away (the new row is the confirmation); the Mac panel stays open
         // for the next task.
         let closing = popouts.state.isQuickAddClosing
-        let card = QuickAddPopout(context: context, style: .floating, isClosing: closing,
+        let card = QuickAddPopout(context: context, style: .floating, isClosing: closing, closesAfterSave: !usesPanel,
                                   onClose: { if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() } },
                                   onSaved: { popouts.didSave(); if !usesPanel { retireQuickAdd() } })
         if usesPanel {
@@ -142,27 +149,40 @@ struct PopoutHost: ViewModifier {
             }
             .transition(.opacity)
         } else {
-            ZStack(alignment: .bottom) {
-                Color.black.opacity(closing ? 0 : 0.5)
-                    .ignoresSafeArea()
-                    .onTapGesture { retireQuickAdd() }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityLabel("Close")
-                    .transition(.opacity)
-                card
-                    .ovalCardChrome()
-                    .padding(.horizontal, Self.ovalInset)
-                    .padding(.bottom, Self.ovalInset)
-                    .opacity(closing ? 0 : 1)
-                    .allowsHitTesting(!closing)
-                    .transition(cardTransition)
+            #if os(iOS)
+            GeometryReader { geo in
+                // The card is placed above the keyboard by hand (`KeyboardObserver`), not by the keyboard
+                // safe area, so that while closing it can hold its height and fade in place.
+                let keyboardHeight = closing ? heldKeyboardHeight : keyboard.height
+                let aboveKeyboard = max(0, keyboardHeight - geo.safeAreaInsets.bottom)
+                ZStack(alignment: .bottom) {
+                    Color.black.opacity(closing ? 0 : 0.5)
+                        .ignoresSafeArea()
+                        .onTapGesture { retireQuickAdd() }
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityLabel("Close")
+                        .transition(.opacity)
+                    card
+                        .ovalCardChrome()
+                        .padding(.horizontal, Self.ovalInset)
+                        .padding(.bottom, Self.ovalInset + aboveKeyboard)
+                        .opacity(closing ? 0 : 1)
+                        .offset(y: closing && !reduceMotion ? 10 : 0)
+                        .allowsHitTesting(!closing)
+                        .transition(cardTransition)
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
+                .animation(.easeIn(duration: Self.retractDuration), value: closing)
             }
-            .animation(.easeInOut(duration: Self.retractDuration), value: closing)
+            .ignoresSafeArea(.keyboard)
+            #else
+            EmptyView()
+            #endif
         }
     }
 
-    /// The oval's distance from the screen edges and from the top of the keyboard. The keyboard's safe
-    /// area keeps the card above it, so it floats rather than docks.
+    /// The oval's distance from the screen edges and from the top of the keyboard (`KeyboardObserver`
+    /// keeps it above the keyboard, so it floats rather than docks).
     static let ovalInset: CGFloat = 12
 }
 

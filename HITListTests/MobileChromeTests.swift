@@ -21,6 +21,18 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(FloatingAddButton.size, CGSize(width: 64, height: 42), "a wide oval, a little shorter than build 8's")
     }
 
+    func testRowsMeasureLikeTheReference() {
+        // Todoist's row (George's reference): a little more above the title than below the second line.
+        let insets = ListMetrics.rowInsets(compact: false)
+        XCTAssertEqual(insets.top, 12)
+        XCTAssertEqual(insets.bottom, 10)
+        XCTAssertEqual(insets.leading, insets.trailing)
+        let compact = ListMetrics.rowInsets(compact: true)
+        XCTAssertLessThan(compact.top, insets.top)
+        XCTAssertLessThan(compact.bottom, insets.bottom)
+        XCTAssertEqual(ListMetrics.rowLineGap, 4)
+    }
+
     func testGlassNeedsTheOSAndBothSwitchesOff() {
         XCTAssertTrue(HITEffects.allowsGlass(osSupportsGlass: true, reduceEffects: false, reduceTransparency: false))
         XCTAssertFalse(HITEffects.allowsGlass(osSupportsGlass: false, reduceEffects: false, reduceTransparency: false))

@@ -88,6 +88,9 @@ struct TaskPopout: View {
                         task.title = title.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
                         titleFocused = false
                     }
+                    if task.title.count > TaskLimits.titleCharacters {
+                        task.title = String(task.title.prefix(TaskLimits.titleCharacters))
+                    }
                     save(reschedule: false)
                 }
 
