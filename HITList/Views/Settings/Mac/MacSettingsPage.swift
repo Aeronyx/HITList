@@ -211,7 +211,7 @@ struct MacSettingsSectionContent: View {
             case .data:
                 MacDataSection()
             case .about:
-                AboutSettingsGroup()
+                MacAboutSection()
             }
         }
     }

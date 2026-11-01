@@ -21,6 +21,7 @@
 		2433F0581A0DA61991077618 /* Inter_18pt-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */; };
 		24C5BA68E59A5030B7F2457C /* MacDataSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A130E46EE910D788FC0FA36 /* MacDataSection.swift */; };
 		257118BE09BECCEE77BAA768 /* SettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E0F881764310827D1A610F1 /* SettingsTests.swift */; };
+		25867322B5DBFEA293437AF1 /* MacAboutSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEBD86391030BCFC15AD273A /* MacAboutSection.swift */; };
 		2627D544E45DE46036EB040C /* HITListApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */; };
 		26FB4550CD5C3E37C7E303A4 /* FlipSwitchTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88ABAD9BF71EABED1CAB264 /* FlipSwitchTile.swift */; };
 		27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528485A27E1D787530779DBE /* LocalCacheReset.swift */; };
@@ -329,6 +330,7 @@
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
 		FDE419EFB9497F9FB13FE74B /* HITTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTokens.swift; sourceTree = "<group>"; };
+		FEBD86391030BCFC15AD273A /* MacAboutSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAboutSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -468,6 +470,7 @@
 			isa = PBXGroup;
 			children = (
 				AF22F4F7DDF5D28105EFED56 /* LastSyncChange.swift */,
+				FEBD86391030BCFC15AD273A /* MacAboutSection.swift */,
 				7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */,
 				6A130E46EE910D788FC0FA36 /* MacDataSection.swift */,
 				02B0D726E6D45191FFDC6A83 /* MacSettingsPage.swift */,
@@ -890,6 +893,7 @@
 				A1A8673E5F354361A23B5ED8 /* LastSyncChange.swift in Sources */,
 				EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */,
 				27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */,
+				25867322B5DBFEA293437AF1 /* MacAboutSection.swift in Sources */,
 				314F390CE31AB982B5B4678D /* MacAppearanceSection.swift in Sources */,
 				24C5BA68E59A5030B7F2457C /* MacDataSection.swift in Sources */,
 				6B7A998AA3C824DE1A2F1654 /* MacSettingsPage.swift in Sources */,
