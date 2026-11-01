@@ -133,9 +133,7 @@ struct InboxView: View {
                     ForEach(group.tasks) { row($0) }
                 } header: {
                     Text("Priority \(group.priority.rawValue)")
-                        .font(HITType.sectionHeader)
-                        .foregroundStyle(group.priority == .p4 ? Theme.secondaryText : group.priority.color)
-                        .textCase(nil)
+                        .taskSectionHeader(color: group.priority == .p4 ? Theme.secondaryText : group.priority.color)
                 }
             }
             if !isCompact {
@@ -145,6 +143,7 @@ struct InboxView: View {
         #if os(macOS)
         .listStyle(.inset)
         #endif
+        .environment(\.defaultMinListHeaderHeight, 0)
         .slateList()
     }
 

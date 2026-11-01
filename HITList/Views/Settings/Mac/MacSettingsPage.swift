@@ -1,66 +1,74 @@
 import SwiftUI
 
-/// Settings inside the Mac window's detail column (`SidebarItem.settings`): a 200 pt column of sections
-/// on the left (`MacSettingsSectionList`), the chosen section on the right in a scroll view at most 620 pt
-/// wide under a large title. The chosen section is remembered across launches
-/// (`Preferences.macSettingsSection`). The sections reuse the iPhone sheet's groups
-/// (`MacSettingsSectionContent`), so a row added to one shows up in both.
+/// Settings inside the Mac window (`SidebarItem.settings`), laid out like System Settings: the window's
+/// sidebar column shows the sections (`MacSettingsSidebar`, with Back) and the detail column, this page,
+/// the chosen section in a scroll view at most 620 pt wide under a large title. The chosen section is
+/// remembered across launches (`Preferences.macSettingsSection`). The sections reuse the iPhone sheet's
+/// groups (`MacSettingsSectionContent`), so a row added to one shows up in both.
 struct MacSettingsPage: View {
     @AppStorage(Preferences.macSettingsSection, store: AppGroup.defaults)
     private var storedSection = MacSettingsSection.general.rawValue
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(SettingsRouter.self) private var router: SettingsRouter?
 
+    /// The section column's minimum width: the sidebar column's.
     static let listWidth: CGFloat = 200
     static let contentMaxWidth: CGFloat = 620
 
     private var section: MacSettingsSection { MacSettingsSection.remembered(storedSection) }
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                // The page takes the whole window (the sidebar slides away), so it carries its own way back.
-                HStack {
-                    Button { router?.close() } label: {
-                        Label("Back", systemImage: "chevron.left")
-                    }
-                    .buttonStyle(HITButtonStyle(.ghost, size: .small))
-                    .keyboardShortcut(.cancelAction)
-                    .help("Back to your lists (Esc)")
-                    .accessibilityIdentifier("settings-back")
-                    Spacer()
-                }
-                .padding(.horizontal, HITSpacing.s)
-                .padding(.top, HITSpacing.s)
-                MacSettingsSectionList(selection: section) { picked in
-                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { storedSection = picked.rawValue }
-                }
+        ScrollView {
+            VStack(alignment: .leading, spacing: HITSpacing.xl) {
+                MacSettingsHeader(section: section)
+                MacSettingsSectionContent(section: section)
             }
-            .frame(width: Self.listWidth)
-            .frame(maxHeight: .infinity)
-            .background(Theme.surface.opacity(0.45))
-
-            Rectangle().fill(Theme.separator).frame(width: 1)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: HITSpacing.xl) {
-                    MacSettingsHeader(section: section)
-                    MacSettingsSectionContent(section: section)
-                }
-                .padding(.horizontal, HITSpacing.xl)
-                .padding(.top, HITSpacing.l)
-                .padding(.bottom, HITSpacing.xl * 2)
-                .frame(maxWidth: Self.contentMaxWidth, alignment: .leading)
-                .frame(maxWidth: .infinity)
-            }
-            // A new section starts at its top, not at the previous one's scroll position.
-            .id(section)
-            .scrollBounceBehavior(.basedOnSize)
+            .padding(.horizontal, HITSpacing.xl)
+            .padding(.top, HITSpacing.l)
+            .padding(.bottom, HITSpacing.xl * 2)
+            .frame(maxWidth: Self.contentMaxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        // A new section starts at its top, not at the previous one's scroll position.
+        .id(section)
+        .scrollBounceBehavior(.basedOnSize)
         .background(Theme.background)
         .foregroundStyle(HITColor.text)
         .navigationTitle("Settings")
         .accessibilityIdentifier("mac-settings-page")
+    }
+}
+
+/// The sidebar column while Settings shows: Back to the lists on top, then one row per section
+/// (`MacSettingsSectionList`). Picking a row changes the detail column's page.
+struct MacSettingsSidebar: View {
+    let onBack: () -> Void
+    @AppStorage(Preferences.macSettingsSection, store: AppGroup.defaults)
+    private var storedSection = MacSettingsSection.general.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var section: MacSettingsSection { MacSettingsSection.remembered(storedSection) }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onBack) {
+                    Label("Back", systemImage: "chevron.left")
+                }
+                .buttonStyle(HITButtonStyle(.ghost, size: .small))
+                .keyboardShortcut(.cancelAction)
+                .help("Back to your lists (Esc)")
+                .accessibilityIdentifier("settings-back")
+                Spacer()
+            }
+            .padding(.horizontal, HITSpacing.s)
+            .padding(.top, HITSpacing.s)
+            MacSettingsSectionList(selection: section) { picked in
+                withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { storedSection = picked.rawValue }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.surface)
+        .navigationTitle("Settings")
+        .accessibilityIdentifier("mac-settings-sidebar")
     }
 }
 
@@ -234,8 +242,11 @@ struct MacSettingsSectionContent: View {
 }
 
 #Preview("Mac Settings") {
-    MacSettingsPage()
-        .modelContainer(ModelContainerFactory.preview())
-        .frame(width: 900, height: 620)
-        .preferredColorScheme(.dark)
+    HStack(spacing: 0) {
+        MacSettingsSidebar {}.frame(width: 240)
+        MacSettingsPage()
+    }
+    .modelContainer(ModelContainerFactory.preview())
+    .frame(width: 900, height: 620)
+    .preferredColorScheme(.dark)
 }

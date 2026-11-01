@@ -127,6 +127,8 @@ struct AccountChangeBanner: View {
 struct SyncBolt: View {
     var action: () -> Void
     static let size: CGFloat = 11
+    /// How far right of its toolbar slot the bolt is drawn.
+    static let nudge: CGFloat = 12
     /// A sync older than this reads as "hasn't synced in a while".
     static let staleAfter: TimeInterval = 24 * 60 * 60
     private var monitor: CloudSyncMonitor { .shared }
@@ -144,8 +146,11 @@ struct SyncBolt: View {
                     .foregroundStyle(look.color.opacity(flash ? 1 : look.opacity))
                     .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 20, height: 20)
+                    .frame(width: 14, height: 20)
                     .contentShape(Rectangle())
+                    // Drawn a little to the right of its toolbar slot, so it sits nearer the two controls
+                    // than the toolbar's own item spacing would put it (George, build 9).
+                    .offset(x: Self.nudge)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(state.summary(now: tick.date))

@@ -119,6 +119,13 @@ enum HITType {
     #endif
     /// Section headers above a group of rows or fields.
     static let sectionHeader = caption2Semibold
+    /// A task list's section headers ("Overdue", "Nov 1, Sunday", "Priority 1"): semibold, a step above
+    /// the rows' body text on the Mac and the subheadline size on iPhone. Applied by `taskSectionHeader`.
+    #if os(macOS)
+    static let listSectionHeader = HITFont.inter(13, .semibold, relativeTo: .headline)
+    #else
+    static let listSectionHeader = HITFont.inter(15, .semibold, relativeTo: .subheadline)
+    #endif
     /// Filter queries and other code-like text stay in the system mono; Inter has no mono cut.
     static let mono = Font.callout.monospaced()
     static let monoCaption = Font.caption.monospaced()
