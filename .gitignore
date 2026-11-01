@@ -1,4 +1,5 @@
 build/
+build.noindex/
 *.xcarchive
 .DS_Store
 xcuserdata/

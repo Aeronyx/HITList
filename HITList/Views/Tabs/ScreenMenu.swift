@@ -1,25 +1,21 @@
 import SwiftUI
 
-/// Every screen's trailing toolbar, in one place so the same controls sit in the same order everywhere:
-/// the small sync icon (`SyncToolbarIcon`, opens Settings), the view-options control (`ViewOptionsMenu`,
-/// the filter-lines icon; optional) and, to its right, the "…" menu. On iPhone the "…" is `ScreenMenu`:
-/// this screen's own actions, then Settings… with the version. On iPad the "…" holds the screen's
-/// actions only (Settings is behind the sidebar's gear), and so does the Mac (Settings is in the app menu).
+/// Every screen's trailing toolbar, in one place so the same three things sit in the same order on every
+/// screen and every platform: the small sync bolt (`SyncBolt`) alone in the empty space, then two
+/// controls in the toolbar's own group: the screen's main control (`viewOptions`: the filter-lines view
+/// options on a task list, Jump to today on Upcoming, New… on Browse, Add switch on the Flipboard) and
+/// the "…" (`ScreenMenu`: this screen's actions, then Settings… and the version). Every screen passes
+/// both, so the bar never has a gap.
 ///
 ///     .screenChrome {
 ///         ViewOptionsMenu { Toggle("Show completed", isOn: $showCompleted) }
 ///     } menu: {
-///         Button { processing = true } label: { Label("Process…", systemImage: "tray.and.arrow.down") }
+///         Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
 ///     }
 extension View {
     func screenChrome<Options: View, Items: View>(@ViewBuilder viewOptions: @escaping () -> Options,
                                                   @ViewBuilder menu: @escaping () -> Items) -> some View {
         modifier(ScreenChrome(viewOptions: viewOptions, menu: menu))
-    }
-
-    /// A screen without view options (Browse, the Flipboard): just the "…".
-    func screenChrome<Items: View>(@ViewBuilder menu: @escaping () -> Items) -> some View {
-        modifier(ScreenChrome(viewOptions: { EmptyView() }, menu: menu))
     }
 }
 
@@ -27,14 +23,12 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     let viewOptions: () -> Options
     let menu: () -> Items
     @State private var showSettings = false
-    #if os(iOS)
-    @Environment(\.horizontalSizeClass) private var sizeClass
-    #else
+    #if os(macOS)
     @Environment(\.openSettings) private var openSettings
     #endif
 
-    /// The sync icon's tap: the Settings sheet on iOS, the Settings window on the Mac.
-    private func openSyncSettings() {
+    /// Settings: a sheet on iPhone and iPad, the Settings window on the Mac.
+    private func openAppSettings() {
         #if os(iOS)
         showSettings = true
         #else
@@ -42,35 +36,27 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
         #endif
     }
 
+    #if os(iOS)
+    private let trailing: ToolbarItemPlacement = .topBarTrailing
+    #else
+    private let trailing: ToolbarItemPlacement = .automatic
+    #endif
+
     func body(content: Content) -> some View {
         content
             .toolbar {
-                #if os(iOS)
-                if sizeClass == .compact {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        SyncToolbarIcon(action: openSyncSettings)
-                        viewOptions()
-                        ScreenMenu(showSettings: $showSettings, items: menu)
-                    }
+                // The bolt stands apart from the controls: on iOS 26 / macOS 26 that means outside the
+                // toolbar's shared glass; before, toolbar items have no shared background anyway.
+                if #available(iOS 26, macOS 26, *) {
+                    ToolbarItem(placement: trailing) { SyncBolt(action: openAppSettings) }
+                        .sharedBackgroundVisibility(.hidden)
                 } else {
-                    ToolbarItem(placement: .automatic) { SyncToolbarIcon(action: openSyncSettings) }
-                    ToolbarItem(placement: .automatic) { viewOptions() }
-                    ToolbarItem(placement: .automatic) {
-                        Menu { menu() } label: { Image(systemName: "ellipsis.circle") }
-                            .menuIndicator(.hidden)
-                            .accessibilityLabel("More")
-                    }
+                    ToolbarItem(placement: trailing) { SyncBolt(action: openAppSettings) }
                 }
-                #else
-                ToolbarItem(placement: .automatic) { SyncToolbarIcon(action: openSyncSettings) }
-                ToolbarItem(placement: .automatic) { viewOptions() }
-                ToolbarItem(placement: .automatic) {
-                    Menu { menu() } label: { Image(systemName: "ellipsis.circle") }
-                        .menuIndicator(.hidden)
-                        .accessibilityLabel("More")
-                        .help("More")
+                ToolbarItemGroup(placement: trailing) {
+                    viewOptions()
+                    ScreenMenu(onSettings: openAppSettings, items: menu)
                 }
-                #endif
             }
             #if os(iOS)
             .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
@@ -93,17 +79,16 @@ struct ViewOptionsMenu<Content: View>: View {
     }
 }
 
-#if os(iOS)
-/// The iPhone's "…": the screen's actions, then Settings… and the version line.
+/// The "…": the screen's actions, then Settings… and the version line. The same on every platform.
 struct ScreenMenu<Items: View>: View {
-    @Binding var showSettings: Bool
+    var onSettings: () -> Void
     let items: () -> Items
 
     var body: some View {
         Menu {
             Section { items() }
             Section {
-                Button { showSettings = true } label: { Label("Settings…", systemImage: "gearshape") }
+                Button(action: onSettings) { Label("Settings…", systemImage: "gearshape") }
                 Button("Version \(AppInfo.versionLabel)") {}
                     .disabled(true)
             }
@@ -113,6 +98,6 @@ struct ScreenMenu<Items: View>: View {
         .menuIndicator(.hidden)
         .accessibilityLabel("More")
         .accessibilityIdentifier("screenMenu")
+        .help("More")
     }
 }
-#endif

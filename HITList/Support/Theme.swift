@@ -75,7 +75,27 @@ struct ThemePalette: Identifiable, Equatable {
         background: "#111612", surface: "#171E19", elevated: "#202A22", separator: "#2D3A30",
         accent: "#8FD694", secondaryText: "#9CAE9F", text: "#E6EFE7", onAccent: "#0B140D"))
 
-    static let all: [ThemePalette] = [.slate, .graphite, .midnight, .moss]
+    /// Cool Scandinavian greys with an ice-blue accent (after the Nord palette).
+    static let nord = ThemePalette(id: "nord", name: "Nord", hex: Hexes(
+        background: "#232831", surface: "#2E3440", elevated: "#3B4252", separator: "#4C566A",
+        accent: "#88C0D0", secondaryText: "#AEB8CA", text: "#ECEFF4", onAccent: "#1B222C"))
+
+    /// Deep indigo night with a periwinkle accent (after Tokyo Night).
+    static let tokyo = ThemePalette(id: "tokyo", name: "Tokyo Night", hex: Hexes(
+        background: "#16161E", surface: "#1A1B26", elevated: "#24283B", separator: "#3B4261",
+        accent: "#7AA2F7", secondaryText: "#9AA5CE", text: "#C0CAF5", onAccent: "#0F1018"))
+
+    /// Warm violet-black with a mauve accent (after Catppuccin Mocha).
+    static let mocha = ThemePalette(id: "mocha", name: "Mocha", hex: Hexes(
+        background: "#181825", surface: "#1E1E2E", elevated: "#313244", separator: "#45475A",
+        accent: "#CBA6F7", secondaryText: "#A6ADC8", text: "#CDD6F4", onAccent: "#11111B"))
+
+    /// Dusky plum with a rose accent (after Rosé Pine).
+    static let rose = ThemePalette(id: "rose", name: "Rosé", hex: Hexes(
+        background: "#191724", surface: "#1F1D2E", elevated: "#26233A", separator: "#403D52",
+        accent: "#EBBCBA", secondaryText: "#9A95B4", text: "#E0DEF4", onAccent: "#14121E"))
+
+    static let all: [ThemePalette] = [.slate, .graphite, .midnight, .moss, .nord, .tokyo, .mocha, .rose]
 
     /// The palette stored under `id`; Slate for nil or anything unknown (a theme from a newer build).
     static func named(_ id: String?) -> ThemePalette {

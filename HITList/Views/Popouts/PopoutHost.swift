@@ -96,12 +96,13 @@ struct PopoutHost: ViewModifier {
             }
     }
 
-    /// The oval card rises from the bottom edge (`enter`) and is put away the same way it came, sliding
-    /// back down behind the keyboard (`exit`); a plain fade under Reduce Motion.
+    /// The oval card rises from the bottom edge with the keyboard (`enter`). Going away it has already
+    /// faded while riding the keyboard down (`retireQuickAdd`), so its removal is a plain quick fade; that
+    /// also covers the instant closes (switching tabs).
     private var cardTransition: AnyTransition {
-        let slide: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
-        return .asymmetric(insertion: slide.animation(HITMotion.enter(reduceMotion: reduceMotion)),
-                           removal: slide.animation(HITMotion.exit(reduceMotion: reduceMotion)))
+        let rise: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
+        return .asymmetric(insertion: rise.animation(HITMotion.enter(reduceMotion: reduceMotion)),
+                           removal: .opacity.animation(HITMotion.exit(reduceMotion: reduceMotion)))
     }
 
     /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
@@ -112,13 +113,29 @@ struct PopoutHost: ViewModifier {
 
     // MARK: Quick add
 
+    /// iPhone: how long the card takes to go, matched to the keyboard's own dismissal.
+    static let retractDuration: TimeInterval = 0.25
+
+    /// iPhone: puts the card away in one motion with the keyboard. The card drops focus (the keyboard
+    /// starts down), fades while it rides the shrinking keyboard safe area down, and is removed once the
+    /// keyboard has gone, so nothing moves in two parts.
+    private func retireQuickAdd() {
+        guard !popouts.state.isQuickAddClosing else { return }
+        withAnimation(.easeInOut(duration: Self.retractDuration)) { popouts.beginClosingQuickAdd() }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(Self.retractDuration + 0.05))
+            if popouts.state.isQuickAddClosing { popouts.closeQuickAdd() }
+        }
+    }
+
     @ViewBuilder
     private func floatingQuickAdd(_ context: QuickAddContext) -> some View {
         // iPhone: adding puts the card away (the new row is the confirmation); the Mac panel stays open
         // for the next task.
-        let card = QuickAddPopout(context: context, style: .floating,
-                                  onClose: { popouts.closeQuickAdd() },
-                                  onSaved: { popouts.didSave(); if !usesPanel { popouts.closeQuickAdd() } })
+        let closing = popouts.state.isQuickAddClosing
+        let card = QuickAddPopout(context: context, style: .floating, isClosing: closing,
+                                  onClose: { if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() } },
+                                  onSaved: { popouts.didSave(); if !usesPanel { retireQuickAdd() } })
         if usesPanel {
             PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
                 card.panelChrome()
@@ -126,9 +143,9 @@ struct PopoutHost: ViewModifier {
             .transition(.opacity)
         } else {
             ZStack(alignment: .bottom) {
-                Color.black.opacity(0.5)
+                Color.black.opacity(closing ? 0 : 0.5)
                     .ignoresSafeArea()
-                    .onTapGesture { popouts.closeQuickAdd() }
+                    .onTapGesture { retireQuickAdd() }
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel("Close")
                     .transition(.opacity)
@@ -136,8 +153,11 @@ struct PopoutHost: ViewModifier {
                     .ovalCardChrome()
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset)
+                    .opacity(closing ? 0 : 1)
+                    .allowsHitTesting(!closing)
                     .transition(cardTransition)
             }
+            .animation(.easeInOut(duration: Self.retractDuration), value: closing)
         }
     }
 

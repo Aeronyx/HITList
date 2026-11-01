@@ -33,9 +33,9 @@ final class ThemeTests: XCTestCase {
 
     // MARK: - Palettes
 
-    func testFourPalettesEachWithEightColours() {
-        XCTAssertEqual(ThemePalette.all.map(\.id), ["slate", "graphite", "midnight", "moss"])
-        XCTAssertEqual(ThemePalette.all.map(\.name), ["Slate", "Graphite", "Midnight", "Moss"])
+    func testEightPalettesEachWithEightColours() {
+        XCTAssertEqual(ThemePalette.all.map(\.id), ["slate", "graphite", "midnight", "moss", "nord", "tokyo", "mocha", "rose"])
+        XCTAssertEqual(ThemePalette.all.map(\.name), ["Slate", "Graphite", "Midnight", "Moss", "Nord", "Tokyo Night", "Mocha", "Rosé"])
         for palette in ThemePalette.all {
             XCTAssertEqual(palette.colors.count, 8, palette.name)
             XCTAssertEqual(palette.hex.all.count, 8, palette.name)

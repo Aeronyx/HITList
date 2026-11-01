@@ -18,6 +18,9 @@ struct PopoutState: Equatable {
         var context: QuickAddContext
         var placement: Placement
         var savedCount = 0
+        /// iPhone: the card is being put away (fading while it rides the keyboard down); the host removes
+        /// it when the keyboard has gone.
+        var isClosing = false
     }
 
     private(set) var quickAdd: QuickAdd?
@@ -25,6 +28,7 @@ struct PopoutState: Equatable {
 
     var isQuickAddOpen: Bool { quickAdd != nil }
     var isFloatingQuickAddOpen: Bool { quickAdd?.placement == .floating }
+    var isQuickAddClosing: Bool { quickAdd?.isClosing == true }
     var isTaskOpen: Bool { taskID != nil }
     /// The floating "+" hides while anything is popped out.
     var showsAddButton: Bool { quickAdd == nil && taskID == nil }
@@ -43,6 +47,11 @@ struct PopoutState: Equatable {
 
     mutating func closeQuickAdd() {
         quickAdd = nil
+    }
+
+    /// Starts putting the card away; `closeQuickAdd` finishes it.
+    mutating func beginClosingQuickAdd() {
+        quickAdd?.isClosing = true
     }
 
     /// Closes the inline card only if it is the one at `key` (another row may have opened since).
@@ -114,6 +123,7 @@ final class PopoutController {
     }
 
     func closeQuickAdd() { state.closeQuickAdd() }
+    func beginClosingQuickAdd() { state.beginClosingQuickAdd() }
     func closeInline(_ key: String) { state.closeInline(key) }
     func didSave() { state.didSave() }
 

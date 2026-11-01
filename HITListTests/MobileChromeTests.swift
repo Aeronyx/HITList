@@ -41,10 +41,18 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertNotNil(ImageRenderer(content: view).cgImage)
     }
 
-    #if os(iOS)
+    func testSyncBoltIsSmallAndSoft() {
+        XCTAssertEqual(SyncBolt.size, 11)
+        XCTAssertEqual(SyncBolt.symbol(for: .offline), "bolt.slash.fill")
+        XCTAssertEqual(SyncBolt.symbol(for: .synced(Date())), "bolt.fill")
+        XCTAssertEqual(SyncBolt.color(for: .synced(Date())), Theme.accent)
+        XCTAssertEqual(SyncBolt.color(for: .notSignedIn), HITColor.dueTomorrow)
+        XCTAssertEqual(SyncBolt.opacity(for: .synced(Date())), 0.75)
+    }
+
     func testScreenMenuRendersForEveryTab() {
         for tab in MobileTab.allCases {
-            let view = ScreenMenu(showSettings: .constant(false)) {
+            let view = ScreenMenu(onSettings: {}) {
                 Button(tab.title) {}
             }
             .frame(width: 200, height: 60)
@@ -52,5 +60,4 @@ final class MobileChromeTests: XCTestCase {
             XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(tab.title) menu didn't render")
         }
     }
-    #endif
 }

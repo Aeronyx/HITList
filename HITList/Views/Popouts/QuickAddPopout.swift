@@ -22,6 +22,8 @@ struct QuickAddPopout: View {
 
     let context: QuickAddContext
     var style: Style = .floating
+    /// iPhone: the host is putting the card away; drop the keyboard so it goes down with the card.
+    var isClosing = false
     var onClose: () -> Void
     var onSaved: () -> Void = {}
 
@@ -43,7 +45,9 @@ struct QuickAddPopout: View {
 
     enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
-    init(context: QuickAddContext, style: Style = .floating, onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {}) {
+    init(context: QuickAddContext, style: Style = .floating, isClosing: Bool = false,
+         onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {}) {
+        self.isClosing = isClosing
         self.context = context
         self.style = style
         self.onClose = onClose
@@ -90,6 +94,9 @@ struct QuickAddPopout: View {
         .onAppear {
             rebuildEngine()
             titleFocused = true
+        }
+        .onChange(of: isClosing) { _, closing in
+            if closing { titleFocused = false; notesFocused = false; locationFocused = false }
         }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }

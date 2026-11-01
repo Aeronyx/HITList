@@ -58,6 +58,9 @@ struct WeekStripView: View {
             .scrollIndicators(.hidden)
             .scrollTargetBehavior(.paging)
             .scrollPosition(id: $visibleWeek)
+            // The iPhone shell gives every scroll view a bottom margin for the island; this strip is
+            // horizontal and 64 pt tall, so that margin would push its days out of view.
+            .contentMargins(.bottom, 0, for: .automatic)
             .frame(height: 64)
         }
         .padding(.top, 8)
