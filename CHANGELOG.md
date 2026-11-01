@@ -4,8 +4,17 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.2.1
+## 0.3.0
 
+- Mac: every chip in the quick-add and task popouts opens a card drawn inside the window (no more system
+  popovers hanging past the edge): a HITList month calendar, a time row that reads "9am", "17:30" or
+  "noon", presets (Today, Tomorrow, Next week, Weekend, No date), a reminder card with offsets and the
+  fire time, and the Priority, Group, Labels, Repeat, Deadline and Location cards. Escape and a click
+  outside close just the card; Tab moves into it; arrows and Return pick a day.
+- Sync status is a small cloud icon at the left of every screen's toolbar (tap for Settings) instead of
+  the Mac sidebar's footer line and the dot on the "…".
+- Mac: the toolbar "Add task" is a proper prominent capsule; the card's confirm button is an outlined
+  capsule so the two no longer look alike.
 - iPhone: adding a task puts the quick-add card away (sliding back down behind the keyboard); lists show
   no "Add task" row, only the oval "+", and an empty list says "No tasks" (or "All clear for today",
   "Nothing due") in grey; every list leaves room for the floating island, so the last row (Browse →

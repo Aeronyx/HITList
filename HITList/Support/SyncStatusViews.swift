@@ -118,6 +118,46 @@ struct AccountChangeBanner: View {
     }
 }
 
+/// The sync state as one small toolbar icon (`SyncState.symbol`: a cloud with a check, arrows, a slash
+/// or an exclamation mark), green once everything has synced, grey while syncing or offline, orange when
+/// sync needs attention. It pulses once when a change reaches iCloud, like `SyncIndicatorDot`, and
+/// tapping it opens Settings. Sits at the left of every screen's trailing toolbar on every platform.
+struct SyncToolbarIcon: View {
+    var action: () -> Void
+    private var monitor: CloudSyncMonitor { .shared }
+    @State private var scale: CGFloat = 1
+    @State private var lastPulse: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let state = monitor.state
+        Button(action: action) {
+            Image(systemName: state.symbol)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(SyncIndicatorDot.color(for: state))
+                .scaleEffect(scale)
+                .contentTransition(.symbolEffect(.replace))
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(state.summary())
+        .accessibilityIdentifier("syncIcon")
+        .help(state.summary())
+        .onChange(of: monitor.lastChangeAt) { old, new in
+            let now = Date()
+            guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
+                                               reduceMotion: reduceMotion) else { return }
+            lastPulse = now
+            withAnimation(HITMotion.emphasis) { scale = 1.3 }
+            Task {
+                try? await Task.sleep(for: .milliseconds(180))
+                withAnimation(HITMotion.emphasis) { scale = 1 }
+            }
+        }
+    }
+}
+
 /// The smallest possible sync confirmation: a 6 pt dot for the corner of a toolbar button. Green once
 /// everything has synced, grey while syncing or offline, orange when sync needs attention. It is a view
 /// of `CloudSyncMonitor.state` only; place it with `.overlay(alignment: .topTrailing)`.

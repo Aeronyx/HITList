@@ -1,10 +1,10 @@
 import SwiftUI
 
-/// Every screen's trailing toolbar, in one place so the same two controls sit in the same order
-/// everywhere: the view-options control (`ViewOptionsMenu`, the filter-lines icon; optional) and, to its
-/// right, the "…" menu. On iPhone the "…" is `ScreenMenu`: this screen's own actions, then Settings…
-/// with the version, and the 6 pt sync dot on its corner. On iPad the "…" holds the screen's actions
-/// only (Settings is behind the sidebar's gear), and so does the Mac (Settings is in the app menu).
+/// Every screen's trailing toolbar, in one place so the same controls sit in the same order everywhere:
+/// the small sync icon (`SyncToolbarIcon`, opens Settings), the view-options control (`ViewOptionsMenu`,
+/// the filter-lines icon; optional) and, to its right, the "…" menu. On iPhone the "…" is `ScreenMenu`:
+/// this screen's own actions, then Settings… with the version. On iPad the "…" holds the screen's
+/// actions only (Settings is behind the sidebar's gear), and so does the Mac (Settings is in the app menu).
 ///
 ///     .screenChrome {
 ///         ViewOptionsMenu { Toggle("Show completed", isOn: $showCompleted) }
@@ -29,7 +29,18 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     @State private var showSettings = false
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    #else
+    @Environment(\.openSettings) private var openSettings
     #endif
+
+    /// The sync icon's tap: the Settings sheet on iOS, the Settings window on the Mac.
+    private func openSyncSettings() {
+        #if os(iOS)
+        showSettings = true
+        #else
+        openSettings()
+        #endif
+    }
 
     func body(content: Content) -> some View {
         content
@@ -37,10 +48,12 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 #if os(iOS)
                 if sizeClass == .compact {
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        SyncToolbarIcon(action: openSyncSettings)
                         viewOptions()
                         ScreenMenu(showSettings: $showSettings, items: menu)
                     }
                 } else {
+                    ToolbarItem(placement: .automatic) { SyncToolbarIcon(action: openSyncSettings) }
                     ToolbarItem(placement: .automatic) { viewOptions() }
                     ToolbarItem(placement: .automatic) {
                         Menu { menu() } label: { Image(systemName: "ellipsis.circle") }
@@ -49,6 +62,7 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                     }
                 }
                 #else
+                ToolbarItem(placement: .automatic) { SyncToolbarIcon(action: openSyncSettings) }
                 ToolbarItem(placement: .automatic) { viewOptions() }
                 ToolbarItem(placement: .automatic) {
                     Menu { menu() } label: { Image(systemName: "ellipsis.circle") }
@@ -58,7 +72,9 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 }
                 #endif
             }
+            #if os(iOS)
             .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
+            #endif
     }
 }
 
@@ -78,8 +94,7 @@ struct ViewOptionsMenu<Content: View>: View {
 }
 
 #if os(iOS)
-/// The iPhone's "…": the screen's actions, then Settings… and the version line, with `SyncIndicatorDot`
-/// as a badge on the icon's top-trailing corner (the dot carries its own accessibility label).
+/// The iPhone's "…": the screen's actions, then Settings… and the version line.
 struct ScreenMenu<Items: View>: View {
     @Binding var showSettings: Bool
     let items: () -> Items
@@ -94,9 +109,6 @@ struct ScreenMenu<Items: View>: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
-                .overlay(alignment: .topTrailing) {
-                    SyncIndicatorDot().offset(x: 2, y: -2)
-                }
         }
         .menuIndicator(.hidden)
         .accessibilityLabel("More")

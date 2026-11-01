@@ -11,6 +11,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.3.0", items: [
+            "Mac: date, time, reminder and every other picker open as cards inside the window, with a HITList calendar.",
+            "Sync status is a small cloud icon in every screen's toolbar; tap it for Settings.",
+            "iPhone: adding a task puts the card away; lists have no \"Add task\" row, just the oval +.",
+            "Task rows line up: the second line is always there and the Group sits at its right end.",
+            "Mac: a proper toolbar + and an outlined confirm button in the quick-add card.",
+        ]),
         Entry(version: "0.2.0", items: [
             "The sync dot pulses once when a change reaches iCloud; Settings says \"Synced just now\".",
             "Check iCloud… tests the path to iCloud and reports what it found.",
