@@ -198,7 +198,7 @@ struct MacSettingsSectionContent: View {
                 GeneralSettingsSection()
                 KeyboardShortcutsGroups()
             case .iCloud:
-                ICloudSyncGroup()
+                ICloudSyncGroup(showsLastChange: true)
                 ResetLocalCacheGroup()
             case .reminders:
                 RemindersSettingsSection()

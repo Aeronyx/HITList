@@ -174,6 +174,30 @@ final class MacSettingsTests: XCTestCase {
         XCTAssertFalse(DataStats.sizeText(5120).isEmpty)
     }
 
+    // MARK: iCloud
+
+    func testLastChangeIsTheNewerOfImportAndExport() {
+        let t = Date(timeIntervalSinceReferenceDate: 815_000_000)
+        XCTAssertNil(LastSyncChange.latest(lastImport: nil, lastExport: nil))
+        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: nil), LastSyncChange(date: t, phase: .imported))
+        XCTAssertEqual(LastSyncChange.latest(lastImport: nil, lastExport: t), LastSyncChange(date: t, phase: .exported))
+        XCTAssertEqual(LastSyncChange.latest(lastImport: t.addingTimeInterval(5), lastExport: t),
+                       LastSyncChange(date: t.addingTimeInterval(5), phase: .imported))
+        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t.addingTimeInterval(5)),
+                       LastSyncChange(date: t.addingTimeInterval(5), phase: .exported))
+        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t, sessionPhase: .importing)?.phase, .imported,
+                       "a tie goes to what this session saw last")
+        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t)?.phase, .exported)
+    }
+
+    func testLastChangeTextNamesThePhase() {
+        let t = Date(timeIntervalSinceReferenceDate: 815_000_000)
+        XCTAssertEqual(LastSyncChange(date: t, phase: .imported).text(now: t.addingTimeInterval(180)),
+                       "Import from iCloud · 3 min ago")
+        XCTAssertEqual(LastSyncChange(date: t, phase: .exported).text(now: t.addingTimeInterval(10)),
+                       "Export to iCloud · just now")
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
