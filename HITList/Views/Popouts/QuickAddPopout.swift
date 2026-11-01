@@ -84,6 +84,8 @@ struct QuickAddPopout: View {
             footer
         }
         .padding(Self.padding)
+        // The chips' picker cards (inside the window on the Mac).
+        .pickerOverlay()
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.extras)
         .onAppear {
             rebuildEngine()
@@ -256,7 +258,7 @@ struct QuickAddPopout: View {
                        systemImage: chips.recurrence == nil ? "calendar" : "repeat",
                        tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
                        isSelected: chips.dueDate != nil, size: .compact, action: { openChip = .date })
-            .popover(isPresented: chipBinding(.date)) {
+            .pickerAnchor(.date, isPresented: chipBinding(.date)) {
                 DateChipPopover(selected: chips.dueDate, now: now, onPick: { day in
                     draft.setDate(day, parser)
                     done()
@@ -272,7 +274,7 @@ struct QuickAddPopout: View {
         HITChip(chips.priority == .p4 ? "Priority" : chips.priority.shortName, systemImage: chips.priority.symbol,
                 tint: chips.priority == .p4 ? Theme.secondaryText : chips.priority.color,
                 isSelected: chips.priority != .p4, size: .compact, action: { openChip = .priority })
-            .popover(isPresented: chipBinding(.priority)) {
+            .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
                 PriorityChipPopover(selection: chips.priority) { p in
                     draft.setPriority(p, parser)
                     done()
@@ -286,7 +288,7 @@ struct QuickAddPopout: View {
         return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
                        tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
                        isSelected: chips.hasDueTime, size: .compact, action: { openChip = .reminder })
-            .popover(isPresented: chipBinding(.reminder)) {
+            .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 let parts = chips.dueDate.map { Calendar.current.dateComponents([.hour, .minute], from: $0) }
                 ReminderChipPopover(hour: chips.hasDueTime ? parts?.hour : nil, minute: chips.hasDueTime ? parts?.minute : nil,
                                     offsetMinutes: chips.reminderOffsetMinutes,
@@ -308,7 +310,7 @@ struct QuickAddPopout: View {
         HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : "number",
                 tint: projectTint(chips.projectName), isSelected: chips.projectName != nil, size: .compact,
                 action: { openChip = .project })
-            .popover(isPresented: chipBinding(.project)) {
+            .pickerAnchor(.group, isPresented: chipBinding(.project)) {
                 ProjectChipPopover(projects: projects, selectedName: chips.projectName) { project in
                     draft.setProject(project?.name, parser)
                     done()
@@ -322,7 +324,7 @@ struct QuickAddPopout: View {
         HITChip(chips.labelNames.isEmpty ? "Labels" : chips.labelNames.map { "@" + $0 }.joined(separator: " "),
                 systemImage: "tag", tint: chips.labelNames.isEmpty ? Theme.secondaryText : PopoutTint.label,
                 isSelected: !chips.labelNames.isEmpty, size: .compact, action: { openChip = .labels })
-            .popover(isPresented: chipBinding(.labels)) {
+            .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
                 LabelsChipPopover(labels: labels, selected: chips.labelNames) { name in
                     draft.toggleLabel(name, parser)
                 }
@@ -337,7 +339,7 @@ struct QuickAddPopout: View {
                        isSelected: chips.deadline != nil, size: .compact,
                        onDismiss: chips.deadline == nil ? nil : { draft.setDeadline(nil) },
                        action: { openChip = .deadline })
-            .popover(isPresented: chipBinding(.deadline)) {
+            .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
                 DateChipPopover(selected: chips.deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
                     draft.setDeadline(day)
                     done()
@@ -352,7 +354,7 @@ struct QuickAddPopout: View {
                 isSelected: chips.recurrence != nil, size: .compact,
                 onDismiss: chips.recurrence == nil ? nil : { draft.setRecurrence(nil, parser) },
                 action: { openChip = .repeating })
-            .popover(isPresented: chipBinding(.repeating)) {
+            .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
                 RepeatChipPopover(rule: chips.recurrence) { rule in
                     draft.setRecurrence(rule, parser)
                     if rule == nil { draft.extras.remove(.repeating) }
