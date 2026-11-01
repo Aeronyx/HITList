@@ -35,20 +35,48 @@ struct HITSheetChrome<Content: View>: View {
     }
 
     @Environment(\.dismiss) private var dismiss
+    @HITEffectsSetting private var effects
 
     var body: some View {
+        if #available(iOS 26, macOS 26, *), effects.allowsGlass {
+            glassBody
+        } else {
+            slateBody
+        }
+    }
+
+    /// Build 5's sheet, unchanged: header, hairline, then the scrolling content. Used before iOS 26 /
+    /// macOS 26 and under Reduce Effects or Reduce Transparency.
+    private var slateBody: some View {
         VStack(spacing: 0) {
             header
             Rectangle().fill(Theme.separator).frame(height: 1)
-            ScrollView {
-                VStack(alignment: .leading, spacing: HITSpacing.xl) { content }
-                    .padding(HITSpacing.l)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .scrollDismissesKeyboard(.interactively)
+            scroll
         }
         .background(background)
         .foregroundStyle(HITColor.text)
+    }
+
+    /// iOS 26 / macOS 26 with effects allowed: the content scrolls under a Liquid Glass header bar, with
+    /// the soft scroll-edge effect beneath it.
+    @available(iOS 26, macOS 26, *)
+    private var glassBody: some View {
+        scroll
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .safeAreaBar(edge: .top, spacing: 0) {
+                header.hitGlass(in: Rectangle(), fallback: background)
+            }
+            .background(background)
+            .foregroundStyle(HITColor.text)
+    }
+
+    private var scroll: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: HITSpacing.xl) { content }
+                .padding(HITSpacing.l)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollDismissesKeyboard(.interactively)
     }
 
     private var header: some View {

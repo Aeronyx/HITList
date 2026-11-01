@@ -172,15 +172,27 @@ private struct HITChipBackground: ViewModifier {
     let isSelected: Bool
     let isHovered: Bool
     var size: HITChip.Size = .regular
+    @HITEffectsSetting private var effects
 
     func body(content: Content) -> some View {
         let look = HITChipAppearance(tint: tint, isSelected: isSelected, isHovered: isHovered)
         let shape = RoundedRectangle(cornerRadius: size == .compact ? size.height / 2 : HITRadius.chip, style: .continuous)
-        content
-            .foregroundStyle(look.label)
-            .background(shape.fill(look.fill))
-            .overlay(shape.strokeBorder(look.border, lineWidth: 1))
-            .contentShape(shape)
+        if #available(iOS 26, macOS 26, *), effects.allowsGlass {
+            // The hover fill of an unselected chip is glass; selected chips keep their tinted fill.
+            let glassHover = isHovered && !isSelected
+            content
+                .foregroundStyle(look.label)
+                .background(shape.fill(glassHover ? .clear : look.fill))
+                .glassEffect(glassHover ? .regular : .identity, in: shape)
+                .overlay(shape.strokeBorder(look.border, lineWidth: 1))
+                .contentShape(shape)
+        } else {
+            content
+                .foregroundStyle(look.label)
+                .background(shape.fill(look.fill))
+                .overlay(shape.strokeBorder(look.border, lineWidth: 1))
+                .contentShape(shape)
+        }
     }
 }
 

@@ -57,10 +57,7 @@ struct HITSegmented<Value: Hashable>: View {
                     .frame(height: 28)
                     .background {
                         if selected {
-                            Capsule()
-                                .fill(Theme.separator)
-                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
-                                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+                            highlightCapsule
                                 .matchedGeometryEffect(id: "highlight", in: highlight)
                         }
                     }
@@ -74,6 +71,22 @@ struct HITSegmented<Value: Hashable>: View {
         .background(Capsule().fill(Theme.elevated))
         .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The moving highlight: a lens of Liquid Glass (tinted with the separator so it still reads on the
+    /// elevated track) on iOS 26 / macOS 26 with effects allowed; build 5's raised slate pill otherwise.
+    @ViewBuilder
+    private var highlightCapsule: some View {
+        if #available(iOS 26, macOS 26, *), effects.allowsGlass {
+            Capsule()
+                .fill(.clear)
+                .glassEffect(.regular.tint(Theme.separator.opacity(0.7)).interactive(), in: Capsule())
+        } else {
+            Capsule()
+                .fill(Theme.separator)
+                .overlay(Capsule().strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+                .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
+        }
     }
 }
 
