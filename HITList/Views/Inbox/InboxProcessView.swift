@@ -112,9 +112,7 @@ struct InboxProcessView: View {
                 }
                 Spacer()
                 Button("Done") { dismiss() }
-                    .buttonStyle(.plain)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Theme.accent)
+                    .buttonStyle(HITButtonStyle(.secondary, size: .small))
                     .keyboardShortcut(editingTitle ? nil : .cancelAction)
                     .help("Close (Esc)")
             }
@@ -339,15 +337,8 @@ struct InboxProcessView: View {
                 InboxZeroView(title: "All done",
                               message: "You've been through the inbox. \(left) \(left == 1 ? "task stays" : "tasks stay") there with \(left == 1 ? "its" : "their") new dates and labels.")
             }
-            Button { dismiss() } label: {
-                Text("Done")
-                    .font(HITType.headline)
-                    .foregroundStyle(Theme.background)
-                    .padding(.horizontal, 36)
-                    .padding(.vertical, 12)
-                    .background(Theme.accent, in: Capsule())
-                    .contentShape(Capsule())
-            }
+            Button("Done") { dismiss() }
+                .buttonStyle(.hitPrimary)
             .buttonStyle(.plain)
             .keyboardShortcut(.defaultAction)
             .padding(.bottom, 40)

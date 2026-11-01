@@ -19,25 +19,27 @@ struct MobileShell: View {
     var body: some View {
         // Only the tab on show is built, so the list on screen is the one whose `.quickAddEntry` sets
         // `popouts.listContext` for the "+" (its onAppear runs on every switch and every pop).
-        stack(for: tab)
-            // The chrome has no backdrop of its own: lists scroll under it and show through the gaps
-            // around the island and beside the "+", while the inset keeps their last row reachable.
-            .safeAreaInset(edge: .bottom, spacing: 0) { chrome }
-            // The quick-add card docks above the keyboard; the island stays put underneath it.
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .onChange(of: tab) { _, _ in popouts.closeAll() }
-            .onReceive(clock) { now = $0 }
+        ZStack(alignment: .bottom) {
+            stack(for: tab)
+                // Lists scroll under the chrome and show through the gaps around the island; the margin
+                // keeps their last row reachable. (A safeAreaInset on the stack did not reach the lists
+                // inside it on iOS 26: Browse's last row ended behind the island.)
+                .contentMargins(.bottom, IslandMetrics.chromeHeight + HITSpacing.s, for: .automatic)
+            chrome
+        }
+        // The quick-add card docks above the keyboard; the island stays put underneath it.
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .onChange(of: tab) { _, _ in popouts.closeAll() }
+        .onReceive(clock) { now = $0 }
     }
 
     private var chrome: some View {
-        HITGlassContainer {
-            VStack(alignment: .trailing, spacing: IslandMetrics.addButtonGap) {
-                FloatingAddButton(glass: true) { popouts.openQuickAdd() }
-                    .padding(.trailing, IslandMetrics.sideInset)
-                MobileTabBar(selection: $tab, day: Calendar.current.component(.day, from: now)) { reselected in
-                    // Tapping the current tab again goes back to its first screen.
-                    paths[reselected] = []
-                }
+        VStack(alignment: .trailing, spacing: IslandMetrics.addButtonGap) {
+            FloatingAddButton(glass: true) { popouts.openQuickAdd() }
+                .padding(.trailing, IslandMetrics.sideInset)
+            MobileTabBar(selection: $tab, day: Calendar.current.component(.day, from: now)) { reselected in
+                // Tapping the current tab again goes back to its first screen.
+                paths[reselected] = []
             }
         }
     }

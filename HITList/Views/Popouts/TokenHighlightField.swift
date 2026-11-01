@@ -40,6 +40,10 @@ struct TokenHighlightField: View {
             #if os(iOS)
             .submitLabel(.done)
             .autocorrectionDisabled()
+            #else
+            // A vertical-axis field is a text view on the Mac: no grey box or focus ring behind the words.
+            .scrollContentBackground(.hidden)
+            .focusEffectDisabled()
             #endif
         }
         .font(HITType.taskName)

@@ -69,23 +69,7 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        #if os(macOS)
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { adding = true } label: { Label("Add Switch", systemImage: "plus") }
-                    .help("Add a switch")
-            }
-            ToolbarItem(placement: .primaryAction) {
-                Menu {
-                    Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                }
-                .help("Flipboard options")
-            }
-        }
-        #endif
-        // iPhone and iPad: both actions in the "…".
+        // Both actions in the "…", on every platform.
         .screenChrome {
             Button { adding = true } label: { Label("Add Switch…", systemImage: "plus") }
             Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }

@@ -53,7 +53,7 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 5 (0.1.0) is live; the next upload is 0.2.0 (6).
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 6 (0.2.0) is live; the next upload is 0.2.1 (7).
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
@@ -82,6 +82,20 @@ version; `scripts/release.sh --version X.Y.Z` (Fable only) runs the preflight te
 anything is archived and refuses a version without a changelog section. Liquid Glass (iOS 26 / macOS 26)
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
+
+## Round 5 ownership (one session; stay inside your files)
+- `23-mac-pickers` (branch `mac-pickers`): `Views/Popouts/PopoutPickers.swift`, new `Views/Popouts/Pickers/*`,
+  new `Support/DesignSystem/HITCalendar.swift` (+ README section, gallery entry), the chip `.popover` call
+  sites and `chipBinding` plumbing in `QuickAddPopout.swift` and `TaskPopout.swift`, `PopoutTests`, new
+  `PickerTests`, its ROADMAP row.
+- Nobody: everything else. Fable is polishing the iPhone lists and the Mac toolbar on master at the same
+  time (`MobileShell`, `TaskRow`, `TaskListView`, `InboxView`, `UpcomingView`, `PopoutHost`, `QuickAddEntry`,
+  `TokenHighlightField`, `InboxProcessView`); do not touch those.
+
+Also on master since build 6: `screenChrome` shows the "…" on the Mac too (Inbox review and Flipboard
+actions live there on every platform); the iPhone shell is a bottom-aligned ZStack with
+`contentMargins(.bottom, IslandMetrics.chromeHeight + 8)` on the stack (a `safeAreaInset` on the
+NavigationStack did not reach the lists inside it on iOS 26).
 
 ## Round 4 (finished 2026-11-01; kept for the record)
 Sessions 20 (iphone-chrome), 21 (settings-v2) and 22 (motion-themes) are merged. 20 and 21 stopped early

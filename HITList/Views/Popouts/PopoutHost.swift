@@ -96,6 +96,14 @@ struct PopoutHost: ViewModifier {
             }
     }
 
+    /// The oval card rises from the bottom edge (`enter`) and is put away the same way it came, sliding
+    /// back down behind the keyboard (`exit`); a plain fade under Reduce Motion.
+    private var cardTransition: AnyTransition {
+        let slide: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
+        return .asymmetric(insertion: slide.animation(HITMotion.enter(reduceMotion: reduceMotion)),
+                           removal: slide.animation(HITMotion.exit(reduceMotion: reduceMotion)))
+    }
+
     /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
     private var sheetTask: Binding<TaskItem?> {
         Binding<TaskItem?>(get: { usesPanel ? nil : popouts.task },
@@ -106,9 +114,11 @@ struct PopoutHost: ViewModifier {
 
     @ViewBuilder
     private func floatingQuickAdd(_ context: QuickAddContext) -> some View {
+        // iPhone: adding puts the card away (the new row is the confirmation); the Mac panel stays open
+        // for the next task.
         let card = QuickAddPopout(context: context, style: .floating,
                                   onClose: { popouts.closeQuickAdd() },
-                                  onSaved: { popouts.didSave() })
+                                  onSaved: { popouts.didSave(); if !usesPanel { popouts.closeQuickAdd() } })
         if usesPanel {
             PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
                 card.panelChrome()
@@ -126,7 +136,7 @@ struct PopoutHost: ViewModifier {
                     .ovalCardChrome()
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset)
-                    .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
+                    .transition(cardTransition)
             }
         }
     }
@@ -184,6 +194,8 @@ extension View {
             .background(shape.fill(Theme.surface))
             .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
             .clipShape(shape)
-            .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
+            // Flatten before the shadow so the panel animates as one layer (the Mac dropped frames).
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
     }
 }
