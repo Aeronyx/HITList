@@ -13,8 +13,8 @@ import SwiftUI
 /// - `ghost`: label only. Cancel, Done, and quiet inline actions.
 /// - `destructive`: red outline that fills on hover/press. Delete, Remove, Reset.
 ///
-/// Pressed darkens the fill 8%, disabled drops to 35% opacity, macOS shows a hover state, and every
-/// change eases over 150 ms (instant with Reduce Motion).
+/// Pressed darkens the fill 8%, disabled drops to 35% opacity, macOS shows a hover state. Hover and press
+/// fade with `HITMotion.quick` (100 ms), enabling with `standard` (150 ms); instant with Reduce Motion.
 struct HITButtonStyle: ButtonStyle {
     enum Kind: CaseIterable { case primary, secondary, ghost, destructive }
     enum Size: CaseIterable {
@@ -109,8 +109,8 @@ private struct HITButtonBody: View {
             .contentShape(Capsule())
             .opacity(look.opacity)
             .onHover { isHovered = $0 }
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: configuration.isPressed)
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
             .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isEnabled)
     }
 }
@@ -146,8 +146,8 @@ private struct HITIconButtonBody: View {
             .contentShape(Rectangle())
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : HITButtonStyle.Appearance.disabledOpacity)
             .onHover { isHovered = $0 }
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: configuration.isPressed)
-            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
     }
 }
 
