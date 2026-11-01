@@ -47,6 +47,8 @@ struct NotificationPlan: Equatable {
             case overdue
             /// Stands in for the tasks the limit cut off.
             case summary
+            /// Settings' daily summary of today's and overdue tasks (`summaryRequest(tasks:at:now:)`).
+            case morningSummary
         }
 
         let identifier: String

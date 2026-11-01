@@ -15,6 +15,21 @@ struct RemindersSettingsSection: View {
     @State private var notificationsEnabled = NotificationScheduler.isEnabled
     @AppStorage(Preferences.defaultReminderOffsetMinutes, store: AppGroup.defaults)
     private var defaultOffset = Preferences.defaultReminderOffsetDefault
+    @AppStorage(Preferences.morningSummaryEnabled, store: AppGroup.defaults)
+    private var morningSummary = Preferences.morningSummaryEnabledDefault
+    @AppStorage(Preferences.morningSummaryMinutes, store: AppGroup.defaults)
+    private var morningMinutes = Preferences.morningSummaryMinutesDefault
+
+    /// The summary time as a Date today, for the time picker; stored as minutes after midnight.
+    private var morningTime: Binding<Date> {
+        Binding {
+            let minutes = min(max(0, morningMinutes), 24 * 60 - 1)
+            return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
+        } set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            morningMinutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
+        }
+    }
     @State private var authorization: UNAuthorizationStatus?
     @State private var scheduled = "…"
     @State private var testMessage: String?
@@ -54,6 +69,29 @@ struct RemindersSettingsSection: View {
                 .accessibilityIdentifier("settings-default-reminder")
             }
             .onChange(of: defaultOffset) { _, _ in Task { await rescheduleAndRefresh() } }
+
+            Toggle(isOn: $morningSummary) {
+                HITMenuRowLabel("Morning summary",
+                                subtitle: "One notification a day: today's and overdue tasks. Skipped when nothing is due.",
+                                systemImage: "sun.horizon")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .accessibilityIdentifier("settings-morning-summary")
+            .onChange(of: morningSummary) { _, on in
+                Task {
+                    if on, !(await NotificationScheduler.requestPermission()) { morningSummary = false }
+                    await rescheduleAndRefresh()
+                }
+            }
+            if morningSummary {
+                HITMenuRow("Summary time", systemImage: "clock") {
+                    DatePicker("Summary time", selection: morningTime, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                        .fixedSize()
+                }
+                .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
+            }
 
             HITMenuRow("Authorization", systemImage: "hand.raised",
                        value: NotificationStatus.authorizationText(authorization))
