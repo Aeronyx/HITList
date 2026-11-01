@@ -88,6 +88,56 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(ICloudCheck.seconds(12.6), "13 s")
     }
 
+    // MARK: Notifications: authorization and the pending summary
+
+    private var newYork: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/New_York")!
+        return c
+    }
+
+    private let britishEnglish = Locale(identifier: "en_GB")
+
+    /// Wednesday 2026-10-28 09:00 in New York.
+    private var morning: Date { newYork.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))! }
+
+    func testAuthorizationTexts() {
+        XCTAssertEqual(NotificationStatus.authorizationText(.authorized), "Allowed")
+        XCTAssertEqual(NotificationStatus.authorizationText(.denied), "Denied")
+        XCTAssertEqual(NotificationStatus.authorizationText(.notDetermined), "Not asked")
+        XCTAssertEqual(NotificationStatus.authorizationText(.provisional), "Provisional")
+        XCTAssertEqual(NotificationStatus.authorizationText(nil), "Checking…")
+    }
+
+    func testPendingSummaryCountsAndNamesTheNextFireTime() {
+        func text(_ hours: [Double?]) -> String {
+            NotificationStatus.pendingText(fireDates: hours.map { $0.map { morning.addingTimeInterval($0 * 3600) } },
+                                           now: morning, calendar: newYork, locale: britishEnglish)
+        }
+        XCTAssertEqual(text([]), "None")
+        XCTAssertEqual(text([1.75]), "1 · next 10:45")
+        XCTAssertEqual(text([30, 1.75, 5]), "3 · next 10:45", "the soonest, whatever the order")
+        // ICU versions disagree on "9:00" vs "09:00"; the time itself is the system's short style.
+        XCTAssertEqual(text([24]), "1 · next tomorrow \(clock(9, 0))")
+        XCTAssertEqual(text([24 * 7 + 0.5]), "1 · next 4 Nov, \(clock(8, 30))", "after the DST change, in local time")
+        XCTAssertEqual(text([nil, 3]), "2 · next \(clock(9, 0))", "an immediate request counts as now")
+    }
+
+    /// A New York wall-clock time in the short style the app uses, with `britishEnglish`.
+    private func clock(_ hour: Int, _ minute: Int) -> String {
+        let date = newYork.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: hour, minute: minute))!
+        return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: britishEnglish,
+                                               calendar: newYork, timeZone: newYork.timeZone))
+    }
+
+    func testTestNotificationUsesTheReminderCategory() {
+        XCTAssertEqual(NotificationScheduler.testDelay, 5)
+        XCTAssertNotEqual(NotificationScheduler.testIdentifier, NotificationPlan.summaryIdentifier)
+        XCTAssertNil(UUID(uuidString: NotificationScheduler.testIdentifier), "never mistaken for a task's reminder")
+        XCTAssertTrue(NotificationTestResult.scheduled.message.contains("5 seconds"))
+        XCTAssertTrue(NotificationTestResult.denied.message.contains("system settings"))
+    }
+
     @MainActor
     func testMonitorStartsWithNoChangeThisSession() {
         // lastChangeAt is never restored from disk, so a launch doesn't pulse for an old sync.

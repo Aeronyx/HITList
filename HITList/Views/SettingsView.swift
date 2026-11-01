@@ -10,7 +10,6 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @State private var notificationsEnabled = NotificationScheduler.isEnabled
     @State private var exportDocument: SnapshotDocument?
     @State private var showImporter = false
     @State private var importMessage: String?
@@ -133,21 +132,7 @@ struct SettingsView: View {
             if let backupMessage { message(backupMessage) }
         }
 
-        HITGroup("Reminders") {
-            Toggle(isOn: $notificationsEnabled) {
-                HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a specific time get a notification.",
-                                systemImage: "bell")
-            }
-            .toggleStyle(.hit)
-            .hitRowPadding()
-            .onChange(of: notificationsEnabled) { _, on in
-                Task {
-                    if on, !(await NotificationScheduler.requestPermission()) { notificationsEnabled = false }
-                    NotificationScheduler.isEnabled = notificationsEnabled
-                    await NotificationScheduler.reschedule(context: context)
-                }
-            }
-        }
+        RemindersSettingsSection()
 
         DelightSettingsSection()
 
