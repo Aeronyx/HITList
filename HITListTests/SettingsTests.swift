@@ -195,6 +195,48 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(NotificationPlan.badgeCount(tasks: [], now: now, calendar: cal), 0)
     }
 
+    // MARK: About
+
+    func testDiagnosticsListsEveryField() {
+        let diagnostics = Diagnostics(
+            version: "0.2.0", build: "6", os: "iOS 26.1 (Build 23B85)", device: "iPhone17,3",
+            syncState: "Synced 2 min ago", lastImport: Date(timeIntervalSince1970: 1_793_000_000), lastExport: nil,
+            cloudKitEnvironment: "Production", storePath: "/path/HITList.store", notifications: "Allowed, reminders on")
+        let lines = diagnostics.text.split(separator: "\n").map(String.init)
+        XCTAssertEqual(lines.count, 9)
+        XCTAssertEqual(lines[0], "HITList 0.2.0 (6)")
+        XCTAssertEqual(lines[1], "OS: iOS 26.1 (Build 23B85)")
+        XCTAssertEqual(lines[2], "Device: iPhone17,3")
+        XCTAssertEqual(lines[3], "Sync: Synced 2 min ago")
+        XCTAssertTrue(lines[4].hasPrefix("Last import: 2026-"), lines[4])
+        XCTAssertEqual(lines[5], "Last export: never")
+        XCTAssertEqual(lines[6], "CloudKit environment: Production")
+        XCTAssertEqual(lines[7], "Store: /path/HITList.store")
+        XCTAssertEqual(lines[8], "Notifications: Allowed, reminders on")
+    }
+
+    func testAppInfoDescribesThisDevice() {
+        XCTAssertFalse(AppInfo.deviceModel.isEmpty)
+        #if os(macOS)
+        XCTAssertTrue(AppInfo.osVersion.hasPrefix("macOS "), AppInfo.osVersion)
+        #else
+        XCTAssertTrue(AppInfo.osVersion.hasPrefix("iOS "), AppInfo.osVersion)
+        #endif
+    }
+
+    func testWhatsNewCoversThisVersion() throws {
+        let versions = WhatsNew.entries.map(\.version)
+        XCTAssertEqual(versions, versions.sorted { WhatsNew.isNewer($0, than: $1) }, "newest first")
+        XCTAssertEqual(Set(versions).count, versions.count)
+        let current = try XCTUnwrap(WhatsNew.current)
+        XCTAssertFalse(WhatsNew.isNewer(AppInfo.version, than: current.version),
+                       "add a What's new entry for \(AppInfo.version)")
+        XCTAssertFalse(current.items.isEmpty)
+        XCTAssertEqual(current.version, "0.2.0", "this round's list")
+        XCTAssertTrue(WhatsNew.isNewer("0.10.0", than: "0.9.1"))
+        XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
+    }
+
     @MainActor
     func testMonitorStartsWithNoChangeThisSession() {
         // lastChangeAt is never restored from disk, so a launch doesn't pulse for an old sync.
