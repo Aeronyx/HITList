@@ -62,6 +62,7 @@
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
 		640EED72AFC56C6A4E158F26 /* HITSegmented.swift in Sources */ = {isa = PBXBuildFile; fileRef = 165FA6D62560AF712E0AB48D /* HITSegmented.swift */; };
 		6647789EC3814C8BED45F16B /* SyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 422E0340B7BAAAB4BAFBB26F /* SyncStateTests.swift */; };
+		66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8604832F30E9E7C59B06C9C /* GeneralSettingsSection.swift */; };
 		68789767B446111D7C449F59 /* FilterSyntaxHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A78F328265E076A5456E48E /* FilterSyntaxHelpView.swift */; };
 		6B070ADB5812F73B071950DC /* PopoutHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 847A246D1F1C5F42FAA5105A /* PopoutHost.swift */; };
 		6DD1C8088F425E2C7D82BA4D /* PopoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC94AAC22806CB55BB755C84 /* PopoutController.swift */; };
@@ -228,6 +229,7 @@
 		A5C4883652158CAEF157D321 /* SeedingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedingTests.swift; sourceTree = "<group>"; };
 		A5E609CA10C57C69771BB15C /* QuickAddContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddContext.swift; sourceTree = "<group>"; };
 		A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackup.swift; sourceTree = "<group>"; };
+		A8604832F30E9E7C59B06C9C /* GeneralSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsSection.swift; sourceTree = "<group>"; };
 		AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardRules.swift; sourceTree = "<group>"; };
 		AD12153261EC9FBC68657755 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWatchTests.swift; sourceTree = "<group>"; };
@@ -527,6 +529,7 @@
 			isa = PBXGroup;
 			children = (
 				A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */,
+				A8604832F30E9E7C59B06C9C /* GeneralSettingsSection.swift */,
 				E4744E706011D5D130E88452 /* ICloudCheck.swift */,
 				B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */,
 				1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */,
@@ -763,6 +766,7 @@
 				5BCC5EB9F77215035E7E5B67 /* FlipboardRules.swift in Sources */,
 				9BDB10C54213061AD4DEBDF7 /* FlipboardView.swift in Sources */,
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
+				66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */,
 				D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */,
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
 				92973FBF19DB570087754456 /* HITField.swift in Sources */,

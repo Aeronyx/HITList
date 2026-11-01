@@ -184,9 +184,29 @@ enum NotificationScheduler {
     @MainActor
     private static func performReschedule(context: ModelContext, reason: String) async {
         let center = UNUserNotificationCenter.current()
+        let now = Date()
+        let calendar = Calendar.current
+        let summaryOn = Preferences.isMorningSummaryOn
+        let badgeOn = Preferences.isBadgeOn
+
+        // Every open dated task: the badge and the morning summary count untimed ones too; reminders
+        // need a time. Nothing is fetched when all three are off (as before this setting existed).
+        var dated: [NotificationPlan.Item] = []
+        if isEnabled || summaryOn || badgeOn {
+            let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+                task.isCompleted == false && task.dueDate != nil
+            })
+            do {
+                dated = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+            } catch {
+                log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
+                return
+            }
+        }
+        await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: dated, now: now, calendar: calendar) : 0)
+
         // Settings' test notification is not the plan's to manage.
         let pending = await center.pendingNotificationRequests().filter { $0.identifier != testIdentifier }
-        let summaryOn = Preferences.isMorningSummaryOn
         guard isEnabled || summaryOn else {
             if !pending.isEmpty { center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier)) }
             log.info("Rescheduled (\(reason, privacy: .public)): reminders off, removed \(pending.count) pending")
@@ -206,21 +226,8 @@ enum NotificationScheduler {
             break
         }
 
-        // Every open dated task: the morning summary counts untimed ones too; reminders need a time.
-        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-            task.isCompleted == false && task.dueDate != nil
-        })
-        let dated: [NotificationPlan.Item]
-        do {
-            dated = try context.fetch(descriptor).map(NotificationPlan.Item.init)
-        } catch {
-            log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
-            return
-        }
         let defaultOffset = Preferences.defaultReminderOffset
         let items = dated.filter(\.hasDueTime).map { $0.withDefaultOffset(defaultOffset) }
-        let now = Date()
-        let calendar = Calendar.current
         // No ledger yet (first run of this build): count tasks that just became due as announced, so
         // upgrading doesn't re-announce reminders build 1 already delivered.
         var ledger = AppGroup.defaults.stringArray(forKey: ledgerKey).map(Set.init) ?? Set(items.compactMap { item in
@@ -272,6 +279,24 @@ enum NotificationScheduler {
             −\(diff.remove.count), \(overdue) overdue now, \(plan.droppedCount) over the limit, \
             \(stale.count) delivered cleared\(summaryLog(summary, on: summaryOn), privacy: .public)
             """)
+    }
+
+    /// The last badge number set, so an unchanged count isn't written again on every reschedule.
+    @MainActor private static var lastBadge: Int?
+
+    /// Settings → General → "Show task count on the app icon": overdue + today's open tasks
+    /// (`NotificationPlan.badgeCount`), or no badge when the setting is off. Needs the `.badge`
+    /// authorization `requestPermission()` asks for.
+    @MainActor
+    private static func updateBadge(count: Int) async {
+        guard count != lastBadge else { return }
+        do {
+            try await UNUserNotificationCenter.current().setBadgeCount(count)
+            lastBadge = count
+            log.info("Badge: \(count)")
+        } catch {
+            log.error("Setting the badge failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private static func summaryLog(_ summary: NotificationPlan.Request?, on: Bool) -> String {

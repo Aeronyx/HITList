@@ -32,6 +32,19 @@ extension Preferences {
     /// what `DateExpressionParser` has always used. Read through `weekStartWeekday(calendar:)`.
     static let weekStart = "pref.weekStart"
     static let weekStartDefault = "monday"
+    static let weekStartChoices = ["sunday", "monday", "system"]
+
+    /// "Sunday", "Monday", "System (Sunday)".
+    static func weekStartLabel(_ stored: String, calendar: Calendar = .current) -> String {
+        switch stored {
+        case "sunday": return "Sunday"
+        case "system":
+            let names = calendar.standaloneWeekdaySymbols
+            let index = calendar.firstWeekday - 1
+            return names.indices.contains(index) ? "System (\(names[index]))" : "System"
+        default: return "Monday"
+        }
+    }
 
     /// The app icon badge shows the count of overdue + today's open tasks (set by `NotificationScheduler`).
     static let showBadge = "pref.showBadge"
