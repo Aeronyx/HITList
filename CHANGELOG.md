@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.1
+## 0.3.1 — build 8, 2026-11-01
 
 - Sync status is a small bolt in the toolbar's empty space, soft accent when synced, breathing while it
   syncs, slashed grey offline, orange when it needs attention; the cloud icon in the pill is gone.
