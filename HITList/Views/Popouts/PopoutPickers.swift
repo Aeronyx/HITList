@@ -76,7 +76,11 @@ struct RepeatChipPopover: View {
     var onPick: (RecurrenceRule?) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Repeat").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+                .padding(.horizontal, HITSpacing.m)
+                .padding(.top, HITSpacing.s)
+                .padding(.bottom, HITSpacing.xs)
             ForEach(RepeatPresets.all, id: \.title) { preset in
                 HITMenuRow(preset.title, systemImage: preset.rule == rule ? "checkmark" : "repeat",
                            iconTint: preset.rule == rule ? Theme.accent : Theme.secondaryText, accessory: .none) {
@@ -128,7 +132,8 @@ enum ReminderChipText {
 
 // MARK: - Project
 
-/// Inbox and the projects, filtered by a search field; picking closes it.
+/// Inbox and the projects, filtered by a search field (Tab into the card focuses it; Return picks the
+/// first match); picking closes it.
 struct ProjectChipPopover: View {
     var projects: [Project]
     /// Nil is the Inbox.
@@ -136,19 +141,27 @@ struct ProjectChipPopover: View {
     var onPick: (Project?) -> Void
 
     @State private var search = ""
+    @FocusState private var searchFocused: Bool
+    @Environment(\.pickerFocusRequest) private var focusRequest
 
     private var matches: [Project] {
         let q = search.trimmingCharacters(in: .whitespaces)
         return q.isEmpty ? projects : projects.filter { $0.name.localizedCaseInsensitiveContains(q) }
     }
 
+    private var showsInbox: Bool {
+        search.isEmpty || "inbox".contains(search.trimmingCharacters(in: .whitespaces).lowercased())
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HITField("Search groups", text: $search, systemImage: "magnifyingglass", clearable: true)
+                .focused($searchFocused)
+                .onSubmit(pickFirst)
                 .padding(HITSpacing.m)
             ScrollView {
                 VStack(spacing: 0) {
-                    if search.isEmpty || "inbox".contains(search.lowercased()) {
+                    if showsInbox {
                         HITMenuRow("Inbox", systemImage: "tray", iconTint: Theme.accent,
                                    value: selectedName == nil ? "✓" : nil, accessory: .none) { onPick(nil) }
                     }
@@ -162,6 +175,15 @@ struct ProjectChipPopover: View {
             .frame(maxHeight: 280)
         }
         .padding(.bottom, HITSpacing.xs)
+        .onChange(of: focusRequest) { _, _ in searchFocused = true }
+    }
+
+    private func pickFirst() {
+        if search.trimmingCharacters(in: .whitespaces).isEmpty || (showsInbox && matches.isEmpty) {
+            if showsInbox { onPick(nil) }
+        } else if let first = matches.first {
+            onPick(first)
+        }
     }
 }
 
@@ -174,6 +196,8 @@ struct LabelsChipPopover: View {
     var onToggle: (String) -> Void
 
     @State private var search = ""
+    @FocusState private var searchFocused: Bool
+    @Environment(\.pickerFocusRequest) private var focusRequest
 
     private func isSelected(_ name: String) -> Bool {
         selected.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
@@ -195,6 +219,7 @@ struct LabelsChipPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HITField("Search or create a label", text: $search, systemImage: "tag", clearable: true)
+                .focused($searchFocused)
                 .onSubmit(createTyped)
                 .padding(HITSpacing.m)
             ScrollView {
@@ -215,6 +240,7 @@ struct LabelsChipPopover: View {
             .frame(maxHeight: 280)
         }
         .padding(.bottom, HITSpacing.xs)
+        .onChange(of: focusRequest) { _, _ in searchFocused = true }
     }
 
     private func row(_ name: String, color: Color) -> some View {
@@ -234,8 +260,8 @@ struct LabelsChipPopover: View {
 
 // MARK: - Location
 
-/// Where the task happens, as plain text (no geofencing). Return or Done keeps it; closing the popover
-/// keeps what was typed too; Remove clears it.
+/// Where the task happens, as plain text (no geofencing). Return or Done keeps it; closing the card
+/// (Escape, a click outside) keeps what was typed too; Remove clears it.
 struct LocationChipPopover: View {
     var name: String?
     /// Nil removes the location.

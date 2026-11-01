@@ -196,14 +196,27 @@ popouts.open(task)
   `PopoutTests`. Example: "Haircut tom 11am p1 !15mb" = Tomorrow · P1 · 11:00 AM · 15 min before.
 - **Reminder grammar** (`ReminderOffset` in HITListCore): `!15mb` or `!15m` = 15 minutes before the due
   time, `!1hb`/`!1h` = 1 hour, `!1db`/`!1d` = 1 day (up to 4 weeks); `!0` or `!at` = at the time (no
-  offset). Only the first one counts; it tints like a time. The Reminder popover's offset presets (At
-  time, 5 min, 15 min, 30 min, 1 hour, 1 day before) write the token and stay open so a time can follow;
-  the time presets below them close it. Stored as `TaskItem.reminderOffsetMinutes` (nil = at the time);
+  offset). Only the first one counts; it tints like a time. The Reminder card's offsets (At time, 5, 10,
+  15, 30 min, 1 hour, 1 day before, two per row, and a custom "N min before" field) write the token and
+  stay open so a time can follow; a time (typed or 9 AM / Noon / 5 PM / 8 PM) closes it. The card says
+  when it fires ("Fires 10:45 AM"). Stored as `TaskItem.reminderOffsetMinutes` (nil = at the time);
   the notification goes out at due − offset reading "in 15 min · Haircut" (`NotificationPlan`).
-- Chip popovers live in `PopoutPickers.swift` (date, deadline via `DateChipPopover(title:clearTitle:)`,
-  priority, reminder, group, labels, repeat, location) and are shared by both popouts. `TaskPopout` has
-  the same Reminder offset UI, shows Deadline and Location chips when set (tap to edit, × to remove),
-  and offers Location / Deadline in its `…` menu.
+- **Picker cards.** Each chip opens a card through `pickerAnchor(_ kind:isPresented:content:)`, and each
+  popout's root has one `pickerOverlay()` (`Views/Popouts/Pickers/PickerPresenter.swift`). On the Mac the
+  card is drawn inside the window, never as an `NSPopover`: below its chip, above it when there is no
+  room, slid inside when neither fits, and clamped so it never leaves the window
+  (`PickerPlacement.frame(anchor:cardSize:bounds:)`, tested). It is `Theme.surface` (glass when effects
+  are allowed) with a hairline border, 14 pt corners and a soft shadow, in and out with `enter`/`exit`.
+  Escape and a click outside close only the card (not the popout); picking closes it; Tab moves the
+  keyboard into it and closing gives it back to the title. Because the popout panel clips what it draws,
+  the card lives on one transparent layer over the window's content (`PickerLayerHost`) and a local event
+  monitor handles Escape, Tab and clicks while a card is open. iPhone and iPad keep SwiftUI popovers.
+- The cards: `DatePickerCard` (presets Today, Tomorrow, Next week, Weekend, No date; `HITCalendar`; the time
+  row, a `HITField`-styled box that takes "9am", "17:30", "noon" via `PickerTime.parse`; the Repeat chip;
+  Deadline uses it with `title: "Deadline"`, no time or repeat), `ReminderPickerCard`, and in
+  `PopoutPickers.swift` priority, group, labels, repeat and location. They are shared by both popouts.
+  `TaskPopout` shows Deadline and Location chips when set (tap to edit, × to remove) and offers Location /
+  Deadline in its `…` menu.
 - Return saves and keeps the card open and empty; Esc, × or a tap on the backdrop closes. Completing in
   `TaskPopout` plays the usual completion feedback, closes it, and shows the undo toast.
 
