@@ -26,14 +26,14 @@ extension FocusedValues {
 
 #if os(macOS)
 /// HITList ▸ Settings… (⌘,): opens the Settings page in the focused window instead of a separate
-/// Settings window.
+/// Settings window. The shortcut comes from `HITShortcuts`, the list Settings → General shows.
 struct SettingsCommands: Commands {
     @FocusedValue(\.settingsRouter) private var router
 
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             Button("Settings…") { router?.open() }
-                .keyboardShortcut(",", modifiers: .command)
+                .keyboardShortcut(HITShortcuts.settings.shortcut ?? KeyboardShortcut(",", modifiers: .command))
                 .disabled(router == nil)
         }
     }
