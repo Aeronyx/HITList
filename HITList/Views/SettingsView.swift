@@ -75,6 +75,8 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var groups: some View {
+        GeneralSettingsSection()
+
         HITGroup("iCloud Sync", footer: "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows.") {
             SyncStatusLine()
                 .fixedSize(horizontal: false, vertical: true)
@@ -104,6 +106,9 @@ struct SettingsView: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("settings-check-icloud-result")
             }
+        }
+        // The end of the iCloud block, set apart so it isn't tapped on the way to Check iCloud.
+        HITGroup(footer: "Danger: this throws away this device's copy and downloads everything again from iCloud. Changes that haven't synced yet are lost.") {
             HITMenuRow("Reset local cache and re-download…", systemImage: "arrow.counterclockwise",
                        role: .destructive, accessory: .none) { confirmReset = true }
                 .disabled(!LocalCacheReset.isAvailable)

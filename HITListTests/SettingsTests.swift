@@ -147,6 +147,54 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(Preferences.defaultReminderOffsetDefault, 0, "off unless chosen")
     }
 
+    // MARK: General
+
+    func testStartScreenDefaultsToToday() {
+        XCTAssertEqual(Preferences.startTabValue(nil), .today)
+        XCTAssertEqual(Preferences.startTabValue("nonsense"), .today, "an unknown value falls back")
+        XCTAssertEqual(Preferences.startTabValue("inbox"), .inbox)
+        XCTAssertEqual(Preferences.startTabValue("browse"), .browse)
+        XCTAssertEqual(MobileTab(rawValue: Preferences.startTabDefault), .today)
+    }
+
+    func testWeekStartReaderAndLabels() {
+        var us = Calendar(identifier: .gregorian)
+        us.firstWeekday = 1
+        var europe = Calendar(identifier: .gregorian)
+        europe.firstWeekday = 2
+        XCTAssertEqual(Preferences.weekStartWeekday(nil, calendar: us), 2, "Monday, as DateExpressionParser always did")
+        XCTAssertEqual(Preferences.weekStartWeekday("sunday", calendar: europe), 1)
+        XCTAssertEqual(Preferences.weekStartWeekday("monday", calendar: us), 2)
+        XCTAssertEqual(Preferences.weekStartWeekday("system", calendar: us), 1)
+        XCTAssertEqual(Preferences.weekStartWeekday("system", calendar: europe), 2)
+        us.locale = Locale(identifier: "en_US")
+        XCTAssertEqual(Preferences.weekStartChoices.map { Preferences.weekStartLabel($0, calendar: us) },
+                       ["Sunday", "Monday", "System (Sunday)"])
+    }
+
+    func testOtherGeneralDefaults() {
+        XCTAssertFalse(Preferences.showBadgeDefault)
+        XCTAssertFalse(Preferences.confirmDeleteDefault)
+        XCTAssertFalse(Preferences.morningSummaryEnabledDefault)
+        XCTAssertEqual(Preferences.morningSummaryMinutesDefault, 480, "8:00")
+    }
+
+    func testBadgeCountsOverdueAndTodaysOpenTasks() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = cal.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 9))!
+        func item(_ dayOffset: Int, hour: Int? = nil, done: Bool = false) -> NotificationPlan.Item {
+            let day = cal.date(byAdding: .day, value: dayOffset, to: cal.startOfDay(for: now))!
+            let due = hour.map { cal.date(bySettingHour: $0, minute: 0, second: 0, of: day)! } ?? day
+            return NotificationPlan.Item(id: UUID(), title: "t", projectName: nil, priority: .p4, dueDate: due,
+                                         hasDueTime: hour != nil, isCompleted: done, updatedAt: now)
+        }
+        let tasks = [item(-3), item(-1, hour: 18), item(0), item(0, hour: 7), item(0, hour: 22),
+                     item(0, done: true), item(1), item(5, hour: 9)]
+        XCTAssertEqual(NotificationPlan.badgeCount(tasks: tasks, now: now, calendar: cal), 5)
+        XCTAssertEqual(NotificationPlan.badgeCount(tasks: [], now: now, calendar: cal), 0)
+    }
+
     @MainActor
     func testMonitorStartsWithNoChangeThisSession() {
         // lastChangeAt is never restored from disk, so a launch doesn't pulse for an old sync.
