@@ -84,6 +84,7 @@
 		93DCB35BB113FC8E976DB2C1 /* SyncState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC2B45AA9BAF7ED9ACFDB96F /* SyncState.swift */; };
 		9580397F7D4ADFFD9422A015 /* QuickAddDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89FB7DFA88325495B19AB6A9 /* QuickAddDraft.swift */; };
 		9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */; };
+		9ACC309C1653B6FF8FF87061 /* MorningSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE7D144EABFA55D287380F2D /* MorningSummary.swift */; };
 		9B7A1569DD43B98A0686C952 /* CompletionFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39432755E875F16592EE8188 /* CompletionFeedback.swift */; };
 		9BDB10C54213061AD4DEBDF7 /* FlipboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E6B3699676B4892851C4C9 /* FlipboardView.swift */; };
 		9C99912454DD44480CCEE61E /* QuickAddEntry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 872E52408155EDE930C89CC6 /* QuickAddEntry.swift */; };
@@ -270,6 +271,7 @@
 		EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncMonitor.swift; sourceTree = "<group>"; };
 		EAAC54705A328613C9AC2A94 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
+		EE7D144EABFA55D287380F2D /* MorningSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorningSummary.swift; sourceTree = "<group>"; };
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
 		FDE419EFB9497F9FB13FE74B /* HITTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTokens.swift; sourceTree = "<group>"; };
@@ -369,6 +371,7 @@
 		42C342686DDF9DFD462F2349 /* Notifications */ = {
 			isa = PBXGroup;
 			children = (
+				EE7D144EABFA55D287380F2D /* MorningSummary.swift */,
 				C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */,
 				A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */,
 				F6E6CED5602E68567841C52F /* NotificationStatus.swift */,
@@ -783,6 +786,7 @@
 				32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */,
 				B88DCC9DB0698CADA1F3C03A /* ModelContainerFactory.swift in Sources */,
 				109F1063E4CA1A1EC234AE79 /* Models.swift in Sources */,
+				9ACC309C1653B6FF8FF87061 /* MorningSummary.swift in Sources */,
 				4427C494548C477A0D31DE0F /* NotificationPlan.swift in Sources */,
 				9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */,
 				BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */,
