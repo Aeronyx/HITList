@@ -5,6 +5,21 @@ import HITListCore
 
 @MainActor
 final class DesignSystemTests: XCTestCase {
+    private var originalPalette: ThemePalette?
+
+    // The colour checks below are written against Slate; pin it whatever theme this Mac has chosen
+    // (without saving, so the real preference is untouched).
+    override func setUp() {
+        super.setUp()
+        originalPalette = ThemeStore.shared.palette
+        ThemeStore.shared.select(.slate, persist: false)
+    }
+
+    override func tearDown() {
+        if let originalPalette { ThemeStore.shared.select(originalPalette, persist: false) }
+        super.tearDown()
+    }
+
     private func resolved(_ color: Color) -> Color.Resolved { color.resolve(in: EnvironmentValues()) }
 
     private func assertColor(_ a: Color, _ b: Color, _ message: String = "", file: StaticString = #filePath, line: UInt = #line) {
@@ -53,6 +68,96 @@ final class DesignSystemTests: XCTestCase {
         render(HITSheetChrome("Title", isPrimaryEnabled: false, onPrimary: {}) { Text("Body") }, "sheet chrome")
         render(DesignSystemGallery().frame(height: 1400), "gallery")
         render(DesignSystemGalleryContent(), "gallery content")
+        for role in HITMotion.Role.allCases { render(HITMotionSample(role: role), "motion sample \(role)") }
+        render(Text("Glass").padding().hitGlass(in: Capsule()), "glass")
+        render(Image(systemName: "plus").padding().hitGlass(in: Circle(), tint: Theme.accent, interactive: true), "tinted glass")
+        render(Image(systemName: "checkmark.circle.fill").hitCelebratePop(trigger: 1), "celebrate pop")
+    }
+
+    func testGalleryAndAppearanceRenderInEveryTheme() {
+        for palette in ThemePalette.all {
+            ThemeStore.shared.select(palette, persist: false)
+            render(DesignSystemGalleryContent(), "gallery in \(palette.name)")
+            render(AppearanceSettingsSection(), "appearance in \(palette.name)")
+            render(ThemeSwatch(palette: palette, isSelected: true), "swatch \(palette.name)")
+        }
+        render(ThemeSwatchRow(selection: .moss) { _ in }, "swatch row")
+    }
+
+    // MARK: - Motion
+
+    func testEveryRoleArrivesWithin250msExceptCelebrate() {
+        for role in HITMotion.Role.allCases where role != .celebrate {
+            XCTAssertLessThanOrEqual(role.arrival, 0.25, "\(role) takes \(role.arrival)s")
+        }
+        XCTAssertEqual(HITMotion.Role.quick.arrival, 0.1)
+        XCTAssertEqual(HITMotion.Role.standard.arrival, 0.15)
+        XCTAssertEqual(HITMotion.Role.enter.arrival, 0.2)
+        XCTAssertEqual(HITMotion.Role.exit.arrival, 0.15)
+        XCTAssertEqual(HITMotion.Role.emphasis.arrival, 0.233, accuracy: 0.005)
+    }
+
+    func testEmphasisIsTheBriefsSpringAndBarelyOvershoots() {
+        XCTAssertEqual(HITMotion.SpringSpec.emphasis.response, 0.28)
+        XCTAssertEqual(HITMotion.SpringSpec.emphasis.damping, 0.8)
+        XCTAssertLessThan(HITMotion.SpringSpec.emphasis.overshoot, 0.02, "under half a point on a 30 pt move")
+        // Only the completion check may bounce, and even it stays modest.
+        XCTAssertLessThan(HITMotion.SpringSpec.celebrate.overshoot, 0.15)
+    }
+
+    func testCelebrateIsCrisperAndNoSmallerThanBuildFive() {
+        XCTAssertGreaterThanOrEqual(HITMotion.Celebrate.peakScale, 1.15, "build 5 popped to 1.15")
+        XCTAssertLessThan(HITMotion.Celebrate.popDuration, 0.1, "build 5 took 100 ms to peak")
+        XCTAssertLessThanOrEqual(HITMotion.Celebrate.totalDuration, 0.35)
+    }
+
+    func testEveryRoleHasAReduceMotionVariant() {
+        for role in HITMotion.Role.allCases {
+            XCTAssertNotNil(role.animation(reduceMotion: false), "\(role)")
+        }
+        XCTAssertNil(HITMotion.quick(reduceMotion: true))
+        XCTAssertNil(HITMotion.standard(reduceMotion: true))
+        XCTAssertNil(HITMotion.celebrate(reduceMotion: true))
+        XCTAssertNotNil(HITMotion.enter(reduceMotion: true), "a short fade stands in for movement")
+        XCTAssertNotNil(HITMotion.exit(reduceMotion: true))
+        XCTAssertNotNil(HITMotion.emphasis(reduceMotion: true))
+        XCTAssertEqual(HITMotion.emphasis(reduceMotion: false), HITMotion.emphasis)
+    }
+
+    func testReduceEffectsCalmsOnlyTheLargerMovements() {
+        let calm = HITEffects(reduceEffects: true, reduceTransparency: false, reduceMotion: false)
+        XCTAssertTrue(calm.calmMotion)
+        XCTAssertEqual(calm.animation(.quick), HITMotion.quick, "hover fades stay")
+        XCTAssertEqual(calm.animation(.standard), HITMotion.standard)
+        XCTAssertEqual(calm.animation(.emphasis), HITMotion.Role.emphasis.reducedAnimation)
+        XCTAssertNil(calm.animation(.celebrate))
+
+        let systemReduceMotion = HITEffects(reduceEffects: false, reduceTransparency: false, reduceMotion: true)
+        XCTAssertNil(systemReduceMotion.animation(.quick))
+        XCTAssertEqual(systemReduceMotion.animation(.enter), HITMotion.Role.enter.reducedAnimation)
+
+        let full = HITEffects()
+        XCTAssertFalse(full.calmMotion)
+        XCTAssertEqual(full.animation(.emphasis), HITMotion.emphasis)
+    }
+
+    // MARK: - Glass
+
+    func testGlassIsOffUnderReduceEffectsOrReduceTransparencyAndOnOldSystems() {
+        XCTAssertTrue(HITEffects.allowsGlass(osSupportsGlass: true, reduceEffects: false, reduceTransparency: false))
+        XCTAssertFalse(HITEffects.allowsGlass(osSupportsGlass: true, reduceEffects: true, reduceTransparency: false))
+        XCTAssertFalse(HITEffects.allowsGlass(osSupportsGlass: true, reduceEffects: false, reduceTransparency: true))
+        XCTAssertFalse(HITEffects.allowsGlass(osSupportsGlass: false, reduceEffects: false, reduceTransparency: false))
+        XCTAssertFalse(HITEffects(reduceEffects: true).allowsGlass)
+        XCTAssertFalse(HITEffects(reduceTransparency: true).allowsGlass)
+        XCTAssertEqual(HITEffects().allowsGlass, HITEffects.osSupportsGlass)
+    }
+
+    func testReduceEffectsKeyIsTheSharedOne() {
+        // Session 20's chrome reads the same key; its meaning (true = no glass) is fixed.
+        XCTAssertEqual(Preferences.reduceEffects, "pref.reduceEffects")
+        XCTAssertEqual(AppearanceSettingsSection.footer,
+                       "Turns off glass, blur and the larger movements. HITList also follows Reduce Motion and Reduce Transparency.")
     }
 
     // MARK: - Buttons
