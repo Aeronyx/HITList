@@ -227,6 +227,107 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertEqual(result.requests.map(\.triggerDate), [now.addingTimeInterval(30 * 60), now.addingTimeInterval(hour)])
     }
 
+    // MARK: Default reminder offset (Settings)
+
+    func testDefaultOffsetAppliesToTasksWithoutTheirOwn() throws {
+        let plain = item("Dentist", in: 5 * hour, remindMinutesBefore: nil)
+        let result = NotificationPlan.make(tasks: [plain], now: now, defaultOffsetMinutes: 15, calendar: calendar)
+        let request = try XCTUnwrap(result.requests.first)
+        XCTAssertEqual(request.triggerDate, now.addingTimeInterval(5 * hour - 15 * 60))
+        XCTAssertEqual(request.title, "in 15 min · Dentist")
+        XCTAssertEqual(request.dueDate, plain.dueDate)
+    }
+
+    func testTasksOwnOffsetWinsOverTheDefault() {
+        let own = item("Flight", in: 5 * hour, remindMinutesBefore: 60)
+        let explicitAtTime = item("Call", in: 6 * hour, remindMinutesBefore: 0)
+        let result = NotificationPlan.make(tasks: [own, explicitAtTime], now: now, defaultOffsetMinutes: 15, calendar: calendar)
+        XCTAssertEqual(result.requests.map(\.title), ["in 1 hour · Flight", "Call"])
+        XCTAssertEqual(result.requests.map(\.triggerDate), [4 * hour, 6 * hour].map(now.addingTimeInterval))
+    }
+
+    func testNoDefaultIsBuildFoursPlan() {
+        let tasks = [item("a", in: hour), item("b", in: 2 * hour, remindMinutesBefore: 30)]
+        XCTAssertEqual(NotificationPlan.make(tasks: tasks, now: now, defaultOffsetMinutes: 0, calendar: calendar),
+                       plan(tasks))
+        XCTAssertEqual(tasks[0].withDefaultOffset(0), tasks[0])
+        XCTAssertEqual(tasks[0].withDefaultOffset(-5), tasks[0], "never negative")
+        XCTAssertEqual(tasks[0].withDefaultOffset(10).reminderOffsetMinutes, 10)
+        XCTAssertEqual(tasks[1].withDefaultOffset(10).reminderOffsetMinutes, 30)
+    }
+
+    func testChangingTheDefaultReplacesThePendingRequest() {
+        let task = item("Standup", in: 3 * hour)
+        let before = plan([task]).requests[0]
+        let after = NotificationPlan.make(tasks: [task], now: now, defaultOffsetMinutes: 10, calendar: calendar).requests[0]
+        XCTAssertEqual(before.identifier, after.identifier)
+        XCTAssertNotEqual(before.fingerprint, after.fingerprint)
+    }
+
+    // MARK: Morning summary (Settings)
+
+    private func task(_ title: String, day: Int, hour: Int? = nil, minute: Int = 0, done: Bool = false,
+                      priority: Priority = .p4) -> NotificationPlan.Item {
+        let date = calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour ?? 0, minute: minute))!
+        return NotificationPlan.Item(id: UUID(), title: title, projectName: nil, priority: priority, dueDate: date,
+                                     hasDueTime: hour != nil, isCompleted: done, updatedAt: now.addingTimeInterval(-86_400))
+    }
+
+    private func summary(_ tasks: [NotificationPlan.Item], at minutes: Int = 8 * 60) -> NotificationPlan.Request? {
+        NotificationPlan.summaryRequest(tasks: tasks, at: minutes, now: now, calendar: calendar,
+                                        locale: Locale(identifier: "en_GB"))
+    }
+
+    func testMorningSummaryCountsTodayAndOverdueAndNamesTheFirstTimedTask() throws {
+        // It's Wednesday 9:00, so the 8:00 summary is tomorrow's (Thursday the 29th).
+        let request = try XCTUnwrap(summary([
+            task("Haircut", day: 29, hour: 11),
+            task("Dentist", day: 29, hour: 15),
+            task("Groceries", day: 29),
+            task("Laundry", day: 29),
+            task("Call mum", day: 29),
+            task("Pay rent", day: 28),            // due today (Wednesday): overdue by Thursday morning
+            task("Tax form", day: 20),
+            task("Done already", day: 29, hour: 10, done: true),
+            task("Next week", day: 36, hour: 9),  // "October 36" = November 5: another day
+        ]))
+        XCTAssertEqual(request.title, "Today in HITList")
+        XCTAssertEqual(request.body, "5 tasks today, 2 overdue · first: Haircut 11:00")
+        XCTAssertEqual(request.kind, .morningSummary)
+        XCTAssertEqual(request.identifier, NotificationPlan.morningSummaryIdentifier)
+        XCTAssertNil(request.taskID)
+        XCTAssertNil(request.ledgerKey)
+        XCTAssertEqual(request.triggerDate, calendar.date(from: DateComponents(year: 2026, month: 10, day: 29, hour: 8)))
+    }
+
+    func testMorningSummaryLaterTodayDescribesToday() throws {
+        // 10:00 is still ahead at 9:00: today's summary. The 9:30 task counts, but "first" names the
+        // first one still ahead when the summary goes out.
+        let request = try XCTUnwrap(summary([task("Standup", day: 28, hour: 9, minute: 30),
+                                             task("Lunch", day: 28, hour: 12, minute: 30)], at: 10 * 60))
+        XCTAssertEqual(request.triggerDate, calendar.date(from: DateComponents(year: 2026, month: 10, day: 28, hour: 10)))
+        XCTAssertEqual(request.body, "2 tasks today · first: Lunch 12:30")
+    }
+
+    func testMorningSummaryWordingForOneTaskAndOverdueOnly() {
+        XCTAssertEqual(summary([task("Groceries", day: 29)])?.body, "1 task today")
+        XCTAssertEqual(summary([task("Old", day: 27), task("Older", day: 2)])?.body, "2 overdue")
+    }
+
+    func testMorningSummarySkippedWhenNothingIsDue() {
+        XCTAssertNil(summary([]))
+        XCTAssertNil(summary([task("Friday", day: 30, hour: 9), task("Done", day: 29, done: true),
+                              task("Done late", day: 20, done: true)]))
+    }
+
+    func testMorningSummaryFingerprintFollowsItsText() throws {
+        let one = try XCTUnwrap(summary([task("A", day: 29)]))
+        let two = try XCTUnwrap(summary([task("A", day: 29), task("B", day: 29)]))
+        XCTAssertEqual(one.identifier, two.identifier)
+        XCTAssertNotEqual(one.fingerprint, two.fingerprint)
+        XCTAssertEqual(one.fingerprint, try XCTUnwrap(summary([task("A", day: 29)])).fingerprint)
+    }
+
     // MARK: Diff
 
     func testDiffAddsNewAndChangedRemovesStaleAndLeavesUnchangedAlone() {

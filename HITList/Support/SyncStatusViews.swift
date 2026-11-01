@@ -1,15 +1,39 @@
 import SwiftUI
+import OSLog
 
 /// "Synced 2 min ago" with its icon. Re-renders every 30 s so the relative time stays current while visible.
+/// When a sync finishes while it is on screen, the icon turns into a checkmark for a few seconds
+/// (`contentTransition(.symbolEffect(.replace))`; a plain swap under Reduce Motion), the text reads
+/// "Synced just now", and then it settles back to the usual icon.
 struct SyncStatusLine: View {
     private var monitor: CloudSyncMonitor { .shared }
+    @State private var confirming = false
+    @State private var confirmTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let state = monitor.state
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            Label(state.summary(now: context.date), systemImage: state.symbol)
-                .foregroundStyle(color(for: state))
+            Label {
+                Text(state.summary(now: context.date))
+            } icon: {
+                Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
+                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+            }
+            .foregroundStyle(color(for: state))
         }
+        .onChange(of: monitor.lastChangeAt) { old, new in
+            guard SyncConfirmation.didAdvance(from: old, to: new) else { return }
+            SyncConfirmation.log.info("Sync confirmed in Settings (\(monitor.lastChangePhase?.rawValue ?? "?", privacy: .public))")
+            confirmTask?.cancel()
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirming = true }
+            confirmTask = Task {
+                try? await Task.sleep(for: SyncConfirmation.checkmarkDuration)
+                guard !Task.isCancelled else { return }
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirming = false }
+            }
+        }
+        .onDisappear { confirmTask?.cancel() }
     }
 
     private func color(for state: SyncState) -> Color {
@@ -97,16 +121,40 @@ struct AccountChangeBanner: View {
 /// The smallest possible sync confirmation: a 6 pt dot for the corner of a toolbar button. Green once
 /// everything has synced, grey while syncing or offline, orange when sync needs attention. It is a view
 /// of `CloudSyncMonitor.state` only; place it with `.overlay(alignment: .topTrailing)`.
+/// Each time a CloudKit import or export finishes (`CloudSyncMonitor.lastChangeAt` advances) it pulses
+/// once, scale 1 → 1.6 → 1 with `HITMotion.spring`; bursts merge, and Reduce Motion turns it off
+/// (`SyncConfirmation`). The scale is a render effect, so the dot's layout stays 6 pt.
 struct SyncIndicatorDot: View {
     static let size: CGFloat = 6
+    static let pulseScale: CGFloat = 1.6
     private var monitor: CloudSyncMonitor { .shared }
+    @State private var scale: CGFloat = 1
+    @State private var lastPulse: Date?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let state = monitor.state
         Circle()
             .fill(Self.color(for: state))
             .frame(width: Self.size, height: Self.size)
+            .scaleEffect(scale)
             .accessibilityLabel(state.summary())
+            .onChange(of: monitor.lastChangeAt) { old, new in
+                let now = Date()
+                guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
+                                                   reduceMotion: reduceMotion) else { return }
+                lastPulse = now
+                SyncConfirmation.log.info("Sync dot pulse (\(monitor.lastChangePhase?.rawValue ?? "?", privacy: .public))")
+                pulse()
+            }
+    }
+
+    private func pulse() {
+        withAnimation(HITMotion.spring) { scale = Self.pulseScale }
+        Task {
+            try? await Task.sleep(for: .milliseconds(180))
+            withAnimation(HITMotion.spring) { scale = 1 }
+        }
     }
 
     static func color(for state: SyncState) -> Color {

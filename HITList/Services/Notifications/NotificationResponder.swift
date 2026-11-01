@@ -7,6 +7,8 @@ extension Notification.Name {
     /// Posted on the main actor when the user taps a task notification's body.
     /// `userInfo[NotificationScheduler.taskIDKey]` is the task's `UUID`.
     static let openTask = Notification.Name("HITList.openTask")
+    /// Posted on the main actor when the user taps the morning summary: show the Today screen.
+    static let openToday = Notification.Name("HITList.openToday")
 }
 
 /// The `UNUserNotificationCenter` delegate: Complete and Snooze actions, taps, and foreground
@@ -17,6 +19,12 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
     static let completeAction = "COMPLETE"
     static let snoozeAction = "SNOOZE_1H"
     static let snoozeInterval: TimeInterval = 60 * 60
+    /// The morning summary's category: no actions; tapping it opens the app on Today.
+    static let summaryCategoryIdentifier = "summary"
+
+    static var summaryCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: summaryCategoryIdentifier, actions: [], intentIdentifiers: [], options: [])
+    }
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "notifications")
 
@@ -43,6 +51,10 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if response.notification.request.content.categoryIdentifier == Self.summaryCategoryIdentifier {
+            await openToday(action: response.actionIdentifier)
+            return
+        }
         let taskID = (response.notification.request.content.userInfo[NotificationScheduler.taskIDKey] as? String)
             .flatMap(UUID.init(uuidString:))
         await handle(action: response.actionIdentifier, taskID: taskID)
@@ -70,6 +82,15 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
         default:
             break
         }
+    }
+
+    /// The morning summary was tapped. The system brings the app to the front; whoever shows the screens
+    /// listens for `.openToday` (on iPhone the app opens on its start screen until then).
+    @MainActor
+    func openToday(action: String) async {
+        guard action == UNNotificationDefaultActionIdentifier else { return }
+        Self.log.info("Morning summary opened")
+        NotificationCenter.default.post(name: .openToday, object: nil)
     }
 
     @MainActor

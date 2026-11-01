@@ -20,6 +20,12 @@ final class CloudSyncMonitor {
     private(set) var isOnline: Bool?
     private(set) var lastImportAt: Date?
     private(set) var lastExportAt: Date?
+    /// When the latest import or export finished in this session (not restored at launch, unlike the two
+    /// above). Its advances drive the sync dot's pulse and Settings' "Synced just now" checkmark
+    /// (`SyncConfirmation`).
+    private(set) var lastChangeAt: Date?
+    /// Which phase set `lastChangeAt`, for the log.
+    private(set) var lastChangePhase: Phase?
     /// "Sync paused: <reason>" text for the latest failure.
     private(set) var lastErrorReason: String?
     /// Domain, code, description and CloudKit userInfo of the latest failure, for the Details disclosure.
@@ -203,6 +209,10 @@ final class CloudSyncMonitor {
                 // A successful setup means CloudKit is reachable again; an older failure no longer applies.
                 lastErrorReason = nil
                 lastErrorAt = nil
+            }
+            if event.type == .import || event.type == .export {
+                lastChangeAt = now
+                lastChangePhase = phase
             }
             Self.log.info("\(phase.rawValue, privacy: .public) succeeded")
             if event.type == .import { NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil) }
