@@ -122,6 +122,9 @@ def main() -> int:
         setting_sources=["user", "project"],
         continue_conversation=a.resume is not None,
         max_budget_usd=a.max_budget_usd,
+        # A Read of a simulator screenshot comes back as one JSON message over the SDK's 1 MB default and
+        # killed two sessions ("JSON message exceeded maximum buffer size"); allow large tool results.
+        max_buffer_size=64 * 1024 * 1024,
     )
     print(f"▸ {'resuming' if a.resume is not None else 'starting'} {a.model} effort={a.effort} in {wt}", flush=True)
 
