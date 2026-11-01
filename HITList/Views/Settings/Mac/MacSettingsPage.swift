@@ -207,8 +207,7 @@ struct MacSettingsSectionContent: View {
             case .appearance:
                 AppearanceSettingsSection()
             case .data:
-                ExportImportGroup()
-                BackupsGroup()
+                MacDataSection()
             case .about:
                 AboutSettingsGroup()
             }
