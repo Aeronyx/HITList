@@ -155,6 +155,60 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(HITCalendar.firstOfMonth(date(2026, 1, 31).addingTimeInterval(3600 * 15), calendar: calendar), date(2026, 1, 1))
     }
 
+    // MARK: The date card's time row and presets
+
+    func testTimeRowAcceptsTheUsualSpellings() {
+        let cases: [(String, Int, Int)] = [
+            ("9am", 9, 0), ("9 am", 9, 0), ("9:00 AM", 9, 0), ("9:00\u{202F}AM", 9, 0), ("9:00 a.m.", 9, 0),
+            ("17:30", 17, 30), ("5:30pm", 17, 30), ("5:30 PM", 17, 30), ("12:15 pm", 12, 15), ("12am", 0, 0),
+            ("noon", 12, 0), ("Noon", 12, 0), ("midnight", 0, 0), ("at 5", 17, 0), ("5", 17, 0), ("9", 9, 0),
+            ("at 9:45pm", 21, 45), ("  7pm  ", 19, 0), ("00:05", 0, 5),
+        ]
+        for (text, hour, minute) in cases {
+            XCTAssertEqual(PickerTime.parse(text), PickerTime(hour: hour, minute: minute), text)
+        }
+    }
+
+    func testTimeRowRejectsWhatIsNotATime() {
+        for text in ["", "  ", "banana", "25:00", "9:7", "13pm", "9am tomorrow", "tomorrow", "at", "9:60"] {
+            XCTAssertNil(PickerTime.parse(text), text)
+        }
+    }
+
+    func testTimeRowReadsBackWhatItWrites() {
+        for locale in [Locale(identifier: "en_US"), Locale(identifier: "en_GB"), Locale(identifier: "de_DE")] {
+            for hour in 0..<24 {
+                for minute in [0, 5, 30, 59] {
+                    let time = PickerTime(hour: hour, minute: minute)
+                    XCTAssertEqual(PickerTime.parse(time.text(locale: locale)), time, "\(time.text(locale: locale)) in \(locale.identifier)")
+                }
+            }
+        }
+        XCTAssertEqual(PickerTime(hour: 9, minute: 0).text(locale: Locale(identifier: "en_US")), "9:00\u{202F}AM")
+    }
+
+    func testTimeOnADayAndFromADate() {
+        let day = date(2026, 11, 3)
+        let at = PickerTime(hour: 10, minute: 45).on(day, calendar: calendar)
+        XCTAssertEqual(calendar.dateComponents([.year, .month, .day, .hour, .minute], from: at),
+                       DateComponents(year: 2026, month: 11, day: 3, hour: 10, minute: 45))
+        XCTAssertEqual(PickerTime(at, calendar: calendar), PickerTime(hour: 10, minute: 45))
+    }
+
+    func testDatePresets() {
+        // Saturday 31 October 2026, 2 pm.
+        let now = calendar.date(from: DateComponents(year: 2026, month: 10, day: 31, hour: 14))!
+        let monday = DatePreset.all(now: now, weekStart: 2, calendar: calendar)
+        XCTAssertEqual(monday.map(\.title), ["Today", "Tomorrow", "Next week", "Weekend", "No date"])
+        XCTAssertEqual(monday.map(\.date), [date(2026, 10, 31), date(2026, 11, 1), date(2026, 11, 2), date(2026, 11, 7), nil])
+        let sunday = DatePreset.all(now: now, weekStart: 1, calendar: calendar, clearTitle: "No deadline")
+        XCTAssertEqual(sunday[2].date, date(2026, 11, 1), "a Sunday week starts tomorrow")
+        XCTAssertEqual(sunday.last?.title, "No deadline")
+        // From a Wednesday, the weekend is this Saturday.
+        let wednesday = calendar.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 9))!
+        XCTAssertEqual(DatePreset.all(now: wednesday, weekStart: 2, calendar: calendar)[3].date, date(2026, 11, 7))
+    }
+
     func testCardsFitTheQuickAddPanel() {
         for kind in PickerKind.allCases {
             XCTAssertLessThanOrEqual(kind.width, 560 - 2 * 20, "\(kind) is wider than the panel's content")
