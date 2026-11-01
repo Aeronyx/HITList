@@ -39,6 +39,8 @@ struct TaskPopout: View {
             footer
         }
         .padding(HITSpacing.l)
+        // The chips' picker cards (inside the window on the Mac).
+        .pickerOverlay()
         .onAppear { showsNotes = !task.notes.isEmpty }
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: delete)
@@ -200,7 +202,7 @@ struct TaskPopout: View {
             HITChip(due.map { DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Date", systemImage: "calendar",
                     tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: task.hasDueTime, now: now),
                     isSelected: due != nil, action: { openChip = .date })
-                .popover(isPresented: chipBinding(.date)) {
+                .pickerAnchor(.date, isPresented: chipBinding(.date)) {
                     DateChipPopover(selected: due, now: now) { day in
                         openChip = nil
                         setDate(day)
@@ -211,7 +213,7 @@ struct TaskPopout: View {
             HITChip(task.priorityValue == .p4 ? "Priority" : task.priorityValue.shortName, systemImage: task.priorityValue.symbol,
                     tint: task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color,
                     isSelected: task.priorityValue != .p4, action: { openChip = .priority })
-                .popover(isPresented: chipBinding(.priority)) {
+                .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
                     PriorityChipPopover(selection: task.priorityValue) { p in
                         openChip = nil
                         task.priorityValue = p
@@ -222,7 +224,7 @@ struct TaskPopout: View {
             HITChip(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : "number",
                     tint: task.project.map { Color(hex: $0.colorHex) } ?? Theme.accent,
                     isSelected: task.project != nil, action: { openChip = .project })
-                .popover(isPresented: chipBinding(.project)) {
+                .pickerAnchor(.group, isPresented: chipBinding(.project)) {
                     ProjectChipPopover(projects: projects, selectedName: task.project?.name) { project in
                         openChip = nil
                         setProject(project)
@@ -232,7 +234,7 @@ struct TaskPopout: View {
             HITChip(task.labelList.isEmpty ? "Labels" : task.labelList.map { "@" + $0.name }.joined(separator: " "),
                     systemImage: "tag", tint: task.labelList.isEmpty ? Theme.secondaryText : PopoutTint.label,
                     isSelected: !task.labelList.isEmpty, action: { openChip = .labels })
-                .popover(isPresented: chipBinding(.labels)) {
+                .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
                     LabelsChipPopover(labels: labels, selected: task.labelList.map(\.name), onToggle: toggleLabel)
                 }
 
@@ -240,7 +242,7 @@ struct TaskPopout: View {
                     systemImage: (task.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
                     tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
                     isSelected: timeParts != nil, action: { openChip = .reminder })
-                .popover(isPresented: chipBinding(.reminder)) {
+                .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                     ReminderChipPopover(hour: timeParts?.hour, minute: timeParts?.minute,
                                         offsetMinutes: task.reminderOffsetMinutes, onPick: { h, m in
                         openChip = nil
@@ -255,7 +257,7 @@ struct TaskPopout: View {
             HITChip(task.recurrenceRule?.displayText ?? "Repeat", systemImage: "repeat",
                     tint: task.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
                     isSelected: task.recurrence != nil, action: { openChip = .repeating })
-                .popover(isPresented: chipBinding(.repeating)) {
+                .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
                     RepeatChipPopover(rule: task.recurrenceRule) { rule in
                         openChip = nil
                         setRecurrence(rule)
@@ -275,7 +277,7 @@ struct TaskPopout: View {
                        isSelected: deadline != nil,
                        onDismiss: deadline == nil ? nil : { setDeadline(nil) },
                        action: { openChip = .deadline })
-            .popover(isPresented: chipBinding(.deadline)) {
+            .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
                 DateChipPopover(selected: deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
                     openChip = nil
                     setDeadline(day)
@@ -290,7 +292,7 @@ struct TaskPopout: View {
                        tint: name == nil ? Theme.secondaryText : Theme.accent, isSelected: name != nil,
                        onDismiss: name == nil ? nil : { setLocation(nil) },
                        action: { openChip = .location })
-            .popover(isPresented: chipBinding(.location)) {
+            .pickerAnchor(.location, isPresented: chipBinding(.location)) {
                 LocationChipPopover(name: name) { value in
                     openChip = nil
                     setLocation(value)

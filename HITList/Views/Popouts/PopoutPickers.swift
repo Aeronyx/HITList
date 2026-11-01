@@ -1,8 +1,9 @@
 import SwiftUI
 import HITListCore
 
-// The compact popovers behind the popouts' chips, shared by the quick-add card and the task popout.
-// Each one reports a pick through a closure and leaves storing it to the caller.
+// The cards behind the popouts' chips, shared by the quick-add card and the task popout. Each one
+// reports a pick through a closure and leaves storing it to the caller. `pickerAnchor` (Pickers/)
+// presents them: inside the window on the Mac, as popovers on iPhone and iPad; it sets the width.
 
 /// How each chip and highlighted token is tinted.
 enum PopoutTint {
@@ -26,25 +27,6 @@ enum PopoutTint {
         case .label: return label
         }
     }
-}
-
-/// The popover chrome: elevated slate, a small title, dark, accent tint, a popover on iPhone too.
-private struct PopoverChrome: ViewModifier {
-    var width: CGFloat
-
-    func body(content: Content) -> some View {
-        content
-            .frame(width: width)
-            .background(Theme.surface)
-            .preferredColorScheme(.dark)
-            .tint(Theme.accent)
-            .presentationBackground(Theme.surface)
-            .presentationCompactAdaptation(.popover)
-    }
-}
-
-extension View {
-    fileprivate func popoverChrome(width: CGFloat = 300) -> some View { modifier(PopoverChrome(width: width)) }
 }
 
 // MARK: - Date
@@ -131,7 +113,6 @@ struct DateChipPopover: View {
                     .padding(HITSpacing.m)
             }
         }
-        .popoverChrome(width: 320)
     }
 }
 
@@ -196,7 +177,6 @@ struct RepeatChipPopover: View {
             }
         }
         .padding(.vertical, HITSpacing.xs)
-        .popoverChrome(width: 260)
     }
 }
 
@@ -215,7 +195,6 @@ struct PriorityChipPopover: View {
         }
         .padding(HITSpacing.m)
         .onChange(of: selection) { _, picked in onPick(picked) }
-        .popoverChrome(width: 280)
     }
 }
 
@@ -299,7 +278,6 @@ struct ReminderChipPopover: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(HITSpacing.m)
-        .popoverChrome(width: 320)
     }
 
     private func submitTyped() {
@@ -348,7 +326,6 @@ struct ProjectChipPopover: View {
             .frame(maxHeight: 280)
         }
         .padding(.bottom, HITSpacing.xs)
-        .popoverChrome(width: 280)
     }
 }
 
@@ -402,7 +379,6 @@ struct LabelsChipPopover: View {
             .frame(maxHeight: 280)
         }
         .padding(.bottom, HITSpacing.xs)
-        .popoverChrome(width: 280)
     }
 
     private func row(_ name: String, color: Color) -> some View {
@@ -464,7 +440,6 @@ struct LocationChipPopover: View {
             // Tapping outside keeps what was typed.
             if !committed, trimmed != name { onSave(trimmed) }
         }
-        .popoverChrome(width: 300)
     }
 
     private func commit(_ value: String?) {
