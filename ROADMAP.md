@@ -201,3 +201,4 @@ Not scheduled. Each becomes a roadmap item when picked up.
   it (notes). Today and Inbox sort priority-then-due; saved filters keep due-then-priority. Due colours:
   today green, tomorrow orange, later purple, overdue red (`HITColor.due`). Inter ships as six static 18 pt
   cuts because iOS resolves only a variable font's default instance by PostScript name.
+- 2026-10-31: schema V2 deployed to CloudKit Production by George after the Development push; build 5 (0.1.0) is the first build that writes the new fields.
