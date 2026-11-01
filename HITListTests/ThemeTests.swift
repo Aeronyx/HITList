@@ -33,13 +33,13 @@ final class ThemeTests: XCTestCase {
 
     // MARK: - Palettes
 
-    func testEightPalettesEachWithEightColours() {
+    func testEightPalettesEachWithNineColours() {
         XCTAssertEqual(ThemePalette.all.map(\.id), ["slate", "graphite", "midnight", "moss", "nord", "tokyo", "mocha", "rose"])
         XCTAssertEqual(ThemePalette.all.map(\.name), ["Slate", "Graphite", "Midnight", "Moss", "Nord", "Tokyo Night", "Mocha", "Rosé"])
         for palette in ThemePalette.all {
-            XCTAssertEqual(palette.colors.count, 8, palette.name)
-            XCTAssertEqual(palette.hex.all.count, 8, palette.name)
-            XCTAssertEqual(Set(palette.hex.all).count, 8, "\(palette.name) has eight distinct colours")
+            XCTAssertEqual(palette.colors.count, 9, palette.name)
+            XCTAssertEqual(palette.hex.all.count, 9, palette.name)
+            XCTAssertEqual(Set(palette.hex.all).count, 9, "\(palette.name) has nine distinct colours")
             for (color, hex) in zip(palette.colors, palette.hex.all) {
                 assertSameColor(color, Color(hex: hex), "\(palette.name) \(hex)")
             }
@@ -90,6 +90,17 @@ final class ThemeTests: XCTestCase {
                 let ratio = contrast(p.accent, surface)
                 XCTAssertGreaterThanOrEqual(ratio, aaNormalText, "\(p.name) accent on \(surfaceName): \(ratio)")
             }
+        }
+    }
+
+    /// The bolt must read on every surface and never be the accent (it would vanish into it).
+    func testBoltReadsOnEverySurfaceAndIsNotTheAccent() {
+        for p in ThemePalette.all {
+            for (surfaceName, surface) in [("background", p.background), ("surface", p.surface), ("elevated", p.elevated)] {
+                let ratio = contrast(p.bolt, surface)
+                XCTAssertGreaterThanOrEqual(ratio, aaNormalText, "\(p.name) bolt on \(surfaceName): \(ratio)")
+            }
+            XCTAssertNotEqual(p.hex.bolt, p.hex.accent, p.name)
         }
     }
 

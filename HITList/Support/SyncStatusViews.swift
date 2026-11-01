@@ -118,13 +118,17 @@ struct AccountChangeBanner: View {
     }
 }
 
-/// Sync status as one small bolt in the toolbar's empty space, on every screen and platform: a soft
-/// accent bolt once everything has synced, a slowly breathing bolt while syncing, a slashed grey bolt
-/// offline, an orange bolt when sync needs attention (signed out, restricted, an error, local only).
-/// It flicks brighter once when a change lands, and tapping it opens Settings.
+/// Sync status as one small bolt in the toolbar's empty space, on every screen and platform. Its shape
+/// is the message: a filled bolt when everything has synced recently, a hollow bolt breathing while a
+/// sync is in flight, a struck-through bolt when it cannot sync (offline, signed out, restricted, an
+/// error, local only) or has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a
+/// pastel that sits apart from the accent; struck-through states go grey, errors and sign-out red. It
+/// flicks brighter once when a change lands, and tapping it opens Settings.
 struct SyncBolt: View {
     var action: () -> Void
     static let size: CGFloat = 11
+    /// A sync older than this reads as "hasn't synced in a while".
+    static let staleAfter: TimeInterval = 24 * 60 * 60
     private var monitor: CloudSyncMonitor { .shared }
     @State private var flash = false
     @State private var lastPulse: Date?
@@ -132,19 +136,22 @@ struct SyncBolt: View {
 
     var body: some View {
         let state = monitor.state
-        Button(action: action) {
-            Image(systemName: Self.symbol(for: state))
-                .font(.system(size: Self.size, weight: .bold))
-                .foregroundStyle(Self.color(for: state).opacity(flash ? 1 : Self.opacity(for: state)))
-                .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
-                .contentTransition(.symbolEffect(.replace))
-                .frame(width: 20, height: 20)
-                .contentShape(Rectangle())
+        TimelineView(.periodic(from: .now, by: 60)) { tick in
+            let look = Self.look(for: state, now: tick.date)
+            Button(action: action) {
+                Image(systemName: look.symbol)
+                    .font(.system(size: Self.size, weight: .bold))
+                    .foregroundStyle(look.color.opacity(flash ? 1 : look.opacity))
+                    .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
+                    .contentTransition(.symbolEffect(.replace))
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(state.summary(now: tick.date))
+            .accessibilityIdentifier("syncBolt")
+            .help(state.summary(now: tick.date))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(state.summary())
-        .accessibilityIdentifier("syncBolt")
-        .help(state.summary())
         .onChange(of: monitor.lastChangeAt) { old, new in
             let now = Date()
             guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
@@ -158,26 +165,25 @@ struct SyncBolt: View {
         }
     }
 
-    static func symbol(for state: SyncState) -> String {
-        switch state {
-        case .offline: return "bolt.slash.fill"
-        default: return "bolt.fill"
-        }
+    /// What the bolt shows for a state. Pure, so tests can check it.
+    struct Look: Equatable {
+        var symbol: String
+        var color: Color
+        var opacity: Double
     }
 
-    /// Soft, not bright: the accent at 0.75 when synced; attention states use the orange due colour.
-    static func color(for state: SyncState) -> Color {
+    static func look(for state: SyncState, now: Date = Date()) -> Look {
         switch state {
-        case .synced, .syncing: return Theme.accent
-        case .offline: return Theme.secondaryText
-        case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
-        }
-    }
-
-    static func opacity(for state: SyncState) -> Double {
-        switch state {
-        case .synced, .syncing: return 0.75
-        default: return 0.9
+        case .synced(let at) where now.timeIntervalSince(at) > staleAfter:
+            return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
+        case .synced:
+            return Look(symbol: "bolt.fill", color: Theme.bolt, opacity: 0.85)
+        case .syncing:
+            return Look(symbol: "bolt", color: Theme.bolt, opacity: 0.85)
+        case .offline, .localOnly:
+            return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
+        case .notSignedIn, .restricted, .error:
+            return Look(symbol: "bolt.slash.fill", color: HITColor.dueOverdue, opacity: 0.85)
         }
     }
 }

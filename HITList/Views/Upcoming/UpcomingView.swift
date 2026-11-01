@@ -107,12 +107,17 @@ struct UpcomingView: View {
         .navigationBarTitleDisplayMode(.inline)
         #endif
         .screenChrome {
-            Button { jumpToTodayRequest += 1 } label: {
-                Label("Jump to today", systemImage: "scope").labelStyle(.iconOnly)
+            ViewOptionsMenu {
+                Toggle("Show overdue", isOn: $overdueExpanded)
+                Picker("Days shown", selection: $dayCount) {
+                    Text("2 weeks").tag(14)
+                    Text("1 month").tag(30)
+                    Text("2 months").tag(60)
+                }
             }
-            .help("Jump to today")
-            .accessibilityIdentifier("jumpToToday")
-        } menu: {}
+        } menu: {
+            Button { jumpToTodayRequest += 1 } label: { Label("Jump to today", systemImage: "calendar") }
+        }
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
     }

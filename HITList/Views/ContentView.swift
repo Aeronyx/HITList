@@ -56,6 +56,9 @@ private struct SplitContent: View {
     @State private var selection: SidebarItem? = .today
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var settingsRouter = SettingsRouter()
+    /// Where to go back to when the Settings page is closed.
+    @State private var beforeSettings: SidebarItem? = .today
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -65,11 +68,21 @@ private struct SplitContent: View {
             ListScreen(item: selection ?? .today)
                 .navigationSplitViewColumnWidth(min: 420, ideal: 640)
         }
-        .onChange(of: selection) { _, _ in popouts.closeAll() }
+        .onChange(of: selection) { old, new in
+            popouts.closeAll()
+            // Settings is a page of its own: the sidebar slides away while it shows and comes back after.
+            if new == .settings {
+                if old != .settings { beforeSettings = old }
+                withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { columnVisibility = .detailOnly }
+            } else if old == .settings {
+                withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { columnVisibility = .all }
+            }
+        }
         #if os(macOS)
         .environment(settingsRouter)
         .focusedSceneValue(\.settingsRouter, settingsRouter)
         .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
+        .onChange(of: settingsRouter.closeRequests) { _, _ in selection = beforeSettings ?? .today }
         #endif
     }
 }

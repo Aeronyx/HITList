@@ -9,6 +9,7 @@ struct MacSettingsPage: View {
     @AppStorage(Preferences.macSettingsSection, store: AppGroup.defaults)
     private var storedSection = MacSettingsSection.general.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(SettingsRouter.self) private var router: SettingsRouter?
 
     static let listWidth: CGFloat = 200
     static let contentMaxWidth: CGFloat = 620
@@ -17,8 +18,23 @@ struct MacSettingsPage: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            MacSettingsSectionList(selection: section) { picked in
-                withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { storedSection = picked.rawValue }
+            VStack(spacing: 0) {
+                // The page takes the whole window (the sidebar slides away), so it carries its own way back.
+                HStack {
+                    Button { router?.close() } label: {
+                        Label("Back", systemImage: "chevron.left")
+                    }
+                    .buttonStyle(HITButtonStyle(.ghost, size: .small))
+                    .keyboardShortcut(.cancelAction)
+                    .help("Back to your lists (Esc)")
+                    .accessibilityIdentifier("settings-back")
+                    Spacer()
+                }
+                .padding(.horizontal, HITSpacing.s)
+                .padding(.top, HITSpacing.s)
+                MacSettingsSectionList(selection: section) { picked in
+                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { storedSection = picked.rawValue }
+                }
             }
             .frame(width: Self.listWidth)
             .frame(maxHeight: .infinity)

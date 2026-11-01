@@ -142,7 +142,7 @@ struct InlineAddRow: View {
                 Button(action: open) {
                     HStack(spacing: HITSpacing.s) {
                         Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Theme.accent)
                             .frame(width: 22)
                         Text("Add task").foregroundStyle(Theme.secondaryText)
@@ -151,7 +151,8 @@ struct InlineAddRow: View {
                             Text(note).foregroundStyle(Theme.secondaryText.opacity(0.7))
                         }
                     }
-                    .font(HITType.subheadline)
+                    // The Mac's list text is 13 pt; the row reads at that size rather than a caption.
+                    .font(HITType.body)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

@@ -57,6 +57,8 @@ struct FlipboardView: View {
                             FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
                                            onOpen: { open(task) })
                         }
+                        // The last cell adds a switch: a dashed outline of one, with a big +.
+                        AddSwitchTile { adding = true }
                     }
                     .padding(16)
                     .animation(.snappy(duration: 0.35), value: switches.map(\.id))
@@ -69,13 +71,17 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // Add switch is the screen's control; the sound toggle sits in the "…". Same on every platform.
+        // Adding lives in the grid (`AddSwitchTile`); the toolbar's control is the flip sound, and the
+        // "…" keeps Add switch… as a second route. Same on every platform.
         .screenChrome {
-            Button { adding = true } label: { Label("Add switch", systemImage: "plus.app").labelStyle(.iconOnly) }
-                .help("Add a switch")
-                .accessibilityIdentifier("addSwitch")
+            Button { soundOn.toggle() } label: {
+                Label(soundOn ? "Flip sound on" : "Flip sound off", systemImage: soundOn ? "speaker.wave.2" : "speaker.slash")
+                    .labelStyle(.iconOnly)
+            }
+            .help(soundOn ? "Flip sound on" : "Flip sound off")
+            .accessibilityIdentifier("flipSound")
         } menu: {
-            Toggle(isOn: $soundOn) { Label("Flip Sound", systemImage: "speaker.wave.2") }
+            Button { adding = true } label: { Label("Add Switch…", systemImage: "plus") }
         }
         .onReceive(clock) { now = $0 }
         .onAppear {
@@ -351,5 +357,47 @@ struct FlipSwitchPreview: View {
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.5)) { dip = nil }
             }
         }
+    }
+}
+
+
+/// The grid's last tile: the outline of a switch drawn with a dashed hairline (the plate, a smaller dashed
+/// rocker in it) and a large accent "+", in the tiles' 18 pt shape. Tapping it opens the switch editor.
+struct AddSwitchTile: View {
+    var action: () -> Void
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let plate = RoundedRectangle(cornerRadius: 18, style: .continuous)
+        Button(action: action) {
+            ZStack {
+                plate.strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                    .foregroundStyle(hovered ? Theme.accent.opacity(0.9) : Theme.separator)
+                VStack(spacing: 10) {
+                    // The rocker: a small dashed capsule, standing in for the switch itself.
+                    Capsule(style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [4, 4]))
+                        .frame(width: 34, height: 56)
+                        .foregroundStyle(hovered ? Theme.accent.opacity(0.7) : Theme.separator)
+                        .overlay {
+                            Image(systemName: "plus")
+                                .font(.system(size: 26, weight: .bold))
+                                .foregroundStyle(Theme.accent)
+                        }
+                    Text("Add switch")
+                        .font(HITType.caption)
+                        .foregroundStyle(Theme.secondaryText)
+                }
+                .padding(.vertical, 22)
+            }
+            .frame(maxWidth: .infinity, minHeight: 150)
+            .contentShape(plate)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: hovered)
+        .accessibilityLabel("Add switch")
+        .accessibilityIdentifier("addSwitchTile")
     }
 }

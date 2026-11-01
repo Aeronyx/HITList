@@ -11,6 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.3.2", items: [
+            "The sync bolt's shape says its state: filled, hollow while syncing, struck through when it can't.",
+            "Mac: Settings is a full page of its own, with keyboard shortcuts, data counts and theme previews.",
+            "Flipboard: add a switch from the grid with the dashed + tile.",
+            "Inbox groups tasks by priority; Upcoming's view options choose how many days to show.",
+        ]),
         Entry(version: "0.3.1", items: [
             "A small bolt in the toolbar shows sync at a glance; tap it for Settings.",
             "Every screen has the same two controls: Upcoming jumps to today, Browse adds a Group, label or filter.",

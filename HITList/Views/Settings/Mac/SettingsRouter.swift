@@ -13,9 +13,15 @@ final class SettingsRouter {
     /// Advances on every `open()`; `SplitContent` watches it. A counter, not a Bool, so a second request
     /// while the page is already showing still counts (and nothing has to reset it).
     private(set) var openRequests = 0
+    /// Advances when the page's Done is pressed; `SplitContent` goes back to the list it came from.
+    private(set) var closeRequests = 0
 
     func open() {
         openRequests += 1
+    }
+
+    func close() {
+        closeRequests += 1
     }
 }
 

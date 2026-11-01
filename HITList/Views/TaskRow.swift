@@ -16,6 +16,8 @@ struct TaskRow: View {
     @Environment(\.modelContext) private var context
     /// Optional: a row rendered outside the app shell (tests, previews) deletes at once.
     @Environment(PopoutController.self) private var popouts: PopoutController?
+    /// Settings → Appearance → Compact rows: less air above and below each row.
+    @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @HITEffectsSetting private var effects
     @State private var pops = 0
@@ -122,7 +124,7 @@ struct TaskRow: View {
                     .frame(height: lineHeight)
             }
         }
-        .padding(.vertical, HITSpacing.xs)
+        .padding(.vertical, compactRows ? 0 : HITSpacing.xs)
         .contentShape(Rectangle())
         // The slide-away: a render offset only, so the row's layout doesn't move.
         .offset(x: slideOffset)

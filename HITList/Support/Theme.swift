@@ -20,12 +20,14 @@ struct ThemePalette: Identifiable, Equatable {
     let text: Color
     /// Text and icons on an accent fill.
     let onAccent: Color
+    /// The sync bolt: a pastel that sits apart from the accent (the accent would get lost in itself).
+    let bolt: Color
 
     struct Hexes: Equatable {
-        var background, surface, elevated, separator, accent, secondaryText, text, onAccent: String
+        var background, surface, elevated, separator, accent, secondaryText, text, onAccent, bolt: String
 
         /// In declaration order, for tests and swatches.
-        var all: [String] { [background, surface, elevated, separator, accent, secondaryText, text, onAccent] }
+        var all: [String] { [background, surface, elevated, separator, accent, secondaryText, text, onAccent, bolt] }
     }
 
     init(id: String, name: String, hex: Hexes) {
@@ -40,6 +42,7 @@ struct ThemePalette: Identifiable, Equatable {
         secondaryText = Color(hex: hex.secondaryText)
         text = Color(hex: hex.text)
         onAccent = Color(hex: hex.onAccent)
+        bolt = Color(hex: hex.bolt)
     }
 
     /// True when the accent is light enough that white on it disappears (Graphite's off-white): controls
@@ -50,50 +53,50 @@ struct ThemePalette: Identifiable, Equatable {
         return luminance > 0.6
     }
 
-    /// The eight colours, in the order of `Hexes.all`.
-    var colors: [Color] { [background, surface, elevated, separator, accent, secondaryText, text, onAccent] }
+    /// The nine colours, in the order of `Hexes.all`.
+    var colors: [Color] { [background, surface, elevated, separator, accent, secondaryText, text, onAccent, bolt] }
 
     static func == (a: ThemePalette, b: ThemePalette) -> Bool { a.id == b.id && a.hex == b.hex }
 
     /// The original: blue-grey slate with a soft blue accent. The default.
     static let slate = ThemePalette(id: "slate", name: "Slate", hex: Hexes(
         background: "#14181F", surface: "#1B2029", elevated: "#242B38", separator: "#303948",
-        accent: "#6C9EFF", secondaryText: "#9AA4B8", text: "#E8ECF3", onAccent: "#0B0E14"))
+        accent: "#6C9EFF", secondaryText: "#9AA4B8", text: "#E8ECF3", onAccent: "#0B0E14", bolt: "#F2D98D"))
 
     /// Neutral greys with a warm off-white accent (dark text on it).
     static let graphite = ThemePalette(id: "graphite", name: "Graphite", hex: Hexes(
         background: "#161616", surface: "#1D1D1E", elevated: "#262627", separator: "#343436",
-        accent: "#E6E1D6", secondaryText: "#A3A3A6", text: "#EDEDED", onAccent: "#141414"))
+        accent: "#E6E1D6", secondaryText: "#A3A3A6", text: "#EDEDED", onAccent: "#141414", bolt: "#F2B9A1"))
 
     /// Blue-black with a cyan accent.
     static let midnight = ThemePalette(id: "midnight", name: "Midnight", hex: Hexes(
         background: "#0B0F1A", surface: "#111727", elevated: "#1A2236", separator: "#273149",
-        accent: "#4FD1E8", secondaryText: "#93A0BC", text: "#E6ECF7", onAccent: "#04121A"))
+        accent: "#4FD1E8", secondaryText: "#93A0BC", text: "#E6ECF7", onAccent: "#04121A", bolt: "#F7C9A0"))
 
     /// Green-black with a soft green accent.
     static let moss = ThemePalette(id: "moss", name: "Moss", hex: Hexes(
         background: "#111612", surface: "#171E19", elevated: "#202A22", separator: "#2D3A30",
-        accent: "#8FD694", secondaryText: "#9CAE9F", text: "#E6EFE7", onAccent: "#0B140D"))
+        accent: "#8FD694", secondaryText: "#9CAE9F", text: "#E6EFE7", onAccent: "#0B140D", bolt: "#EBD48B"))
 
     /// Cool Scandinavian greys with an ice-blue accent (after the Nord palette).
     static let nord = ThemePalette(id: "nord", name: "Nord", hex: Hexes(
         background: "#232831", surface: "#2E3440", elevated: "#3B4252", separator: "#4C566A",
-        accent: "#88C0D0", secondaryText: "#AEB8CA", text: "#ECEFF4", onAccent: "#1B222C"))
+        accent: "#88C0D0", secondaryText: "#AEB8CA", text: "#ECEFF4", onAccent: "#1B222C", bolt: "#EBCB8B"))
 
     /// Deep indigo night with a periwinkle accent (after Tokyo Night).
     static let tokyo = ThemePalette(id: "tokyo", name: "Tokyo Night", hex: Hexes(
         background: "#16161E", surface: "#1A1B26", elevated: "#24283B", separator: "#3B4261",
-        accent: "#7AA2F7", secondaryText: "#9AA5CE", text: "#C0CAF5", onAccent: "#0F1018"))
+        accent: "#7AA2F7", secondaryText: "#9AA5CE", text: "#C0CAF5", onAccent: "#0F1018", bolt: "#F5B07A"))
 
     /// Warm violet-black with a mauve accent (after Catppuccin Mocha).
     static let mocha = ThemePalette(id: "mocha", name: "Mocha", hex: Hexes(
         background: "#181825", surface: "#1E1E2E", elevated: "#313244", separator: "#45475A",
-        accent: "#CBA6F7", secondaryText: "#A6ADC8", text: "#CDD6F4", onAccent: "#11111B"))
+        accent: "#CBA6F7", secondaryText: "#A6ADC8", text: "#CDD6F4", onAccent: "#11111B", bolt: "#F9E2AF"))
 
     /// Dusky plum with a rose accent (after Rosé Pine).
     static let rose = ThemePalette(id: "rose", name: "Rosé", hex: Hexes(
         background: "#191724", surface: "#1F1D2E", elevated: "#26233A", separator: "#403D52",
-        accent: "#EBBCBA", secondaryText: "#9A95B4", text: "#E0DEF4", onAccent: "#14121E"))
+        accent: "#EBBCBA", secondaryText: "#9A95B4", text: "#E0DEF4", onAccent: "#14121E", bolt: "#F6C177"))
 
     static let all: [ThemePalette] = [.slate, .graphite, .midnight, .moss, .nord, .tokyo, .mocha, .rose]
 
@@ -137,6 +140,8 @@ enum Theme {
     static var separator: Color { palette.separator }
     static var accent: Color { palette.accent }
     static var secondaryText: Color { palette.secondaryText }
+    /// The sync bolt's pastel (`ThemePalette.bolt`).
+    static var bolt: Color { ThemeStore.shared.palette.bolt }
 }
 
 extension View {
