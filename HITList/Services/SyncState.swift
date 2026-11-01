@@ -1,5 +1,6 @@
 import Foundation
 import CloudKit
+import OSLog
 
 /// What the app tells the user about iCloud sync. `CloudSyncMonitor.state` derives it; Settings, the
 /// sidebar footer and the account banner all read it from there.
@@ -113,5 +114,33 @@ enum SyncState: Equatable {
             return "some changes didn't sync"
         default: return "iCloud error \(code.rawValue)"
         }
+    }
+}
+
+/// When the sync dot pulses and Settings' status line flashes its checkmark: each time
+/// `CloudSyncMonitor.lastChangeAt` advances (a CloudKit import or export finished in this session).
+/// Pure, so the trigger is testable.
+enum SyncConfirmation {
+    /// Imports and exports arrive in bursts (one event per zone); pulses closer together than this merge.
+    static let minimumGap: TimeInterval = 2
+    /// How long Settings shows the checkmark before the usual icon returns.
+    static let checkmarkDuration: Duration = .seconds(3)
+    /// The views log each confirmation (category "sync"), so it can be seen without watching the screen.
+    static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
+
+    /// A sync finished: `new` is later than `old`, or is the session's first (`old == nil`). Views pass
+    /// the values of `onChange`, which doesn't fire for the value a view appears with, so opening a
+    /// screen long after the last sync doesn't pulse.
+    static func didAdvance(from old: Date?, to new: Date?) -> Bool {
+        guard let new else { return false }
+        guard let old else { return true }
+        return new > old
+    }
+
+    /// The dot pulses once per advance, never more than once per `minimumGap`, and never under Reduce Motion.
+    static func shouldPulse(from old: Date?, to new: Date?, lastPulse: Date?, now: Date, reduceMotion: Bool) -> Bool {
+        guard !reduceMotion, didAdvance(from: old, to: new) else { return false }
+        guard let lastPulse else { return true }
+        return now.timeIntervalSince(lastPulse) >= minimumGap
     }
 }
