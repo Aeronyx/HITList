@@ -126,15 +126,16 @@ struct PopoutHost: ViewModifier {
 }
 
 extension View {
-    /// The iPhone quick-add card: a detached oval (28 pt continuous corners), slate surface, hairline
-    /// border, soft shadow.
+    /// The iPhone quick-add card: a detached oval (28 pt continuous corners), hairline border. On iOS 26
+    /// it is regular Liquid Glass tinted with the slate surface, so the dimmed list shows through
+    /// faintly; before that (and under Reduce Transparency / Reduce Effects) a solid slate surface with
+    /// a soft shadow.
     func ovalCardChrome() -> some View {
         let shape = RoundedRectangle(cornerRadius: QuickAddPopout.cardRadius, style: .continuous)
         return self
-            .background(shape.fill(Theme.surface))
-            .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
             .clipShape(shape)
-            .shadow(color: .black.opacity(0.45), radius: 24, y: 8)
+            .mobileGlass(in: shape, tint: Theme.surface.opacity(0.75), fallback: Theme.surface, shadow: .card)
+            .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
     }
 }
 

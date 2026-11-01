@@ -48,8 +48,8 @@ enum IslandMetrics {
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
 /// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
 /// with Inter labels, the selected one in accent on a faint pill. Tapping the selected tab again calls
-/// `onReselect` (the shell pops that tab to its root). The island's own fill (glass or slate) comes from
-/// `MobileShell`, which draws it with the "+".
+/// `onReselect` (the shell pops that tab to its root). The island is Liquid Glass tinted slate on iOS 26
+/// (`mobileGlass`), plain `Theme.surface` before that and under Reduce Transparency / Reduce Effects.
 struct MobileTabBar: View {
     @Binding var selection: MobileTab
     /// Today's day of the month, for the Today icon.
@@ -72,11 +72,7 @@ struct MobileTabBar: View {
         }
         .padding(.horizontal, IslandMetrics.pillInset)
         .frame(height: IslandMetrics.height)
-        .background {
-            Capsule(style: .continuous)
-                .fill(Theme.surface)
-                .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-        }
+        .mobileGlass(in: Capsule(style: .continuous), tint: Theme.surface.opacity(0.6), fallback: Theme.surface)
         .overlay { Capsule(style: .continuous).strokeBorder(Theme.separator, lineWidth: 0.5) }
         .contentShape(Capsule(style: .continuous))
         .padding(.horizontal, IslandMetrics.sideInset)
