@@ -42,6 +42,12 @@ struct ReminderPickerCard: View {
         return "Fires " + fire.formatted(.dateTime.weekday(.abbreviated)) + " " + clock
     }
 
+    /// An offset chip's title, short enough for two per row at iPhone sizes: "At time", "5 min", "1 hour",
+    /// "1 day" (the header says "before the time"; the chip on the bar keeps the long "15 min before").
+    static func chipTitle(minutes: Int) -> String {
+        minutes > 0 ? ReminderOffset.duration(minutes: minutes) : "At time"
+    }
+
     /// The custom field's minutes: a whole number from 1 up to the grammar's four weeks.
     static func customOffset(_ text: String) -> Int? {
         guard let n = Int(text.trimmingCharacters(in: .whitespaces)), (1...ReminderOffset.maxMinutes).contains(n) else { return nil }
@@ -56,14 +62,16 @@ struct ReminderPickerCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.s) {
             if let onOffset {
-                header("Remind me")
+                header("Remind me before the time")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
                                     GridItem(.flexible(), alignment: .leading)],
                           alignment: .leading, spacing: 6) {
                     ForEach(Self.offsetPresets, id: \.self) { minutes in
-                        HITChip(ReminderOffset.label(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
+                        HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
                                 tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
                                 action: { onOffset(minutes == 0 ? nil : minutes) })
+                            .accessibilityLabel(ReminderOffset.label(minutes: minutes))
+                            .help(ReminderOffset.label(minutes: minutes))
                             .accessibilityIdentifier("reminderOffset\(minutes)")
                     }
                     CustomOffsetField(minutes: isCustomOffset ? offsetMinutes : nil, onCommit: onOffset)
@@ -110,7 +118,7 @@ struct ReminderPickerCard: View {
     }
 }
 
-/// The offsets' last cell: a chip-sized box holding "[ 45 ] min before"; Return sets it.
+/// The offsets' last cell: a chip-sized box holding "[ 45 ] min" (before); Return sets it.
 private struct CustomOffsetField: View {
     /// The current offset when it isn't one of the presets.
     var minutes: Int?
@@ -138,12 +146,12 @@ private struct CustomOffsetField: View {
                 .font(HITType.control)
                 .monospacedDigit()
                 .multilineTextAlignment(.trailing)
-                .frame(width: 30)
+                .frame(width: 36)
                 .focused($isFocused)
                 .onSubmit(commit)
                 .accessibilityLabel("Custom minutes before")
                 .accessibilityIdentifier("reminderCustomOffset")
-            Text("min before")
+            Text("min")
                 .font(HITType.control)
                 .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
                 .lineLimit(1)
