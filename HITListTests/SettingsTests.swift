@@ -138,6 +138,15 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(NotificationTestResult.denied.message.contains("system settings"))
     }
 
+    // MARK: Default reminder
+
+    func testDefaultReminderChoicesAndLabels() {
+        XCTAssertEqual(Preferences.defaultReminderOffsetChoices, [0, 5, 10, 15, 30, 60])
+        XCTAssertEqual(Preferences.defaultReminderOffsetChoices.map(Preferences.defaultReminderLabel(minutes:)),
+                       ["At due time", "5 min before", "10 min before", "15 min before", "30 min before", "1 hr before"])
+        XCTAssertEqual(Preferences.defaultReminderOffsetDefault, 0, "off unless chosen")
+    }
+
     @MainActor
     func testMonitorStartsWithNoChangeThisSession() {
         // lastChangeAt is never restored from disk, so a launch doesn't pulse for an old sync.

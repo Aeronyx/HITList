@@ -209,8 +209,9 @@ enum NotificationScheduler {
             task.isCompleted == false && task.hasDueTime == true && task.dueDate != nil
         })
         let items: [NotificationPlan.Item]
+        let defaultOffset = Preferences.defaultReminderOffset
         do {
-            items = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+            items = try context.fetch(descriptor).map { NotificationPlan.Item($0).withDefaultOffset(defaultOffset) }
         } catch {
             log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
             return
@@ -224,6 +225,7 @@ enum NotificationScheduler {
                   due >= now.addingTimeInterval(-NotificationPlan.lateGrace) else { return nil }
             return NotificationPlan.ledgerKey(taskID: item.id, dueDate: remindAt)
         })
+        // `items` already carry the default offset (the ledger seed above needs it too).
         let plan = NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
         let pendingFingerprints = Dictionary(
             pending.map { ($0.identifier, $0.content.userInfo[fingerprintKey] as? String ?? "") },

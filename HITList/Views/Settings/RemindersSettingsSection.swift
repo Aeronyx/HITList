@@ -13,6 +13,8 @@ struct RemindersSettingsSection: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var notificationsEnabled = NotificationScheduler.isEnabled
+    @AppStorage(Preferences.defaultReminderOffsetMinutes, store: AppGroup.defaults)
+    private var defaultOffset = Preferences.defaultReminderOffsetDefault
     @State private var authorization: UNAuthorizationStatus?
     @State private var scheduled = "…"
     @State private var testMessage: String?
@@ -33,6 +35,25 @@ struct RemindersSettingsSection: View {
                     await rescheduleAndRefresh()
                 }
             }
+
+            HITMenuRow("Default reminder", subtitle: "For timed tasks without a ! offset of their own.",
+                       systemImage: "bell.badge") {
+                Menu {
+                    Picker("Default reminder", selection: $defaultOffset) {
+                        ForEach(Preferences.defaultReminderOffsetChoices, id: \.self) { minutes in
+                            Text(Preferences.defaultReminderLabel(minutes: minutes)).tag(minutes)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                } label: {
+                    MenuValueLabel(text: Preferences.defaultReminderLabel(minutes: defaultOffset))
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .fixedSize()
+                .accessibilityIdentifier("settings-default-reminder")
+            }
+            .onChange(of: defaultOffset) { _, _ in Task { await rescheduleAndRefresh() } }
 
             HITMenuRow("Authorization", systemImage: "hand.raised",
                        value: NotificationStatus.authorizationText(authorization))
@@ -91,5 +112,23 @@ struct RemindersSettingsSection: View {
         let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")
         #endif
         if let url { openURL(url) }
+    }
+}
+
+/// The label of a Menu in a settings row: the current value in grey with an up-down chevron, like a
+/// pop-up button drawn in the design system's colours.
+struct MenuValueLabel: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: HITSpacing.xs) {
+            Text(text)
+                .font(HITType.body)
+                .lineLimit(1)
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .foregroundStyle(Theme.secondaryText)
+        .contentShape(Rectangle())
     }
 }
