@@ -198,6 +198,27 @@ final class MacSettingsTests: XCTestCase {
                        "Export to iCloud · just now")
     }
 
+    // MARK: Appearance
+
+    func testAppearanceSwatchesAndCompactRowsKey() {
+        XCTAssertEqual(MacAppearanceSection.swatchSide, 56)
+        XCTAssertEqual(ThemeSwatch.size, 44, "the iPhone sheet keeps its 44 pt swatches")
+        XCTAssertEqual(Preferences.compactRows, "pref.compactRows")
+        XCTAssertFalse(Preferences.compactRowsDefault)
+        let keys = [Preferences.compactRows, Preferences.macSettingsSection, Preferences.theme,
+                    Preferences.reduceEffects, Preferences.startTab, Preferences.weekStart]
+        XCTAssertEqual(Set(keys).count, keys.count, "no key collides with another preference")
+    }
+
+    func testPreviewCardRendersInEveryPalette() {
+        for palette in ThemePalette.all {
+            render(ThemePreviewCard(palette: palette), "preview \(palette.name)", width: 312)
+            render(ThemePreviewCard(palette: palette, compact: true), "compact preview \(palette.name)", width: 560)
+            render(ThemeSwatch(palette: palette, isSelected: true, side: MacAppearanceSection.swatchSide),
+                   "56 pt swatch \(palette.name)", width: 70)
+        }
+    }
+
     // MARK: Rendering
 
     /// Renders a view offscreen, which evaluates every body in it. A crash or a nil image fails.
