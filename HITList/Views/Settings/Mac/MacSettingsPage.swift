@@ -167,7 +167,9 @@ private struct MacSettingsSectionRow: View {
             .padding(.vertical, 7)
             .background {
                 if isSelected {
-                    Color.clear
+                    // A half-slate wash on the glass keeps the white title legible whatever the glass
+                    // picks up; with effects off the pill is plain `Theme.elevated`.
+                    Self.shape.fill(Theme.elevated.opacity(0.55))
                         .hitGlass(in: Self.shape, tint: Theme.accent.opacity(0.14), fallback: Theme.elevated)
                         .matchedGeometryEffect(id: "selection", in: pill)
                 } else if isHovered {
@@ -205,7 +207,7 @@ struct MacSettingsSectionContent: View {
             case .completing:
                 DelightSettingsSection()
             case .appearance:
-                AppearanceSettingsSection()
+                MacAppearanceSection()
             case .data:
                 MacDataSection()
             case .about:

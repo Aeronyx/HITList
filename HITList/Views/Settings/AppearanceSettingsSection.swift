@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings → Appearance: the four dark themes as swatches, and the Reduce Effects switch. A `HITGroup`
+/// Settings → Appearance (iPhone sheet): the dark themes as swatches, and the Reduce Effects switch. A `HITGroup`
 /// for SettingsView's page, `AppearanceSettingsSection()`. Picking a theme applies at once in every window
 /// (`ThemeStore`); both choices are saved in `AppGroup.defaults`.
 struct AppearanceSettingsSection: View {
@@ -24,7 +24,7 @@ struct AppearanceSettingsSection: View {
     }
 }
 
-/// The four themes side by side, each a `ThemeSwatch` with its name under it.
+/// The themes side by side, each a `ThemeSwatch` with its name under it.
 struct ThemeSwatchRow: View {
     var selection: ThemePalette
     var palettes: [ThemePalette] = ThemePalette.all
@@ -33,57 +33,71 @@ struct ThemeSwatchRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: HITSpacing.s) {
             ForEach(palettes) { palette in
-                let selected = palette.id == selection.id
-                Button { onSelect(palette) } label: {
-                    VStack(spacing: HITSpacing.s - 2) {
-                        ThemeSwatch(palette: palette, isSelected: selected)
-                        Text(palette.name)
-                            .font(selected ? HITType.caption2Semibold : HITType.caption2)
-                            .foregroundStyle(selected ? HITColor.text : Theme.secondaryText)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(ThemeSwatchPressStyle())
-                .accessibilityLabel("\(palette.name) theme")
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                ThemeSwatchButton(palette: palette, isSelected: palette.id == selection.id) { onSelect(palette) }
             }
         }
         .accessibilityElement(children: .contain)
     }
 }
 
-/// A 44 pt rounded square previewing a palette: its background, a surface card along the bottom and an
-/// accent dot; the selected one is ringed in its own accent.
+/// One theme to pick: the swatch and its name under it, pressed down a little while clicked.
+struct ThemeSwatchButton: View {
+    let palette: ThemePalette
+    let isSelected: Bool
+    var side: CGFloat = ThemeSwatch.size
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: HITSpacing.s - 2) {
+                ThemeSwatch(palette: palette, isSelected: isSelected, side: side)
+                Text(palette.name)
+                    .font(isSelected ? HITType.caption2Semibold : HITType.caption2)
+                    .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(ThemeSwatchPressStyle())
+        .accessibilityLabel("\(palette.name) theme")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// A rounded square previewing a palette (44 pt by default, 56 on the Mac page): its background, a
+/// surface card along the bottom and an accent dot; the selected one is ringed in its own accent.
 struct ThemeSwatch: View {
     let palette: ThemePalette
     var isSelected = false
+    var side: CGFloat = ThemeSwatch.size
 
     static let size: CGFloat = 44
-    private static let radius: CGFloat = 11
+    private var radius: CGFloat { side / 4 }
+    private var scale: CGFloat { side / Self.size }
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: Self.radius, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         ZStack(alignment: .bottom) {
             shape.fill(palette.background)
             // The surface card: the lower half, inset like a row on a page.
-            UnevenRoundedRectangle(topLeadingRadius: 5, bottomLeadingRadius: Self.radius - 4,
-                                   bottomTrailingRadius: Self.radius - 4, topTrailingRadius: 5, style: .continuous)
+            UnevenRoundedRectangle(topLeadingRadius: 5 * scale, bottomLeadingRadius: radius - 4 * scale,
+                                   bottomTrailingRadius: radius - 4 * scale, topTrailingRadius: 5 * scale,
+                                   style: .continuous)
                 .fill(palette.surface)
-                .frame(height: Self.size * 0.42)
-                .padding(4)
+                .frame(height: side * 0.42)
+                .padding(4 * scale)
             Circle()
                 .fill(palette.accent)
-                .frame(width: 12, height: 12)
-                .offset(x: 8, y: -Self.size * 0.42 - 2)
+                .frame(width: 12 * scale, height: 12 * scale)
+                .offset(x: 8 * scale, y: -side * 0.42 - 2 * scale)
         }
-        .frame(width: Self.size, height: Self.size)
+        .frame(width: side, height: side)
         .clipShape(shape)
         .overlay(shape.strokeBorder(palette.separator, lineWidth: 1))
         .padding(3)
         .overlay(
-            RoundedRectangle(cornerRadius: Self.radius + 3, style: .continuous)
+            RoundedRectangle(cornerRadius: radius + 3, style: .continuous)
                 .strokeBorder(isSelected ? palette.accent : .clear, lineWidth: 2)
         )
     }
