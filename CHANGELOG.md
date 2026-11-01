@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.2
+## 0.3.2 — build 9, 2026-11-01
 
 - The sync bolt says its state by shape: filled when synced, hollow and breathing while syncing, struck
   through when it cannot sync or has not synced in a day. Each theme has its own pastel bolt colour
