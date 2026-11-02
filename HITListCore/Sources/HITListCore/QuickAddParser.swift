@@ -147,15 +147,23 @@ public struct QuickAddParser: Sendable {
         }
         result.title = titleWords.joined(separator: " ")
 
-        // Resolve date/time.
+        // Resolve date/time. A date the user typed is kept as typed, even in the past ("yesterday").
+        let dateWasTyped = date != nil
         if date == nil, let rule = result.recurrence {
             date = rule.firstOccurrence(onOrAfter: dateParser.today, calendar: dateParser.calendar)
         }
         if let time {
-            var base = date ?? dateParser.today
-            var candidate = dateParser.date(base, hour: time.0, minute: time.1)
-            if date == nil, candidate < dateParser.now {
-                base = dateParser.day(1); candidate = dateParser.date(base, hour: time.0, minute: time.1)
+            var candidate = dateParser.date(date ?? dateParser.today, hour: time.0, minute: time.1)
+            if !dateWasTyped, candidate < dateParser.now {
+                if let rule = result.recurrence {
+                    // Typed after today's time: the rule's next occurrence ("every weekday 9am" at 2 pm is
+                    // tomorrow 9 am). Anchor first so "every month" from the 31st keeps the 31st.
+                    let anchored = rule.anchored(to: candidate, calendar: dateParser.calendar)
+                    result.recurrence = anchored
+                    candidate = anchored.nextOccurrence(after: candidate, calendar: dateParser.calendar)
+                } else {
+                    candidate = dateParser.date(dateParser.day(1), hour: time.0, minute: time.1)
+                }
             }
             result.dueDate = candidate
             result.hasDueTime = true

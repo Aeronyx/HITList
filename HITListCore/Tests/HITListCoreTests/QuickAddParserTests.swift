@@ -83,7 +83,49 @@ final class QuickAddParserTests: XCTestCase {
         assertDate(parser.parse("Journal every day").dueDate, 2026, 10, 21)
         // Explicit date wins.
         assertDate(parser.parse("Journal every day starting jan 5").dueDate, 2027, 1, 5)
-        assertDate(parser.parse("Standup every weekday 9am").dueDate, 2026, 10, 21, 9, 0)
+        // 9 am has passed at 14:30 (George, 2026-11-02): the next weekday, not today overdue.
+        assertDate(parser.parse("Standup every weekday 9am").dueDate, 2026, 10, 22, 9, 0)
+    }
+
+    private func parser(at now: Date) -> QuickAddParser { QuickAddParser(now: now, calendar: Fixed.calendar) }
+
+    /// George, 2026-11-02: a repeating task typed at a time already past today starts at its next occurrence.
+    func testARepeatingTaskTypedAfterItsTimeStartsAtTheNextOccurrence() {
+        // Wednesday 14:30.
+        assertDate(parser.parse("Standup every weekday 9am").dueDate, 2026, 10, 22, 9, 0)
+        assertDate(parser.parse("Pills every day 8pm").dueDate, 2026, 10, 21, 20, 0)
+        assertDate(parser.parse("Pills every day 2pm").dueDate, 2026, 10, 22, 14, 0)
+        assertDate(parser.parse("Water every 3 days 9am").dueDate, 2026, 10, 24, 9, 0)
+        assertDate(parser.parse("Bins every week 7am").dueDate, 2026, 10, 28, 7, 0)
+        let rent = parser.parse("Rent every month 9am")
+        assertDate(rent.dueDate, 2026, 11, 21, 9, 0)
+        XCTAssertEqual(rent.recurrence?.anchorDay, 21)
+        XCTAssertTrue(parser.parse("Standup every weekday 9am").hasDueTime)
+
+        // "every day 8pm" typed at 7 pm is today; at 9 pm it is tomorrow; at exactly 8 pm it is now.
+        assertDate(parser(at: Fixed.date(2026, 10, 21, 19)).parse("Pills every day 8pm").dueDate, 2026, 10, 21, 20, 0)
+        assertDate(parser(at: Fixed.date(2026, 10, 21, 21)).parse("Pills every day 8pm").dueDate, 2026, 10, 22, 20, 0)
+        assertDate(parser(at: Fixed.date(2026, 10, 21, 20)).parse("Pills every day 8pm").dueDate, 2026, 10, 21, 20, 0)
+        // Friday afternoon: the next weekday is Monday.
+        assertDate(parser(at: Fixed.date(2026, 10, 23, 14)).parse("Standup every weekday 9am").dueDate, 2026, 10, 26, 9, 0)
+        // Monday 10:00, "every monday 7am": next Monday.
+        assertDate(parser(at: Fixed.date(2026, 10, 26, 10)).parse("Gym every monday 7am").dueDate, 2026, 11, 2, 7, 0)
+        // A matching day still ahead is unaffected.
+        assertDate(parser.parse("Gym every monday 7am").dueDate, 2026, 10, 26, 7, 0)
+        // Jan 31 at 14:00, "every month 9am": Feb 28, still anchored to the 31st.
+        let jan31 = parser(at: Fixed.date(2027, 1, 31, 14)).parse("Rent every month 9am")
+        assertDate(jan31.dueDate, 2027, 2, 28, 9, 0)
+        XCTAssertEqual(jan31.recurrence?.encoded, "monthly;1;;31")
+    }
+
+    func testAnExplicitPastDateOnARepeatingTaskIsKeptAsTyped() {
+        assertDate(parser.parse("Standup every day yesterday 9am").dueDate, 2026, 10, 20, 9, 0)
+        assertDate(parser.parse("Standup every weekday today 9am").dueDate, 2026, 10, 21, 9, 0)
+        assertDate(parser.parse("Review every month oct 3 2026 9am").dueDate, 2026, 10, 3, 9, 0)
+        assertDate(parser.parse("Review every month oct 3 2026").dueDate, 2026, 10, 3)
+        // Not repeating: a time-only task still rolls to tomorrow, a dated one is kept.
+        assertDate(parser.parse("Call bank 9am").dueDate, 2026, 10, 22, 9, 0)
+        assertDate(parser.parse("Call bank today 9am").dueDate, 2026, 10, 21, 9, 0)
     }
 
     func testMonthlyAndYearlyRulesAreAnchoredToTheDueDay() {
