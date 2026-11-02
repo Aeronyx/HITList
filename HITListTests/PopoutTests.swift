@@ -425,12 +425,29 @@ final class PopoutTests: XCTestCase {
         for area in wrapped { XCTAssertLessThanOrEqual(area.rect.maxX, 70.5) }
     }
 
+    /// A title longer than the field's four lines: the field scrolls to the cursor, but the highlight copy
+    /// stops after four lines, so its places were the first lines' while the field showed the last ones.
+    /// The tints sat on the wrong words and a tap on the text could switch off a token out of sight (final
+    /// review). A truncated copy now draws no highlights and no tap targets.
+    func testATitleLongerThanTheFieldDrawsNoHighlightsInTheWrongPlace() throws {
+        let long = "Call Tom about the parcel p2 " + String(repeating: "and the other parcel from the market ", count: 12) + "#Work"
+        let tokens = parser().parse(long).tokens
+        XCTAssertEqual(tokens.map(\.text), ["Tom", "p2", "#Work"])
+        XCTAssertTrue(renderAreas(long, tokens: tokens, width: 330, lineLimit: 1...4).isEmpty,
+                      "nothing drawn or tappable where the field's words aren't")
+        let short = "Call Tom about the parcel p2"
+        XCTAssertEqual(renderAreas(short, tokens: parser().parse(short).tokens, width: 330, lineLimit: 1...4).map(\.token), [0, 1],
+                       "a title that fits keeps its highlights")
+    }
+
     private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }
 
-    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?) -> [TokenHighlightField.Area] {
+    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?,
+                             lineLimit: ClosedRange<Int>? = nil) -> [TokenHighlightField.Area] {
         let box = AreaBox()
         let view = TokenHighlightField.highlightText(text, tokens: tokens)
             .font(HITType.taskName)
+            .lineLimit(lineLimit?.upperBound)
             .frame(width: width, alignment: .leading)
             .fixedSize(horizontal: width == nil, vertical: true)
             .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
