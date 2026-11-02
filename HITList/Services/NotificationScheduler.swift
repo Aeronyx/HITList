@@ -8,7 +8,8 @@ import UIKit
 
 /// Schedules a local notification for each upcoming timed task, at its due time or its reminder offset
 /// before it ("!15mb": "in 15 min · Haircut"; see `NotificationPlan`), and keeps the pending
-/// set current when tasks arrive from another device, the clock or time zone changes, or the day rolls over.
+/// set current when anything is saved here, tasks arrive from another device, the clock or time zone
+/// changes, or the day rolls over (`triggers`).
 enum NotificationScheduler {
     static let enabledKey = "notifications.enabled"
     /// userInfo key holding the task's UUID string.
@@ -102,8 +103,19 @@ enum NotificationScheduler {
         center.delegate = responder
         center.setNotificationCategories([NotificationResponder.category, NotificationResponder.summaryCategory])
 
-        var triggers: [(Notification.Name, String)] = [
+        observers = observeTriggers { scheduleReschedule(reason: $0) }
+        scheduleReschedule(reason: "launch")
+    }
+
+    /// What makes the pending set stale, with the reason each is logged under: another device's change (an
+    /// import), any change made here (a local save: a task added, completed, deleted, moved or edited from
+    /// any list, row menu, popout or the Flipboard, so no call site can forget), and the clock. The 2 s
+    /// debounce folds a burst (typing a title saves on every keystroke) into one pass.
+    @MainActor
+    static var triggers: [(name: Notification.Name, reason: String)] {
+        var triggers: [(name: Notification.Name, reason: String)] = [
             (.cloudKitImportSucceeded, "import"),
+            (ModelContext.didSave, "local change"),
             (.NSSystemTimeZoneDidChange, "time zone"),
             (.NSSystemClockDidChange, "clock"),
             (.NSCalendarDayChanged, "day changed"),
@@ -111,12 +123,18 @@ enum NotificationScheduler {
         #if os(iOS)
         triggers.append((UIApplication.significantTimeChangeNotification, "significant time change"))
         #endif
-        for (name, reason) in triggers {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { scheduleReschedule(reason: reason) }
-            })
+        return triggers
+    }
+
+    /// Calls `handle` with a trigger's reason each time one is posted in `center`, on the main actor.
+    @MainActor
+    static func observeTriggers(in center: NotificationCenter = .default,
+                                _ handle: @escaping @MainActor (String) -> Void) -> [NSObjectProtocol] {
+        triggers.map { trigger in
+            center.addObserver(forName: trigger.name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { handle(trigger.reason) }
+            }
         }
-        scheduleReschedule(reason: "launch")
     }
 
     /// Reschedules once triggers stop arriving for 2 s (imports come in bursts, one event per zone).
