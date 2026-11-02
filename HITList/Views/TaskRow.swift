@@ -128,6 +128,7 @@ struct TaskRow: View {
         // The row owns its insets (the same above and below, and the same on every list) so rows are
         // equal heights and sit the same distance under every header.
         .listRowInsets(ListMetrics.rowInsets(compact: compactRows))
+        .listRowSeparatorTint(Theme.separator)
         .contentShape(Rectangle())
         // The slide-away: a render offset only, so the row's layout doesn't move.
         .offset(x: slideOffset)

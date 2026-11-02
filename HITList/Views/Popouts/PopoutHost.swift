@@ -24,6 +24,10 @@ struct PopoutHost: ViewModifier {
     private var keyboard: KeyboardObserver { .shared }
     @State private var heldKeyboardHeight: CGFloat = 0
     #endif
+    /// iPhone: the card has a title, so closing it asks first.
+    @State private var quickAddHasContent = false
+    /// iPhone: "Discard?" is showing above the card, keyboard down.
+    @State private var confirmingDiscard = false
 
     /// The Mac's panel style; iPad gets it too.
     private var usesPanel: Bool {
@@ -62,6 +66,9 @@ struct PopoutHost: ViewModifier {
                 }
             }
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: popouts.state.isFloatingQuickAddOpen)
+            .onChange(of: popouts.state.isFloatingQuickAddOpen) { _, open in
+                if !open { confirmingDiscard = false; quickAddHasContent = false }
+            }
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
             // Settings → General → Confirm before deleting: every delete path asks through the controller,
             // and this one dialog answers for all of them.
@@ -128,11 +135,34 @@ struct PopoutHost: ViewModifier {
         #if os(iOS)
         heldKeyboardHeight = keyboard.height
         #endif
+        // `confirmingDiscard` is left as it is until the overlay has gone (the onChange above resets it):
+        // clearing it here un-paused the card a pass before `isClosing` reached it, and the keyboard
+        // popped up during the fade.
         withAnimation(.easeIn(duration: Self.retractDuration)) { popouts.beginClosingQuickAdd() }
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(Self.retractDuration + 0.1))
             if popouts.state.isQuickAddClosing { popouts.closeQuickAdd() }
         }
+    }
+
+    /// × or a tap on the backdrop. iPhone: with a title typed, the keyboard steps down and "Discard" is
+    /// offered above the card (George, build 11: a draft is never lost by accident); tapping anywhere
+    /// else brings the keyboard back. An empty card, and the Mac panel, just close.
+    private func requestClose() {
+        if !usesPanel, quickAddHasContent, !confirmingDiscard {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+            return
+        }
+        if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
+    }
+
+    private func resumeDraft() {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+    }
+
+    private func discardDraft() {
+        QuickAddDraftStore.clear()
+        retireQuickAdd()
     }
 
     @ViewBuilder
@@ -141,8 +171,10 @@ struct PopoutHost: ViewModifier {
         // for the next task.
         let closing = popouts.state.isQuickAddClosing
         let card = QuickAddPopout(context: context, style: .floating, isClosing: closing, closesAfterSave: !usesPanel,
-                                  onClose: { if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() } },
-                                  onSaved: { popouts.didSave(); if !usesPanel { retireQuickAdd() } })
+                                  isPaused: confirmingDiscard,
+                                  onClose: requestClose,
+                                  onSaved: { popouts.didSave(); if !usesPanel { retireQuickAdd() } },
+                                  onDraftChange: { quickAddHasContent = $0 })
         if usesPanel {
             PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
                 card.panelChrome()
@@ -158,18 +190,26 @@ struct PopoutHost: ViewModifier {
                 ZStack(alignment: .bottom) {
                     Color.black.opacity(closing ? 0 : 0.5)
                         .ignoresSafeArea()
-                        .onTapGesture { retireQuickAdd() }
+                        .onTapGesture { if confirmingDiscard { resumeDraft() } else { requestClose() } }
                         .accessibilityAddTraits(.isButton)
-                        .accessibilityLabel("Close")
+                        .accessibilityLabel(confirmingDiscard ? "Keep editing" : "Close")
                         .transition(.opacity)
-                    card
-                        .ovalCardChrome()
-                        .padding(.horizontal, Self.ovalInset)
-                        .padding(.bottom, Self.ovalInset + aboveKeyboard)
-                        .opacity(closing ? 0 : 1)
-                        .offset(y: closing && !reduceMotion ? 10 : 0)
-                        .allowsHitTesting(!closing)
-                        .transition(cardTransition)
+                    VStack(spacing: 10) {
+                        if confirmingDiscard {
+                            DiscardBubble(action: discardDraft)
+                                .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+                        }
+                        card
+                            .ovalCardChrome()
+                            // A tap on the card itself also means "keep editing".
+                            .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
+                    }
+                    .padding(.horizontal, Self.ovalInset)
+                    .padding(.bottom, Self.ovalInset + aboveKeyboard)
+                    .opacity(closing ? 0 : 1)
+                    .offset(y: closing && !reduceMotion ? 10 : 0)
+                    .allowsHitTesting(!closing)
+                    .transition(cardTransition)
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
                 .animation(.easeIn(duration: Self.retractDuration), value: closing)
@@ -184,6 +224,51 @@ struct PopoutHost: ViewModifier {
     /// The oval's distance from the screen edges and from the top of the keyboard (`KeyboardObserver`
     /// keeps it above the keyboard, so it floats rather than docks).
     static let ovalInset: CGFloat = 12
+}
+
+/// "Discard" in a speech bubble pointing down at the quick-add card: a slate bubble, a lighter pill with
+/// the word in the danger colour, and a small pointer. Tapping it throws the draft away; tapping anywhere
+/// else keeps it.
+struct DiscardBubble: View {
+    var action: () -> Void
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        Button(action: action) {
+            Text("Discard")
+                .font(HITType.control)
+                .foregroundStyle(HITColor.danger)
+                .padding(.horizontal, 36)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(Theme.elevated))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .padding(8)
+        .background(shape.fill(Theme.surface))
+        .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
+        .overlay(alignment: .bottom) {
+            BubblePointer()
+                .fill(Theme.surface)
+                .frame(width: 18, height: 9)
+                .offset(y: 9)
+        }
+        .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
+        .accessibilityLabel("Discard draft")
+        .accessibilityIdentifier("quickAddDiscard")
+    }
+}
+
+/// A small downward triangle.
+struct BubblePointer: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
 }
 
 extension View {

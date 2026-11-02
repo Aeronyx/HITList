@@ -96,6 +96,8 @@ struct UpcomingView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
+                        // iPhone: above the island and the oval "+" (it hid behind them in build 11).
+                        .padding(.bottom, isCompact ? IslandMetrics.chromeHeight + HITSpacing.xs : 0)
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
@@ -329,7 +331,7 @@ struct UpcomingView: View {
                     .selectionDisabled()
                     .listRowSeparator(.hidden)
                     .listRowInsets(ListMetrics.rowInsets(compact: false))
-                    .slateRow()
+                    .listRowBackground(Theme.background)
             }
         } else {
             InlineAddRow(context: .day(day), key: "day-\(day.timeIntervalSinceReferenceDate)", note: isEmpty ? "Nothing due" : nil)
@@ -504,13 +506,13 @@ struct UpcomingView: View {
     /// open on its next date, just moves to that day instead.
     private func finishCompletion(of task: TaskItem, token: Int) async {
         let id = task.id
-        try? await Task.sleep(for: .milliseconds(600))
+        try? await Task.sleep(for: CompletionMotion.hold)
         if !task.isCompleted, task.dueDate != nil {
             withAnimation(reduceMotion ? nil : .snappy) { _ = completions.remove(id, token: token) }
             return
         }
         guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
-        try? await Task.sleep(for: .milliseconds(180))
+        try? await Task.sleep(for: CompletionMotion.collapseSettle)
         if reduceMotion {
             var transaction = Transaction()
             transaction.disablesAnimations = true

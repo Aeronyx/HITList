@@ -295,3 +295,35 @@ enum QuickAddTokens {
         name.contains(where: \.isWhitespace) ? "\"\(name)\"" : name
     }
 }
+
+extension Preferences {
+    static let quickAddDraftText = "quickAdd.draftText"
+    static let quickAddDraftNotes = "quickAdd.draftNotes"
+}
+
+/// Sticky drafts (George, build 11): what is typed in the quick-add card is kept in app-group defaults
+/// as it changes, so a card put away, an app sent to the background and even an app quit mid-thought
+/// comes back with the text. Cleared when the task is added or the draft is discarded.
+enum QuickAddDraftStore {
+    struct Stored: Equatable {
+        var text: String
+        var notes: String
+    }
+
+    static func load(from defaults: UserDefaults = AppGroup.defaults) -> Stored? {
+        let text = defaults.string(forKey: Preferences.quickAddDraftText) ?? ""
+        let notes = defaults.string(forKey: Preferences.quickAddDraftNotes) ?? ""
+        return text.isEmpty && notes.isEmpty ? nil : Stored(text: text, notes: notes)
+    }
+
+    static func save(text: String, notes: String, to defaults: UserDefaults = AppGroup.defaults) {
+        if text.isEmpty && notes.isEmpty { clear(from: defaults); return }
+        defaults.set(text, forKey: Preferences.quickAddDraftText)
+        defaults.set(notes, forKey: Preferences.quickAddDraftNotes)
+    }
+
+    static func clear(from defaults: UserDefaults = AppGroup.defaults) {
+        defaults.removeObject(forKey: Preferences.quickAddDraftText)
+        defaults.removeObject(forKey: Preferences.quickAddDraftNotes)
+    }
+}

@@ -240,6 +240,11 @@ struct TaskListView: View {
                         }
                         #if os(macOS)
                         .listStyle(.inset)
+                        #else
+                        // Flat rows on the background with hairline separators, like the Mac (George, build
+                        // 11: the inset-grouped cards were "a different and worse design").
+                        .listStyle(.plain)
+                        .listSectionSpacing(0)
                         #endif
                         .environment(\.defaultMinListHeaderHeight, 0)
                         .slateList()
@@ -257,6 +262,8 @@ struct TaskListView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
+                        // iPhone: above the island and the oval "+" (it hid behind them in build 11).
+                        .padding(.bottom, isCompact ? IslandMetrics.chromeHeight + HITSpacing.xs : 0)
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
@@ -381,13 +388,13 @@ struct TaskListView: View {
     /// still belong in the list (Show Completed is on) just settle. Every step checks `token`, so an
     /// undo or a newer completion of the same task wins.
     private func finishCompletion(of id: UUID, token: Int) async {
-        try? await Task.sleep(for: .milliseconds(600))
+        try? await Task.sleep(for: CompletionMotion.hold)
         if (try? matchedTasks())?.contains(where: { $0.id == id }) == true {
             withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }
         guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
-        try? await Task.sleep(for: .milliseconds(180))
+        try? await Task.sleep(for: CompletionMotion.collapseSettle)
         if reduceMotion {
             // Reduce Motion: the fade above is the whole effect; the gap closes without sliding.
             var transaction = Transaction()

@@ -78,6 +78,8 @@ struct InboxView: View {
             .overlay(alignment: .bottom) {
                 if toast.isVisible {
                     CompletionToast(message: toast.message, onUndo: undoToast)
+                        // iPhone: above the island and the oval "+" (it hid behind them in build 11).
+                        .padding(.bottom, isCompact ? IslandMetrics.chromeHeight + HITSpacing.xs : 0)
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
@@ -142,6 +144,9 @@ struct InboxView: View {
         }
         #if os(macOS)
         .listStyle(.inset)
+        #else
+        .listStyle(.plain)
+        .listSectionSpacing(0)
         #endif
         .environment(\.defaultMinListHeaderHeight, 0)
         .slateList()
@@ -233,13 +238,13 @@ struct InboxView: View {
     /// Check, strike and flash, then the row fades and the gap closes; with Show Completed on it just
     /// settles. When it was the last task, the list gives way to "Inbox zero" once the row is gone.
     private func finishCompletion(of id: UUID, token: Int) async {
-        try? await Task.sleep(for: .milliseconds(600))
+        try? await Task.sleep(for: CompletionMotion.hold)
         if matchedTasks().contains(where: { $0.id == id }) {
             withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }
         guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
-        try? await Task.sleep(for: .milliseconds(180))
+        try? await Task.sleep(for: CompletionMotion.collapseSettle)
         if reduceMotion {
             var transaction = Transaction()
             transaction.disablesAnimations = true

@@ -15,6 +15,12 @@ enum CompletionMotion {
     static let strikeDuration: TimeInterval = 0.2
     static let strike = Animation.easeOut(duration: strikeDuration)
 
+    /// How long a checked row stays before it leaves: long enough for the check's pop (`hitCelebratePop`,
+    /// 330 ms) and the strike (200 ms) to land, no longer (George, build 11: "snappier"; it was 600 ms).
+    static let hold: Duration = .milliseconds(380)
+    /// After the row starts collapsing, how long until the list drops it.
+    static let collapseSettle: Duration = .milliseconds(150)
+
     /// How far a completed row slides toward the trailing edge while it fades out.
     static let slideDistance: CGFloat = 24
     static func slideAway(calmMotion: Bool) -> Animation? { HITMotion.exit(reduceMotion: calmMotion) }

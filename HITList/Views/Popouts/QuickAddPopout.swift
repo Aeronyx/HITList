@@ -27,8 +27,13 @@ struct QuickAddPopout: View {
     /// iPhone: the host closes the card after a save, so the card leaves its contents as they are while it
     /// fades (clearing them re-laid the card out mid-fade). The Mac panel stays open and resets for the next task.
     var closesAfterSave = false
+    /// iPhone: the host is asking "Discard?" above the card; the keyboard steps down and comes back when
+    /// the question is dismissed.
+    var isPaused = false
     var onClose: () -> Void
     var onSaved: () -> Void = {}
+    /// Whether the draft has a title, whenever that changes (the host decides how closing behaves).
+    var onDraftChange: (Bool) -> Void = { _ in }
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -49,14 +54,26 @@ struct QuickAddPopout: View {
     enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
     init(context: QuickAddContext, style: Style = .floating, isClosing: Bool = false, closesAfterSave: Bool = false,
-         onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {}) {
+         isPaused: Bool = false, onClose: @escaping () -> Void, onSaved: @escaping () -> Void = {},
+         onDraftChange: @escaping (Bool) -> Void = { _ in }) {
         self.isClosing = isClosing
         self.closesAfterSave = closesAfterSave
+        self.isPaused = isPaused
         self.context = context
         self.style = style
         self.onClose = onClose
         self.onSaved = onSaved
-        _draft = State(initialValue: QuickAddDraft(context: context))
+        self.onDraftChange = onDraftChange
+        // A sticky draft comes back (`QuickAddDraftStore`): the text, and the description line if it had one.
+        var initial = QuickAddDraft(context: context)
+        if let stored = QuickAddDraftStore.load() {
+            initial.text = stored.text
+            if !stored.notes.isEmpty {
+                initial.notes = stored.notes
+                initial.showsNotes = true
+            }
+        }
+        _draft = State(initialValue: initial)
     }
 
     private var parser: QuickAddParser {
@@ -98,10 +115,23 @@ struct QuickAddPopout: View {
         .onAppear {
             rebuildEngine()
             titleFocused = true
+            onDraftChange(!draft.isEmpty)
         }
         .onChange(of: isClosing) { _, closing in
             if closing { titleFocused = false; notesFocused = false; locationFocused = false }
         }
+        .onChange(of: isPaused) { _, paused in
+            if paused {
+                titleFocused = false; notesFocused = false; locationFocused = false
+            } else if !isClosing {
+                titleFocused = true
+            }
+        }
+        .onChange(of: draft.text) { _, _ in
+            onDraftChange(!draft.isEmpty)
+            QuickAddDraftStore.save(text: draft.text, notes: draft.notes)
+        }
+        .onChange(of: draft.notes) { _, _ in QuickAddDraftStore.save(text: draft.text, notes: draft.notes) }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }
         .onChange(of: labels.count) { _, _ in rebuildEngine() }
@@ -409,13 +439,17 @@ struct QuickAddPopout: View {
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
                 .help("Close (Esc)")
-            // A capsule outlined in the accent, so it reads as "send" and not as a second solid "+".
+            // Hollow and faded while there is nothing to add; filled with the accent from the first
+            // character (George, build 11). A pill, so it never reads as a second "+".
+            let canAdd = !draft.result(parser).title.isEmpty
             Button(action: save) {
                 Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
                     .frame(width: 24)
             }
-            .buttonStyle(HITButtonStyle(.secondary, shape: .pill))
-            .disabled(draft.result(parser).title.isEmpty)
+            .buttonStyle(HITButtonStyle(canAdd ? .primary : .secondary, shape: .pill))
+            .opacity(canAdd ? 1 : 0.55)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: canAdd)
+            .disabled(!canAdd)
             .accessibilityLabel("Add task")
             .accessibilityIdentifier("quickAddSave")
             .help("Add task (Return)")
@@ -435,6 +469,7 @@ struct QuickAddPopout: View {
                 try? modelContext.save()
             }
             errorMessage = nil
+            QuickAddDraftStore.clear()
             if !closesAfterSave {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                     draft.reset()
