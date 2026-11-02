@@ -174,6 +174,36 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(ReminderOffset.token(minutes: 0), "!at")
     }
 
+    // MARK: Huge numbers (beta review)
+
+    /// The parser runs on every keystroke of the quick-add card. "!9999999999999999d" multiplied the
+    /// digits by 1440 past Int.max, which traps: the app crashed while the user typed.
+    func testAHugeReminderOffsetStaysInTheTitleInsteadOfCrashing() {
+        for token in ["!9999999999999999d", "!999999999999999999h", "!9223372036854775807m"] {
+            XCTAssertNil(ReminderOffset.minutes(fromToken: token), token)
+            let r = parser.parse("Call 5pm \(token)")
+            XCTAssertNil(r.reminderOffsetMinutes, token)
+            XCTAssertEqual(r.title, "Call \(token)", token)
+        }
+    }
+
+    /// "every 2000000000000000000 weeks" made a rule whose next date, worked out on completion, computed
+    /// 7 × interval past Int.max and trapped. Absurd counts stay in the title, and a rule never holds one.
+    func testHugeCountsStayInTheTitle() {
+        let every = parser.parse("Trash every 2000000000000000000 weeks")
+        XCTAssertNil(every.recurrence)
+        XCTAssertEqual(every.title, "Trash every 2000000000000000000 weeks")
+        let inDays = parser.parse("Renew in 99999999999 days")
+        XCTAssertNil(inDays.dueDate)
+        XCTAssertEqual(inDays.title, "Renew in 99999999999 days")
+        XCTAssertEqual(parser.parse("Water every 3 days").recurrence, RecurrenceRule(frequency: .daily, interval: 3), "sane counts still parse")
+
+        let rule = RecurrenceRule(frequency: .weekly, interval: 2_000_000_000_000_000_000)
+        XCTAssertEqual(rule.interval, RecurrenceRule.maxInterval)
+        XCTAssertGreaterThan(rule.nextOccurrence(after: Fixed.now, calendar: Fixed.calendar), Fixed.now)
+        XCTAssertEqual(RecurrenceRule(encoded: "daily;99999999999999")?.interval, RecurrenceRule.maxInterval)
+    }
+
     func testReminderOffsetWording() {
         XCTAssertEqual(ReminderOffset.label(minutes: 0), "At time")
         XCTAssertEqual(ReminderOffset.label(minutes: 15), "15 min before")
