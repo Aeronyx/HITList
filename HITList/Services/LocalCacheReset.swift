@@ -15,9 +15,12 @@ enum LocalCacheReset {
         ModelContainerFactory.isCloudKitEnabled && CloudSyncMonitor.shared.accountStatus == .available
     }
 
-    static func request() {
-        AppGroup.defaults.set(true, forKey: ModelContainerFactory.resetLocalStoreKey)
-        log.notice("Reset local store requested; it runs on the next launch")
+    /// Asks for a reset of the store this launch opened (`storeName`), by name: another build on the
+    /// device that opens a different store (TestFlight's HITList.store, a Development build's own) leaves
+    /// the request alone, so a reset never lands on the wrong store.
+    static func request(storeName: String = ModelContainerFactory.storeName, defaults: UserDefaults = AppGroup.defaults) {
+        defaults.set(storeName, forKey: ModelContainerFactory.resetLocalStoreKey)
+        log.notice("Reset local store requested for \(storeName, privacy: .public); it runs on the next launch that opens it")
     }
 
     #if os(macOS)
