@@ -15,6 +15,8 @@ struct PopoutState: Equatable {
 
     /// One open quick-add card. `savedCount` counts the tasks added without closing it.
     struct QuickAdd: Equatable {
+        /// Which card this is: its stored draft (`QuickAddDraftStore`) belongs to it and to no other.
+        var id = UUID()
         var context: QuickAddContext
         var placement: Placement
         var savedCount = 0
@@ -35,9 +37,10 @@ struct PopoutState: Equatable {
 
     func isInlineOpen(_ key: String) -> Bool { quickAdd?.placement == .inline(key) }
 
-    mutating func openQuickAdd(_ context: QuickAddContext, placement: Placement = .floating) {
+    /// A new card, unless `id` names one being put back after a relaunch.
+    mutating func openQuickAdd(_ context: QuickAddContext, placement: Placement = .floating, id: UUID = UUID()) {
         taskID = nil
-        quickAdd = QuickAdd(context: context, placement: placement)
+        quickAdd = QuickAdd(id: id, context: context, placement: placement)
     }
 
     /// A task was added: the card stays open (empty) for the next one.
@@ -79,7 +82,17 @@ struct PopoutState: Equatable {
 @MainActor
 @Observable
 final class PopoutController {
+    /// Changed only through `update`, which keeps the stored quick-add draft in step with the card.
     private(set) var state = PopoutState()
+    /// Where the open card's draft is kept (`QuickAddDraftStore`); tests pass their own.
+    @ObservationIgnored let draftDefaults: UserDefaults
+    /// The quick-add cards open in this process, in any window, so a second Mac window does not open
+    /// the same stored card again.
+    private static var liveCards: Set<UUID> = []
+
+    init(draftDefaults: UserDefaults = AppGroup.defaults) {
+        self.draftDefaults = draftDefaults
+    }
     /// The task the task popout shows; kept in step with `state.taskID`.
     private(set) var task: TaskItem?
     /// The list on screen, so ⌘N and the toolbar "+" add into it.
@@ -117,31 +130,71 @@ final class PopoutController {
 
     // MARK: Quick add
 
+    /// A fresh card: it starts empty, whatever is stored (only the card that was open gets that back).
     func openQuickAdd(_ context: QuickAddContext? = nil, placement: PopoutState.Placement = .floating) {
         task = nil
-        state.openQuickAdd(context ?? listContext, placement: placement)
+        update { $0.openQuickAdd(context ?? listContext, placement: placement) }
     }
 
-    func closeQuickAdd() { state.closeQuickAdd() }
-    func beginClosingQuickAdd() { state.beginClosingQuickAdd() }
-    func closeInline(_ key: String) { state.closeInline(key) }
-    func didSave() { state.didSave() }
+    func closeQuickAdd() { update { $0.closeQuickAdd() } }
+    func beginClosingQuickAdd() { update { $0.beginClosingQuickAdd() } }
+    func closeInline(_ key: String) { update { $0.closeInline(key) } }
+    func didSave() { update { $0.didSave() } }
+
+    /// iPhone's Discard: the draft goes at once, before the card has finished fading.
+    func discardQuickAddDraft() {
+        if let id = state.quickAdd?.id { QuickAddDraftStore.clear(card: id, from: draftDefaults) }
+    }
+
+    /// Launch, and each new Mac window: if the app was killed (or quit) with a quick-add card open and
+    /// something in it, that card opens again, floating, in the list it belonged to, with everything it
+    /// held (the card reads it back by its id). Nothing happens if a card is already up here, or the
+    /// stored card is open in another window.
+    @discardableResult
+    func reopenStoredQuickAdd() -> Bool {
+        for key in Preferences.legacyQuickAddDraftKeys { draftDefaults.removeObject(forKey: key) }
+        guard state.quickAdd == nil, let stored = QuickAddDraftStore.load(from: draftDefaults),
+              !Self.liveCards.contains(stored.cardID) else { return false }
+        task = nil
+        update { $0.openQuickAdd(stored.draft.context, placement: .floating, id: stored.cardID) }
+        return true
+    }
+
+    /// The window is going away (Mac): its card is no longer live here, but its draft stays stored, so
+    /// the next window, or the next launch, opens it again.
+    func windowClosed() {
+        if let id = state.quickAdd?.id { Self.liveCards.remove(id) }
+    }
+
+    /// Every change to what is popped out goes through here: when a quick-add card goes (closed, replaced
+    /// by another card or by a task), its stored draft goes with it.
+    private func update(_ change: (inout PopoutState) -> Void) {
+        let before = state.quickAdd?.id
+        change(&state)
+        let after = state.quickAdd?.id
+        guard before != after else { return }
+        if let before {
+            Self.liveCards.remove(before)
+            QuickAddDraftStore.clear(card: before, from: draftDefaults)
+        }
+        if let after { Self.liveCards.insert(after) }
+    }
 
     // MARK: Task
 
     func open(_ task: TaskItem) {
         self.task = task
-        state.openTask(task.id)
+        update { $0.openTask(task.id) }
     }
 
     func closeTask() {
         task = nil
-        state.closeTask()
+        update { $0.closeTask() }
     }
 
     func closeAll() {
         task = nil
-        state.closeAll()
+        update { $0.closeAll() }
     }
 
     /// Completes a task from its popout: saves, closes the popout, and shows the undo toast. (The

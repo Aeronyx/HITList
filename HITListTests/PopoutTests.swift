@@ -1,6 +1,10 @@
 import XCTest
+import SwiftUI
 import SwiftData
 import HITListCore
+#if os(macOS)
+import AppKit
+#endif
 @testable import HITList
 
 /// The popouts' pure parts: quick-add text ↔ chips, list defaults, and what is popped out.
@@ -311,6 +315,156 @@ final class PopoutTests: XCTestCase {
         let atTime = try TaskActions.create(from: QuickAddParser().parse("Call 5pm !at"), defaultProject: nil, defaultLabel: nil, in: context)
         XCTAssertNil(atTime.reminderOffsetMinutes, "!at is the same as no offset")
     }
+
+    // MARK: Tapping a highlight switches its token off (brief 28)
+
+    private func token(_ text: String, in draft: QuickAddDraft, _ p: QuickAddParser) throws -> QuickAddToken {
+        try XCTUnwrap(draft.parsed(p).tokens.first { $0.text == text }, "no token \(text)")
+    }
+
+    func testSwitchingOffTomMakesATaskCalledCallTomWithNoDate() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
+        XCTAssertNotNil(draft.chips(p).dueDate, "\"Tom\" reads as tomorrow")
+        draft.disable(try token("Tom", in: draft, p))
+        XCTAssertEqual(draft.text, "Call Tom", "the words stay")
+        XCTAssertTrue(draft.parsed(p).tokens.isEmpty, "the highlight goes")
+        XCTAssertNil(draft.chips(p).dueDate, "the Date chip lets go")
+        let container = ModelContainerFactory.preview()
+        let task = try TaskActions.create(from: draft.result(p), defaultProject: nil, defaultLabel: nil, in: container.mainContext)
+        XCTAssertEqual(task.title, "Call Tom")
+        XCTAssertNil(task.dueDate)
+    }
+
+    func testASwitchedOffTokenInTodayFallsBackToTheListsDay() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .today, text: "Call Tom")
+        draft.disable(try token("Tom", in: draft, p))
+        XCTAssertEqual(draft.result(p).title, "Call Tom")
+        XCTAssertEqual(draft.result(p).dueDate, today, "as if nothing had been typed: Today's day")
+    }
+
+    func testTypingOnKeepsTheChoice() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
+        draft.disable(try token("Tom", in: draft, p))
+        draft.text = "Call Tom about the 5pm meeting p2 #Work"
+        let chips = draft.chips(p)
+        XCTAssertEqual(draft.result(p).title, "Call Tom about the meeting")
+        XCTAssertEqual(chips.priority, .p2)
+        XCTAssertEqual(chips.projectName, "Work")
+        XCTAssertTrue(chips.hasDueTime)
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["5pm", "p2", "#Work"])
+    }
+
+    func testEveryKindOfHighlightCanBeSwitchedOff() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Ship tomorrow 5pm every week #Work @calls p1 !15mb")
+        for token in draft.parsed(p).tokens { draft.disable(token) }
+        XCTAssertTrue(draft.parsed(p).tokens.isEmpty)
+        XCTAssertEqual(draft.chips(p), QuickAddChips(), "no chip reflects them")
+        XCTAssertEqual(draft.result(p).title, "Ship tomorrow 5pm every week #Work @calls p1 !15mb")
+    }
+
+    func testChipsLeaveASwitchedOffTokenAlone() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
+        draft.disable(try token("Tom", in: draft, p))
+        draft.setDate(day(3), p)
+        XCTAssertTrue(draft.text.hasPrefix("Call Tom "), "picking a date keeps the plain words")
+        XCTAssertEqual(draft.result(p).title, "Call Tom")
+        XCTAssertEqual(draft.result(p).dueDate, day(3))
+        draft.setDate(nil, p)
+        XCTAssertEqual(draft.text.trimmingCharacters(in: .whitespaces), "Call Tom", "No date removes only the picked date")
+    }
+
+    func testPickingTheSameWordsFromAChipCounts() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Plan p1")
+        draft.disable(try token("p1", in: draft, p))
+        XCTAssertEqual(draft.chips(p).priority, .p4)
+        draft.setPriority(.p1, p)
+        XCTAssertEqual(draft.chips(p).priority, .p1, "the chip's pick is not swallowed by the earlier choice")
+        XCTAssertEqual(draft.result(p).title, "Plan p1", "and the words typed first are still in the title")
+    }
+
+    func testResetForgetsSwitchedOffTokens() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
+        draft.disable(try token("Tom", in: draft, p))
+        draft.reset()
+        draft.text = "Call Tom"
+        XCTAssertNotNil(draft.chips(p).dueDate, "the next task starts with every token on")
+    }
+
+    /// The highlights and their tap targets come from the clear copy's real line layout: one area per
+    /// token, in order along the line, where its words are; a token that wraps has one per line.
+    func testEachHighlightIsWhereItsWordsAreLaidOut() throws {
+        let text = "Call Tom at 5pm p1 #Work"
+        let tokens = parser().parse(text).tokens
+        XCTAssertEqual(tokens.map(\.text), ["Tom", "at 5pm", "p1", "#Work"])
+
+        let oneLine = renderAreas(text, tokens: tokens, width: nil)
+        XCTAssertEqual(oneLine.map(\.token), [0, 1, 2, 3])
+        XCTAssertEqual(Set(oneLine.map(\.line)), [0])
+        XCTAssertGreaterThan(oneLine[0].rect.minX, 20, "\"Call \" comes first")
+        for (a, b) in zip(oneLine, oneLine.dropFirst()) {
+            XCTAssertLessThanOrEqual(a.rect.maxX, b.rect.minX + 0.5, "in order, not overlapping")
+        }
+        for area in oneLine {
+            XCTAssertGreaterThan(area.rect.width, 5)
+            XCTAssertGreaterThan(area.rect.height, 10)
+        }
+        // "Tom" is about three letters wide: wider than "p1", narrower than "at 5pm".
+        XCTAssertLessThan(oneLine[2].rect.width, oneLine[0].rect.width)
+        XCTAssertLessThan(oneLine[0].rect.width, oneLine[1].rect.width)
+
+        let wrapped = renderAreas(text, tokens: tokens, width: 70)
+        XCTAssertGreaterThan(Set(wrapped.map(\.line)).count, 1, "a narrow field wraps")
+        XCTAssertEqual(Set(wrapped.map(\.token)), [0, 1, 2, 3], "every token still has its area")
+        for area in wrapped { XCTAssertLessThanOrEqual(area.rect.maxX, 70.5) }
+    }
+
+    private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }
+
+    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?) -> [TokenHighlightField.Area] {
+        let box = AreaBox()
+        let view = TokenHighlightField.highlightText(text, tokens: tokens)
+            .font(HITType.taskName)
+            .frame(width: width, alignment: .leading)
+            .fixedSize(horizontal: width == nil, vertical: true)
+            .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
+                GeometryReader { proxy in
+                    let _ = (box.areas = TokenHighlightField.areas(layouts, in: proxy))
+                    Color.clear
+                }
+            }
+        let renderer = ImageRenderer(content: view)
+        _ = renderer.cgImage
+        return box.areas
+    }
+
+    #if os(macOS)
+    /// The Mac title is a `TextEditor`; its words start `editorTextInset` in, and the clear copy that places
+    /// the highlights is inset by the same amount.
+    func testTheMacEditorInsetMatchesTheHighlightCopy() throws {
+        let host = NSHostingView(rootView: TextEditor(text: .constant("Call Tom")).textEditorStyle(.plain)
+            .scrollContentBackground(.hidden).frame(width: 300, height: 40))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 40), styleMask: [.borderless],
+                              backing: .buffered, defer: true)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> NSTextView? {
+            if let text = view as? NSTextView { return text }
+            for sub in view.subviews { if let found = find(sub) { return found } }
+            return nil
+        }
+        let textView = try XCTUnwrap(find(host), "TextEditor is an NSTextView inside")
+        XCTAssertEqual(textView.textContainer?.lineFragmentPadding, TokenHighlightField.editorTextInset)
+        XCTAssertEqual(textView.textContainerInset.width, 0)
+        window.contentView = nil
+    }
+    #endif
 
     // MARK: Quick-add v2: reminder offsets, "+" options
 
