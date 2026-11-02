@@ -18,6 +18,7 @@ struct HITListApp: App {
         }
         CloudSyncMonitor.shared.start()
         container = ModelContainerFactory.make()
+        CloudSyncMonitor.shared.containerReady(container)
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         TaskActions.seedDefaultsIfNeeded(in: context)
@@ -41,6 +42,7 @@ struct HITListApp: App {
                 .tint(Theme.accent)
                 .font(HITType.body)
                 .onChange(of: scenePhase) { _, phase in
+                    if !isTesting { CloudSyncMonitor.shared.sceneChanged(to: phase) }
                     guard phase == .active else { return }
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }
