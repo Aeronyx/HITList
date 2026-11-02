@@ -3,8 +3,9 @@ import HITListCore
 
 /// The list a quick-add was opened from, which decides the new task's defaults: Today adds for today,
 /// a project adds into that project, an Upcoming day adds on that day, Inbox adds undated to the Inbox.
-/// Text typed in the card always wins over these.
-enum QuickAddContext: Hashable {
+/// Text typed in the card always wins over these. Codable so an open card's list comes back with it after
+/// the app was killed (`QuickAddDraftStore`).
+enum QuickAddContext: Hashable, Codable {
     case inbox
     case today
     /// Upcoming's "+" and ⌘N: today, like Today.

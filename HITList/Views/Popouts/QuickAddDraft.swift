@@ -22,10 +22,11 @@ struct QuickAddChips: Equatable {
 
 /// The quick-add card's text and the choices typed text can't hold, kept in step both ways like
 /// Todoist: typing "tomorrow p2" fills the chips, and picking a chip writes its token into the text.
-/// Pure; the parser carries `now` and the known project and label names.
-struct QuickAddDraft: Equatable {
+/// Pure; the parser carries `now` and the known project and label names. Codable so an open card can be
+/// put back after the app was killed (`QuickAddDraftStore`).
+struct QuickAddDraft: Equatable, Codable {
     /// The card's "+" menu: each option, once picked, shows its control in the card.
-    enum Extra: String, Hashable, CaseIterable {
+    enum Extra: String, Hashable, CaseIterable, Codable {
         case description, labels, location, deadline, repeating
     }
 
@@ -44,6 +45,8 @@ struct QuickAddDraft: Equatable {
     private(set) var inboxChosen = false
     /// The list's label taken off.
     private(set) var defaultLabelRemoved = false
+    /// Tokens switched off by tapping their highlight (brief 28): their words stay plain title text.
+    private(set) var disabledTokens: Set<QuickAddTokenKey> = []
 
     init(context: QuickAddContext, text: String = "") {
         self.context = context
@@ -74,6 +77,17 @@ struct QuickAddDraft: Equatable {
         return trimmed.isEmpty ? nil : trimmed
     }
 
+    /// Switches a highlighted token off: its words stay in the title as typed, the chips stop showing it,
+    /// and the choice holds while the rest of the text is edited.
+    mutating func disable(_ token: QuickAddToken) {
+        disabledTokens.insert(token.key)
+    }
+
+    /// The text as the parser reads it, switched-off tokens left as plain words.
+    func parsed(_ parser: QuickAddParser) -> QuickAddResult {
+        parser.parse(text, disabling: disabledTokens)
+    }
+
     /// Ready for the next task: empty text, the list's defaults back.
     mutating func reset() {
         self = QuickAddDraft(context: context)
@@ -83,7 +97,7 @@ struct QuickAddDraft: Equatable {
 
     func chips(_ parser: QuickAddParser) -> QuickAddChips {
         let result = self.result(parser)
-        let parsed = parser.parse(text)
+        let parsed = parsed(parser)
         let kinds = Set(parsed.tokens.map(\.kind))
         return QuickAddChips(
             dueDate: result.dueDate,
@@ -101,7 +115,7 @@ struct QuickAddDraft: Equatable {
 
     /// The task to create: the parsed text with the list's defaults wherever the text is silent.
     func result(_ parser: QuickAddParser) -> QuickAddResult {
-        var result = parser.parse(text)
+        var result = parsed(parser)
         let calendar = parser.dateParser.calendar
         let kinds = Set(result.tokens.map(\.kind))
         let defaultDay = dateCleared ? nil : context.defaultDate(now: parser.dateParser.now, calendar: calendar)
@@ -131,42 +145,42 @@ struct QuickAddDraft: Equatable {
     /// Sets the due day, keeping a typed time. Nil removes the date, its time and any repeat.
     mutating func setDate(_ day: Date?, _ parser: QuickAddParser) {
         if let day {
-            text = Self.removing([.date], from: text, parser)
-            text = Self.appending(QuickAddTokens.date(day, now: parser.dateParser.now, calendar: parser.dateParser.calendar), to: text)
+            text = removing([.date], parser)
+            append(QuickAddTokens.date(day, now: parser.dateParser.now, calendar: parser.dateParser.calendar))
             dateCleared = false
         } else {
-            text = Self.removing([.date, .time, .recurrence], from: text, parser)
+            text = removing([.date, .time, .recurrence], parser)
             dateCleared = context.defaultDate() != nil
         }
     }
 
     /// Sets the reminder time (the due time). Nil keeps the day and drops the time.
     mutating func setTime(hour: Int, minute: Int, _ parser: QuickAddParser) {
-        text = Self.removing([.time], from: text, parser)
-        text = Self.appending(QuickAddTokens.time(hour: hour, minute: minute), to: text)
+        text = removing([.time], parser)
+        append(QuickAddTokens.time(hour: hour, minute: minute))
         dateCleared = false
     }
 
     mutating func clearTime(_ parser: QuickAddParser) {
-        text = Self.removing([.time], from: text, parser)
+        text = removing([.time], parser)
     }
 
     /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it.
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
-        text = Self.removing([.reminder], from: text, parser)
-        if let minutes, minutes > 0 { text = Self.appending(ReminderOffset.token(minutes: minutes), to: text) }
+        text = removing([.reminder], parser)
+        if let minutes, minutes > 0 { append(ReminderOffset.token(minutes: minutes)) }
     }
 
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {
-        text = Self.removing([.priority], from: text, parser)
-        if priority != .p4 { text = Self.appending(QuickAddTokens.priority(priority), to: text) }
+        text = removing([.priority], parser)
+        if priority != .p4 { append(QuickAddTokens.priority(priority)) }
     }
 
     /// Nil is the Inbox, which has no token.
     mutating func setProject(_ name: String?, _ parser: QuickAddParser) {
-        text = Self.removing([.project], from: text, parser)
+        text = removing([.project], parser)
         if let name {
-            text = Self.appending(QuickAddTokens.project(name), to: text)
+            append(QuickAddTokens.project(name))
             inboxChosen = false
         } else {
             inboxChosen = context.defaultProjectName != nil
@@ -174,19 +188,19 @@ struct QuickAddDraft: Equatable {
     }
 
     mutating func toggleLabel(_ name: String, _ parser: QuickAddParser) {
-        let typed = parser.parse(text).tokens.filter { $0.kind == .label && Self.name(of: $0) == name.lowercased() }
+        let typed = parsed(parser).tokens.filter { $0.kind == .label && Self.name(of: $0) == name.lowercased() }
         if !typed.isEmpty {
             text = Self.removing(typed, from: text)
         } else if let label = context.defaultLabelName, label.caseInsensitiveCompare(name) == .orderedSame {
             defaultLabelRemoved.toggle()
         } else {
-            text = Self.appending(QuickAddTokens.label(name), to: text)
+            append(QuickAddTokens.label(name))
         }
     }
 
     mutating func setRecurrence(_ rule: RecurrenceRule?, _ parser: QuickAddParser) {
-        text = Self.removing([.recurrence], from: text, parser)
-        if let rule { text = Self.appending(QuickAddTokens.recurrence(rule), to: text); dateCleared = false }
+        text = removing([.recurrence], parser)
+        if let rule { append(QuickAddTokens.recurrence(rule)); dateCleared = false }
     }
 
     /// Accepts an autocomplete suggestion: a title replaces the text, anything else the last word.
@@ -198,6 +212,25 @@ struct QuickAddDraft: Equatable {
         } else {
             text = suggestion.replacement + " "
         }
+        if suggestion.kind != .title { enable(suggestion.replacement) }
+    }
+
+    /// Writes a token at the end of the text (a chip, a suggestion). Picking it means it counts: if the
+    /// same words had been switched off, they are switched back on.
+    mutating func append(_ token: String) {
+        text = Self.appending(token, to: text)
+        enable(token)
+    }
+
+    /// Switches back on every token with these words, whatever its kind.
+    private mutating func enable(_ words: String) {
+        let text = QuickAddTokenKey(kind: .date, text: words).text
+        disabledTokens = disabledTokens.filter { $0.text != text }
+    }
+
+    /// The text without the tokens of these kinds the parser sees (switched-off ones stay).
+    private func removing(_ kinds: Set<QuickAddToken.Kind>, _ parser: QuickAddParser) -> String {
+        Self.removing(parsed(parser).tokens.filter { kinds.contains($0.kind) }, from: text)
     }
 
     // MARK: Text surgery
@@ -207,10 +240,6 @@ struct QuickAddDraft: Equatable {
         var raw = String(token.text.dropFirst())
         if raw.count >= 2, raw.hasPrefix("\""), raw.hasSuffix("\"") { raw = String(raw.dropFirst().dropLast()) }
         return raw.lowercased()
-    }
-
-    static func removing(_ kinds: Set<QuickAddToken.Kind>, from text: String, _ parser: QuickAddParser) -> String {
-        removing(parser.parse(text).tokens.filter { kinds.contains($0.kind) }, from: text)
     }
 
     /// The text without the tokens' spans, single-spaced, keeping a trailing space to type on after.
@@ -296,81 +325,70 @@ enum QuickAddTokens {
     }
 }
 
-extension Preferences {
-    static let quickAddDraftText = "quickAdd.draftText"
-    static let quickAddDraftNotes = "quickAdd.draftNotes"
-    static let quickAddDraftLocation = "quickAdd.draftLocation"
-    static let quickAddDraftDeadline = "quickAdd.draftDeadline"
+extension QuickAddDraft {
+    /// Something George would not want to lose: text, a description, a location or a deadline.
+    var hasContent: Bool {
+        let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return !blank(text) || !blank(notes) || !blank(locationName) || deadline != nil
+    }
 }
 
-/// Sticky drafts (George, build 11): what is typed in the quick-add card is kept in app-group defaults
-/// as it changes, so a card put away, an app sent to the background and even an app quit mid-thought
-/// comes back with the text. Cleared when the task is added or the draft is discarded. The description,
-/// and the location and deadline picked from "+" (beta review: those two used to be dropped), stick too.
-enum QuickAddDraftStore {
-    struct Stored: Equatable {
-        var text: String
-        var notes: String
-        var locationName: String = ""
-        var deadline: Date? = nil
+extension Preferences {
+    /// The open quick-add card, JSON (`QuickAddDraftStore.Stored`).
+    static let quickAddOpenCard = "quickAdd.openCard"
+    /// Builds 11-12 kept one draft for every card; read by nothing now, removed on sight.
+    static let legacyQuickAddDraftKeys = ["quickAdd.draftText", "quickAdd.draftNotes",
+                                          "quickAdd.draftLocation", "quickAdd.draftDeadline"]
+}
 
-        var isEmpty: Bool { text.isEmpty && notes.isEmpty && locationName.isEmpty && deadline == nil }
+/// Sticky drafts, redefined (George, 2026-11-02, brief 28): no drafting system, only "don't lose it". The
+/// quick-add card that is open, with something in it, is kept in app-group defaults as it changes, with
+/// its list (`QuickAddContext`) and the id of the card (`PopoutState.QuickAdd.id`). If the app is killed
+/// with the card open, the next launch opens that card again (`PopoutController.reopenStoredQuickAdd`).
+/// Only that card ever gets the draft back: a card opened fresh from any list starts empty. Whenever the
+/// card closes, for any reason (added, Discard, ×, closed empty, the Mac panel dismissed, a tab switch),
+/// the controller clears it.
+enum QuickAddDraftStore {
+    struct Stored: Codable, Equatable {
+        var cardID: UUID
+        /// Everything in the card, its list (`draft.context`) included.
+        var draft: QuickAddDraft
     }
 
     static func load(from defaults: UserDefaults = AppGroup.defaults) -> Stored? {
-        let stored = Stored(text: defaults.string(forKey: Preferences.quickAddDraftText) ?? "",
-                            notes: defaults.string(forKey: Preferences.quickAddDraftNotes) ?? "",
-                            locationName: defaults.string(forKey: Preferences.quickAddDraftLocation) ?? "",
-                            deadline: defaults.object(forKey: Preferences.quickAddDraftDeadline) as? Date)
-        return stored.isEmpty ? nil : stored
+        guard let data = defaults.data(forKey: Preferences.quickAddOpenCard),
+              let stored = try? JSONDecoder().decode(Stored.self, from: data), stored.draft.hasContent else { return nil }
+        return stored
     }
 
-    static func save(_ stored: Stored, to defaults: UserDefaults = AppGroup.defaults) {
-        if stored.isEmpty { clear(from: defaults); return }
-        defaults.set(stored.text, forKey: Preferences.quickAddDraftText)
-        defaults.set(stored.notes, forKey: Preferences.quickAddDraftNotes)
-        defaults.set(stored.locationName, forKey: Preferences.quickAddDraftLocation)
-        if let deadline = stored.deadline {
-            defaults.set(deadline, forKey: Preferences.quickAddDraftDeadline)
-        } else {
-            defaults.removeObject(forKey: Preferences.quickAddDraftDeadline)
+    /// Keeps `draft` as the card `cardID`'s; an empty draft clears the store instead.
+    static func save(_ draft: QuickAddDraft, card cardID: UUID, to defaults: UserDefaults = AppGroup.defaults) {
+        guard draft.hasContent, let data = try? JSONEncoder().encode(Stored(cardID: cardID, draft: draft)) else {
+            clear(card: cardID, from: defaults)
+            return
         }
+        defaults.set(data, forKey: Preferences.quickAddOpenCard)
     }
 
-    /// Everything in the card that sticks: the text, the description, the location and the deadline.
-    static func save(_ draft: QuickAddDraft, to defaults: UserDefaults = AppGroup.defaults) {
-        save(Stored(text: draft.text, notes: draft.notes, locationName: draft.locationName, deadline: draft.deadline), to: defaults)
+    /// The draft stored for this card, if it is this card's. A fresh card's id has nothing stored.
+    static func draft(for cardID: UUID, from defaults: UserDefaults = AppGroup.defaults) -> QuickAddDraft? {
+        guard let stored = load(from: defaults), stored.cardID == cardID else { return nil }
+        return stored.draft
     }
 
-    static func save(text: String, notes: String, to defaults: UserDefaults = AppGroup.defaults) {
-        save(Stored(text: text, notes: notes), to: defaults)
+    /// The card closed: forgets its draft. Another card's (another Mac window's) is left alone.
+    static func clear(card cardID: UUID, from defaults: UserDefaults = AppGroup.defaults) {
+        if let data = defaults.data(forKey: Preferences.quickAddOpenCard),
+           let stored = try? JSONDecoder().decode(Stored.self, from: data), stored.cardID != cardID {
+            return
+        }
+        clear(from: defaults)
     }
 
+    /// Forgets whatever is stored, the old builds' keys included.
     static func clear(from defaults: UserDefaults = AppGroup.defaults) {
-        for key in [Preferences.quickAddDraftText, Preferences.quickAddDraftNotes,
-                    Preferences.quickAddDraftLocation, Preferences.quickAddDraftDeadline] {
+        for key in [Preferences.quickAddOpenCard] + Preferences.legacyQuickAddDraftKeys {
             defaults.removeObject(forKey: key)
         }
-    }
-
-    /// The card's starting draft for `context`: empty, or the sticky one with its description, location
-    /// and deadline showing.
-    static func restoredDraft(context: QuickAddContext, from defaults: UserDefaults = AppGroup.defaults) -> QuickAddDraft {
-        var draft = QuickAddDraft(context: context)
-        guard let stored = load(from: defaults) else { return draft }
-        draft.text = stored.text
-        if !stored.notes.isEmpty {
-            draft.notes = stored.notes
-            draft.showsNotes = true
-        }
-        if !stored.locationName.isEmpty {
-            draft.locationName = stored.locationName
-            draft.reveal(.location)
-        }
-        if let deadline = stored.deadline {
-            draft.setDeadline(deadline)
-            draft.reveal(.deadline)
-        }
-        return draft
     }
 }

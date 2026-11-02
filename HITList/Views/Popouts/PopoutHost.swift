@@ -69,6 +69,10 @@ struct PopoutHost: ViewModifier {
             .onChange(of: popouts.state.isFloatingQuickAddOpen) { _, open in
                 if !open { confirmingDiscard = false; quickAddHasContent = false }
             }
+            // Sticky drafts (brief 28): a card killed with something in it opens again at launch, and in a
+            // new Mac window if its own window was closed.
+            .onAppear { popouts.reopenStoredQuickAdd() }
+            .onDisappear { popouts.windowClosed() }
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
             // Settings → General → Confirm before deleting: every delete path asks through the controller,
             // and this one dialog answers for all of them.
@@ -161,7 +165,7 @@ struct PopoutHost: ViewModifier {
     }
 
     private func discardDraft() {
-        QuickAddDraftStore.clear()
+        popouts.discardQuickAddDraft()
         retireQuickAdd()
     }
 
