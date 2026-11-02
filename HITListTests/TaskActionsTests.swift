@@ -115,6 +115,48 @@ final class TaskActionsTests: XCTestCase {
         XCTAssertEqual(t.recurrence, "monthly;1;;15")
     }
 
+    // MARK: The Repeat menu (final review): picking a repeat again keeps the day it returns to
+
+    /// The Repeat menu ticks "Every month" for a "31st" task rolled to Feb 28 (the anchor doesn't make a
+    /// different repeat). Picking it again stored the plain rule, so the next roll anchored on the 28th
+    /// and the task repeated on the 28th from then on.
+    func testPickingEveryMonthAgainKeepsThe31st() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let t = try task(due: day(year, 2, lastDayOfFebruary(year), hour: 9), hasDueTime: true,
+                         recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
+        TaskActions.setRecurrence(.monthly, on: t, in: context)
+        XCTAssertEqual(t.recurrence, "monthly;1;;31")
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 3, 31, hour: 9), "back on the 31st, not the 28th")
+    }
+
+    func testAnotherMonthlyIntervalKeepsTheDayAndOtherRepeatsTakeTheDueDay() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let feb = day(year, 2, lastDayOfFebruary(year))
+        let t = try task(due: feb, recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
+        TaskActions.setRecurrence(RecurrenceRule(frequency: .monthly, interval: 3), on: t, in: context)
+        XCTAssertEqual(t.recurrence, "monthly;3;;31", "every 3 months, still the 31st")
+        TaskActions.setRecurrence(.yearly, on: t, in: context)
+        XCTAssertEqual(t.recurrence, "yearly;1;;\(lastDayOfFebruary(year))", "a yearly repeat keeps the day it is due on")
+        TaskActions.setRecurrence(.weekly, on: t, in: context)
+        XCTAssertEqual(t.recurrence, "weekly;1", "weeks have no anchor")
+        TaskActions.setRecurrence(nil, on: t, in: context)
+        XCTAssertNil(t.recurrence)
+        XCTAssertEqual(t.dueDate, feb, "Don't repeat leaves the date")
+    }
+
+    /// A task the user moved off its anchor follows its new day, as a completion would make it.
+    func testPickingARepeatOnAMovedTaskFollowsTheDueDate() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let t = try task(due: day(year, 3, 15), recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
+        TaskActions.setRecurrence(.monthly, on: t, in: context)
+        XCTAssertEqual(t.recurrence, "monthly;1;;15")
+        let undated = try task(due: nil)
+        TaskActions.setRecurrence(.monthly, on: undated, in: context)
+        XCTAssertEqual(undated.dueDate, cal.startOfDay(for: Date()), "a repeat on an undated task starts today")
+        XCTAssertEqual(undated.recurrenceRule?.anchorDay, cal.component(.day, from: Date()))
+    }
+
     func testWeeklyRuleStringIsLeftAlone() throws {
         let t = try task(due: tomorrow(), recurrence: nil)
         t.recurrence = "weekly;1;4,2"   // as an older build or an import might have written it
