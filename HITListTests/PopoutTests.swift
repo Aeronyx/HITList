@@ -21,6 +21,19 @@ final class PopoutTests: XCTestCase {
         QuickAddParser(now: now, calendar: calendar, knownProjects: projects, knownLabels: labels)
     }
 
+    // MARK: A title left blank (beta review)
+
+    /// Clearing a task's title in its popout saved an empty title: a blank row in every list, though
+    /// quick add refuses to create one (`TaskActions.ActionError.emptyTitle`). Closing the popout now puts
+    /// back the title it opened with.
+    func testABlankTitleGetsTheOpeningTitleBack() {
+        XCTAssertEqual(TaskPopout.titleToKeep("", opening: "Buy milk"), "Buy milk")
+        XCTAssertEqual(TaskPopout.titleToKeep("  \n", opening: "Buy milk"), "Buy milk")
+        XCTAssertNil(TaskPopout.titleToKeep("Buy oat milk", opening: "Buy milk"), "a real edit stays")
+        XCTAssertNil(TaskPopout.titleToKeep("", opening: nil), "nothing to put back")
+        XCTAssertNil(TaskPopout.titleToKeep("", opening: "  "))
+    }
+
     // MARK: Text → chips
 
     func testTypedTextFillsEveryChip() {

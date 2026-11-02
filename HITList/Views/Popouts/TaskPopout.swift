@@ -25,6 +25,8 @@ struct TaskPopout: View {
     /// Deadline / Location picked from the `…` menu: their chips show before they have a value.
     @State private var revealsDeadline = false
     @State private var revealsLocation = false
+    /// The title when the popout opened, put back if it is left blank (`restoreTitleIfBlank`).
+    @State private var openingTitle: String?
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
 
@@ -41,7 +43,11 @@ struct TaskPopout: View {
         .padding(HITSpacing.l)
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
-        .onAppear { showsNotes = !task.notes.isEmpty }
+        .onAppear {
+            showsNotes = !task.notes.isEmpty
+            if openingTitle == nil { openingTitle = task.title }
+        }
+        .onDisappear(perform: restoreTitleIfBlank)
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: delete)
         } message: {
@@ -352,6 +358,21 @@ struct TaskPopout: View {
     }
 
     // MARK: Changes
+
+    /// The title to put back when the popout closes: the one it opened with, if the edit left the title
+    /// blank (a task needs a title; quick add refuses an empty one). Nil keeps the title as it is.
+    static func titleToKeep(_ edited: String, opening: String?) -> String? {
+        guard edited.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let opening, !opening.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return opening
+    }
+
+    /// On close: a title left blank gets its opening title back (`titleToKeep`).
+    private func restoreTitleIfBlank() {
+        guard let kept = Self.titleToKeep(task.title, opening: openingTitle) else { return }
+        task.title = kept
+        save(reschedule: false)
+    }
 
     private func save(reschedule: Bool = true) {
         task.touch()
