@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.4.0
+## 0.4.0 — build 13, 2026-11-02
 
 The first beta for friends. Two review passes on the core, each change with a test that failed first, then
 George's decisions on dates, times, taps and drafts.
