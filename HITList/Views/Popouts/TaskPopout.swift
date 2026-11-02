@@ -27,6 +27,9 @@ struct TaskPopout: View {
     @State private var revealsLocation = false
     /// The title when the popout opened, put back if it is left blank (`restoreTitleIfBlank`).
     @State private var openingTitle: String?
+    /// The task's id, read once while it certainly exists: the popout may close because the task was
+    /// deleted elsewhere, and then nothing may be written to it.
+    @State private var taskID: UUID?
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
 
@@ -46,6 +49,7 @@ struct TaskPopout: View {
         .onAppear {
             showsNotes = !task.notes.isEmpty
             if openingTitle == nil { openingTitle = task.title }
+            if taskID == nil { taskID = task.id }
         }
         .onDisappear(perform: restoreTitleIfBlank)
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -369,6 +373,8 @@ struct TaskPopout: View {
 
     /// On close: a title left blank gets its opening title back (`titleToKeep`).
     private func restoreTitleIfBlank() {
+        // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
+        guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
         guard let kept = Self.titleToKeep(task.title, opening: openingTitle) else { return }
         task.title = kept
         save(reschedule: false)

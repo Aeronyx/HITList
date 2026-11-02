@@ -115,6 +115,38 @@ final class CompletionAnimatorTests: XCTestCase {
         XCTAssertLessThan(CompletionMotion.strikeDuration, hold)
     }
 
+    // MARK: - Taps (George, 2026-11-02: no fast-tap toggling)
+
+    func testTappingAnOpenTaskCompletesIt() {
+        let animator = CompletionAnimator<String>()
+        XCTAssertEqual(animator.tap(on: a, isCompleted: false, undoable: false), .complete)
+    }
+
+    /// A second tap while the row is still checking, striking and flashing does nothing, even though the
+    /// task is saved as complete and the toast offers to undo it.
+    func testTappingARowInItsAnimationDoesNothing() {
+        var animator = CompletionAnimator<String>()
+        let token = animator.begin(a, anchor: "")
+        XCTAssertEqual(animator.tap(on: a, isCompleted: true, undoable: true), .ignore)
+        XCTAssertEqual(animator.tap(on: a, isCompleted: true, undoable: false), .ignore)
+        // A recurring task has already advanced (open again) while its row animates: still nothing.
+        XCTAssertEqual(animator.tap(on: a, isCompleted: false, undoable: true), .ignore)
+
+        animator.collapse(a, token: token)
+        XCTAssertEqual(animator.tap(on: a, isCompleted: true, undoable: true), .ignore, "nor while it collapses")
+        XCTAssertEqual(animator.tap(on: b, isCompleted: false, undoable: false), .complete, "other rows are unaffected")
+    }
+
+    /// Once the row has settled as completed (Show completed, the Completed list), a tap unchecks it:
+    /// through the toast's record while the toast lists it, plainly after.
+    func testTappingASettledCompletedRowUnchecksIt() {
+        var animator = CompletionAnimator<String>()
+        let token = animator.begin(a, anchor: "")
+        animator.remove(a, token: token)
+        XCTAssertEqual(animator.tap(on: a, isCompleted: true, undoable: true), .undo)
+        XCTAssertEqual(animator.tap(on: a, isCompleted: true, undoable: false), .uncheck)
+    }
+
     func testCancelAllReleasesEveryRow() {
         var animator = CompletionAnimator<String>()
         let token = animator.begin(a, anchor: "")

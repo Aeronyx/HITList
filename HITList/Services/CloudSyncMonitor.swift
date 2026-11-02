@@ -454,7 +454,8 @@ final class CloudSyncMonitor {
     /// How a wait for the next import ended.
     enum ImportOutcome: Equatable, Sendable { case succeeded, failed, timedOut }
 
-    @ObservationIgnored private var importWaiters: [(id: UUID, resume: (ImportOutcome) -> Void)] = []
+    /// The iOS push handler's wait (`ImportWaiter`, in SyncAppDelegate.swift).
+    @ObservationIgnored let importWaiter = ImportWaiter()
     /// For Settings → Details: "registered", "failed: <reason>", or nil before either happened.
     private(set) var pushRegistration: String?
 
@@ -502,28 +503,12 @@ final class CloudSyncMonitor {
         #endif
     }
 
-    /// Waits for the next import to end, or `timeout`. The iOS background push handler holds the
-    /// system's completion handler until then, so the app isn't suspended mid-import.
-    func nextImport(within timeout: Duration) async -> ImportOutcome {
-        let id = UUID()
-        return await withCheckedContinuation { continuation in
-            importWaiters.append((id, { continuation.resume(returning: $0) }))
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: timeout)
-                self?.resolveImportWaiter(id, .timedOut)
-            }
-        }
-    }
-
-    private func resolveImportWaiter(_ id: UUID, _ outcome: ImportOutcome) {
-        guard let index = importWaiters.firstIndex(where: { $0.id == id }) else { return }
-        importWaiters.remove(at: index).resume(outcome)
-    }
-
-    private func resolveImportWaiters(_ outcome: ImportOutcome) {
-        let waiters = importWaiters
-        importWaiters.removeAll()
-        for waiter in waiters { waiter.resume(outcome) }
+    /// Waits for the import that answers a push received at `pushAt`, or `timeout`: at once when one
+    /// already finished after the push arrived (or started just before it). The iOS background push
+    /// handler holds the system's completion handler until then, so the app isn't suspended mid-import
+    /// and isn't kept awake once the import is done.
+    func nextImport(after pushAt: Date, within timeout: Duration) async -> ImportOutcome {
+        await importWaiter.next(after: pushAt, within: timeout)
     }
 
     // MARK: - Saves
@@ -696,7 +681,7 @@ final class CloudSyncMonitor {
             fields.merge(SyncLogFormat.errorFields(error)) { $1 }
             write(.event, "\(type.title) failed after \(duration): \(reason)",
                   level: Self.isExpected(failureReason: reason, account: accountStatus) ? .notice : .error, fields: fields)
-            if event.type == .import { resolveImportWaiters(.failed) }
+            if event.type == .import { importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .failed) }
         } else {
             switch event.type {
             case .import:
@@ -717,7 +702,7 @@ final class CloudSyncMonitor {
             write(.event, "\(type.title) finished in \(duration)", fields: fields)
             if event.type == .import {
                 NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil)
-                resolveImportWaiters(.succeeded)
+                importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .succeeded)
             }
         }
     }

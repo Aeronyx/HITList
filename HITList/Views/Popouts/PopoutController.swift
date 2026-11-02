@@ -99,6 +99,16 @@ final class PopoutController {
     var listContext: QuickAddContext = .today
     /// "Completed ‘Title’ · Undo" after completing a task from its popout (the lists keep their own).
     var toast = CompletionToastState()
+    /// iPhone: the undo toast the list on screen is showing, which `PopoutHost` draws (`completionToast`).
+    private(set) var listToast: ListToast?
+
+    /// A list's toast as `PopoutHost` draws it. `owner` is the list that showed it, so a list leaving
+    /// the screen only takes down its own.
+    struct ListToast {
+        let owner: UUID
+        let message: String
+        let undo: () -> Void
+    }
     /// A deletion waiting for the user's yes (Settings → General → Confirm before deleting); `PopoutHost`
     /// shows the dialog. Nil when nothing is pending.
     private(set) var pendingDelete: PendingDelete?
@@ -197,6 +207,32 @@ final class PopoutController {
         update { $0.closeAll() }
     }
 
+    /// Closes the popout if its task no longer exists: deleted on another device (arriving with a sync
+    /// import), in another window, or by a script (George, 2026-11-02). True if it closed. `PopoutHost`
+    /// calls it when its query for the task comes back empty and after every import.
+    ///
+    /// The model the popout holds can't be asked: after another context's deletion is merged it still
+    /// says `isDeleted == false` and keeps its context (`PopoutTests`), so this asks the store, by the
+    /// id kept in `state` (never reading the possibly gone model's attributes).
+    @discardableResult
+    func closeTaskIfDeleted(in context: ModelContext) -> Bool {
+        guard let id = state.taskID else { return false }
+        let deletedHere = task?.isDeleted == true
+        guard deletedHere || !Self.taskExists(id, in: context) else { return false }
+        // At once, without the panel's fade: nothing should draw a task that is gone.
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { closeTask() }
+        return true
+    }
+
+    /// Whether a task with this id is in the store or pending insertion (and not pending deletion). A
+    /// failed fetch counts as present, so a hiccup never closes a popout.
+    static func taskExists(_ id: UUID, in context: ModelContext) -> Bool {
+        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })
+        return ((try? context.fetchCount(descriptor)) ?? 1) > 0
+    }
+
     /// Completes a task from its popout: saves, closes the popout, and shows the undo toast. (The
     /// popout has already played the check and the completion feedback.)
     func complete(_ task: TaskItem, in context: ModelContext) {
@@ -223,6 +259,18 @@ final class PopoutController {
         let day = TaskRescheduling.day(offset, from: task.dueDate, now: now)
         TaskActions.reschedule(task, to: day, in: context)
         Task { await NotificationScheduler.reschedule(context: context) }
+    }
+
+    // MARK: List toasts (iPhone)
+
+    /// A list's toast appeared or changed ("2 completed"); it replaces any other list's.
+    func showListToast(_ toast: ListToast) {
+        listToast = toast
+    }
+
+    /// The list's toast went away (expired, undone, or the list left the screen).
+    func hideListToast(owner: UUID) {
+        if listToast?.owner == owner { listToast = nil }
     }
 
     /// The toast's Undo: puts every task it lists back as it was.
