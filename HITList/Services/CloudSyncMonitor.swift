@@ -419,21 +419,26 @@ final class CloudSyncMonitor {
     enum ImportOutcome: Equatable, Sendable { case succeeded, failed, timedOut }
 
     @ObservationIgnored private var importWaiters: [(id: UUID, resume: (ImportOutcome) -> Void)] = []
+    /// For Settings → Details: "registered", "failed: <reason>", or nil before either happened.
+    private(set) var pushRegistration: String?
 
     /// From the app delegate's launch: whether the app is registered for pushes yet.
     func pushLaunchState(registered: Bool, launchedByPush: Bool) {
         var fields = ["aps": SyncEnvironment.current.push ?? "unknown"]
         if launchedByPush { fields["launchedBy"] = "push" }
+        if registered { pushRegistration = "registered" }
         write(.push, registered ? "Registered for remote notifications at launch" : "Not yet registered for remote notifications at launch",
               fields: fields)
     }
 
     func pushRegistered(tokenBytes: Int) {
+        pushRegistration = "registered"
         write(.push, "Registered for remote notifications", level: .notice,
               fields: ["token": "\(tokenBytes) bytes", "aps": SyncEnvironment.current.push ?? "unknown"])
     }
 
     func pushRegistrationFailed(_ error: Error) {
+        pushRegistration = "failed: \(SyncState.shortReason(for: error))"
         write(.push, "Remote notification registration failed: \(SyncState.shortReason(for: error))", level: .error,
               fields: SyncLogFormat.errorFields(error))
     }

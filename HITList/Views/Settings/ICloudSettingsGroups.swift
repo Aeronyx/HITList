@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → iCloud Sync: the status line, Details, Check iCloud…. Shared by the iPhone sheet and the
-/// Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
+/// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…. Shared by
+/// the iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
 struct ICloudSyncGroup: View {
     var showsLastChange = false
     @Environment(\.modelContext) private var context
@@ -22,6 +22,7 @@ struct ICloudSyncGroup: View {
             if showsLastChange {
                 LastSyncChangeRow()
             }
+            SyncEnvironmentRow()
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
@@ -53,7 +54,13 @@ struct ICloudSyncGroup: View {
         guard !isCheckingICloud else { return }
         isCheckingICloud = true
         Task {
-            let result = await ICloudCheck.run()
+            var result = await ICloudCheck.run()
+            // ICloudCheck assumes every Mac build is Development; a TestFlight Mac build is Production. The
+            // environment row above says which, so the check's own line leaves it out.
+            result.isDevelopmentEnvironment = false
+            CloudSyncMonitor.shared.write(.note, "Check iCloud: \(result.summary)",
+                                          level: result.isHealthy ? .info : .notice,
+                                          fields: ["environment": SyncEnvironment.current.summary])
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                 iCloudCheck = result
                 isCheckingICloud = false
@@ -68,6 +75,8 @@ struct ICloudSyncGroup: View {
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         detailRow("Last import", timestamp(monitor.lastImportAt))
         detailRow("Last export", timestamp(monitor.lastExportAt))
+        detailRow("Push", monitor.pushRegistration ?? "not registered yet")
+        detailRow("CloudKit", "\(SyncEnvironment.current.cloudKit.rawValue), push \(SyncEnvironment.current.push ?? "unknown")")
         if let err = ModelContainerFactory.startupError {
             detailBlock("Startup error", err)
         }
@@ -99,6 +108,22 @@ struct ICloudSyncGroup: View {
         }
         .font(HITType.caption)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Which CloudKit environment and build this is ("Production · TestFlight build 11"), with the line
+/// that explains why two devices on different environments never see each other's tasks.
+struct SyncEnvironmentRow: View {
+    var environment: SyncEnvironment = .current
+
+    var body: some View {
+        HITMenuRowLabel(environment.summary, subtitle: SyncEnvironment.explanation, systemImage: "server.rack",
+                        iconTint: environment.cloudKit == .production ? Theme.secondaryText : HITColor.dueTomorrow)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hitRowPadding()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("CloudKit environment: \(environment.summary). \(SyncEnvironment.explanation)")
+            .accessibilityIdentifier("settings-sync-environment")
     }
 }
 
