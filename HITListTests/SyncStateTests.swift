@@ -7,12 +7,13 @@ final class SyncStateTests: XCTestCase {
 
     private func derive(
         cloudKit: Bool = true, account: CKAccountStatus? = .available, online: Bool = true, syncing: Bool = false,
-        synced: TimeInterval? = nil, error: (String, TimeInterval)? = nil
+        synced: TimeInterval? = nil, error: (String, TimeInterval)? = nil, stalled: TimeInterval? = nil
     ) -> SyncState {
         SyncState.derive(
             cloudKitEnabled: cloudKit, localOnlyReason: "iCloud sync turned off", account: account, isOnline: online,
             isSyncing: syncing, lastSynced: synced.map { now.addingTimeInterval($0) },
-            lastError: error.map { ($0.0, now.addingTimeInterval($0.1)) }, now: now)
+            lastError: error.map { ($0.0, now.addingTimeInterval($0.1)) },
+            stalledSince: stalled.map { now.addingTimeInterval($0) }, now: now)
     }
 
     // MARK: Summary
@@ -68,6 +69,36 @@ final class SyncStateTests: XCTestCase {
         XCTAssertEqual(derive(synced: -30, error: ("network unavailable", -60)), .synced(now.addingTimeInterval(-30)))
         XCTAssertEqual(derive(error: ("network unavailable", -60)), .error("network unavailable", now.addingTimeInterval(-60)))
         XCTAssertEqual(derive(syncing: true, error: ("network unavailable", -60)), .syncing, "a retry is running")
+    }
+
+    // MARK: Stalled (brief 25)
+
+    @MainActor
+    func testAStalledEventSaysSyncIsStuckInsteadOfSyncing() {
+        let stuck = derive(syncing: true, synced: -600, stalled: -130)
+        XCTAssertEqual(stuck, .error(SyncState.stalledReason, now.addingTimeInterval(-130)))
+        #if os(macOS)
+        XCTAssertEqual(stuck.summary(now: now), "Sync paused: stuck, relaunch HITList")
+        #else
+        XCTAssertEqual(stuck.summary(now: now), "Sync paused: stuck, reopen HITList")
+        #endif
+        XCTAssertEqual(SyncBolt.look(for: stuck, now: now).symbol, "bolt.slash.fill", "the bolt is struck through")
+    }
+
+    func testAStalledEventNoLongerReadsAsSyncedOnceItStopsCounting() {
+        // Before: after 10 minutes the stuck event stopped counting and the state fell back to "Synced".
+        XCTAssertEqual(derive(syncing: false, synced: -900, stalled: -700), .error(SyncState.stalledReason, now.addingTimeInterval(-700)))
+    }
+
+    func testAccountAndNetworkStillComeFirst() {
+        XCTAssertEqual(derive(online: false, stalled: -130), .offline)
+        XCTAssertEqual(derive(account: .noAccount, stalled: -130), .notSignedIn)
+        XCTAssertEqual(derive(cloudKit: false, stalled: -130), .localOnly("iCloud sync turned off"))
+    }
+
+    func testNotStalledIsUnchanged() {
+        XCTAssertEqual(derive(syncing: true, synced: -60), .syncing)
+        XCTAssertEqual(derive(synced: -60), .synced(now.addingTimeInterval(-60)))
     }
 
     // MARK: Error reasons

@@ -7,6 +7,12 @@ struct HITListApp: App {
     private let isTesting: Bool
     private var importObserver: NSObjectProtocol?
     @Environment(\.scenePhase) private var scenePhase
+    // Logs push registration and every push to the sync log (SyncAppDelegate).
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(SyncAppDelegate.self) private var syncDelegate
+    #else
+    @UIApplicationDelegateAdaptor(SyncAppDelegate.self) private var syncDelegate
+    #endif
 
     init() {
         HITFont.installPlatformAppearance()
@@ -16,8 +22,14 @@ struct HITListApp: App {
             container = ModelContainerFactory.preview()
             return
         }
+        // Sync (brief 25): an instance relaunched to restart a stuck sync waits for the one it replaces,
+        // and a Development build keeps its own store, apart from the TestFlight build's Production one.
+        let waited = SyncRecovery.waitForPreviousInstance()
+        let isolated = SyncStoreGuard.isolateDevelopmentStore()
         CloudSyncMonitor.shared.start()
+        CloudSyncMonitor.shared.recordLaunchGuards(waitedForPrevious: waited, isolatedStoreSuffix: isolated)
         container = ModelContainerFactory.make()
+        CloudSyncMonitor.shared.containerReady(container)
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         TaskActions.seedDefaultsIfNeeded(in: context)
@@ -41,6 +53,7 @@ struct HITListApp: App {
                 .tint(Theme.accent)
                 .font(HITType.body)
                 .onChange(of: scenePhase) { _, phase in
+                    if !isTesting { CloudSyncMonitor.shared.sceneChanged(to: phase) }
                     guard phase == .active else { return }
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }

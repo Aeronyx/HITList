@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → iCloud Sync: the status line, Details, Check iCloud…. Shared by the iPhone sheet and the
-/// Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
+/// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…, and on
+/// the iPhone the Sync log (a sheet; the Mac page shows the log inline, `SyncLogSection`). Shared by the
+/// iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
 struct ICloudSyncGroup: View {
     var showsLastChange = false
     @Environment(\.modelContext) private var context
@@ -10,6 +11,7 @@ struct ICloudSyncGroup: View {
     @State private var showSyncDetails = false
     @State private var isCheckingICloud = false
     @State private var iCloudCheck: ICloudCheck?
+    @State private var showSyncLog = false
 
     static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows."
 
@@ -19,9 +21,17 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
+            if let stalled = CloudSyncMonitor.shared.stalledSince {
+                SyncStuckRow(since: stalled)
+            }
             if showsLastChange {
                 LastSyncChangeRow()
             }
+            SyncEnvironmentRow()
+            #if os(iOS)
+            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { showSyncLog = true }
+                .accessibilityIdentifier("settings-sync-log-row")
+            #endif
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
@@ -47,13 +57,22 @@ struct ICloudSyncGroup: View {
                     .accessibilityIdentifier("settings-check-icloud-result")
             }
         }
+        .sheet(isPresented: $showSyncLog) {
+            SyncLogSheet().slateSheet()
+        }
     }
 
     private func runICloudCheck() {
         guard !isCheckingICloud else { return }
         isCheckingICloud = true
         Task {
-            let result = await ICloudCheck.run()
+            var result = await ICloudCheck.run()
+            // ICloudCheck assumes every Mac build is Development; a TestFlight Mac build is Production. The
+            // environment row above says which, so the check's own line leaves it out.
+            result.isDevelopmentEnvironment = false
+            CloudSyncMonitor.shared.write(.note, "Check iCloud: \(result.summary)",
+                                          level: result.isHealthy ? .info : .notice,
+                                          fields: ["environment": SyncEnvironment.current.summary])
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                 iCloudCheck = result
                 isCheckingICloud = false
@@ -68,6 +87,8 @@ struct ICloudSyncGroup: View {
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         detailRow("Last import", timestamp(monitor.lastImportAt))
         detailRow("Last export", timestamp(monitor.lastExportAt))
+        detailRow("Push", monitor.pushRegistration ?? "not registered yet")
+        detailRow("CloudKit", "\(SyncEnvironment.current.cloudKit.rawValue), push \(SyncEnvironment.current.push ?? "unknown")")
         if let err = ModelContainerFactory.startupError {
             detailBlock("Startup error", err)
         }
@@ -99,6 +120,65 @@ struct ICloudSyncGroup: View {
         }
         .font(HITType.caption)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Shown while an import, export or setup has run for two minutes with nothing in its way
+/// (`CloudSyncMonitor.stalledSince`): CloudKit syncs nothing else until it ends, and only a fresh process
+/// gets it going again. The Mac relaunches in one click; the iPhone says how to reopen the app.
+struct SyncStuckRow: View {
+    let since: Date
+    @State private var relaunchFailed = false
+
+    var body: some View {
+        #if os(macOS)
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since), systemImage: "exclamationmark.arrow.circlepath",
+                   iconTint: HITColor.danger) {
+            Button("Relaunch") { SyncRecovery.relaunch { relaunchFailed = true } }
+                .buttonStyle(HITButtonStyle(.primary, size: .small))
+                .accessibilityIdentifier("settings-sync-relaunch")
+        }
+        .accessibilityIdentifier("settings-sync-stuck")
+        .alert("Quit and reopen HITList", isPresented: $relaunchFailed) {
+            Button("OK") {}
+        } message: {
+            Text("HITList couldn't relaunch itself. Quit it and open it again; your changes are kept and upload when it starts.")
+        }
+        #else
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since) + " " + Self.reopen,
+                   systemImage: "exclamationmark.arrow.circlepath", iconTint: HITColor.danger)
+            .accessibilityIdentifier("settings-sync-stuck")
+        #endif
+    }
+
+    static let reopen = "Swipe HITList away in the app switcher and open it again."
+
+    /// "iCloud sync has been busy with one request since 6:51 PM. Relaunching starts it afresh; your
+    /// changes are kept and upload right after."
+    static func detail(since: Date) -> String {
+        let time = since.formatted(date: .omitted, time: .shortened)
+        #if os(macOS)
+        let verb = "Relaunching"
+        #else
+        let verb = "Reopening"
+        #endif
+        return "iCloud sync has been busy with one request since \(time). \(verb) starts it afresh; your changes are kept and upload right after."
+    }
+}
+
+/// Which CloudKit environment and build this is ("Production · TestFlight build 11"), with the line
+/// that explains why two devices on different environments never see each other's tasks.
+struct SyncEnvironmentRow: View {
+    var environment: SyncEnvironment = .current
+
+    var body: some View {
+        HITMenuRowLabel(environment.summary, subtitle: SyncEnvironment.explanation, systemImage: "server.rack",
+                        iconTint: environment.cloudKit == .production ? Theme.secondaryText : HITColor.dueTomorrow)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hitRowPadding()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("CloudKit environment: \(environment.summary). \(SyncEnvironment.explanation)")
+            .accessibilityIdentifier("settings-sync-environment")
     }
 }
 
