@@ -64,16 +64,9 @@ struct QuickAddPopout: View {
         self.onClose = onClose
         self.onSaved = onSaved
         self.onDraftChange = onDraftChange
-        // A sticky draft comes back (`QuickAddDraftStore`): the text, and the description line if it had one.
-        var initial = QuickAddDraft(context: context)
-        if let stored = QuickAddDraftStore.load() {
-            initial.text = stored.text
-            if !stored.notes.isEmpty {
-                initial.notes = stored.notes
-                initial.showsNotes = true
-            }
-        }
-        _draft = State(initialValue: initial)
+        // A sticky draft comes back (`QuickAddDraftStore`): the text, and the description, location and
+        // deadline if it had them.
+        _draft = State(initialValue: QuickAddDraftStore.restoredDraft(context: context))
     }
 
     private var parser: QuickAddParser {
@@ -129,9 +122,11 @@ struct QuickAddPopout: View {
         }
         .onChange(of: draft.text) { _, _ in
             onDraftChange(!draft.isEmpty)
-            QuickAddDraftStore.save(text: draft.text, notes: draft.notes)
+            QuickAddDraftStore.save(draft)
         }
-        .onChange(of: draft.notes) { _, _ in QuickAddDraftStore.save(text: draft.text, notes: draft.notes) }
+        .onChange(of: draft.notes) { _, _ in QuickAddDraftStore.save(draft) }
+        .onChange(of: draft.locationName) { _, _ in QuickAddDraftStore.save(draft) }
+        .onChange(of: draft.deadline) { _, _ in QuickAddDraftStore.save(draft) }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }
         .onChange(of: labels.count) { _, _ in rebuildEngine() }
