@@ -516,3 +516,121 @@ final class SyncRecoveryTests: XCTestCase {
         XCTAssertNil(SyncRecovery.waitForPreviousInstance(defaults: scratchDefaults()), "a normal launch doesn't wait")
     }
 }
+
+/// The iOS push handler's wait (George, 2026-11-02): it ends as soon as the import answering the push
+/// has finished, at once if that already happened, and only times out when the clock says so.
+@MainActor
+final class ImportWaiterTests: XCTestCase {
+    private let push = Date(timeIntervalSinceReferenceDate: 1_000)
+    private func at(_ seconds: TimeInterval) -> Date { push.addingTimeInterval(seconds) }
+
+    /// A clock the test advances by hand.
+    @MainActor
+    private final class ManualClock {
+        private var sleepers: [CheckedContinuation<Void, Never>] = []
+        private(set) var requested: [Duration] = []
+        var sleeping: Int { sleepers.count }
+
+        func sleep(_ duration: Duration) async {
+            requested.append(duration)
+            await withCheckedContinuation { sleepers.append($0) }
+        }
+
+        func fire() {
+            let woken = sleepers
+            sleepers.removeAll()
+            for sleeper in woken { sleeper.resume() }
+        }
+    }
+
+    private func makeWaiter() -> (ImportWaiter, ManualClock) {
+        let clock = ManualClock()
+        return (ImportWaiter(sleep: { await clock.sleep($0) }), clock)
+    }
+
+    /// Lets a started wait reach its suspension point.
+    private func settle(until condition: () -> Bool) async {
+        for _ in 0..<200 where !condition() { await Task.yield() }
+    }
+
+    func testAnImportThatFinishedAfterThePushAnswersAtOnce() async {
+        let (waiter, clock) = makeWaiter()
+        // CloudKit took the push and imported before the handler's task started waiting.
+        waiter.importEnded(startedAt: at(0.1), at: at(0.6), outcome: .succeeded)
+        let outcome = await waiter.next(after: push, within: .seconds(25))
+        XCTAssertEqual(outcome, .succeeded)
+        XCTAssertTrue(clock.requested.isEmpty, "no timer: the app is released straight away")
+        XCTAssertEqual(waiter.waitingCount, 0)
+    }
+
+    func testAnImportStartedJustBeforeThePushCounts() async {
+        let (waiter, clock) = makeWaiter()
+        waiter.importEnded(startedAt: at(-1.5), at: at(-0.2), outcome: .succeeded)
+        let outcome = await waiter.next(after: push, within: .seconds(25))
+        XCTAssertEqual(outcome, .succeeded, "within the watchdog's import slack of the push")
+        XCTAssertTrue(clock.requested.isEmpty)
+    }
+
+    func testAnOlderImportDoesNotAnswerAndTheNextOneDoes() async {
+        let (waiter, clock) = makeWaiter()
+        waiter.importEnded(startedAt: at(-30), at: at(-20), outcome: .succeeded)
+        let wait = Task { await waiter.next(after: push, within: .seconds(25)) }
+        await settle { waiter.waitingCount == 1 && clock.sleeping == 1 }
+        XCTAssertEqual(waiter.waitingCount, 1, "an import from before the push doesn't answer it")
+        XCTAssertEqual(clock.requested, [.seconds(25)])
+
+        waiter.importEnded(startedAt: at(0.3), at: at(1.2), outcome: .succeeded)
+        let outcome = await wait.value
+        XCTAssertEqual(outcome, .succeeded, "released when the import ends, not after 25 s")
+        XCTAssertEqual(waiter.waitingCount, 0)
+        clock.fire()   // the cancelled timer waking later changes nothing
+        await settle { false }
+        XCTAssertEqual(waiter.waitingCount, 0)
+    }
+
+    func testAFailedImportEndsTheWaitToo() async {
+        let (waiter, clock) = makeWaiter()
+        let wait = Task { await waiter.next(after: push, within: .seconds(25)) }
+        await settle { clock.sleeping == 1 }
+        waiter.importEnded(startedAt: at(0.5), at: at(2), outcome: .failed)
+        let outcome = await wait.value
+        XCTAssertEqual(outcome, .failed)
+    }
+
+    func testWithNoImportItTimesOutOnlyWhenTheClockSaysSo() async {
+        let (waiter, clock) = makeWaiter()
+        let wait = Task { await waiter.next(after: push, within: .seconds(25)) }
+        await settle { clock.sleeping == 1 }
+        XCTAssertEqual(waiter.waitingCount, 1)
+        clock.fire()
+        let outcome = await wait.value
+        XCTAssertEqual(outcome, .timedOut)
+        XCTAssertEqual(waiter.waitingCount, 0)
+    }
+
+    /// Two pushes close together: one import answers both; a later push still waits for its own.
+    func testOneImportAnswersEveryPushItCovers() async {
+        let (waiter, clock) = makeWaiter()
+        let first = Task { await waiter.next(after: push, within: .seconds(25)) }
+        let second = Task { await waiter.next(after: at(1), within: .seconds(25)) }
+        let third = Task { await waiter.next(after: at(60), within: .seconds(25)) }
+        await settle { clock.sleeping == 3 }
+        waiter.importEnded(startedAt: at(0.5), at: at(3), outcome: .succeeded)
+        let firstOutcome = await first.value
+        let secondOutcome = await second.value
+        XCTAssertEqual(firstOutcome, .succeeded)
+        XCTAssertEqual(secondOutcome, .succeeded)
+        XCTAssertEqual(waiter.waitingCount, 1, "the push at +60 s isn't answered by an import that ended at +3 s")
+        clock.fire()
+        let thirdOutcome = await third.value
+        XCTAssertEqual(thirdOutcome, .timedOut)
+    }
+
+    func testCoverageRule() {
+        let ended = ImportWaiter.Ended(startedAt: at(-10), endedAt: at(0.01), outcome: .succeeded)
+        XCTAssertTrue(ImportWaiter.covers(ended, pushAt: push), "finished after the push arrived")
+        let before = ImportWaiter.Ended(startedAt: at(-3), endedAt: at(-1), outcome: .succeeded)
+        XCTAssertFalse(ImportWaiter.covers(before, pushAt: push), "started more than the slack before, ended before")
+        XCTAssertEqual(ImportWaiter.slack, SyncWatchdog.Rules().importSlack)
+    }
+}
