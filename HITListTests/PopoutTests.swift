@@ -388,6 +388,27 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(draft.result(p).title, "Plan p1", "and the words typed first are still in the title")
     }
 
+    /// The card reads its text once per keystroke (final review: it parsed a 500-character title four times,
+    /// each repeated for every switched-off token). Reading from that one parse gives what each call gave.
+    func testTheCardsOneParseGivesTheSameChipsAndTask() throws {
+        let p = parser()
+        var switchedOff = QuickAddDraft(context: .today, text: "Call Tom about the 5pm meeting p2 #Work every week")
+        switchedOff.disable(try token("Tom", in: switchedOff, p))
+        switchedOff.disable(try token("p2", in: switchedOff, p))
+        var cleared = QuickAddDraft(context: .project(name: "Work"), text: "Plan offsite")
+        cleared.setProject(nil, p)
+        let drafts = [switchedOff, cleared,
+                      QuickAddDraft(context: .day(day(3)), text: "Dentist 9am !15mb"),
+                      QuickAddDraft(context: .label(name: "calls"), text: "Ring the bank tomorrow"),
+                      QuickAddDraft(context: .inbox, text: "  ")]
+        for draft in drafts {
+            let parsed = draft.parsed(p)
+            let result = draft.result(p, parsed: parsed)
+            XCTAssertEqual(result, draft.result(p), draft.text)
+            XCTAssertEqual(draft.chips(p, parsed: parsed, result: result), draft.chips(p), draft.text)
+        }
+    }
+
     func testResetForgetsSwitchedOffTokens() throws {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
