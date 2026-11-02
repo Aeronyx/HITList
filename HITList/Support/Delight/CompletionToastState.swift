@@ -40,7 +40,7 @@ struct CompletionToastState {
         return generation
     }
 
-    /// The task was un-completed some other way (its row tapped again).
+    /// The task was un-completed some other way (its settled, completed row unchecked).
     mutating func remove(_ id: UUID) {
         completed.removeAll { $0.id == id }
     }
