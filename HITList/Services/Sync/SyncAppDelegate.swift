@@ -25,6 +25,11 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
         let monitor = CloudSyncMonitor.shared
         monitor.pushLaunchState(registered: application.isRegisteredForRemoteNotifications,
                                 launchedByPush: launchOptions?[.remoteNotification] != nil)
+        // On the Mac the container registers for pushes by itself once its setup succeeds (seen in the
+        // sync log). On the iPhone that couldn't be checked (the simulator has no iCloud account), so the
+        // app asks too: registering is idempotent, shows no prompt (silent pushes need no permission), and
+        // the token can change between launches, which is why Apple asks apps to register at every launch.
+        application.registerForRemoteNotifications()
         return true
     }
 
