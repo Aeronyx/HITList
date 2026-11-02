@@ -52,20 +52,30 @@ enum LocalBackup {
     }
 
     /// Called on scene activation: backs up when the last backup is at least 24 h old.
+    /// `ownsBackups`: this launch opened the real store (`ModelContainerFactory.isMainStoreOpen`). A Debug
+    /// build on the Mac opens HITList-Development.store but shares this folder and `lastBackupKey` with the
+    /// TestFlight app, so it backs nothing up: its data would replace the day's real backup, and marking the
+    /// day done would leave the real data unsaved for 24 hours.
     @MainActor
     static func runIfDue(context: ModelContext, defaults: UserDefaults = AppGroup.defaults,
-                         directory: URL = directory, now: Date = .now) {
+                         directory: URL = directory, now: Date = .now, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen) {
+        guard ownsBackups else {
+            log.info("Local backup skipped: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); backups are HITList.store's")
+            return
+        }
         guard isDue(lastBackup: defaults.object(forKey: lastBackupKey) as? Date, now: now) else { return }
-        do { try run(context: context, defaults: defaults, directory: directory, now: now) }
+        do { try run(context: context, defaults: defaults, directory: directory, now: now, ownsBackups: ownsBackups) }
         catch { log.error("Local backup failed: \(error.localizedDescription, privacy: .public)") }
     }
 
     /// Writes a backup now. Returns nil without writing when the store has no tasks, projects or labels:
     /// an empty store (just after a reset or an iCloud sign-out, before the import) is not worth a slot.
+    /// Throws `BackupError.notTheRealStore` when this launch didn't open HITList.store (see `runIfDue`).
     @MainActor
     @discardableResult
     static func run(context: ModelContext, defaults: UserDefaults = AppGroup.defaults,
-                    directory: URL = directory, now: Date = .now) throws -> URL? {
+                    directory: URL = directory, now: Date = .now, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen) throws -> URL? {
+        guard ownsBackups else { throw BackupError.notTheRealStore(ModelContainerFactory.openedStoreDescription) }
         let snapshot = try SnapshotBuilder.build(from: context)
         guard !(snapshot.tasks.isEmpty && snapshot.projects.isEmpty && snapshot.labels.isEmpty) else {
             log.info("Local backup skipped: nothing to back up")
@@ -75,5 +85,16 @@ enum LocalBackup {
         defaults.set(now, forKey: lastBackupKey)
         log.notice("Local backup written: \(url.path, privacy: .public) (\(snapshot.tasks.count) tasks)")
         return url
+    }
+
+    enum BackupError: LocalizedError, Equatable {
+        /// This launch opened another store (named), not HITList.store.
+        case notTheRealStore(String)
+
+        var errorDescription: String? {
+            switch self {
+            case .notTheRealStore(let store): "this run uses \(store), and backups are kept only for HITList.store"
+            }
+        }
     }
 }

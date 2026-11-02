@@ -8,7 +8,8 @@ import UIKit
 
 /// Schedules a local notification for each upcoming timed task, at its due time or its reminder offset
 /// before it ("!15mb": "in 15 min · Haircut"; see `NotificationPlan`), and keeps the pending
-/// set current when tasks arrive from another device, the clock or time zone changes, or the day rolls over.
+/// set current when anything is saved here, tasks arrive from another device, the clock or time zone
+/// changes, or the day rolls over (`triggers`).
 enum NotificationScheduler {
     static let enabledKey = "notifications.enabled"
     /// userInfo key holding the task's UUID string.
@@ -83,9 +84,18 @@ enum NotificationScheduler {
     /// Call once at launch, before the app finishes launching, so notification actions that launch the
     /// app in the background reach the delegate. Everything here works without a scene: CloudKit pushes
     /// wake the app in the background (`remote-notification` mode) and the import hook fires there.
+    ///
+    /// Stands down when this launch didn't open the real store (`ModelContainerFactory.isMainStoreOpen`):
+    /// a Debug build on the Mac (its own HITList-Development.store) shares the pending reminders and the
+    /// badge with the TestFlight app (one bundle ID), and rescheduling from its other tasks removed every
+    /// real reminder until the TestFlight app ran again.
     @MainActor
-    static func bootstrap(container: ModelContainer) {
+    static func bootstrap(container: ModelContainer, isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) {
         guard self.container == nil else { return }
+        guard isMainStore else {
+            log.notice("Reminders stand down: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); the pending reminders and the badge are HITList.store's")
+            return
+        }
         self.container = container
         let responder = NotificationResponder(container: container)
         self.responder = responder
@@ -93,8 +103,19 @@ enum NotificationScheduler {
         center.delegate = responder
         center.setNotificationCategories([NotificationResponder.category, NotificationResponder.summaryCategory])
 
-        var triggers: [(Notification.Name, String)] = [
+        observers = observeTriggers { scheduleReschedule(reason: $0) }
+        scheduleReschedule(reason: "launch")
+    }
+
+    /// What makes the pending set stale, with the reason each is logged under: another device's change (an
+    /// import), any change made here (a local save: a task added, completed, deleted, moved or edited from
+    /// any list, row menu, popout or the Flipboard, so no call site can forget), and the clock. The 2 s
+    /// debounce folds a burst (typing a title saves on every keystroke) into one pass.
+    @MainActor
+    static var triggers: [(name: Notification.Name, reason: String)] {
+        var triggers: [(name: Notification.Name, reason: String)] = [
             (.cloudKitImportSucceeded, "import"),
+            (ModelContext.didSave, "local change"),
             (.NSSystemTimeZoneDidChange, "time zone"),
             (.NSSystemClockDidChange, "clock"),
             (.NSCalendarDayChanged, "day changed"),
@@ -102,12 +123,18 @@ enum NotificationScheduler {
         #if os(iOS)
         triggers.append((UIApplication.significantTimeChangeNotification, "significant time change"))
         #endif
-        for (name, reason) in triggers {
-            observers.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { scheduleReschedule(reason: reason) }
-            })
+        return triggers
+    }
+
+    /// Calls `handle` with a trigger's reason each time one is posted in `center`, on the main actor.
+    @MainActor
+    static func observeTriggers(in center: NotificationCenter = .default,
+                                _ handle: @escaping @MainActor (String) -> Void) -> [NSObjectProtocol] {
+        triggers.map { trigger in
+            center.addObserver(forName: trigger.name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { handle(trigger.reason) }
+            }
         }
-        scheduleReschedule(reason: "launch")
     }
 
     /// Reschedules once triggers stop arriving for 2 s (imports come in bursts, one event per zone).
@@ -158,8 +185,11 @@ enum NotificationScheduler {
 
     /// Brings the pending set in line with `NotificationPlan`: the soonest 60 incomplete, timed tasks due in
     /// the next 14 days (plus a summary if more), changing only what differs. Calls that arrive while one is running are folded into a single rerun, so passes never interleave.
+    /// Does nothing when this launch didn't open the real store (see `bootstrap`).
     @MainActor
-    static func reschedule(context: ModelContext, reason: String = "app") async {
+    static func reschedule(context: ModelContext, reason: String = "app",
+                           isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) async {
+        guard isMainStore else { return }
         guard !isRescheduling else {
             rerunReasons.insert(reason)
             return

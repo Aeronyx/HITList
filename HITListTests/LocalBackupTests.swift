@@ -86,6 +86,25 @@ final class LocalBackupTests: XCTestCase {
         XCTAssertEqual(LocalBackup.backups(in: dir).count, 2)
     }
 
+    /// A Debug build on the Mac opens its own HITList-Development.store but shares this folder and the
+    /// last-backup date with the TestFlight app (one bundle ID): it must neither write its data as the
+    /// day's backup nor mark the day as backed up, or the real data goes unsaved for 24 hours.
+    func testASideStoreLeavesTheBackupsAlone() throws {
+        let dir = try tempDir()
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        context.insert(TaskItem(title: "Development data"))
+        try context.save()
+
+        LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: t0, ownsBackups: false)
+        XCTAssertTrue(LocalBackup.backups(in: dir).isEmpty)
+        XCTAssertNil(defaults.object(forKey: LocalBackup.lastBackupKey), "the TestFlight app still backs up today")
+
+        XCTAssertThrowsError(try LocalBackup.run(context: context, defaults: defaults, directory: dir, now: t0, ownsBackups: false),
+                             "Back up now says why it didn't")
+        XCTAssertTrue(LocalBackup.backups(in: dir).isEmpty)
+    }
+
     func testEmptyStoreIsNotBackedUp() throws {
         let dir = try tempDir()
         let container = ModelContainerFactory.preview()

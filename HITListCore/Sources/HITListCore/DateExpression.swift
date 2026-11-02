@@ -182,6 +182,10 @@ public struct DateExpressionParser: Sendable {
         return nil
     }
 
+    /// How far "in N days" / "N weeks" may reach: beyond this the words stay in the title (Calendar
+    /// turned "in 99999999999 days" into a date no formatter can print).
+    static let relativeCounts = -9999...9999
+
     static func unitDays(_ word: String) -> (component: Calendar.Component, multiplier: Int)? {
         switch normalize(word) {
         case "day", "days", "d": return (.day, 1)
@@ -253,7 +257,7 @@ public struct DateExpressionParser: Sendable {
         case "in":
             guard let n = next, let n2 = next2 else { return nil }
             let count: Int? = (n == "a" || n == "an" || n == "one") ? 1 : Int(n)
-            if let count, let unit = Self.unitDays(n2) {
+            if let count, Self.relativeCounts.contains(count), let unit = Self.unitDays(n2) {
                 return (d(calendar.date(byAdding: unit.component, value: count, to: today)!), 3)
             }
             return nil
@@ -268,7 +272,7 @@ public struct DateExpressionParser: Sendable {
         }
 
         // "3 days", "2 weeks"
-        if let count = Int(w), let n = next, let unit = Self.unitDays(n), count > 0 {
+        if let count = Int(w), let n = next, let unit = Self.unitDays(n), count > 0, Self.relativeCounts.contains(count) {
             return (d(calendar.date(byAdding: unit.component, value: count, to: today)!), 2)
         }
 

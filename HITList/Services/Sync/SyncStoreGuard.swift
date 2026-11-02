@@ -16,9 +16,11 @@ enum SyncStoreGuard {
     static let suffixVariable = "HITLIST_STORE_SUFFIX"
     static let developmentSuffix = "Development"
 
-    /// The suffix a build should use: Development's own, or nil to keep the current store name.
+    /// The suffix a build should use: Development's own, or nil to keep the current store name. Never for
+    /// a TestFlight or App Store build: `SyncEnvironment.resolve` never calls one Development, and this is
+    /// the second lock, since a side store there would open empty and look like every task was lost.
     static func isolationSuffix(environment: SyncEnvironment, processEnvironment: [String: String]) -> String? {
-        guard environment.cloudKit == .development else { return nil }
+        guard environment.cloudKit == .development, !environment.channel.isDistribution else { return nil }
         if let existing = processEnvironment[suffixVariable], !existing.isEmpty { return nil }
         return developmentSuffix
     }

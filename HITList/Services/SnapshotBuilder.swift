@@ -25,7 +25,9 @@ enum SnapshotBuilder {
             tasks: tasks.map {
                 .init(id: $0.id, title: $0.title, notes: $0.notes, priority: $0.priority, dueDate: $0.dueDate, hasDueTime: $0.hasDueTime,
                       isCompleted: $0.isCompleted, completedAt: $0.completedAt, recurrence: $0.recurrence, sortOrder: $0.sortOrder,
-                      projectID: $0.project?.id, labelIDs: ($0.labels ?? []).map(\.id), createdAt: $0.createdAt, updatedAt: $0.updatedAt)
+                      projectID: $0.project?.id, labelIDs: ($0.labels ?? []).map(\.id), createdAt: $0.createdAt, updatedAt: $0.updatedAt,
+                      reminderOffsetMinutes: $0.reminderOffsetMinutes, deadline: $0.deadline, locationName: $0.locationName,
+                      flipTarget: $0.flipTarget, flipCount: $0.flipCount, flipPeriodStart: $0.flipPeriodStart)
             },
             filters: filters.map { .init(id: $0.id, name: $0.name, query: $0.query, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
         )
@@ -111,6 +113,16 @@ enum SnapshotBuilder {
             target.recurrence = r.recurrence; target.sortOrder = r.sortOrder
             target.project = r.projectID.flatMap { projectsByID[$0] }
             target.labels = r.labelIDs.compactMap { labelsByID[$0] }
+            // Schema V2's fields, when the backup has them: one from before 0.3.6 doesn't say, so it leaves
+            // them as they are (a new task keeps the defaults).
+            if r.hasV2Fields {
+                target.reminderOffsetMinutes = r.reminderOffsetMinutes
+                target.deadline = r.deadline
+                target.locationName = r.locationName
+                target.flipTarget = r.flipTarget ?? 1
+                target.flipCount = r.flipCount ?? 0
+                target.flipPeriodStart = r.flipPeriodStart
+            }
             target.updatedAt = r.updatedAt
         }
 

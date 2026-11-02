@@ -21,7 +21,8 @@ struct ICloudCheck: Equatable, Sendable {
     /// A short reason when a step failed ("network unavailable", "timed out").
     var failure: String?
     var duration: TimeInterval
-    /// The Mac build talks to CloudKit Development, the TestFlight iPhone build to Production.
+    /// This build talks to CloudKit Development (`SyncEnvironment.current`), whose data Production builds
+    /// (TestFlight, App Store) never see, so the summary says so.
     var isDevelopmentEnvironment: Bool
 
     /// "iCloud available · container reachable · sync zone found · 0.8 s", or what failed, in plain words.
@@ -48,7 +49,7 @@ struct ICloudCheck: Equatable, Sendable {
         }
         if let failure { parts.append(account == nil ? "Couldn't reach iCloud: \(failure)" : failure) }
         parts.append(Self.seconds(duration))
-        if isDevelopmentEnvironment { parts.append("Development environment on the Mac") }
+        if isDevelopmentEnvironment { parts.append("Development environment") }
         return parts.joined(separator: " · ")
     }
 
@@ -59,11 +60,9 @@ struct ICloudCheck: Equatable, Sendable {
         interval < 10 ? String(format: "%.1f s", interval) : "\(Int(interval.rounded())) s"
     }
 
-    #if os(macOS)
-    static let developmentEnvironment = true
-    #else
-    static let developmentEnvironment = false
-    #endif
+    /// Whether this build talks to CloudKit Development. It used to be true for every Mac build, the
+    /// TestFlight one (Production) included, and false for an iPhone Debug build (Development).
+    static var developmentEnvironment: Bool { SyncEnvironment.current.isDevelopment }
 
     // MARK: - Running it
 

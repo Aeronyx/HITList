@@ -72,14 +72,23 @@ final class CloudSyncMonitor {
     static let lastImportKey = "sync.lastImportAt"
     static let lastExportKey = "sync.lastExportAt"
 
+    /// The defaults key for this store's `key` (`lastImportKey`, `lastExportKey`). Every build on a device
+    /// shares the app group's defaults, so a Debug build's own store (HITList-Development.store) quoted the
+    /// TestFlight app's sync times ("Synced just now" for a store that never synced). The real store keeps
+    /// the plain key, so 0.3.5's times carry over.
+    nonisolated static func syncTimeKey(_ key: String, storeName: String = ModelContainerFactory.storeName) -> String {
+        storeName == ModelContainerFactory.mainStoreName ? key : "\(key).\(storeName)"
+    }
+
     /// Re-checking the account on activation is a CloudKit call; the Mac activates on every click into
     /// the window, so at most once a minute.
     static let accountRecheckInterval: TimeInterval = 60
 
     private init() {
         // Remembered across launches so the status reads "Synced 3 hr ago" before the first event arrives.
-        lastImportAt = AppGroup.defaults.object(forKey: Self.lastImportKey) as? Date
-        lastExportAt = AppGroup.defaults.object(forKey: Self.lastExportKey) as? Date
+        // `shared` is first touched after `SyncStoreGuard` has picked the store, so these are its own.
+        lastImportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastImportKey)) as? Date
+        lastExportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastExportKey)) as? Date
         watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
     }
 
@@ -362,12 +371,14 @@ final class CloudSyncMonitor {
     @ObservationIgnored private let accountChangeBurst = Debouncer(delay: .milliseconds(500))
     @ObservationIgnored private var accountChangeCount = 0
 
-    /// After a reset the old store's sync times no longer describe this store.
+    /// After a reset the old store's sync times no longer describe this store; the watchdog forgets them
+    /// too, so the re-import counts as a first import (`SyncWatchdog.Rules.firstImportStalledAfter`).
     func forgetLastSync() {
         lastImportAt = nil
         lastExportAt = nil
-        AppGroup.defaults.removeObject(forKey: Self.lastImportKey)
-        AppGroup.defaults.removeObject(forKey: Self.lastExportKey)
+        watchdog.forgetLastSync()
+        AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastImportKey))
+        AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastExportKey))
         write(.note, "Local store was reset; sync times cleared", level: .notice)
     }
 
@@ -690,10 +701,10 @@ final class CloudSyncMonitor {
             switch event.type {
             case .import:
                 lastImportAt = now
-                AppGroup.defaults.set(now, forKey: Self.lastImportKey)
+                AppGroup.defaults.set(now, forKey: Self.syncTimeKey(Self.lastImportKey))
             case .export:
                 lastExportAt = now
-                AppGroup.defaults.set(now, forKey: Self.lastExportKey)
+                AppGroup.defaults.set(now, forKey: Self.syncTimeKey(Self.lastExportKey))
             default:
                 // A successful setup means CloudKit is reachable again; an older failure no longer applies.
                 lastErrorReason = nil

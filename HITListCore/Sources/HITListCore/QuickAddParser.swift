@@ -231,8 +231,9 @@ public struct QuickAddParser: Sendable {
             }
         default: break
         }
-        // every N days/weeks/months/years
-        if let count = Int(n), count > 0, i + 2 < words.count, let unit = DateExpressionParser.unitDays(words[i + 2]) {
+        // every N days/weeks/months/years (an absurd N stays in the title)
+        if let count = Int(n), (1...RecurrenceRule.maxInterval).contains(count), i + 2 < words.count,
+           let unit = DateExpressionParser.unitDays(words[i + 2]) {
             let freq: RecurrenceRule.Frequency
             switch unit.component {
             case .day: freq = .daily
@@ -281,8 +282,9 @@ public enum ReminderOffset {
         }
         let digits = w.dropLast()
         guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), let n = Int(digits), n > 0 else { return nil }
-        let minutes = n * scale
-        return minutes <= maxMinutes ? minutes : nil
+        // Overflow-checked: this runs on every keystroke, and "!9999999999999999d" used to trap.
+        let (minutes, overflow) = n.multipliedReportingOverflow(by: scale)
+        return !overflow && minutes <= maxMinutes ? minutes : nil
     }
 
     /// The token a chip writes: "!15mb", "!1hb", "!1db"; "!at" for zero.
