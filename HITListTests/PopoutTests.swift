@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import SwiftData
 import HITListCore
 @testable import HITList
@@ -553,6 +554,108 @@ final class PopoutTests: XCTestCase {
 
         popouts.shiftDay(done, by: 1, in: context, now: now)
         XCTAssertEqual(done.dueDate, today, "completed tasks stay put")
+    }
+
+    // MARK: - A task deleted elsewhere (George, 2026-11-02: its popout closes by itself)
+
+    /// Another device's deletion arrives through the store (here: another context saving it). The model
+    /// the popout holds still says it isn't deleted, so the controller asks the store.
+    func testPopoutClosesWhenItsTaskIsDeletedElsewhere() throws {
+        let container = ModelContainerFactory.preview()
+        let main = container.mainContext
+        let task = TaskItem(title: "Water plants")
+        main.insert(task)
+        try main.save()
+        let popouts = PopoutController()
+        popouts.open(task)
+        XCTAssertFalse(popouts.closeTaskIfDeleted(in: main), "still there: stays open")
+        XCTAssertNotNil(popouts.task)
+
+        let id = task.id
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+        XCTAssertFalse(task.isDeleted, "the popout's model doesn't know (why the controller fetches)")
+
+        XCTAssertTrue(popouts.closeTaskIfDeleted(in: main))
+        XCTAssertNil(popouts.task)
+        XCTAssertFalse(popouts.state.isTaskOpen)
+        XCTAssertFalse(popouts.closeTaskIfDeleted(in: main), "nothing open: nothing to close")
+    }
+
+    /// Deleted in this context (another Mac window), saved or not yet.
+    func testPopoutClosesWhenItsTaskIsDeletedInThisContext() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Call the bank")
+        context.insert(task)
+        let popouts = PopoutController()
+        popouts.open(task)
+        XCTAssertFalse(popouts.closeTaskIfDeleted(in: context), "a new, unsaved task is there")
+        context.delete(task)
+        XCTAssertTrue(popouts.closeTaskIfDeleted(in: context))
+        XCTAssertFalse(popouts.state.isTaskOpen)
+    }
+
+    #if os(macOS)
+    /// The real wiring on the Mac: `PopoutHost` drawn in a window with the task's panel open; another
+    /// context deletes the task and the panel closes by itself (its query empties), without a crash.
+    func testMacPanelClosesByItselfWhenItsTaskIsDeletedElsewhere() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Doomed", notes: "deleted by another device")
+        context.insert(task)
+        try context.save()
+        let popouts = PopoutController()
+        popouts.open(task)
+
+        let root = Color.clear.frame(width: 900, height: 700)
+            .popoutHost(popouts)
+            .environment(popouts)
+            .modelContainer(container)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: root)
+        defer { window.close() }
+        func spin(until done: () -> Bool, for seconds: TimeInterval) {
+            let deadline = Date().addingTimeInterval(seconds)
+            while !done(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        }
+        spin(until: { false }, for: 0.3)
+        XCTAssertTrue(popouts.state.isTaskOpen, "the panel is up")
+
+        let id = task.id
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+
+        spin(until: { !popouts.state.isTaskOpen }, for: 2)
+        XCTAssertFalse(popouts.state.isTaskOpen, "the panel closed by itself")
+        XCTAssertNil(popouts.task)
+        spin(until: { false }, for: 0.3)
+        XCTAssertFalse(PopoutController.taskExists(id, in: context), "nothing brought the task back")
+    }
+    #endif
+
+    /// Only the task on show matters: deleting another one leaves the popout open.
+    func testDeletingAnotherTaskLeavesThePopoutOpen() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let shown = TaskItem(title: "Shown"), other = TaskItem(title: "Other")
+        context.insert(shown)
+        context.insert(other)
+        try context.save()
+        let popouts = PopoutController()
+        popouts.open(shown)
+        context.delete(other)
+        try context.save()
+        XCTAssertFalse(popouts.closeTaskIfDeleted(in: context))
+        XCTAssertEqual(popouts.state.taskID, shown.id)
+        XCTAssertTrue(PopoutController.taskExists(shown.id, in: context))
+        XCTAssertFalse(PopoutController.taskExists(UUID(), in: context))
     }
 
     // MARK: - iPhone toasts (George, 2026-11-02: never behind the island)
