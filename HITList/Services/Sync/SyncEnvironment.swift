@@ -63,8 +63,9 @@ struct SyncEnvironment: Equatable, Sendable {
         return SyncEnvironment(cloudKit: cloudKit, push: push,
                                channel: channel(isDebug: isDebug, hasProfile: hasMacProfile, receipt: receipt), build: build)
         #elseif targetEnvironment(simulator)
-        // Simulator builds carry no profile and always run against Development.
-        return SyncEnvironment(cloudKit: .development, push: "development", channel: isDebug ? .debug : .xcode, build: build)
+        // Simulator builds carry no profile and always run against Development; count them as Xcode's.
+        return SyncEnvironment(cloudKit: .development, push: "development",
+                               channel: channel(isDebug: isDebug, hasProfile: true, receipt: receipt), build: build)
         #else
         let profileData = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision").flatMap { try? Data(contentsOf: $0) }
         let profile = profileData.flatMap(ProvisioningProfile.parse)

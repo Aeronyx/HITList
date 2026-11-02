@@ -65,6 +65,7 @@
 		53FEB8C0A1250F7D59BD7AF1 /* AboutSettingsGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */; };
 		54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73ACCF90D84809171E18645 /* Keychain.swift */; };
 		5530F11C224FC2EB6213122B /* HITChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52D4DEDC8BFB16C07252D16 /* HITChip.swift */; };
+		55EFAE67092E0D44A0F98359 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */; };
 		5720041FAE6A032A7066DF4D /* DatePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */; };
 		5849B1C50CCFC964844E2ACB /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543B0A056452AA86090ECAD8 /* InboxView.swift */; };
 		5AB1564F606D8B7271F6E8F6 /* Inter_18pt-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BDBD761482A5F9B84F96433A /* Inter_18pt-Medium.ttf */; };
@@ -200,6 +201,7 @@
 		172507FC4FF599F803EE8248 /* TaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopout.swift; sourceTree = "<group>"; };
 		179EC0133891B8DCC4B358ED /* MobileTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTabBar.swift; sourceTree = "<group>"; };
 		184C37C143DA7F89F0707031 /* SettingsRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRouter.swift; sourceTree = "<group>"; };
+		1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLogView.swift; sourceTree = "<group>"; };
 		1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPreferences.swift; sourceTree = "<group>"; };
 		2126889A9D7B6886FF5AE480 /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		29800AE3317F5D97333D1CDF /* HITMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMaterial.swift; sourceTree = "<group>"; };
@@ -638,6 +640,7 @@
 				2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */,
 				B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */,
 				1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */,
+				1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */,
 				40F12A1583CCBDCFBE2646D5 /* WhatsNew.swift */,
 				66A1BEC88DB9CB6DBD543778 /* Mac */,
 			);
@@ -975,6 +978,7 @@
 				AC0A5906024DDBA597C16B87 /* SyncEnvironment.swift in Sources */,
 				9F91BB5E438E6DC117CBFCC5 /* SyncLog.swift in Sources */,
 				B6F538BFE92844B8530ABA1B /* SyncLogFormat.swift in Sources */,
+				55EFAE67092E0D44A0F98359 /* SyncLogView.swift in Sources */,
 				D83CF3DF7B180E45E5E88B66 /* SyncPush.swift in Sources */,
 				93DCB35BB113FC8E976DB2C1 /* SyncState.swift in Sources */,
 				01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */,
