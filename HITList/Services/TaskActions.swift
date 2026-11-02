@@ -67,6 +67,17 @@ enum TaskActions {
         try? context.save()
     }
 
+    /// The Repeat menu (task popout, its date card): sets or clears the task's repeat and saves. A repeat
+    /// on an undated task starts today. A monthly or yearly repeat keeps the day the task returns to
+    /// (`RecurrenceRule.keepingAnchor`): picking "Every month" again on a "31st" task due Feb 28 used to
+    /// store the plain rule, and the task repeated on the 28th from then on.
+    static func setRecurrence(_ rule: RecurrenceRule?, on task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        if rule != nil, task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
+        task.recurrenceRule = rule?.keepingAnchor(of: task.recurrenceRule, due: task.dueDate)
+        task.touch()
+        try? context.save()
+    }
+
     static func reschedule(_ task: TaskItem, to date: Date?, keepTime: Bool = true, in context: ModelContext) {
         if let date, let old = task.dueDate, task.hasDueTime, keepTime {
             let cal = Calendar.current

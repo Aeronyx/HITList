@@ -109,6 +109,27 @@ final class RecurrenceRuleTests: XCTestCase {
         XCTAssertEqual(RecurrenceRule.weekdays.anchored(to: Fixed.date(2027, 1, 31), calendar: cal).encoded, "weekly;1;2,3,4,5,6")
     }
 
+    /// The Repeat menu's rules carry no anchor (final review): picked again, they keep the task's day.
+    func testAMenuRulePickedAgainKeepsTheDayTheTaskReturnsTo() {
+        let thirtyFirst = RecurrenceRule(frequency: .monthly, anchorDay: 31)
+        let feb28 = Fixed.date(2027, 2, 28, 9)
+        XCTAssertEqual(RecurrenceRule.monthly.keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal).anchorDay, 31)
+        XCTAssertEqual(RecurrenceRule(frequency: .monthly, interval: 3).keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal).encoded,
+                       "monthly;3;;31")
+        // Moved off the anchor: the due day. Another frequency: the due day. No previous rule: the due day.
+        XCTAssertEqual(RecurrenceRule.monthly.keepingAnchor(of: thirtyFirst, due: Fixed.date(2027, 3, 15), calendar: cal).anchorDay, 15)
+        XCTAssertEqual(RecurrenceRule.yearly.keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal).anchorDay, 28)
+        XCTAssertEqual(RecurrenceRule.monthly.keepingAnchor(of: nil, due: Fixed.date(2027, 1, 31), calendar: cal).anchorDay, 31)
+        XCTAssertEqual(RecurrenceRule.monthly.keepingAnchor(of: .weekly, due: Fixed.date(2027, 1, 30), calendar: cal).anchorDay, 30)
+        // Left as they are: days and weeks, an undated task, a rule that has its own anchor.
+        XCTAssertEqual(RecurrenceRule.weekdays.keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal).encoded, "weekly;1;2,3,4,5,6")
+        XCTAssertNil(RecurrenceRule.monthly.keepingAnchor(of: thirtyFirst, due: nil, calendar: cal).anchorDay)
+        XCTAssertEqual(RecurrenceRule(frequency: .monthly, anchorDay: 30).keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal).anchorDay, 30)
+        // And the 31st comes back after the short month.
+        let kept = RecurrenceRule.monthly.keepingAnchor(of: thirtyFirst, due: feb28, calendar: cal)
+        assertDate(kept.nextOccurrence(after: feb28, calendar: cal), 2027, 3, 31, 9)
+    }
+
     func testAnchorEncoding() {
         let rule = RecurrenceRule(frequency: .monthly, anchorDay: 31)
         XCTAssertEqual(rule.encoded, "monthly;1;;31")
