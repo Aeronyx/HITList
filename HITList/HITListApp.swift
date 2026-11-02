@@ -7,6 +7,12 @@ struct HITListApp: App {
     private let isTesting: Bool
     private var importObserver: NSObjectProtocol?
     @Environment(\.scenePhase) private var scenePhase
+    // Logs push registration and every push to the sync log (SyncAppDelegate).
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(SyncAppDelegate.self) private var syncDelegate
+    #else
+    @UIApplicationDelegateAdaptor(SyncAppDelegate.self) private var syncDelegate
+    #endif
 
     init() {
         HITFont.installPlatformAppearance()

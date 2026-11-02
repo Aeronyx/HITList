@@ -241,6 +241,48 @@ final class SyncLogTests: XCTestCase {
     }
 }
 
+/// What the push log line says about a remote notification (brief 25, item 2).
+final class SyncPushTests: XCTestCase {
+    /// The shape CloudKit sends for a database subscription such as NSPersistentCloudKitContainer's.
+    private let databasePush: [AnyHashable: Any] = [
+        "aps": ["content-available": 1],
+        "ck": [
+            "ce": 2,
+            "cid": "iCloud.com.trammells.hitlist",
+            "nid": "6c3f0a2e-1b4d-4c55-9a8e-1f2e3d4c5b6a",
+            "met": ["dbs": 1, "sid": "com.apple.coredata.cloudkit.private.subscription",
+                    "zid": "com.apple.coredata.cloudkit.zone", "zoid": "_defaultOwner"],
+        ] as [String: Any],
+    ]
+
+    func testACloudKitDatabasePushIsDescribed() {
+        let push = SyncPush(userInfo: databasePush)
+        XCTAssertTrue(push.isCloudKit)
+        XCTAssertEqual(push.container, "iCloud.com.trammells.hitlist")
+        XCTAssertEqual(push.subscriptionID, "com.apple.coredata.cloudkit.private.subscription")
+        XCTAssertEqual(push.environmentCode, "2")
+        XCTAssertEqual(push.fields["ce"], "2")
+        XCTAssertEqual(push.fields["nid"], "6c3f0a2e-1b4", "the notification id is shortened")
+        XCTAssertEqual(push.fields["cloudKit"], "yes")
+        XCTAssertTrue(push.summary.hasPrefix("CloudKit "), push.summary)
+        XCTAssertTrue(push.summary.hasSuffix("iCloud.com.trammells.hitlist"), push.summary)
+    }
+
+    func testAPushThatIsntCloudKitsSaysSo() {
+        let push = SyncPush(userInfo: ["aps": ["alert": "Hello"]])
+        XCTAssertFalse(push.isCloudKit)
+        XCTAssertEqual(push.summary, "not from CloudKit")
+        XCTAssertEqual(push.fields, ["cloudKit": "no"])
+    }
+
+    func testScopeNames() {
+        XCTAssertEqual(SyncPush.scopeName(rawValue: 1), "public")
+        XCTAssertEqual(SyncPush.scopeName(rawValue: 2), "private")
+        XCTAssertEqual(SyncPush.scopeName(rawValue: 3), "shared")
+        XCTAssertNil(SyncPush.scopeName(rawValue: 99))
+    }
+}
+
 /// A thread-safe step counter for the injected clock.
 private final class Counter: @unchecked Sendable {
     private let lock = NSLock()
