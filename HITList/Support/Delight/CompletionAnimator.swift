@@ -64,4 +64,27 @@ struct CompletionAnimator<Anchor> {
     }
 
     mutating func cancelAll() { entries.removeAll() }
+
+    /// What a tap on a row's checkbox does. Completing is final until Undo (George, 2026-11-02): a row
+    /// still in its completion animation ignores taps (a second tap used to undo it), and only a task
+    /// that is actually showing as completed (the Completed list, Show completed) unchecks. When the
+    /// toast still lists that task, unchecking goes through the toast's record (`undoable`), which knows
+    /// how to put a recurring task's date back.
+    func tap(on id: UUID, isCompleted: Bool, undoable: Bool) -> CompletionTap {
+        if phase(of: id) != nil { return .ignore }
+        if isCompleted { return undoable ? .undo : .uncheck }
+        return .complete
+    }
+}
+
+/// The outcome of tapping a row's checkbox; see `CompletionAnimator.tap(on:isCompleted:undoable:)`.
+enum CompletionTap: Equatable {
+    /// The row is animating out: nothing happens. Undo is the toast's.
+    case ignore
+    /// Save it as complete and start the animation.
+    case complete
+    /// A completed task shown as completed: mark it incomplete.
+    case uncheck
+    /// A completed task the toast still offers to undo: undo it through the toast's record.
+    case undo
 }

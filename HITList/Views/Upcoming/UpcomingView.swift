@@ -93,14 +93,8 @@ struct UpcomingView: View {
                 }
                 .onChange(of: jumpToTodayRequest) { _, _ in jump(to: today, schedule: schedule, proxy: proxy) }
             }
-            .overlay(alignment: .bottom) {
-                if toast.isVisible {
-                    CompletionToast(message: toast.message, onUndo: undoToast)
-                        // iPhone: above the island and the oval "+" (it hid behind them in build 11).
-                        .padding(.bottom, isCompact ? IslandMetrics.chromeHeight + HITSpacing.xs : 0)
-                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
-                }
-            }
+            // iPhone: drawn by PopoutHost above the island and the "+".
+            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast)
         }
         .quickAddEntry(.upcoming)
         .background(Theme.background)
@@ -445,21 +439,20 @@ struct UpcomingView: View {
     // MARK: - Completion (the same behaviour as TaskListView)
 
     private func toggleCompletion(_ task: TaskItem) {
-        let checked = task.isCompleted || completions.phase(of: task.id) != nil
-        if checked, let record = toast.record(for: task.id) {
+        let record = toast.record(for: task.id)
+        switch completions.tap(on: task.id, isCompleted: task.isCompleted, undoable: record != nil) {
+        case .ignore:
+            return
+        case .undo:
             withAnimation(HITMotion.exit) { toast.remove(task.id) }
-            revert([record])
+            revert(record.map { [$0] } ?? [])
             return
-        }
-        if task.isCompleted {
-            withAnimation(HITMotion.standard) {
-                completions.cancel(task.id)
-                TaskActions.toggleCompletion(task, in: context)
-            }
+        case .uncheck:
+            withAnimation(HITMotion.standard) { TaskActions.toggleCompletion(task, in: context) }
             return
+        case .complete:
+            break
         }
-        // A recurring task mid-animation already advanced; a second tap must not advance it again.
-        guard completions.phase(of: task.id) == nil else { return }
 
         let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
             .restoreDueDate(due)
