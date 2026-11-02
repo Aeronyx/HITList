@@ -28,6 +28,7 @@ George's decisions on dates, times, taps and drafts.
 - Sticky drafts keep the location and deadline picked from "+". Clearing a task's title in the popout
   puts the original back instead of saving a task with no title.
 - About → Copy diagnostics and Check iCloud report the right CloudKit environment on every build.
+- iPhone: the quick-add title has standard autocorrect and sentence capitals (it had autocorrect off).
 
 ## 0.3.5 — build 12, 2026-11-02
 

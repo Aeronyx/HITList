@@ -108,7 +108,9 @@ struct TokenHighlightField: View {
         .focused(focus)
         .onSubmit(onSubmit)
         .submitLabel(.done)
-        .autocorrectionDisabled()
+        // Standard autocorrect and sentence capitals (George, 0.4.0): the parser reads tokens without
+        // regard to case, so "Tom" and "P1" still work.
+        .textInputAutocapitalization(.sentences)
         #else
         // On the Mac a vertical-axis TextField kept drawing its text view's grey box behind the
         // words whatever was asked of it; a plain TextEditor honours a hidden background. Return
