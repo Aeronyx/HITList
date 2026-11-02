@@ -86,6 +86,15 @@ final class QuickAddParserTests: XCTestCase {
         assertDate(parser.parse("Standup every weekday 9am").dueDate, 2026, 10, 21, 9, 0)
     }
 
+    func testMonthlyAndYearlyRulesAreAnchoredToTheDueDay() {
+        XCTAssertEqual(parser.parse("Rent every month").recurrence?.anchorDay, 21)
+        XCTAssertEqual(parser.parse("Rent every month").recurrence?.encoded, "monthly;1;;21")
+        XCTAssertEqual(parser.parse("Invoice every month jan 31").recurrence?.encoded, "monthly;1;;31")
+        XCTAssertEqual(parser.parse("Birthday yearly 2/29/28").recurrence?.encoded, "yearly;1;;29")
+        XCTAssertNil(parser.parse("Journal every day").recurrence?.anchorDay)
+        XCTAssertNil(parser.parse("Gym every monday").recurrence?.anchorDay)
+    }
+
     func testTimeOnlyRollsToTomorrowWhenPassed() {
         assertDate(parser.parse("Call bank 9am").dueDate, 2026, 10, 22, 9, 0)
         assertDate(parser.parse("Call bank 4pm").dueDate, 2026, 10, 21, 16, 0)
