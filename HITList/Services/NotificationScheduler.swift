@@ -83,9 +83,18 @@ enum NotificationScheduler {
     /// Call once at launch, before the app finishes launching, so notification actions that launch the
     /// app in the background reach the delegate. Everything here works without a scene: CloudKit pushes
     /// wake the app in the background (`remote-notification` mode) and the import hook fires there.
+    ///
+    /// Stands down when this launch didn't open the real store (`ModelContainerFactory.isMainStoreOpen`):
+    /// a Debug build on the Mac (its own HITList-Development.store) shares the pending reminders and the
+    /// badge with the TestFlight app (one bundle ID), and rescheduling from its other tasks removed every
+    /// real reminder until the TestFlight app ran again.
     @MainActor
-    static func bootstrap(container: ModelContainer) {
+    static func bootstrap(container: ModelContainer, isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) {
         guard self.container == nil else { return }
+        guard isMainStore else {
+            log.notice("Reminders stand down: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); the pending reminders and the badge are HITList.store's")
+            return
+        }
         self.container = container
         let responder = NotificationResponder(container: container)
         self.responder = responder
@@ -158,8 +167,11 @@ enum NotificationScheduler {
 
     /// Brings the pending set in line with `NotificationPlan`: the soonest 60 incomplete, timed tasks due in
     /// the next 14 days (plus a summary if more), changing only what differs. Calls that arrive while one is running are folded into a single rerun, so passes never interleave.
+    /// Does nothing when this launch didn't open the real store (see `bootstrap`).
     @MainActor
-    static func reschedule(context: ModelContext, reason: String = "app") async {
+    static func reschedule(context: ModelContext, reason: String = "app",
+                           isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) async {
+        guard isMainStore else { return }
         guard !isRescheduling else {
             rerunReasons.insert(reason)
             return

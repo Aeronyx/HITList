@@ -44,6 +44,21 @@ enum ModelContainerFactory {
     /// The real store: the one TestFlight and App Store builds open.
     static let mainStoreName = "HITList.store"
 
+    /// Whether this launch opened the real store itself: HITList.store, not a side store (a Development
+    /// build's own, a schema run's) and not the in-memory fallback. The device's pending reminders, app
+    /// icon badge and daily backups belong to the real store's data, and every build on a device shares
+    /// them (one bundle ID), so any other launch leaves them alone (`NotificationScheduler`, `LocalBackup`).
+    static var isMainStoreOpen: Bool { isMainStore(storeName: storeName, inMemory: isRunningInMemory) }
+
+    /// What this launch opened, for messages: "HITList-Development.store", or the fallback.
+    static var openedStoreDescription: String {
+        isRunningInMemory ? "an empty in-memory store (\(storeName) couldn't be opened)" : storeName
+    }
+
+    static func isMainStore(storeName: String, inMemory: Bool) -> Bool {
+        storeName == mainStoreName && !inMemory
+    }
+
     /// Builds the CloudKit-backed container, falling back to local-only storage if CloudKit
     /// can't be set up (not signed in to iCloud, missing entitlement during development, ...), and to an
     /// empty in-memory store, file untouched, if the store can't be opened at all (`open`).
