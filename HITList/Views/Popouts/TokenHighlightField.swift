@@ -192,8 +192,12 @@ struct TokenHighlightField: View {
     }
 
     /// Where each token's highlight is, in `proxy`'s space: the tagged runs of every laid-out line, the
-    /// runs of one token on one line joined into one rectangle.
+    /// runs of one token on one line joined into one rectangle. None when the copy was cut short (a title
+    /// longer than the field's lines): the field then scrolls to the cursor while the copy keeps its first
+    /// lines, so its places are not where the field's words are, and a tap there could switch off a token
+    /// out of sight. The tokens still count; the VoiceOver actions still switch them off.
     static func areas(_ layouts: [Text.LayoutKey.AnchoredLayout], in proxy: GeometryProxy) -> [Area] {
+        guard !layouts.contains(where: { $0.layout.isTruncated }) else { return [] }
         var areas: [Area] = []
         for anchored in layouts {
             let origin = proxy[anchored.origin]
