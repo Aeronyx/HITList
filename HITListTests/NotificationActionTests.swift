@@ -94,4 +94,37 @@ final class NotificationActionTests: XCTestCase {
         XCTAssertEqual(category.actions.map(\.identifier), ["COMPLETE", "SNOOZE_1H"])
         XCTAssertEqual(category.actions.map(\.title), ["Complete", "Snooze 1 hour"])
     }
+
+    // MARK: - What keeps the pending reminders current (beta review)
+
+    /// Records the reasons `NotificationScheduler` would reschedule for while `body` runs.
+    private func triggers(during body: () throws -> Void) async throws -> [String] {
+        var reasons: [String] = []
+        let observers = NotificationScheduler.observeTriggers { reasons.append($0) }
+        defer { observers.forEach(NotificationCenter.default.removeObserver) }
+        try body()
+        // The observers run on the main queue, one turn later.
+        try await Task.sleep(for: .milliseconds(200))
+        return reasons
+    }
+
+    /// Completing, deleting or rescheduling a task from Today, a Group, the Inbox or Upcoming (and from a
+    /// row's context menu) never told the scheduler: the reminder of a task completed at 2:30 for 3:00
+    /// still went off at 3:00, a deleted task's reminder fired, and a recurring task's next reminder
+    /// waited for the app's next activation. Every local save is now a trigger.
+    func testCompletingATaskFromAListAsksForAReschedule() async throws {
+        let task = try task(due: Date().addingTimeInterval(1800))
+        let reasons = try await triggers { TaskActions.toggleCompletion(task, in: context) }
+        XCTAssertTrue(reasons.contains("local change"), "got \(reasons)")
+    }
+
+    func testDeletingAndReschedulingAskForAReschedule() async throws {
+        let moved = try task(due: Date().addingTimeInterval(1800))
+        let deleted = try task(due: Date().addingTimeInterval(3600))
+        let reasons = try await triggers {
+            TaskActions.reschedule(moved, to: Date().addingTimeInterval(86_400), in: context)
+            TaskActions.delete(deleted, in: context)
+        }
+        XCTAssertTrue(reasons.contains("local change"), "got \(reasons)")
+    }
 }
