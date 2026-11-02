@@ -437,9 +437,8 @@ struct TaskPopout: View {
     }
 
     private func setRecurrence(_ rule: RecurrenceRule?) {
-        task.recurrenceRule = rule
-        if rule != nil, task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: Date()) }
-        save()
+        TaskActions.setRecurrence(rule, on: task, in: context)
+        rescheduleNotifications()
     }
 
     private func setProject(_ project: Project?) {
