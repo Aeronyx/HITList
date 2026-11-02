@@ -881,6 +881,104 @@ final class PopoutTests: XCTestCase {
     }
     #endif
 
+    #if os(macOS)
+    /// A window for the Mac tests that draw the real views, and a way to let them settle.
+    private func hostWindow<V: View>(_ view: V) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: view)
+        return window
+    }
+
+    private func spin(until done: () -> Bool = { false }, for seconds: TimeInterval = 0.4) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+    }
+
+    private func textView(in window: NSWindow) throws -> NSTextView {
+        func find(_ view: NSView) -> NSTextView? {
+            if let text = view as? NSTextView { return text }
+            for sub in view.subviews { if let found = find(sub) { return found } }
+            return nil
+        }
+        return try XCTUnwrap(window.contentView.flatMap(find), "a title editor")
+    }
+
+    /// The Mac's inline "Add task" row, open with "Call Tom p2", in a real window: a click on a highlighted
+    /// word lands on its tap target (SwiftUI, above the editor), a click on a plain word lands in the text
+    /// editor. On a title longer than the field, every word goes to the editor (no tap target is left where
+    /// the field's words aren't). Hit-testing only: an agent session's window can't become key, and AppKit
+    /// swallows synthesized clicks on a window that isn't.
+    func testOnTheMacAClickOnAHighlightHitsItsTapTargetAndPlainWordsGoToTheEditor() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = ModelContainerFactory.preview()
+        let long = "Call Tom p2 " + String(repeating: "and the other parcel from the market ", count: 12)
+        for text in ["Call Tom p2", long] {
+            let popouts = PopoutController(draftDefaults: defaults)
+            popouts.openQuickAdd(.inbox, placement: .inline("list"))
+            let card = try XCTUnwrap(popouts.state.quickAdd?.id)
+            QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: text), card: card, to: defaults)
+            let window = hostWindow(VStack { InlineAddRow(context: .inbox, key: "list"); Spacer() }
+                .frame(width: 600, height: 400)
+                .environment(popouts)
+                .modelContainer(container))
+            defer { window.close() }
+            spin()
+            let editor = try textView(in: window)
+            XCTAssertEqual(editor.string, text)
+            let content = try XCTUnwrap(window.contentView)
+            /// What a click on the middle of characters `range` of the title would hit.
+            func hit(_ range: NSRange) -> NSView? {
+                let onScreen = editor.firstRect(forCharacterRange: range, actualRange: nil)
+                let inWindow = window.convertPoint(fromScreen: NSPoint(x: onScreen.midX, y: onScreen.midY))
+                return content.hitTest(content.superview?.convert(inWindow, from: nil) ?? inWindow)
+            }
+            let call = hit(NSRange(location: 0, length: 4)), tom = hit(NSRange(location: 5, length: 3)),
+                p2 = hit(NSRange(location: 9, length: 2))
+            XCTAssertTrue(call is NSTextView, "a plain word: the editor (\(String(describing: call)))")
+            if text == long {
+                XCTAssertTrue(tom is NSTextView, "a long title: no tap target on \"Tom\"")
+                XCTAssertTrue(p2 is NSTextView, "a long title: no tap target on \"p2\"")
+            } else {
+                XCTAssertNotNil(tom)
+                XCTAssertFalse(tom is NSTextView, "\"Tom\": its highlight's tap target")
+                XCTAssertFalse(p2 is NSTextView, "\"p2\": its highlight's tap target")
+            }
+            popouts.closeInline("list")
+        }
+    }
+
+    /// Two Mac windows share one store. A task panel open in the first closes by itself when the second
+    /// window deletes that task (its own popout's Delete), without drawing the deleted task.
+    func testTheMacPanelClosesWhenASecondWindowDeletesItsTask() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Shared", notes: "deleted from the other window")
+        context.insert(task)
+        try context.save()
+        let first = PopoutController(), second = PopoutController()
+        first.open(task)
+        let windows = [first, second].map { popouts in
+            hostWindow(Color.clear.frame(width: 900, height: 700).popoutHost(popouts).environment(popouts).modelContainer(container))
+        }
+        defer { windows.forEach { $0.close() } }
+        spin()
+        XCTAssertTrue(first.state.isTaskOpen)
+
+        second.open(task)
+        second.closeTask()
+        TaskActions.delete(task, in: context)
+        spin(until: { !first.state.isTaskOpen }, for: 2)
+        XCTAssertFalse(first.state.isTaskOpen, "the first window's panel closed by itself")
+        XCTAssertNil(first.task)
+        spin()
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 0, "and nothing brought it back")
+    }
+    #endif
+
     /// Only the task on show matters: deleting another one leaves the popout open.
     func testDeletingAnotherTaskLeavesThePopoutOpen() throws {
         let container = ModelContainerFactory.preview()
