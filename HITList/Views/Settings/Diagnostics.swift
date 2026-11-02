@@ -51,16 +51,10 @@ struct Diagnostics: Equatable {
             notifications: "\(NotificationStatus.authorizationText(authorization)), \(reminders)")
     }
 
-    /// The Mac build talks to CloudKit Development; an iPhone build from Xcode does too, TestFlight to Production.
-    static var environment: String {
-        #if os(macOS)
-        return "Development (Mac)"
-        #elseif DEBUG
-        return "Development (Xcode build)"
-        #else
-        return "Production"
-        #endif
-    }
+    /// The CloudKit environment this build talks to and how it got here, "Production · TestFlight build 12"
+    /// (`SyncEnvironment.current`). It used to say "Development (Mac)" for every Mac build, the TestFlight
+    /// one included, which is Production.
+    static var environment: String { SyncEnvironment.current.summary }
 
     /// Puts `text` on the general pasteboard.
     @MainActor

@@ -14,9 +14,13 @@ public struct RecurrenceRule: Codable, Equatable, Hashable, Sendable {
 
     public init(frequency: Frequency, interval: Int = 1, weekdays: Set<Int>? = nil) {
         self.frequency = frequency
-        self.interval = max(1, interval)
+        self.interval = min(max(1, interval), Self.maxInterval)
         self.weekdays = weekdays?.isEmpty == true ? nil : weekdays
     }
+
+    /// The longest interval a rule holds: the date arithmetic (7 × interval for weeks, the weekday walk)
+    /// trapped on absurd values typed into quick add or arriving from another device.
+    public static let maxInterval = 999
 
     public static let daily = RecurrenceRule(frequency: .daily)
     public static let weekly = RecurrenceRule(frequency: .weekly)

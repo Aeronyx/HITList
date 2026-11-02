@@ -55,13 +55,19 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
             await openToday(action: response.actionIdentifier)
             return
         }
-        let taskID = (response.notification.request.content.userInfo[NotificationScheduler.taskIDKey] as? String)
-            .flatMap(UUID.init(uuidString:))
-        await handle(action: response.actionIdentifier, taskID: taskID)
+        let userInfo = response.notification.request.content.userInfo
+        let taskID = (userInfo[NotificationScheduler.taskIDKey] as? String).flatMap(UUID.init(uuidString:))
+        await handle(action: response.actionIdentifier, taskID: taskID, remindedDue: Self.remindedDue(in: userInfo))
+    }
+
+    /// The due time a reminder was scheduled for (`NotificationScheduler.dueKey`); nil for one delivered
+    /// by build 1, which didn't store it.
+    static func remindedDue(in userInfo: [AnyHashable: Any]) -> Date? {
+        (userInfo[NotificationScheduler.dueKey] as? Double).map(Date.init(timeIntervalSince1970:))
     }
 
     @MainActor
-    func handle(action: String, taskID: UUID?) async {
+    func handle(action: String, taskID: UUID?, remindedDue: Date? = nil) async {
         guard let taskID else { return }  // the summary notification has no task
         switch action {
         case UNNotificationDefaultActionIdentifier:
@@ -72,12 +78,11 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
                 Self.log.info("\(action, privacy: .public): task no longer exists")
                 return
             }
-            if action == Self.completeAction {
-                Self.complete(task, in: context)
-            } else {
-                Self.snooze(task, now: Date(), in: context)
-            }
-            Self.log.info("\(action, privacy: .public) handled")
+            let changed = action == Self.completeAction
+                ? Self.complete(task, remindedDue: remindedDue, in: context)
+                : Self.snooze(task, now: Date(), remindedDue: remindedDue, in: context)
+            Self.log.info("\(action, privacy: .public) \(changed ? "handled" : "left alone: the task is done or has moved since this reminder", privacy: .public)")
+            // Also clears a stale reminder from Notification Center (`NotificationPlan.staleDelivered`).
             await NotificationScheduler.reschedule(context: context, reason: "action")
         default:
             break
@@ -100,18 +105,38 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
         return try? context.fetch(descriptor).first
     }
 
+    /// Whether a reminder scheduled for the due time `remindedDue` still stands for `task`: the task is
+    /// open and still due then. A reminder outlives the task's moves: completed (a recurring task rolls
+    /// on), moved, or snoozed on another device or in the app before the reminder was cleared. Nil (build
+    /// 1's reminders stored no due time) can't tell, so it counts.
+    static func reminderIsCurrent(for task: TaskItem, remindedDue: Date?) -> Bool {
+        guard !task.isCompleted else { return false }
+        guard let remindedDue else { return true }
+        guard let due = task.dueDate else { return false }
+        return Int(due.timeIntervalSince1970) == Int(remindedDue.timeIntervalSince1970)
+    }
+
     /// Completes the task (recurring tasks roll forward). A notification can outlive the task's
-    /// completion on another device; toggling then would reopen it, so a completed task is left alone.
+    /// completion on another device; toggling then would reopen it, so a completed task is left alone,
+    /// and a recurring task that already rolled past the occurrence this reminder was for is too
+    /// (completing it again would skip the next occurrence). Returns whether anything changed.
     @MainActor
-    static func complete(_ task: TaskItem, in context: ModelContext) {
-        guard !task.isCompleted else { return }
+    @discardableResult
+    static func complete(_ task: TaskItem, remindedDue: Date? = nil, in context: ModelContext) -> Bool {
+        guard !task.isCompleted else { return false }
+        if task.recurrenceRule != nil, !reminderIsCurrent(for: task, remindedDue: remindedDue) { return false }
         TaskActions.toggleCompletion(task, in: context)
+        return true
     }
 
     /// Moves the task to exactly one hour from `now`, keeping it timed. `keepTime: false` because
-    /// `keepTime: true` would put the old clock time on the new day instead of moving it an hour.
+    /// `keepTime: true` would put the old clock time on the new day instead of moving it an hour. Only
+    /// while the reminder is current: a task completed, or moved since, stays as the user left it.
     @MainActor
-    static func snooze(_ task: TaskItem, now: Date, in context: ModelContext) {
+    @discardableResult
+    static func snooze(_ task: TaskItem, now: Date, remindedDue: Date? = nil, in context: ModelContext) -> Bool {
+        guard reminderIsCurrent(for: task, remindedDue: remindedDue) else { return false }
         TaskActions.reschedule(task, to: now.addingTimeInterval(snoozeInterval), keepTime: false, in: context)
+        return true
     }
 }

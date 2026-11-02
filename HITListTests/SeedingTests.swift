@@ -104,4 +104,34 @@ final class SeedingTests: XCTestCase {
         XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<Project>()), 0)
         XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<TaskLabel>()), 0)
     }
+
+    // MARK: - Sample data (beta review)
+
+    /// `-seedSampleData` is for schema pushes into a side store (`HITLIST_STORE_SUFFIX`). Run against the
+    /// TestFlight app (say from Terminal) it used to put "Sample task (safe to delete)" into the real store,
+    /// and from there onto every device.
+    func testSampleDataIsNeverSeededIntoTheRealStore() throws {
+        let d = device()
+        TaskActions.seedSampleDataIfRequested(in: d.context, arguments: ["HITList", "-seedSampleData"], storeName: "HITList.store")
+        XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<TaskItem>()), 0)
+        XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<Project>()), 0)
+    }
+
+    func testSampleDataGoesIntoASideStoreWhenAskedFor() throws {
+        let d = device()
+        TaskActions.seedSampleDataIfRequested(in: d.context, arguments: ["HITList"], storeName: "HITList-schema.store")
+        XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<TaskItem>()), 0, "only with the argument")
+        TaskActions.seedSampleDataIfRequested(in: d.context, arguments: ["HITList", "-seedSampleData"], storeName: "HITList-schema.store")
+        XCTAssertEqual(try d.context.fetch(FetchDescriptor<TaskItem>()).map(\.title), ["Sample task (safe to delete)"])
+    }
+
+    /// Reminders, the app icon badge and the daily backup are the real store's: every build on a device
+    /// shares them (one bundle ID), so a side store or the in-memory fallback leaves them alone.
+    func testOnlyTheRealStoreOwnsTheDevicesRemindersAndBackups() {
+        XCTAssertTrue(ModelContainerFactory.isMainStore(storeName: "HITList.store", inMemory: false))
+        XCTAssertFalse(ModelContainerFactory.isMainStore(storeName: "HITList-Development.store", inMemory: false))
+        XCTAssertFalse(ModelContainerFactory.isMainStore(storeName: "HITList-schema.store", inMemory: false))
+        XCTAssertFalse(ModelContainerFactory.isMainStore(storeName: "HITList.store", inMemory: true))
+        XCTAssertTrue(ModelContainerFactory.isMainStoreOpen, "the hosted tests open no side store")
+    }
 }

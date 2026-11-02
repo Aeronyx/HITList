@@ -125,9 +125,16 @@ enum TaskActions {
     }
 
     /// Developer aid: `HITList -seedSampleData` inserts one task with a project and a label so every
-    /// record type exists in CloudKit (needed once before deploying the schema to Production).
-    static func seedSampleDataIfRequested(in context: ModelContext) {
-        guard CommandLine.arguments.contains("-seedSampleData") else { return }
+    /// record type exists in CloudKit (needed once before deploying the schema to Production). Only into a
+    /// side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into
+    /// HITList.store, from where the sample would reach every device.
+    static func seedSampleDataIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
+                                          storeName: String = ModelContainerFactory.storeName) {
+        guard arguments.contains("-seedSampleData") else { return }
+        guard storeName != ModelContainerFactory.mainStoreName else {
+            print("-seedSampleData ignored: it seeds only a side store (HITLIST_STORE_SUFFIX=schema), never \(storeName)")
+            return
+        }
         do {
             let project = try findOrCreateProject(named: "Sample Project", in: context)
             let label = try findOrCreateLabel(named: "sample", in: context)

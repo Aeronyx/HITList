@@ -299,31 +299,78 @@ enum QuickAddTokens {
 extension Preferences {
     static let quickAddDraftText = "quickAdd.draftText"
     static let quickAddDraftNotes = "quickAdd.draftNotes"
+    static let quickAddDraftLocation = "quickAdd.draftLocation"
+    static let quickAddDraftDeadline = "quickAdd.draftDeadline"
 }
 
 /// Sticky drafts (George, build 11): what is typed in the quick-add card is kept in app-group defaults
 /// as it changes, so a card put away, an app sent to the background and even an app quit mid-thought
-/// comes back with the text. Cleared when the task is added or the draft is discarded.
+/// comes back with the text. Cleared when the task is added or the draft is discarded. The description,
+/// and the location and deadline picked from "+" (beta review: those two used to be dropped), stick too.
 enum QuickAddDraftStore {
     struct Stored: Equatable {
         var text: String
         var notes: String
+        var locationName: String = ""
+        var deadline: Date? = nil
+
+        var isEmpty: Bool { text.isEmpty && notes.isEmpty && locationName.isEmpty && deadline == nil }
     }
 
     static func load(from defaults: UserDefaults = AppGroup.defaults) -> Stored? {
-        let text = defaults.string(forKey: Preferences.quickAddDraftText) ?? ""
-        let notes = defaults.string(forKey: Preferences.quickAddDraftNotes) ?? ""
-        return text.isEmpty && notes.isEmpty ? nil : Stored(text: text, notes: notes)
+        let stored = Stored(text: defaults.string(forKey: Preferences.quickAddDraftText) ?? "",
+                            notes: defaults.string(forKey: Preferences.quickAddDraftNotes) ?? "",
+                            locationName: defaults.string(forKey: Preferences.quickAddDraftLocation) ?? "",
+                            deadline: defaults.object(forKey: Preferences.quickAddDraftDeadline) as? Date)
+        return stored.isEmpty ? nil : stored
+    }
+
+    static func save(_ stored: Stored, to defaults: UserDefaults = AppGroup.defaults) {
+        if stored.isEmpty { clear(from: defaults); return }
+        defaults.set(stored.text, forKey: Preferences.quickAddDraftText)
+        defaults.set(stored.notes, forKey: Preferences.quickAddDraftNotes)
+        defaults.set(stored.locationName, forKey: Preferences.quickAddDraftLocation)
+        if let deadline = stored.deadline {
+            defaults.set(deadline, forKey: Preferences.quickAddDraftDeadline)
+        } else {
+            defaults.removeObject(forKey: Preferences.quickAddDraftDeadline)
+        }
+    }
+
+    /// Everything in the card that sticks: the text, the description, the location and the deadline.
+    static func save(_ draft: QuickAddDraft, to defaults: UserDefaults = AppGroup.defaults) {
+        save(Stored(text: draft.text, notes: draft.notes, locationName: draft.locationName, deadline: draft.deadline), to: defaults)
     }
 
     static func save(text: String, notes: String, to defaults: UserDefaults = AppGroup.defaults) {
-        if text.isEmpty && notes.isEmpty { clear(from: defaults); return }
-        defaults.set(text, forKey: Preferences.quickAddDraftText)
-        defaults.set(notes, forKey: Preferences.quickAddDraftNotes)
+        save(Stored(text: text, notes: notes), to: defaults)
     }
 
     static func clear(from defaults: UserDefaults = AppGroup.defaults) {
-        defaults.removeObject(forKey: Preferences.quickAddDraftText)
-        defaults.removeObject(forKey: Preferences.quickAddDraftNotes)
+        for key in [Preferences.quickAddDraftText, Preferences.quickAddDraftNotes,
+                    Preferences.quickAddDraftLocation, Preferences.quickAddDraftDeadline] {
+            defaults.removeObject(forKey: key)
+        }
+    }
+
+    /// The card's starting draft for `context`: empty, or the sticky one with its description, location
+    /// and deadline showing.
+    static func restoredDraft(context: QuickAddContext, from defaults: UserDefaults = AppGroup.defaults) -> QuickAddDraft {
+        var draft = QuickAddDraft(context: context)
+        guard let stored = load(from: defaults) else { return draft }
+        draft.text = stored.text
+        if !stored.notes.isEmpty {
+            draft.notes = stored.notes
+            draft.showsNotes = true
+        }
+        if !stored.locationName.isEmpty {
+            draft.locationName = stored.locationName
+            draft.reveal(.location)
+        }
+        if let deadline = stored.deadline {
+            draft.setDeadline(deadline)
+            draft.reveal(.deadline)
+        }
+        return draft
     }
 }
