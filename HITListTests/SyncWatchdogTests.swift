@@ -21,9 +21,10 @@ final class SyncWatchdogTests: XCTestCase {
     }
 
     /// A watchdog that has seen the network, the account and a successful CloudKit setup, as the app's
-    /// does within a second or two of launch.
-    private func makeWatchdog() -> SyncWatchdog {
-        var dog = SyncWatchdog()
+    /// does within a second or two of launch, on a store that has imported before (`lastImportAt`; nil is
+    /// a store's first import: a new device, a reinstall, a reset).
+    private func makeWatchdog(lastImportAt: Date? = Date(timeIntervalSinceReferenceDate: -3600)) -> SyncWatchdog {
+        var dog = SyncWatchdog(lastImportAt: lastImportAt)
         _ = dog.handle(.network(online: true, at: at(-100)))
         _ = dog.handle(.account(available: true, description: "available", at: at(-100)))
         let setup = UUID()
@@ -378,6 +379,59 @@ final class SyncWatchdogTests: XCTestCase {
         _ = dog.handle(.localSave(at: at(247)))
         XCTAssertEqual(dog.tick(at(457)), [], "nothing new to report until something finishes")
         XCTAssertEqual(dog.waitingSaves, 2, "the Quitting line says two saves never left")
+    }
+
+    // MARK: A store's first import (beta review)
+
+    /// A new device, a reinstall or a reset downloads every task in its first import, one event that can
+    /// run for minutes with nothing wrong. At two minutes the state said "Sync paused: stuck" and offered a
+    /// relaunch, which starts the download over. A store's first import now gets ten minutes.
+    func testAFirstImportGetsTenMinutesBeforeTheStateSaysStuck() {
+        var dog = makeWatchdog(lastImportAt: nil)
+        _ = dog.handle(started(importID, .importing, 0))
+        XCTAssertNil(dog.stalledSince(now: at(121)))
+        XCTAssertNil(dog.stalledSince(now: at(599)))
+        XCTAssertEqual(dog.stalledSince(now: at(600)), at(0))
+        XCTAssertEqual(dog.nextDeadline(after: at(60)), at(600), "the one timer wakes for the longer deadline")
+        guard case .eventStuck(.importing, 60, _)? = dog.tick(at(60)).first else {
+            return XCTFail("the log still notes a long first import at one minute")
+        }
+    }
+
+    func testLaterImportsStillCountAsStuckAfterTwoMinutes() {
+        var dog = makeWatchdog(lastImportAt: nil)
+        _ = dog.handle(started(importID, .importing, 0))
+        _ = dog.handle(ended(importID, .importing, from: 0, at: 300))
+        let second = UUID()
+        _ = dog.handle(started(second, .importing, 400))
+        XCTAssertEqual(dog.stalledSince(now: at(520)), at(400))
+    }
+
+    func testOnlyImportsGetTheLongerWait() {
+        var dog = makeWatchdog(lastImportAt: nil)
+        _ = dog.handle(started(exportID, .exporting, 0))
+        XCTAssertEqual(dog.stalledSince(now: at(120)), at(0))
+    }
+
+    /// After Settings → Reset local cache the new store has never synced: its first import is a first
+    /// import again, and the context stops quoting the old store's times.
+    func testForgettingTheLastSyncMakesTheNextImportAFirstImport() {
+        var dog = makeWatchdog()
+        dog.forgetLastSync()
+        _ = dog.handle(started(importID, .importing, 0))
+        XCTAssertNil(dog.stalledSince(now: at(300)))
+        XCTAssertNil(dog.context(at(0)).sinceLastImport)
+        XCTAssertNil(dog.lastExportAt)
+    }
+
+    /// The status line's "Synced 3 min ago" is remembered per store: a Debug build's own store
+    /// (HITList-Development.store) shares the app group's defaults with the TestFlight app's.
+    @MainActor
+    func testEachStoreRemembersItsOwnSyncTimes() {
+        XCTAssertEqual(CloudSyncMonitor.syncTimeKey(CloudSyncMonitor.lastImportKey, storeName: "HITList.store"), "sync.lastImportAt",
+                       "the real store keeps the key 0.3.5 wrote")
+        XCTAssertEqual(CloudSyncMonitor.syncTimeKey(CloudSyncMonitor.lastExportKey, storeName: "HITList-Development.store"),
+                       "sync.lastExportAt.HITList-Development.store")
     }
 
     func testOnTimeExportsGetNoLineOfTheirOwn() {

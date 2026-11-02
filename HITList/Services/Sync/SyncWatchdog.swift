@@ -38,6 +38,10 @@ struct SyncWatchdog: Sendable {
         /// An event running this long makes the sync state say so (`stalledSince`), and Settings offers
         /// a relaunch. Longer than `stuckAfter`, so the log has the evidence before anyone sees a warning.
         var stalledAfter: TimeInterval = 120
+        /// `stalledAfter` for a store's first import (no import recorded yet: a new device, a reinstall,
+        /// a reset): it brings every task down in one event that can run for minutes with nothing wrong,
+        /// and a relaunch would only start it over. Beta review, 2026-11-02.
+        var firstImportStalledAfter: TimeInterval = 600
         /// An export may start this long before the save it covers is seen (the save notification and
         /// the export race); an import this long before the push.
         var exportSlack: TimeInterval = 0.25
@@ -157,6 +161,8 @@ struct SyncWatchdog: Sendable {
         var startedAt: Date
         /// Where its clock counts from: the start, or the last time the obstacle went away. Nil while paused.
         var clockFrom: Date?
+        /// How long it may run before the state says stuck: `Rules.stalledAfter`, or longer for a first import.
+        var stalledAfter: TimeInterval
         var reportedStuck = false
     }
 
@@ -196,6 +202,15 @@ struct SyncWatchdog: Sendable {
         self.lastImportAt = lastImportAt
     }
 
+    /// After Settings → Reset local cache: the new store has never synced, so the old store's times no
+    /// longer apply (its first import is a first import again).
+    mutating func forgetLastSync() {
+        lastExportAt = nil
+        lastImportAt = nil
+        lastExportStart = nil
+        lastImportStart = nil
+    }
+
     /// Why nothing can run right now, or nil: pauses the stuck clocks of running events. An unknown
     /// network or account counts as fine.
     var blockedReason: String? {
@@ -230,7 +245,9 @@ struct SyncWatchdog: Sendable {
                let oldest = flights.min(by: { $0.value.startedAt < $1.value.startedAt })?.key {
                 flights[oldest] = nil
             }
-            flights[id] = Flight(type: type, startedAt: at, clockFrom: blockedReason == nil ? at : nil)
+            let firstImport = type == .importing && lastImportAt == nil
+            flights[id] = Flight(type: type, startedAt: at, clockFrom: blockedReason == nil ? at : nil,
+                                 stalledAfter: firstImport ? rules.firstImportStalledAfter : rules.stalledAfter)
             // A new setup (launch, account change) means nothing exports until it succeeds.
             return type == .setup ? transition(at) { $0.setup = .pending } : []
 
@@ -347,17 +364,18 @@ struct SyncWatchdog: Sendable {
         for flight in flights.values {
             guard let from = flight.clockFrom else { continue }
             if !flight.reportedStuck { candidates.append(from.addingTimeInterval(rules.stuckAfter)) }
-            candidates.append(from.addingTimeInterval(rules.stalledAfter))
+            candidates.append(from.addingTimeInterval(flight.stalledAfter))
         }
         return candidates.filter { $0 > now }.min()
     }
 
-    /// The start of the oldest event that has been running for `rules.stalledAfter` (paused time not
-    /// counted) while nothing stood in its way; nil when nothing is stalled.
+    /// The start of the oldest event that has been running for `rules.stalledAfter` (a first import:
+    /// `rules.firstImportStalledAfter`; paused time not counted) while nothing stood in its way; nil when
+    /// nothing is stalled.
     func stalledSince(now: Date) -> Date? {
         guard blockedReason == nil else { return nil }
         return flights.values
-            .filter { flight in flight.clockFrom.map { now.timeIntervalSince($0) >= rules.stalledAfter } ?? false }
+            .filter { flight in flight.clockFrom.map { now.timeIntervalSince($0) >= flight.stalledAfter } ?? false }
             .map(\.startedAt)
             .min()
     }

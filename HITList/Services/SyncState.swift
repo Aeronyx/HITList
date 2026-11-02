@@ -56,8 +56,8 @@ enum SyncState: Equatable {
 
     /// Precedence: no CloudKit, then account problems, then reachability, then a stalled event, then
     /// mirroring events. An error counts only while it is newer than the last successful import or export.
-    /// `stalledSince` is when an import, export or setup began that has run for two minutes with
-    /// nothing in its way (`SyncWatchdog.stalledSince`): CloudKit's mirroring runs one request at a time,
+    /// `stalledSince` is when an import, export or setup began that has run for two minutes (ten for a
+    /// store's first import) with nothing in its way (`SyncWatchdog.stalledSince`): CloudKit's mirroring runs one request at a time,
     /// so nothing else syncs until it ends (brief 25: an import on Nov 1 never did).
     static func derive(
         cloudKitEnabled: Bool,
