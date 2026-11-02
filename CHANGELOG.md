@@ -4,9 +4,10 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.6
+## 0.4.0
 
-The first beta for friends. Two review passes on the core, each change with a test that failed first.
+The first beta for friends. Two review passes on the core, each change with a test that failed first, then
+George's decisions on dates, times, taps and drafts.
 
 - iCloud sync keeps a record. Settings → iCloud shows which CloudKit environment and build channel this
   copy syncs with ("Production · TestFlight build 13") and has a Sync log: every setup, import, export,

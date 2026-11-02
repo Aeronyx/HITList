@@ -11,7 +11,7 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.3.6", items: [
+        Entry(version: "0.4.0", items: [
             "Settings → iCloud shows the sync environment and a Sync log; a stuck sync is called out on the bolt.",
             "Reminders stop when a task is completed, deleted or moved; repeating tasks keep their next date.",
             "Backups carry every field; a damaged store no longer locks you out.",

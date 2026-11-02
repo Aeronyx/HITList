@@ -65,6 +65,28 @@ if [[ -n "$(git status --porcelain)" ]]; then
   fail "working tree is dirty; commit or stash first so the release tag matches what was built"
 fi
 
+# ---- schema drift (first: nothing is bumped or built until the schemas match) ---------------------
+# The models' fields reach CloudKit Development as soon as a Development build saves a record with them;
+# Production only gets them when George deploys in the CloudKit dashboard. A build whose models need
+# undeployed fields would fail to sync in Production, so this refuses to go on while the two differ.
+if (( SCHEMA_CHECK && UPLOAD )); then
+  step "CloudKit schema drift check"
+  TMP=$(mktemp -d)
+  if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+       --environment development --output-file "$TMP/dev.ckdb" >/dev/null 2>&1 &&
+     xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
+       --environment production --output-file "$TMP/prod.ckdb" >/dev/null 2>&1; then
+    if ! diff -q "$TMP/dev.ckdb" "$TMP/prod.ckdb" >/dev/null; then
+      diff "$TMP/dev.ckdb" "$TMP/prod.ckdb" || true
+      print -P "%F{yellow}Deploy first: icloud.developer.apple.com → CloudKit Database → iCloud.com.trammells.hitlist → Development → Deploy Schema Changes… → Production. Then run this again (nothing was changed here).%f"
+      fail "Development schema differs from Production (see the lines above: '<' is Development, '>' Production). Or pass --skip-schema-check."
+    fi
+    echo "Development and Production schemas match."
+  else
+    print -P "%F{yellow}No cktool management token saved; skipping drift check. Run: xcrun cktool save-token --type management%f"
+  fi
+fi
+
 # ---- build number -------------------------------------------------------------------------------
 CURRENT=$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | awk '{print $2}')
 MARKETING=$(grep -E '^[[:space:]]+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
@@ -110,24 +132,6 @@ if (( TESTS )); then
   fi
 else
   print -P "%F{yellow}Preflight tests skipped (--skip-tests).%f"
-fi
-
-# ---- schema drift -------------------------------------------------------------------------------
-if (( SCHEMA_CHECK && UPLOAD )); then
-  step "CloudKit schema drift check"
-  TMP=$(mktemp -d)
-  if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
-       --environment development --output-file "$TMP/dev.ckdb" >/dev/null 2>&1 &&
-     xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
-       --environment production --output-file "$TMP/prod.ckdb" >/dev/null 2>&1; then
-    if ! diff -q "$TMP/dev.ckdb" "$TMP/prod.ckdb" >/dev/null; then
-      diff "$TMP/dev.ckdb" "$TMP/prod.ckdb" || true
-      fail "Development schema differs from Production. Deploy it in the CloudKit dashboard first, or pass --skip-schema-check."
-    fi
-    echo "Development and Production schemas match."
-  else
-    print -P "%F{yellow}No cktool management token saved; skipping drift check. Run: xcrun cktool save-token --type management%f"
-  fi
 fi
 
 # ---- archive / export / verify ------------------------------------------------------------------
