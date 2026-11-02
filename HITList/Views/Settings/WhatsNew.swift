@@ -11,6 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.3.6", items: [
+            "Settings → iCloud shows the sync environment and a Sync log; a stuck sync is called out on the bolt.",
+            "Reminders stop when a task is completed, deleted or moved; repeating tasks keep their next date.",
+            "Backups carry every field; a damaged store no longer locks you out.",
+            "Sticky drafts keep location and deadline; quick add survives absurd numbers.",
+        ]),
         Entry(version: "0.3.5", items: [
             "iPhone lists look like the Mac's: flat rows, hairlines, headers over the checkboxes.",
             "Quick-add drafts are sticky, and tapping away asks before discarding one.",
