@@ -17,7 +17,7 @@ struct PickerTime: Equatable, Hashable {
     }
 
     /// What the time row accepts: "9am", "9:00 AM" (as the row itself writes it), "17:30", "noon",
-    /// "midnight", "at 5" and a bare "5" (5 pm, the quick-add rule for 1–6), "9" (9 am). The whole text
+    /// "midnight", "at 5" and a bare "5" (05:00: 24-hour unless am/pm is typed, as in quick add), "17". The whole text
     /// must be the time: "9am tomorrow" is not one. `DateExpressionParser.matchTime` does the work.
     static func parse(_ raw: String) -> PickerTime? {
         var text = raw.lowercased()

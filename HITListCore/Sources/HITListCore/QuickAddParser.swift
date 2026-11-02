@@ -133,7 +133,13 @@ public struct QuickAddParser: Sendable {
             }
             // Date
             if date == nil, let (pd, n) = dateParser.matchDate(in: lowers, at: i) {
-                date = pd.date; mark(i, n, .date); i += n; continue
+                date = pd.date; mark(i, n, .date); i += n
+                // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
+                if time == nil, i < words.count, !consumed[i],
+                   let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true) {
+                    time = (t.hour, t.minute); mark(i, t.consumed, .time); i += t.consumed
+                }
+                continue
             }
             i += 1
         }
@@ -147,21 +153,33 @@ public struct QuickAddParser: Sendable {
         }
         result.title = titleWords.joined(separator: " ")
 
-        // Resolve date/time.
+        // Resolve date/time. A date the user typed is kept as typed, even in the past ("yesterday").
+        let dateWasTyped = date != nil
         if date == nil, let rule = result.recurrence {
             date = rule.firstOccurrence(onOrAfter: dateParser.today, calendar: dateParser.calendar)
         }
         if let time {
-            var base = date ?? dateParser.today
-            var candidate = dateParser.date(base, hour: time.0, minute: time.1)
-            if date == nil, candidate < dateParser.now {
-                base = dateParser.day(1); candidate = dateParser.date(base, hour: time.0, minute: time.1)
+            var candidate = dateParser.date(date ?? dateParser.today, hour: time.0, minute: time.1)
+            if !dateWasTyped, candidate < dateParser.now {
+                if let rule = result.recurrence {
+                    // Typed after today's time: the rule's next occurrence ("every weekday 9am" at 2 pm is
+                    // tomorrow 9 am). Anchor first so "every month" from the 31st keeps the 31st.
+                    let anchored = rule.anchored(to: candidate, calendar: dateParser.calendar)
+                    result.recurrence = anchored
+                    candidate = anchored.nextOccurrence(after: candidate, calendar: dateParser.calendar)
+                } else {
+                    candidate = dateParser.date(dateParser.day(1), hour: time.0, minute: time.1)
+                }
             }
             result.dueDate = candidate
             result.hasDueTime = true
         } else if let date {
             result.dueDate = date
             result.hasDueTime = false
+        }
+        // "every month" keeps the day it starts on (the 31st stays the 31st after a short month).
+        if let rule = result.recurrence, let due = result.dueDate {
+            result.recurrence = rule.anchored(to: due, calendar: dateParser.calendar)
         }
         result.tokens.sort { $0.range.lowerBound < $1.range.lowerBound }
         return result

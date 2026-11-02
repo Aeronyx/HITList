@@ -48,12 +48,17 @@ enum TaskActions {
     }
 
     /// Completes a task. Recurring tasks are not marked done; their due date advances instead.
+    ///
+    /// Monthly and yearly rules advance from their anchor day, which is stored in the rule string on the
+    /// first roll if the rule came without one (the Repeat menu, older builds): Jan 31 → Feb 28 → Mar 31.
     static func toggleCompletion(_ task: TaskItem, in context: ModelContext) {
         if task.isCompleted {
             task.isCompleted = false
             task.completedAt = nil
         } else if let rule = task.recurrenceRule, let due = task.dueDate {
-            task.dueDate = rule.nextDueDate(from: due, now: Date())
+            let anchored = rule.anchored(to: due)
+            task.dueDate = anchored.nextDueDate(from: due, now: Date())
+            if anchored.anchorDay != rule.anchorDay { task.recurrence = anchored.encoded }
         } else {
             task.isCompleted = true
             task.completedAt = Date()
