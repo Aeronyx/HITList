@@ -391,6 +391,178 @@ final class SyncEnvironmentTests: XCTestCase {
             XCTAssertEqual(SyncEnvironment.current.push, "development")
         }
     }
+
+    // MARK: - Every channel, from the entitlements each build carries (beta review)
+
+    /// What `codesign -d --entitlements :-` printed on 2026-11-02 (`testEntitlementPlistsOfRealBuilds`),
+    /// reduced to the keys detection reads, plus Xcode's iOS development signing.
+    private enum Signed {
+        static let macTestFlight: [String: Any] = [
+            "beta-reports-active": true, "com.apple.developer.aps-environment": "production",
+            "com.apple.developer.icloud-container-environment": "Production"]
+        static let macDevelopment: [String: Any] = [
+            "com.apple.developer.aps-environment": "development",
+            "com.apple.developer.icloud-container-environment": "Development", "com.apple.security.get-task-allow": true]
+        static let iOSExport: [String: Any] = [
+            "aps-environment": "production", "beta-reports-active": true,
+            "com.apple.developer.icloud-container-environment": "Production", "get-task-allow": false]
+        static let iOSDevelopment: [String: Any] = [
+            "aps-environment": "development",
+            "com.apple.developer.icloud-container-environment": "Development", "get-task-allow": true]
+    }
+
+    private func resolve(_ platform: SyncEnvironment.Platform, debug: Bool = false, signed: [String: Any]?,
+                         profile: Bool, parsed: ProvisioningProfile? = nil, receipt: SyncEnvironment.Receipt) -> SyncEnvironment {
+        SyncEnvironment.resolve(.init(platform: platform, isDebugBuild: debug, entitlements: signed, hasProfile: profile,
+                                      profile: parsed, receipt: receipt), build: "13")
+    }
+
+    private func assert(_ env: SyncEnvironment, _ cloudKit: SyncEnvironment.CloudKit, _ channel: SyncEnvironment.Channel,
+                        push: String?, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(env.cloudKit, cloudKit, message, file: file, line: line)
+        XCTAssertEqual(env.channel, channel, message, file: file, line: line)
+        XCTAssertEqual(env.push, push, message, file: file, line: line)
+    }
+
+    func testEveryMacChannel() {
+        assert(resolve(.macOS, debug: true, signed: Signed.macDevelopment, profile: true, receipt: .none),
+               .development, .debug, push: "development", "Debug run from Xcode")
+        assert(resolve(.macOS, signed: Signed.macDevelopment, profile: true, receipt: .none),
+               .development, .xcode, push: "development", "Release build signed for development, copied out of DerivedData")
+        assert(resolve(.macOS, signed: Signed.macTestFlight, profile: true, receipt: .sandbox),
+               .production, .testFlight, push: "production", "TestFlight")
+        assert(resolve(.macOS, signed: Signed.macTestFlight, profile: true, receipt: .none),
+               .production, .testFlight, push: "production", "TestFlight before its receipt is there (Mac apps keep a profile)")
+        assert(resolve(.macOS, signed: Signed.macTestFlight, profile: true, receipt: .production),
+               .production, .appStore, push: "production", "Mac App Store")
+        assert(resolve(.macOS, debug: true, signed: nil, profile: false, receipt: .none),
+               .unknown, .debug, push: nil, "unsigned (CI): nothing to read, so nothing is isolated")
+    }
+
+    func testEveryIOSChannel() {
+        assert(resolve(.iOSDevice, debug: true, signed: Signed.iOSDevelopment, profile: true, receipt: .none),
+               .development, .debug, push: "development", "Debug run on the phone from Xcode")
+        assert(resolve(.iOSDevice, signed: Signed.iOSExport, profile: false, receipt: .sandbox),
+               .production, .testFlight, push: "production", "TestFlight")
+        assert(resolve(.iOSDevice, signed: Signed.iOSExport, profile: false, receipt: .production),
+               .production, .appStore, push: "production", "App Store")
+        assert(resolve(.iOSSimulator, debug: true, signed: nil, profile: false, receipt: .none),
+               .development, .debug, push: "development", "simulator, signature not readable")
+        assert(resolve(.iOSSimulator, debug: true, signed: Signed.iOSDevelopment, profile: false, receipt: .none),
+               .development, .debug, push: "development", "simulator with its simulated entitlements")
+    }
+
+    func testAnUnreadableSignatureFallsBackToTheProfileAndTheReceipt() {
+        let development = ProvisioningProfile.parse(profile(getTaskAllow: true, environments: ["Development", "Production"], aps: "development"))
+        assert(resolve(.iOSDevice, debug: true, signed: nil, profile: true, parsed: development, receipt: .none),
+               .development, .debug, push: "development", "a development profile")
+        assert(resolve(.iOSDevice, signed: nil, profile: false, receipt: .sandbox),
+               .production, .testFlight, push: "production", "no profile and a TestFlight receipt")
+    }
+
+    /// The rule brief 26 asked for: a TestFlight or App Store build is never Development, whatever else
+    /// says so, because Development opens HITList-Development.store, empty, and looks like data loss.
+    func testATestFlightBuildIsNeverDevelopment() {
+        assert(resolve(.macOS, signed: Signed.macDevelopment, profile: true, receipt: .sandbox),
+               .production, .testFlight, push: "development", "a TestFlight receipt, whatever the entitlements claim")
+        var exported = Signed.macDevelopment
+        exported["beta-reports-active"] = true
+        XCTAssertEqual(resolve(.macOS, signed: exported, profile: true, receipt: .none).cloudKit, .production,
+                       "exported for App Store Connect")
+        let development = ProvisioningProfile.parse(profile(getTaskAllow: true, environments: ["Development", "Production"], aps: "development"))
+        assert(resolve(.iOSDevice, signed: nil, profile: true, parsed: development, receipt: .sandbox),
+               .production, .testFlight, push: "development", "a TestFlight receipt beats a development profile")
+        // Every TestFlight install (sandbox receipt), whatever its signature says or whether it can be read,
+        // and every App Store install (production receipt on an exported build, or no profile at all).
+        let anySignature: [[String: Any]?] = [Signed.macTestFlight, Signed.iOSExport, Signed.macDevelopment, Signed.iOSDevelopment, nil]
+        for platform in [SyncEnvironment.Platform.macOS, .iOSDevice] {
+            for signed in anySignature {
+                let testFlight = resolve(platform, signed: signed, profile: platform == .macOS, receipt: .sandbox)
+                XCTAssertEqual(testFlight.channel, .testFlight, "\(platform)")
+                XCTAssertEqual(testFlight.cloudKit, .production, "\(platform) \(String(describing: signed))")
+                XCTAssertNil(SyncStoreGuard.isolationSuffix(environment: testFlight, processEnvironment: [:]))
+            }
+            for signed in [Signed.macTestFlight, Signed.iOSExport] {
+                let appStore = resolve(platform, signed: signed, profile: platform == .macOS, receipt: .production)
+                XCTAssertEqual(appStore.channel, .appStore, "\(platform)")
+                XCTAssertEqual(appStore.cloudKit, .production, "\(platform)")
+            }
+        }
+        XCTAssertEqual(resolve(.iOSDevice, signed: nil, profile: false, receipt: .production).cloudKit, .production,
+                       "an iOS App Store install whose signature can't be read")
+    }
+
+    /// The store guard's own lock: even an environment that says Development keeps the real store when
+    /// its channel is TestFlight or the App Store.
+    func testTheStoreGuardNeverIsolatesADistributionBuild() {
+        for channel in [SyncEnvironment.Channel.testFlight, .appStore] {
+            let env = SyncEnvironment(cloudKit: .development, push: "development", channel: channel, build: "13")
+            XCTAssertNil(SyncStoreGuard.isolationSuffix(environment: env, processEnvironment: [:]), channel.rawValue)
+        }
+    }
+
+    // MARK: Reading a binary's own entitlements
+
+    private func le32(_ v: UInt32) -> Data { withUnsafeBytes(of: v.littleEndian) { Data($0) } }
+    private func be32(_ v: UInt32) -> Data { withUnsafeBytes(of: v.bigEndian) { Data($0) } }
+
+    /// A minimal 64-bit Mach-O: header, one LC_CODE_SIGNATURE, and a super blob holding an entitlements
+    /// blob (after a code directory slot, as real signatures have).
+    private func machO(entitlements xml: String?) -> Data {
+        var blob = Data()
+        if let xml {
+            let body = Data(xml.utf8)
+            let directory = be32(0xFADE_0C02) + be32(12) + be32(0)
+            let entitlements = be32(0xFADE_7171) + be32(UInt32(8 + body.count)) + body
+            let header = 12 + 2 * 8
+            blob = be32(0xFADE_0CC0) + be32(UInt32(header + directory.count + entitlements.count)) + be32(2)
+                + be32(0) + be32(UInt32(header)) + be32(5) + be32(UInt32(header + directory.count))
+                + directory + entitlements
+        }
+        let signatureOffset: UInt32 = 32 + 16
+        var data = le32(0xFEED_FACF) + le32(0x0100_000C) + le32(0) + le32(2) + le32(1) + le32(16) + le32(0) + le32(0)
+        data += le32(0x1D) + le32(16) + le32(signatureOffset) + le32(UInt32(blob.count))
+        return data + blob
+    }
+
+    private let sampleEntitlements = #"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>beta-reports-active</key><true/><key>com.apple.developer.icloud-container-environment</key><string>Production</string><key>aps-environment</key><string>production</string></dict></plist>"#
+
+    func testTheEntitlementsAreReadFromTheCodeSignature() throws {
+        let read = try XCTUnwrap(CodeSignature.entitlements(inExecutable: machO(entitlements: sampleEntitlements)))
+        XCTAssertEqual(read["com.apple.developer.icloud-container-environment"] as? String, "Production")
+        XCTAssertEqual(read["beta-reports-active"] as? Bool, true)
+        XCTAssertEqual(read["aps-environment"] as? String, "production")
+
+        // A universal binary: the first architecture's signature.
+        let thin = machO(entitlements: sampleEntitlements)
+        let fat = be32(0xCAFE_BABE) + be32(1) + be32(0x0100_000C) + be32(0) + be32(0x4000) + be32(UInt32(thin.count)) + be32(14)
+        let universal = fat + Data(count: 0x4000 - fat.count) + thin
+        XCTAssertEqual(CodeSignature.entitlements(inExecutable: universal)?["beta-reports-active"] as? Bool, true)
+    }
+
+    func testAnythingElseReadsAsNoEntitlements() {
+        XCTAssertNil(CodeSignature.entitlements(inExecutable: machO(entitlements: nil)), "unsigned")
+        XCTAssertNil(CodeSignature.entitlements(inExecutable: Data("not a binary".utf8)))
+        XCTAssertNil(CodeSignature.entitlements(inExecutable: Data()))
+        let whole = machO(entitlements: sampleEntitlements)
+        for cut in stride(from: 0, to: whole.count, by: 7) {
+            XCTAssertNil(CodeSignature.entitlements(inExecutable: whole.prefix(cut)), "cut at \(cut) of \(whole.count)")
+        }
+    }
+
+    /// The test host is the app itself: its executable's signature is what a Debug build carries.
+    func testThisAppsOwnSignatureIsReadable() throws {
+        try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] != nil, "unsigned builds carry no entitlements")
+        let executable = try XCTUnwrap(Bundle.main.executableURL)
+        let read = CodeSignature.entitlements(ofExecutableAt: executable)
+        #if os(macOS)
+        let entitlements = try XCTUnwrap(read, "the Mac Debug build is signed with its entitlements")
+        XCTAssertEqual(entitlements[SyncEnvironment.cloudKitEnvironmentKey] as? String, "Development")
+        XCTAssertEqual(entitlements[SyncEnvironment.macGetTaskAllowKey] as? Bool, true)
+        #else
+        if let read { XCTAssertNotEqual(read[SyncEnvironment.cloudKitEnvironmentKey] as? String, "Production") }
+        #endif
+    }
 }
 
 /// The words of Settings → iCloud → Sync log (brief 25, item 5): row times, details, the export's header.
