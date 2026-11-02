@@ -81,6 +81,18 @@ struct PopoutHost: ViewModifier {
                 if !open { confirmingDiscard = false; quickAddHasContent = false }
             }
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
+            // A task deleted elsewhere (another device, window or a script) closes its popout, panel or
+            // sheet: the query for it empties as the deletion reaches this context, and every finished
+            // import checks again.
+            .background {
+                if let id = popouts.state.taskID {
+                    TaskDeletionWatch(id: id) { popouts.closeTaskIfDeleted(in: context) }
+                        .id(id)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .cloudKitImportSucceeded)) { _ in
+                popouts.closeTaskIfDeleted(in: context)
+            }
             // Settings → General → Confirm before deleting: every delete path asks through the controller,
             // and this one dialog answers for all of them.
             .confirmationDialog(popouts.pendingDelete.map { "Delete “\($0.title)”?" } ?? "Delete?",
@@ -333,6 +345,26 @@ extension View {
             // Flatten before the shadow so the panel animates as one layer (the Mac dropped frames).
             .compositingGroup()
             .shadow(color: .black.opacity(0.45), radius: 22, y: 10)
+    }
+}
+
+// MARK: - A task deleted elsewhere
+
+/// Watches the store for the task on show; when it is gone, `onGone` (which checks again and closes the
+/// popout). Draws nothing.
+private struct TaskDeletionWatch: View {
+    @Query private var matches: [TaskItem]
+    let onGone: () -> Void
+
+    init(id: UUID, onGone: @escaping () -> Void) {
+        _matches = Query(filter: #Predicate<TaskItem> { $0.id == id })
+        self.onGone = onGone
+    }
+
+    var body: some View {
+        Color.clear
+            .accessibilityHidden(true)
+            .onChange(of: matches.isEmpty) { _, gone in if gone { onGone() } }
     }
 }
 
