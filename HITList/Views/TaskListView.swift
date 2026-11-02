@@ -320,25 +320,26 @@ struct TaskListView: View {
     // MARK: - Completion
 
     /// Completing saves at once (sync isn't held back by the animation) and keeps the row on screen
-    /// while it celebrates, then collapses it; un-completing just fades the row back to normal.
+    /// while it celebrates, then collapses it. Completing is final until Undo: a tap on a row still in
+    /// its animation does nothing (`CompletionAnimator.tap`); only a task showing as completed unchecks,
+    /// fading back to normal.
     private func toggleCompletion(_ task: TaskItem) {
-        let checked = task.isCompleted || completions.phase(of: task.id) != nil
-        if checked, let record = toast.record(for: task.id) {
+        let record = toast.record(for: task.id)
+        switch completions.tap(on: task.id, isCompleted: task.isCompleted, undoable: record != nil) {
+        case .ignore:
+            return
+        case .undo:
             // Un-checking a row the toast still offers to undo is that undo (it knows how to put a
             // recurring task's date back).
             withAnimation(HITMotion.exit) { toast.remove(task.id) }
-            revert([record])
+            revert(record.map { [$0] } ?? [])
             return
-        }
-        if task.isCompleted {
-            withAnimation(HITMotion.standard) {
-                completions.cancel(task.id)
-                TaskActions.toggleCompletion(task, in: context)
-            }
+        case .uncheck:
+            withAnimation(HITMotion.standard) { TaskActions.toggleCompletion(task, in: context) }
             return
+        case .complete:
+            break
         }
-        // A recurring task mid-animation: it already advanced; a second tap must not advance it again.
-        guard completions.phase(of: task.id) == nil else { return }
 
         let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
             .restoreDueDate(due)
