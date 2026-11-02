@@ -53,7 +53,7 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## How sessions run (from 2026-10-31)
 Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
 worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 11 (0.3.4) is live; the next upload is 0.3.5 (12).
+main (Fable) session, which reviews, tests, merges and releases. TestFlight build 12 (0.3.5) is live; the next upload is 0.3.6 (13), the first beta for George's friends.
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
