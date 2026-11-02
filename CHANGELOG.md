@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.3.5
+## 0.3.5 — build 12, 2026-11-02
 
 - iPhone lists look like the Mac's: rows flat on the background with hairline separators, headers over the
   checkboxes; no more inset cards on Today and the Inbox. The undo toast rises above the island instead of
