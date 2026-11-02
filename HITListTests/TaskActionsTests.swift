@@ -46,7 +46,7 @@ final class TaskActionsTests: XCTestCase {
         XCTAssertEqual(t.dueDate, cal.date(byAdding: component, value: value, to: due), file: file, line: line)
         XCTAssertFalse(t.isCompleted, "a recurring task rolls forward instead of completing", file: file, line: line)
         XCTAssertNil(t.completedAt, file: file, line: line)
-        XCTAssertEqual(t.recurrence, rule.encoded, file: file, line: line)
+        XCTAssertEqual(t.recurrenceRule, rule, "same repeat (a monthly rule gains its anchor day)", file: file, line: line)
         XCTAssertEqual(try allTasks().count, 1, "the occurrence rolls in place; no copy is created", file: file, line: line)
     }
 
@@ -63,6 +63,63 @@ final class TaskActionsTests: XCTestCase {
         let next = try XCTUnwrap(t.dueDate)
         XCTAssertEqual(cal.component(.month, from: next), 2)
         XCTAssertEqual(cal.component(.day, from: next), cal.range(of: .day, in: .month, for: next)!.count)
+    }
+
+    // MARK: Anchor day (George, 2026-11-02)
+
+    private func day(_ year: Int, _ month: Int, _ day: Int, hour: Int = 0) -> Date {
+        cal.date(from: DateComponents(year: year, month: month, day: day, hour: hour))!
+    }
+
+    private func lastDayOfFebruary(_ year: Int) -> Int { cal.range(of: .day, in: .month, for: day(year, 2, 1))!.count }
+
+    /// A rule from the Repeat menu (no anchor) on Jan 31: Feb 28 (or 29), then Mar 31, not Mar 28.
+    func testMonthlyOnThe31stComesBackToThe31st() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let t = try task(due: day(year, 1, 31, hour: 9), hasDueTime: true, recurrence: .monthly)
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 2, lastDayOfFebruary(year), hour: 9))
+        XCTAssertEqual(t.recurrence, "monthly;1;;31", "the anchor is stored on the first roll")
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 3, 31, hour: 9))
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 4, 30, hour: 9))
+        XCTAssertEqual(t.recurrenceRule, .monthly)
+    }
+
+    func testCompletingOnTheLastDayOfFebruaryLandsOnMarch31() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let t = try task(due: day(year, 2, lastDayOfFebruary(year)), recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 3, 31))
+        XCTAssertEqual(t.recurrence, "monthly;1;;31")
+    }
+
+    func testYearlyOnFebruary29ReturnsInTheNextLeapYear() throws {
+        var leap = cal.component(.year, from: Date()) + 1
+        while lastDayOfFebruary(leap) != 29 { leap += 1 }
+        let t = try task(due: day(leap, 2, 29), recurrence: .yearly)
+        for offset in 1...4 {
+            TaskActions.toggleCompletion(t, in: context)
+            XCTAssertEqual(t.dueDate, day(leap + offset, 2, offset == 4 ? 29 : 28), "year +\(offset)")
+        }
+        XCTAssertEqual(t.recurrence, "yearly;1;;29")
+    }
+
+    /// A "31st" task the user moved to the 15th repeats on the 15th, and its stored anchor follows.
+    func testAMovedMonthlyTaskRepeatsOnItsNewDay() throws {
+        let year = cal.component(.year, from: Date()) + 1
+        let t = try task(due: day(year, 3, 15), recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.dueDate, day(year, 4, 15))
+        XCTAssertEqual(t.recurrence, "monthly;1;;15")
+    }
+
+    func testWeeklyRuleStringIsLeftAlone() throws {
+        let t = try task(due: tomorrow(), recurrence: nil)
+        t.recurrence = "weekly;1;4,2"   // as an older build or an import might have written it
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.recurrence, "weekly;1;4,2", "only an anchor change rewrites the rule")
     }
 
     func testRecurringKeepsTimeOfDayWhenHasDueTime() throws {

@@ -47,7 +47,9 @@ final class QuickAddCreateTests: XCTestCase {
         XCTAssertEqual(task.priority, 1)
         XCTAssertEqual(task.dueDate, parsed.dueDate)
         XCTAssertTrue(task.hasDueTime)
-        XCTAssertEqual(task.recurrence, RecurrenceRule.monthly.encoded)
+        XCTAssertEqual(task.recurrenceRule, .monthly)
+        let dueDay = Calendar.current.component(.day, from: try XCTUnwrap(parsed.dueDate))
+        XCTAssertEqual(task.recurrence, "monthly;1;;\(dueDay)", "a monthly rule keeps the day it started on")
         XCTAssertEqual(task.project?.name, "Finance")
         XCTAssertEqual(Set(task.labelList.map(\.name)), ["bills", "home"])
         XCTAssertEqual(try fetch(Project.self).count, 1)
@@ -110,6 +112,20 @@ final class QuickAddCreateTests: XCTestCase {
             XCTAssertEqual(error.localizedDescription, TaskActions.ActionError.emptyTitle.localizedDescription)
         }
         XCTAssertEqual(try fetch(TaskItem.self).count, 0)
+    }
+
+    /// George, 2026-11-02: "Standup every weekday 9am" typed on a Wednesday at 2 pm is due Thursday 9 am.
+    func testARepeatingTaskTypedAfterItsTimeIsCreatedAtTheNextOccurrence() throws {
+        let cal = Calendar.current
+        var wednesday = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))!
+        while cal.component(.weekday, from: wednesday) != 4 { wednesday = cal.date(byAdding: .day, value: 1, to: wednesday)! }
+        let typedAt = cal.date(bySettingHour: 14, minute: 0, second: 0, of: wednesday)!
+        let parsed = QuickAddParser(now: typedAt, calendar: cal).parse("Standup every weekday 9am")
+        let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: nil, in: context)
+        let thursday = cal.date(byAdding: .day, value: 1, to: wednesday)!
+        XCTAssertEqual(task.dueDate, cal.date(bySettingHour: 9, minute: 0, second: 0, of: thursday))
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(task.recurrence, "weekly;1;2,3,4,5,6")
     }
 
     func testEveryThreeDaysQuickAddCreatesRecurringTask() throws {
