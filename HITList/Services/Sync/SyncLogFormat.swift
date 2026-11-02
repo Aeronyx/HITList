@@ -6,6 +6,9 @@ enum SyncEventType: String, Sendable, Equatable, CaseIterable {
     case setup
     case importing = "import"
     case exporting = "export"
+
+    /// "Setup", "Import", "Export": how a log line starts.
+    var title: String { rawValue.capitalized }
 }
 
 /// How the sync log spells durations, errors and counts. Pure, so tests pin the wording.

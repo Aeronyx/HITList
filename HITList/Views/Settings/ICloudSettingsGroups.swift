@@ -1,8 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…. Shared by
-/// the iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
+/// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…, and on
+/// the iPhone the Sync log (a sheet; the Mac page shows the log inline, `SyncLogSection`). Shared by the
+/// iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
 struct ICloudSyncGroup: View {
     var showsLastChange = false
     @Environment(\.modelContext) private var context
@@ -10,6 +11,7 @@ struct ICloudSyncGroup: View {
     @State private var showSyncDetails = false
     @State private var isCheckingICloud = false
     @State private var iCloudCheck: ICloudCheck?
+    @State private var showSyncLog = false
 
     static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows."
 
@@ -23,6 +25,10 @@ struct ICloudSyncGroup: View {
                 LastSyncChangeRow()
             }
             SyncEnvironmentRow()
+            #if os(iOS)
+            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { showSyncLog = true }
+                .accessibilityIdentifier("settings-sync-log-row")
+            #endif
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
@@ -47,6 +53,9 @@ struct ICloudSyncGroup: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("settings-check-icloud-result")
             }
+        }
+        .sheet(isPresented: $showSyncLog) {
+            SyncLogSheet().slateSheet()
         }
     }
 

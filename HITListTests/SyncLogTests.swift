@@ -371,6 +371,58 @@ final class SyncEnvironmentTests: XCTestCase {
     }
 }
 
+/// The words of Settings → iCloud → Sync log (brief 25, item 5): row times, details, the export's header.
+final class SyncLogTextTests: XCTestCase {
+    private let utc = TimeZone(identifier: "UTC")!
+    /// 2026-11-02 17:17:49.677 UTC.
+    private let now = Date(timeIntervalSince1970: 1_793_639_869.677)
+
+    func testRowTimesUseA24HourClockAndADateBeforeToday() {
+        XCTAssertEqual(SyncLogText.rowTime(now, now: now, timeZone: utc), "17:17:49")
+        XCTAssertEqual(SyncLogText.rowTime(now.addingTimeInterval(-6 * 3600), now: now, timeZone: utc), "11:17:49")
+        let nov1 = Date(timeIntervalSince1970: 1_793_558_314) // 2026-11-01 18:38:34 UTC
+        XCTAssertEqual(SyncLogText.rowTime(nov1, now: now, timeZone: utc), "Nov 1, 18:38:34")
+    }
+
+    func testRowDetailIsTheKindThenTheFields() {
+        let entry = SyncLogEntry(seq: 1, date: now, pid: 1, kind: .event, level: .info, message: "export finished in 0.70 s",
+                                 fields: ["id": "9D6205C0", "duration": "0.70 s", "afterSave": "0.72 s"])
+        XCTAssertEqual(SyncLogText.rowDetail(entry), "CloudKit · afterSave=0.72 s · duration=0.70 s · id=9D6205C0")
+        let bare = SyncLogEntry(seq: 2, date: now, pid: 1, kind: .scene, level: .info, message: "App active")
+        XCTAssertEqual(SyncLogText.rowDetail(bare), "App")
+    }
+
+    func testNewestFirstBreaksTiesBySequence() {
+        let a = SyncLogEntry(seq: 1, date: now, pid: 1, kind: .note, level: .info, message: "a")
+        let b = SyncLogEntry(seq: 2, date: now, pid: 1, kind: .note, level: .info, message: "b")
+        let c = SyncLogEntry(seq: 3, date: now.addingTimeInterval(-1), pid: 1, kind: .note, level: .info, message: "c")
+        XCTAssertEqual([c, a, b].sorted(by: SyncLogText.newestFirst).map(\.message), ["b", "a", "c"])
+    }
+
+    func testTheExportStartsWithAHeader() {
+        let env = SyncEnvironment(cloudKit: .production, push: "production", channel: .testFlight, build: "11")
+        let header = SyncLogText.header(now: now, environment: env, timeZone: utc)
+        XCTAssertEqual(header.first, "HITList sync log")
+        XCTAssertTrue(header[1].hasPrefix("HITList \(AppInfo.versionLabel) · "), header[1])
+        XCTAssertEqual(header[2], "CloudKit: Production · TestFlight build 11")
+        XCTAssertEqual(header[3], "Exported 2026-11-02 17:17:49 Z")
+        XCTAssertEqual(SyncLogText.fileName(now: now, timeZone: utc), "HITList sync log 2026-11-02")
+    }
+
+    func testTheFullTextIsOldestFirstUnderTheHeader() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "SyncLogTextTests-\(UUID().uuidString).jsonl")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let log = SyncLog(url: url, mirrorToOSLog: false)
+        log.record(.note, "second", date: now)
+        log.record(.note, "first", date: now.addingTimeInterval(-60))
+        let lines = SyncLogText.full(log).components(separatedBy: "\n")
+        XCTAssertEqual(lines.first, "HITList sync log")
+        let first = try XCTUnwrap(lines.firstIndex { $0.hasSuffix("first") })
+        let second = try XCTUnwrap(lines.firstIndex { $0.hasSuffix("second") })
+        XCTAssertLessThan(first, second, "sorted by time, whatever order the lines were written in")
+    }
+}
+
 /// A thread-safe step counter for the injected clock.
 private final class Counter: @unchecked Sendable {
     private let lock = NSLock()

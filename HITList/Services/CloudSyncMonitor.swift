@@ -617,7 +617,7 @@ final class CloudSyncMonitor {
         let shortID = String(event.identifier.uuidString.prefix(8))
         guard let end = event.endDate else {
             inFlight[event.identifier] = event.startDate
-            write(.event, "\(type.rawValue) started", fields: ["id": shortID])
+            write(.event, "\(type.title) started", fields: ["id": shortID])
             watch(.eventStarted(id: event.identifier, type: type, at: event.startDate))
             return
         }
@@ -659,7 +659,7 @@ final class CloudSyncMonitor {
             lastErrorAt = now
             Self.log.error("\(text, privacy: .public)")
             fields.merge(SyncLogFormat.errorFields(error)) { $1 }
-            write(.event, "\(type.rawValue) failed after \(duration): \(SyncState.shortReason(for: error))",
+            write(.event, "\(type.title) failed after \(duration): \(SyncState.shortReason(for: error))",
                            level: .error, fields: fields)
             if event.type == .import { resolveImportWaiters(.failed) }
         } else {
@@ -679,7 +679,7 @@ final class CloudSyncMonitor {
                 lastChangeAt = now
                 lastChangePhase = phase
             }
-            write(.event, "\(type.rawValue) finished in \(duration)", fields: fields)
+            write(.event, "\(type.title) finished in \(duration)", fields: fields)
             if event.type == .import {
                 NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil)
                 resolveImportWaiters(.succeeded)
