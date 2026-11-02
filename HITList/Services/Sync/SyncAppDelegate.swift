@@ -48,6 +48,7 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
         monitor.pushReceived(userInfo, appState: state)
         Task { @MainActor in
             let outcome = await monitor.nextImport(within: SyncAppDelegateSupport.backgroundImportWait)
+            monitor.pushHandled(stillInBackground: application.applicationState == .background)
             switch outcome {
             case .succeeded: completionHandler(.newData)
             case .failed: completionHandler(.failed)
