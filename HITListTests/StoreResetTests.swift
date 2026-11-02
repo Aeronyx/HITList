@@ -81,4 +81,80 @@ final class StoreResetTests: XCTestCase {
         XCTAssertNil(try ModelContainerFactory.trashStore(at: dir.appending(path: "HITList.store"), into: dir.appending(path: "Trash"), now: t0))
         XCTAssertFalse(fm.fileExists(atPath: dir.appending(path: "Trash").path))
     }
+
+    // MARK: - Which store a reset lands on (beta review)
+
+    private func defaults() -> UserDefaults {
+        let name = "HITListTests.\(UUID().uuidString)"
+        addTeardownBlock { UserDefaults().removePersistentDomain(forName: name) }
+        return UserDefaults(suiteName: name)!
+    }
+
+    /// Every build on a device shares the app group's defaults, so a reset asked for by a Development build
+    /// (HITList-Development.store) or a side-store run must not trash the TestFlight build's HITList.store.
+    func testAResetAskedForByAnotherStoreLeavesThisStoreAlone() throws {
+        let dir = try tempDir()
+        let store = try makeStore(in: dir, tag: "production")
+        let defaults = defaults()
+        LocalCacheReset.request(storeName: "HITList-Development.store", defaults: defaults)
+
+        let outcome = ModelContainerFactory.resetStoreIfRequested(at: store, defaults: defaults, othersExited: { true }, now: t0)
+
+        XCTAssertEqual(outcome, .otherStore("HITList-Development.store"))
+        XCTAssertEqual(String(decoding: try Data(contentsOf: store), as: UTF8.self), "production", "the real store stays put")
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), "HITList-Development.store",
+                       "the request waits for a launch of the store that asked")
+    }
+
+    func testAResetForThisStoreTrashesItAndClearsTheRequest() throws {
+        let dir = try tempDir()
+        let store = try makeStore(in: dir, tag: "v1")
+        let defaults = defaults()
+        LocalCacheReset.request(storeName: "HITList.store", defaults: defaults)
+
+        let outcome = ModelContainerFactory.resetStoreIfRequested(at: store, defaults: defaults, othersExited: { true }, now: t0)
+
+        guard case .reset(let folder) = outcome else { return XCTFail("expected a reset, got \(outcome)") }
+        XCTAssertTrue(fm.fileExists(atPath: folder.appending(path: "HITList.store").path))
+        XCTAssertFalse(fm.fileExists(atPath: store.path))
+        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults))
+    }
+
+    func testAResetRequestedBeforeThisBuildMeansTheMainStore() throws {
+        let defaults = defaults()
+        defaults.set(true, forKey: ModelContainerFactory.resetLocalStoreKey)  // what 0.3.5 and earlier wrote
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), "HITList.store")
+        defaults.set(false, forKey: ModelContainerFactory.resetLocalStoreKey)
+        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults))
+    }
+
+    func testAResetWaitsWhileAnotherInstanceHasTheStoreOpen() throws {
+        let dir = try tempDir()
+        let store = try makeStore(in: dir, tag: "v1")
+        let defaults = defaults()
+        LocalCacheReset.request(storeName: "HITList.store", defaults: defaults)
+
+        XCTAssertEqual(ModelContainerFactory.resetStoreIfRequested(at: store, defaults: defaults, othersExited: { false }, now: t0), .postponed)
+        XCTAssertTrue(fm.fileExists(atPath: store.path))
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), "HITList.store")
+    }
+
+    /// The trash keeps two copies per store: resetting a Development store must not prune the copies of
+    /// the real store, the last way back to changes that hadn't synced.
+    func testEachStoreKeepsItsOwnTrash() throws {
+        let dir = try tempDir()
+        let main = dir.appending(path: "HITList.store")
+        let side = dir.appending(path: "HITList-Development.store")
+        XCTAssertEqual(ModelContainerFactory.trashFolder(for: main).lastPathComponent, "Trash")
+        XCTAssertNotEqual(ModelContainerFactory.trashFolder(for: side), ModelContainerFactory.trashFolder(for: main))
+        XCTAssertEqual(ModelContainerFactory.trashFolder(for: side).deletingLastPathComponent().standardizedFileURL,
+                       dir.standardizedFileURL)
+    }
+
+    func testStoreNames() {
+        XCTAssertEqual(ModelContainerFactory.storeName(suffix: nil), "HITList.store")
+        XCTAssertEqual(ModelContainerFactory.storeName(suffix: ""), "HITList.store")
+        XCTAssertEqual(ModelContainerFactory.storeName(suffix: "Development"), "HITList-Development.store")
+        XCTAssertEqual(ModelContainerFactory.storeName(suffix: "../evil"), "HITList.store", "only letters, digits and dashes")
+    }
 }

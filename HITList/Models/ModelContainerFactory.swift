@@ -12,7 +12,8 @@ enum ModelContainerFactory {
     /// Whether this launch moved the old store aside (Settings → Reset local cache).
     nonisolated(unsafe) static var didResetStore = false
 
-    /// Set by Settings; `make()` moves the store into the trash before opening the container.
+    /// Set by Settings to the name of the store to reset (`LocalCacheReset.request`); `make()` moves that
+    /// store into the trash before opening the container (`resetStoreIfRequested`).
     static let resetLocalStoreKey = "resetLocalStoreOnNextLaunch"
 
     /// Why the container runs without CloudKit, in a few words for the sync status line.
@@ -28,20 +29,24 @@ enum ModelContainerFactory {
     /// `HITLIST_STORE_SUFFIX=schema` and `-seedSampleData` opens an empty store beside the real one and
     /// exports a record carrying every field, which creates the new fields in CloudKit Development
     /// without ever opening the real (Production-mirrored) store under the Development environment.
-    private static var storeName: String {
-        if let suffix = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"],
-           !suffix.isEmpty, suffix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) {
+    static var storeName: String { storeName(suffix: ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"]) }
+
+    static func storeName(suffix: String?) -> String {
+        if let suffix, !suffix.isEmpty, suffix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) {
             return "HITList-\(suffix).store"
         }
-        return "HITList.store"
+        return mainStoreName
     }
+
+    /// The real store: the one TestFlight and App Store builds open.
+    static let mainStoreName = "HITList.store"
 
     /// Builds the CloudKit-backed container, falling back to local-only storage if CloudKit
     /// can't be set up (not signed in to iCloud, missing entitlement during development, ...).
     static func make() -> ModelContainer {
         let schema = HITListSchema.schema
         let url = storeURL()
-        if let url { resetStoreIfRequested(at: url) }
+        if let url, case .reset = resetStoreIfRequested(at: url) { didResetStore = true }
         let disableCloud = AppGroup.defaults.bool(forKey: "disableCloudKit")
         if !disableCloud {
             let cloud = configuration(schema: schema, url: url, cloudKitDatabase: .private(HITListSchema.cloudKitContainerID))
@@ -142,30 +147,70 @@ enum ModelContainerFactory {
     /// Moves the store aside so CloudKit re-imports everything into a fresh one. Moving files is the
     /// only safe reset: deleting objects, or `ModelContainer.deleteAllData()`, would mirror the
     /// deletions to CloudKit and wipe every device.
-    private static func resetStoreIfRequested(at url: URL) {
-        let defaults = AppGroup.defaults
-        guard defaults.bool(forKey: resetLocalStoreKey) else { return }
-        guard otherInstancesExited() else {
+    enum ResetOutcome: Equatable {
+        /// No reset was asked for.
+        case none
+        /// The store moved into this trash folder.
+        case reset(URL)
+        /// Asked for, but there was no store to move.
+        case noStore
+        /// Asked for by a launch that opened another store (named); left for a launch of that store.
+        case otherStore(String)
+        /// Another instance still had the store open; tried again on the next launch.
+        case postponed
+        case failed(String)
+    }
+
+    /// The store a pending reset is for, or nil when none is pending. Every build on a device shares the
+    /// app group's defaults (TestFlight's HITList.store, a Development build's HITList-Development.store, a
+    /// schema run's side store), so the request names its store and only a launch of that store acts on it.
+    /// Builds up to 0.3.5 wrote `true`, and only ever had HITList.store.
+    static func requestedReset(in defaults: UserDefaults) -> String? {
+        switch defaults.object(forKey: resetLocalStoreKey) {
+        case let name as String: return name.isEmpty ? nil : name
+        case let flag as Bool: return flag ? mainStoreName : nil
+        default: return nil
+        }
+    }
+
+    /// Where `trashStore` keeps the copies of the store at `url`: `Trash` for HITList.store (as before),
+    /// a folder of its own for any other store, so resetting one never prunes another's copies.
+    static func trashFolder(for url: URL) -> URL {
+        let name = url.lastPathComponent == mainStoreName ? "Trash" : "Trash-\(url.deletingPathExtension().lastPathComponent)"
+        return url.deletingLastPathComponent().appending(path: name)
+    }
+
+    /// Moves the store at `url` aside when a reset was asked for it (`LocalCacheReset.request`), and only
+    /// then: a request from a launch that opened another store is left for that store.
+    @discardableResult
+    static func resetStoreIfRequested(at url: URL, defaults: UserDefaults = AppGroup.defaults,
+                                      othersExited: () -> Bool = otherInstancesExited, now: Date = .now) -> ResetOutcome {
+        guard let requested = requestedReset(in: defaults) else { return .none }
+        guard requested == url.lastPathComponent else {
+            log.notice("Reset local store asked for \(requested, privacy: .public); this launch opened \(url.lastPathComponent, privacy: .public), so nothing moves")
+            return .otherStore(requested)
+        }
+        guard othersExited() else {
             log.error("Reset local store postponed: another HITList instance still has the store open")
-            return
+            return .postponed
         }
         defaults.removeObject(forKey: resetLocalStoreKey)
-        let trash = url.deletingLastPathComponent().appending(path: "Trash")
         do {
-            if let folder = try trashStore(at: url, into: trash) {
-                didResetStore = true
+            if let folder = try trashStore(at: url, into: trashFolder(for: url), now: now) {
                 log.notice("Reset local store: moved \(url.lastPathComponent, privacy: .public) to \(folder.path, privacy: .public); CloudKit will re-import")
-            } else {
-                log.notice("Reset local store: no store at \(url.path, privacy: .public)")
+                return .reset(folder)
             }
+            log.notice("Reset local store: no store at \(url.path, privacy: .public)")
+            return .noStore
         } catch {
             log.error("Reset local store failed, keeping the current store: \(error.localizedDescription, privacy: .public)")
+            return .failed(error.localizedDescription)
         }
     }
 
     /// The relaunch after Settings → Reset starts the new instance before the old one has quit; wait for
     /// it (up to 10 s) so the store is never moved while another process has it open.
-    private static func otherInstancesExited() -> Bool {
+    static func otherInstancesExited() -> Bool {
         #if os(macOS)
         guard let bundleID = Bundle.main.bundleIdentifier else { return true }
         let me = ProcessInfo.processInfo.processIdentifier
