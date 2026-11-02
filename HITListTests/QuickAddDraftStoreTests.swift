@@ -1,7 +1,11 @@
 import XCTest
+import HITListCore
 @testable import HITList
 
-/// Sticky quick-add drafts (George, build 11): what is typed comes back.
+/// Sticky drafts, redefined (George, 2026-11-02, brief 28): only "don't lose it". The open card, with
+/// something in it, comes back after the app was killed, in its own list; a card opened fresh never gets a
+/// stored draft; every way of closing the card clears it.
+@MainActor
 final class QuickAddDraftStoreTests: XCTestCase {
     private var defaults: UserDefaults!
     private var suite: String!
@@ -15,67 +19,166 @@ final class QuickAddDraftStoreTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
-    func testRoundTripsAndClears() {
-        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "nothing stored yet")
-        QuickAddDraftStore.save(text: "Call the bank tom 9am", notes: "Ask about the card", to: defaults)
-        XCTAssertEqual(QuickAddDraftStore.load(from: defaults),
-                       QuickAddDraftStore.Stored(text: "Call the bank tom 9am", notes: "Ask about the card"))
-        QuickAddDraftStore.clear(from: defaults)
-        XCTAssertNil(QuickAddDraftStore.load(from: defaults))
-    }
-
-    func testEmptyDraftLeavesNothingBehind() {
-        QuickAddDraftStore.save(text: "x", notes: "", to: defaults)
-        QuickAddDraftStore.save(text: "", notes: "", to: defaults)
-        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "deleting the text clears the stored draft")
-    }
-
-    // MARK: - Everything the card holds (beta review)
-
     private let deadline = Calendar.current.startOfDay(for: Date().addingTimeInterval(5 * 86_400))
 
-    /// The location and deadline picked from the card's "+" didn't stick: a card put away by a tab switch,
-    /// or an app killed mid-thought, came back with the text and without them.
-    func testTheLocationAndDeadlineStickWithTheText() throws {
-        var draft = QuickAddDraft(context: .inbox, text: "Return the parcel")
+    private func fullDraft(_ context: QuickAddContext = .project(name: "Home Office")) -> QuickAddDraft {
+        var draft = QuickAddDraft(context: context, text: "Call Tom about the parcel p2")
+        draft.notes = "Ask about the card"
+        draft.showsNotes = true
         draft.locationName = "Post office"
+        draft.reveal(.location)
         draft.setDeadline(deadline)
-        QuickAddDraftStore.save(draft, to: defaults)
-
-        let restored = QuickAddDraftStore.restoredDraft(context: .inbox, from: defaults)
-        XCTAssertEqual(restored.text, "Return the parcel")
-        XCTAssertEqual(restored.locationName, "Post office")
-        XCTAssertEqual(restored.deadline, deadline)
-        XCTAssertTrue(restored.shows(.location), "the location field shows again")
-        XCTAssertTrue(restored.shows(.deadline), "and the deadline chip")
+        draft.reveal(.deadline)
+        let tom = QuickAddParser().parse(draft.text).tokens.first { $0.text == "Tom" }!
+        draft.disable(tom)
+        return draft
     }
 
-    func testAddingOrDiscardingClearsEveryPart() {
-        var draft = QuickAddDraft(context: .inbox, text: "Return the parcel")
-        draft.locationName = "Post office"
-        draft.setDeadline(deadline)
-        QuickAddDraftStore.save(draft, to: defaults)
-        QuickAddDraftStore.clear(from: defaults)
-        XCTAssertNil(QuickAddDraftStore.load(from: defaults))
-        let fresh = QuickAddDraftStore.restoredDraft(context: .inbox, from: defaults)
-        XCTAssertEqual(fresh, QuickAddDraft(context: .inbox))
+    /// A controller as a fresh launch has it, on the test's defaults.
+    private func launch() -> PopoutController { PopoutController(draftDefaults: defaults) }
+
+    // MARK: The store
+
+    func testTheCardRoundTripsWithItsListAndEverythingInIt() throws {
+        let card = UUID()
+        for context: QuickAddContext in [.inbox, .today, .upcoming, .day(deadline), .project(name: "Home Office"),
+                                         .label(name: "calls"), .plain] {
+            let draft = fullDraft(context)
+            QuickAddDraftStore.save(draft, card: card, to: defaults)
+            let stored = try XCTUnwrap(QuickAddDraftStore.load(from: defaults))
+            XCTAssertEqual(stored.cardID, card)
+            XCTAssertEqual(stored.draft, draft, "\(context)")
+            XCTAssertEqual(stored.draft.context, context)
+            XCTAssertEqual(QuickAddDraftStore.draft(for: card, from: defaults), draft)
+        }
+        let restored = try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults))
+        XCTAssertTrue(restored.shows(.description) && restored.shows(.location) && restored.shows(.deadline),
+                      "the description, location and deadline show again")
+        XCTAssertEqual(restored.disabledTokens, [QuickAddTokenKey(kind: .date, text: "tom")],
+                       "a switched-off token stays off")
     }
 
-    func testALocationOnItsOwnIsStillADraft() throws {
+    func testAnEmptyCardLeavesNothingBehind() {
+        let card = UUID()
+        QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: "x"), card: card, to: defaults)
+        QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: "  "), card: card, to: defaults)
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "deleting the text clears the stored card")
+    }
+
+    func testALocationOnItsOwnIsStillSomethingToKeep() throws {
         var draft = QuickAddDraft(context: .today)
         draft.locationName = "Costco"
-        QuickAddDraftStore.save(draft, to: defaults)
-        XCTAssertEqual(try XCTUnwrap(QuickAddDraftStore.load(from: defaults)).locationName, "Costco")
-        draft.locationName = ""
-        QuickAddDraftStore.save(draft, to: defaults)
-        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "emptying it clears the draft")
+        QuickAddDraftStore.save(draft, card: UUID(), to: defaults)
+        XCTAssertEqual(try XCTUnwrap(QuickAddDraftStore.load(from: defaults)).draft.locationName, "Costco")
     }
 
-    func testTheDescriptionComesBackShowing() {
-        QuickAddDraftStore.save(text: "Call the bank", notes: "Ask about the card", to: defaults)
-        let restored = QuickAddDraftStore.restoredDraft(context: .inbox, from: defaults)
-        XCTAssertEqual(restored.notes, "Ask about the card")
-        XCTAssertTrue(restored.showsNotes)
-        XCTAssertFalse(restored.shows(.location))
+    func testAnotherCardsDraftIsNeitherGivenNorCleared() {
+        let card = UUID(), other = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: card, to: defaults)
+        XCTAssertNil(QuickAddDraftStore.draft(for: other, from: defaults), "a fresh card gets nothing")
+        QuickAddDraftStore.clear(card: other, from: defaults)
+        XCTAssertNotNil(QuickAddDraftStore.load(from: defaults), "closing another window's card leaves this one")
+        QuickAddDraftStore.clear(card: card, from: defaults)
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults))
+    }
+
+    // MARK: A fresh card gets nothing
+
+    func testACardOpenedFreshFromAnyListNeverGetsTheStoredDraft() {
+        let stale = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: stale, to: defaults)
+        for context: QuickAddContext in [.inbox, .today, .project(name: "Home Office")] {
+            let popouts = launch()
+            popouts.openQuickAdd(context)
+            let id = popouts.state.quickAdd!.id
+            XCTAssertNotEqual(id, stale)
+            XCTAssertNil(QuickAddDraftStore.draft(for: id, from: defaults), "\(context): starts empty")
+        }
+    }
+
+    // MARK: Relaunch
+
+    func testAKilledCardOpensAgainInItsListAtLaunch() throws {
+        let card = UUID()
+        let draft = fullDraft(.project(name: "Home Office"))
+        QuickAddDraftStore.save(draft, card: card, to: defaults)
+
+        let popouts = launch()
+        popouts.listContext = .today
+        XCTAssertTrue(popouts.reopenStoredQuickAdd())
+        let open = try XCTUnwrap(popouts.state.quickAdd)
+        XCTAssertEqual(open.id, card, "the same card, so it reads its own draft back")
+        XCTAssertEqual(open.context, .project(name: "Home Office"), "in the list it had, not the one on screen")
+        XCTAssertEqual(open.placement, .floating)
+        XCTAssertEqual(QuickAddDraftStore.draft(for: open.id, from: defaults), draft)
+        XCTAssertFalse(popouts.reopenStoredQuickAdd(), "once")
+    }
+
+    func testNothingStoredOpensNothing() {
+        let popouts = launch()
+        XCTAssertFalse(popouts.reopenStoredQuickAdd())
+        XCTAssertFalse(popouts.state.isQuickAddOpen)
+    }
+
+    func testOldBuildsDraftsDoNotOpenACardAndAreRemoved() {
+        for key in Preferences.legacyQuickAddDraftKeys { defaults.set("Call the bank", forKey: key) }
+        let popouts = launch()
+        XCTAssertFalse(popouts.reopenStoredQuickAdd(), "builds 11-12 kept a draft whether or not a card was open")
+        for key in Preferences.legacyQuickAddDraftKeys { XCTAssertNil(defaults.object(forKey: key)) }
+    }
+
+    func testASecondWindowDoesNotOpenACardThatIsOpenInTheFirst() {
+        let card = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: card, to: defaults)
+        let first = launch(), second = launch()
+        XCTAssertTrue(first.reopenStoredQuickAdd())
+        XCTAssertFalse(second.reopenStoredQuickAdd(), "the card is already up in the first window")
+        first.windowClosed()
+        XCTAssertTrue(second.reopenStoredQuickAdd(), "its window closed with the card in it: the next window has it")
+        second.closeQuickAdd()
+    }
+
+    // MARK: Every way of closing clears it
+
+    func testEveryCloseClearsTheStoredCard() throws {
+        let container = ModelContainerFactory.preview()
+        let task = TaskItem(title: "Read")
+        container.mainContext.insert(task)
+        let closes: [(String, (PopoutController) -> Void)] = [
+            ("closed (added and put away, ×, Escape, backdrop, Mac panel)", { $0.closeQuickAdd() }),
+            ("Discard", { $0.discardQuickAddDraft() }),
+            ("a tab or sidebar switch", { $0.closeAll() }),
+            ("a task opened over it", { $0.open(task) }),
+            ("another card opened", { $0.openQuickAdd(.inbox) }),
+        ]
+        for (name, close) in closes {
+            let popouts = launch()
+            popouts.openQuickAdd(.today)
+            QuickAddDraftStore.save(fullDraft(), card: popouts.state.quickAdd!.id, to: defaults)
+            close(popouts)
+            XCTAssertNil(QuickAddDraftStore.load(from: defaults), name)
+            popouts.closeAll()
+        }
+    }
+
+    func testTheInlineCardClearsWhenItsRowCloses() {
+        let popouts = launch()
+        popouts.openQuickAdd(.day(deadline), placement: .inline("day-a"))
+        QuickAddDraftStore.save(fullDraft(), card: popouts.state.quickAdd!.id, to: defaults)
+        popouts.closeInline("day-b")
+        XCTAssertNotNil(QuickAddDraftStore.load(from: defaults), "another row's close leaves it")
+        popouts.closeInline("day-a")
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults))
+    }
+
+    func testSavingAndFadingKeepTheCard() {
+        let popouts = launch()
+        popouts.openQuickAdd(.today)
+        QuickAddDraftStore.save(fullDraft(), card: popouts.state.quickAdd!.id, to: defaults)
+        popouts.didSave()
+        popouts.beginClosingQuickAdd()
+        XCTAssertNotNil(QuickAddDraftStore.load(from: defaults), "still the same card until it has gone")
+        popouts.closeQuickAdd()
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults))
     }
 }
