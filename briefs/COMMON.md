@@ -83,7 +83,11 @@ anything is archived and refuses a version without a changelog section. Liquid G
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
 
-## Round 7 (started 2026-11-02)
+## Round 7 (2026-11-02; sessions 25–30, all merged for 0.4.0 (13))
+- Sessions 27 `dates-and-times` (High, $4.20), 28 `quick-add-card` (High, $4.65), 29
+  `completion-popout-push` (High, $7.23) ran in parallel on George's nine decisions; 30 `beta-final-review`
+  (Max, $16.64) reviewed the merged result (six fixes). Self-launched from Fable's Bash; reports read from
+  the task output files.
 - Session 25 `sync-robustness` (Max, $36.61, 74 min, merged 2026-11-02): sync log, watchdog (5 s rule),
   CloudKit environment and push diagnostics, Settings → iCloud → Sync log, the stuck-sync relaunch, the
   Development side store. Found the Nov 1 Mac hang (an import that never ended; CloudKit refused every

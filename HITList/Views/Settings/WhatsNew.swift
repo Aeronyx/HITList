@@ -12,10 +12,11 @@ enum WhatsNew {
 
     static let entries: [Entry] = [
         Entry(version: "0.4.0", items: [
+            "Tap a highlighted word in quick add to keep it as plain text; times are 24-hour unless you type am or pm.",
+            "Monthly repeats keep their day; a repeat typed after its time starts at the next one.",
             "Settings → iCloud shows the sync environment and a Sync log; a stuck sync is called out on the bolt.",
-            "Reminders stop when a task is completed, deleted or moved; repeating tasks keep their next date.",
-            "Backups carry every field; a damaged store no longer locks you out.",
-            "Sticky drafts keep location and deadline; quick add survives absurd numbers.",
+            "Reminders stop when a task is completed, deleted or moved; backups carry every field.",
+            "An open quick-add card survives app switches and relaunches; completing is final until Undo.",
         ]),
         Entry(version: "0.3.5", items: [
             "iPhone lists look like the Mac's: flat rows, hairlines, headers over the checkboxes.",
