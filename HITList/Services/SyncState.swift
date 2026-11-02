@@ -54,8 +54,11 @@ enum SyncState: Equatable {
         }
     }
 
-    /// Precedence: no CloudKit, then account problems, then reachability, then mirroring events.
-    /// An error counts only while it is newer than the last successful import or export.
+    /// Precedence: no CloudKit, then account problems, then reachability, then a stalled event, then
+    /// mirroring events. An error counts only while it is newer than the last successful import or export.
+    /// `stalledSince` is when an import, export or setup began that has run for two minutes with
+    /// nothing in its way (`SyncWatchdog.stalledSince`): CloudKit's mirroring runs one request at a time,
+    /// so nothing else syncs until it ends (brief 25: an import on Nov 1 never did).
     static func derive(
         cloudKitEnabled: Bool,
         localOnlyReason: String,
@@ -64,6 +67,7 @@ enum SyncState: Equatable {
         isSyncing: Bool,
         lastSynced: Date?,
         lastError: (reason: String, at: Date)?,
+        stalledSince: Date? = nil,
         now: Date = .now
     ) -> SyncState {
         guard cloudKitEnabled else { return .localOnly(localOnlyReason) }
@@ -74,11 +78,20 @@ enum SyncState: Equatable {
         default: break  // .available, .couldNotDetermine or not checked yet: let the events decide
         }
         if !isOnline { return .offline }
+        if let stalledSince { return .error(stalledReason, stalledSince) }
         if isSyncing { return .syncing }
         if let lastError, lastSynced.map({ lastError.at > $0 }) ?? true { return .error(lastError.reason, lastError.at) }
         if let lastSynced { return .synced(lastSynced) }
         return .syncing  // launched, nothing has finished yet
     }
+
+    /// "Sync paused: stuck, relaunch HITList". Relaunching starts CloudKit's mirroring afresh, which is
+    /// what ended every stuck event seen so far (Settings → iCloud offers it).
+    #if os(macOS)
+    static let stalledReason = "stuck, relaunch HITList"
+    #else
+    static let stalledReason = "stuck, reopen HITList"
+    #endif
 
     /// A few words for "Sync paused: …". Looks at the error, then its underlying error, for a CKError.
     static func shortReason(for error: Error) -> String {

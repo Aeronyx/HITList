@@ -169,11 +169,15 @@ struct SyncWatchdog: Sendable {
         var reportedWaiting = false
     }
 
+    /// CloudKit's mirroring exports and imports only after its setup event succeeded in this process.
+    enum Setup: Equatable, Sendable { case pending, done, failed }
+
     let rules: Rules
     private(set) var online: Bool?
     private(set) var accountAvailable: Bool?
     private(set) var accountDescription: String?
     private(set) var isSuspended = false
+    private(set) var setup: Setup = .pending
     private var flights: [UUID: Flight] = [:]
     private var exports: Pending?
     private var imports: Pending?
@@ -192,12 +196,24 @@ struct SyncWatchdog: Sendable {
         self.lastImportAt = lastImportAt
     }
 
-    /// Why nothing can sync right now, or nil. An unknown network or account counts as fine.
+    /// Why nothing can run right now, or nil: pauses the stuck clocks of running events. An unknown
+    /// network or account counts as fine.
     var blockedReason: String? {
         if online == false { return "offline" }
         if accountAvailable == false { return "iCloud not available" }
         if isSuspended { return "app not running" }
         return nil
+    }
+
+    /// Why no export or import can follow a save or push right now: `blockedReason`, or CloudKit not set
+    /// up (yet, or after a failed setup). Pauses the 5-second clocks; a running setup keeps its own.
+    var waitBlockedReason: String? {
+        if let reason = blockedReason { return reason }
+        switch setup {
+        case .pending: return "CloudKit not set up yet"
+        case .failed: return "CloudKit setup failed"
+        case .done: return nil
+        }
     }
 
     /// Saves and pushes not yet covered by an export or import.
@@ -215,18 +231,22 @@ struct SyncWatchdog: Sendable {
                 flights[oldest] = nil
             }
             flights[id] = Flight(type: type, startedAt: at, clockFrom: blockedReason == nil ? at : nil)
-            return []
+            // A new setup (launch, account change) means nothing exports until it succeeds.
+            return type == .setup ? transition(at) { $0.setup = .pending } : []
 
         case let .eventEnded(id, type, startedAt, succeeded, error, at):
             var findings: [Finding] = []
             if let flight = flights.removeValue(forKey: id), flight.reportedStuck {
                 findings.append(.eventRecovered(type: type, duration: at.timeIntervalSince(flight.startedAt), succeeded: succeeded))
             }
+            if type == .setup {
+                findings += transition(at) { $0.setup = succeeded ? .done : .failed }
+            }
             guard succeeded else {
                 lastError = "\(type.rawValue): \(error ?? "failed")"
                 return findings
             }
-            let blocked = blockedReason
+            let blocked = waitBlockedReason
             switch type {
             case .exporting:
                 lastExportAt = at
@@ -256,7 +276,7 @@ struct SyncWatchdog: Sendable {
                start >= at.addingTimeInterval(-rules.exportSlack) {
                 return [.exportOnTime(latency: end.timeIntervalSince(at), saves: 1)]
             }
-            let blocked = blockedReason, window = rules.exportWithin, cap = rules.maxWaiting
+            let blocked = waitBlockedReason, window = rules.exportWithin, cap = rules.maxWaiting
             return Self.add(at, to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
 
         case let .push(at):
@@ -264,11 +284,11 @@ struct SyncWatchdog: Sendable {
                start >= at.addingTimeInterval(-rules.importSlack) {
                 return [.importAfterPush(latency: max(0, end.timeIntervalSince(at)), pushes: 1)]
             }
-            let blocked = blockedReason, window = rules.importWithin, cap = rules.maxWaiting
+            let blocked = waitBlockedReason, window = rules.importWithin, cap = rules.maxWaiting
             return Self.add(at, to: &imports, wait: .import, window: window, blocked: blocked, cap: cap)
 
         case let .activated(at, idle):
-            guard let idle, idle >= rules.activationMinimumIdle, blockedReason == nil else { return [] }
+            guard let idle, idle >= rules.activationMinimumIdle, waitBlockedReason == nil else { return [] }
             activation = (at, at.addingTimeInterval(rules.activationWindow))
             return []
 
@@ -296,6 +316,8 @@ struct SyncWatchdog: Sendable {
                 flights[id]?.reportedStuck = true
                 findings.append(.eventStuck(type: flight.type, running: now.timeIntervalSince(flight.startedAt), context: context(now)))
             }
+        }
+        if waitBlockedReason == nil {
             if var pending = exports, !pending.overdue, let deadline = pending.deadline, deadline <= now {
                 pending.overdue = true
                 pending.deadline = nil
@@ -391,21 +413,24 @@ struct SyncWatchdog: Sendable {
         return [result]
     }
 
-    /// Applies a change to the network, account or suspension, pausing or restarting the clocks when
-    /// whether anything can sync flips.
+    /// Applies a change to the network, account, suspension or setup, pausing or restarting the clocks
+    /// when whether anything can run (events' stuck clocks) or follow (the 5-second waits) flips.
     private mutating func transition(_ at: Date, _ change: (inout SyncWatchdog) -> Void) -> [Finding] {
-        let wasBlocked = blockedReason
+        let wasBlocked = blockedReason, wasWaitBlocked = waitBlockedReason
         change(&self)
-        let nowBlocked = blockedReason
+        let nowBlocked = blockedReason, nowWaitBlocked = waitBlockedReason
         var findings: [Finding] = []
-        if wasBlocked == nil, let reason = nowBlocked {
+        if wasBlocked == nil, nowBlocked != nil {
             for id in flights.keys { flights[id]?.clockFrom = nil }
-            findings += Self.pause(&exports, wait: .export, reason: reason)
-            findings += Self.pause(&imports, wait: .import, reason: reason)
-            activation = nil
         } else if wasBlocked != nil, nowBlocked == nil {
             // Every running event's clock restarts: the time it couldn't run doesn't count against it.
             for id in flights.keys { flights[id]?.clockFrom = at }
+        }
+        if wasWaitBlocked == nil, let reason = nowWaitBlocked {
+            findings += Self.pause(&exports, wait: .export, reason: reason)
+            findings += Self.pause(&imports, wait: .import, reason: reason)
+            activation = nil
+        } else if wasWaitBlocked != nil, nowWaitBlocked == nil {
             let exportWindow = rules.exportWithin, importWindow = rules.importWithin
             Self.restart(&exports, at: at, window: exportWindow)
             Self.restart(&imports, at: at, window: importWindow)
