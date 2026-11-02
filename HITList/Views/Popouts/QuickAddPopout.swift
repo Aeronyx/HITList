@@ -83,9 +83,12 @@ struct QuickAddPopout: View {
     }
 
     var body: some View {
+        // The text is read once per keystroke: the highlights, the chips and the add button all come from
+        // this one parse (they used to make four, each repeated for every switched-off token).
         let parser = parser
         let parsed = draft.parsed(parser)
-        let chips = draft.chips(parser)
+        let result = draft.result(parser, parsed: parsed)
+        let chips = draft.chips(parser, parsed: parsed, result: result)
         VStack(alignment: .leading, spacing: HITSpacing.m) {
             TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
                                 priority: parsed.priority, focus: $titleFocused, bordered: false,
@@ -111,7 +114,7 @@ struct QuickAddPopout: View {
             if let errorMessage {
                 Text(errorMessage).font(HITType.caption).foregroundStyle(HITColor.danger)
             }
-            footer
+            footer(canAdd: !result.title.isEmpty)
         }
         .padding(Self.padding)
         // The chips' picker cards (inside the window on the Mac).
@@ -430,7 +433,8 @@ struct QuickAddPopout: View {
 
     // MARK: Footer
 
-    private var footer: some View {
+    /// `canAdd`: the text makes a title (the body's one parse says so).
+    private func footer(canAdd: Bool) -> some View {
         HStack(spacing: HITSpacing.s) {
             if let added {
                 Label(added, systemImage: "checkmark.circle.fill")
@@ -448,7 +452,6 @@ struct QuickAddPopout: View {
                 .help("Close (Esc)")
             // Hollow and faded while there is nothing to add; filled with the accent from the first
             // character (George, build 11). A pill, so it never reads as a second "+".
-            let canAdd = !draft.result(parser).title.isEmpty
             Button(action: save) {
                 Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
                     .frame(width: 24)

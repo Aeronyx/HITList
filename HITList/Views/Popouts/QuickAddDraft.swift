@@ -96,8 +96,13 @@ struct QuickAddDraft: Equatable, Codable {
     // MARK: Reading
 
     func chips(_ parser: QuickAddParser) -> QuickAddChips {
-        let result = self.result(parser)
         let parsed = parsed(parser)
+        return chips(parser, parsed: parsed, result: result(parser, parsed: parsed))
+    }
+
+    /// `chips(_:)` from a parse already made (`parsed(_:)`) and its `result(_:parsed:)`: the card reads the
+    /// text once per keystroke rather than once for each thing it shows.
+    func chips(_ parser: QuickAddParser, parsed: QuickAddResult, result: QuickAddResult) -> QuickAddChips {
         let kinds = Set(parsed.tokens.map(\.kind))
         return QuickAddChips(
             dueDate: result.dueDate,
@@ -115,7 +120,12 @@ struct QuickAddDraft: Equatable, Codable {
 
     /// The task to create: the parsed text with the list's defaults wherever the text is silent.
     func result(_ parser: QuickAddParser) -> QuickAddResult {
-        var result = parsed(parser)
+        result(parser, parsed: parsed(parser))
+    }
+
+    /// `result(_:)` from a parse already made (`parsed(_:)`).
+    func result(_ parser: QuickAddParser, parsed: QuickAddResult) -> QuickAddResult {
+        var result = parsed
         let calendar = parser.dateParser.calendar
         let kinds = Set(result.tokens.map(\.kind))
         let defaultDay = dateCleared ? nil : context.defaultDate(now: parser.dateParser.now, calendar: calendar)
