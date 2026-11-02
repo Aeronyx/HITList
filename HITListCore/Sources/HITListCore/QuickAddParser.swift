@@ -133,7 +133,13 @@ public struct QuickAddParser: Sendable {
             }
             // Date
             if date == nil, let (pd, n) = dateParser.matchDate(in: lowers, at: i) {
-                date = pd.date; mark(i, n, .date); i += n; continue
+                date = pd.date; mark(i, n, .date); i += n
+                // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
+                if time == nil, i < words.count, !consumed[i],
+                   let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true) {
+                    time = (t.hour, t.minute); mark(i, t.consumed, .time); i += t.consumed
+                }
+                continue
             }
             i += 1
         }

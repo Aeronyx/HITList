@@ -303,7 +303,12 @@ public struct DateExpressionParser: Sendable {
     }
 
     /// Attempts to match a time phrase at `words[i]`. Returns hour, minute, and words consumed.
-    public func matchTime(in words: [String], at i: Int) -> (hour: Int, minute: Int, consumed: Int)? {
+    ///
+    /// Times are 24-hour unless the user says otherwise (George, 2026-11-02): "at 5" and "5:30" are
+    /// morning, "at 17" is 17:00, "5pm" / "5p" / "5 pm" are 17:00. A bare hour (0–23) is a time only after
+    /// "at", or when `allowBareHour` says the word right before it was a date ("tom 13", "friday 9"); even
+    /// then not when a month or a unit follows ("fri 5 jan", "tom 3 weeks").
+    public func matchTime(in words: [String], at i: Int, allowBareHour: Bool = false) -> (hour: Int, minute: Int, consumed: Int)? {
         guard i < words.count else { return nil }
         let w = Self.normalize(words[i])
         let next: String? = i + 1 < words.count ? Self.normalize(words[i + 1]) : nil
@@ -334,10 +339,15 @@ public struct DateExpressionParser: Sendable {
         if let t = Self.parseClock(w, allowBareHour: false) {
             return (t.hour, t.minute, 1)
         }
+        if allowBareHour, let t = Self.parseClock(w, allowBareHour: true) {
+            if let n = next, Self.monthNames[n] != nil || Self.unitDays(n) != nil { return nil }
+            return (t.hour, t.minute, 1)
+        }
         return nil
     }
 
-    /// Parses "5pm", "5:30pm", "17:00", "5:30", "5p", and (if allowed) a bare "5".
+    /// Parses "5pm", "5:30pm", "17:00", "5:30" (05:30), "5p", and (if allowed) a bare "5" (05:00).
+    /// Without am/pm the hour is read on a 24-hour clock.
     static func parseClock(_ raw: String, allowBareHour: Bool) -> (hour: Int, minute: Int)? {
         var s = normalize(raw)
         var meridiem: String? = nil
@@ -364,9 +374,6 @@ public struct DateExpressionParser: Sendable {
             guard (1...12).contains(hour) else { return nil }
             if m == "a" { hour = hour == 12 ? 0 : hour }
             else { hour = hour == 12 ? 12 : hour + 12 }
-        } else if allowBareHour && s.firstIndex(of: ":") == nil {
-            // "at 5" → 5 PM; "at 9" → 9 AM.
-            if (1...6).contains(hour) { hour += 12 }
         }
         return (hour, minute)
     }
@@ -409,7 +416,7 @@ public struct DateExpressionParser: Sendable {
 
     // MARK: - Whole-phrase parsing
 
-    /// Parses a complete phrase such as "next mon", "jan 5 at 3pm", "2026-01-05".
+    /// Parses a complete phrase such as "next mon", "jan 5 at 3pm", "tom 13", "2026-01-05".
     /// Returns nil unless every word is consumed by a date or time match.
     public func parse(_ phrase: String) -> ParsedDate? {
         let words = phrase.split(whereSeparator: { $0.isWhitespace }).map { $0.lowercased() }
@@ -419,7 +426,12 @@ public struct DateExpressionParser: Sendable {
         var time: (Int, Int)? = nil
         while i < words.count {
             if date == nil, let (pd, n) = matchDate(in: words, at: i) {
-                date = pd.date; i += n; continue
+                date = pd.date; i += n
+                // A bare hour right after the date is its time: "tom 13".
+                if time == nil, let t = matchTime(in: words, at: i, allowBareHour: true) {
+                    time = (t.hour, t.minute); i += t.consumed
+                }
+                continue
             }
             if time == nil, let t = matchTime(in: words, at: i) {
                 time = (t.hour, t.minute); i += t.consumed; continue

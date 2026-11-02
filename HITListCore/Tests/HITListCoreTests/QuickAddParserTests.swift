@@ -142,6 +142,51 @@ final class QuickAddParserTests: XCTestCase {
         assertDate(parser.parse("Call bank 4pm").dueDate, 2026, 10, 21, 16, 0)
     }
 
+    /// George, 2026-11-02: times are 24-hour unless the user says otherwise; a bare hour is a time only
+    /// right after a date word or "at".
+    func testTwentyFourHourTimes() {
+        let tom13 = parser.parse("Haircut tom 13")
+        XCTAssertEqual(tom13.title, "Haircut")
+        assertDate(tom13.dueDate, 2026, 10, 22, 13, 0)
+        XCTAssertTrue(tom13.hasDueTime)
+        XCTAssertEqual(tom13.tokens.map(\.kind), [.date, .time])
+        XCTAssertEqual(tom13.tokens.map(\.text), ["tom", "13"])
+
+        let fri9 = parser.parse("Call friday 9 about the lease")
+        XCTAssertEqual(fri9.title, "Call about the lease")
+        assertDate(fri9.dueDate, 2026, 10, 23, 9, 0)
+
+        // Time only, now 14:30.
+        assertDate(parser.parse("Gym at 5").dueDate, 2026, 10, 22, 5, 0)
+        assertDate(parser.parse("Dinner at 19").dueDate, 2026, 10, 21, 19, 0)
+        assertDate(parser.parse("Run 5:30").dueDate, 2026, 10, 22, 5, 30)
+        assertDate(parser.parse("Call 5pm").dueDate, 2026, 10, 21, 17, 0)
+        assertDate(parser.parse("Call 5p").dueDate, 2026, 10, 21, 17, 0)
+        assertDate(parser.parse("Call 5 pm").dueDate, 2026, 10, 21, 17, 0)
+        assertDate(parser.parse("Lunch noon").dueDate, 2026, 10, 22, 12, 0)
+        assertDate(parser.parse("Lunch tom noon").dueDate, 2026, 10, 22, 12, 0)
+        assertDate(parser.parse("Backup midnight").dueDate, 2026, 10, 22, 0, 0)
+        assertDate(parser.parse("Call tom 9 am").dueDate, 2026, 10, 22, 9, 0)
+        XCTAssertEqual(parser.parse("Call tom 9 am").title, "Call")
+
+        // Bare numbers anywhere else stay in the title.
+        let apples = parser.parse("Buy 3 apples")
+        XCTAssertEqual(apples.title, "Buy 3 apples")
+        XCTAssertNil(apples.dueDate)
+        let applesTom = parser.parse("Buy 3 apples tomorrow")
+        XCTAssertEqual(applesTom.title, "Buy 3 apples")
+        assertDate(applesTom.dueDate, 2026, 10, 22)
+        XCTAssertFalse(applesTom.hasDueTime)
+        XCTAssertEqual(parser.parse("Run tom 30 laps").title, "Run 30 laps", "30 is not an hour")
+        XCTAssertFalse(parser.parse("Run tom 30 laps").hasDueTime)
+        // A repeat is not a date word: "every day 5" leaves the 5.
+        XCTAssertEqual(parser.parse("Stretch every day 5").title, "Stretch 5")
+        // A time already typed wins; a second bare hour stays in the title.
+        let twice = parser.parse("Call 5pm tom 9")
+        assertDate(twice.dueDate, 2026, 10, 22, 17, 0)
+        XCTAssertEqual(twice.title, "Call 9")
+    }
+
     func testNumbersInTitleAreNotDates() {
         let r = parser.parse("Read 5 pages of chapter 12")
         XCTAssertEqual(r.title, "Read 5 pages of chapter 12")
