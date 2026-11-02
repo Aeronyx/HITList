@@ -360,6 +360,28 @@ final class SyncEnvironmentTests: XCTestCase {
                        "A Mac run from Xcode syncs with Development; TestFlight builds sync with Production, so the two don't see each other.")
     }
 
+    /// What `codesign -d --entitlements :-` printed on 2026-11-02 for the installed TestFlight Mac app, a
+    /// Debug Mac build and the iOS app exported by release.sh, read the way SecTask hands values over.
+    func testEntitlementPlistsOfRealBuilds() throws {
+        func entitlements(_ xml: String) throws -> [String: Any] {
+            try XCTUnwrap(PropertyListSerialization.propertyList(from: Data(xml.utf8), format: nil) as? [String: Any])
+        }
+        let head = #"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "https://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>"#
+        let containers = "<key>com.apple.developer.icloud-container-identifiers</key><array><string>iCloud.com.trammells.hitlist</string></array><key>com.apple.developer.icloud-services</key><array><string>CloudKit</string></array>"
+        let macTestFlight = try entitlements(head + "<key>beta-reports-active</key><true/><key>com.apple.application-identifier</key><string>UC8N98H3RT.com.trammells.hitlist</string><key>com.apple.developer.aps-environment</key><string>production</string><key>com.apple.developer.icloud-container-environment</key><string>Production</string>" + containers + "<key>com.apple.security.app-sandbox</key><true/><key>com.apple.security.application-groups</key><array><string>UC8N98H3RT.com.trammells.hitlist</string></array></dict></plist>")
+        let macDebug = try entitlements(head + "<key>com.apple.application-identifier</key><string>UC8N98H3RT.com.trammells.hitlist</string><key>com.apple.developer.aps-environment</key><string>development</string><key>com.apple.developer.icloud-container-environment</key><string>Development</string>" + containers + "<key>com.apple.security.get-task-allow</key><true/></dict></plist>")
+        let iOSExport = try entitlements(head + "<key>application-identifier</key><string>UC8N98H3RT.com.trammells.hitlist</string><key>aps-environment</key><string>production</string><key>beta-reports-active</key><true/><key>com.apple.developer.icloud-container-environment</key><string>Production</string>" + containers + "<key>get-task-allow</key><false/></dict></plist>")
+
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: macTestFlight[SyncEnvironment.cloudKitEnvironmentKey]), .production)
+        XCTAssertEqual(macTestFlight[SyncEnvironment.macPushKey] as? String, "production")
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: macDebug[SyncEnvironment.cloudKitEnvironmentKey]), .development)
+        XCTAssertEqual(macDebug[SyncEnvironment.macPushKey] as? String, "development")
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: iOSExport[SyncEnvironment.cloudKitEnvironmentKey]), .production)
+        XCTAssertEqual(iOSExport[SyncEnvironment.iOSPushKey] as? String, "production")
+        XCTAssertNil(iOSExport["com.apple.developer.icloud-container-development-container-identifiers"],
+                     "App Store Connect rejects builds that carry it")
+    }
+
     func testThisTestBuildIsADebugBuild() {
         XCTAssertEqual(SyncEnvironment.current.channel, .debug)
         XCTAssertEqual(SyncEnvironment.current.build, AppInfo.build)
