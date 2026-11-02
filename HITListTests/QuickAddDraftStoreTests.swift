@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 import HITListCore
 @testable import HITList
 
@@ -156,6 +157,50 @@ final class QuickAddDraftStoreTests: XCTestCase {
         first.windowClosed()
         XCTAssertTrue(second.reopenStoredQuickAdd(), "its window closed with the card in it: the next window has it")
         second.closeQuickAdd()
+    }
+
+    // MARK: The restored card and the other popout work (final review: sessions 28 and 29 met in PopoutHost)
+
+    /// A list's undo toast (now drawn by PopoutHost on iPhone) coming and going, and its Undo, leave the
+    /// restored card open and stored.
+    func testTheRestoredCardOutlivesTheListToasts() throws {
+        let card = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: card, to: defaults)
+        let popouts = launch()
+        XCTAssertTrue(popouts.reopenStoredQuickAdd())
+        var undone = false
+        let list = UUID()
+        popouts.showListToast(.init(owner: list, message: "Completed ‘Stretch’", undo: { undone = true }))
+        popouts.listToast?.undo()
+        popouts.hideListToast(owner: list)
+        XCTAssertTrue(undone)
+        XCTAssertEqual(popouts.state.quickAdd?.id, card, "the card is still up")
+        XCTAssertEqual(QuickAddDraftStore.draft(for: card, from: defaults), fullDraft(), "and still kept")
+        popouts.closeQuickAdd()
+    }
+
+    /// The deleted-task check (after every import, and when a task's query empties) only ever closes a
+    /// task popout: with a card open there is no task on show, and the card and its draft stay.
+    func testADeletionElsewhereLeavesAnOpenCardAlone() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Gone soon")
+        context.insert(task)
+        try context.save()
+        let card = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: card, to: defaults)
+        let popouts = launch()
+        XCTAssertTrue(popouts.reopenStoredQuickAdd())
+
+        let id = task.id
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+        XCTAssertFalse(popouts.closeTaskIfDeleted(in: context))
+        XCTAssertEqual(popouts.state.quickAdd?.id, card)
+        XCTAssertNotNil(QuickAddDraftStore.load(from: defaults))
+        popouts.closeQuickAdd()
     }
 
     // MARK: Every way of closing clears it
