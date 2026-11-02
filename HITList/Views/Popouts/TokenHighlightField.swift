@@ -80,7 +80,7 @@ struct TokenHighlightField: View {
         .onChange(of: text) { _, new in
             // A vertical field takes Return as a newline; treat it as submit.
             guard new.contains(where: \.isNewline) else { return }
-            text = new.replacingOccurrences(of: "\r", with: "").replacingOccurrences(of: "\n", with: "")
+            text = TaskLimits.singleLine(new)
             onSubmit()
         }
     }
