@@ -75,14 +75,8 @@ struct InboxView: View {
                 }
             }
             .frame(maxHeight: .infinity)
-            .overlay(alignment: .bottom) {
-                if toast.isVisible {
-                    CompletionToast(message: toast.message, onUndo: undoToast)
-                        // iPhone: above the island and the oval "+" (it hid behind them in build 11).
-                        .padding(.bottom, isCompact ? IslandMetrics.chromeHeight + HITSpacing.xs : 0)
-                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
-                }
-            }
+            // iPhone: drawn by PopoutHost above the island and the "+".
+            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast)
         }
         .quickAddEntry(.inbox)
         .background(Theme.background)

@@ -86,6 +86,16 @@ final class PopoutController {
     var listContext: QuickAddContext = .today
     /// "Completed ‘Title’ · Undo" after completing a task from its popout (the lists keep their own).
     var toast = CompletionToastState()
+    /// iPhone: the undo toast the list on screen is showing, which `PopoutHost` draws (`completionToast`).
+    private(set) var listToast: ListToast?
+
+    /// A list's toast as `PopoutHost` draws it. `owner` is the list that showed it, so a list leaving
+    /// the screen only takes down its own.
+    struct ListToast {
+        let owner: UUID
+        let message: String
+        let undo: () -> Void
+    }
     /// A deletion waiting for the user's yes (Settings → General → Confirm before deleting); `PopoutHost`
     /// shows the dialog. Nil when nothing is pending.
     private(set) var pendingDelete: PendingDelete?
@@ -170,6 +180,18 @@ final class PopoutController {
         let day = TaskRescheduling.day(offset, from: task.dueDate, now: now)
         TaskActions.reschedule(task, to: day, in: context)
         Task { await NotificationScheduler.reschedule(context: context) }
+    }
+
+    // MARK: List toasts (iPhone)
+
+    /// A list's toast appeared or changed ("2 completed"); it replaces any other list's.
+    func showListToast(_ toast: ListToast) {
+        listToast = toast
+    }
+
+    /// The list's toast went away (expired, undone, or the list left the screen).
+    func hideListToast(owner: UUID) {
+        if listToast?.owner == owner { listToast = nil }
     }
 
     /// The toast's Undo: puts every task it lists back as it was.

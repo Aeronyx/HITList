@@ -554,4 +554,36 @@ final class PopoutTests: XCTestCase {
         popouts.shiftDay(done, by: 1, in: context, now: now)
         XCTAssertEqual(done.dueDate, today, "completed tasks stay put")
     }
+
+    // MARK: - iPhone toasts (George, 2026-11-02: never behind the island)
+
+    /// The lists hand their toast to the host; a list leaving the screen takes down only its own.
+    func testListToastBelongsToTheListThatShowedIt() {
+        let popouts = PopoutController()
+        let today = UUID(), group = UUID()
+        var undone = 0
+        popouts.showListToast(.init(owner: today, message: "Completed ‘A’", undo: { undone += 1 }))
+        XCTAssertEqual(popouts.listToast?.message, "Completed ‘A’")
+        popouts.showListToast(.init(owner: today, message: "2 completed", undo: { undone += 1 }))
+        XCTAssertEqual(popouts.listToast?.message, "2 completed", "the same list updates its toast")
+
+        popouts.hideListToast(owner: group)
+        XCTAssertNotNil(popouts.listToast, "another list's hide leaves it")
+        popouts.listToast?.undo()
+        XCTAssertEqual(undone, 1, "Undo reaches the list that owns the toast")
+
+        popouts.showListToast(.init(owner: group, message: "Completed ‘B’", undo: {}))
+        popouts.hideListToast(owner: today)
+        XCTAssertEqual(popouts.listToast?.message, "Completed ‘B’", "a newer list's toast outlives the old list")
+        popouts.hideListToast(owner: group)
+        XCTAssertNil(popouts.listToast)
+    }
+
+    /// Every iPhone toast stands on the shell's bottom edge, above the island and the "+".
+    func testToastClearsTheIslandAndTheAddButton() {
+        XCTAssertEqual(PopoutHost.toastClearance,
+                       IslandMetrics.bottomGap + IslandMetrics.height + IslandMetrics.addButtonGap
+                       + FloatingAddButton.size.height + HITSpacing.xs)
+        XCTAssertGreaterThan(PopoutHost.toastClearance, IslandMetrics.chromeHeight)
+    }
 }
