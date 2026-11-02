@@ -38,6 +38,19 @@ The core, in order of how badly a bug would hurt a friend who trusts the app wit
    with an empty store, launch after a reset, the seeding path (`SeedIdentity`, sample data never seeded
    into a real store), background/foreground, the app killed mid-edit.
 
+### Known follow-ups left by session 25 (sync), to resolve or report
+- `Diagnostics.environment` (About → Copy diagnostics) and `ICloudCheck` still assume "Development (Mac)";
+  `SyncEnvironment.current` has the right answer for both platforms. Make them use it.
+- Debug runs on the Mac share reminders (`NotificationScheduler`) and the daily backup folder (`LocalBackup`)
+  with the TestFlight app (same bundle ID); when the store is not `HITList.store`, both should stand down.
+- Reset local cache from a side-store run reopens `HITList-Development.store` because the sandbox drops the
+  environment; make sure a Production build's reset can never land on the wrong store.
+- The 2-minute "stuck" threshold (`SyncWatchdog`) may wrongly show "Sync paused: stuck" during a very long
+  first import on a new device with many tasks. Decide whether first imports get more time.
+- A TestFlight build must never be classified as Development by `SyncEnvironment` (that would open an empty
+  side store and look like data loss). Re-derive the detection from the exported entitlements and add a
+  test for every channel.
+
 Not in scope: visual polish, spacing, animations, themes, Settings layout (George expects UI/UX bugs in the
 beta and will collect them himself). Do not restyle anything.
 
