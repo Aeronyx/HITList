@@ -95,7 +95,7 @@ struct TaskPopout: View {
                 .onChange(of: task.title) { _, title in
                     if title.contains(where: \.isNewline) {
                         // Return finishes editing instead of adding a line.
-                        task.title = title.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: "\r", with: "")
+                        task.title = TaskLimits.singleLine(title)
                         titleFocused = false
                     }
                     if task.title.count > TaskLimits.titleCharacters {
@@ -437,9 +437,8 @@ struct TaskPopout: View {
     }
 
     private func setRecurrence(_ rule: RecurrenceRule?) {
-        task.recurrenceRule = rule
-        if rule != nil, task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: Date()) }
-        save()
+        TaskActions.setRecurrence(rule, on: task, in: context)
+        rescheduleNotifications()
     }
 
     private func setProject(_ project: Project?) {

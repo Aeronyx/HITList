@@ -124,6 +124,38 @@ final class TokenDisablingTests: XCTestCase {
         assertRangesMatch(r, in: input)
     }
 
+    /// Final review: switching tokens off with session 27's time rules. A bare hour is a time only right
+    /// after a date word, so with the date switched off it is plain text again; with the hour switched off
+    /// the date stays, all day.
+    func testSwitchingOffTheDateOfTom13LeavesThe13AsText() throws {
+        let input = "Call mom tom 13"
+        XCTAssertEqual(parser.parse(input).tokens.map(\.text), ["tom", "13"])
+        let noDate = parser.parse(input, disabling: [key(.date, "tom")])
+        XCTAssertEqual(noDate.title, "Call mom tom 13")
+        XCTAssertNil(noDate.dueDate)
+        XCTAssertFalse(noDate.hasDueTime)
+        XCTAssertTrue(noDate.tokens.isEmpty)
+
+        let noTime = parser.parse(input, disabling: [key(.time, "13")])
+        XCTAssertEqual(noTime.title, "Call mom 13")
+        assertDate(noTime.dueDate, 2026, 10, 22)
+        XCTAssertFalse(noTime.hasDueTime)
+        XCTAssertEqual(noTime.tokens.map(\.text), ["tom"])
+        assertRangesMatch(noTime, in: input)
+
+        // "at 5" is 05:00 whatever is switched off around it; "5pm" is 17:00.
+        let at5 = parser.parse("Run tom at 5", disabling: [key(.date, "tom")])
+        XCTAssertEqual(at5.title, "Run tom")
+        assertDate(at5.dueDate, 2026, 10, 22, 5, 0)
+        XCTAssertEqual(parser.parse("Run fri 9 p1", disabling: [key(.priority, "p1")]).title, "Run p1")
+        assertDate(parser.parse("Run fri 9 p1", disabling: [key(.priority, "p1")]).dueDate, 2026, 10, 23, 9, 0)
+        // A repeat switched off: the time typed after today's is plain today/tomorrow again, not "next".
+        let standup = parser.parse("Standup every weekday 9am", disabling: [key(.recurrence, "every weekday")])
+        XCTAssertEqual(standup.title, "Standup every weekday")
+        XCTAssertNil(standup.recurrence)
+        assertDate(standup.dueDate, 2026, 10, 22, 9, 0)
+    }
+
     func testTheKeyIsCodable() throws {
         let keys: Set<QuickAddTokenKey> = [key(.date, "Tom"), key(.project, "#\"Home Repairs\"")]
         let data = try JSONEncoder().encode(keys)

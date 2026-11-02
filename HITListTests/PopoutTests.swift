@@ -388,6 +388,27 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(draft.result(p).title, "Plan p1", "and the words typed first are still in the title")
     }
 
+    /// The card reads its text once per keystroke (final review: it parsed a 500-character title four times,
+    /// each repeated for every switched-off token). Reading from that one parse gives what each call gave.
+    func testTheCardsOneParseGivesTheSameChipsAndTask() throws {
+        let p = parser()
+        var switchedOff = QuickAddDraft(context: .today, text: "Call Tom about the 5pm meeting p2 #Work every week")
+        switchedOff.disable(try token("Tom", in: switchedOff, p))
+        switchedOff.disable(try token("p2", in: switchedOff, p))
+        var cleared = QuickAddDraft(context: .project(name: "Work"), text: "Plan offsite")
+        cleared.setProject(nil, p)
+        let drafts = [switchedOff, cleared,
+                      QuickAddDraft(context: .day(day(3)), text: "Dentist 9am !15mb"),
+                      QuickAddDraft(context: .label(name: "calls"), text: "Ring the bank tomorrow"),
+                      QuickAddDraft(context: .inbox, text: "  ")]
+        for draft in drafts {
+            let parsed = draft.parsed(p)
+            let result = draft.result(p, parsed: parsed)
+            XCTAssertEqual(result, draft.result(p), draft.text)
+            XCTAssertEqual(draft.chips(p, parsed: parsed, result: result), draft.chips(p), draft.text)
+        }
+    }
+
     func testResetForgetsSwitchedOffTokens() throws {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call Tom")
@@ -425,12 +446,29 @@ final class PopoutTests: XCTestCase {
         for area in wrapped { XCTAssertLessThanOrEqual(area.rect.maxX, 70.5) }
     }
 
+    /// A title longer than the field's four lines: the field scrolls to the cursor, but the highlight copy
+    /// stops after four lines, so its places were the first lines' while the field showed the last ones.
+    /// The tints sat on the wrong words and a tap on the text could switch off a token out of sight (final
+    /// review). A truncated copy now draws no highlights and no tap targets.
+    func testATitleLongerThanTheFieldDrawsNoHighlightsInTheWrongPlace() throws {
+        let long = "Call Tom about the parcel p2 " + String(repeating: "and the other parcel from the market ", count: 12) + "#Work"
+        let tokens = parser().parse(long).tokens
+        XCTAssertEqual(tokens.map(\.text), ["Tom", "p2", "#Work"])
+        XCTAssertTrue(renderAreas(long, tokens: tokens, width: 330, lineLimit: 1...4).isEmpty,
+                      "nothing drawn or tappable where the field's words aren't")
+        let short = "Call Tom about the parcel p2"
+        XCTAssertEqual(renderAreas(short, tokens: parser().parse(short).tokens, width: 330, lineLimit: 1...4).map(\.token), [0, 1],
+                       "a title that fits keeps its highlights")
+    }
+
     private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }
 
-    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?) -> [TokenHighlightField.Area] {
+    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?,
+                             lineLimit: ClosedRange<Int>? = nil) -> [TokenHighlightField.Area] {
         let box = AreaBox()
         let view = TokenHighlightField.highlightText(text, tokens: tokens)
             .font(HITType.taskName)
+            .lineLimit(lineLimit?.upperBound)
             .frame(width: width, alignment: .leading)
             .fixedSize(horizontal: width == nil, vertical: true)
             .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
@@ -790,6 +828,154 @@ final class PopoutTests: XCTestCase {
         XCTAssertNil(popouts.task)
         spin(until: { false }, for: 0.3)
         XCTAssertFalse(PopoutController.taskExists(id, in: context), "nothing brought the task back")
+    }
+    #endif
+
+    #if os(macOS)
+    /// ⌘N (or the toolbar "+") while the Mac panel is open opens a new card for the list on screen. The
+    /// panel kept the old card's view: its text and list stayed, and what was typed next was stored under
+    /// the old card's id, which no close cleared, so the closed card opened again at the next launch.
+    func testANewCardOverTheOpenMacPanelStartsEmptyAndItsCloseLeavesNothingStored() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = ModelContainerFactory.preview()
+        let popouts = PopoutController(draftDefaults: defaults)
+        // The app was killed with "Call mom" in the panel: the launch opens that card again.
+        QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: "Call mom"), card: UUID(), to: defaults)
+
+        let root = Color.clear.frame(width: 900, height: 700)
+            .popoutHost(popouts)
+            .environment(popouts)
+            .modelContainer(container)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: root)
+        defer { window.close() }
+        func spin(_ seconds: TimeInterval = 0.4) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
+        func editor() throws -> NSTextView {
+            func find(_ view: NSView) -> NSTextView? {
+                if let text = view as? NSTextView { return text }
+                for sub in view.subviews { if let found = find(sub) { return found } }
+                return nil
+            }
+            return try XCTUnwrap(window.contentView.flatMap(find), "the panel's title editor")
+        }
+        spin()
+        XCTAssertEqual(try editor().string, "Call mom", "the killed card is back")
+
+        popouts.openQuickAdd(.today)   // ⌘N
+        spin()
+        let fresh = try editor()
+        XCTAssertEqual(fresh.string, "", "a new card starts empty")
+        fresh.insertText("Buy milk", replacementRange: fresh.selectedRange())
+        spin()
+        let id = try XCTUnwrap(popouts.state.quickAdd?.id)
+        XCTAssertEqual(QuickAddDraftStore.draft(for: id, from: defaults)?.text, "Buy milk", "kept as the new card's")
+        XCTAssertEqual(QuickAddDraftStore.draft(for: id, from: defaults)?.context, .today, "in the list it was opened for")
+
+        popouts.closeQuickAdd()   // × or Escape
+        spin()
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "a closed card never opens again at launch")
+    }
+    #endif
+
+    #if os(macOS)
+    /// A window for the Mac tests that draw the real views, and a way to let them settle.
+    private func hostWindow<V: View>(_ view: V) -> NSWindow {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: view)
+        return window
+    }
+
+    private func spin(until done: () -> Bool = { false }, for seconds: TimeInterval = 0.4) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+    }
+
+    private func textView(in window: NSWindow) throws -> NSTextView {
+        func find(_ view: NSView) -> NSTextView? {
+            if let text = view as? NSTextView { return text }
+            for sub in view.subviews { if let found = find(sub) { return found } }
+            return nil
+        }
+        return try XCTUnwrap(window.contentView.flatMap(find), "a title editor")
+    }
+
+    /// The Mac's inline "Add task" row, open with "Call Tom p2", in a real window: a click on a highlighted
+    /// word lands on its tap target (SwiftUI, above the editor), a click on a plain word lands in the text
+    /// editor. On a title longer than the field, every word goes to the editor (no tap target is left where
+    /// the field's words aren't). Hit-testing only: an agent session's window can't become key, and AppKit
+    /// swallows synthesized clicks on a window that isn't.
+    func testOnTheMacAClickOnAHighlightHitsItsTapTargetAndPlainWordsGoToTheEditor() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = ModelContainerFactory.preview()
+        let long = "Call Tom p2 " + String(repeating: "and the other parcel from the market ", count: 12)
+        for text in ["Call Tom p2", long] {
+            let popouts = PopoutController(draftDefaults: defaults)
+            popouts.openQuickAdd(.inbox, placement: .inline("list"))
+            let card = try XCTUnwrap(popouts.state.quickAdd?.id)
+            QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: text), card: card, to: defaults)
+            let window = hostWindow(VStack { InlineAddRow(context: .inbox, key: "list"); Spacer() }
+                .frame(width: 600, height: 400)
+                .environment(popouts)
+                .modelContainer(container))
+            defer { window.close() }
+            spin()
+            let editor = try textView(in: window)
+            XCTAssertEqual(editor.string, text)
+            let content = try XCTUnwrap(window.contentView)
+            /// What a click on the middle of characters `range` of the title would hit.
+            func hit(_ range: NSRange) -> NSView? {
+                let onScreen = editor.firstRect(forCharacterRange: range, actualRange: nil)
+                let inWindow = window.convertPoint(fromScreen: NSPoint(x: onScreen.midX, y: onScreen.midY))
+                return content.hitTest(content.superview?.convert(inWindow, from: nil) ?? inWindow)
+            }
+            let call = hit(NSRange(location: 0, length: 4)), tom = hit(NSRange(location: 5, length: 3)),
+                p2 = hit(NSRange(location: 9, length: 2))
+            XCTAssertTrue(call is NSTextView, "a plain word: the editor (\(String(describing: call)))")
+            if text == long {
+                XCTAssertTrue(tom is NSTextView, "a long title: no tap target on \"Tom\"")
+                XCTAssertTrue(p2 is NSTextView, "a long title: no tap target on \"p2\"")
+            } else {
+                XCTAssertNotNil(tom)
+                XCTAssertFalse(tom is NSTextView, "\"Tom\": its highlight's tap target")
+                XCTAssertFalse(p2 is NSTextView, "\"p2\": its highlight's tap target")
+            }
+            popouts.closeInline("list")
+        }
+    }
+
+    /// Two Mac windows share one store. A task panel open in the first closes by itself when the second
+    /// window deletes that task (its own popout's Delete), without drawing the deleted task.
+    func testTheMacPanelClosesWhenASecondWindowDeletesItsTask() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Shared", notes: "deleted from the other window")
+        context.insert(task)
+        try context.save()
+        let first = PopoutController(), second = PopoutController()
+        first.open(task)
+        let windows = [first, second].map { popouts in
+            hostWindow(Color.clear.frame(width: 900, height: 700).popoutHost(popouts).environment(popouts).modelContainer(container))
+        }
+        defer { windows.forEach { $0.close() } }
+        spin()
+        XCTAssertTrue(first.state.isTaskOpen)
+
+        second.open(task)
+        second.closeTask()
+        TaskActions.delete(task, in: context)
+        spin(until: { !first.state.isTaskOpen }, for: 2)
+        XCTAssertFalse(first.state.isTaskOpen, "the first window's panel closed by itself")
+        XCTAssertNil(first.task)
+        spin()
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 0, "and nothing brought it back")
     }
     #endif
 

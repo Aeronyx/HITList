@@ -96,6 +96,19 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         return rule
     }
 
+    /// This rule picked from the Repeat menu for a task whose repeat was `previous` and which is due at
+    /// `due`. Menu rules carry no anchor and compare equal to anchored ones, so picking "Every month" again
+    /// on a "31st" task due Feb 28 must not forget the 31st: a monthly or yearly rule keeps the day
+    /// `previous` returned to (same frequency) while `due` still matches it, and otherwise takes `due`'s
+    /// day, as a completion would. A rule that already has an anchor, or has no use for one, is returned
+    /// as it is; so is any rule for an undated task.
+    public func keepingAnchor(of previous: RecurrenceRule?, due: Date?, calendar: Calendar = .current) -> RecurrenceRule {
+        guard Self.usesAnchor(frequency), anchorDay == nil, let due else { return self }
+        var rule = self
+        if let previous, previous.frequency == frequency { rule.anchorDay = previous.anchorDay }
+        return rule.anchored(to: due, calendar: calendar)
+    }
+
     // MARK: Occurrence math
 
     /// The first occurrence strictly after `date`, preserving the time of day of `date`.
