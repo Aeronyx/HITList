@@ -47,6 +47,10 @@ struct QuickAddPopout: View {
     @State private var errorMessage: String?
     @State private var added: String?
     @State private var addedGeneration = 0
+    /// iPhone: the card has added its task and is on its way out; a second submit in that instant (Return
+    /// delivered twice, a tap on the pill during the fade) must not add it again. The draft is left as it
+    /// is while the card fades (`closesAfterSave`), so this flag is what makes the save idempotent.
+    @State private var hasSavedForClose = false
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
     @FocusState private var locationFocused: Bool
@@ -455,7 +459,7 @@ struct QuickAddPopout: View {
 
     private func save() {
         let result = draft.result(parser)
-        guard !result.title.isEmpty else { return }
+        guard !result.title.isEmpty, !hasSavedForClose else { return }
         do {
             let task = try TaskActions.create(from: result, defaultProject: nil, defaultLabel: nil, in: modelContext)
             let notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -465,6 +469,7 @@ struct QuickAddPopout: View {
             }
             errorMessage = nil
             QuickAddDraftStore.clear()
+            if closesAfterSave { hasSavedForClose = true }
             if !closesAfterSave {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                     draft.reset()

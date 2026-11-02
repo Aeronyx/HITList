@@ -547,13 +547,21 @@ struct FilterParser {
         }
     }
 
+    /// A count of days, weeks or hours typed into a filter, within `DateExpressionParser.relativeCounts`;
+    /// nil for anything else, so "99999999999 days" fails to parse instead of trapping in the date
+    /// arithmetic (the same overflow quick add had, beta review).
+    static func boundedCount(_ word: String) -> Int? {
+        guard let n = Int(word), DateExpressionParser.relativeCounts.contains(n) else { return nil }
+        return n
+    }
+
     /// A date used on its own: `today`, `7 days`, `-3 days`, `saturday`, `jan 3`, `today..friday`.
     private mutating func parseBareDate(_ w: String, first: Int) throws -> FilterNode {
         var w = w
-        if w == "next", let n = peekWord(), let count = Int(n), count >= 0 {
+        if w == "next", let n = peekWord(), let count = Self.boundedCount(n), count >= 0 {
             w = n; advance() // "next 7 days" is "7 days"
         }
-        if let count = Int(w), let unit = peekWord().flatMap({ DateUnit(word: $0) }) {
+        if let count = Self.boundedCount(w), let unit = peekWord().flatMap({ DateUnit(word: $0) }) {
             advance()
             let days: Int
             switch unit {
@@ -613,11 +621,11 @@ struct FilterParser {
         }
 
         // "+4 hours", "-365 days", "3 days"
-        if words.count == 2, let n = Int(words[0]), let unit = DateUnit(word: words[1]) {
+        if words.count == 2, let n = Self.boundedCount(words[0]), let unit = DateUnit(word: words[1]) {
             return .relative(n, unit)
         }
         // "1 week after next week", "8 days before sunday"
-        if words.count >= 4, let n = Int(words[0]), n >= 0, let unit = DateUnit(word: words[1]),
+        if words.count >= 4, let n = Self.boundedCount(words[0]), n >= 0, let unit = DateUnit(word: words[1]),
            words[2] == "after" || words[2] == "before",
            let base = dateTerm(words[3...].joined(separator: " "), parser: parser) {
             return .shifted(words[2] == "after" ? n : -n, unit, base)

@@ -66,10 +66,7 @@ struct ICloudSyncGroup: View {
         guard !isCheckingICloud else { return }
         isCheckingICloud = true
         Task {
-            var result = await ICloudCheck.run()
-            // ICloudCheck assumes every Mac build is Development; a TestFlight Mac build is Production. The
-            // environment row above says which, so the check's own line leaves it out.
-            result.isDevelopmentEnvironment = false
+            let result = await ICloudCheck.run()
             CloudSyncMonitor.shared.write(.note, "Check iCloud: \(result.summary)",
                                           level: result.isHealthy ? .info : .notice,
                                           fields: ["environment": SyncEnvironment.current.summary])

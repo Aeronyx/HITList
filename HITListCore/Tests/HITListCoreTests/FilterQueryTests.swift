@@ -124,4 +124,13 @@ final class FilterQueryTests: XCTestCase {
         let names = q.apply(to: tasks, now: tomorrowNow, calendar: Fixed.calendar).map(\.filterTitle)
         XCTAssertEqual(names, ["Tomorrow"])
     }
+
+    func testAbsurdCountsFailToParseInsteadOfTrapping() {
+        // "due before: 99999999999 days" used to reach Calendar arithmetic with the raw Int (beta review).
+        XCTAssertNil(FilterParser.boundedCount("99999999999"))
+        XCTAssertNil(FilterParser.boundedCount("-99999999999"))
+        XCTAssertEqual(FilterParser.boundedCount("30"), 30)
+        XCTAssertEqual(FilterParser.boundedCount("-3"), -3)
+        XCTAssertNil(FilterParser.boundedCount("3x"))
+    }
 }

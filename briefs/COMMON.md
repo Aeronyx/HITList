@@ -84,11 +84,15 @@ is allowed behind `#available` with the slate look as fallback; deployment targe
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
 
 ## Round 7 (started 2026-11-02)
-- Session 25 `sync-robustness` (Max): sync log, watchdog (5 s rule), CloudKit environment and push
-  diagnostics, Settings → iCloud → Sync log. Owns `Services/CloudSyncMonitor.swift`, `SyncState.swift`,
-  `AccountWatch.swift`, new `Services/Sync/`, the app-delegate hooks in `HITListApp.swift`, the iCloud
-  settings groups and the Mac iCloud section. Fable owns everything under `Views/` this round (lists,
-  popouts, rows) and did the build-11 feedback on master.
+- Session 25 `sync-robustness` (Max, $36.61, 74 min, merged 2026-11-02): sync log, watchdog (5 s rule),
+  CloudKit environment and push diagnostics, Settings → iCloud → Sync log, the stuck-sync relaunch, the
+  Development side store. Found the Nov 1 Mac hang (an import that never ended; CloudKit refused every
+  later request, NSCocoaErrorDomain 134417).
+- Session 26 `beta-review` (Max, $33.89, 62 min, merged 2026-11-02): 12 core fixes, each with a failing
+  test first (reset safety, in-memory fallback for a damaged store, complete backups, Debug/TestFlight
+  separation, reminder rescheduling on every save, stale-reminder completion, sticky draft fields, blank
+  titles, integer overflow in quick add, environment detection from signed entitlements, first-import
+  grace). Nine behaviour decisions left for George are in its report (Fable's session notes).
 
 ## Round 6 (finished 2026-11-01; kept for the record)
 - `24-mac-settings-page` (branch `mac-settings`): `SettingsView.swift`, `Views/Settings/*`, new

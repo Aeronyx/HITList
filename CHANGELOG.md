@@ -4,6 +4,30 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.3.6
+
+The first beta for friends. Two review passes on the core, each change with a test that failed first.
+
+- iCloud sync keeps a record. Settings → iCloud shows which CloudKit environment and build channel this
+  copy syncs with ("Production · TestFlight build 13") and has a Sync log: every setup, import, export,
+  push, account and network change with timings and full error details, filterable to errors, with Copy
+  and Share. A watchdog records an error when a local change has no export within 5 seconds or a push no
+  import within 5 seconds, and when a sync request has hung for a minute; after two minutes the bolt is
+  struck through, "Sync paused: stuck", and Settings offers Relaunch on the Mac (a first import on a new
+  device gets ten minutes). This is the state that held the Mac's changes back for 16 hours on Nov 1.
+- Builds run from Xcode keep their own store, reminders and backups, apart from the TestFlight app's; a
+  TestFlight or App Store build is never mistaken for one.
+- Reminders no longer fire for tasks completed, deleted or moved from a list. Complete on a stale
+  reminder no longer skips a repeating task's next occurrence; Snooze no longer undoes a move.
+- Daily backups and Export JSON now carry reminder offsets, deadlines, locations and Flipboard state;
+  old backups still restore.
+- A store that cannot be opened no longer crashes the app at launch: it runs on an empty in-memory copy,
+  leaves the file alone, says so, and offers Reset. A cache reset acts only on the store that asked for it.
+- Typing a very long number in quick add ("!9999999999999999d", "every 99999999 days") no longer crashes.
+- Sticky drafts keep the location and deadline picked from "+". Clearing a task's title in the popout
+  puts the original back instead of saving a task with no title.
+- About → Copy diagnostics and Check iCloud report the right CloudKit environment on every build.
+
 ## 0.3.5 — build 12, 2026-11-02
 
 - iPhone lists look like the Mac's: rows flat on the background with hairline separators, headers over the
