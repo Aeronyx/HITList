@@ -37,6 +37,8 @@ struct QuickAddPopout: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Says which card this is (`PopoutState.QuickAdd.id`), for the "don't lose it" store.
+    @Environment(PopoutController.self) private var popouts: PopoutController?
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
@@ -51,6 +53,8 @@ struct QuickAddPopout: View {
     /// delivered twice, a tap on the pill during the fade) must not add it again. The draft is left as it
     /// is while the card fades (`closesAfterSave`), so this flag is what makes the save idempotent.
     @State private var hasSavedForClose = false
+    /// This card's id while it is on screen; its draft is stored under it (`QuickAddDraftStore`).
+    @State private var cardID: UUID?
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
     @FocusState private var locationFocused: Bool
@@ -68,9 +72,9 @@ struct QuickAddPopout: View {
         self.onClose = onClose
         self.onSaved = onSaved
         self.onDraftChange = onDraftChange
-        // A sticky draft comes back (`QuickAddDraftStore`): the text, and the description, location and
-        // deadline if it had them.
-        _draft = State(initialValue: QuickAddDraftStore.restoredDraft(context: context))
+        // Empty: a fresh card never gets a stored draft. Only the card that was open when the app was
+        // killed (same card id) reads its own back, on appear.
+        _draft = State(initialValue: QuickAddDraft(context: context))
     }
 
     private var parser: QuickAddParser {
@@ -80,11 +84,15 @@ struct QuickAddPopout: View {
 
     var body: some View {
         let parser = parser
-        let parsed = parser.parse(draft.text)
+        let parsed = draft.parsed(parser)
         let chips = draft.chips(parser)
         VStack(alignment: .leading, spacing: HITSpacing.m) {
             TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
-                                priority: parsed.priority, focus: $titleFocused, bordered: false, onSubmit: save)
+                                priority: parsed.priority, focus: $titleFocused, bordered: false,
+                                onDisable: { token in
+                                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.disable(token) }
+                                },
+                                onSubmit: save)
                 .accessibilityIdentifier("quickAddTitle")
             if draft.shows(.description) {
                 HITField("Description", text: $draft.notes, systemImage: "text.alignleft", axis: .vertical, lineLimit: 1...5)
@@ -111,6 +119,11 @@ struct QuickAddPopout: View {
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.extras)
         .onAppear {
             rebuildEngine()
+            // The card's own draft, if it had one when the app was last alive (or this view was rebuilt).
+            cardID = popouts?.state.quickAdd?.id
+            if let cardID, let popouts, let stored = QuickAddDraftStore.draft(for: cardID, from: popouts.draftDefaults) {
+                draft = stored
+            }
             titleFocused = true
             onDraftChange(!draft.isEmpty)
         }
@@ -124,13 +137,8 @@ struct QuickAddPopout: View {
                 titleFocused = true
             }
         }
-        .onChange(of: draft.text) { _, _ in
-            onDraftChange(!draft.isEmpty)
-            QuickAddDraftStore.save(draft)
-        }
-        .onChange(of: draft.notes) { _, _ in QuickAddDraftStore.save(draft) }
-        .onChange(of: draft.locationName) { _, _ in QuickAddDraftStore.save(draft) }
-        .onChange(of: draft.deadline) { _, _ in QuickAddDraftStore.save(draft) }
+        .onChange(of: draft.text) { _, _ in onDraftChange(!draft.isEmpty) }
+        .onChange(of: draft) { _, _ in storeDraft() }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }
         .onChange(of: labels.count) { _, _ in rebuildEngine() }
@@ -209,7 +217,7 @@ struct QuickAddPopout: View {
     }
 
     private func appendToken(_ token: String) {
-        draft.text = QuickAddDraft.appending(token, to: draft.text)
+        draft.append(token)
         titleFocused = true
     }
 
@@ -457,6 +465,13 @@ struct QuickAddPopout: View {
 
     // MARK: Saving
 
+    /// Keeps what is in the card, under its id, so a kill in the background loses nothing. Not once the
+    /// iPhone card has added its task and is fading (the controller clears it as the card goes).
+    private func storeDraft() {
+        guard let cardID, let popouts, !hasSavedForClose else { return }
+        QuickAddDraftStore.save(draft, card: cardID, to: popouts.draftDefaults)
+    }
+
     private func save() {
         let result = draft.result(parser)
         guard !result.title.isEmpty, !hasSavedForClose else { return }
@@ -468,8 +483,8 @@ struct QuickAddPopout: View {
                 try? modelContext.save()
             }
             errorMessage = nil
-            QuickAddDraftStore.clear()
             if closesAfterSave { hasSavedForClose = true }
+            if let cardID, let popouts { QuickAddDraftStore.clear(card: cardID, from: popouts.draftDefaults) }
             if !closesAfterSave {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                     draft.reset()
