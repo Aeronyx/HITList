@@ -63,7 +63,7 @@ struct PopoutHost: ViewModifier {
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
-                    floatingQuickAdd(quickAdd.context)
+                    floatingQuickAdd(quickAdd.context, card: quickAdd.id)
                 }
             }
             .overlay {
@@ -193,7 +193,7 @@ struct PopoutHost: ViewModifier {
     }
 
     @ViewBuilder
-    private func floatingQuickAdd(_ context: QuickAddContext) -> some View {
+    private func floatingQuickAdd(_ context: QuickAddContext, card cardID: UUID) -> some View {
         // iPhone: adding puts the card away (the new row is the confirmation); the Mac panel stays open
         // for the next task.
         let closing = popouts.state.isQuickAddClosing
@@ -202,6 +202,10 @@ struct PopoutHost: ViewModifier {
                                   onClose: requestClose,
                                   onSaved: { popouts.didSave(); if !usesPanel { retireQuickAdd() } },
                                   onDraftChange: { quickAddHasContent = $0 })
+            // One view per card: a new card opened over the Mac panel (⌘N, the toolbar "+") starts with its
+            // own empty draft, its own list and its own stored draft. The panel used to keep the old card's
+            // view, whose text then outlived the close and came back at the next launch.
+            .id(cardID)
         if usesPanel {
             PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
                 card.panelChrome()
