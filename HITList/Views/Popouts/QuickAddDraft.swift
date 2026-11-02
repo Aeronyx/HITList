@@ -355,39 +355,53 @@ enum QuickAddDraftStore {
         var draft: QuickAddDraft
     }
 
-    static func load(from defaults: UserDefaults = AppGroup.defaults) -> Stored? {
-        guard let data = defaults.data(forKey: Preferences.quickAddOpenCard),
+    /// The defaults key for the open card of the store `storeName`. Every build on a device shares the app
+    /// group's defaults, but a Debug build opens its own store (HITList-Development.store): each store keeps
+    /// its own card, so a Debug run never reopens (or throws away) the TestFlight app's card, and a Debug card
+    /// killed from Xcode never comes back in the TestFlight app. The real store keeps the plain key, as the
+    /// sync times do (`CloudSyncMonitor.syncTimeKey`).
+    static func key(storeName: String) -> String {
+        storeName == ModelContainerFactory.mainStoreName ? Preferences.quickAddOpenCard
+                                                         : "\(Preferences.quickAddOpenCard).\(storeName)"
+    }
+
+    static func load(from defaults: UserDefaults = AppGroup.defaults,
+                     storeName: String = ModelContainerFactory.storeName) -> Stored? {
+        guard let data = defaults.data(forKey: key(storeName: storeName)),
               let stored = try? JSONDecoder().decode(Stored.self, from: data), stored.draft.hasContent else { return nil }
         return stored
     }
 
     /// Keeps `draft` as the card `cardID`'s; an empty draft clears the store instead.
-    static func save(_ draft: QuickAddDraft, card cardID: UUID, to defaults: UserDefaults = AppGroup.defaults) {
+    static func save(_ draft: QuickAddDraft, card cardID: UUID, to defaults: UserDefaults = AppGroup.defaults,
+                     storeName: String = ModelContainerFactory.storeName) {
         guard draft.hasContent, let data = try? JSONEncoder().encode(Stored(cardID: cardID, draft: draft)) else {
-            clear(card: cardID, from: defaults)
+            clear(card: cardID, from: defaults, storeName: storeName)
             return
         }
-        defaults.set(data, forKey: Preferences.quickAddOpenCard)
+        defaults.set(data, forKey: key(storeName: storeName))
     }
 
     /// The draft stored for this card, if it is this card's. A fresh card's id has nothing stored.
-    static func draft(for cardID: UUID, from defaults: UserDefaults = AppGroup.defaults) -> QuickAddDraft? {
-        guard let stored = load(from: defaults), stored.cardID == cardID else { return nil }
+    static func draft(for cardID: UUID, from defaults: UserDefaults = AppGroup.defaults,
+                      storeName: String = ModelContainerFactory.storeName) -> QuickAddDraft? {
+        guard let stored = load(from: defaults, storeName: storeName), stored.cardID == cardID else { return nil }
         return stored.draft
     }
 
     /// The card closed: forgets its draft. Another card's (another Mac window's) is left alone.
-    static func clear(card cardID: UUID, from defaults: UserDefaults = AppGroup.defaults) {
-        if let data = defaults.data(forKey: Preferences.quickAddOpenCard),
+    static func clear(card cardID: UUID, from defaults: UserDefaults = AppGroup.defaults,
+                      storeName: String = ModelContainerFactory.storeName) {
+        if let data = defaults.data(forKey: key(storeName: storeName)),
            let stored = try? JSONDecoder().decode(Stored.self, from: data), stored.cardID != cardID {
             return
         }
-        clear(from: defaults)
+        clear(from: defaults, storeName: storeName)
     }
 
     /// Forgets whatever is stored, the old builds' keys included.
-    static func clear(from defaults: UserDefaults = AppGroup.defaults) {
-        for key in [Preferences.quickAddOpenCard] + Preferences.legacyQuickAddDraftKeys {
+    static func clear(from defaults: UserDefaults = AppGroup.defaults, storeName: String = ModelContainerFactory.storeName) {
+        for key in [key(storeName: storeName)] + Preferences.legacyQuickAddDraftKeys {
             defaults.removeObject(forKey: key)
         }
     }

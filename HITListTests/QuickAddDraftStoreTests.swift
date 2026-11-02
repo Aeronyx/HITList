@@ -82,6 +82,26 @@ final class QuickAddDraftStoreTests: XCTestCase {
         XCTAssertNil(QuickAddDraftStore.load(from: defaults))
     }
 
+    /// Every build on a device shares the app group's defaults, but a Debug build opens its own store
+    /// (HITList-Development.store, brief 26). The open card was one key for all of them: a Debug run on the
+    /// Mac reopened the TestFlight app's card (and closing it there threw it away), and a Debug card killed
+    /// from Xcode came back in the TestFlight app, ready to be added to the real tasks.
+    func testEachStoreKeepsItsOwnOpenCard() throws {
+        let main = ModelContainerFactory.mainStoreName, development = "HITList-Development.store"
+        let real = UUID(), debug = UUID()
+        QuickAddDraftStore.save(fullDraft(), card: real, to: defaults, storeName: main)
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults, storeName: development), "a Debug build doesn't see it")
+
+        QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: "test task from Xcode"), card: debug, to: defaults,
+                                storeName: development)
+        XCTAssertEqual(QuickAddDraftStore.load(from: defaults, storeName: main)?.cardID, real, "nor overwrites it")
+        QuickAddDraftStore.clear(from: defaults, storeName: development)
+        XCTAssertEqual(QuickAddDraftStore.load(from: defaults, storeName: main)?.draft, fullDraft(),
+                       "a Debug build's close leaves the real card")
+        XCTAssertEqual(QuickAddDraftStore.key(storeName: main), Preferences.quickAddOpenCard,
+                       "the real store keeps the plain key")
+    }
+
     // MARK: A fresh card gets nothing
 
     func testACardOpenedFreshFromAnyListNeverGetsTheStoredDraft() {
