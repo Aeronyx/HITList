@@ -59,6 +59,16 @@ final class CloudSyncMonitor {
     @ObservationIgnored private var lastAccountCheck: Date?
     @ObservationIgnored private var started = false
 
+    /// The 5-second rule (`SyncWatchdog`): fed the same signals as the log; what it finds is logged.
+    @ObservationIgnored private var watchdog = SyncWatchdog()
+    /// Its one timer, armed for the next deadline only.
+    @ObservationIgnored private var watchdogTimer: Task<Void, Never>?
+    /// The start of the oldest event still running after `SyncWatchdog.Rules.stalledAfter` while
+    /// nothing stood in its way; nil when nothing is stalled.
+    private(set) var stalledSince: Date?
+    /// When the app last stopped being active, to tell a real return from a click into the window.
+    @ObservationIgnored private var inactiveSince: Date?
+
     static let lastImportKey = "sync.lastImportAt"
     static let lastExportKey = "sync.lastExportAt"
 
@@ -70,6 +80,7 @@ final class CloudSyncMonitor {
         // Remembered across launches so the status reads "Synced 3 hr ago" before the first event arrives.
         lastImportAt = AppGroup.defaults.object(forKey: Self.lastImportKey) as? Date
         lastExportAt = AppGroup.defaults.object(forKey: Self.lastExportKey) as? Date
+        watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
     }
 
     var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
@@ -190,11 +201,15 @@ final class CloudSyncMonitor {
         #if os(macOS)
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append(workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.write(.scene, "Mac going to sleep") }
+            MainActor.assumeIsolated {
+                self?.write(.scene, "Mac going to sleep", fields: self?.inFlightFields() ?? [:])
+                self?.watch(.suspended(at: Date()))
+            }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.write(.scene, "Mac woke from sleep")
+                self?.watch(.resumed(at: Date()))
                 self?.refreshAccountStatus(force: true)
             }
         })
@@ -207,31 +222,91 @@ final class CloudSyncMonitor {
         })
     }
 
-    /// From `HITListApp`'s `scenePhase`: logged, and on activation the account is checked again.
+    /// From `HITListApp`'s `scenePhase`: logged, and on activation the account is checked again and the
+    /// watchdog measures whether an import follows. On iOS the background suspends the process, so the
+    /// watchdog's clocks pause; a Mac app keeps running in the background and keeps its clocks.
     func sceneChanged(to phase: ScenePhase) {
+        let now = Date()
         switch phase {
         case .active:
-            write(.scene, "App active")
+            let idle = inactiveSince.map { now.timeIntervalSince($0) }
+            inactiveSince = nil
+            write(.scene, "App active", fields: idle.map { ["away": SyncLogFormat.duration($0)] } ?? [:])
+            #if os(iOS)
+            watch(.resumed(at: now))
+            #endif
+            watch(.activated(at: now, idle: idle))
             refreshAccountStatus()
         case .inactive:
+            if inactiveSince == nil { inactiveSince = now }
             write(.scene, "App inactive")
         case .background:
+            if inactiveSince == nil { inactiveSince = now }
             write(.scene, "App in background", fields: inFlightFields())
+            #if os(iOS)
+            watch(.suspended(at: now))
+            #endif
         @unknown default:
             write(.scene, "App phase \(String(describing: phase))")
         }
     }
 
     private func recordQuit() {
-        write(.scene, "Quitting", level: inFlight.isEmpty ? .info : .notice, fields: inFlightFields())
+        let fields = inFlightFields()
+        write(.scene, "Quitting", level: fields.isEmpty ? .info : .notice, fields: fields)
     }
 
-    /// "import 7 min 37 s" for each event still running.
+    /// What is still running or waiting: "1 running for 7 min 37 s", saves not exported yet.
     private func inFlightFields() -> [String: String] {
-        guard !inFlight.isEmpty else { return [:] }
+        var fields: [String: String] = [:]
+        if !inFlight.isEmpty {
+            let now = Date()
+            let running = inFlight.values.sorted().map { SyncLogFormat.duration(now.timeIntervalSince($0)) }
+            fields["inFlight"] = "\(inFlight.count) running for \(running.joined(separator: ", "))"
+        }
+        if watchdog.waitingSaves > 0 { fields["savesNotExported"] = "\(watchdog.waitingSaves)" }
+        if watchdog.waitingPushes > 0 { fields["pushesNotImported"] = "\(watchdog.waitingPushes)" }
+        return fields
+    }
+
+    // MARK: - Watchdog
+
+    /// Feeds the watchdog one signal (or only the time), logs what it found unless `log` is false, and
+    /// re-arms its single timer. Returns the findings, so an event's own line can carry its latency.
+    @discardableResult
+    func watch(_ signal: SyncSignal?, log: Bool = true) -> [SyncWatchdog.Finding] {
         let now = Date()
-        let running = inFlight.values.sorted().map { SyncLogFormat.duration(now.timeIntervalSince($0)) }
-        return ["inFlight": "\(inFlight.count) running for \(running.joined(separator: ", "))"]
+        var findings = signal.map { watchdog.handle($0) } ?? []
+        findings += watchdog.tick(now)
+        if log { writeFindings(findings) }
+        let stalled = watchdog.stalledSince(now: now)
+        if stalled != stalledSince {
+            stalledSince = stalled
+            logStateIfChanged()
+        }
+        armWatchdog(after: now)
+        return findings
+    }
+
+    private func writeFindings(_ findings: [SyncWatchdog.Finding]) {
+        for finding in findings where finding.isLogged {
+            write(.watchdog, finding.message(rules: watchdog.rules), level: finding.level, fields: finding.fields)
+        }
+    }
+
+    /// One `Task.sleep` until the next deadline: nothing runs while nothing is pending.
+    private func armWatchdog(after now: Date) {
+        watchdogTimer?.cancel()
+        guard let next = watchdog.nextDeadline(after: now) else {
+            watchdogTimer = nil
+            return
+        }
+        let delay = max(0.01, next.timeIntervalSince(now)) + 0.02
+        watchdogTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            self?.watch(nil)
+        }
     }
 
     // MARK: - Account
@@ -286,6 +361,9 @@ final class CloudSyncMonitor {
             write(.account, text, level: changed || status != .available ? .notice : .info)
             loggedAccount = status
         }
+        // Signed out, restricted or "sign in again" means nothing can sync; "could not determine" doesn't say.
+        let blocking: [CKAccountStatus] = [.noAccount, .restricted, .temporarilyUnavailable]
+        watch(.account(available: !blocking.contains(status), description: Self.describe(status), at: Date()))
         if status == .available { signedOutDismissed = false }
         setNotice(accountWatch.update(status: status, shown: accountNotice, signedOutDismissed: signedOutDismissed))
         logStateIfChanged()
@@ -316,6 +394,7 @@ final class CloudSyncMonitor {
         let first = loggedNetwork == nil
         loggedNetwork = description
         write(.network, "Network \(description)", level: first ? .info : .notice)
+        watch(.network(online: online, at: Date()))
     }
 
     /// "reachable via wifi", "reachable via wiredEthernet (expensive)", "unreachable".
@@ -360,11 +439,26 @@ final class CloudSyncMonitor {
     }
 
     /// A push arrived through the app delegate. `appState` is "active", "inactive" or "background".
+    /// A CloudKit push for this container starts the watchdog's 5-second import clock; an iOS app woken
+    /// in the background is running again for as long as the push handler holds it.
     func pushReceived(_ userInfo: [AnyHashable: Any], appState: String) {
         let push = SyncPush(userInfo: userInfo)
         var fields = push.fields
         fields["app"] = appState
         write(.push, "Push received: \(push.summary)", fields: fields)
+        guard push.isCloudKit, ModelContainerFactory.isCloudKitEnabled else { return }
+        let now = Date()
+        #if os(iOS)
+        if appState == "background" { watch(.resumed(at: now)) }
+        #endif
+        watch(.push(at: now))
+    }
+
+    /// The iOS push handler is done: an app still in the background is suspended again.
+    func pushHandled(stillInBackground: Bool) {
+        #if os(iOS)
+        if stillInBackground { watch(.suspended(at: Date())) }
+        #endif
     }
 
     /// Waits for the next import to end, or `timeout`. The iOS background push handler holds the
@@ -454,6 +548,8 @@ final class CloudSyncMonitor {
     static let saveGathering: Duration = .seconds(1)
 
     private func localSaved(_ summary: SaveSummary, at: Date) {
+        // Gathered into the log's line first, so a "waiting: offline" finding follows the save it is about.
+        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at)) } }
         if var pending = pendingSaves {
             pending.count += 1
             pending.last = at
@@ -517,9 +613,16 @@ final class CloudSyncMonitor {
         guard let end = event.endDate else {
             inFlight[event.identifier] = event.startDate
             write(.event, "\(type.rawValue) started", fields: ["id": shortID])
+            watch(.eventStarted(id: event.identifier, type: type, at: event.startDate))
             return
         }
         inFlight[event.identifier] = nil
+        // The watchdog first: an export's line carries how long after the save it finished ("afterSave"),
+        // and its other findings (late, recovered) follow the event's line.
+        let failed = event.error != nil || !event.succeeded
+        let findings = watch(.eventEnded(id: event.identifier, type: type, startedAt: event.startDate, succeeded: !failed,
+                                         error: event.error.map { SyncState.shortReason(for: $0) }, at: end), log: false)
+        defer { writeFindings(findings) }
         let phase: Phase
         switch event.type {
         case .setup: phase = .setup
@@ -530,7 +633,11 @@ final class CloudSyncMonitor {
         let now = Date()
         let duration = SyncLogFormat.duration(end.timeIntervalSince(event.startDate))
         var fields = ["id": shortID, "duration": duration]
-        if event.error != nil || !event.succeeded {
+        for case let .exportOnTime(latency, saves) in findings {
+            fields["afterSave"] = SyncLogFormat.duration(latency)
+            if saves > 1 { fields["saves"] = "\(saves)" }
+        }
+        if failed {
             let error = event.error ?? NSError(domain: "HITList.sync", code: 0,
                                                userInfo: [NSLocalizedDescriptionKey: "ended without success or an error"])
             let ns = error as NSError

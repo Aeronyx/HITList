@@ -60,6 +60,7 @@
 		4C5C4412756C5F3A805276E8 /* AppGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99F5C84701529B786312B4FD /* AppGroupTests.swift */; };
 		4E3CC00722B95EA5C12A9D06 /* ProjectEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8ABD5B832600BB422B2240 /* ProjectEditorView.swift */; };
 		50966C1D4A63EBAC1A08B11D /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD69DA3D48DE01A521546D67 /* UpcomingView.swift */; };
+		529B38250A5BE6884DB35AC8 /* SyncWatchdogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */; };
 		539A93532A78AA32DB03790F /* swish.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4EC7B932C6B8D510FA4827B9 /* swish.caf */; };
 		53FEB8C0A1250F7D59BD7AF1 /* AboutSettingsGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */; };
 		54A85D92F0E0BD3EAB6660EC /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B73ACCF90D84809171E18645 /* Keychain.swift */; };
@@ -112,6 +113,7 @@
 		A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FC29DB1F9289C32B262576 /* SyncLogTests.swift */; };
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		A5CB417B22951B64EABA4A8F /* AccountWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */; };
+		A6DA9DF74D818DD89E711D05 /* SyncWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */; };
 		A8CEEB66309F56025E17DD1C /* QuickAddPopout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D500F169967494D4FCCD6B /* QuickAddPopout.swift */; };
 		AAE316B3515708BCEF1AC95D /* PickerTimeField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 315D24154A9ABD69200C164B /* PickerTimeField.swift */; };
 		AC0A5906024DDBA597C16B87 /* SyncEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 949018764012BBE12E6F0ED2 /* SyncEnvironment.swift */; };
@@ -227,6 +229,7 @@
 		43685282BB59BB5A3F3DD659 /* KeyboardObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		46C5F20012A7AE765F02805B /* flip.caf */ = {isa = PBXFileReference; path = flip.caf; sourceTree = "<group>"; };
 		470E9FA3AA856BA92FBFC6FA /* Preferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preferences.swift; sourceTree = "<group>"; };
+		47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdogTests.swift; sourceTree = "<group>"; };
 		48F188E277BC60A2CD068AAD /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		4A889BC2315D60CA212A38FD /* Debouncer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Debouncer.swift; sourceTree = "<group>"; };
 		4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationActionTests.swift; sourceTree = "<group>"; };
@@ -322,6 +325,7 @@
 		CBA41DFD36958529902FFC2C /* DataSettingsGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSettingsGroups.swift; sourceTree = "<group>"; };
 		CC94AAC22806CB55BB755C84 /* PopoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutController.swift; sourceTree = "<group>"; };
 		CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITToggleStyle.swift; sourceTree = "<group>"; };
+		CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdog.swift; sourceTree = "<group>"; };
 		D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITButtonStyle.swift; sourceTree = "<group>"; };
 		D3DF87F469E151C325CD9969 /* SyncPush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPush.swift; sourceTree = "<group>"; };
 		D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPlacement.swift; sourceTree = "<group>"; };
@@ -613,6 +617,7 @@
 				EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */,
 				80FC29DB1F9289C32B262576 /* SyncLogTests.swift */,
 				422E0340B7BAAAB4BAFBB26F /* SyncStateTests.swift */,
+				47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */,
 				DC6B43A27F6D86FFFA01232F /* TaskActionsTests.swift */,
 				3AB0E811BC8B9E3BBF492DED /* ThemeTests.swift */,
 				133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */,
@@ -736,6 +741,7 @@
 				5764B62739B38F9D4F936CB1 /* SyncLog.swift */,
 				1054B92FCF463385DF075D13 /* SyncLogFormat.swift */,
 				D3DF87F469E151C325CD9969 /* SyncPush.swift */,
+				CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -972,6 +978,7 @@
 				D83CF3DF7B180E45E5E88B66 /* SyncPush.swift in Sources */,
 				93DCB35BB113FC8E976DB2C1 /* SyncState.swift in Sources */,
 				01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */,
+				A6DA9DF74D818DD89E711D05 /* SyncWatchdog.swift in Sources */,
 				490CBF09443A68F306B100F1 /* TaskActions.swift in Sources */,
 				45ECCAFF0C36623DD6DDD8E8 /* TaskListView.swift in Sources */,
 				FAA36AA5C80F0B9C974F38FA /* TaskPopout.swift in Sources */,
@@ -1019,6 +1026,7 @@
 				0F9EB6A121578D72E6DCBDFB /* StoreResetTests.swift in Sources */,
 				A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */,
 				6647789EC3814C8BED45F16B /* SyncStateTests.swift in Sources */,
+				529B38250A5BE6884DB35AC8 /* SyncWatchdogTests.swift in Sources */,
 				867074403180E4273CE90374 /* TaskActionsTests.swift in Sources */,
 				7F600F45E5CD9A4E535D951A /* ThemeTests.swift in Sources */,
 				EDBEC249FA6239C0F6E4A5B8 /* UpcomingScheduleTests.swift in Sources */,
