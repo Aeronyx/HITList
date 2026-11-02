@@ -61,10 +61,12 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(result.isHealthy)
     }
 
-    func testCheckICloudSaysDevelopmentOnTheMac() {
+    /// Brief 26: the check assumed every Mac build talks to Development, but the TestFlight Mac app is
+    /// Production (and an iPhone Debug build is Development); it now asks `SyncEnvironment.current`.
+    func testCheckICloudSaysWhenThisBuildTalksToDevelopment() {
         XCTAssertEqual(check(.available, reachable: true, zone: true, seconds: 1.26, mac: true).summary,
-                       "iCloud available · container reachable · sync zone found · 1.3 s · Development environment on the Mac")
-        XCTAssertEqual(ICloudCheck.developmentEnvironment, ICloudCheckTestsPlatform.isMac)
+                       "iCloud available · container reachable · sync zone found · 1.3 s · Development environment")
+        XCTAssertEqual(ICloudCheck.developmentEnvironment, SyncEnvironment.current.isDevelopment)
     }
 
     func testCheckICloudProblemsInPlainWords() {
@@ -215,6 +217,13 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(lines[8], "Notifications: Allowed, reminders on")
     }
 
+    /// Copy diagnostics said "Development (Mac)" for every Mac build, the TestFlight one included, which
+    /// is Production: the one line a bug report needs to be right. It now says what this build uses.
+    func testDiagnosticsNameTheEnvironmentThisBuildUses() {
+        XCTAssertEqual(Diagnostics.environment, SyncEnvironment.current.summary)
+        XCTAssertFalse(Diagnostics.environment.contains("(Mac)"))
+    }
+
     func testAppInfoDescribesThisDevice() {
         XCTAssertFalse(AppInfo.deviceModel.isEmpty)
         #if os(macOS)
@@ -247,12 +256,4 @@ final class SettingsTests: XCTestCase {
             XCTAssertLessThanOrEqual(change, monitor.lastSyncedAt!)
         }
     }
-}
-
-private enum ICloudCheckTestsPlatform {
-    #if os(macOS)
-    static let isMac = true
-    #else
-    static let isMac = false
-    #endif
 }
