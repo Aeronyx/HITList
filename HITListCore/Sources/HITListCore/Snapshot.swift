@@ -44,14 +44,32 @@ public struct Snapshot: Codable, Equatable, Sendable {
         public var labelIDs: [UUID]
         public var createdAt: Date
         public var updatedAt: Date
+        // Schema V2 (build 5). Optional, so a snapshot written before 0.3.6, which has none of these keys,
+        // still decodes. 0.3.6 and later always write `flipTarget` (`hasV2Fields`), which is how a restore
+        // tells "no deadline" from "a backup too old to say".
+        /// Minutes before the due time to remind; nil reminds at the due time.
+        public var reminderOffsetMinutes: Int?
+        public var deadline: Date?
+        public var locationName: String?
+        public var flipTarget: Int?
+        public var flipCount: Int?
+        public var flipPeriodStart: Date?
+
         public init(id: UUID, title: String, notes: String, priority: Int, dueDate: Date?, hasDueTime: Bool,
                     isCompleted: Bool, completedAt: Date?, recurrence: String?, sortOrder: Int, projectID: UUID?,
-                    labelIDs: [UUID], createdAt: Date, updatedAt: Date) {
+                    labelIDs: [UUID], createdAt: Date, updatedAt: Date,
+                    reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
+                    flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil) {
             self.id = id; self.title = title; self.notes = notes; self.priority = priority; self.dueDate = dueDate
             self.hasDueTime = hasDueTime; self.isCompleted = isCompleted; self.completedAt = completedAt
             self.recurrence = recurrence; self.sortOrder = sortOrder; self.projectID = projectID
             self.labelIDs = labelIDs; self.createdAt = createdAt; self.updatedAt = updatedAt
+            self.reminderOffsetMinutes = reminderOffsetMinutes; self.deadline = deadline; self.locationName = locationName
+            self.flipTarget = flipTarget; self.flipCount = flipCount; self.flipPeriodStart = flipPeriodStart
         }
+
+        /// Whether this record carries the V2 fields (it was written by 0.3.6 or later).
+        public var hasV2Fields: Bool { flipTarget != nil }
     }
 
     public struct FilterRecord: Codable, Equatable, Sendable, Identifiable {

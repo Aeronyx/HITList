@@ -154,4 +154,84 @@ final class SnapshotRoundTripTests: XCTestCase {
         XCTAssertEqual(restored.project?.name, "Home")
         XCTAssertEqual(restored.recurrence, "monthly;1")
     }
+
+    // MARK: - Schema V2 fields (beta review)
+
+    private func setV2Fields(on task: TaskItem) {
+        task.reminderOffsetMinutes = 15
+        task.deadline = t0.addingTimeInterval(3 * 86_400)
+        task.locationName = "Office"
+        task.flipTarget = 3
+        task.flipCount = 1
+        task.flipPeriodStart = t0
+    }
+
+    /// The daily backup and Export JSON wrote none of schema V2's fields, so restoring one (the way back
+    /// after losing a device's data) dropped every reminder offset, deadline, location and Flipboard charge.
+    func testReminderDeadlineLocationAndFlipboardSurviveABackup() throws {
+        try populate(source.mainContext)
+        let standup = try XCTUnwrap(try source.mainContext.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Standup" })
+        setV2Fields(on: standup)
+        try source.mainContext.save()
+
+        try SnapshotBuilder.restore(try roundTrip(SnapshotBuilder.build(from: source.mainContext)), into: target.mainContext)
+
+        let tasks = try target.mainContext.fetch(FetchDescriptor<TaskItem>())
+        let restored = try XCTUnwrap(tasks.first { $0.title == "Standup" })
+        XCTAssertEqual(restored.reminderOffsetMinutes, 15)
+        XCTAssertEqual(restored.deadline, t0.addingTimeInterval(3 * 86_400))
+        XCTAssertEqual(restored.locationName, "Office")
+        XCTAssertEqual(restored.flipTarget, 3)
+        XCTAssertEqual(restored.flipCount, 1)
+        XCTAssertEqual(restored.flipPeriodStart, t0)
+        let bare = try XCTUnwrap(tasks.first { $0.title == "Loose end" })
+        XCTAssertNil(bare.reminderOffsetMinutes)
+        XCTAssertNil(bare.deadline)
+        XCTAssertNil(bare.locationName)
+        XCTAssertEqual(bare.flipTarget, 1)
+        XCTAssertEqual(bare.flipCount, 0)
+    }
+
+    /// A newer backup clears a field the backup says is empty...
+    func testANewerBackupClearsAV2FieldItHasNoValueFor() throws {
+        try populate(source.mainContext)
+        try SnapshotBuilder.restore(try roundTrip(SnapshotBuilder.build(from: source.mainContext)), into: target.mainContext)
+        let local = try XCTUnwrap(try target.mainContext.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Standup" })
+        setV2Fields(on: local)
+        try target.mainContext.save()
+
+        let source = try XCTUnwrap(try self.source.mainContext.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Standup" })
+        source.updatedAt = t0.addingTimeInterval(9_000)
+        try self.source.mainContext.save()
+        try SnapshotBuilder.restore(try roundTrip(SnapshotBuilder.build(from: self.source.mainContext)), into: target.mainContext)
+
+        XCTAssertNil(local.locationName, "the newer backup says there is no location")
+        XCTAssertNil(local.deadline)
+        XCTAssertEqual(local.flipTarget, 1)
+    }
+
+    /// ...but a backup from before 0.3.6 can't say, so it leaves them as they are.
+    func testABackupFromBeforeTheV2FieldsLeavesThemAlone() throws {
+        try populate(target.mainContext)
+        let local = try XCTUnwrap(try target.mainContext.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Standup" })
+        setV2Fields(on: local)
+        try target.mainContext.save()
+
+        var old = try SnapshotBuilder.build(from: target.mainContext)
+        old.tasks = old.tasks.map { record in
+            var r = Snapshot.TaskRecord(id: record.id, title: record.title + " (renamed)", notes: record.notes, priority: record.priority,
+                                        dueDate: record.dueDate, hasDueTime: record.hasDueTime, isCompleted: record.isCompleted,
+                                        completedAt: record.completedAt, recurrence: record.recurrence, sortOrder: record.sortOrder,
+                                        projectID: record.projectID, labelIDs: record.labelIDs, createdAt: record.createdAt,
+                                        updatedAt: record.updatedAt.addingTimeInterval(9_000))
+            r.reminderOffsetMinutes = nil  // what a 0.3.5 backup holds: no V2 keys at all
+            return r
+        }
+        try SnapshotBuilder.restore(try roundTrip(old), into: target.mainContext)
+
+        XCTAssertEqual(local.title, "Standup (renamed)", "the old backup is newer, so its fields win")
+        XCTAssertEqual(local.reminderOffsetMinutes, 15)
+        XCTAssertEqual(local.locationName, "Office")
+        XCTAssertEqual(local.flipTarget, 3)
+    }
 }
