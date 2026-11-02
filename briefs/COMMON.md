@@ -83,6 +83,13 @@ anything is archived and refuses a version without a changelog section. Liquid G
 is allowed behind `#available` with the slate look as fallback; deployment targets stay iOS 18 / macOS 15;
 the API names are listed in briefs 20 and 22 and were checked against the Xcode 27.1 SDK interface.
 
+## Round 7 (started 2026-11-02)
+- Session 25 `sync-robustness` (Max): sync log, watchdog (5 s rule), CloudKit environment and push
+  diagnostics, Settings → iCloud → Sync log. Owns `Services/CloudSyncMonitor.swift`, `SyncState.swift`,
+  `AccountWatch.swift`, new `Services/Sync/`, the app-delegate hooks in `HITListApp.swift`, the iCloud
+  settings groups and the Mac iCloud section. Fable owns everything under `Views/` this round (lists,
+  popouts, rows) and did the build-11 feedback on master.
+
 ## Round 6 (finished 2026-11-01; kept for the record)
 - `24-mac-settings-page` (branch `mac-settings`): `SettingsView.swift`, `Views/Settings/*`, new
   `Views/Settings/Mac/*`, `HITListApp.swift` (Settings scene + appSettings command only), `ContentView.swift`

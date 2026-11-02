@@ -13,6 +13,14 @@ TestFlight iterations; the heading lists the last build that shipped it.
 - Mac: the lists' sidebar only fades under the Settings sections (it stays built), so nothing stutters.
 - iPhone: after adding a task the card holds still and fades while the keyboard drops; nothing rides the
   keyboard or re-lays out on the way.
+- iPhone lists look like the Mac's: rows flat on the background with hairline separators, headers over the
+  checkboxes; no more inset cards on Today and the Inbox. The undo toast rises above the island instead of
+  behind it.
+- Completing a task is snappier: the checked row leaves after 380 ms instead of 600.
+- Quick-add: the confirm pill is hollow and faded until there is a title, then fills with the accent.
+  Tapping away from a card with text drops the keyboard and offers "Discard" in a bubble above it; any
+  other tap brings the keyboard back. Drafts are sticky: the text survives closing the card, backgrounding
+  and relaunching, until the task is added or discarded (`QuickAddDraftStore`).
 
 ## 0.3.3 — build 10, 2026-11-01
 
