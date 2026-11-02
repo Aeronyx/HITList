@@ -95,6 +95,57 @@ final class NotificationActionTests: XCTestCase {
         XCTAssertEqual(category.actions.map(\.title), ["Complete", "Snooze 1 hour"])
     }
 
+    // MARK: - Actions on a reminder the task has moved past (beta review)
+
+    /// A daily task's 9:00 reminder sits on the lock screen; the task is completed in the app (or on the
+    /// Mac, and the import lands first), which moves it to tomorrow. Complete on the old reminder then
+    /// moved it to the day after: one occurrence skipped without the user ever seeing it.
+    func testCompleteOnAReminderForAnOccurrenceAlreadyDoneDoesNotSkipTheNext() throws {
+        let due = Date().addingTimeInterval(-60)
+        let task = try task(due: due, recurrence: RecurrenceRule(frequency: .daily))
+        TaskActions.toggleCompletion(task, in: context)
+        let next = try XCTUnwrap(task.dueDate)
+
+        NotificationResponder.complete(task, remindedDue: due, in: context)
+
+        XCTAssertEqual(task.dueDate, next, "the occurrence that reminder was for is already done")
+    }
+
+    func testCompleteOnTheCurrentReminderStillRollsTheRecurringTask() throws {
+        let due = Date().addingTimeInterval(-60)
+        let task = try task(due: due, recurrence: RecurrenceRule(frequency: .daily))
+        XCTAssertTrue(NotificationResponder.complete(task, remindedDue: due, in: context))
+        XCTAssertGreaterThan(try XCTUnwrap(task.dueDate), Date())
+    }
+
+    /// The user moved the task to Friday after this reminder went out; Snooze on the old reminder dragged
+    /// it back to an hour from now.
+    func testSnoozeOnAReminderForAnEarlierDueTimeLeavesTheTaskWhereTheUserPutIt() throws {
+        let due = Date().addingTimeInterval(-90)
+        let task = try task(due: due)
+        let friday = Date().addingTimeInterval(3 * 86_400)
+        TaskActions.reschedule(task, to: friday, keepTime: false, in: context)
+
+        NotificationResponder.snooze(task, now: Date(), remindedDue: due, in: context)
+
+        XCTAssertEqual(task.dueDate, friday)
+    }
+
+    func testSnoozingACompletedTaskDoesNothing() throws {
+        let due = Date().addingTimeInterval(-90)
+        let task = try task(due: due)
+        TaskActions.toggleCompletion(task, in: context)
+        XCTAssertFalse(NotificationResponder.snooze(task, now: Date(), remindedDue: due, in: context))
+        XCTAssertEqual(task.dueDate, due)
+        XCTAssertTrue(task.isCompleted)
+    }
+
+    func testTheReminderCarriesTheDueTimeItWasFor() {
+        let due = Date(timeIntervalSince1970: 1_793_700_000)
+        XCTAssertEqual(NotificationResponder.remindedDue(in: [NotificationScheduler.dueKey: due.timeIntervalSince1970]), due)
+        XCTAssertNil(NotificationResponder.remindedDue(in: [:]), "build 1's reminders stored no due time")
+    }
+
     // MARK: - What keeps the pending reminders current (beta review)
 
     /// Records the reasons `NotificationScheduler` would reschedule for while `body` runs.
