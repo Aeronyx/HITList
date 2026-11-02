@@ -11,12 +11,17 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.3.4", items: [
+        Entry(version: "0.3.5", items: [
             "iPhone lists look like the Mac's: flat rows, hairlines, headers over the checkboxes.",
-            "Task rows measure like Todoist's; a description shows its first line under the title.",
             "Quick-add drafts are sticky, and tapping away asks before discarding one.",
+            "The confirm pill fills in as soon as there is a title.",
             "Completing a task is snappier; the undo toast rises above the island.",
-            "Mac: the sidebar fades under the Settings sections; one line under section headers.",
+        ]),
+        Entry(version: "0.3.4", items: [
+            "Task rows measure like Todoist's; a description shows its first line under the title.",
+            "Mac: one line under section headers, and the toolbar + as before.",
+            "Mac: the sidebar fades under the Settings sections instead of being rebuilt.",
+            "iPhone: the quick-add card fades away in place with the keyboard after adding a task.",
         ]),
         Entry(version: "0.3.3", items: [
             "Slimmer task rows, all the same height; priority is the checkbox's colour, with no badge.",
