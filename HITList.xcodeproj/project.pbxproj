@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71906FD6A69511E19F1911F9 /* SyncStatusViews.swift */; };
+		058B3B6E0DD68DAF9CBA67D7 /* SyncAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1AC953B97F6563715FF6460 /* SyncAppDelegate.swift */; };
 		0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAAC54705A328613C9AC2A94 /* Formatting.swift */; };
 		0DA2417C68E733465E2C7079 /* SnapshotRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B995BCBE5A70A04406E507 /* SnapshotRoundTripTests.swift */; };
 		0F9EB6A121578D72E6DCBDFB /* StoreResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */; };
@@ -139,6 +140,7 @@
 		D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */; };
 		D6D05DC0F3BE0D8FEDCE58DD /* CompletionAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89E8ABE1817CBAD4F72AE06 /* CompletionAnimator.swift */; };
 		D6D0CFCCBE7E6A804A288E03 /* QuickAddCreateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */; };
+		D83CF3DF7B180E45E5E88B66 /* SyncPush.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3DF87F469E151C325CD9969 /* SyncPush.swift */; };
 		D8DC35F42D40D8941CBBA440 /* PickerPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */; };
 		D99264CADBBCB47980A5D5A4 /* MacSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F47544BF23E1A61CD9357EA /* MacSettingsTests.swift */; };
 		D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */; };
@@ -321,6 +323,7 @@
 		CC94AAC22806CB55BB755C84 /* PopoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutController.swift; sourceTree = "<group>"; };
 		CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITToggleStyle.swift; sourceTree = "<group>"; };
 		D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITButtonStyle.swift; sourceTree = "<group>"; };
+		D3DF87F469E151C325CD9969 /* SyncPush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPush.swift; sourceTree = "<group>"; };
 		D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPlacement.swift; sourceTree = "<group>"; };
 		D5F4EFFF4EA0167D686BDF26 /* AppInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoTests.swift; sourceTree = "<group>"; };
 		D756AF47EBCBD00580C2A32D /* ScreenMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMenu.swift; sourceTree = "<group>"; };
@@ -338,6 +341,7 @@
 		EAAC54705A328613C9AC2A94 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
 		EE7D144EABFA55D287380F2D /* MorningSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorningSummary.swift; sourceTree = "<group>"; };
+		F1AC953B97F6563715FF6460 /* SyncAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncAppDelegate.swift; sourceTree = "<group>"; };
 		F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITCalendar.swift; sourceTree = "<group>"; };
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
@@ -727,9 +731,11 @@
 		F42FDCD245C2F7FE52D96DD9 /* Sync */ = {
 			isa = PBXGroup;
 			children = (
+				F1AC953B97F6563715FF6460 /* SyncAppDelegate.swift */,
 				949018764012BBE12E6F0ED2 /* SyncEnvironment.swift */,
 				5764B62739B38F9D4F936CB1 /* SyncLog.swift */,
 				1054B92FCF463385DF075D13 /* SyncLogFormat.swift */,
+				D3DF87F469E151C325CD9969 /* SyncPush.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -959,9 +965,11 @@
 				E2EDC1033F73BA817EFF8FA9 /* SettingsView.swift in Sources */,
 				233658D322415C6CB9EC8B8A /* SidebarView.swift in Sources */,
 				E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */,
+				058B3B6E0DD68DAF9CBA67D7 /* SyncAppDelegate.swift in Sources */,
 				AC0A5906024DDBA597C16B87 /* SyncEnvironment.swift in Sources */,
 				9F91BB5E438E6DC117CBFCC5 /* SyncLog.swift in Sources */,
 				B6F538BFE92844B8530ABA1B /* SyncLogFormat.swift in Sources */,
+				D83CF3DF7B180E45E5E88B66 /* SyncPush.swift in Sources */,
 				93DCB35BB113FC8E976DB2C1 /* SyncState.swift in Sources */,
 				01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */,
 				490CBF09443A68F306B100F1 /* TaskActions.swift in Sources */,
