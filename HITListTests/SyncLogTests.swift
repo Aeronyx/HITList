@@ -283,6 +283,94 @@ final class SyncPushTests: XCTestCase {
     }
 }
 
+/// Which CloudKit environment and channel a build reports (brief 25, item 4), from sample entitlements,
+/// provisioning profiles and receipts.
+final class SyncEnvironmentTests: XCTestCase {
+    func testEntitlementValues() {
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: "Production"), .production)
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: "Development"), .development)
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: ["Production"]), .production)
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: ["Production", "Development"]), .unknown,
+                       "a profile that allows both doesn't say which the binary uses")
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: nil), .unknown)
+        XCTAssertEqual(SyncEnvironment.cloudKitEnvironment(from: "Staging"), .unknown)
+    }
+
+    /// An `embedded.mobileprovision`: a CMS envelope (binary) around an XML property list.
+    private func profile(getTaskAllow: Bool, environments: [String], aps: String) -> Data {
+        let list = environments.map { "<string>\($0)</string>" }.joined()
+        let xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            <plist version="1.0"><dict>
+            <key>Name</key><string>HITList profile</string>
+            <key>Entitlements</key><dict>
+            <key>aps-environment</key><string>\(aps)</string>
+            <key>com.apple.developer.icloud-container-environment</key><array>\(list)</array>
+            <key>get-task-allow</key>\(getTaskAllow ? "<true/>" : "<false/>")
+            </dict></dict></plist>
+            """
+        return Data([0x30, 0x82, 0x2E, 0x4B, 0x06, 0x09, 0x2A, 0x86]) + Data(xml.utf8) + Data([0xA0, 0x82, 0x0B, 0x00])
+    }
+
+    func testAProvisioningProfileIsCutOutOfItsEnvelope() throws {
+        let parsed = try XCTUnwrap(ProvisioningProfile.parse(profile(getTaskAllow: true, environments: ["Development"], aps: "development")))
+        XCTAssertEqual(parsed.name, "HITList profile")
+        XCTAssertTrue(parsed.getTaskAllow)
+        XCTAssertEqual(parsed.entitlements["aps-environment"] as? String, "development")
+        XCTAssertNil(ProvisioningProfile.parse(Data("not a profile".utf8)))
+    }
+
+    func testIOSBuildsResolveToTheirEnvironment() {
+        XCTAssertTrue(SyncEnvironment.resolveIOS(profile: nil, hasProfile: false) == (.production, "production"),
+                      "TestFlight and App Store builds carry no profile")
+        let development = ProvisioningProfile.parse(profile(getTaskAllow: true, environments: ["Development", "Production"], aps: "development"))
+        XCTAssertTrue(SyncEnvironment.resolveIOS(profile: development, hasProfile: true) == (.development, "development"))
+        // The profile inside release.sh's exported .ipa (checked 2026-11-02): both environments, no get-task-allow.
+        let distribution = ProvisioningProfile.parse(profile(getTaskAllow: false, environments: ["Production", "Development"], aps: "production"))
+        XCTAssertTrue(SyncEnvironment.resolveIOS(profile: distribution, hasProfile: true) == (.production, "production"))
+        let single = ProvisioningProfile.parse(profile(getTaskAllow: false, environments: ["Production"], aps: "production"))
+        XCTAssertTrue(SyncEnvironment.resolveIOS(profile: single, hasProfile: true) == (.production, "production"))
+        XCTAssertTrue(SyncEnvironment.resolveIOS(profile: nil, hasProfile: true) == (.unknown, nil), "a profile that won't parse")
+    }
+
+    func testReceiptsTellTestFlightFromTheAppStore() throws {
+        XCTAssertEqual(SyncEnvironment.receiptKind(url: nil), .none)
+        XCTAssertEqual(SyncEnvironment.receiptKind(url: URL(filePath: "/nowhere/StoreKit/sandboxReceipt")), .sandbox,
+                       "iOS names a TestFlight receipt; the file needn't exist yet")
+        XCTAssertEqual(SyncEnvironment.receiptKind(url: URL(filePath: "/nowhere/_MASReceipt/receipt")), .none)
+        XCTAssertEqual(SyncEnvironment.receiptKind(contents: Data("\u{0C}\u{11}ProductionSandbox\u{02}".utf8)), .sandbox)
+        XCTAssertEqual(SyncEnvironment.receiptKind(contents: Data("\u{0C}\u{0A}Production\u{02}".utf8)), .production)
+    }
+
+    func testChannels() {
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: true, hasProfile: true, receipt: .none), .debug)
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: false, hasProfile: false, receipt: .sandbox), .testFlight)
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: false, hasProfile: false, receipt: .production), .appStore)
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: false, hasProfile: true, receipt: .production), .xcode)
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: false, hasProfile: true, receipt: .none), .xcode)
+        XCTAssertEqual(SyncEnvironment.channel(isDebug: false, hasProfile: false, receipt: .none), .unknown)
+    }
+
+    func testSummaryAndExplanation() {
+        let testFlight = SyncEnvironment(cloudKit: .production, push: "production", channel: .testFlight, build: "11")
+        XCTAssertEqual(testFlight.summary, "Production · TestFlight build 11")
+        XCTAssertFalse(testFlight.isDevelopment)
+        XCTAssertEqual(SyncEnvironment.explanation,
+                       "A Mac run from Xcode syncs with Development; TestFlight builds sync with Production, so the two don't see each other.")
+    }
+
+    func testThisTestBuildIsADebugBuild() {
+        XCTAssertEqual(SyncEnvironment.current.channel, .debug)
+        XCTAssertEqual(SyncEnvironment.current.build, AppInfo.build)
+        // Unsigned (CI) builds carry no entitlements to read.
+        if ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] == nil {
+            XCTAssertEqual(SyncEnvironment.current.cloudKit, .development)
+            XCTAssertEqual(SyncEnvironment.current.push, "development")
+        }
+    }
+}
+
 /// A thread-safe step counter for the injected clock.
 private final class Counter: @unchecked Sendable {
     private let lock = NSLock()
