@@ -22,7 +22,12 @@ struct HITListApp: App {
             container = ModelContainerFactory.preview()
             return
         }
+        // Sync (brief 25): an instance relaunched to restart a stuck sync waits for the one it replaces,
+        // and a Development build keeps its own store, apart from the TestFlight build's Production one.
+        let waited = SyncRecovery.waitForPreviousInstance()
+        let isolated = SyncStoreGuard.isolateDevelopmentStore()
         CloudSyncMonitor.shared.start()
+        CloudSyncMonitor.shared.recordLaunchGuards(waitedForPrevious: waited, isolatedStoreSuffix: isolated)
         container = ModelContainerFactory.make()
         CloudSyncMonitor.shared.containerReady(container)
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }

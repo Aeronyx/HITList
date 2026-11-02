@@ -20,11 +20,15 @@ final class SyncWatchdogTests: XCTestCase {
         .eventEnded(id: id, type: type, startedAt: at(start), succeeded: succeeded, error: error, at: at(end))
     }
 
-    /// A watchdog that has seen the network and the account, as the app's does within a second of launch.
+    /// A watchdog that has seen the network, the account and a successful CloudKit setup, as the app's
+    /// does within a second or two of launch.
     private func makeWatchdog() -> SyncWatchdog {
         var dog = SyncWatchdog()
         _ = dog.handle(.network(online: true, at: at(-100)))
         _ = dog.handle(.account(available: true, description: "available", at: at(-100)))
+        let setup = UUID()
+        _ = dog.handle(started(setup, .setup, -101))
+        _ = dog.handle(ended(setup, .setup, from: -101, at: -100))
         return dog
     }
 
@@ -242,9 +246,62 @@ final class SyncWatchdogTests: XCTestCase {
 
     func testAnUnknownNetworkOrAccountDoesntBlock() {
         var dog = SyncWatchdog()
+        let setup = UUID()
+        _ = dog.handle(ended(setup, .setup, from: -1, at: 0))
         XCTAssertNil(dog.blockedReason)
+        XCTAssertNil(dog.waitBlockedReason)
         _ = dog.handle(.localSave(at: at(0)))
         XCTAssertEqual(dog.tick(at(5)).count, 1)
+    }
+
+    func testNothingIsOverdueBeforeCloudKitIsSetUp() {
+        // The simulator, 2026-11-02: the launch's seeding save reached the watchdog 25 s late, while setup was
+        // still waiting for an account that wasn't there. That was reported as an overdue export.
+        var dog = SyncWatchdog()
+        XCTAssertEqual(dog.waitBlockedReason, "CloudKit not set up yet")
+        let setup = UUID()
+        _ = dog.handle(started(setup, .setup, 0))
+        XCTAssertEqual(dog.handle(.localSave(at: at(0.1))), [.waiting(.export, reason: "CloudKit not set up yet", count: 1)])
+        XCTAssertEqual(dog.tick(at(25)), [])
+        _ = dog.handle(.account(available: false, description: "no account", at: at(25)))
+        XCTAssertEqual(dog.handle(ended(setup, .setup, from: 0, at: 26, succeeded: false, error: "not signed in to iCloud")), [])
+        XCTAssertEqual(dog.waitBlockedReason, "iCloud not available")
+        XCTAssertEqual(dog.tick(at(500)), [], "no account: nothing can export, so nothing is overdue")
+    }
+
+    func testTheWaitsStartWhenSetupSucceeds() {
+        var dog = SyncWatchdog()
+        _ = dog.handle(.network(online: true, at: at(-1)))
+        _ = dog.handle(.account(available: true, description: "available", at: at(-1)))
+        let setup = UUID()
+        _ = dog.handle(started(setup, .setup, 0))
+        _ = dog.handle(.localSave(at: at(0.5)))
+        XCTAssertEqual(dog.handle(ended(setup, .setup, from: 0, at: 2)), [])
+        XCTAssertNil(dog.waitBlockedReason)
+        XCTAssertEqual(dog.nextDeadline(after: at(2)), at(7), "a full window from the setup")
+        XCTAssertEqual(dog.handle(ended(exportID, .exporting, from: 2.1, at: 2.6)), [.exportOnTime(latency: 2.1, saves: 1)])
+    }
+
+    func testAFailedSetupPausesTheWaitsUntilTheNextOneSucceeds() {
+        var dog = makeWatchdog()
+        let retry = UUID()
+        _ = dog.handle(started(retry, .setup, 10))
+        XCTAssertEqual(dog.handle(ended(retry, .setup, from: 10, at: 11, succeeded: false, error: "iCloud is busy, will retry")), [])
+        XCTAssertEqual(dog.handle(.localSave(at: at(12))), [.waiting(.export, reason: "CloudKit setup failed", count: 1)])
+        XCTAssertEqual(dog.tick(at(60)), [])
+        let again = UUID()
+        _ = dog.handle(started(again, .setup, 70))
+        _ = dog.handle(ended(again, .setup, from: 70, at: 71))
+        XCTAssertEqual(dog.tick(at(75.9)), [])
+        XCTAssertEqual(dog.tick(at(76)).count, 1, "overdue once five seconds pass after a working setup")
+    }
+
+    func testAStuckSetupIsStillCaught() {
+        // Setup gates the 5-second waits, not the stuck clock: a setup that hangs (cloudd unreachable) is reported.
+        var dog = SyncWatchdog()
+        _ = dog.handle(started(UUID(), .setup, 0))
+        guard case .eventStuck(.setup, 60, _)? = dog.tick(at(60)).first else { return XCTFail() }
+        XCTAssertEqual(dog.stalledSince(now: at(120)), at(0))
     }
 
     func testSuspensionPausesTheClocksAndResumingRestartsThem() {
@@ -307,11 +364,101 @@ final class SyncWatchdogTests: XCTestCase {
         XCTAssertEqual(dog.inFlightCount, 0)
     }
 
+    func testGeorgesNovemberFirstSessionWouldHaveBeenCaught() throws {
+        // The TestFlight Mac app, pid 41015: an import started 2 s after launch and never ended; tasks were
+        // edited at +13 s and created at +4 min 7 s; George quit at +7 min 37 s. Nothing synced after launch.
+        var dog = makeWatchdog()
+        _ = dog.handle(started(importID, .importing, 0))
+        _ = dog.handle(.localSave(at: at(13)))
+        let overdue = dog.tick(at(18))
+        guard case .exportOverdue(1, let context)? = overdue.first else { return XCTFail("\(overdue)") }
+        XCTAssertEqual(context.inFlight, ["import 18 s"], "the context names the import holding everything up")
+        guard case .eventStuck(.importing, 60, _)? = dog.tick(at(60)).first else { return XCTFail() }
+        XCTAssertEqual(dog.stalledSince(now: at(120)), at(0), "from two minutes the state says stuck and Settings offers a relaunch")
+        _ = dog.handle(.localSave(at: at(247)))
+        XCTAssertEqual(dog.tick(at(457)), [], "nothing new to report until something finishes")
+        XCTAssertEqual(dog.waitingSaves, 2, "the Quitting line says two saves never left")
+    }
+
     func testOnTimeExportsGetNoLineOfTheirOwn() {
         XCTAssertFalse(SyncWatchdog.Finding.exportOnTime(latency: 0.3, saves: 1).isLogged)
         XCTAssertEqual(SyncWatchdog.Finding.exportOnTime(latency: 0.3, saves: 1).fields["afterSave"], "0.30 s")
         XCTAssertTrue(SyncWatchdog.Finding.waiting(.import, reason: "offline", count: 2).isLogged)
         XCTAssertEqual(SyncWatchdog.Finding.waiting(.import, reason: "offline", count: 2).message(rules: .init()),
                        "Import waiting: offline")
+    }
+}
+
+/// The fixes around a stuck sync and mixed environments (brief 25, item 6).
+final class SyncRecoveryTests: XCTestCase {
+    private let development = SyncEnvironment(cloudKit: .development, push: "development", channel: .debug, build: "11")
+    private let production = SyncEnvironment(cloudKit: .production, push: "production", channel: .testFlight, build: "11")
+
+    func testADevelopmentBuildGetsItsOwnStore() {
+        XCTAssertEqual(SyncStoreGuard.isolationSuffix(environment: development, processEnvironment: [:]), "Development")
+        XCTAssertEqual(SyncStoreGuard.isolationSuffix(environment: development, processEnvironment: ["HITLIST_STORE_SUFFIX": ""]),
+                       "Development", "an empty suffix is no suffix")
+    }
+
+    func testTheGuardMovesTheStoreTheFactoryOpens() throws {
+        // The guard works by setting HITLIST_STORE_SUFFIX before ModelContainerFactory reads it through
+        // ProcessInfo; this pins that the variable set in-process is the one the factory sees.
+        XCTAssertNil(ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"], "the test host runs without a suffix")
+        defer { unsetenv("HITLIST_STORE_SUFFIX") }
+        XCTAssertEqual(SyncStoreGuard.isolateDevelopmentStore(environment: development,
+                                                              processEnvironment: ProcessInfo.processInfo.environment), "Development")
+        XCTAssertEqual(ModelContainerFactory.groupStoreURL?.lastPathComponent ?? "HITList-Development.store", "HITList-Development.store")
+        XCTAssertEqual(ModelContainerFactory.legacyStoreURL.lastPathComponent, "HITList-Development.store")
+        XCTAssertNil(SyncStoreGuard.isolateDevelopmentStore(environment: development,
+                                                            processEnvironment: ProcessInfo.processInfo.environment),
+                     "once set, a second call leaves it")
+        unsetenv("HITLIST_STORE_SUFFIX")
+        XCTAssertEqual(ModelContainerFactory.legacyStoreURL.lastPathComponent, "HITList.store")
+    }
+
+    func testAnExplicitSideStoreIsKept() {
+        XCTAssertNil(SyncStoreGuard.isolationSuffix(environment: development, processEnvironment: ["HITLIST_STORE_SUFFIX": "schema"]),
+                     "the schema-deployment workflow names its own store")
+    }
+
+    func testProductionAndUnknownBuildsKeepTheRealStore() {
+        XCTAssertNil(SyncStoreGuard.isolationSuffix(environment: production, processEnvironment: [:]))
+        var unknown = production
+        unknown.cloudKit = .unknown
+        XCTAssertNil(SyncStoreGuard.isolationSuffix(environment: unknown, processEnvironment: [:]),
+                     "an unsigned or unreadable build changes nothing")
+    }
+
+    /// Scratch defaults, so the tests never touch the app group's.
+    private func scratchDefaults() -> UserDefaults {
+        let name = "SyncRecoveryTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
+        return defaults
+    }
+
+    func testARelaunchedInstanceKnowsWhomToWaitFor() {
+        // The App Sandbox drops a relaunch's arguments and environment (seen on the Mac, 2026-11-02), so the
+        // relaunching instance leaves its pid in the shared defaults.
+        let defaults = scratchDefaults()
+        let now = Date()
+        defaults.set(41015, forKey: SyncRecovery.pidKey)
+        defaults.set(now.addingTimeInterval(-2), forKey: SyncRecovery.atKey)
+        XCTAssertEqual(SyncRecovery.previousInstance(defaults: defaults, now: now, me: 7), 41015)
+        XCTAssertNil(defaults.object(forKey: SyncRecovery.pidKey), "consumed by the first launch that reads it")
+        XCTAssertNil(SyncRecovery.previousInstance(defaults: defaults, now: now, me: 7))
+    }
+
+    func testAStaleOrOwnHandoffIsIgnored() {
+        let defaults = scratchDefaults()
+        let now = Date()
+        defaults.set(41015, forKey: SyncRecovery.pidKey)
+        defaults.set(now.addingTimeInterval(-31), forKey: SyncRecovery.atKey)
+        XCTAssertNil(SyncRecovery.previousInstance(defaults: defaults, now: now, me: 7), "older than 30 s: the relaunch failed")
+        XCTAssertNil(defaults.object(forKey: SyncRecovery.atKey), "and it is cleared")
+        defaults.set(7, forKey: SyncRecovery.pidKey)
+        defaults.set(now, forKey: SyncRecovery.atKey)
+        XCTAssertNil(SyncRecovery.previousInstance(defaults: defaults, now: now, me: 7), "never wait for yourself")
+        XCTAssertNil(SyncRecovery.waitForPreviousInstance(defaults: scratchDefaults()), "a normal launch doesn't wait")
     }
 }

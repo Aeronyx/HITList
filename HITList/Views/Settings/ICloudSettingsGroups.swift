@@ -21,6 +21,9 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
+            if let stalled = CloudSyncMonitor.shared.stalledSince {
+                SyncStuckRow(since: stalled)
+            }
             if showsLastChange {
                 LastSyncChangeRow()
             }
@@ -117,6 +120,49 @@ struct ICloudSyncGroup: View {
         }
         .font(HITType.caption)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Shown while an import, export or setup has run for two minutes with nothing in its way
+/// (`CloudSyncMonitor.stalledSince`): CloudKit syncs nothing else until it ends, and only a fresh process
+/// gets it going again. The Mac relaunches in one click; the iPhone says how to reopen the app.
+struct SyncStuckRow: View {
+    let since: Date
+    @State private var relaunchFailed = false
+
+    var body: some View {
+        #if os(macOS)
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since), systemImage: "exclamationmark.arrow.circlepath",
+                   iconTint: HITColor.danger) {
+            Button("Relaunch") { SyncRecovery.relaunch { relaunchFailed = true } }
+                .buttonStyle(HITButtonStyle(.primary, size: .small))
+                .accessibilityIdentifier("settings-sync-relaunch")
+        }
+        .accessibilityIdentifier("settings-sync-stuck")
+        .alert("Quit and reopen HITList", isPresented: $relaunchFailed) {
+            Button("OK") {}
+        } message: {
+            Text("HITList couldn't relaunch itself. Quit it and open it again; your changes are kept and upload when it starts.")
+        }
+        #else
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since) + " " + Self.reopen,
+                   systemImage: "exclamationmark.arrow.circlepath", iconTint: HITColor.danger)
+            .accessibilityIdentifier("settings-sync-stuck")
+        #endif
+    }
+
+    static let reopen = "Swipe HITList away in the app switcher and open it again."
+
+    /// "iCloud sync has been busy with one request since 6:51 PM. Relaunching starts it afresh; your
+    /// changes are kept and upload right after."
+    static func detail(since: Date) -> String {
+        let time = since.formatted(date: .omitted, time: .shortened)
+        #if os(macOS)
+        let verb = "Relaunching"
+        #else
+        let verb = "Reopening"
+        #endif
+        return "iCloud sync has been busy with one request since \(time). \(verb) starts it afresh; your changes are kept and upload right after."
     }
 }
 

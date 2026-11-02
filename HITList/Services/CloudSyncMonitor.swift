@@ -93,11 +93,14 @@ final class CloudSyncMonitor {
             isOnline: isOnline ?? true,
             isSyncing: isSyncing,
             lastSynced: lastSyncedAt,
-            lastError: both(lastErrorReason, lastErrorAt)
+            lastError: both(lastErrorReason, lastErrorAt),
+            stalledSince: stalledSince
         )
     }
 
     /// An event that never reports its end (the process lost track of it) stops counting after 10 minutes.
+    /// Before that, one running for two minutes makes the state say sync is stuck (`stalledSince`) instead
+    /// of "Syncing…", and then, once it stopped counting, a "Synced" that wasn't true.
     private var isSyncing: Bool {
         let cutoff = Date().addingTimeInterval(-600)
         return inFlight.values.contains { $0 > cutoff }
@@ -123,10 +126,7 @@ final class CloudSyncMonitor {
             }
         })
         observers.append(center.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.write(.account, "CKAccountChanged received", level: .notice)
-                self?.refreshAccountStatus()
-            }
+            MainActor.assumeIsolated { self?.accountChangeNotified() }
         })
         // Local saves: the time is taken on the saving thread, before the export it triggers can start.
         observers.append(center.addObserver(forName: ModelContext.didSave, object: nil, queue: nil) { [weak self] note in
@@ -142,6 +142,19 @@ final class CloudSyncMonitor {
             Task { @MainActor in self?.networkChanged(online: online, description: description) }
         }
         pathMonitor.start(queue: DispatchQueue(label: "com.trammells.hitlist.network"))
+    }
+
+    /// What `HITListApp.init` did before opening the store: waited for a relaunched-from instance to
+    /// exit (`SyncRecovery`), or moved a Development build to its own store (`SyncStoreGuard`).
+    func recordLaunchGuards(waitedForPrevious: TimeInterval?, isolatedStoreSuffix: String?) {
+        if let waitedForPrevious {
+            write(.note, "Relaunched to restart sync; waited \(SyncLogFormat.duration(waitedForPrevious)) for the previous instance to quit",
+                  level: .notice)
+        }
+        if let isolatedStoreSuffix {
+            write(.note, "Development build: using HITList-\(isolatedStoreSuffix).store, apart from the TestFlight build's Production store",
+                  fields: ["store": ModelContainerFactory.groupStoreURL?.lastPathComponent ?? "default location"])
+        }
     }
 
     /// Called from `HITListApp.init` once `ModelContainerFactory.make()` returned.
@@ -322,14 +335,32 @@ final class CloudSyncMonitor {
         container.accountStatus { [weak self] status, error in
             Task { @MainActor in
                 if let error {
-                    Self.log.error("accountStatus failed: \(error.localizedDescription, privacy: .public)")
                     self?.write(.account, "Account check failed: \(SyncState.shortReason(for: error))",
-                                         level: .error, fields: SyncLogFormat.errorFields(error))
+                                level: .error, fields: SyncLogFormat.errorFields(error))
                 }
                 self?.accountStatusChanged(to: status, container: container)
             }
         }
     }
+
+    /// `CKAccountChanged` comes in bursts (a dozen within a second on a simulator without an account, as
+    /// CloudKit's own account monitor re-reads the account): one log line per burst, and one account
+    /// check half a second after it ends, always made, since a real sign-out must not wait a minute.
+    private func accountChangeNotified() {
+        accountChangeCount += 1
+        if accountChangeCount == 1 { write(.account, "CKAccountChanged received", level: .notice) }
+        accountChangeBurst.schedule { [weak self] in
+            guard let self else { return }
+            if self.accountChangeCount > 1 {
+                self.write(.account, "CKAccountChanged burst ended", fields: ["notifications": "\(self.accountChangeCount)"])
+            }
+            self.accountChangeCount = 0
+            self.refreshAccountStatus(force: true)
+        }
+    }
+
+    @ObservationIgnored private let accountChangeBurst = Debouncer(delay: .milliseconds(500))
+    @ObservationIgnored private var accountChangeCount = 0
 
     /// After a reset the old store's sync times no longer describe this store.
     func forgetLastSync() {
@@ -349,11 +380,7 @@ final class CloudSyncMonitor {
         // The previous launch's status counts too: signing out while the app was closed is still a sign-out.
         let previous = accountStatus ?? accountWatch.lastStatus
         accountStatus = status
-        if previous != status {
-            Self.log.notice("iCloud account: \(Self.describe(previous), privacy: .public) → \(Self.describe(status), privacy: .public)")
-        } else {
-            Self.log.info("iCloud account status: \(Self.describe(status), privacy: .public)")
-        }
+        // The sync log (mirrored to os.Logger) records the status once per change.
         if loggedAccount != status {
             let changed = loggedAccount.map { $0 != status } ?? (previous != nil && previous != status)
             let text = changed ? "iCloud account: \(Self.describe(loggedAccount ?? previous)) → \(Self.describe(status))"
@@ -372,7 +399,6 @@ final class CloudSyncMonitor {
             Task { @MainActor in
                 guard let self else { return }
                 guard let name = id?.recordName else {
-                    Self.log.error("fetchUserRecordID failed: \(error?.localizedDescription ?? "no id", privacy: .public)")
                     self.write(.account, "Fetching the iCloud user failed", level: .error,
                                         fields: error.map { SyncLogFormat.errorFields($0) } ?? [:])
                     return
@@ -387,7 +413,6 @@ final class CloudSyncMonitor {
     private func networkChanged(online: Bool, description: String) {
         if isOnline != online {
             isOnline = online
-            Self.log.info("Network \(online ? "reachable" : "unreachable", privacy: .public)")
             logStateIfChanged()
         }
         guard description != loggedNetwork else { return }
@@ -607,7 +632,6 @@ final class CloudSyncMonitor {
 
     private func setNotice(_ notice: AccountWatch.Notice?) {
         guard notice != accountNotice else { return }
-        Self.log.notice("Account banner: \(notice.map { "\($0)" } ?? "hidden", privacy: .public)")
         write(.account, "Account banner: \(notice.map { "\($0)" } ?? "hidden")", level: .notice)
         accountNotice = notice
     }
@@ -654,13 +678,13 @@ final class CloudSyncMonitor {
                 if let v = ns.userInfo[key] { parts.append("\(key)=\(v)") }
             }
             let text = parts.joined(separator: " · ")
+            let reason = SyncState.shortReason(for: error)
             lastErrorDetail = text
-            lastErrorReason = SyncState.shortReason(for: error)
+            lastErrorReason = reason
             lastErrorAt = now
-            Self.log.error("\(text, privacy: .public)")
             fields.merge(SyncLogFormat.errorFields(error)) { $1 }
-            write(.event, "\(type.title) failed after \(duration): \(SyncState.shortReason(for: error))",
-                           level: .error, fields: fields)
+            write(.event, "\(type.title) failed after \(duration): \(reason)",
+                  level: Self.isExpected(failureReason: reason, account: accountStatus) ? .notice : .error, fields: fields)
             if event.type == .import { resolveImportWaiters(.failed) }
         } else {
             switch event.type {
@@ -685,6 +709,12 @@ final class CloudSyncMonitor {
                 resolveImportWaiters(.succeeded)
             }
         }
+    }
+
+    /// A failure that only says what is already known: "not signed in to iCloud" on a device with no
+    /// usable account (the simulator, a signed-out Mac). It is logged as a notice, not an error.
+    nonisolated static func isExpected(failureReason: String, account: CKAccountStatus?) -> Bool {
+        failureReason == "not signed in to iCloud" && account != .available
     }
 
     static func describe(_ status: CKAccountStatus?) -> String {
