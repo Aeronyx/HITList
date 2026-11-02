@@ -793,6 +793,56 @@ final class PopoutTests: XCTestCase {
     }
     #endif
 
+    #if os(macOS)
+    /// ⌘N (or the toolbar "+") while the Mac panel is open opens a new card for the list on screen. The
+    /// panel kept the old card's view: its text and list stayed, and what was typed next was stored under
+    /// the old card's id, which no close cleared, so the closed card opened again at the next launch.
+    func testANewCardOverTheOpenMacPanelStartsEmptyAndItsCloseLeavesNothingStored() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = ModelContainerFactory.preview()
+        let popouts = PopoutController(draftDefaults: defaults)
+        // The app was killed with "Call mom" in the panel: the launch opens that card again.
+        QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: "Call mom"), card: UUID(), to: defaults)
+
+        let root = Color.clear.frame(width: 900, height: 700)
+            .popoutHost(popouts)
+            .environment(popouts)
+            .modelContainer(container)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: root)
+        defer { window.close() }
+        func spin(_ seconds: TimeInterval = 0.4) { RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
+        func editor() throws -> NSTextView {
+            func find(_ view: NSView) -> NSTextView? {
+                if let text = view as? NSTextView { return text }
+                for sub in view.subviews { if let found = find(sub) { return found } }
+                return nil
+            }
+            return try XCTUnwrap(window.contentView.flatMap(find), "the panel's title editor")
+        }
+        spin()
+        XCTAssertEqual(try editor().string, "Call mom", "the killed card is back")
+
+        popouts.openQuickAdd(.today)   // ⌘N
+        spin()
+        let fresh = try editor()
+        XCTAssertEqual(fresh.string, "", "a new card starts empty")
+        fresh.insertText("Buy milk", replacementRange: fresh.selectedRange())
+        spin()
+        let id = try XCTUnwrap(popouts.state.quickAdd?.id)
+        XCTAssertEqual(QuickAddDraftStore.draft(for: id, from: defaults)?.text, "Buy milk", "kept as the new card's")
+        XCTAssertEqual(QuickAddDraftStore.draft(for: id, from: defaults)?.context, .today, "in the list it was opened for")
+
+        popouts.closeQuickAdd()   // × or Escape
+        spin()
+        XCTAssertNil(QuickAddDraftStore.load(from: defaults), "a closed card never opens again at launch")
+    }
+    #endif
+
     /// Only the task on show matters: deleting another one leaves the popout open.
     func testDeletingAnotherTaskLeavesThePopoutOpen() throws {
         let container = ModelContainerFactory.preview()
