@@ -336,7 +336,8 @@ enum QuickAddTokens {
 }
 
 extension QuickAddDraft {
-    /// Something George would not want to lose: text, a description, a location or a deadline.
+    /// Something George would not want to lose: text, a description, a location or a deadline. The stored
+    /// card and the tap-away "Discard?" question both key off it (final review, decision 1).
     var hasContent: Bool {
         let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         return !blank(text) || !blank(notes) || !blank(locationName) || deadline != nil

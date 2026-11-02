@@ -1028,4 +1028,19 @@ final class PopoutTests: XCTestCase {
                        + FloatingAddButton.size.height + HITSpacing.xs)
         XCTAssertGreaterThan(PopoutHost.toastClearance, IslandMetrics.chromeHeight)
     }
+
+    func testACardWithOnlyADescriptionLocationOrDeadlineCountsAsContent() {
+        var draft = QuickAddDraft(context: .inbox)
+        XCTAssertFalse(draft.hasContent)
+        draft.notes = "Ask about the invoice"
+        XCTAssertTrue(draft.hasContent, "a description alone is worth a Discard? question")
+        draft = QuickAddDraft(context: .inbox)
+        draft.locationName = "Pharmacy"
+        XCTAssertTrue(draft.hasContent)
+        draft = QuickAddDraft(context: .inbox)
+        draft.setDeadline(Date())
+        XCTAssertTrue(draft.hasContent)
+        draft = QuickAddDraft(context: .inbox, text: "   ")
+        XCTAssertFalse(draft.hasContent, "whitespace is nothing")
+    }
 }

@@ -29,6 +29,21 @@ George's decisions on dates, times, taps and drafts.
   puts the original back instead of saving a task with no title.
 - About → Copy diagnostics and Check iCloud report the right CloudKit environment on every build.
 - iPhone: the quick-add title has standard autocorrect and sentence capitals (it had autocorrect off).
+- Dates and times read the way George does: monthly and yearly repeats keep their original day (Jan 31,
+  Feb 28, Mar 31; Feb 29 in leap years), a repeating task typed after its time today starts at its next
+  occurrence unless a date was typed, and times are 24-hour unless am or pm is typed ("tom 13" is
+  tomorrow 13:00, "at 5" is 05:00). Picking "Every month" again keeps the day.
+- Quick add: tap or click a highlighted token to switch it off and keep the words as plain text ("Call
+  Tom" with no date); highlights are rounded like buttons. "Sticky" now means only that an open card
+  with text survives app switches and a kill, reopening on launch in its own list; nothing is ever restored
+  into a fresh card, and every way of closing clears it. Each build keeps its own open card.
+- Completing is final until Undo: a second tap on a row still animating does nothing; undo is the toast
+  or the Completed list. Every iPhone toast is drawn above the island on every screen size. A task
+  popout closes by itself when the task is deleted on another device. The iPhone push handler finishes as
+  soon as its import lands instead of waiting 25 seconds.
+- Two review passes over the merged work: highlights never sit on the wrong words of a long title, the
+  Mac's ⌘N over an open panel starts a fresh card, a pasted line break becomes a space, typing parses the
+  title once per keystroke, and tapping away asks "Discard?" whenever the card holds anything.
 
 ## 0.3.5 — build 12, 2026-11-02
 

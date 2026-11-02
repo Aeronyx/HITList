@@ -128,7 +128,7 @@ struct QuickAddPopout: View {
                 draft = stored
             }
             titleFocused = true
-            onDraftChange(!draft.isEmpty)
+            onDraftChange(draft.hasContent)
         }
         .onChange(of: isClosing) { _, closing in
             if closing { titleFocused = false; notesFocused = false; locationFocused = false }
@@ -140,7 +140,7 @@ struct QuickAddPopout: View {
                 titleFocused = true
             }
         }
-        .onChange(of: draft.text) { _, _ in onDraftChange(!draft.isEmpty) }
+        .onChange(of: draft.hasContent) { _, has in onDraftChange(has) }
         .onChange(of: draft) { _, _ in storeDraft() }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }
