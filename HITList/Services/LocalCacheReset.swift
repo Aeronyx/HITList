@@ -10,9 +10,12 @@ enum LocalCacheReset {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "storage")
 
     /// Only offered while iCloud has the data: without a signed-in account the local store is the only copy.
+    /// Also offered when the store couldn't be opened at all (`isRunningInMemory`): moving it to Trash and
+    /// downloading again is then the only way back from inside the app.
     @MainActor
     static var isAvailable: Bool {
-        ModelContainerFactory.isCloudKitEnabled && CloudSyncMonitor.shared.accountStatus == .available
+        (ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isRunningInMemory)
+            && CloudSyncMonitor.shared.accountStatus == .available
     }
 
     /// Asks for a reset of the store this launch opened (`storeName`), by name: another build on the

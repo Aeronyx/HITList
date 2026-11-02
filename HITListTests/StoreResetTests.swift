@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 @testable import HITList
 
 final class StoreResetTests: XCTestCase {
@@ -149,6 +150,42 @@ final class StoreResetTests: XCTestCase {
         XCTAssertNotEqual(ModelContainerFactory.trashFolder(for: side), ModelContainerFactory.trashFolder(for: main))
         XCTAssertEqual(ModelContainerFactory.trashFolder(for: side).deletingLastPathComponent().standardizedFileURL,
                        dir.standardizedFileURL)
+    }
+
+    // MARK: - A store that won't open (beta review)
+
+    /// A store SwiftData can't open (a damaged file; SwiftData throws `loadIssueModelContainer`) ended in
+    /// `fatalError` at every launch, and a friend's natural way out, deleting the app, deletes the file
+    /// too. The app now runs on an empty in-memory store, says why, and leaves the file as it was.
+    @MainActor
+    func testAStoreThatWontOpenIsLeftAloneAndTheAppRunsInMemory() throws {
+        let dir = try tempDir()
+        let store = dir.appending(path: "HITList.store")
+        let damaged = Data(repeating: 0x42, count: 8192)
+        try damaged.write(to: store)
+
+        let opened = ModelContainerFactory.open(schema: HITListSchema.schema, url: store, useCloudKit: false)
+
+        XCTAssertEqual(opened.outcome, .inMemory)
+        XCTAssertNotNil(opened.error)
+        XCTAssertEqual(try Data(contentsOf: store), damaged, "the file is never touched")
+        XCTAssertTrue(opened.container.configurations.allSatisfy(\.isStoredInMemoryOnly))
+        let context = opened.container.mainContext
+        context.insert(TaskItem(title: "Still runs"))
+        try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<TaskItem>()).map(\.title), ["Still runs"])
+    }
+
+    @MainActor
+    func testAHealthyStoreOpensWithoutCloudKitWhenAskedTo() throws {
+        let dir = try tempDir()
+        let store = dir.appending(path: "HITList.store")
+        let opened = ModelContainerFactory.open(schema: HITListSchema.schema, url: store, useCloudKit: false)
+        XCTAssertEqual(opened.outcome, .localOnly)
+        XCTAssertNil(opened.error)
+        opened.container.mainContext.insert(TaskItem(title: "Kept"))
+        try opened.container.mainContext.save()
+        XCTAssertTrue(fm.fileExists(atPath: store.path))
     }
 
     func testStoreNames() {
