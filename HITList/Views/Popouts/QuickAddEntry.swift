@@ -35,9 +35,11 @@ private struct QuickAddEntry: ViewModifier {
                         // The iPhone's accent oval as a prominent toolbar button, so the toolbar sizes and
                         // aligns it with its neighbours (a hand-drawn capsule sat off-centre on macOS 26).
                         Button { popouts.openQuickAdd(context) } label: {
+                            // Decently smaller than build 13's (George): the oval measures 50 × 30 pt in
+                            // the toolbar (it was 58 × 36 with a 22 × 16 label and a 13 pt glyph).
                             Image(systemName: "plus")
-                                .font(.system(size: 13, weight: .bold))
-                                .frame(width: 22, height: 16)
+                                .font(.system(size: 10, weight: .bold))
+                                .frame(width: 14, height: 10)
                         }
                         // Not `.controlSize(.small)`: on macOS 26 that drew the glass oval in two halves
                         // (build 10). The toolbar sets this button's height.
@@ -57,8 +59,9 @@ private struct QuickAddEntry: ViewModifier {
 /// list on iPad). It shrinks away while a popout is up; `popouts.openQuickAdd()` adds into the list on
 /// screen. With `glass` (the iPhone shell) it is accent-tinted interactive Liquid Glass on iOS 26.
 struct FloatingAddButton: View {
-    /// A wide oval: 64 × 42, a little shorter than its first cut (George, build 9).
-    static let size = CGSize(width: 64, height: 42)
+    /// A wide oval: 76 × 50, "a good bit larger" than build 9–13's 64 × 42 (George, build 13).
+    static let size = CGSize(width: 76, height: 50)
+    static let glyphSize: CGFloat = 28
     /// iPhone: glass on iOS 26 (see `hitGlass`); iPad keeps the plain accent oval.
     var glass = false
     var action: () -> Void
@@ -92,7 +95,7 @@ struct FloatingAddButton: View {
 
     private var plus: some View {
         Image(systemName: "plus")
-            .font(.system(size: 24, weight: .semibold))
+            .font(.system(size: Self.glyphSize, weight: .semibold))
             .foregroundStyle(HITColor.onAccent)
             .frame(width: Self.size.width, height: Self.size.height)
     }
