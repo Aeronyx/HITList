@@ -26,4 +26,13 @@ final class FontTests: XCTestCase {
         XCTAssertEqual(Set(names).count, names.count)
         XCTAssertEqual(HITFont.postScriptName(.bold), "Inter18pt-Bold")
     }
+
+    /// Build 13: the iPhone's row titles a pixel tighter ("by like a pixel"); the Mac's untouched.
+    func testTaskTitleTracking() {
+        #if os(macOS)
+        XCTAssertEqual(HITType.taskTitleTracking, 0)
+        #else
+        XCTAssertEqual(HITType.taskTitleTracking, -0.3)
+        #endif
+    }
 }
