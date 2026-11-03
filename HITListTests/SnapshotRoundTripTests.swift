@@ -234,4 +234,71 @@ final class SnapshotRoundTripTests: XCTestCase {
         XCTAssertEqual(local.locationName, "Office")
         XCTAssertEqual(local.flipTarget, 3)
     }
+
+    // MARK: - Schema V3: subtasks
+
+    func testSubtasksSurviveABackupUnderTheirParent() throws {
+        let context = source.mainContext
+        let trip = TaskItem(title: "Pack for trip")
+        let socks = TaskItem(title: "Socks"), charger = TaskItem(title: "Charger")
+        for task in [trip, socks, charger] { context.insert(task) }
+        socks.parent = trip; socks.sortOrder = 1
+        charger.parent = trip; charger.sortOrder = 0
+        charger.isCompleted = true
+        try context.save()
+
+        let exported = try roundTrip(SnapshotBuilder.build(from: context))
+        XCTAssertEqual(exported.tasks.first { $0.title == "Socks" }?.parentID, trip.id)
+        XCTAssertNil(exported.tasks.first { $0.title == "Pack for trip" }?.parentID)
+        try SnapshotBuilder.restore(exported, into: target.mainContext)
+
+        let tasks = try target.mainContext.fetch(FetchDescriptor<TaskItem>())
+        let restored = try XCTUnwrap(tasks.first { $0.title == "Pack for trip" })
+        XCTAssertNil(restored.parent)
+        XCTAssertEqual(restored.orderedSubtasks.map(\.title), ["Charger", "Socks"])
+        XCTAssertEqual(restored.orderedSubtasks.map(\.isCompleted), [true, false])
+        XCTAssertEqual(normalized(try SnapshotBuilder.build(from: target.mainContext)), normalized(exported))
+    }
+
+    /// A child listed before its parent (the store's fetch order is arbitrary) still finds it.
+    func testASubtaskListedBeforeItsParentIsReattached() throws {
+        let parentID = UUID(), childID = UUID()
+        let child = Snapshot.TaskRecord(id: childID, title: "Socks", notes: "", priority: 4, dueDate: nil, hasDueTime: false,
+                                        isCompleted: false, completedAt: nil, recurrence: nil, sortOrder: 0, projectID: nil,
+                                        labelIDs: [], createdAt: t0, updatedAt: t0, parentID: parentID)
+        let parent = Snapshot.TaskRecord(id: parentID, title: "Pack", notes: "", priority: 4, dueDate: nil, hasDueTime: false,
+                                         isCompleted: false, completedAt: nil, recurrence: nil, sortOrder: 0, projectID: nil,
+                                         labelIDs: [], createdAt: t0, updatedAt: t0)
+        let snapshot = Snapshot(deviceName: "test", projects: [], labels: [], tasks: [child, parent], filters: [])
+        try SnapshotBuilder.restore(try roundTrip(snapshot), into: target.mainContext)
+        let tasks = try target.mainContext.fetch(FetchDescriptor<TaskItem>())
+        XCTAssertEqual(tasks.first { $0.id == childID }?.parent?.id, parentID)
+    }
+
+    /// A backup from before 0.4.1 has no `parentID` key at all and still decodes.
+    func testABackupWithoutParentIDsDecodes() throws {
+        try populate(source.mainContext)
+        let json = try SnapshotBuilder.build(from: source.mainContext).jsonData()
+        var object = try XCTUnwrap(try JSONSerialization.jsonObject(with: json) as? [String: Any])
+        object["tasks"] = (object["tasks"] as? [[String: Any]])?.map { var t = $0; t.removeValue(forKey: "parentID"); return t }
+        let old = try Snapshot.from(json: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(old.tasks.count, 4)
+        XCTAssertTrue(old.tasks.allSatisfy { $0.parentID == nil })
+    }
+
+    /// The rule is one level: a damaged backup that nests deeper attaches the grandchild to the top task.
+    func testABackupNestingDeeperThanOneLevelIsFlattened() throws {
+        let a = UUID(), b = UUID(), c = UUID()
+        func record(_ id: UUID, _ title: String, parent: UUID?) -> Snapshot.TaskRecord {
+            Snapshot.TaskRecord(id: id, title: title, notes: "", priority: 4, dueDate: nil, hasDueTime: false, isCompleted: false,
+                                completedAt: nil, recurrence: nil, sortOrder: 0, projectID: nil, labelIDs: [], createdAt: t0,
+                                updatedAt: t0, parentID: parent)
+        }
+        let snapshot = Snapshot(deviceName: "test", projects: [], labels: [],
+                                tasks: [record(c, "C", parent: b), record(b, "B", parent: a), record(a, "A", parent: nil)], filters: [])
+        try SnapshotBuilder.restore(snapshot, into: target.mainContext)
+        let byTitle = Dictionary(uniqueKeysWithValues: try target.mainContext.fetch(FetchDescriptor<TaskItem>()).map { ($0.title, $0) })
+        XCTAssertEqual(byTitle["B"]?.parent?.title, "A")
+        XCTAssertEqual(byTitle["C"]?.parent?.title, "A")
+    }
 }
