@@ -684,7 +684,7 @@ public struct FilterQuery: Sendable, Equatable {
         return Self.defaultSort(matched)
     }
 
-    /// Due date ascending (undated last), then priority, then title.
+    /// Due date ascending (undated last), then priority, then creation order (`TaskOrdering.createdThenTitle`).
     public static func defaultSort<T: FilterableTask>(_ tasks: [T]) -> [T] {
         tasks.sorted { a, b in
             switch (a.filterDueDate, b.filterDueDate) {
@@ -694,7 +694,7 @@ public struct FilterQuery: Sendable, Equatable {
             default: break
             }
             if a.filterPriority != b.filterPriority { return a.filterPriority < b.filterPriority }
-            return a.filterTitle.localizedCaseInsensitiveCompare(b.filterTitle) == .orderedAscending
+            return TaskOrdering.createdThenTitle(a, b)
         }
     }
 
