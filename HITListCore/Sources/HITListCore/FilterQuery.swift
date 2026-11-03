@@ -673,11 +673,13 @@ public struct FilterQuery: Sendable, Equatable {
         return Self.eval(root, task, ctx)
     }
 
-    /// Filters and sorts `tasks`. Completed tasks are excluded unless the query mentions completion.
+    /// Filters and sorts `tasks`. Completed tasks are excluded unless the query mentions completion;
+    /// subtasks always are (they live inside their parent, `TaskOrdering.topLevel`).
     public func apply<T: FilterableTask>(to tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
         let ctx = EvalContext(parser: DateExpressionParser(calendar: calendar, now: now))
         let hideCompleted = !mentionsCompleted
         let matched = tasks.filter { task in
+            if task.filterIsSubtask { return false }
             if hideCompleted && task.filterIsCompleted { return false }
             return Self.eval(root, task, ctx)
         }

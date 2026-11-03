@@ -153,6 +153,26 @@ extension TaskItem: FilterableTask {
     var filterLabelNames: [String] { (labels ?? []).map(\.name) }
     var filterIsRecurring: Bool { recurrence != nil }
     var filterCreatedDate: Date? { createdAt }
+    var filterIsSubtask: Bool { parent != nil }
+}
+
+/// How far through its checklist a task is: "2/5" on its row, "2 of 5" in the editor.
+struct SubtaskProgress: Equatable {
+    let done: Int
+    let total: Int
+
+    var compactText: String { "\(done)/\(total)" }
+    var text: String { "\(done) of \(total)" }
+    var isComplete: Bool { done == total }
+}
+
+extension TaskItem {
+    /// Nil when the task has no subtasks.
+    var subtaskProgress: SubtaskProgress? {
+        let subtasks = subtasks ?? []
+        guard !subtasks.isEmpty else { return nil }
+        return SubtaskProgress(done: subtasks.filter(\.isCompleted).count, total: subtasks.count)
+    }
 }
 
 extension HITListSchemaV3 {

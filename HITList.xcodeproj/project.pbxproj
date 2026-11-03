@@ -114,6 +114,7 @@
 		A1A8673E5F354361A23B5ED8 /* LastSyncChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF22F4F7DDF5D28105EFED56 /* LastSyncChange.swift */; };
 		A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FC29DB1F9289C32B262576 /* SyncLogTests.swift */; };
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
+		A5582DCC236003C9F6C5873A /* SubtaskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */; };
 		A5CB417B22951B64EABA4A8F /* AccountWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */; };
 		A6DA9DF74D818DD89E711D05 /* SyncWatchdog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */; };
 		A8CEEB66309F56025E17DD1C /* QuickAddPopout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D500F169967494D4FCCD6B /* QuickAddPopout.swift */; };
@@ -193,6 +194,7 @@
 		02B0D726E6D45191FFDC6A83 /* MacSettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsPage.swift; sourceTree = "<group>"; };
 		03340EB6E38EDAB8BB35B0C4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		06571975348E2AFECA8660F9 /* BackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupService.swift; sourceTree = "<group>"; };
+		0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtaskTests.swift; sourceTree = "<group>"; };
 		08BB24F8F65457496F557A04 /* Deduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deduplicator.swift; sourceTree = "<group>"; };
 		0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlanTests.swift; sourceTree = "<group>"; };
 		0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTests.swift; sourceTree = "<group>"; };
@@ -627,6 +629,7 @@
 				5E0F881764310827D1A610F1 /* SettingsTests.swift */,
 				E3B995BCBE5A70A04406E507 /* SnapshotRoundTripTests.swift */,
 				EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */,
+				0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */,
 				80FC29DB1F9289C32B262576 /* SyncLogTests.swift */,
 				422E0340B7BAAAB4BAFBB26F /* SyncStateTests.swift */,
 				47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */,
@@ -1044,6 +1047,7 @@
 				257118BE09BECCEE77BAA768 /* SettingsTests.swift in Sources */,
 				0DA2417C68E733465E2C7079 /* SnapshotRoundTripTests.swift in Sources */,
 				0F9EB6A121578D72E6DCBDFB /* StoreResetTests.swift in Sources */,
+				A5582DCC236003C9F6C5873A /* SubtaskTests.swift in Sources */,
 				A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */,
 				6647789EC3814C8BED45F16B /* SyncStateTests.swift in Sources */,
 				529B38250A5BE6884DB35AC8 /* SyncWatchdogTests.swift in Sources */,
