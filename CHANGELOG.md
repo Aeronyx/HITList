@@ -4,6 +4,36 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.4.1
+
+George's notes on build 13, split across three sessions: sub-tasks, a real task editor, quick-add time
+phrases, and the feel of taps, toasts and buttons.
+
+- Sub-tasks: a checklist inside any task, one level deep. Add them from the quick-add "+" (Subtasks: one
+  line each, Return for the next) or in the editor; rows show "2/5". Completing a task ticks its open
+  sub-tasks and Undo reopens them; a repeating task's next occurrence starts with its checklist open.
+  Sub-tasks never appear as rows of their own and are not counted in Group and label counts.
+- The task editor is rebuilt: a title card with Group and date rows, value pills for Description,
+  Priority, Reminder, Labels, Repeat, Deadline and Location, the Sub-tasks checklist, and one Confirm pill
+  that saves everything typed and closes in one tap (Return in the title, ⌘Return on the Mac). × or Esc
+  closes without saving unsaved typing.
+- Quick add understands "in 10 minutes", "in two hours", "in half an hour", "in three days", "in a week",
+  "in a month" (number words one to twelve); the phrase is one highlight, tap to keep it as text.
+- Reminder shortcuts (`!15mb`, `!1h`, `!at`) only count, and only light up, when the task has a time; a
+  bare "!" or "!0mb" stays in the title.
+- Repeating tasks keep their exact time across the clock changes: the rule now stores the time of day
+  and each occurrence is rebuilt from it.
+- Tasks with the same priority and date stay in the order you added them.
+- The suggestion pills under the quick-add title are gone.
+- A quick-add card reopened after its Group was renamed adds to that Group; one whose Group was deleted
+  adds to the Inbox.
+- iPhone: one light tap when you press "+", confirm a task, or complete one (it used to tap twice on
+  completion); the "+" is larger; task titles are a step smaller and a pixel tighter.
+- The Undo toast is one big button, 48 pt tall and sized to its text; on the iPhone it sits beside the
+  "+", on the Mac and iPad at the list's bottom-right corner; swipe it away to keep the completion.
+- Mac: the window comes back at once after you close it and click the Dock icon (or ⌘Tab back); the
+  toolbar "+" is smaller.
+
 ## 0.4.0 — build 13, 2026-11-02
 
 The first beta for friends. Two review passes on the core, each change with a test that failed first, then

@@ -11,6 +11,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.4.1", items: [
+            "Sub-tasks: a checklist inside any task, from the quick-add \"+\" or the editor; rows show \"2/5\".",
+            "A new task editor with one Confirm that saves and closes.",
+            "Quick add understands \"in 10 minutes\", \"in two hours\", \"in three days\"; reminder shortcuts light up only with a time.",
+            "Repeats keep their exact time across clock changes; equal tasks stay in the order you added them.",
+            "One light tap for add, confirm and complete; the Undo toast is one big button beside the \"+\", swipe to dismiss.",
+        ]),
         Entry(version: "0.4.0", items: [
             "Tap a highlighted word in quick add to keep it as plain text; times are 24-hour unless you type am or pm.",
             "Monthly repeats keep their day; a repeat typed after its time starts at the next one.",
