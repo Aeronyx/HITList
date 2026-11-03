@@ -246,4 +246,70 @@ final class QuickAddDraftStoreTests: XCTestCase {
         popouts.closeQuickAdd()
         XCTAssertNil(QuickAddDraftStore.load(from: defaults))
     }
+
+    // MARK: A Group renamed or deleted while the card was stored (brief 31)
+
+    /// Stores `draft` as a card's, then reads it back the way the card does on appear.
+    private func storedAndRestored(_ draft: QuickAddDraft, in context: ModelContext,
+                                   change: () throws -> Void) throws -> QuickAddDraft {
+        let card = UUID()
+        QuickAddDraftStore.save(draft, card: card, to: defaults)
+        try change()
+        try context.save()
+        let projects = try context.fetch(FetchDescriptor<Project>())
+        return try XCTUnwrap(QuickAddDraftStore.restoredDraft(for: card, from: defaults, projects: projects))
+    }
+
+    func testARenamedGroupIsFoundByItsID() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let work = Project(name: "Work")
+        context.insert(work)
+        try context.save()
+        let draft = QuickAddDraft(context: .project(name: "Work", id: work.id), text: "Plan offsite")
+        let back = try storedAndRestored(draft, in: context) { work.name = "Jobs" }
+        XCTAssertEqual(back.context, .project(name: "Jobs", id: work.id))
+        let task = try TaskActions.create(from: back.result(QuickAddParser()), defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertEqual(task.project?.id, work.id, "added to the renamed Group")
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).map(\.name), ["Jobs"], "no Group recreated under the old name")
+    }
+
+    func testAGroupStoredWithoutAnIDIsFoundByName() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let work = Project(name: "Work")
+        context.insert(work)
+        // A card stored by 0.4.0 (13) has only the name.
+        let old = try JSONDecoder().decode(QuickAddContext.self, from: Data(#"{"project":{"name":"work"}}"#.utf8))
+        XCTAssertEqual(old, .project(name: "work"))
+        let back = try storedAndRestored(QuickAddDraft(context: old, text: "Plan offsite"), in: context) {}
+        XCTAssertEqual(back.context, .project(name: "Work", id: work.id))
+    }
+
+    func testADeletedGroupIsDroppedRatherThanRecreated() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let work = Project(name: "Work")
+        context.insert(work)
+        try context.save()
+        var draft = QuickAddDraft(context: .project(name: "Work", id: work.id), text: "Plan offsite p2")
+        draft.notes = "agenda"
+        let back = try storedAndRestored(draft, in: context) { context.delete(work) }
+        XCTAssertEqual(back.context, .inbox)
+        XCTAssertEqual(back.text, "Plan offsite p2", "everything else is kept")
+        XCTAssertEqual(back.notes, "agenda")
+        let task = try TaskActions.create(from: back.result(QuickAddParser()), defaultProject: nil, defaultLabel: nil, in: context)
+        XCTAssertNil(task.project)
+        XCTAssertTrue(try context.fetch(FetchDescriptor<Project>()).isEmpty, "the Group is not created again")
+        // Gone by id and by name alike, for an old card too.
+        XCTAssertEqual(QuickAddContext.project(name: "Work").resolvingGroup(in: []), .inbox)
+    }
+
+    func testOtherListsAreRestoredAsTheyWere() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        for list: QuickAddContext in [.inbox, .today, .upcoming, .day(deadline), .label(name: "calls"), .plain] {
+            XCTAssertEqual(try storedAndRestored(QuickAddDraft(context: list, text: "x"), in: context) {}.context, list)
+        }
+    }
 }

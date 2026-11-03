@@ -120,7 +120,8 @@ struct QuickAddPopout: View {
         .onAppear {
             // The card's own draft, if it had one when the app was last alive (or this view was rebuilt).
             cardID = popouts?.state.quickAdd?.id
-            if let cardID, let popouts, let stored = QuickAddDraftStore.draft(for: cardID, from: popouts.draftDefaults) {
+            if let cardID, let popouts,
+               let stored = QuickAddDraftStore.restoredDraft(for: cardID, from: popouts.draftDefaults, projects: projects) {
                 draft = stored
             }
             titleFocused = true

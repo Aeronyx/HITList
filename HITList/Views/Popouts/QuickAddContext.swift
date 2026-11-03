@@ -12,7 +12,9 @@ enum QuickAddContext: Hashable, Codable {
     case upcoming
     /// An Upcoming day's "Add task" row.
     case day(Date)
-    case project(name: String)
+    /// The Group's name, and its id so a card stored while the Group was renamed elsewhere still finds it
+    /// (`resolvingGroup`). Cards stored by 0.4.0 (13) have no id.
+    case project(name: String, id: UUID? = nil)
     case label(name: String)
     /// Saved filters, Completed, the Flipboard: no defaults.
     case plain
@@ -28,8 +30,18 @@ enum QuickAddContext: Hashable, Codable {
 
     /// The project a task added here goes to when its text names none; nil is the Inbox.
     var defaultProjectName: String? {
-        if case .project(let name) = self { return name }
+        if case .project(let name, _) = self { return name }
         return nil
+    }
+
+    /// This list with its Group looked up again among `projects`: by id first, then by name (case
+    /// ignored). A Group that is gone is dropped, so the task goes to the Inbox rather than recreating the
+    /// Group under a name it no longer has. Every other list is returned as it is.
+    func resolvingGroup(in projects: [(id: UUID, name: String)]) -> QuickAddContext {
+        guard case .project(let name, let id) = self else { return self }
+        let found = id.flatMap { id in projects.first { $0.id == id } }
+            ?? projects.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        return found.map { .project(name: $0.name, id: $0.id) } ?? .inbox
     }
 
     /// The label every task added here carries.

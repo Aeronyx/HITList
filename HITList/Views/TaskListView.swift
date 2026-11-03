@@ -419,7 +419,7 @@ struct TaskListView: View {
         case .inbox: return .inbox
         case .today: return .today
         case .upcoming: return .upcoming
-        case .project: return currentProject.map { .project(name: $0.name) } ?? .plain
+        case .project: return currentProject.map { .project(name: $0.name, id: $0.id) } ?? .plain
         case .label: return currentLabel.map { .label(name: $0.name) } ?? .plain
         case .filter, .completed: return .plain
         }

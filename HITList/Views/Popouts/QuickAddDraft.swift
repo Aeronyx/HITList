@@ -400,6 +400,15 @@ enum QuickAddDraftStore {
         return stored.draft
     }
 
+    /// `draft(for:from:storeName:)` as the card puts it back: its Group looked up again among `projects`
+    /// (renamed elsewhere meanwhile: found by id; deleted: dropped, `QuickAddContext.resolvingGroup`).
+    static func restoredDraft(for cardID: UUID, from defaults: UserDefaults = AppGroup.defaults,
+                              storeName: String = ModelContainerFactory.storeName, projects: [Project]) -> QuickAddDraft? {
+        guard var draft = draft(for: cardID, from: defaults, storeName: storeName) else { return nil }
+        draft.context = draft.context.resolvingGroup(in: projects.map { ($0.id, $0.name) })
+        return draft
+    }
+
     /// The card closed: forgets its draft. Another card's (another Mac window's) is left alone.
     static func clear(card cardID: UUID, from defaults: UserDefaults = AppGroup.defaults,
                       storeName: String = ModelContainerFactory.storeName) {
