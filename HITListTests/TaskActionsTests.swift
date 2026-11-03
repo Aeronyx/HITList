@@ -79,7 +79,7 @@ final class TaskActionsTests: XCTestCase {
         let t = try task(due: day(year, 1, 31, hour: 9), hasDueTime: true, recurrence: .monthly)
         TaskActions.toggleCompletion(t, in: context)
         XCTAssertEqual(t.dueDate, day(year, 2, lastDayOfFebruary(year), hour: 9))
-        XCTAssertEqual(t.recurrence, "monthly;1;;31", "the anchor is stored on the first roll")
+        XCTAssertEqual(t.recurrence, "monthly;1;;31;09:00", "the anchor (and the time) is stored on the first roll")
         TaskActions.toggleCompletion(t, in: context)
         XCTAssertEqual(t.dueDate, day(year, 3, 31, hour: 9))
         TaskActions.toggleCompletion(t, in: context)
@@ -125,7 +125,7 @@ final class TaskActionsTests: XCTestCase {
         let t = try task(due: day(year, 2, lastDayOfFebruary(year), hour: 9), hasDueTime: true,
                          recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 31))
         TaskActions.setRecurrence(.monthly, on: t, in: context)
-        XCTAssertEqual(t.recurrence, "monthly;1;;31")
+        XCTAssertEqual(t.recurrence, "monthly;1;;31;09:00")
         TaskActions.toggleCompletion(t, in: context)
         XCTAssertEqual(t.dueDate, day(year, 3, 31, hour: 9), "back on the 31st, not the 28th")
     }
@@ -171,6 +171,56 @@ final class TaskActionsTests: XCTestCase {
         XCTAssertEqual(cal.dateComponents([.hour, .minute], from: next), DateComponents(hour: 17, minute: 45))
         XCTAssertEqual(cal.dateComponents([.day], from: tomorrow(), to: cal.startOfDay(for: next)).day, 3)
         XCTAssertTrue(t.hasDueTime)
+    }
+
+    // MARK: The repeat's time (brief 31)
+
+    func testTheFirstRollOfATimedTaskStoresItsTimeInTheRule() throws {
+        let t = try task(due: tomorrow(17, 45), hasDueTime: true, recurrence: .daily)
+        XCTAssertEqual(t.recurrence, "daily;1", "as builds up to 0.4.0 wrote it")
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.recurrence, "daily;1;;;17:45")
+    }
+
+    /// A due time the clock pushed (the spring change) or anything else moved off the rule's time comes
+    /// back to the rule's time on the next roll.
+    func testRollingRebuildsTheTimeFromTheRule() throws {
+        let t = try task(due: tomorrow(3, 30), hasDueTime: true, recurrence: RecurrenceRule.daily.withTime(hour: 2, minute: 30))
+        TaskActions.toggleCompletion(t, in: context)
+        let next = try XCTUnwrap(t.dueDate)
+        XCTAssertEqual(cal.dateComponents([.hour, .minute], from: next), DateComponents(hour: 2, minute: 30))
+        XCTAssertEqual(cal.dateComponents([.day], from: tomorrow(), to: cal.startOfDay(for: next)).day, 1)
+        XCTAssertEqual(t.recurrence, "daily;1;;;02:30", "the rule's time is kept, not taken from the pushed due date")
+    }
+
+    func testAnAllDayTasksRuleLosesAStrayTime() throws {
+        let t = try task(due: tomorrow(), recurrence: RecurrenceRule.daily.withTime(hour: 9, minute: 0))
+        TaskActions.toggleCompletion(t, in: context)
+        XCTAssertEqual(t.recurrence, "daily;1")
+        XCTAssertEqual(t.dueDate, cal.date(byAdding: .day, value: 1, to: tomorrow()), "still all day")
+    }
+
+    func testPickingARepeatTimesItToTheTask() throws {
+        let timed = try task(due: tomorrow(7, 30), hasDueTime: true)
+        TaskActions.setRecurrence(.daily, on: timed, in: context)
+        XCTAssertEqual(timed.recurrence, "daily;1;;;07:30")
+        let allDay = try task(due: tomorrow())
+        TaskActions.setRecurrence(.weekdays, on: allDay, in: context)
+        XCTAssertEqual(allDay.recurrence, "weekly;1;2,3,4,5,6")
+    }
+
+    /// The editor's time setters call this after changing the time (session 32 owns the editor).
+    func testSyncingTheRepeatTimeFollowsTheTasksTime() throws {
+        let t = try task(due: tomorrow(7, 30), hasDueTime: true, recurrence: RecurrenceRule.daily.withTime(hour: 7, minute: 30))
+        t.dueDate = tomorrow(18, 0)
+        TaskActions.syncRepeatTime(of: t)
+        XCTAssertEqual(t.recurrence, "daily;1;;;18:00")
+        t.hasDueTime = false
+        TaskActions.syncRepeatTime(of: t)
+        XCTAssertEqual(t.recurrence, "daily;1")
+        let plain = try task(due: tomorrow(9, 0), hasDueTime: true)
+        TaskActions.syncRepeatTime(of: plain)
+        XCTAssertNil(plain.recurrence, "no repeat, nothing to do")
     }
 
     func testOverdueDailySkipsToTodayNotThePast() throws {

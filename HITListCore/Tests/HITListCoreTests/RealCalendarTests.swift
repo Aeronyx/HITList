@@ -69,16 +69,19 @@ final class RealCalendarTests: XCTestCase {
         XCTAssertEqual(night.dueDate?.timeIntervalSince(at(2027, 3, 14, 1, 30)), 2 * 3600)
     }
 
-    /// Known, not fixed in 0.4.0 (final review): a repeat timed inside the skipped hour lands after the gap
-    /// that night (right), then stays an hour late, because the rule keeps no time of its own and steps from
-    /// the stored due date. Needs the wall-clock time in the rule string, like the anchor day.
+    /// A repeat timed inside the skipped hour lands after the gap that night, then comes back to its time:
+    /// the rule keeps the wall-clock time (brief 31; it used to stay an hour late from then on).
     func testARepeatInsideTheSkippedHourComesBackToItsTime() {
-        var due = at(2027, 3, 13, 2, 30)
-        due = RecurrenceRule.daily.nextOccurrence(after: due, calendar: ny)
-        XCTAssertGreaterThanOrEqual(ny.component(.hour, from: due), 3, "the night of the change: after the gap")
-        due = RecurrenceRule.daily.nextOccurrence(after: due, calendar: ny)
-        XCTExpectFailure("a repeat at 2:30 stays at 3:30 after the spring change")
+        let typed = parser(now: at(2027, 3, 12, 20)).parse("Feed cat every day 2:30")
+        XCTAssertEqual(typed.recurrence?.encoded, "daily;1;;;02:30")
+        var due = try! XCTUnwrap(typed.dueDate)
+        assertWall(due, 2027, 3, 13, 2, 30)
+        due = typed.recurrence!.nextOccurrence(after: due, calendar: ny)
+        assertWall(due, 2027, 3, 14, 3, 0)
+        due = typed.recurrence!.nextOccurrence(after: due, calendar: ny)
         assertWall(due, 2027, 3, 15, 2, 30)
+        // Completed late: still 2:30.
+        assertWall(typed.recurrence!.nextDueDate(from: at(2027, 3, 14, 3), now: at(2027, 3, 16, 12), calendar: ny), 2027, 3, 16, 2, 30)
     }
 
     // MARK: Fall back, Sunday 2027-11-07: 1:00–2:00 happens twice

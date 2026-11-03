@@ -49,7 +49,7 @@ final class QuickAddCreateTests: XCTestCase {
         XCTAssertTrue(task.hasDueTime)
         XCTAssertEqual(task.recurrenceRule, .monthly)
         let dueDay = Calendar.current.component(.day, from: try XCTUnwrap(parsed.dueDate))
-        XCTAssertEqual(task.recurrence, "monthly;1;;\(dueDay)", "a monthly rule keeps the day it started on")
+        XCTAssertEqual(task.recurrence, "monthly;1;;\(dueDay);17:00", "a monthly rule keeps the day it started on, and its time")
         XCTAssertEqual(task.project?.name, "Finance")
         XCTAssertEqual(Set(task.labelList.map(\.name)), ["bills", "home"])
         XCTAssertEqual(try fetch(Project.self).count, 1)
@@ -125,7 +125,7 @@ final class QuickAddCreateTests: XCTestCase {
         let thursday = cal.date(byAdding: .day, value: 1, to: wednesday)!
         XCTAssertEqual(task.dueDate, cal.date(bySettingHour: 9, minute: 0, second: 0, of: thursday))
         XCTAssertTrue(task.hasDueTime)
-        XCTAssertEqual(task.recurrence, "weekly;1;2,3,4,5,6")
+        XCTAssertEqual(task.recurrence, "weekly;1;2,3,4,5,6;;09:00")
     }
 
     func testEveryThreeDaysQuickAddCreatesRecurringTask() throws {

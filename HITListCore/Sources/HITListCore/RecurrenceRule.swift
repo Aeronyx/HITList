@@ -5,8 +5,9 @@ import Foundation
 ///
 /// Monthly and yearly rules may carry an anchor day: the day of the month the task started on, so "every
 /// month" from Jan 31 goes Feb 28, Mar 31, Apr 30 instead of drifting to the 28th, and "every year" from
-/// Feb 29 comes back to Feb 29 in the next leap year (George, 2026-11-02). Equality ignores the anchor:
-/// it only says where a shortened month's date returns to and follows the task's due date.
+/// Feb 29 comes back to Feb 29 in the next leap year (George, 2026-11-02). A timed task's rule carries its
+/// wall-clock time too, so a repeat at 2:30 that the spring change pushed to 3:00 comes back to 2:30 the
+/// next day (George, 2026-11-03). Equality ignores both: they follow the task's due date, not the repeat.
 public struct RecurrenceRule: Codable, Hashable, Sendable {
     public enum Frequency: String, Codable, Sendable, CaseIterable {
         case daily, weekly, monthly, yearly
@@ -20,6 +21,19 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     /// weekly rules, and for rules written before 0.4.0 (they behave as they always did until a
     /// completion anchors them: see `anchored(to:calendar:)`).
     public var anchorDay: Int?
+    /// The wall-clock time each occurrence is rebuilt at; nil for all-day tasks and rules written before
+    /// 0.4.1 (they step the stored due date, as they always did, until a completion times them).
+    public var time: TimeOfDay?
+
+    public struct TimeOfDay: Codable, Hashable, Sendable {
+        public var hour: Int
+        public var minute: Int
+        public init(hour: Int, minute: Int) {
+            self.hour = hour
+            self.minute = minute
+        }
+        var isValid: Bool { (0...23).contains(hour) && (0...59).contains(minute) }
+    }
 
     public init(frequency: Frequency, interval: Int = 1, weekdays: Set<Int>? = nil, anchorDay: Int? = nil) {
         self.frequency = frequency
@@ -54,12 +68,16 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     //
     // A fourth part holds the anchor day: "monthly;1;;31". Builds before 0.4.0 read only the first three
     // parts and see an empty weekday list, so to them it is plain "every month" (no schema change).
+    // A fifth holds the time: "daily;1;;;02:30", "monthly;1;;31;09:00". Builds up to 0.4.0 (13) read four
+    // parts at most, so to them it is the rule without its time.
 
     public var encoded: String {
-        var s = "\(frequency.rawValue);\(interval)"
-        if let weekdays { s += ";" + weekdays.sorted().map(String.init).joined(separator: ",") }
-        if let anchorDay { s += (weekdays == nil ? ";;" : ";") + String(anchorDay) }
-        return s
+        var parts = ["\(frequency.rawValue)", "\(interval)"]
+        parts.append(weekdays.map { $0.sorted().map(String.init).joined(separator: ",") } ?? "")
+        parts.append(anchorDay.map(String.init) ?? "")
+        parts.append(time.map { String(format: "%02d:%02d", $0.hour, $0.minute) } ?? "")
+        while parts.count > 2, parts.last == "" { parts.removeLast() }
+        return parts.joined(separator: ";")
     }
 
     public init?(encoded: String) {
@@ -71,6 +89,36 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         }
         let anchorDay = parts.count >= 4 ? Int(parts[3]) : nil
         self.init(frequency: freq, interval: interval, weekdays: weekdays, anchorDay: anchorDay)
+        if parts.count >= 5 {
+            let clock = parts[4].split(separator: ":", omittingEmptySubsequences: false)
+            if clock.count == 2, clock.allSatisfy({ $0.count == 2 }), let h = Int(clock[0]), let m = Int(clock[1]) {
+                self = withTime(hour: h, minute: m)
+            }
+        }
+    }
+
+    // MARK: Time of day
+
+    /// This rule rebuilding each occurrence at `hour:minute`; an impossible time leaves it untimed.
+    public func withTime(hour: Int, minute: Int) -> RecurrenceRule {
+        var rule = self
+        let time = TimeOfDay(hour: hour, minute: minute)
+        rule.time = time.isValid ? time : nil
+        return rule
+    }
+
+    public var withoutTime: RecurrenceRule {
+        var rule = self
+        rule.time = nil
+        return rule
+    }
+
+    /// This rule for a task due at `due`: timed to its wall-clock time when it has one, untimed otherwise.
+    /// Call it whenever the task's time changes (quick add, the Repeat menu, the editor's time).
+    public func timed(to due: Date?, hasTime: Bool, calendar: Calendar = .current) -> RecurrenceRule {
+        guard hasTime, let due else { return withoutTime }
+        let parts = calendar.dateComponents([.hour, .minute], from: due)
+        return withTime(hour: parts.hour ?? 0, minute: parts.minute ?? 0)
     }
 
     // MARK: Anchor day
@@ -111,8 +159,17 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
 
     // MARK: Occurrence math
 
-    /// The first occurrence strictly after `date`, preserving the time of day of `date`.
+    /// The first occurrence strictly after `date`: at the rule's time when it has one (rebuilt on the
+    /// day, so a time the clock skipped one night is back the next), else at `date`'s time of day.
     public func nextOccurrence(after date: Date, calendar: Calendar = .current) -> Date {
+        let next = step(after: date, calendar: calendar)
+        guard let time,
+              let rebuilt = calendar.date(bySettingHour: time.hour, minute: time.minute, second: 0,
+                                          of: calendar.startOfDay(for: next)), rebuilt > date else { return next }
+        return rebuilt
+    }
+
+    private func step(after date: Date, calendar: Calendar) -> Date {
         switch frequency {
         case .daily:
             return calendar.date(byAdding: .day, value: interval, to: date)!

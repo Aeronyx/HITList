@@ -115,7 +115,14 @@ final class QuickAddParserTests: XCTestCase {
         // Jan 31 at 14:00, "every month 9am": Feb 28, still anchored to the 31st.
         let jan31 = parser(at: Fixed.date(2027, 1, 31, 14)).parse("Rent every month 9am")
         assertDate(jan31.dueDate, 2027, 2, 28, 9, 0)
-        XCTAssertEqual(jan31.recurrence?.encoded, "monthly;1;;31")
+        XCTAssertEqual(jan31.recurrence?.encoded, "monthly;1;;31;09:00")
+    }
+
+    func testATimedRepeatKeepsItsTimeInTheRule() {
+        XCTAssertEqual(parser.parse("Pills every day 8pm").recurrence?.encoded, "daily;1;;;20:00")
+        XCTAssertEqual(parser.parse("Standup every weekday 9:15am").recurrence?.encoded, "weekly;1;2,3,4,5,6;;09:15")
+        XCTAssertEqual(parser.parse("Rent every month").recurrence?.encoded, "monthly;1;;21", "all day: no time")
+        XCTAssertEqual(parser.parse("Call mum every day in 2 hours").recurrence?.encoded, "daily;1;;;16:30")
     }
 
     func testAnExplicitPastDateOnARepeatingTaskIsKeptAsTyped() {

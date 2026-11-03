@@ -162,6 +162,74 @@ final class RecurrenceRuleTests: XCTestCase {
         XCTAssertEqual(old?.encoded, "monthly;2")
     }
 
+    // MARK: Time of day (brief 31)
+
+    func testTimeEncoding() {
+        let daily = RecurrenceRule.daily.withTime(hour: 2, minute: 30)
+        XCTAssertEqual(daily.time, RecurrenceRule.TimeOfDay(hour: 2, minute: 30))
+        XCTAssertEqual(daily.encoded, "daily;1;;;02:30")
+        XCTAssertEqual(RecurrenceRule(frequency: .weekly, weekdays: [2, 4]).withTime(hour: 9, minute: 0).encoded, "weekly;1;2,4;;09:00")
+        XCTAssertEqual(RecurrenceRule(frequency: .monthly, anchorDay: 31).withTime(hour: 17, minute: 5).encoded, "monthly;1;;31;17:05")
+        for encoded in ["daily;1;;;02:30", "weekly;1;2,4;;09:00", "monthly;1;;31;17:05", "yearly;2;;29;23:59"] {
+            XCTAssertEqual(RecurrenceRule(encoded: encoded)?.encoded, encoded)
+        }
+        XCTAssertEqual(RecurrenceRule(encoded: "monthly;1;;31;17:05")?.anchorDay, 31)
+        XCTAssertEqual(RecurrenceRule(encoded: "monthly;1;;31;17:05")?.time, RecurrenceRule.TimeOfDay(hour: 17, minute: 5))
+        // No time, no extra part; nonsense times are dropped.
+        XCTAssertEqual(RecurrenceRule.daily.encoded, "daily;1")
+        XCTAssertEqual(daily.withoutTime.encoded, "daily;1")
+        for bad in ["daily;1;;;25:00", "daily;1;;;9:60", "daily;1;;;x", "daily;1;;;", "daily;1;;;-1:00", "daily;1;;;0930"] {
+            XCTAssertNil(RecurrenceRule(encoded: bad)?.time, bad)
+            XCTAssertEqual(RecurrenceRule(encoded: bad)?.encoded, "daily;1", bad)
+        }
+        XCTAssertNil(RecurrenceRule.daily.withTime(hour: 24, minute: 0).time)
+    }
+
+    func testTimedFollowsTheDueTime() {
+        let due = Fixed.date(2026, 10, 21, 7, 45)
+        XCTAssertEqual(RecurrenceRule.daily.timed(to: due, hasTime: true, calendar: Fixed.calendar).time,
+                       RecurrenceRule.TimeOfDay(hour: 7, minute: 45))
+        XCTAssertNil(RecurrenceRule.daily.withTime(hour: 7, minute: 0).timed(to: due, hasTime: false, calendar: Fixed.calendar).time,
+                     "an all-day task's repeat has no time")
+        XCTAssertNil(RecurrenceRule.daily.withTime(hour: 7, minute: 0).timed(to: nil, hasTime: true, calendar: Fixed.calendar).time)
+    }
+
+    /// Like the anchor, the time follows the due date: the Repeat menu still ticks "Every day".
+    func testEqualityIgnoresTheTime() {
+        XCTAssertEqual(RecurrenceRule.daily.withTime(hour: 9, minute: 0), .daily)
+        XCTAssertEqual(Set([RecurrenceRule.daily.withTime(hour: 9, minute: 0), .daily]).count, 1)
+    }
+
+    func testOccurrencesAreRebuiltFromTheRulesTime() {
+        let cal = Fixed.calendar
+        // A due date that drifted off the rule's time comes back to it on the next step.
+        let rule = RecurrenceRule.daily.withTime(hour: 9, minute: 0)
+        assertDate(rule.nextOccurrence(after: Fixed.date(2026, 10, 21, 10, 0), calendar: cal), 2026, 10, 22, 9, 0)
+        let weekly = RecurrenceRule(frequency: .weekly, weekdays: [2, 4]).withTime(hour: 18, minute: 30)
+        assertDate(weekly.nextOccurrence(after: Fixed.date(2026, 10, 21, 18, 30), calendar: cal), 2026, 10, 26, 18, 30)
+        let monthly = RecurrenceRule(frequency: .monthly, anchorDay: 31).withTime(hour: 8, minute: 15)
+        assertDate(monthly.nextOccurrence(after: Fixed.date(2027, 1, 31, 8, 15), calendar: cal), 2027, 2, 28, 8, 15)
+        assertDate(monthly.nextDueDate(from: Fixed.date(2026, 8, 31, 8, 15), now: Fixed.now, calendar: cal), 2026, 10, 31, 8, 15)
+    }
+
+    /// Builds 13 and before decode with exactly this logic: a timed rule must read as the plain rule (with
+    /// its anchor), so a TestFlight build that hasn't updated still repeats it.
+    func testBuild13ReadsATimedRuleAsTheRuleWithoutItsTime() {
+        func decodeLikeBuild13(_ encoded: String) -> RecurrenceRule? {
+            let parts = encoded.split(separator: ";", omittingEmptySubsequences: false).map(String.init)
+            guard parts.count >= 2, let freq = RecurrenceRule.Frequency(rawValue: parts[0]), let interval = Int(parts[1]) else { return nil }
+            var weekdays: Set<Int>? = nil
+            if parts.count >= 3, !parts[2].isEmpty {
+                weekdays = Set(parts[2].split(separator: ",").compactMap { Int($0) }.filter { (1...7).contains($0) })
+            }
+            let anchorDay = parts.count >= 4 ? Int(parts[3]) : nil
+            return RecurrenceRule(frequency: freq, interval: interval, weekdays: weekdays, anchorDay: anchorDay)
+        }
+        XCTAssertEqual(decodeLikeBuild13("daily;1;;;02:30")?.encoded, "daily;1")
+        XCTAssertEqual(decodeLikeBuild13("weekly;2;2,4;;09:00")?.encoded, "weekly;2;2,4")
+        XCTAssertEqual(decodeLikeBuild13("monthly;1;;31;17:05")?.encoded, "monthly;1;;31")
+    }
+
     /// The anchor follows the due date; it does not make a different repeat. The Repeat menu ticks
     /// "Every month" for an anchored monthly rule.
     func testEqualityIgnoresTheAnchor() {

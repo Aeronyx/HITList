@@ -51,14 +51,18 @@ enum TaskActions {
     ///
     /// Monthly and yearly rules advance from their anchor day, which is stored in the rule string on the
     /// first roll if the rule came without one (the Repeat menu, older builds): Jan 31 → Feb 28 → Mar 31.
+    /// A timed task's rule likewise takes the task's time on its first roll, and every roll rebuilds the
+    /// next due time from the rule's hour and minute (a 2:30 repeat the spring change pushed to 3:00 is back
+    /// at 2:30 the next day); an all-day task's rule has no time.
     static func toggleCompletion(_ task: TaskItem, in context: ModelContext) {
         if task.isCompleted {
             task.isCompleted = false
             task.completedAt = nil
         } else if let rule = task.recurrenceRule, let due = task.dueDate {
-            let anchored = rule.anchored(to: due)
-            task.dueDate = anchored.nextDueDate(from: due, now: Date())
-            if anchored.anchorDay != rule.anchorDay { task.recurrence = anchored.encoded }
+            var next = rule.anchored(to: due)
+            if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime) }
+            task.dueDate = next.nextDueDate(from: due, now: Date())
+            if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
         } else {
             task.isCompleted = true
             task.completedAt = Date()
@@ -70,12 +74,22 @@ enum TaskActions {
     /// The Repeat menu (task popout, its date card): sets or clears the task's repeat and saves. A repeat
     /// on an undated task starts today. A monthly or yearly repeat keeps the day the task returns to
     /// (`RecurrenceRule.keepingAnchor`): picking "Every month" again on a "31st" task due Feb 28 used to
-    /// store the plain rule, and the task repeated on the 28th from then on.
+    /// store the plain rule, and the task repeated on the 28th from then on. A timed task's repeat keeps
+    /// its time (`RecurrenceRule.timed`).
     static func setRecurrence(_ rule: RecurrenceRule?, on task: TaskItem, in context: ModelContext, now: Date = Date()) {
         if rule != nil, task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
         task.recurrenceRule = rule?.keepingAnchor(of: task.recurrenceRule, due: task.dueDate)
+            .timed(to: task.dueDate, hasTime: task.hasDueTime)
         task.touch()
         try? context.save()
+    }
+
+    /// Keeps a repeating task's rule on the task's time after something changed `dueDate` or `hasDueTime`
+    /// (the editor's time and date setters). Does not save; the caller does.
+    static func syncRepeatTime(of task: TaskItem) {
+        guard let rule = task.recurrenceRule else { return }
+        let timed = rule.timed(to: task.dueDate, hasTime: task.hasDueTime)
+        if timed.time != rule.time { task.recurrenceRule = timed }
     }
 
     static func reschedule(_ task: TaskItem, to date: Date?, keepTime: Bool = true, in context: ModelContext) {
