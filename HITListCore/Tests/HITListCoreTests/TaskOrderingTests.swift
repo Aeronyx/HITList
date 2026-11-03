@@ -41,6 +41,27 @@ final class TaskOrderingTests: XCTestCase {
         XCTAssertEqual(titles(TaskOrdering.sorted(tasks)), ["Apple", "banana", "Mango", "zebra"])
     }
 
+    /// Same priority and date: the order they were added in, older first (George, 2026-11-03: tasks "fly
+    /// out of order after being added" when the title decided). The title only breaks a tie on that too.
+    func testTiesBreakOnCreationOrderBeforeTitle() {
+        let day = Fixed.date(2026, 10, 21)
+        let first = Fixed.date(2026, 10, 21, 9, 0), second = first.addingTimeInterval(3)
+        let tasks = [
+            PlainTask(title: "apple", priority: 2, dueDate: day, createdDate: second),
+            PlainTask(title: "zebra", priority: 2, dueDate: day, createdDate: first),
+            PlainTask(title: "mango", priority: 2, dueDate: day, createdDate: second),
+            PlainTask(title: "undated b", priority: 2, createdDate: second),
+            PlainTask(title: "undated a", priority: 2, createdDate: first),
+        ]
+        XCTAssertEqual(titles(TaskOrdering.sorted(tasks)), ["zebra", "apple", "mango", "undated a", "undated b"])
+        XCTAssertEqual(titles(TaskOrdering.sorted(tasks.reversed())), ["zebra", "apple", "mango", "undated a", "undated b"])
+        XCTAssertEqual(titles(FilterQuery.defaultSort(tasks)), ["zebra", "apple", "mango", "undated a", "undated b"],
+                       "saved filters break ties the same way")
+        // A task with no creation date (an old snapshot) counts as the oldest, so the order stays total.
+        let unknown = PlainTask(title: "unknown", priority: 2, dueDate: day)
+        XCTAssertEqual(titles(TaskOrdering.sorted(tasks + [unknown])).first, "unknown")
+    }
+
     func testUndatedHighPriorityStillBeatsDatedLowPriority() {
         let tasks = [
             PlainTask(title: "dated p4", priority: 4, dueDate: Fixed.date(2026, 10, 21)),

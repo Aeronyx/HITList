@@ -42,6 +42,7 @@ struct InboxView: View {
         var filterProjectName: String? { task.filterProjectName }
         var filterLabelNames: [String] { task.filterLabelNames }
         var filterIsRecurring: Bool { task.filterIsRecurring }
+        var filterCreatedDate: Date? { task.filterCreatedDate }
     }
 
     private func matchedTasks() -> [TaskItem] {

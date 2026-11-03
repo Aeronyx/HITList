@@ -2,7 +2,8 @@ import Foundation
 
 /// The list rules George asked for in round 3, kept pure so they are tested once and every screen uses
 /// the same ones:
-/// - Inbox and Today sort by priority (P1 first), then due date and time (undated last), then title.
+/// - Inbox and Today sort by priority (P1 first), then due date and time (undated last), then creation
+///   (older first), then title.
 ///   (`FilterQuery.defaultSort`, due-then-priority, stays the order of saved filters.)
 /// - The Inbox holds every dated task, in any Group, plus undated tasks with no Group. An undated task
 ///   inside a Group is a note: it shows only when browsing that Group.
@@ -12,7 +13,7 @@ public enum TaskOrdering {
 
     // MARK: - Order
 
-    /// Priority (P1 first), then due date and time ascending with undated last, then title.
+    /// Priority (P1 first), then due date and time ascending with undated last, then creation order.
     public static func priorityThenDue<T: FilterableTask>(_ a: T, _ b: T) -> Bool {
         if a.filterPriority != b.filterPriority { return a.filterPriority < b.filterPriority }
         switch (a.filterDueDate, b.filterDueDate) {
@@ -21,6 +22,15 @@ public enum TaskOrdering {
         case (.some, nil): return true
         default: break
         }
+        return createdThenTitle(a, b)
+    }
+
+    /// The last tiebreak of every list: the order tasks were added in, older first (George, 2026-11-03:
+    /// with the title deciding, a task just added jumped among its equals), then the title. A task with
+    /// no creation date counts as the oldest.
+    public static func createdThenTitle<T: FilterableTask>(_ a: T, _ b: T) -> Bool {
+        let ca = a.filterCreatedDate ?? .distantPast, cb = b.filterCreatedDate ?? .distantPast
+        if ca != cb { return ca < cb }
         return a.filterTitle.localizedCaseInsensitiveCompare(b.filterTitle) == .orderedAscending
     }
 
