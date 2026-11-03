@@ -27,7 +27,7 @@ struct QuickAddChips: Equatable {
 struct QuickAddDraft: Equatable, Codable {
     /// The card's "+" menu: each option, once picked, shows its control in the card.
     enum Extra: String, Hashable, CaseIterable, Codable {
-        case description, labels, location, deadline, repeating
+        case description, labels, location, deadline, repeating, subtasks
     }
 
     var context: QuickAddContext
@@ -47,6 +47,9 @@ struct QuickAddDraft: Equatable, Codable {
     private(set) var defaultLabelRemoved = false
     /// Tokens switched off by tapping their highlight (brief 28): their words stay plain title text.
     private(set) var disabledTokens: Set<QuickAddTokenKey> = []
+    /// "+" → Subtasks (brief 32): one line per sub-task, in order, empty ones included while typed. Kept
+    /// optional on disk so a card stored before 0.4.1, which has no such key, still decodes.
+    private var storedSubtaskLines: [String]?
 
     init(context: QuickAddContext, text: String = "") {
         self.context = context
@@ -63,7 +66,42 @@ struct QuickAddDraft: Equatable, Codable {
 
     func shows(_ extra: Extra) -> Bool { extras.contains(extra) }
 
-    mutating func reveal(_ extra: Extra) { extras.insert(extra) }
+    /// Revealing Subtasks starts the list with one empty line (or keeps the lines there are).
+    mutating func reveal(_ extra: Extra) {
+        extras.insert(extra)
+        if extra == .subtasks, subtaskLines.isEmpty { subtaskLines = [""] }
+    }
+
+    // MARK: Subtask lines
+
+    var subtaskLines: [String] {
+        get { storedSubtaskLines ?? [] }
+        set { storedSubtaskLines = newValue.isEmpty ? nil : newValue }
+    }
+
+    /// The sub-tasks to add with the task: each line on one line, trimmed, blank ones dropped.
+    var subtaskTitles: [String] {
+        subtaskLines.map { TaskLimits.clampedTitle(TaskLimits.singleLine($0)) }.filter { !$0.isEmpty }
+    }
+
+    /// Return on a line: a new empty line right under it. Returns the new line's index (to focus).
+    mutating func insertSubtaskLine(after index: Int) -> Int {
+        let at = min(max(index + 1, 0), subtaskLines.count)
+        subtaskLines.insert("", at: at)
+        return at
+    }
+
+    /// Backspace on an empty line: it goes. Returns the line to focus next (the one above), or nil for the
+    /// title; the last line going hides the list.
+    mutating func removeSubtaskLine(at index: Int) -> Int? {
+        guard subtaskLines.indices.contains(index) else { return nil }
+        subtaskLines.remove(at: index)
+        if subtaskLines.isEmpty {
+            extras.remove(.subtasks)
+            return nil
+        }
+        return index > 0 ? index - 1 : nil
+    }
 
     /// Sets the deadline (its day); nil removes it and hides its chip.
     mutating func setDeadline(_ day: Date?, calendar: Calendar = .current) {
@@ -336,11 +374,11 @@ enum QuickAddTokens {
 }
 
 extension QuickAddDraft {
-    /// Something George would not want to lose: text, a description, a location or a deadline. The stored
+    /// Something George would not want to lose: text, a description, a location, a deadline or sub-tasks. The stored
     /// card and the tap-away "Discard?" question both key off it (final review, decision 1).
     var hasContent: Bool {
         let blank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return !blank(text) || !blank(notes) || !blank(locationName) || deadline != nil
+        return !blank(text) || !blank(notes) || !blank(locationName) || deadline != nil || !subtaskTitles.isEmpty
     }
 }
 

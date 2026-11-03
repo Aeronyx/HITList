@@ -601,6 +601,77 @@ final class PopoutTests: XCTestCase {
     }
     #endif
 
+    // MARK: Quick-add subtask lines (brief 32)
+
+    /// "+" → Subtasks shows one empty line; Return on a line adds the next one under it; Backspace on an
+    /// empty line removes it and goes back a line (to the title from the first); the last one going hides
+    /// the list.
+    func testSubtaskLinesAddAndRemoveLikeAChecklist() {
+        var draft = QuickAddDraft(context: .inbox, text: "Pack for trip")
+        draft.reveal(.subtasks)
+        XCTAssertTrue(draft.shows(.subtasks))
+        XCTAssertEqual(draft.subtaskLines, [""])
+
+        draft.subtaskLines[0] = "Socks"
+        XCTAssertEqual(draft.insertSubtaskLine(after: 0), 1)
+        draft.subtaskLines[1] = "Passport"
+        XCTAssertEqual(draft.insertSubtaskLine(after: 0), 1, "Return in the middle adds right under it")
+        XCTAssertEqual(draft.subtaskLines, ["Socks", "", "Passport"])
+
+        XCTAssertEqual(draft.removeSubtaskLine(at: 1), 0, "back to the line above")
+        XCTAssertEqual(draft.subtaskLines, ["Socks", "Passport"])
+        draft.subtaskLines = [""]
+        XCTAssertNil(draft.removeSubtaskLine(at: 0), "from the first line, back to the title")
+        XCTAssertFalse(draft.shows(.subtasks), "no lines, no list")
+        XCTAssertEqual(draft.subtaskLines, [])
+
+        draft.reveal(.subtasks)
+        draft.subtaskLines[0] = "Again"
+        draft.reveal(.subtasks)
+        XCTAssertEqual(draft.subtaskLines, ["Again"], "revealing again keeps what is there")
+    }
+
+    func testSubtaskLinesSaveAsTrimmedTitlesInOrderAndCountAsContent() throws {
+        var draft = QuickAddDraft(context: .inbox)
+        draft.reveal(.subtasks)
+        draft.subtaskLines = ["  Socks ", "", "Phone\ncharger", "   "]
+        XCTAssertEqual(draft.subtaskTitles, ["Socks", "Phone charger"])
+        XCTAssertTrue(draft.hasContent, "lines alone are worth keeping")
+        draft.reset()
+        XCTAssertEqual(draft.subtaskLines, [])
+        XCTAssertFalse(draft.shows(.subtasks))
+    }
+
+    /// The card adds the task and then its checklist, in the order typed.
+    func testAddingFromTheCardCreatesTheSubtasks() throws {
+        let container = ModelContainerFactory.preview()
+        editorContainer = container
+        let context = container.mainContext
+        var draft = QuickAddDraft(context: .inbox, text: "Pack for trip")
+        draft.reveal(.subtasks)
+        draft.subtaskLines = ["Socks", "Phone charger", "", "Passport"]
+        let task = try TaskActions.create(from: draft.result(parser()), defaultProject: nil, defaultLabel: nil, in: context)
+        try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: context)
+        XCTAssertEqual(task.orderedSubtasks.map(\.title), ["Socks", "Phone charger", "Passport"])
+        XCTAssertEqual(TaskOrdering.inbox(try context.fetch(FetchDescriptor<TaskItem>())).map(\.title), ["Pack for trip"])
+    }
+
+    /// The sticky draft keeps the lines; a card stored by 0.4.0, which had none, still opens.
+    func testStoredDraftsKeepSubtaskLinesAndOldOnesStillDecode() throws {
+        var draft = QuickAddDraft(context: .inbox, text: "Pack")
+        draft.reveal(.subtasks)
+        draft.subtaskLines = ["Socks", ""]
+        let decoded = try JSONDecoder().decode(QuickAddDraft.self, from: JSONEncoder().encode(draft))
+        XCTAssertEqual(decoded, draft)
+
+        let data = try JSONEncoder().encode(QuickAddDraft(context: .inbox, text: "Old card"))
+        var object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object = object.filter { !$0.key.lowercased().contains("subtask") }
+        let old = try JSONDecoder().decode(QuickAddDraft.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertEqual(old.text, "Old card")
+        XCTAssertEqual(old.subtaskLines, [])
+    }
+
     // MARK: Quick-add v2: reminder offsets, "+" options
 
     func testTypedReminderOffsetFillsTheReminderChip() {
