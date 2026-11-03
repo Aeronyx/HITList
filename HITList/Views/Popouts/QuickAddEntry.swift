@@ -71,7 +71,10 @@ struct FloatingAddButton: View {
     private var shown: Bool { popouts.state.showsAddButton }
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            TapHaptic.play()
+            action()
+        } label: {
             SwiftUI.Group {
                 if glass {
                     plus.hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
@@ -91,6 +94,7 @@ struct FloatingAddButton: View {
         .allowsHitTesting(shown)
         .accessibilityHidden(!shown)
         .animation(HITMotion.enter(reduceMotion: reduceMotion), value: shown)
+        .onAppear { TapHaptic.prepare() }
     }
 
     private var plus: some View {
