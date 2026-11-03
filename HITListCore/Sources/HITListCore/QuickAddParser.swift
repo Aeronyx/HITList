@@ -196,9 +196,11 @@ public struct QuickAddParser: Sendable {
             result.dueDate = date
             result.hasDueTime = false
         }
-        // "every month" keeps the day it starts on (the 31st stays the 31st after a short month).
+        // "every month" keeps the day it starts on (the 31st stays the 31st after a short month), and a
+        // timed repeat its time.
         if let rule = result.recurrence, let due = result.dueDate {
             result.recurrence = rule.anchored(to: due, calendar: dateParser.calendar)
+                .timed(to: due, hasTime: result.hasDueTime, calendar: dateParser.calendar)
         }
         result.tokens.sort { $0.range.lowerBound < $1.range.lowerBound }
         return result
