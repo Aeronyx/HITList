@@ -91,7 +91,6 @@ final class TokenDisablingTests: XCTestCase {
             ("Fix sink #\"Home Repairs\"", .project, "#\"Home Repairs\""),
             ("Fix sink #Home Repairs", .project, "#Home Repairs"),
             ("Pay @bills", .label, "@bills"),
-            ("Ping !15mb", .reminder, "!15mb"),
             ("Ship p1", .priority, "p1"),
         ]
         for (input, kind, text) in cases {
@@ -108,6 +107,11 @@ final class TokenDisablingTests: XCTestCase {
             XCTAssertNil(r.reminderOffsetMinutes, input)
             XCTAssertEqual(r.priority, .p4, input)
         }
+        // A reminder needs a time to count, so it is switched off beside one.
+        let ping = parser.parse("Ping 5pm !15mb", disabling: [key(.reminder, "!15mb")])
+        XCTAssertEqual(ping.title, "Ping !15mb")
+        XCTAssertNil(ping.reminderOffsetMinutes)
+        XCTAssertEqual(ping.tokens.map(\.kind), [.time])
     }
 
     func testASecondPriorityTakesOverFromASwitchedOffFirst() {

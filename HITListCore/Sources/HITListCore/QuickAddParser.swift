@@ -91,6 +91,8 @@ public struct QuickAddParser: Sendable {
         var date: Date? = nil
         /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
         var moment: Date? = nil
+        /// Where the reminder token is, so it can go back to the title when nothing sets a time.
+        var reminderWord: Int? = nil
 
         func mark(_ i: Int, _ n: Int, _ kind: QuickAddToken.Kind) {
             guard n > 0 else { return }
@@ -123,7 +125,7 @@ public struct QuickAddParser: Sendable {
             }
             // Reminder offset: !15mb, !1hb, !1db (the "b" optional), !0 / !at
             if result.reminderOffsetMinutes == nil, let minutes = ReminderOffset.minutes(fromToken: w) {
-                result.reminderOffsetMinutes = minutes; mark(i, 1, .reminder); i += 1; continue
+                result.reminderOffsetMinutes = minutes; reminderWord = i; mark(i, 1, .reminder); i += 1; continue
             }
             // Recurrence
             if result.recurrence == nil, let (rule, n) = Self.matchRecurrence(lowers, at: i) {
@@ -148,6 +150,14 @@ public struct QuickAddParser: Sendable {
                 continue
             }
             i += 1
+        }
+
+        // A reminder is relative to the due time: with no time typed (or set by "in 2 hours") it means
+        // nothing, and stays in the title as typed, unhighlighted (George, 2026-11-03).
+        if let k = reminderWord, time == nil, moment == nil {
+            consumed[k] = false
+            result.reminderOffsetMinutes = nil
+            result.tokens.removeAll { $0.kind == .reminder }
         }
 
         // Title = whatever was not consumed, with surrounding quotes stripped.
@@ -286,8 +296,9 @@ public struct QuickAddParser: Sendable {
 
 /// The reminder-offset grammar, shared by the parser, the chips and the notification copy.
 ///
-/// `!15mb` or `!15m` = 15 minutes before the due time, `!1hb` / `!1h` = an hour before, `!1db` / `!1d` =
-/// a day before; `!0` and `!at` = at the due time. The offset only matters for a task with a time.
+/// `!Nm` / `!Nmb` = N minutes before the due time, `!Nh` / `!Nhb` = N hours, `!Nd` / `!Ndb` = N days
+/// (N ≥ 1, up to four weeks); `!0` and `!at` = at the due time. Nothing else is a reminder (`!`, `!0mb`,
+/// `!m`, `!15`). The parser only reads one when the task has a due time (`QuickAddParser.parse`).
 public enum ReminderOffset {
     /// The longest offset accepted: four weeks.
     public static let maxMinutes = 28 * 24 * 60
