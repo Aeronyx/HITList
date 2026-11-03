@@ -15,10 +15,13 @@ public protocol FilterableTask {
     var filterIsRecurring: Bool { get }
     /// When the task was created, for `created:` terms. `nil` (the default) never matches them.
     var filterCreatedDate: Date? { get }
+    /// A subtask lives inside its parent and is never a row of its own (`TaskOrdering.topLevel`). Default false.
+    var filterIsSubtask: Bool { get }
 }
 
 extension FilterableTask {
     public var filterCreatedDate: Date? { nil }
+    public var filterIsSubtask: Bool { false }
 }
 
 /// A plain value implementation, handy for tests and for snapshots.
@@ -33,6 +36,7 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
     public var filterLabelNames: [String]
     public var filterIsRecurring: Bool
     public var filterCreatedDate: Date?
+    public var filterIsSubtask: Bool
 
     public init(
         title: String,
@@ -44,7 +48,8 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         projectName: String? = nil,
         labelNames: [String] = [],
         isRecurring: Bool = false,
-        createdDate: Date? = nil
+        createdDate: Date? = nil,
+        isSubtask: Bool = false
     ) {
         filterTitle = title
         filterNotes = notes
@@ -56,5 +61,6 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         filterLabelNames = labelNames
         filterIsRecurring = isRecurring
         filterCreatedDate = createdDate
+        filterIsSubtask = isSubtask
     }
 }

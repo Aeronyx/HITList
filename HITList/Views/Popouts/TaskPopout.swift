@@ -2,31 +2,44 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// A task, popped out: a bottom sheet on iPhone, the top-centred panel on the Mac. Minimal until you
-/// reach for more: checkbox and title (edit in place), a collapsed "Add description", and the chip row
-/// (date, priority, group, labels, reminder with its offset, repeat, then deadline and location when
-/// set); a repeating task also offers the Flipboard. The `…` menu holds Location, Deadline, Duplicate,
-/// Move and Delete. Every change saves as it is made.
+/// A task, popped out: a bottom sheet on iPhone, the top-centred panel on the Mac (and iPad). Laid out
+/// like Todoist's task view in HITList's slate (brief 32, George: "please make a better task editing
+/// system"), on the darker ground with `Theme.surface` cards:
+///
+/// - × (close) and "…" (duplicate, move, a day earlier / later, delete) at the top.
+/// - The title card: the check circle and the title, the description under it once it has one (or the
+///   Description pill is tapped), then the Group row and the date row (with the time and the repeat),
+///   which open the Group and date cards.
+/// - A sideways row of pills: Description, Priority, Reminder, Labels, Repeat, Deadline, Location,
+///   outlined until set, filled with their value once set.
+/// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
+/// - A footer with when it was created and **Confirm**, the quick-add card's filled pill: one tap saves
+///   everything typed (title, description, the sub-task field, a rename) and closes. × and Esc close
+///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. Return in the
+///   title confirms; ⌘Return confirms on the Mac.
 struct TaskPopout: View {
     @Bindable var task: TaskItem
 
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
 
+    @State private var draft: TaskEditorDraft
     @State private var openChip: Chip?
-    @State private var showsNotes = false
+    @State private var showsNotes: Bool
     @State private var confirmDelete = false
     /// The check fills for a moment before the popout closes with the toast.
     @State private var completing = false
     @State private var pops = 0
-    /// Deadline / Location picked from the `…` menu: their chips show before they have a value.
-    @State private var revealsDeadline = false
-    @State private var revealsLocation = false
-    /// The title when the popout opened, put back if it is left blank (`restoreTitleIfBlank`).
-    @State private var openingTitle: String?
+    /// Confirm (or Return) ran: a second one in the same instant does nothing.
+    @State private var isClosing = false
+    /// The scrolling middle's height, so the panel is as tall as its content (up to a cap).
+    @State private var bodyHeight: CGFloat = 0
     /// The task's id, read once while it certainly exists: the popout may close because the task was
     /// deleted elsewhere, and then nothing may be written to it.
     @State private var taskID: UUID?
@@ -35,91 +48,77 @@ struct TaskPopout: View {
 
     enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
 
+    init(task: TaskItem) {
+        self.task = task
+        _draft = State(initialValue: TaskEditorDraft(task: task))
+        _showsNotes = State(initialValue: !task.notes.isEmpty)
+    }
+
+    /// The panel (Mac, iPad) sizes to its content; the iPhone sheet fills its detent.
+    private var isPanel: Bool {
+        #if os(macOS)
+        true
+        #else
+        sizeClass == .regular
+        #endif
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: HITSpacing.m) {
-            header
-            description
-            chipRow
-            if task.recurrence != nil { flipboardRow }
+        VStack(spacing: 0) {
+            topBar
+            ScrollView {
+                VStack(alignment: .leading, spacing: HITSpacing.l) {
+                    titleCard
+                    pillRow
+                    if task.recurrence != nil, !task.isSubtask { flipboardRow }
+                    if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+                }
+                .padding(.horizontal, HITSpacing.l)
+                .padding(.top, HITSpacing.xs)
+                .padding(.bottom, HITSpacing.l)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
+            .frame(idealHeight: bodyHeight)
+            .frame(maxHeight: isPanel ? EditorMetrics.panelBodyMaxHeight : .infinity)
             footer
         }
-        .padding(HITSpacing.l)
+        .background(Theme.background)
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
-            showsNotes = !task.notes.isEmpty
-            if openingTitle == nil { openingTitle = task.title }
             if taskID == nil { taskID = task.id }
         }
-        .onDisappear(perform: restoreTitleIfBlank)
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: delete)
         } message: {
             Text("“\(task.title)” will be deleted on all your devices.")
         }
         #if os(macOS)
-        .onExitCommand { popouts.closeTask() }
+        .onExitCommand(perform: close)
         #endif
     }
 
-    // MARK: Header
+    // MARK: Top bar
 
-    private var isChecked: Bool { task.isCompleted || completing }
-
-    /// One title line; the checkbox and the header buttons centre on it (a long title wraps below).
-    private let headerLine: CGFloat = 26
-
-    private var header: some View {
-        HStack(alignment: .top, spacing: HITSpacing.m) {
-            Button(action: toggleCompletion) {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22))
-                    .frame(width: 24, height: headerLine)
-                    .foregroundStyle(isChecked ? (task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color)
-                                     : task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color)
-                    .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
-                    .hitCelebratePop(trigger: pops)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(task.isCompleted ? "Mark incomplete" : "Complete task")
-            .accessibilityIdentifier("popoutCheckbox")
-
-            TextField("Task name", text: $task.title, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(HITType.title)
-                .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
-                .strikethrough(task.isCompleted, color: Theme.secondaryText)
-                .lineLimit(1...5)
-                .frame(minHeight: headerLine, alignment: .leading)
-                .focused($titleFocused)
-                .onChange(of: task.title) { _, title in
-                    if title.contains(where: \.isNewline) {
-                        // Return finishes editing instead of adding a line.
-                        task.title = TaskLimits.singleLine(title)
-                        titleFocused = false
-                    }
-                    if task.title.count > TaskLimits.titleCharacters {
-                        task.title = String(task.title.prefix(TaskLimits.titleCharacters))
-                    }
-                    save(reschedule: false)
-                }
-
-            moreMenu
-                .frame(height: headerLine)
-            Button { popouts.closeTask() } label: { Image(systemName: "xmark") }
-                .buttonStyle(HITIconButtonStyle(font: .system(size: 14, weight: .semibold)))
-                .frame(height: headerLine)
+    private var topBar: some View {
+        HStack(spacing: HITSpacing.s) {
+            Button(action: close) { Image(systemName: "xmark").frame(width: 32, height: 32).contentShape(Rectangle()) }
+                .buttonStyle(HITIconButtonStyle(font: .system(size: 16, weight: .semibold)))
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
-                .help("Close (Esc)")
+                .help("Close without saving typing (Esc)")
+            Spacer()
+            moreMenu
         }
+        .padding(.horizontal, HITSpacing.s)
+        .padding(.top, isPanel ? HITSpacing.s : HITSpacing.l)
+        .padding(.bottom, HITSpacing.xs)
     }
 
     private var moreMenu: some View {
         Menu {
-            Button("Location", systemImage: "mappin.and.ellipse") { reveal(.location) }
-            Button("Deadline", systemImage: "scope") { reveal(.deadline) }
-            Divider()
             Button("Duplicate", systemImage: "plus.square.on.square", action: duplicate)
             Menu("Move to…", systemImage: "arrow.right.square") {
                 Button("Inbox", systemImage: "tray") { setProject(nil) }
@@ -140,9 +139,9 @@ struct TaskPopout: View {
             Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Theme.secondaryText)
-                .frame(width: 28, height: 24)
+                .frame(width: 32, height: 32)
                 .contentShape(Rectangle())
         }
         .menuStyle(.button)
@@ -151,19 +150,7 @@ struct TaskPopout: View {
         .fixedSize()
         .accessibilityLabel("More")
         .accessibilityIdentifier("popoutMore")
-        .help("Location, deadline, duplicate, move or delete")
-    }
-
-    /// Shows the Deadline or Location chip and opens its popover once the menu has gone.
-    private func reveal(_ chip: Chip) {
-        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-            if chip == .deadline { revealsDeadline = true }
-            if chip == .location { revealsLocation = true }
-        }
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(350))
-            openChip = chip
-        }
+        .help("Duplicate, move or delete")
     }
 
     /// Menu titles carry their Mac shortcut, since `PopoutHost` handles the keys rather than the menu.
@@ -175,28 +162,116 @@ struct TaskPopout: View {
         #endif
     }
 
-    // MARK: Description
+    // MARK: Title card
 
-    @ViewBuilder
-    private var description: some View {
-        if showsNotes {
-            HITField("Description", text: $task.notes, axis: .vertical, lineLimit: 1...10)
-                .focused($notesFocused)
-                .onChange(of: task.notes) { _, _ in save(reschedule: false) }
-                .transition(.opacity)
-        } else {
-            Button {
-                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showsNotes = true }
-                notesFocused = true
-            } label: {
-                Label("Add description", systemImage: "text.alignleft")
+    private var isChecked: Bool { task.isCompleted || completing }
+
+    private var titleCard: some View {
+        let now = Date()
+        return EditorCard {
+            HStack(alignment: .top, spacing: EditorMetrics.gap) {
+                Button(action: toggleCompletion) {
+                    Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: EditorMetrics.checkSize, weight: .light))
+                        .frame(width: EditorMetrics.iconColumn, height: EditorMetrics.titleLine)
+                        .foregroundStyle(isChecked ? (task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color)
+                                         : task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color)
+                        .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
+                        .hitCelebratePop(trigger: pops)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(task.isCompleted ? "Mark incomplete" : "Complete task")
+                .accessibilityIdentifier("popoutCheckbox")
+
+                VStack(alignment: .leading, spacing: HITSpacing.xs) {
+                    TextField("Task name", text: $draft.title, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(HITType.title2Bold)
+                        .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
+                        .strikethrough(task.isCompleted, color: Theme.secondaryText)
+                        .lineLimit(1...6)
+                        .frame(minHeight: EditorMetrics.titleLine, alignment: .leading)
+                        .focused($titleFocused)
+                        .onSubmit(confirm)
+                        .onChange(of: draft.title) { _, title in
+                            // Return confirms (George: one tap, or one key) instead of adding a line.
+                            if title.contains(where: \.isNewline) {
+                                draft.title = TaskLimits.singleLine(title)
+                                confirm()
+                            }
+                        }
+                        .accessibilityIdentifier("editorTitle")
+                    if showsNotes {
+                        TextField("Description", text: $draft.notes, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(HITType.callout)
+                            .foregroundStyle(HITColor.text.opacity(0.85))
+                            .lineLimit(1...12)
+                            .focused($notesFocused)
+                            .transition(.opacity)
+                            .accessibilityIdentifier("editorDescription")
+                    }
+                }
             }
-            .buttonStyle(HITButtonStyle(.ghost, size: .small))
-            .accessibilityIdentifier("addDescription")
+            .padding(.horizontal, EditorMetrics.inset)
+            .padding(.top, EditorMetrics.inset)
+            .padding(.bottom, HITSpacing.m)
+
+            groupRow
+            EditorHairline()
+            dateRow(now: now)
         }
     }
 
-    // MARK: Chips
+    private var groupRow: some View {
+        EditorRow(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : "number",
+                  tint: task.project.map { Color(hex: $0.colorHex) } ?? Theme.accent,
+                  action: { openChip = .project })
+            .pickerAnchor(.group, isPresented: chipBinding(.project)) {
+                ProjectChipPopover(projects: projects, selectedName: task.project?.name) { project in
+                    openChip = nil
+                    setProject(project)
+                }
+            }
+            .accessibilityLabel("Group: \(task.project?.name ?? "Inbox")")
+            .accessibilityIdentifier("editorGroupRow")
+    }
+
+    private func dateRow(now: Date) -> some View {
+        let due = task.dueDate
+        return EditorRow(due.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) } ?? "No date",
+                         systemImage: "calendar",
+                         tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: task.hasDueTime, now: now),
+                         isPlaceholder: due == nil, action: { openChip = .date }) {
+            if let rule = task.recurrenceRule {
+                HStack(spacing: 4) {
+                    Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
+                    Text(rule.displayText).font(HITType.caption).lineLimit(1)
+                }
+                .foregroundStyle(Theme.secondaryText)
+            }
+        }
+        .pickerAnchor(.date, isPresented: chipBinding(.date)) {
+            DatePickerCard(selected: due, now: now, onPick: { day in
+                openChip = nil
+                setDate(day)
+            }, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) }, onTime: { time in
+                if let time {
+                    openChip = nil
+                    setTime(hour: time.hour, minute: time.minute)
+                } else {
+                    clearTime()
+                }
+            }, recurrence: task.recurrenceRule, onRepeat: { rule in
+                openChip = nil
+                setRecurrence(rule)
+            })
+        }
+        .accessibilityIdentifier("popoutDateRow")
+    }
+
+    // MARK: Pills
 
     private func chipBinding(_ chip: Chip) -> Binding<Bool> {
         Binding(get: { openChip == chip }, set: { if !$0, openChip == chip { openChip = nil } })
@@ -208,100 +283,101 @@ struct TaskPopout: View {
         return (parts.hour ?? 9, parts.minute ?? 0)
     }
 
-    private var chipRow: some View {
-        let now = Date()
-        let due = task.dueDate
-        return HITChipRow {
-            HITChip(due.map { DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Date", systemImage: "calendar",
-                    tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: task.hasDueTime, now: now),
-                    isSelected: due != nil, action: { openChip = .date })
-                .pickerAnchor(.date, isPresented: chipBinding(.date)) {
-                    DatePickerCard(selected: due, now: now, onPick: { day in
-                        openChip = nil
-                        setDate(day)
-                    }, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) }, onTime: { time in
-                        if let time {
-                            openChip = nil
-                            setTime(hour: time.hour, minute: time.minute)
-                        } else {
-                            clearTime()
-                        }
-                    }, recurrence: task.recurrenceRule, onRepeat: { rule in
-                        openChip = nil
-                        setRecurrence(rule)
-                    })
-                }
-                .accessibilityIdentifier("popoutDateChip")
-
-            HITChip(task.priorityValue == .p4 ? "Priority" : task.priorityValue.shortName, systemImage: task.priorityValue.symbol,
-                    tint: task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color,
-                    isSelected: task.priorityValue != .p4, action: { openChip = .priority })
-                .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
-                    PriorityChipPopover(selection: task.priorityValue) { p in
-                        openChip = nil
-                        task.priorityValue = p
-                        save()
-                    }
-                }
-
-            HITChip(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : "number",
-                    tint: task.project.map { Color(hex: $0.colorHex) } ?? Theme.accent,
-                    isSelected: task.project != nil, action: { openChip = .project })
-                .pickerAnchor(.group, isPresented: chipBinding(.project)) {
-                    ProjectChipPopover(projects: projects, selectedName: task.project?.name) { project in
-                        openChip = nil
-                        setProject(project)
-                    }
-                }
-
-            HITChip(task.labelList.isEmpty ? "Labels" : task.labelList.map { "@" + $0.name }.joined(separator: " "),
-                    systemImage: "tag", tint: task.labelList.isEmpty ? Theme.secondaryText : PopoutTint.label,
-                    isSelected: !task.labelList.isEmpty, action: { openChip = .labels })
-                .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
-                    LabelsChipPopover(labels: labels, selected: task.labelList.map(\.name), onToggle: toggleLabel)
-                }
-
-            HITChip(ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes),
-                    systemImage: (task.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
-                    tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
-                    isSelected: timeParts != nil, action: { openChip = .reminder })
-                .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
-                    ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
-                                       offsetMinutes: task.reminderOffsetMinutes, now: now, onTime: { time in
-                        if let time {
-                            openChip = nil
-                            setTime(hour: time.hour, minute: time.minute)
-                        } else {
-                            clearTime()
-                        }
-                    }, onClear: {
-                        openChip = nil
-                        clearTime()
-                    }, onOffset: setReminderOffset)
-                }
-                .accessibilityIdentifier("popoutReminderChip")
-
-            HITChip(task.recurrenceRule?.displayText ?? "Repeat", systemImage: "repeat",
-                    tint: task.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
-                    isSelected: task.recurrence != nil, action: { openChip = .repeating })
-                .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
-                    RepeatChipPopover(rule: task.recurrenceRule) { rule in
-                        openChip = nil
-                        setRecurrence(rule)
-                    }
-                }
-
-            if task.deadline != nil || revealsDeadline { deadlineChip(now: now) }
-            if task.locationName != nil || revealsLocation { locationChip }
+    /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set.
+    private var pillRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: HITSpacing.s) {
+                descriptionPill
+                priorityPill
+                reminderPill
+                labelsPill
+                repeatPill
+                deadlinePill
+                locationPill
+            }
+            .padding(.horizontal, HITSpacing.l)
+            .padding(.vertical, 1)
         }
+        .padding(.horizontal, -HITSpacing.l)
+        .frame(height: HITChip.Size.compact.height + 2)
+        .accessibilityIdentifier("editorPills")
     }
 
-    private func deadlineChip(now: Date) -> some View {
+    private var descriptionPill: some View {
+        let hasNotes = !draft.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        return HITChip("Description", systemImage: "text.alignleft", tint: hasNotes ? Theme.accent : Theme.secondaryText,
+                       isSelected: hasNotes,
+                       size: .compact) {
+            withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { showsNotes = true }
+            Task { @MainActor in notesFocused = true }
+        }
+        .accessibilityIdentifier("editorDescriptionPill")
+    }
+
+    private var priorityPill: some View {
+        HITChip(task.priorityValue == .p4 ? "Priority" : task.priorityValue.shortName, systemImage: task.priorityValue.symbol,
+                tint: task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color,
+                isSelected: task.priorityValue != .p4, size: .compact, action: { openChip = .priority })
+            .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
+                PriorityChipPopover(selection: task.priorityValue) { p in
+                    openChip = nil
+                    task.priorityValue = p
+                    save()
+                }
+            }
+    }
+
+    private var reminderPill: some View {
+        let due = task.dueDate
+        return HITChip(ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes),
+                       systemImage: (task.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
+                       tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
+                       isSelected: timeParts != nil, size: .compact, action: { openChip = .reminder })
+            .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
+                ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
+                                   offsetMinutes: task.reminderOffsetMinutes, now: Date(), onTime: { time in
+                    if let time {
+                        openChip = nil
+                        setTime(hour: time.hour, minute: time.minute)
+                    } else {
+                        clearTime()
+                    }
+                }, onClear: {
+                    openChip = nil
+                    clearTime()
+                }, onOffset: setReminderOffset)
+            }
+            .accessibilityIdentifier("popoutReminderChip")
+    }
+
+    private var labelsPill: some View {
+        HITChip(task.labelList.isEmpty ? "Labels" : task.labelList.map { "@" + $0.name }.joined(separator: " "),
+                systemImage: "tag", tint: task.labelList.isEmpty ? Theme.secondaryText : PopoutTint.label,
+                isSelected: !task.labelList.isEmpty, size: .compact, action: { openChip = .labels })
+            .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
+                LabelsChipPopover(labels: labels, selected: task.labelList.map(\.name), onToggle: toggleLabel)
+            }
+    }
+
+    private var repeatPill: some View {
+        HITChip(task.recurrenceRule?.displayText ?? "Repeat", systemImage: "repeat",
+                tint: task.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
+                isSelected: task.recurrence != nil, size: .compact, action: { openChip = .repeating })
+            .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
+                RepeatChipPopover(rule: task.recurrenceRule) { rule in
+                    openChip = nil
+                    setRecurrence(rule)
+                }
+            }
+    }
+
+    private var deadlinePill: some View {
         let deadline = task.deadline
+        let now = Date()
         return HITChip(deadline.map { "Deadline · " + DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Deadline",
                        systemImage: "scope",
                        tint: deadline == nil ? Theme.secondaryText : PopoutTint.date(deadline, now: now),
-                       isSelected: deadline != nil,
+                       isSelected: deadline != nil, size: .compact,
                        onDismiss: deadline == nil ? nil : { setDeadline(nil) },
                        action: { openChip = .deadline })
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
@@ -313,10 +389,10 @@ struct TaskPopout: View {
             .accessibilityIdentifier("popoutDeadlineChip")
     }
 
-    private var locationChip: some View {
+    private var locationPill: some View {
         let name = task.locationName
         return HITChip(name ?? "Location", systemImage: "mappin.and.ellipse",
-                       tint: name == nil ? Theme.secondaryText : Theme.accent, isSelected: name != nil,
+                       tint: name == nil ? Theme.secondaryText : Theme.accent, isSelected: name != nil, size: .compact,
                        onDismiss: name == nil ? nil : { setLocation(nil) },
                        action: { openChip = .location })
             .pickerAnchor(.location, isPresented: chipBinding(.location)) {
@@ -350,35 +426,58 @@ struct TaskPopout: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack(spacing: HITSpacing.s) {
-            Text("Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))")
-            if let done = task.completedAt {
-                Text("·")
-                Text("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
+        HStack(spacing: HITSpacing.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))")
+                if let done = task.completedAt {
+                    Text("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
+                }
             }
+            .font(HITType.caption)
+            .foregroundStyle(Theme.secondaryText.opacity(0.8))
+            .lineLimit(1)
+            Spacer(minLength: HITSpacing.s)
+            // The quick-add card's send pill (George: "ideally the same as the Confirm add task button").
+            Button(action: confirm) {
+                Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
+                    .frame(width: 24)
+            }
+            .buttonStyle(HITButtonStyle(.primary, shape: .pill))
+            .keyboardShortcut(.return, modifiers: .command)
+            .accessibilityLabel("Confirm")
+            .accessibilityIdentifier("editorConfirm")
+            .help("Save and close (⌘Return)")
         }
-        .font(HITType.caption)
-        .foregroundStyle(Theme.secondaryText.opacity(0.8))
+        .padding(.horizontal, HITSpacing.l)
+        .padding(.vertical, HITSpacing.m)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.separator.opacity(0.6)).frame(height: 1) }
+    }
+
+    // MARK: Confirm and close
+
+    /// Saves everything typed and closes, in one tap.
+    private func confirm() {
+        guard !isClosing else { return }
+        isClosing = true
+        commitDraft()
+        popouts.closeTask()
+    }
+
+    /// Closes without saving typing (picked values have landed already).
+    private func close() {
+        guard !isClosing else { return }
+        isClosing = true
+        draft.renaming = nil
+        popouts.closeTask()
+    }
+
+    private func commitDraft() {
+        // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
+        guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
+        if (try? draft.commit(to: task, in: context)) == true { rescheduleNotifications() }
     }
 
     // MARK: Changes
-
-    /// The title to put back when the popout closes: the one it opened with, if the edit left the title
-    /// blank (a task needs a title; quick add refuses an empty one). Nil keeps the title as it is.
-    static func titleToKeep(_ edited: String, opening: String?) -> String? {
-        guard edited.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let opening, !opening.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
-        return opening
-    }
-
-    /// On close: a title left blank gets its opening title back (`titleToKeep`).
-    private func restoreTitleIfBlank() {
-        // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
-        guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
-        guard let kept = Self.titleToKeep(task.title, opening: openingTitle) else { return }
-        task.title = kept
-        save(reschedule: false)
-    }
 
     private func save(reschedule: Bool = true) {
         task.touch()
@@ -419,18 +518,16 @@ struct TaskPopout: View {
         save()
     }
 
-    /// The deadline's day; nil removes it and its chip.
+    /// The deadline's day; nil removes it.
     private func setDeadline(_ day: Date?) {
         task.deadline = day.map { Calendar.current.startOfDay(for: $0) }
-        if day == nil { revealsDeadline = false }
         save(reschedule: false)
     }
 
-    /// Trimmed; nil or blank removes it and its chip.
+    /// Trimmed; nil or blank removes it.
     private func setLocation(_ name: String?) {
         let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        if value == nil { revealsLocation = false }
         guard task.locationName != value else { return }
         task.locationName = value
         save(reschedule: false)
@@ -441,9 +538,10 @@ struct TaskPopout: View {
         rescheduleNotifications()
     }
 
+    /// The checklist moves with the task (`TaskActions.setProject`).
     private func setProject(_ project: Project?) {
-        task.project = project
-        save()
+        TaskActions.setProject(project, of: task, in: context)
+        rescheduleNotifications()
     }
 
     private func toggleLabel(_ name: String) {
@@ -457,7 +555,9 @@ struct TaskPopout: View {
         save()
     }
 
+    /// A copy with what was typed so far, its checklist open again, opened in place of this one.
     private func duplicate() {
+        commitDraft()
         let copy = TaskItem(title: task.title, notes: task.notes, priority: task.priority, dueDate: task.dueDate,
                             hasDueTime: task.hasDueTime, project: task.project, labels: task.labels ?? [],
                             recurrence: task.recurrenceRule)
@@ -465,8 +565,15 @@ struct TaskPopout: View {
         copy.deadline = task.deadline
         copy.locationName = task.locationName
         context.insert(copy)
+        for (i, subtask) in task.orderedSubtasks.enumerated() {
+            let item = TaskItem(title: subtask.title, project: task.project)
+            item.sortOrder = i
+            context.insert(item)
+            item.parent = copy
+        }
         try? context.save()
         rescheduleNotifications()
+        isClosing = true
         popouts.open(copy)
     }
 
@@ -492,6 +599,9 @@ struct TaskPopout: View {
             return
         }
         guard !completing else { return }
+        // Typing lands with it: completing is as deliberate as Confirm.
+        commitDraft()
+        isClosing = true
         if !reduceMotion { pops += 1 }
         withAnimation(.easeOut(duration: 0.15)) { completing = true }
         CompletionFeedback.shared.taskCompleted()

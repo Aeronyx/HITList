@@ -207,4 +207,48 @@ final class DeduplicatorTests: XCTestCase {
         let filters = try fetch(SavedFilter.self).map { "F \($0.id) \($0.name) \($0.updatedAt)" }
         return (projects + labels + filters).sorted()
     }
+
+    // MARK: Subtasks (schema V3)
+
+    /// Two copies of a Group merge; the parent was in the copy that goes, its subtask in the one that
+    /// stays. Both end up in the survivor, together.
+    func testSubtasksFollowTheirParentWhenGroupsMerge() throws {
+        let keep = project("Trip", createdAt: 0)
+        let lose = project("trip", createdAt: 5)
+        let parent = TaskItem(title: "Pack", project: lose)
+        let child = TaskItem(title: "Socks", project: keep)
+        context.insert(parent); context.insert(child)
+        child.parent = parent
+        try context.save()
+
+        try Deduplicator.run(in: context)
+
+        XCTAssertEqual(try fetch(Project.self).count, 1)
+        XCTAssertEqual(parent.project?.persistentModelID, keep.persistentModelID)
+        XCTAssertEqual(child.project?.persistentModelID, keep.persistentModelID)
+        XCTAssertEqual(child.parent?.persistentModelID, parent.persistentModelID)
+    }
+
+    /// Edits from two devices can leave a subtask in another Group than its parent, or nested a level
+    /// deeper than the rule allows; the pass puts both right.
+    func testSubtasksAreRepairedToOneLevelInTheirParentsGroup() throws {
+        let home = project("Home", createdAt: 0)
+        let work = project("Work", createdAt: 1)
+        let top = TaskItem(title: "Top", project: home)
+        let middle = TaskItem(title: "Middle", project: work)
+        let bottom = TaskItem(title: "Bottom")
+        for task in [top, middle, bottom] { context.insert(task) }
+        middle.parent = top
+        bottom.parent = middle
+        try context.save()
+
+        let report = try Deduplicator.run(in: context)
+
+        XCTAssertEqual(report.subtasks, 2)
+        XCTAssertEqual(bottom.parent?.persistentModelID, top.persistentModelID, "a grandchild moves up to the top task")
+        XCTAssertEqual(middle.subtasks ?? [], [])
+        XCTAssertEqual(middle.project?.name, "Home")
+        XCTAssertEqual(bottom.project?.name, "Home")
+        XCTAssertEqual(try Deduplicator.run(in: context).removed + (try Deduplicator.run(in: context).subtasks), 0, "a second pass changes nothing")
+    }
 }
