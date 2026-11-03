@@ -118,6 +118,13 @@ enum TaskActions {
         return subtask
     }
 
+    /// The quick-add card's sub-task lines, in order, after its task. Blank titles are skipped.
+    static func addSubtasks(_ titles: [String], to parent: TaskItem, in context: ModelContext) throws {
+        for title in titles where !TaskLimits.clampedTitle(TaskLimits.singleLine(title)).isEmpty {
+            try addSubtask(title, to: parent, in: context)
+        }
+    }
+
     /// The one-level rule: only a task in its own right takes subtasks, and only a task without subtasks
     /// becomes one.
     static func canNest(_ task: TaskItem, under parent: TaskItem) -> Bool {

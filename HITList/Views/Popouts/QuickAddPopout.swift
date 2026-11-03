@@ -7,7 +7,7 @@ import HITListCore
 /// expanded in place of a list's "Add task" row.
 ///
 /// "Task Name" in `HITType.taskName` (Inter bold, a step above `body`: 20 pt on iPhone), then one slim horizontally scrolling bar of
-/// compact chips: "+" (Description, Labels, Location, Deadline, Repeat), Date, Priority, Reminder,
+/// compact chips: "+" (Description, Labels, Location, Deadline, Repeat, Subtasks), Date, Priority, Reminder,
 /// Group, then Labels, Deadline and Repeat once they are set or picked from "+". Type naturally
 /// ("Haircut tom 11am p1 !15mb"); tokens light up and the chips follow. Picking a chip writes its token
 /// into the text. Return adds the task and keeps the card open, empty, for the next one; Escape, ×, or
@@ -58,6 +58,8 @@ struct QuickAddPopout: View {
     @FocusState private var titleFocused: Bool
     @FocusState private var notesFocused: Bool
     @FocusState private var locationFocused: Bool
+    /// The sub-task line with the cursor (`SubtaskLineField` keeps its own focus; this asks for it).
+    @State private var focusedLine: Int?
 
     enum Chip: Hashable { case date, priority, reminder, project, labels, deadline, repeating }
 
@@ -102,6 +104,10 @@ struct QuickAddPopout: View {
                     .focused($notesFocused)
                     .transition(.opacity)
             }
+            if draft.shows(.subtasks) {
+                subtaskLines
+                    .transition(.opacity)
+            }
             if draft.shows(.location) {
                 HITField("Location", text: $draft.locationName, systemImage: "mappin.and.ellipse", clearable: true)
                     .focused($locationFocused)
@@ -131,17 +137,18 @@ struct QuickAddPopout: View {
             onDraftChange(draft.hasContent)
         }
         .onChange(of: isClosing) { _, closing in
-            if closing { titleFocused = false; notesFocused = false; locationFocused = false }
+            if closing { titleFocused = false; notesFocused = false; locationFocused = false; endLineEditing() }
         }
         .onChange(of: isPaused) { _, paused in
             if paused {
-                titleFocused = false; notesFocused = false; locationFocused = false
+                titleFocused = false; notesFocused = false; locationFocused = false; endLineEditing()
             } else if !isClosing {
                 titleFocused = true
             }
         }
         .onChange(of: draft.hasContent) { _, has in onDraftChange(has) }
         .onChange(of: draft) { _, _ in storeDraft() }
+        .onChange(of: titleFocused) { _, focused in if focused { focusedLine = nil } }
         .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
         .onChange(of: projects.count) { _, _ in rebuildEngine() }
         .onChange(of: labels.count) { _, _ in rebuildEngine() }
@@ -149,7 +156,7 @@ struct QuickAddPopout: View {
             // iPhone: the keyboard steps aside while a chip's popover needs the room, then comes back.
             #if os(iOS)
             if chip != nil {
-                titleFocused = false; notesFocused = false; locationFocused = false
+                titleFocused = false; notesFocused = false; locationFocused = false; endLineEditing()
             } else {
                 titleFocused = true
             }
@@ -269,6 +276,7 @@ struct QuickAddPopout: View {
             Button("Location", systemImage: "mappin.and.ellipse") { reveal(.location) }
             Button("Deadline", systemImage: "scope") { reveal(.deadline) }
             Button("Repeat", systemImage: "repeat") { reveal(.repeating) }
+            Button("Subtasks", systemImage: "checklist") { reveal(.subtasks) }
         } label: {
             HITChipLabel("", systemImage: "plus", tint: Theme.accent, size: .compact)
         }
@@ -278,7 +286,7 @@ struct QuickAddPopout: View {
         .fixedSize()
         .accessibilityLabel("More options")
         .accessibilityIdentifier("quickAddPlus")
-        .help("Description, labels, location, deadline, repeat")
+        .help("Description, labels, location, deadline, repeat, subtasks")
     }
 
     /// Shows the picked option's control: a field gets the cursor, a chip opens its popover once the
@@ -289,7 +297,7 @@ struct QuickAddPopout: View {
         case .labels: .labels
         case .deadline: .deadline
         case .repeating: .repeating
-        case .description, .location: nil
+        case .description, .location, .subtasks: nil
         }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(350))
@@ -297,6 +305,9 @@ struct QuickAddPopout: View {
                 openChip = chip
             } else if extra == .description {
                 notesFocused = true
+            } else if extra == .subtasks {
+                titleFocused = false
+                focusedLine = draft.subtaskLines.indices.last
             } else {
                 locationFocused = true
             }
@@ -466,6 +477,65 @@ struct QuickAddPopout: View {
         }
     }
 
+    // MARK: Subtask lines (brief 32)
+
+    /// "+" → Subtasks: a line per sub-task under the description. Return adds the next line (on an empty
+    /// line it finishes the list and goes back to the title); Backspace on an empty line removes it.
+    private var subtaskLines: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(draft.subtaskLines.indices, id: \.self) { index in
+                HStack(spacing: HITSpacing.s) {
+                    Image(systemName: "circle")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Theme.secondaryText.opacity(0.7))
+                        .frame(width: 18)
+                    SubtaskLineField(placeholder: "Sub-task", text: lineBinding(index), isFocused: focusedLine == index,
+                                     onFocus: { focusedLine = index },
+                                     onReturn: { lineReturn(index) },
+                                     onDeleteEmpty: { lineDelete(index) })
+                        .accessibilityLabel("Sub-task \(index + 1)")
+                }
+            }
+        }
+        .accessibilityIdentifier("quickAddSubtasks")
+    }
+
+    private func lineBinding(_ index: Int) -> Binding<String> {
+        Binding(get: { draft.subtaskLines.indices.contains(index) ? draft.subtaskLines[index] : "" },
+                set: { if draft.subtaskLines.indices.contains(index) { draft.subtaskLines[index] = $0 } })
+    }
+
+    private func lineReturn(_ index: Int) {
+        guard draft.subtaskLines.indices.contains(index) else { return }
+        if draft.subtaskLines[index].trimmingCharacters(in: .whitespaces).isEmpty {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { _ = draft.removeSubtaskLine(at: index) }
+            backToTitle()
+        } else {
+            focusedLine = draft.insertSubtaskLine(after: index)
+        }
+    }
+
+    private func lineDelete(_ index: Int) {
+        let next = withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { draft.removeSubtaskLine(at: index) }
+        if let next { focusedLine = next } else { backToTitle() }
+    }
+
+    private func backToTitle() {
+        focusedLine = nil
+        titleFocused = true
+    }
+
+    /// Takes the cursor out of a sub-task line (they are UIKit / AppKit fields, outside `FocusState`).
+    private func endLineEditing() {
+        guard focusedLine != nil else { return }
+        focusedLine = nil
+        #if os(iOS)
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        #else
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        #endif
+    }
+
     // MARK: Saving
 
     /// Keeps what is in the card, under its id, so a kill in the background loses nothing. Not once the
@@ -485,6 +555,7 @@ struct QuickAddPopout: View {
                 task.notes = notes
                 try? modelContext.save()
             }
+            try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)
             errorMessage = nil
             if closesAfterSave { hasSavedForClose = true }
             if let cardID, let popouts { QuickAddDraftStore.clear(card: cardID, from: popouts.draftDefaults) }
@@ -499,6 +570,7 @@ struct QuickAddPopout: View {
                     try? await Task.sleep(for: .seconds(3))
                     if generation == addedGeneration { withAnimation { added = nil } }
                 }
+                focusedLine = nil
                 titleFocused = true
             }
             onSaved()
