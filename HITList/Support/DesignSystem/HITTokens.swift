@@ -112,10 +112,22 @@ enum HITType {
     /// Naming a task in the quick-add card: fixed bold 14 (George's spec).
     /// The quick-add card's title field: one step above `body` (the ratio of 14 pt to 12 pt), bold, so the
     /// task being typed reads larger than the tasks in the list behind it. Fixed size, like `title`.
+    /// iPhone 19 (20 until build 13, a step down with the list rows' titles); the Mac stays at 15, which
+    /// George chose after finding 14 too small.
     #if os(macOS)
     static let taskName = HITFont.inter(15, .bold)
     #else
-    static let taskName = HITFont.inter(20, .bold)
+    static let taskName = HITFont.inter(19, .bold)
+    #endif
+    /// A task's title in a list row (`TaskRow`), with `taskTitleTracking`. iPhone: a step under `body`,
+    /// a pixel tighter (George, build 13: "a little too large", the kerning "ever so slightly too much,
+    /// by like a pixel"). Mac: `body`, untouched (13 pt is already the Mac's small list text).
+    #if os(macOS)
+    static let taskTitle = body
+    static let taskTitleTracking: CGFloat = 0
+    #else
+    static let taskTitle = HITFont.inter(16, .regular, relativeTo: .body)
+    static let taskTitleTracking: CGFloat = -0.3
     #endif
     /// Section headers above a group of rows or fields.
     static let sectionHeader = caption2Semibold

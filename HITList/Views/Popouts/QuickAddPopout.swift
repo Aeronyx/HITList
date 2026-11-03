@@ -378,7 +378,7 @@ struct QuickAddPopout: View {
                 .help("Close (Esc)")
             // Hollow and faded while there is nothing to add; filled with the accent from the first
             // character (George, build 11). A pill, so it never reads as a second "+".
-            Button(action: save) {
+            Button { TapHaptic.play(); save() } label: {
                 Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
                     .frame(width: 24)
             }
