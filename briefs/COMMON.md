@@ -50,10 +50,31 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 - Final message always includes: what changed per commit, test counts before/after, how you verified
   it running (simulator and/or Mac), the branch name, and anything George must do.
 
-## How sessions run (from 2026-10-31)
-Sessions start with `scripts/session.sh <slug> <brief> <effort>` on George's API credit, each in its own
-worktree `../HITList-<slug>` on branch `<slug>` cut from master. George pastes the final report into the
-main (Fable) session, which reviews, tests, merges and releases. TestFlight build 12 (0.3.5) is live; the next upload is 0.4.0 (13), the first beta for George's friends. Production's CloudKit schema was deployed on 2026-11-02 (reminderOffsetMinutes); `scripts/release.sh` now checks drift before anything else.
+## How sessions run (from 2026-11-03, round 8)
+Sessions are Claude Code sessions the desktop app starts from Fable's session on George's subscription
+(no API key): each in its own git worktree on a branch named after its brief, cut from master. Fable sends
+each session its brief, reads its final report, reviews, tests, merges and prepares the release; George runs
+`scripts/release.sh`. Before that (rounds 3–7) they ran through `scripts/session.sh` on API credit.
+TestFlight build 13 (0.4.0) is live on George's devices and not yet shared with friends; the next upload is
+0.4.1 (14). Production's CloudKit schema was deployed on 2026-11-02 (`reminderOffsetMinutes`); session 32
+adds a schema V3 (subtasks) that George must deploy before 0.4.1 ships. `scripts/release.sh` checks drift
+before anything else.
+
+## Round 8 ownership (2026-11-03; briefs 31–33 run in parallel)
+- `31-quick-add-language` (branch `quick-add-language`, High): HITListCore `DateExpression`, `QuickAddParser`
+  (+Disabled), `RecurrenceRule`, `TaskOrdering.priorityThenDue`, `FilterQuery.defaultSort`; `TaskActions`
+  roll-over/`setRecurrence`; `QuickAddPopout` suggestion row (removal); `QuickAddContext`; `QuickAddDraft`
+  `restoredDraft`; help text; their tests.
+- `32-subtasks-editor` (branch `subtasks-editor`, xhigh): `Models.swift`, `SchemaVersions.swift`, new
+  `SchemaV2Models.swift`, `SchemaTests`; `TaskActions` (all but the roll-over's time); `Deduplicator`;
+  `Snapshot`/`SnapshotBuilder`; `TaskPopout.swift` + new `Views/Popouts/Editor/`; `QuickAddPopout` option bar
+  + subtask lines; `QuickAddDraft` subtask lines; `TaskRow` meta line; subtask exclusion in `TaskOrdering` /
+  `FilterQuery`; `project.yml` (adding files only).
+- `33-feel-and-chrome` (branch `feel-and-chrome`, High): `SyncAppDelegate` Mac half, `HITListApp.swift`
+  window lines, new Mac window helper; `QuickAddEntry.swift`; `CompletionFeedback.swift`, new `TapHaptic.swift`;
+  `CompletionToast.swift`, `CompletionMotion.swift`; `PopoutHost` toast placement; list toast call sites;
+  one haptic call in `QuickAddPopout`; `HITTokens.swift`, `IslandMetrics`; `TaskRow` line height.
+- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, everything else. ROADMAP: only your row.
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
