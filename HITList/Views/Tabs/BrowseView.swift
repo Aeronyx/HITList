@@ -72,7 +72,7 @@ struct BrowseView: View {
 
     // MARK: - Sections
 
-    private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted } }
+    private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted && !$0.isSubtask } }
 
     private var sections: some View {
         let open = openTasks

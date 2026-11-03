@@ -500,6 +500,7 @@ struct TaskPopout: View {
         let day = task.dueDate ?? calendar.startOfDay(for: Date())
         task.dueDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
         task.hasDueTime = true
+        TaskActions.syncRepeatTime(of: task)
         save()
     }
 
@@ -507,6 +508,7 @@ struct TaskPopout: View {
         if let due = task.dueDate { task.dueDate = Calendar.current.startOfDay(for: due) }
         task.hasDueTime = false
         task.reminderOffsetMinutes = nil
+        TaskActions.syncRepeatTime(of: task)
         save()
     }
 
