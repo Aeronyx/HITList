@@ -232,7 +232,10 @@ struct QuickAddPopout: View {
             } else if extra == .description {
                 notesFocused = true
             } else if extra == .subtasks {
+                // Let SwiftUI finish resigning the title's field first: asking for the line's cursor in
+                // the same turn lost it to that resignation (seen in the iPhone 17 simulator, 0.4.1).
                 titleFocused = false
+                try? await Task.sleep(for: .milliseconds(80))
                 focusedLine = draft.subtaskLines.indices.last
             } else {
                 locationFocused = true

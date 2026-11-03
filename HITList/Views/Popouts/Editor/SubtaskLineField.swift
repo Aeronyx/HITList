@@ -36,6 +36,14 @@ import UIKit
 
 private final class BackspaceTextField: UITextField {
     var onDeleteEmpty: () -> Void = {}
+    /// The owner asked for the cursor; honoured as soon as the field is in a window (a line just
+    /// revealed is updated before it is).
+    var wantsFocus = false
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if wantsFocus, window != nil, !isFirstResponder { becomeFirstResponder() }
+    }
 
     override func deleteBackward() {
         if (text ?? "").isEmpty { onDeleteEmpty() } else { super.deleteBackward() }
@@ -77,8 +85,9 @@ private struct LineFieldRepresentable: UIViewRepresentable {
         field.attributedPlaceholder = NSAttributedString(string: placeholder,
                                                          attributes: [.foregroundColor: UIColor(placeholderColor)])
         field.onDeleteEmpty = { context.coordinator.parent.onDeleteEmpty() }
+        field.wantsFocus = isFocused
         if isFocused, !field.isFirstResponder {
-            // After this update: a field just inserted is not in a window yet.
+            // After this update: a field just inserted is not in a window yet (`didMoveToWindow` then takes it).
             DispatchQueue.main.async { if field.window != nil { field.becomeFirstResponder() } }
         }
     }
