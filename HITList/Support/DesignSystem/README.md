@@ -182,8 +182,7 @@ popouts.open(task)
   day, a project = that project, a label = that label, Inbox = undated in the Inbox.
 - The quick-add card, top to bottom: the title (placeholder "Task Name", `HITType.taskName`, Inter 20
   bold, `TokenHighlightField(bordered: false)` since the card is the frame), any revealed Description /
-  Location fields, the autocomplete row (only while it has suggestions), then one slim horizontally
-  scrolling bar of `HITChip(size: .compact)` chips (30 pt capsules; an untitled chip is a 30 pt icon
+  Location fields, then one slim horizontally scrolling bar of `HITChip(size: .compact)` chips (30 pt capsules; an untitled chip is a 30 pt icon
   circle): **"+"**, **Date** ("Today" in green from Today, "Date" elsewhere), **Priority**, **Reminder**
   ("11:00 AM · 15 min before"), **Group** (its name, or "Inbox"), then **Labels**, **Deadline**,
   **Repeat** once set or picked from "+". Last, the "Added ‘…’" note, × and the send button.

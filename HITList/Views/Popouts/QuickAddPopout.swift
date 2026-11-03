@@ -39,12 +39,10 @@ struct QuickAddPopout: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Says which card this is (`PopoutState.QuickAdd.id`), for the "don't lose it" store.
     @Environment(PopoutController.self) private var popouts: PopoutController?
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
 
     @State private var draft: QuickAddDraft
-    @State private var engine: AutocompleteEngine?
     @State private var openChip: Chip?
     @State private var errorMessage: String?
     @State private var added: String?
@@ -109,7 +107,6 @@ struct QuickAddPopout: View {
                     .transition(.opacity)
                     .accessibilityIdentifier("quickAddLocation")
             }
-            suggestionRow(parsed)
             optionBar(chips, parser: parser)
             if let errorMessage {
                 Text(errorMessage).font(HITType.caption).foregroundStyle(HITColor.danger)
@@ -121,7 +118,6 @@ struct QuickAddPopout: View {
         .pickerOverlay()
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.extras)
         .onAppear {
-            rebuildEngine()
             // The card's own draft, if it had one when the app was last alive (or this view was rebuilt).
             cardID = popouts?.state.quickAdd?.id
             if let cardID, let popouts, let stored = QuickAddDraftStore.draft(for: cardID, from: popouts.draftDefaults) {
@@ -142,9 +138,6 @@ struct QuickAddPopout: View {
         }
         .onChange(of: draft.hasContent) { _, has in onDraftChange(has) }
         .onChange(of: draft) { _, _ in storeDraft() }
-        .onChange(of: allTasks.count) { _, _ in rebuildEngine() }
-        .onChange(of: projects.count) { _, _ in rebuildEngine() }
-        .onChange(of: labels.count) { _, _ in rebuildEngine() }
         .onChange(of: openChip) { _, chip in
             // iPhone: the keyboard steps aside while a chip's popover needs the room, then comes back.
             #if os(iOS)
@@ -158,74 +151,6 @@ struct QuickAddPopout: View {
         #if os(macOS)
         .onExitCommand(perform: onClose)
         #endif
-    }
-
-    // MARK: Suggestions
-
-    private var currentEngine: AutocompleteEngine {
-        engine ?? AutocompleteEngine(tasks: allTasks, projects: projects.map(\.name), labels: labels.map(\.name))
-    }
-
-    /// Autocomplete for the word being typed, then "you usually add these" attributes for the title.
-    /// Only there while it has something to offer.
-    @ViewBuilder
-    private func suggestionRow(_ parsed: QuickAddResult) -> some View {
-        let suggestions = draft.text.isEmpty ? [] : currentEngine.suggestions(for: draft.text, limit: 5)
-        let autofill = autofill(parsed)
-        if !suggestions.isEmpty || autofill != nil {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: HITSpacing.xs + 2) {
-                    ForEach(suggestions, id: \.replacement) { s in
-                        Button { draft.apply(s); titleFocused = true } label: {
-                            Label(s.text, systemImage: icon(for: s.kind)).lineLimit(1)
-                        }
-                        .buttonStyle(SuggestionStyle())
-                    }
-                    if let autofill {
-                        Image(systemName: "sparkles").font(.system(size: 10, weight: .semibold)).foregroundStyle(Theme.secondaryText)
-                        if let p = autofill.projectName {
-                            Button("#\(p)") { appendToken(QuickAddTokens.project(p)) }.buttonStyle(SuggestionStyle())
-                        }
-                        ForEach(autofill.labelNames, id: \.self) { l in
-                            Button("@\(l)") { appendToken(QuickAddTokens.label(l)) }.buttonStyle(SuggestionStyle())
-                        }
-                        if let pr = autofill.priority {
-                            Button(pr.shortName) { appendToken(QuickAddTokens.priority(pr)) }.buttonStyle(SuggestionStyle())
-                        }
-                    }
-                }
-                .padding(.horizontal, Self.padding)
-            }
-            .padding(.horizontal, -Self.padding)
-            .frame(height: 24)
-            .transition(.opacity)
-        }
-    }
-
-    private func autofill(_ parsed: QuickAddResult) -> AutocompleteEngine.AttributeSuggestion? {
-        guard parsed.title.count >= 3, var s = currentEngine.attributeSuggestion(forTitle: parsed.title) else { return nil }
-        if parsed.projectName != nil || context.defaultProjectName != nil { s.projectName = nil }
-        s.labelNames.removeAll { name in parsed.labelNames.contains { $0.caseInsensitiveCompare(name) == .orderedSame } }
-        if parsed.priority != .p4 { s.priority = nil }
-        return s.isEmpty ? nil : s
-    }
-
-    private func icon(for kind: AutocompleteEngine.Suggestion.Kind) -> String {
-        switch kind {
-        case .title: return "clock.arrow.circlepath"
-        case .project: return "number"
-        case .label: return "tag"
-        case .keyword: return "calendar"
-        }
-    }
-
-    private func appendToken(_ token: String) {
-        draft.append(token)
-        titleFocused = true
-    }
-
-    private func rebuildEngine() {
-        engine = AutocompleteEngine(tasks: allTasks, projects: projects.map(\.name), labels: labels.map(\.name))
     }
 
     // MARK: The option bar
@@ -507,18 +432,5 @@ struct QuickAddPopout: View {
         } catch {
             errorMessage = error.localizedDescription
         }
-    }
-}
-
-/// A thin suggestion pill above the option bar.
-private struct SuggestionStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(HITType.caption)
-            .foregroundStyle(configuration.isPressed ? HITColor.text : Theme.secondaryText)
-            .padding(.horizontal, HITSpacing.s)
-            .frame(height: 22)
-            .background(Capsule().fill(Theme.elevated))
-            .contentShape(Capsule())
     }
 }
