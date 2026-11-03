@@ -76,7 +76,8 @@ struct InboxView: View {
             }
             .frame(maxHeight: .infinity)
             // iPhone: drawn by PopoutHost above the island and the "+".
-            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast)
+            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
+                             onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
         }
         .quickAddEntry(.inbox)
         .background(Theme.background)
