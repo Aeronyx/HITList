@@ -42,24 +42,32 @@ struct PopoutHost: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: usesPanel ? .bottomTrailing : .bottomLeading) {
                 // iPhone: every undo toast is drawn here, the lists' included (`completionToast`), over
-                // the shell and clear of the island and the oval "+". This overlay has the shell's own
-                // frame, so its bottom edge is the one the island stands on whatever the screen size; a
-                // toast inside a list sat under the chrome and depended on that list's frame (George
-                // still saw it hidden on his iPhone 16).
-                // (Each toast carries its own 12 pt bottom padding, which also spaces the two when both show.)
-                VStack(spacing: 0) {
+                // the shell, to the left of the oval "+" and centred on it (George, build 13: not above it).
+                // This overlay has the shell's own frame, so its bottom edge is the one the island stands
+                // on whatever the screen size; a toast inside a list sat under the chrome and depended on
+                // that list's frame. Mac and iPad: the popout's toast at the window's bottom-trailing
+                // corner, a row above where a list's own toast sits.
+                VStack(alignment: usesPanel ? .trailing : .leading, spacing: HITSpacing.s) {
                     if !usesPanel, let listToast = popouts.listToast {
-                        CompletionToast(message: listToast.message, onUndo: listToast.undo)
-                            .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
+                        CompletionToast(message: listToast.message, onUndo: listToast.undo) {
+                            // The list sees its toast go and clears it (`ListCompletionToast`).
+                            popouts.hideListToast(owner: listToast.owner)
+                        }
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                     }
                     if popouts.toast.isVisible {
-                        CompletionToast(message: popouts.toast.message) { popouts.undoCompletions(in: context) }
-                            .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
+                        CompletionToast(message: popouts.toast.message) {
+                            popouts.undoCompletions(in: context)
+                        } onDismiss: {
+                            _ = popouts.toast.takeAll()
+                        }
+                        .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                     }
                 }
-                .padding(.bottom, usesPanel ? 64 : Self.toastClearance)
+                .frame(maxWidth: usesPanel ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
+                .padding(usesPanel ? Self.panelToastInsets : Self.phoneToastInsets)
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -380,23 +388,40 @@ private struct TaskDeletionWatch: View {
 
 extension PopoutHost {
     /// iPhone: from the bottom of the shell (the top of the home indicator, where the island stands) to
-    /// the toast's frame: the island, the "+" above it, and a little air.
-    static var toastClearance: CGFloat { IslandMetrics.chromeHeight + HITSpacing.xs }
+    /// the toast's frame, which is centred on the "+" beside it.
+    static var toastClearance: CGFloat {
+        IslandMetrics.addButtonBottom + (FloatingAddButton.size.height - CompletionToast.height) / 2
+    }
+    /// iPhone: from the right edge of the shell to the toast, clear of the "+" and a gap.
+    static var toastTrailingClearance: CGFloat {
+        IslandMetrics.sideInset + FloatingAddButton.size.width + HITSpacing.m
+    }
+    static var phoneToastInsets: EdgeInsets {
+        EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: toastClearance, trailing: toastTrailingClearance)
+    }
+    /// Mac and iPad: the popout's toast sits one toast and a gap above a list's (`ListCompletionToast`).
+    static var panelToastInsets: EdgeInsets {
+        EdgeInsets(top: 0, leading: HITSpacing.l, bottom: HITSpacing.l + CompletionToast.height + HITSpacing.s,
+                   trailing: HITSpacing.l)
+    }
 }
 
 extension View {
-    /// A list's undo toast. Mac and iPad: at the bottom of the list, as before. iPhone: handed to
-    /// `PopoutHost` (`PopoutController.listToast`), which draws it above the island and the "+"; the list
-    /// itself sits under the shell's chrome, so a toast drawn inside it could end up hidden behind it.
-    /// `message` is nil while there is no toast.
-    func completionToast(_ message: String?, onUndo: @escaping () -> Void) -> some View {
-        modifier(ListCompletionToast(message: message, onUndo: onUndo))
+    /// A list's undo toast. Mac and iPad: at the bottom-trailing corner of the list (on iPad above the
+    /// floating "+", which `quickAddEntry` insets below it). iPhone: handed to `PopoutHost`
+    /// (`PopoutController.listToast`), which draws it beside the "+"; the list itself sits under the
+    /// shell's chrome, so a toast drawn inside it could end up hidden behind it. `message` is nil while
+    /// there is no toast; `onDismiss` clears it without undoing after a swipe.
+    func completionToast(_ message: String?, onUndo: @escaping () -> Void,
+                         onDismiss: @escaping () -> Void) -> some View {
+        modifier(ListCompletionToast(message: message, onUndo: onUndo, onDismiss: onDismiss))
     }
 }
 
 private struct ListCompletionToast: ViewModifier {
     let message: String?
     let onUndo: () -> Void
+    let onDismiss: () -> Void
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -411,14 +436,21 @@ private struct ListCompletionToast: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: .bottom) {
+            .overlay(alignment: .bottomTrailing) {
                 if !drawnByHost, let message {
-                    CompletionToast(message: message, onUndo: onUndo)
+                    CompletionToast(message: message, onUndo: onUndo, onDismiss: onDismiss)
+                        .frame(maxWidth: CompletionToast.panelMaxWidth, alignment: .trailing)
+                        .padding(HITSpacing.l)
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                 }
             }
             .onChange(of: message, initial: true) { _, _ in handOver() }
             .onChange(of: drawnByHost) { _, _ in handOver() }
+            // iPhone: the host took the toast down while this list still shows it, which only a swipe
+            // does (an expiry or an undo clears the message first).
+            .onChange(of: popouts.listToast?.owner) { old, new in
+                if drawnByHost, old == owner, new == nil, message != nil { onDismiss() }
+            }
             .onDisappear { popouts.hideListToast(owner: owner) }
     }
 

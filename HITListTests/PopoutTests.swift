@@ -1021,12 +1021,50 @@ final class PopoutTests: XCTestCase {
         XCTAssertNil(popouts.listToast)
     }
 
-    /// Every iPhone toast stands on the shell's bottom edge, above the island and the "+".
-    func testToastClearsTheIslandAndTheAddButton() {
-        XCTAssertEqual(PopoutHost.toastClearance,
-                       IslandMetrics.bottomGap + IslandMetrics.height + IslandMetrics.addButtonGap
-                       + FloatingAddButton.size.height + HITSpacing.xs)
-        XCTAssertGreaterThan(PopoutHost.toastClearance, IslandMetrics.chromeHeight)
+    /// Every iPhone toast sits to the left of the "+", centred on it (George, build 13: not above it),
+    /// above the island, and never reaches under the "+".
+    func testToastSitsBesideTheAddButton() {
+        let toastBottom = PopoutHost.toastClearance
+        let toastTop = toastBottom + CompletionToast.height
+        XCTAssertGreaterThan(toastBottom, IslandMetrics.bottomGap + IslandMetrics.height, "clear of the island")
+        XCTAssertEqual((toastBottom + toastTop) / 2,
+                       IslandMetrics.addButtonBottom + FloatingAddButton.size.height / 2, "centred on the +")
+        XCTAssertLessThan(toastTop, IslandMetrics.chromeHeight + 1, "beside the +, not above it")
+        XCTAssertGreaterThan(PopoutHost.toastTrailingClearance,
+                             IslandMetrics.sideInset + FloatingAddButton.size.width, "never under the +")
+        XCTAssertEqual(PopoutHost.phoneToastInsets.leading, IslandMetrics.sideInset)
+        // On the narrowest iPhone (375 pt) there is still room for a readable toast.
+        XCTAssertGreaterThan(375 - PopoutHost.phoneToastInsets.leading - PopoutHost.toastTrailingClearance, 200)
+    }
+
+    /// The whole pill is the button and taller than build 13's; Mac and iPad cap its width.
+    func testToastIsATallContentSizedPill() {
+        XCTAssertEqual(CompletionToast.height, 48)
+        XCTAssertEqual(CompletionToast.panelMaxWidth, 360)
+        XCTAssertGreaterThan(PopoutHost.panelToastInsets.bottom, CompletionToast.height + HITSpacing.l,
+                             "the popout's toast sits above a list's in the same corner")
+    }
+
+    /// Swipe down or sideways puts the toast away; a short or upward drag snaps back.
+    func testToastSwipe() {
+        typealias M = CompletionMotion
+        XCTAssertEqual(M.toastSwipe(translation: .init(width: 4, height: 10), predicted: .init(width: 6, height: 14)), .stay)
+        XCTAssertEqual(M.toastSwipe(translation: .init(width: 0, height: -60), predicted: .init(width: 0, height: -200)), .stay,
+                       "up never dismisses")
+        guard case .away(let down) = M.toastSwipe(translation: .init(width: 2, height: 30), predicted: .init(width: 2, height: 40))
+        else { return XCTFail("a drag down dismisses") }
+        XCTAssertGreaterThanOrEqual(down.height, M.flingDistance)
+        guard case .away(let flick) = M.toastSwipe(translation: .init(width: 0, height: 12), predicted: .init(width: 0, height: 90))
+        else { return XCTFail("a short flick down dismisses") }
+        XCTAssertGreaterThan(flick.height, 0)
+        guard case .away(let left) = M.toastSwipe(translation: .init(width: -70, height: 5), predicted: .init(width: -90, height: 5))
+        else { return XCTFail("a drag left dismisses") }
+        XCTAssertLessThan(left.width, -M.flingDistance)
+        guard case .away(let right) = M.toastSwipe(translation: .init(width: 30, height: 0), predicted: .init(width: 160, height: 0))
+        else { return XCTFail("a flick right dismisses") }
+        XCTAssertGreaterThan(right.width, M.flingDistance)
+        XCTAssertEqual(M.toastSwipe(translation: .init(width: 40, height: 0), predicted: .init(width: 50, height: 0)), .stay,
+                       "a short sideways drag snaps back")
     }
 
     func testACardWithOnlyADescriptionLocationOrDeadlineCountsAsContent() {

@@ -94,7 +94,8 @@ struct UpcomingView: View {
                 .onChange(of: jumpToTodayRequest) { _, _ in jump(to: today, schedule: schedule, proxy: proxy) }
             }
             // iPhone: drawn by PopoutHost above the island and the "+".
-            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast)
+            .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
+                             onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
         }
         .quickAddEntry(.upcoming)
         .background(Theme.background)
