@@ -54,18 +54,22 @@ public struct Snapshot: Codable, Equatable, Sendable {
         public var flipTarget: Int?
         public var flipCount: Int?
         public var flipPeriodStart: Date?
+        // Schema V3 (0.4.1). The task this one is a subtask of; nil for a task in its own right, and in
+        // every backup written before 0.4.1 (which had no subtasks).
+        public var parentID: UUID?
 
         public init(id: UUID, title: String, notes: String, priority: Int, dueDate: Date?, hasDueTime: Bool,
                     isCompleted: Bool, completedAt: Date?, recurrence: String?, sortOrder: Int, projectID: UUID?,
                     labelIDs: [UUID], createdAt: Date, updatedAt: Date,
                     reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
-                    flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil) {
+                    flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil, parentID: UUID? = nil) {
             self.id = id; self.title = title; self.notes = notes; self.priority = priority; self.dueDate = dueDate
             self.hasDueTime = hasDueTime; self.isCompleted = isCompleted; self.completedAt = completedAt
             self.recurrence = recurrence; self.sortOrder = sortOrder; self.projectID = projectID
             self.labelIDs = labelIDs; self.createdAt = createdAt; self.updatedAt = updatedAt
             self.reminderOffsetMinutes = reminderOffsetMinutes; self.deadline = deadline; self.locationName = locationName
             self.flipTarget = flipTarget; self.flipCount = flipCount; self.flipPeriodStart = flipPeriodStart
+            self.parentID = parentID
         }
 
         /// Whether this record carries the V2 fields (it was written by 0.3.6 or later).

@@ -2,17 +2,17 @@ import Foundation
 import SwiftData
 import HITListCore
 
-// The current schema version (V2). V1 is frozen in SchemaV1Models.swift.
+// The current schema version (V3). V1 and V2 are frozen in SchemaV1Models.swift and SchemaV2Models.swift.
 // CloudKit rules shaped these models: every attribute has a default or is optional,
 // every relationship is optional, and there are no unique constraints. The full rule list is at the
 // top of SchemaVersions.swift; read it before changing anything here.
 
-typealias Project = HITListSchemaV2.Project
-typealias TaskLabel = HITListSchemaV2.TaskLabel
-typealias TaskItem = HITListSchemaV2.TaskItem
-typealias SavedFilter = HITListSchemaV2.SavedFilter
+typealias Project = HITListSchemaV3.Project
+typealias TaskLabel = HITListSchemaV3.TaskLabel
+typealias TaskItem = HITListSchemaV3.TaskItem
+typealias SavedFilter = HITListSchemaV3.SavedFilter
 
-extension HITListSchemaV2 {
+extension HITListSchemaV3 {
     @Model
     final class Project {
         var id: UUID = UUID()
@@ -36,7 +36,7 @@ extension HITListSchemaV2 {
     }
 }
 
-extension HITListSchemaV2 {
+extension HITListSchemaV3 {
     @Model
     final class TaskLabel {
         var id: UUID = UUID()
@@ -58,7 +58,7 @@ extension HITListSchemaV2 {
     }
 }
 
-extension HITListSchemaV2 {
+extension HITListSchemaV3 {
     @Model
     final class TaskItem {
         var id: UUID = UUID()
@@ -92,6 +92,14 @@ extension HITListSchemaV2 {
         /// Flipboard: when the current charging interval began; nil until the interval's first flip.
         var flipPeriodStart: Date? = nil
 
+        // V3 (0.4.1): subtasks, one level deep, a checklist inside a task (brief 32). A subtask has a
+        // title and a done state and its parent's Group; no date, priority, labels or reminder of its own.
+        // Its place in the checklist is `sortOrder`. `TaskActions` keeps the one-level rule.
+        /// The task this one is a subtask of; nil for a task in its own right.
+        var parent: TaskItem? = nil
+        /// This task's checklist, in no particular order (`orderedSubtasks`). Deleting the task deletes them.
+        @Relationship(deleteRule: .cascade, inverse: \TaskItem.parent) var subtasks: [TaskItem]? = []
+
         init(title: String, notes: String = "", priority: Int = 4, dueDate: Date? = nil, hasDueTime: Bool = false,
              project: Project? = nil, labels: [TaskLabel] = [], recurrence: RecurrenceRule? = nil) {
             self.id = UUID()
@@ -119,6 +127,17 @@ extension HITListSchemaV2 {
 
         var labelList: [TaskLabel] { (labels ?? []).sorted { $0.name < $1.name } }
 
+        var isSubtask: Bool { parent != nil }
+
+        /// The checklist in order: `sortOrder`, then creation, then id, so every device shows the same order.
+        var orderedSubtasks: [TaskItem] {
+            (subtasks ?? []).sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+        }
+
         func touch() { updatedAt = Date() }
     }
 }
@@ -136,7 +155,7 @@ extension TaskItem: FilterableTask {
     var filterCreatedDate: Date? { createdAt }
 }
 
-extension HITListSchemaV2 {
+extension HITListSchemaV3 {
     @Model
     final class SavedFilter {
         var id: UUID = UUID()
@@ -163,7 +182,7 @@ extension HITListSchemaV2 {
 
 enum HITListSchema {
     /// The schema version the app runs on. Bump together with the typealiases at the top of this file.
-    static let current: any VersionedSchema.Type = HITListSchemaV2.self
+    static let current: any VersionedSchema.Type = HITListSchemaV3.self
     static var models: [any PersistentModel.Type] { current.models }
     static var schema: Schema { Schema(versionedSchema: current) }
     static let cloudKitContainerID = "iCloud.com.trammells.hitlist"

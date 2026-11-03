@@ -19,9 +19,13 @@ struct DedupeReport: Equatable, CustomStringConvertible {
     var projects = 0
     var labels = 0
     var filters = 0
+    /// Subtasks put back under the one-level rule or into their parent's Group (nothing deleted).
+    var subtasks = 0
 
     var removed: Int { projects + labels + filters }
-    var description: String { "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s)" }
+    var description: String {
+        "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s); repaired \(subtasks) subtask(s)"
+    }
 }
 
 /// Collapses duplicate projects, labels and saved filters. Runs at launch and after every successful
@@ -33,6 +37,9 @@ struct DedupeReport: Equatable, CustomStringConvertible {
 /// instead of deleting each other's survivors. Tasks are re-pointed to the survivor; the survivor
 /// keeps its own fields except `updatedAt`, which becomes the newest of the group. One pass leaves no
 /// duplicates, so a second pass changes nothing.
+///
+/// Then subtasks follow their parent (`repairSubtasks`): into the surviving Group, and back to one level
+/// when two devices' edits nested them deeper.
 @MainActor
 enum Deduplicator {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "dedupe")
@@ -51,6 +58,7 @@ enum Deduplicator {
             }
         }
         report.filters = try collapse(SavedFilter.self, in: context) { _, _ in }
+        report.subtasks = try repairSubtasks(in: context)
         if context.hasChanges { try context.save() }
         return report
     }
@@ -60,7 +68,7 @@ enum Deduplicator {
     static func runAndLog(in context: ModelContext, trigger: String) {
         do {
             let report = try run(in: context)
-            if report.removed > 0 {
+            if report.removed > 0 || report.subtasks > 0 {
                 log.notice("dedupe after \(trigger, privacy: .public): \(report.description, privacy: .public)")
             }
         } catch {
@@ -77,6 +85,34 @@ enum Deduplicator {
 
     static func nameKey(_ name: String) -> String {
         name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    /// Every subtask hangs from a task in its own right and sits in that task's Group. A subtask under a
+    /// subtask (one device nested B under A while another put C under B) moves up to the top task; a
+    /// subtask in another Group than its parent (its parent moved on another device) joins the parent's.
+    /// Returns the number of subtasks changed. Writes only what differs, so a second pass changes nothing.
+    static func repairSubtasks(in context: ModelContext) throws -> Int {
+        var repaired = 0
+        let subtasks = try context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.parent != nil }))
+        for task in subtasks {
+            guard var top = task.parent else { continue }
+            var seen: Set<PersistentIdentifier> = [task.persistentModelID]
+            while let next = top.parent, !seen.contains(top.persistentModelID) {
+                seen.insert(top.persistentModelID)
+                top = next
+            }
+            var changed = false
+            if top.persistentModelID == task.persistentModelID {
+                // A loop (A under B under A): the task stands on its own again.
+                task.parent = nil
+                changed = true
+            } else {
+                if task.parent?.persistentModelID != top.persistentModelID { task.parent = top; changed = true }
+                if task.project?.persistentModelID != top.project?.persistentModelID { task.project = top.project; changed = true }
+            }
+            if changed { repaired += 1 }
+        }
+        return repaired
     }
 
     /// Returns the number of records deleted.

@@ -127,6 +127,7 @@
 		B6F538BFE92844B8530ABA1B /* SyncLogFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1054B92FCF463385DF075D13 /* SyncLogFormat.swift */; };
 		B7E484557E8DFB00AFE65C32 /* KeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */; };
 		B88DCC9DB0698CADA1F3C03A /* ModelContainerFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7433290494D95848705DE1E /* ModelContainerFactory.swift */; };
+		B92AB305BFBFB3EA781F75D4 /* SchemaV2Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B924ED4BBBF0B1F428F97F6 /* SchemaV2Models.swift */; };
 		BC738007BD16DA260D7433B6 /* AppInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5F4EFFF4EA0167D686BDF26 /* AppInfoTests.swift */; };
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
 		C09211C77F010492FDC5B15F /* InboxText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD387014332B38314461584 /* InboxText.swift */; };
@@ -281,6 +282,7 @@
 		899E17FD4EC8DCCC11FD290D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		89FB7DFA88325495B19AB6A9 /* QuickAddDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddDraft.swift; sourceTree = "<group>"; };
 		8B28A9FE09B2F51E29D9AD05 /* FilterQueryField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterQueryField.swift; sourceTree = "<group>"; };
+		8B924ED4BBBF0B1F428F97F6 /* SchemaV2Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV2Models.swift; sourceTree = "<group>"; };
 		8BA460FC5A3651A663287601 /* DesignSystemGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemGallery.swift; sourceTree = "<group>"; };
 		8CD698A5F08AB63F32AEBED2 /* SyncRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRecovery.swift; sourceTree = "<group>"; };
 		8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListApp.swift; sourceTree = "<group>"; };
@@ -407,6 +409,7 @@
 				B7433290494D95848705DE1E /* ModelContainerFactory.swift */,
 				659074BDF3973B67D923222D /* Models.swift */,
 				3E3B7CF30F03F2BFC2FA0C00 /* SchemaV1Models.swift */,
+				8B924ED4BBBF0B1F428F97F6 /* SchemaV2Models.swift */,
 				8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */,
 			);
 			path = Models;
@@ -976,6 +979,7 @@
 				8657C41CB79A77C4A9253FBE /* RemindersSettingsSection.swift in Sources */,
 				6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */,
 				3823282AA34F38C7D2FBB63C /* SchemaV1Models.swift in Sources */,
+				B92AB305BFBFB3EA781F75D4 /* SchemaV2Models.swift in Sources */,
 				D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */,
 				DD66FCDE2203AFD42E38B1B3 /* ScreenMenu.swift in Sources */,
 				3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */,
