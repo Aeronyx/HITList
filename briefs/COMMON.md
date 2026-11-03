@@ -60,7 +60,14 @@ TestFlight build 13 (0.4.0) is live on George's devices and not yet shared with 
 adds a schema V3 (subtasks) that George must deploy before 0.4.1 ships. `scripts/release.sh` checks drift
 before anything else.
 
-## Round 8 ownership (2026-11-03; briefs 31–33 run in parallel)
+## Round 8 record (2026-11-03; sessions 31–33 merged for 0.4.1 (14))
+Three desktop-app sessions on the subscription, all merged by Fable the same day: 31 `quick-add-language`
+(High, 97 turns), 32 `subtasks-editor` (xhigh, 137 turns), 33 `feel-and-chrome` (High, 143 turns). Fable's
+follow-ups after the merge: the editor's time setters and `TaskActions.reschedule` call
+`TaskActions.syncRepeatTime(of:)`; sidebar and Browse counts skip sub-tasks. Schema V3 (`TaskItem.parent`)
+is in CloudKit Development; George deploys it to Production before 0.4.1 uploads.
+
+## Round 8 ownership (2026-11-03; briefs 31–33 ran in parallel; kept for the record)
 - `31-quick-add-language` (branch `quick-add-language`, High): HITListCore `DateExpression`, `QuickAddParser`
   (+Disabled), `RecurrenceRule`, `TaskOrdering.priorityThenDue`, `FilterQuery.defaultSort`; `TaskActions`
   roll-over/`setRecurrence`; `QuickAddPopout` suggestion row (removal); `QuickAddContext`; `QuickAddDraft`
