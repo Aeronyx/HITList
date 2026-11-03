@@ -315,11 +315,52 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(r.title, "Pills !1h")
     }
 
-    func testReminderWithoutATimeStillParses() {
-        let r = parser.parse("Pack tomorrow !1db")
-        XCTAssertEqual(r.reminderOffsetMinutes, 1440)
-        XCTAssertFalse(r.hasDueTime)
-        XCTAssertEqual(r.title, "Pack")
+    /// A reminder is relative to the due time; without one it means nothing (George, 2026-11-03), so it is
+    /// plain title text: no token, no highlight.
+    func testAReminderWithoutADueTimeIsPlainText() {
+        for text in ["Pack tomorrow !1db", "Pack !1hb", "Pack !15mb", "Pack !at", "Pack in 3 days !1hb"] {
+            let r = parser.parse(text)
+            XCTAssertNil(r.reminderOffsetMinutes, text)
+            XCTAssertEqual(r.title, text.replacingOccurrences(of: " tomorrow", with: "").replacingOccurrences(of: " in 3 days", with: ""), text)
+            XCTAssertFalse(r.tokens.contains { $0.kind == .reminder }, text)
+        }
+        // A time anywhere in the text, or a phrase that sets one, makes it count.
+        for text in ["Pack !1hb tomorrow 9am", "Pack tomorrow at 9 !1hb", "Call mum in 2 hours !15mb", "Pills every day 9pm !10m"] {
+            let r = parser.parse(text)
+            XCTAssertNotNil(r.reminderOffsetMinutes, text)
+            XCTAssertTrue(r.tokens.contains { $0.kind == .reminder }, text)
+        }
+        let r = parser.parse("Call mum in 2 hours !15mb")
+        XCTAssertEqual(r.title, "Call mum")
+        XCTAssertEqual(r.tokens.map(\.kind), [.date, .reminder])
+        XCTAssertEqual(r.reminderOffsetMinutes, 15)
+    }
+
+    func testSwitchingOffTheTimeTurnsTheReminderBackIntoText() {
+        let text = "Haircut tom 11am !15mb"
+        let time = parser.parse(text).tokens.first { $0.kind == .time }!
+        let r = parser.parse(text, disabling: [time.key])
+        XCTAssertNil(r.reminderOffsetMinutes)
+        XCTAssertEqual(r.title, "Haircut 11am !15mb")
+        XCTAssertEqual(r.tokens.map(\.kind), [.date])
+    }
+
+    func testOnlyTheDocumentedReminderFormsCount() {
+        let valid: [(String, Int)] = [
+            ("!1m", 1), ("!1mb", 1), ("!2h", 120), ("!2hb", 120), ("!3d", 4320), ("!3db", 4320), ("!0", 0), ("!at", 0),
+        ]
+        for (token, minutes) in valid {
+            XCTAssertEqual(ReminderOffset.minutes(fromToken: token), minutes, token)
+            XCTAssertEqual(parser.parse("Call 5pm \(token)").reminderOffsetMinutes, minutes, token)
+        }
+        for token in ["!", "!0mb", "!0m", "!0h", "!0hb", "!0d", "!0db", "!00", "!m", "!mb", "!h", "!d", "!b", "!xyz",
+                      "!15", "!15b", "!15x", "!15bm", "!15mbb", "!-5m", "!+5m", "!1.5h", "!at5", "!att", "!1 5m"] {
+            XCTAssertNil(ReminderOffset.minutes(fromToken: token), token)
+            let r = parser.parse("Fix sink 5pm \(token)")
+            XCTAssertNil(r.reminderOffsetMinutes, token)
+            XCTAssertEqual(r.title, "Fix sink \(token)", token)
+            XCTAssertEqual(r.tokens.map(\.kind), [.time], token)
+        }
     }
 
     func testReminderTokensRoundTrip() {
