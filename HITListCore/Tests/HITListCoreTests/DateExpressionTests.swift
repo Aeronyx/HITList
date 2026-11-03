@@ -139,4 +139,45 @@ final class DateExpressionTests: XCTestCase {
         let sunday = DateExpressionParser(calendar: Fixed.calendar, now: Fixed.date(2026, 10, 25, 10))
         XCTAssertEqual(sunday.spanWeekend(), DateSpan(start: Fixed.date(2026, 10, 24), end: Fixed.date(2026, 10, 26)))
     }
+
+    // MARK: Relative times (brief 31)
+
+    func testNumberWordsCountDays() {
+        let p = Fixed.dateParser
+        assertDate(p.parse("in three days")?.date, 2026, 10, 24)
+        assertDate(p.parse("in two weeks")?.date, 2026, 11, 4)
+        assertDate(p.parse("in twelve days")?.date, 2026, 11, 2)
+        assertDate(p.parse("in a month")?.date, 2026, 11, 21)
+        XCTAssertNil(p.parse("in thirteen days"), "one to twelve only")
+        XCTAssertNil(p.parse("three days"), "a number word without \"in\" is a title")
+    }
+
+    func testMinutesAndHoursAreAMomentFromNow() {
+        let p = Fixed.dateParser // 14:30
+        let cases: [(String, Int, Int)] = [
+            ("in 10 minutes", 14, 40), ("in 10 min", 14, 40), ("in 1 minute", 14, 31), ("in 45 mins", 15, 15),
+            ("in 2 hours", 16, 30), ("in two hours", 16, 30), ("in an hour", 15, 30), ("in a hour", 15, 30),
+            ("in one hour", 15, 30), ("in 3 hrs", 17, 30), ("in half an hour", 15, 0), ("in twelve hours", 26, 30),
+        ]
+        for (text, h, m) in cases {
+            let words = text.split(separator: " ").map(String.init)
+            guard let (date, n) = p.matchRelativeTime(in: words, at: 0) else { XCTFail(text); continue }
+            XCTAssertEqual(n, words.count, text)
+            XCTAssertEqual(date, Fixed.date(2026, 10, 21, 0, 0).addingTimeInterval(TimeInterval(h * 3600 + m * 60)), text)
+        }
+        for text in ["10 minutes", "in minutes", "in 0 minutes", "in 2 days", "in thirteen hours", "in -5 min",
+                     "in half a day", "in 99999999 hours"] {
+            let words = text.split(separator: " ").map(String.init)
+            XCTAssertNil(p.matchRelativeTime(in: words, at: 0), text)
+        }
+    }
+
+    func testRelativeTimesDropTheSeconds() {
+        let p = DateExpressionParser(calendar: Fixed.calendar, now: Fixed.date(2026, 10, 21, 14, 30).addingTimeInterval(42))
+        XCTAssertEqual(p.matchRelativeTime(in: ["in", "10", "minutes"], at: 0)?.0, Fixed.date(2026, 10, 21, 14, 40))
+    }
+
+    func testTheFilterLanguageDoesNotReadMinutesOrHours() {
+        XCTAssertNil(Fixed.dateParser.parse("in 2 hours"), "a filter date is a day; \"in N days\" is")
+    }
 }
