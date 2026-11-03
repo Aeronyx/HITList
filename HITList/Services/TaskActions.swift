@@ -248,9 +248,9 @@ enum TaskActions {
         }
     }
 
-    /// Developer aid: `HITList -seedSampleData` inserts one task with a project and a label so every
-    /// record type exists in CloudKit (needed once before deploying the schema to Production). Only into a
-    /// side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into
+    /// Developer aid: `HITList -seedSampleData` inserts one task with a project, a label and a sub-task so
+    /// every record type and field exists in CloudKit (needed once before deploying the schema to
+    /// Production). Only into a side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into
     /// HITList.store, from where the sample would reach every device.
     static func seedSampleDataIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
                                           storeName: String = ModelContainerFactory.storeName) {
@@ -266,6 +266,8 @@ enum TaskActions {
                                 dueDate: Calendar.current.startOfDay(for: Date()), project: project, labels: [label])
             context.insert(task)
             try context.save()
+            // Schema V3's `parent` reaches CloudKit only on a record that has one.
+            try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
         } catch {
             print("seedSampleData failed: \(error)")
         }

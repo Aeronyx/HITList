@@ -227,4 +227,15 @@ final class SubtaskTests: XCTestCase {
         XCTAssertEqual(TaskRow.checklistText(for: parent), "2/3")
         XCTAssertTrue(TaskRow.hasMeta(parent, hidesDay: true, showProject: false))
     }
+
+    // MARK: Schema push
+
+    /// `-seedSampleData` writes one record of every shape so each field reaches CloudKit Development before
+    /// the schema is deployed; V3's `CD_parent` needs a sub-task.
+    func testTheSchemaSampleIncludesASubtask() throws {
+        TaskActions.seedSampleDataIfRequested(in: context, arguments: ["HITList", "-seedSampleData"], storeName: "HITList-schema.store")
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        let sample = try XCTUnwrap(tasks.first { $0.parent == nil })
+        XCTAssertEqual(sample.orderedSubtasks.map(\.title), ["Sample sub-task (safe to delete)"])
+    }
 }
