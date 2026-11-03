@@ -28,14 +28,111 @@ final class PopoutTests: XCTestCase {
     // MARK: A title left blank (beta review)
 
     /// Clearing a task's title in its popout saved an empty title: a blank row in every list, though
-    /// quick add refuses to create one (`TaskActions.ActionError.emptyTitle`). Closing the popout now puts
-    /// back the title it opened with.
+    /// quick add refuses to create one (`TaskActions.ActionError.emptyTitle`). Confirm keeps the title.
     func testABlankTitleGetsTheOpeningTitleBack() {
-        XCTAssertEqual(TaskPopout.titleToKeep("", opening: "Buy milk"), "Buy milk")
-        XCTAssertEqual(TaskPopout.titleToKeep("  \n", opening: "Buy milk"), "Buy milk")
-        XCTAssertNil(TaskPopout.titleToKeep("Buy oat milk", opening: "Buy milk"), "a real edit stays")
-        XCTAssertNil(TaskPopout.titleToKeep("", opening: nil), "nothing to put back")
-        XCTAssertNil(TaskPopout.titleToKeep("", opening: "  "))
+        XCTAssertNil(TaskEditorDraft.titleToSave("", current: "Buy milk"))
+        XCTAssertNil(TaskEditorDraft.titleToSave("  \n", current: "Buy milk"))
+        XCTAssertEqual(TaskEditorDraft.titleToSave("Buy oat milk", current: "Buy milk"), "Buy oat milk", "a real edit stays")
+        XCTAssertNil(TaskEditorDraft.titleToSave("Buy milk", current: "Buy milk"), "unchanged")
+    }
+
+    // MARK: The task editor's Confirm (brief 32)
+
+    /// Kept for the length of a test: a context outlived by its container crashes.
+    private var editorContainer: ModelContainer?
+
+    private func editorTask(_ title: String = "Buy milk", notes: String = "") -> (TaskItem, ModelContext) {
+        let container = ModelContainerFactory.preview()
+        editorContainer = container
+        let context = container.mainContext
+        let task = TaskItem(title: title, notes: notes)
+        context.insert(task)
+        try? context.save()
+        return (task, context)
+    }
+
+    /// Typing waits for Confirm, which saves the title, the description and the open sub-task field in
+    /// one go (George: "I shouldn't have to tap twice to confirm an edit and close the task").
+    func testConfirmSavesEverythingTypedInOneGo() throws {
+        let (task, context) = editorTask()
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "Buy oat milk"
+        draft.notes = "The barista one\n"
+        draft.isAddingSubtask = true
+        draft.newSubtask = "  Check the date  "
+        XCTAssertEqual(task.title, "Buy milk", "nothing lands before Confirm")
+        XCTAssertTrue(draft.hasPendingChanges(for: task))
+
+        XCTAssertTrue(try draft.commit(to: task, in: context))
+        XCTAssertEqual(task.title, "Buy oat milk")
+        XCTAssertEqual(task.notes, "The barista one")
+        XCTAssertEqual(task.orderedSubtasks.map(\.title), ["Check the date"])
+        XCTAssertFalse(draft.hasPendingChanges(for: task))
+    }
+
+    func testConfirmWithNothingTypedChangesNothing() throws {
+        let (task, context) = editorTask(notes: "Semi-skimmed")
+        let stamp = task.updatedAt
+        var draft = TaskEditorDraft(task: task)
+        draft.isAddingSubtask = true
+        draft.newSubtask = "   "
+        XCTAssertFalse(draft.hasPendingChanges(for: task))
+        XCTAssertFalse(try draft.commit(to: task, in: context))
+        XCTAssertEqual(task.updatedAt, stamp)
+        XCTAssertEqual(task.subtasks ?? [], [])
+    }
+
+    func testConfirmKeepsTheTitleWhenItWasLeftBlankAndMakesItOneLine() throws {
+        let (task, context) = editorTask()
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "  \n "
+        try draft.commit(to: task, in: context)
+        XCTAssertEqual(task.title, "Buy milk")
+        draft.title = "Buy\nmilk and eggs " + String(repeating: "x", count: 600)
+        try draft.commit(to: task, in: context)
+        XCTAssertFalse(task.title.contains(where: \.isNewline))
+        XCTAssertEqual(task.title.count, TaskLimits.titleCharacters)
+    }
+
+    /// Return in the sub-task field adds it and keeps the field open, empty, for the next; Return on an
+    /// empty field closes it.
+    func testReturnInTheSubtaskFieldAddsAndKeepsItOpen() throws {
+        let (task, context) = editorTask("Pack for trip")
+        var draft = TaskEditorDraft(task: task)
+        draft.startAddingSubtask()
+        draft.newSubtask = "Socks"
+        XCTAssertTrue(try draft.submitNewSubtask(to: task, in: context))
+        XCTAssertTrue(draft.isAddingSubtask)
+        XCTAssertEqual(draft.newSubtask, "")
+        draft.newSubtask = "Charger"
+        try draft.submitNewSubtask(to: task, in: context)
+        XCTAssertEqual(task.orderedSubtasks.map(\.title), ["Socks", "Charger"])
+
+        XCTAssertFalse(try draft.submitNewSubtask(to: task, in: context))
+        XCTAssertFalse(draft.isAddingSubtask, "an empty Return closes the field")
+    }
+
+    /// A rename in place lands on Return (or when the field is left), and with Confirm; blank keeps the name.
+    func testRenamingASubtaskInPlace() throws {
+        let (task, context) = editorTask("Pack for trip")
+        let socks = try TaskActions.addSubtask("Socks", to: task, in: context)
+        var draft = TaskEditorDraft(task: task)
+        draft.beginRenaming(socks)
+        draft.renaming?.text = "Wool socks"
+        XCTAssertTrue(draft.hasPendingChanges(for: task))
+        draft.finishRenaming(in: context)
+        XCTAssertEqual(socks.title, "Wool socks")
+        XCTAssertNil(draft.renaming)
+
+        draft.beginRenaming(socks)
+        draft.renaming?.text = " "
+        draft.finishRenaming(in: context)
+        XCTAssertEqual(socks.title, "Wool socks", "a blank rename keeps the name")
+
+        draft.beginRenaming(socks)
+        draft.renaming?.text = "Hiking socks"
+        try draft.commit(to: task, in: context)
+        XCTAssertEqual(socks.title, "Hiking socks", "Confirm lands the rename being typed")
     }
 
     // MARK: Text → chips

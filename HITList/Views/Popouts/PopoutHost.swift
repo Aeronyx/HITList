@@ -118,18 +118,15 @@ struct PopoutHost: ViewModifier {
             }
             #endif
             .sheet(item: sheetTask) { task in
-                ScrollView {
-                    TaskPopout(task: task)
-                        .padding(.top, HITSpacing.s)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .environment(popouts)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-                .presentationBackground(Theme.surface)
-                .presentationCornerRadius(HITRadius.card + 10)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
+                // The editor scrolls its own middle and pins its Confirm footer (brief 32).
+                TaskPopout(task: task)
+                    .environment(popouts)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationBackground(Theme.background)
+                    .presentationCornerRadius(HITRadius.card + 10)
+                    .preferredColorScheme(.dark)
+                    .tint(Theme.accent)
             }
     }
 

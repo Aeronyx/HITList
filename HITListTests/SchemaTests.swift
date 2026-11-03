@@ -153,7 +153,9 @@ final class SchemaTests: XCTestCase {
     }
 
     func testDeletingATaskDeletesItsSubtasksButNotTheOtherWayRound() throws {
-        let context = ModelContext(ModelContainerFactory.preview())
+        let container = ModelContainerFactory.preview()
+        defer { withExtendedLifetime(container) {} }
+        let context = ModelContext(container)
         let trip = TaskItem(title: "Pack for trip")
         let socks = TaskItem(title: "Socks"), charger = TaskItem(title: "Charger")
         for task in [trip, socks, charger] { context.insert(task) }
