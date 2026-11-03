@@ -124,19 +124,18 @@ final class CompletionSoundPlayer: FeedbackOutput {
     }
 }
 
-/// `.success` notification haptic on iPhone; the trackpad's `.levelChange` tap on the Mac.
+/// iPhone: the one staccato bump (`TapHaptic`), the same as the "+" and the confirm pill. It was the
+/// `.success` notification haptic, which taps twice (George, build 13: "just one staccato bump, not
+/// two"). Mac: the trackpad's `.levelChange` tap.
 final class CompletionHaptic: FeedbackOutput {
     #if os(iOS)
-    private var generator: UINotificationFeedbackGenerator?
-
     func prepare() {
-        if generator == nil { generator = UINotificationFeedbackGenerator() }
-        generator?.prepare()
+        TapHaptic.prepare()
     }
 
     func play() {
-        prepare()
-        generator?.notificationOccurred(.success)
+        // `CompletionFeedback` has already checked the haptics toggle.
+        TapHaptic.bump()
     }
     #else
     func prepare() {}
