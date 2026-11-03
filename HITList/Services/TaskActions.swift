@@ -54,7 +54,14 @@ enum TaskActions {
     /// A timed task's rule likewise takes the task's time on its first roll, and every roll rebuilds the
     /// next due time from the rule's hour and minute (a 2:30 repeat the spring change pushed to 3:00 is back
     /// at 2:30 the next day); an all-day task's rule has no time.
+    ///
+    /// Subtasks (brief 32) follow: completing a task completes its open subtasks at the same moment, and
+    /// un-completing it (the toast's Undo, the Completed list) reopens exactly those, by that shared
+    /// `completedAt`; ones ticked by hand earlier stay ticked. A repeating task's next occurrence starts
+    /// with its checklist open. Completing the last subtask leaves the parent alone (Todoist's rule).
     static func toggleCompletion(_ task: TaskItem, in context: ModelContext) {
+        let wasCompleted = task.isCompleted
+        let closedAt = task.completedAt
         if task.isCompleted {
             task.isCompleted = false
             task.completedAt = nil
@@ -68,6 +75,107 @@ enum TaskActions {
             task.completedAt = Date()
         }
         task.touch()
+        followParent(task, wasCompleted: wasCompleted, closedAt: closedAt)
+        try? context.save()
+    }
+
+    /// `toggleCompletion`'s checklist half, kept out of its branches (the roll-over's time handling is
+    /// brief 31's).
+    private static func followParent(_ task: TaskItem, wasCompleted: Bool, closedAt: Date?) {
+        for subtask in task.subtasks ?? [] {
+            let reopen: Bool
+            if wasCompleted {
+                reopen = subtask.isCompleted && closedAt != nil && subtask.completedAt == closedAt
+            } else if task.isCompleted {
+                if !subtask.isCompleted {
+                    subtask.isCompleted = true
+                    subtask.completedAt = task.completedAt
+                    subtask.touch()
+                }
+                continue
+            } else {
+                reopen = subtask.isCompleted  // rolled over to its next occurrence
+            }
+            if reopen {
+                subtask.isCompleted = false
+                subtask.completedAt = nil
+                subtask.touch()
+            }
+        }
+    }
+
+    // MARK: Subtasks (brief 32)
+
+    /// Adds a subtask at the end of `parent`'s checklist: the title (trimmed to one line), the parent's
+    /// Group, nothing else. Given a subtask as the parent, it goes to that subtask's own parent (one level).
+    @discardableResult
+    static func addSubtask(_ title: String, to parent: TaskItem, in context: ModelContext) throws -> TaskItem {
+        let title = TaskLimits.clampedTitle(TaskLimits.singleLine(title))
+        guard !title.isEmpty else { throw ActionError.emptyTitle }
+        let parent = parent.parent ?? parent
+        let subtask = TaskItem(title: title, project: parent.project)
+        subtask.sortOrder = ((parent.subtasks ?? []).map(\.sortOrder).max() ?? -1) + 1
+        context.insert(subtask)
+        subtask.parent = parent
+        parent.touch()
+        try context.save()
+        return subtask
+    }
+
+    /// The quick-add card's sub-task lines, in order, after its task. Blank titles are skipped.
+    static func addSubtasks(_ titles: [String], to parent: TaskItem, in context: ModelContext) throws {
+        for title in titles where !TaskLimits.clampedTitle(TaskLimits.singleLine(title)).isEmpty {
+            try addSubtask(title, to: parent, in: context)
+        }
+    }
+
+    /// The one-level rule: only a task in its own right takes subtasks, and only a task without subtasks
+    /// becomes one.
+    static func canNest(_ task: TaskItem, under parent: TaskItem) -> Bool {
+        task.persistentModelID != parent.persistentModelID && parent.parent == nil && (task.subtasks ?? []).isEmpty
+    }
+
+    /// Makes `task` the last subtask of `parent`, dropping what subtasks don't have (date, time, repeat,
+    /// reminder, deadline, priority, labels) and taking the parent's Group. False, and nothing changed,
+    /// when the one-level rule forbids it.
+    @discardableResult
+    static func makeSubtask(_ task: TaskItem, of parent: TaskItem, in context: ModelContext) -> Bool {
+        guard canNest(task, under: parent) else { return false }
+        task.sortOrder = ((parent.subtasks ?? []).map(\.sortOrder).max() ?? -1) + 1
+        task.parent = parent
+        task.project = parent.project
+        task.dueDate = nil
+        task.hasDueTime = false
+        task.recurrence = nil
+        task.reminderOffsetMinutes = nil
+        task.deadline = nil
+        task.priority = Priority.p4.rawValue
+        task.labels = []
+        task.touch()
+        try? context.save()
+        return true
+    }
+
+    /// Moves a task to a Group (nil: the Inbox), its checklist with it.
+    static func setProject(_ project: Project?, of task: TaskItem, in context: ModelContext) {
+        task.project = project
+        for subtask in task.subtasks ?? [] where subtask.project?.persistentModelID != project?.persistentModelID {
+            subtask.project = project
+            subtask.touch()
+        }
+        task.touch()
+        try? context.save()
+    }
+
+    /// Puts a subtask at `index` in its parent's checklist (clamped) and numbers the checklist 0, 1, 2…
+    static func moveSubtask(_ subtask: TaskItem, to index: Int, in context: ModelContext) {
+        guard let parent = subtask.parent else { return }
+        var order = parent.orderedSubtasks.filter { $0.persistentModelID != subtask.persistentModelID }
+        order.insert(subtask, at: max(0, min(index, order.count)))
+        for (i, item) in order.enumerated() where item.sortOrder != i {
+            item.sortOrder = i
+            item.touch()
+        }
         try? context.save()
     }
 
@@ -154,9 +262,9 @@ enum TaskActions {
         }
     }
 
-    /// Developer aid: `HITList -seedSampleData` inserts one task with a project and a label so every
-    /// record type exists in CloudKit (needed once before deploying the schema to Production). Only into a
-    /// side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into
+    /// Developer aid: `HITList -seedSampleData` inserts one task with a project, a label and a sub-task so
+    /// every record type and field exists in CloudKit (needed once before deploying the schema to
+    /// Production). Only into a side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into
     /// HITList.store, from where the sample would reach every device.
     static func seedSampleDataIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
                                           storeName: String = ModelContainerFactory.storeName) {
@@ -172,6 +280,8 @@ enum TaskActions {
                                 dueDate: Calendar.current.startOfDay(for: Date()), project: project, labels: [label])
             context.insert(task)
             try context.save()
+            // Schema V3's `parent` reaches CloudKit only on a record that has one.
+            try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
         } catch {
             print("seedSampleData failed: \(error)")
         }

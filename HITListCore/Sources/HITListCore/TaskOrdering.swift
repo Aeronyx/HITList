@@ -9,7 +9,15 @@ import Foundation
 ///   inside a Group is a note: it shows only when browsing that Group.
 /// - Today is two sections, overdue and today, and never shows undated or future tasks.
 /// - Browse search looks through titles and notes of every task, completed ones too.
+/// - Subtasks (brief 32) are never rows of their own anywhere: they live inside their parent.
 public enum TaskOrdering {
+
+    // MARK: - Subtasks
+
+    /// `tasks` without the subtasks: every list starts from these.
+    public static func topLevel<T: FilterableTask>(_ tasks: [T]) -> [T] {
+        tasks.filter { !$0.filterIsSubtask }
+    }
 
     // MARK: - Order
 
@@ -44,7 +52,8 @@ public enum TaskOrdering {
     /// Whether a task belongs in the Inbox, whatever its completion: it has a date (in any Group), or
     /// it has no Group.
     public static func isInInbox<T: FilterableTask>(_ task: T) -> Bool {
-        task.filterDueDate != nil || task.filterProjectName == nil
+        guard !task.filterIsSubtask else { return false }
+        return task.filterDueDate != nil || task.filterProjectName == nil
     }
 
     /// The Inbox's tasks in list order: open ones, plus completed ones when `includeCompleted`.
@@ -81,7 +90,7 @@ public enum TaskOrdering {
     public static func today<T: FilterableTask>(_ tasks: [T], now: Date, calendar: Calendar = .current,
                                                 includeCompleted: Bool = false) -> TodayList<T> {
         var overdue: [T] = [], today: [T] = []
-        for task in tasks {
+        for task in topLevel(tasks) {
             switch todaySection(for: task.filterDueDate, now: now, calendar: calendar) {
             case .overdue? where !task.filterIsCompleted: overdue.append(task)
             case .today? where includeCompleted || !task.filterIsCompleted: today.append(task)
@@ -94,6 +103,7 @@ public enum TaskOrdering {
     /// Whether a task is on the Today screen (the membership half of `today(_:now:)`).
     public static func isInToday<T: FilterableTask>(_ task: T, now: Date, calendar: Calendar = .current,
                                                     includeCompleted: Bool = false) -> Bool {
+        guard !task.filterIsSubtask else { return false }
         switch todaySection(for: task.filterDueDate, now: now, calendar: calendar) {
         case .overdue?: return !task.filterIsCompleted
         case .today?: return includeCompleted || !task.filterIsCompleted
@@ -109,7 +119,7 @@ public enum TaskOrdering {
     public static func search<T: FilterableTask>(_ tasks: [T], text: String) -> [T] {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
-        let matches = tasks.filter { task in
+        let matches = topLevel(tasks).filter { task in
             words.allSatisfy { word in
                 task.filterTitle.range(of: word, options: [.caseInsensitive, .diacriticInsensitive]) != nil
                     || task.filterNotes.range(of: word, options: [.caseInsensitive, .diacriticInsensitive]) != nil

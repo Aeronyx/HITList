@@ -27,7 +27,8 @@ enum SnapshotBuilder {
                       isCompleted: $0.isCompleted, completedAt: $0.completedAt, recurrence: $0.recurrence, sortOrder: $0.sortOrder,
                       projectID: $0.project?.id, labelIDs: ($0.labels ?? []).map(\.id), createdAt: $0.createdAt, updatedAt: $0.updatedAt,
                       reminderOffsetMinutes: $0.reminderOffsetMinutes, deadline: $0.deadline, locationName: $0.locationName,
-                      flipTarget: $0.flipTarget, flipCount: $0.flipCount, flipPeriodStart: $0.flipPeriodStart)
+                      flipTarget: $0.flipTarget, flipCount: $0.flipCount, flipPeriodStart: $0.flipPeriodStart,
+                      parentID: $0.parent?.id)
             },
             filters: filters.map { .init(id: $0.id, name: $0.name, query: $0.query, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
         )
@@ -94,6 +95,7 @@ enum SnapshotBuilder {
 
         var tasksByID: [UUID: TaskItem] = [:]
         for t in try context.fetch(FetchDescriptor<TaskItem>()) { tasksByID[t.id] = t }
+        var restoredTasks: [(record: Snapshot.TaskRecord, task: TaskItem)] = []
         for r in snapshot.tasks {
             let target: TaskItem
             if let existing = tasksByID[r.id] {
@@ -105,8 +107,10 @@ enum SnapshotBuilder {
                 target.id = r.id
                 target.createdAt = r.createdAt
                 context.insert(target)
+                tasksByID[r.id] = target
                 summary.inserted += 1
             }
+            restoredTasks.append((r, target))
             target.title = r.title; target.notes = r.notes; target.priority = r.priority
             target.dueDate = r.dueDate; target.hasDueTime = r.hasDueTime
             target.isCompleted = r.isCompleted; target.completedAt = r.completedAt
@@ -124,6 +128,22 @@ enum SnapshotBuilder {
                 target.flipPeriodStart = r.flipPeriodStart
             }
             target.updatedAt = r.updatedAt
+        }
+        // Subtasks once every task exists (a child may come before its parent). One level only: a parent
+        // that is itself a subtask in the backup (a damaged one) hands its children to its own parent.
+        let parentIDs = Dictionary(snapshot.tasks.map { ($0.id, $0.parentID) }, uniquingKeysWith: { first, _ in first })
+        for (record, task) in restoredTasks {
+            var parentID = record.parentID
+            var hops = 0
+            while let id = parentID, let next = parentIDs[id] ?? nil, hops < snapshot.tasks.count {
+                parentID = next
+                hops += 1
+            }
+            var parent = parentID.flatMap { tasksByID[$0] }
+            // A parent the backup doesn't hold, which is a subtask here: its own parent instead.
+            let parentInBackup = parentID.map { parentIDs.keys.contains($0) } ?? false
+            if !parentInBackup, let grand = parent?.parent { parent = grand }
+            task.parent = parent === task ? nil : parent
         }
 
         try context.save()
