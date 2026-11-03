@@ -7,7 +7,8 @@ struct SidebarView: View {
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
-    @Query(filter: #Predicate<TaskItem> { !$0.isCompleted }) private var openTasks: [TaskItem]
+    // Sub-tasks live inside their parent, so the counts skip them (brief 32).
+    @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.parent == nil }) private var openTasks: [TaskItem]
 
     @State private var editingFilter: SavedFilter?
     @State private var creatingFilter = false

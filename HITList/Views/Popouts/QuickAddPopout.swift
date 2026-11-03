@@ -6,7 +6,7 @@ import HITListCore
 /// over a dimmed screen (`PopoutHost`), on the Mac the 560 pt panel near the top of the window, or
 /// expanded in place of a list's "Add task" row.
 ///
-/// "Task Name" in `HITType.taskName` (Inter bold, a step above `body`: 20 pt on iPhone), then one slim horizontally scrolling bar of
+/// "Task Name" in `HITType.taskName` (Inter bold, a step above `body`: 19 pt on iPhone), then one slim horizontally scrolling bar of
 /// compact chips: "+" (Description, Labels, Location, Deadline, Repeat, Subtasks), Date, Priority, Reminder,
 /// Group, then Labels, Deadline and Repeat once they are set or picked from "+". Type naturally
 /// ("Haircut tom 11am p1 !15mb"); tokens light up and the chips follow. Picking a chip writes its token

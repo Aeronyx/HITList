@@ -209,6 +209,7 @@ enum TaskActions {
             task.dueDate = date
             if date == nil { task.hasDueTime = false }
         }
+        syncRepeatTime(of: task)
         task.touch()
         try? context.save()
     }

@@ -214,8 +214,9 @@ Not scheduled. Each becomes a roadmap item when picked up.
 - 2026-10-26: `com.apple.developer.icloud-container-development-container-identifiers` must never be
   in the entitlements; App Store Connect rejects uploads carrying it (errors 90045 / 90285).
 - 2026-10-28: Filter language skips Todoist's collaboration terms (`assigned`, `added by`, `shared`,
-  `workspace`), `subtask`, `/sections` and `deadline:`: HITList is single-user and has no sub-tasks,
-  sections or deadlines, so they get explanatory errors instead. `,` stays an AND (one list per view)
+  `workspace`), `subtask`, `/sections` and `deadline:`: HITList is single-user and had no sub-tasks,
+  sections or deadlines, so they get explanatory errors instead (sub-tasks arrived in 0.4.1, brief 32,
+  but never as rows of their own, so the filter term stays out). `,` stays an AND (one list per view)
   rather than Todoist's "separate lists".
 - 2026-10-31 (round 3): "Group" is the user-facing word for Project; the model and `#name`/`project:` syntax
   stay. Inbox = every dated task plus undated tasks with no Group; undated tasks in a Group show only inside
