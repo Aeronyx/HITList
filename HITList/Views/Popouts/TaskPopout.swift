@@ -441,9 +441,10 @@ struct TaskPopout: View {
         rescheduleNotifications()
     }
 
+    /// The checklist moves with the task (`TaskActions.setProject`).
     private func setProject(_ project: Project?) {
-        task.project = project
-        save()
+        TaskActions.setProject(project, of: task, in: context)
+        rescheduleNotifications()
     }
 
     private func toggleLabel(_ name: String) {
