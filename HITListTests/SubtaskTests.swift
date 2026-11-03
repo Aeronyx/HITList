@@ -211,4 +211,20 @@ final class SubtaskTests: XCTestCase {
         XCTAssertEqual(try FilterQuery("no date").apply(to: tasks).map(\.title), ["Pack for trip"])
         XCTAssertEqual(TaskOrdering.search(tasks, text: "socks").count, 0)
     }
+
+    // MARK: Rows
+
+    /// A parent's row says how far through its checklist it is ("2/3" by a checklist glyph); a task
+    /// without sub-tasks says nothing, and the count alone gives an undated task a second line.
+    func testTheRowShowsTheChecklistCount() throws {
+        let plain = try task("Plain")
+        XCTAssertNil(TaskRow.checklistText(for: plain))
+        XCTAssertFalse(TaskRow.hasMeta(plain, hidesDay: false, showProject: true))
+
+        let parent = try trip()
+        TaskActions.toggleCompletion(parent.orderedSubtasks[0], in: context)
+        TaskActions.toggleCompletion(parent.orderedSubtasks[1], in: context)
+        XCTAssertEqual(TaskRow.checklistText(for: parent), "2/3")
+        XCTAssertTrue(TaskRow.hasMeta(parent, hidesDay: true, showProject: false))
+    }
 }

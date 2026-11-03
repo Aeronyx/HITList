@@ -92,7 +92,7 @@ struct TaskRow: View {
                 HStack(spacing: HITSpacing.s + 2) {
                     // The date, labels and note icon keep their full width; a long Group name truncates.
                     HStack(spacing: HITSpacing.s + 2) {
-                        if hasMeta {
+                        if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject) {
                             if let due = task.dueDate {
                                 let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
                                 if !hidesDay {
@@ -104,6 +104,11 @@ struct TaskRow: View {
                                     MetaItem(nil, systemImage: "repeat", tint: tint)
                                         .accessibilityLabel("Repeats")
                                 }
+                            }
+                            // Its checklist (brief 32): "2/5" by a checklist glyph, nothing without one.
+                            if let checklist = Self.checklistText(for: task) {
+                                MetaItem(checklist, systemImage: "checklist", tint: Theme.secondaryText)
+                                    .accessibilityLabel("\(checklist.replacingOccurrences(of: "/", with: " of ")) sub-tasks done")
                             }
                             ForEach(task.labelList) { label in
                                 MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
@@ -159,10 +164,15 @@ struct TaskRow: View {
     }
 
     /// Whether the second line has anything to show (an all-day task under Today's header may not).
-    private var hasMeta: Bool {
+    static func hasMeta(_ task: TaskItem, hidesDay: Bool, showProject: Bool) -> Bool {
         if let _ = task.dueDate, !hidesDay || task.hasDueTime || task.recurrence != nil { return true }
         if showProject, task.project != nil { return true }
-        return !task.labelList.isEmpty
+        return !task.labelList.isEmpty || task.subtaskProgress != nil
+    }
+
+    /// "2/5" for a task with sub-tasks; nil without.
+    static func checklistText(for task: TaskItem) -> String? {
+        task.subtaskProgress?.compactText
     }
 
     /// The title's strike-through, drawn on its own so it can sweep left to right when the task is
