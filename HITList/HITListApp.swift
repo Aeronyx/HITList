@@ -52,6 +52,10 @@ struct HITListApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .font(HITType.body)
+                #if os(macOS)
+                // Closing the window hides it, so the Dock icon brings it back at once (`MacWindowKeeper`).
+                .keepsWindowOnClose()
+                #endif
                 .onChange(of: scenePhase) { _, phase in
                     if !isTesting { CloudSyncMonitor.shared.sceneChanged(to: phase) }
                     guard phase == .active else { return }

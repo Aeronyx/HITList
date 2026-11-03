@@ -43,7 +43,7 @@ struct TaskRow: View {
     private let lineHeight: CGFloat = 20
     private let checkSize: CGFloat = 18
     #else
-    private let lineHeight: CGFloat = 22
+    private let lineHeight: CGFloat = 21
     private let checkSize: CGFloat = 22
     #endif
 
@@ -72,7 +72,8 @@ struct TaskRow: View {
                 // A long title wraps in full (titles are capped at `TaskLimits.titleCharacters`); the
                 // checkbox stays on its first line.
                 Text(task.title)
-                    .font(HITType.body)
+                    .font(HITType.taskTitle)
+                    .tracking(HITType.taskTitleTracking)
                     .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
                     .overlay { strikeLine }
                     .animation(CompletionMotion.strike, value: isChecked)

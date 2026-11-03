@@ -163,5 +163,17 @@ final class SyncAppDelegate: NSObject, NSApplicationDelegate {
         guard !SyncAppDelegateSupport.isTesting else { return }
         CloudSyncMonitor.shared.pushReceived(userInfo, appState: application.isActive ? "active" : "inactive")
     }
+
+    /// A Dock click with no window on screen: the window closed earlier comes back as it was
+    /// (`MacWindowKeeper`) instead of SwiftUI building a new one.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        flag || !MacWindowKeeper.shared.reopen()
+    }
+
+    /// ⌘Tab (or any other way back) with the window put away: show it, as a Dock click would.
+    func applicationDidBecomeActive(_ notification: Notification) {
+        guard !NSApp.windows.contains(where: { $0.isVisible && $0.styleMask.contains(.titled) }) else { return }
+        MacWindowKeeper.shared.reopen()
+    }
 }
 #endif

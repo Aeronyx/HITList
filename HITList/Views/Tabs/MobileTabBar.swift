@@ -43,9 +43,11 @@ enum IslandMetrics {
     static var pillRadius: CGFloat { cornerRadius - pillInset }
     /// Between the top of the island and the bottom of the "+".
     static let addButtonGap: CGFloat = HITSpacing.m
-    /// Everything the shell adds at the bottom, from the home indicator to the top of the "+"; the toast
-    /// (`PopoutHost`) rises above it.
-    static var chromeHeight: CGFloat { bottomGap + height + addButtonGap + FloatingAddButton.size.height }
+    /// From the home indicator to the bottom of the "+"; the undo toast (`PopoutHost`) sits to its left,
+    /// centred on it.
+    static var addButtonBottom: CGFloat { bottomGap + height + addButtonGap }
+    /// Everything the shell adds at the bottom, from the home indicator to the top of the "+".
+    static var chromeHeight: CGFloat { addButtonBottom + FloatingAddButton.size.height }
 }
 
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
