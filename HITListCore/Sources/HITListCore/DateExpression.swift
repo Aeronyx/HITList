@@ -186,6 +186,25 @@ public struct DateExpressionParser: Sendable {
     /// turned "in 99999999999 days" into a date no formatter can print).
     static let relativeCounts = -9999...9999
 
+    /// "a", "an" and the number words one to twelve, then digits: the count in "in two hours".
+    static let numberWords: [String: Int] = [
+        "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+        "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+    ]
+
+    static func count(_ word: String) -> Int? {
+        let w = normalize(word)
+        return numberWords[w] ?? Int(w)
+    }
+
+    static func unitMinutes(_ word: String) -> Int? {
+        switch normalize(word) {
+        case "minute", "minutes", "min", "mins": return 1
+        case "hour", "hours", "hr", "hrs": return 60
+        default: return nil
+        }
+    }
+
     static func unitDays(_ word: String) -> (component: Calendar.Component, multiplier: Int)? {
         switch normalize(word) {
         case "day", "days", "d": return (.day, 1)
@@ -256,8 +275,7 @@ public struct DateExpressionParser: Sendable {
             return nil
         case "in":
             guard let n = next, let n2 = next2 else { return nil }
-            let count: Int? = (n == "a" || n == "an" || n == "one") ? 1 : Int(n)
-            if let count, Self.relativeCounts.contains(count), let unit = Self.unitDays(n2) {
+            if let count = Self.count(n), Self.relativeCounts.contains(count), let unit = Self.unitDays(n2) {
                 return (d(calendar.date(byAdding: unit.component, value: count, to: today)!), 3)
             }
             return nil
@@ -300,6 +318,27 @@ public struct DateExpressionParser: Sendable {
         if let date = parseSlash(w) { return (d(date), 1) }
 
         return nil
+    }
+
+    /// "in 10 minutes", "in 10 min", "in two hours", "in an hour", "in half an hour": the moment that far
+    /// from `now`, to the minute (the seconds dropped), and the words consumed. Only after "in": "10
+    /// minutes" alone is a title. Quick add only; a filter's date is a day ("in 3 days" is `matchDate`'s).
+    public func matchRelativeTime(in words: [String], at i: Int) -> (Date, Int)? {
+        guard i + 2 < words.count, Self.normalize(words[i]) == "in" else { return nil }
+        let n = Self.normalize(words[i + 1])
+        var minutes: Int
+        var consumed = 3
+        if n == "half" {
+            guard i + 3 < words.count, ["a", "an"].contains(Self.normalize(words[i + 2])),
+                  Self.unitMinutes(words[i + 3]) == 60 else { return nil }
+            minutes = 30; consumed = 4
+        } else {
+            guard let count = Self.count(n), (1...Self.relativeCounts.upperBound).contains(count),
+                  let unit = Self.unitMinutes(words[i + 2]) else { return nil }
+            minutes = count * unit
+        }
+        let minute = calendar.dateInterval(of: .minute, for: now)?.start ?? now
+        return (minute.addingTimeInterval(TimeInterval(minutes * 60)), consumed)
     }
 
     /// Attempts to match a time phrase at `words[i]`. Returns hour, minute, and words consumed.

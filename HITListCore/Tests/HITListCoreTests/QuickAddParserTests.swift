@@ -207,6 +207,69 @@ final class QuickAddParserTests: XCTestCase {
         }
     }
 
+    // MARK: Relative times (brief 31)
+
+    func testInTwoHoursSetsADueTimeFromNow() {
+        let r = parser.parse("Call mum in 2 hours")
+        XCTAssertEqual(r.title, "Call mum")
+        assertDate(r.dueDate, 2026, 10, 21, 16, 30)
+        XCTAssertTrue(r.hasDueTime)
+        XCTAssertEqual(r.tokens.map(\.kind), [.date])
+        XCTAssertEqual(r.tokens.map(\.text), ["in 2 hours"])
+        for text in ["Call mum in two hours", "Call mum in 120 minutes", "Call mum in 120 min"] {
+            assertDate(parser.parse(text).dueDate, 2026, 10, 21, 16, 30)
+            XCTAssertEqual(parser.parse(text).title, "Call mum", text)
+        }
+        let half = parser.parse("Tea in half an hour")
+        XCTAssertEqual(half.tokens.map(\.text), ["in half an hour"])
+        assertDate(half.dueDate, 2026, 10, 21, 15, 0)
+    }
+
+    func testInTwoHoursCrossesMidnight() {
+        let late = QuickAddParser(now: Fixed.date(2026, 10, 21, 23, 30), calendar: Fixed.calendar)
+        let r = late.parse("Check oven in 2 hours")
+        assertDate(r.dueDate, 2026, 10, 22, 1, 30)
+        XCTAssertTrue(r.hasDueTime)
+    }
+
+    func testDaysAndWeeksKeepATypedTimeOrHaveNone() {
+        let r = parser.parse("Renew in three days")
+        assertDate(r.dueDate, 2026, 10, 24)
+        XCTAssertFalse(r.hasDueTime)
+        XCTAssertEqual(r.tokens.map(\.text), ["in three days"])
+        let timed = parser.parse("Renew in a week 5pm")
+        assertDate(timed.dueDate, 2026, 10, 28, 17, 0)
+        XCTAssertTrue(timed.hasDueTime)
+        assertDate(parser.parse("Renew in 2 weeks at 9").dueDate, 2026, 11, 4, 9, 0)
+        assertDate(parser.parse("Renew in a month").dueDate, 2026, 11, 21)
+    }
+
+    func testATypedTimeOverridesTheTimeOfARelativePhrase() {
+        // The Date chip's time picker appends "5pm": it sets the time on the phrase's day.
+        let r = parser.parse("Call mum in 2 hours 5pm")
+        assertDate(r.dueDate, 2026, 10, 21, 17, 0)
+        XCTAssertEqual(r.title, "Call mum")
+        XCTAssertEqual(r.tokens.map(\.kind), [.date, .time])
+    }
+
+    func testMinutesAndHoursNeedIn() {
+        for text in ["Run 10 minutes", "Practice 2 hours", "Nap half an hour", "Read for an hour"] {
+            let r = parser.parse(text)
+            XCTAssertEqual(r.title, text, text)
+            XCTAssertNil(r.dueDate, text)
+            XCTAssertTrue(r.tokens.isEmpty, text)
+        }
+    }
+
+    func testASwitchedOffRelativePhraseStaysInTheTitle() {
+        let text = "Call mum in 2 hours"
+        let on = parser.parse(text)
+        let off = parser.parse(text, disabling: [on.tokens[0].key])
+        XCTAssertEqual(off.title, "Call mum in 2 hours")
+        XCTAssertNil(off.dueDate)
+        XCTAssertTrue(off.tokens.isEmpty)
+    }
+
     // MARK: Reminder offsets
 
     func testGeorgesHaircutExample() {

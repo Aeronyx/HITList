@@ -56,6 +56,19 @@ final class RealCalendarTests: XCTestCase {
                    2027, 3, 14, 9)
     }
 
+    func testRelativePhrasesOnTheSpringForwardNight() {
+        // "in 1 day" late on Saturday: Sunday, all day.
+        let saturday = parser(now: at(2027, 3, 13, 23))
+        let r = saturday.parse("Feed cat in 1 day")
+        assertWall(r.dueDate, 2027, 3, 14)
+        XCTAssertFalse(r.hasDueTime)
+        assertWall(saturday.parse("Feed cat in one day 2:30").dueDate, 2027, 3, 14, 3, 0)
+        // "in 2 hours" at 1:30: two real hours later, which the clock calls 4:30.
+        let night = parser(now: at(2027, 3, 14, 1, 30)).parse("Feed cat in 2 hours")
+        assertWall(night.dueDate, 2027, 3, 14, 4, 30)
+        XCTAssertEqual(night.dueDate?.timeIntervalSince(at(2027, 3, 14, 1, 30)), 2 * 3600)
+    }
+
     /// Known, not fixed in 0.4.0 (final review): a repeat timed inside the skipped hour lands after the gap
     /// that night (right), then stays an hour late, because the rule keeps no time of its own and steps from
     /// the stored due date. Needs the wall-clock time in the rule string, like the anchor day.

@@ -89,6 +89,8 @@ public struct QuickAddParser: Sendable {
         var result = QuickAddResult()
         var time: (Int, Int)? = nil
         var date: Date? = nil
+        /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
+        var moment: Date? = nil
 
         func mark(_ i: Int, _ n: Int, _ kind: QuickAddToken.Kind) {
             guard n > 0 else { return }
@@ -126,6 +128,10 @@ public struct QuickAddParser: Sendable {
             // Recurrence
             if result.recurrence == nil, let (rule, n) = Self.matchRecurrence(lowers, at: i) {
                 result.recurrence = rule; mark(i, n, .recurrence); i += n; continue
+            }
+            // "in 10 minutes", "in two hours": a date token that sets the time as well
+            if date == nil, let (at, n) = dateParser.matchRelativeTime(in: lowers, at: i) {
+                moment = at; date = dateParser.startOfDay(at); mark(i, n, .date); i += n; continue
             }
             // Time
             if time == nil, let t = dateParser.matchTime(in: lowers, at: i) {
@@ -172,6 +178,9 @@ public struct QuickAddParser: Sendable {
                 }
             }
             result.dueDate = candidate
+            result.hasDueTime = true
+        } else if let moment {
+            result.dueDate = moment
             result.hasDueTime = true
         } else if let date {
             result.dueDate = date

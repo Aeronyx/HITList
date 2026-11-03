@@ -194,6 +194,10 @@ popouts.open(task)
 - `QuickAddDraft` keeps the text and the chips in step (typing fills chips; picking a chip writes its
   token: `tomorrow`, `5:30pm`, `p2`, `#"Two Words"`, `@label`, `every weekday`, `!15mb`). Pure; see
   `PopoutTests`. Example: "Haircut tom 11am p1 !15mb" = Tomorrow · P1 · 11:00 AM · 15 min before.
+- **Relative times** (`DateExpressionParser.matchRelativeTime`): "in 10 minutes", "in 10 min", "in two
+  hours", "in an hour", "in half an hour" set the due time that far from now, to the minute; "in 3 days",
+  "in a week", "in 2 weeks", "in a month" set the day (number words one to twelve, or digits), keeping a
+  time typed beside them. One `.date` token. Minutes and hours need "in": "Run 10 minutes" is a title.
 - **Reminder grammar** (`ReminderOffset` in HITListCore): `!15mb` or `!15m` = 15 minutes before the due
   time, `!1hb`/`!1h` = 1 hour, `!1db`/`!1d` = 1 day (up to 4 weeks); `!0` or `!at` = at the time (no
   offset). Only the first one counts; it tints like a time. The Reminder card's offsets (At time, 5, 10,
