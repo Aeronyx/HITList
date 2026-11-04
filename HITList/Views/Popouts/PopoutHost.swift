@@ -31,8 +31,13 @@ struct PopoutHost: ViewModifier {
     #endif
     /// iPhone: the card has a title, so closing it asks first.
     @State private var quickAddHasContent = false
-    /// iPhone: "Discard?" is showing above the card, keyboard down.
+    /// "Discard?" is showing above the card (iPhone: keyboard down).
     @State private var confirmingDiscard = false
+    /// When "Discard?" was offered: on the Mac one Esc reaches both the ×'s shortcut and the exit command,
+    /// and must not ask and discard in the same press.
+    @State private var discardOfferedAt = Date.distantPast
+    /// The editor panel's say on a click on its backdrop (`panelDismissGuard`).
+    @State private var editorGuard = PanelDismissGuard()
     /// The style as of the latest body, for the editor sheet's setter (`sheetTask`).
     @State private var latestStyle = StyleBox()
 
@@ -129,9 +134,11 @@ struct PopoutHost: ViewModifier {
             }
             .overlay {
                 if style.editor == .panel, let task = popouts.task {
-                    PanelBackdrop(onDismiss: { popouts.closeTask() }) {
+                    // A click on the backdrop with typing asks Discard first, as × does (session 41's report).
+                    PanelBackdrop(onDismiss: { if !editorGuard.attempt() { popouts.closeTask() } }) {
                         TaskPopout(task: task)
                             .id(task.id)
+                            .environment(\.panelDismissGuard, editorGuard)
                             .panelChrome()
                     }
                     .transition(.opacity)
@@ -245,15 +252,36 @@ struct PopoutHost: ViewModifier {
         }
     }
 
-    /// × or a tap on the backdrop. iPhone: with a title typed, the keyboard steps down and "Discard" is
-    /// offered above the card (George, build 11: a draft is never lost by accident); tapping anywhere
-    /// else brings the keyboard back. An empty card, and the Mac panel, just close.
+    /// What × (or Esc, or a tap on the backdrop) does to the quick-add card.
+    enum CloseStep: Equatable {
+        /// Offer "Discard" above the card.
+        case askDiscard
+        /// Close (and with "Discard" already offered, drop the draft).
+        case close
+        /// The same press that just offered "Discard": nothing.
+        case ignore
+    }
+
+    /// George's rule (build 11, and for the Mac and iPad panel too since round 10): a card with content
+    /// is never closed by one tap; the first asks Discard, a second (× again, Esc again) closes.
+    static func closeStep(hasContent: Bool, confirming: Bool, sinceOffered: TimeInterval) -> CloseStep {
+        if !confirming { return hasContent ? .askDiscard : .close }
+        return sinceOffered < 0.3 ? .ignore : .close
+    }
+
+    /// × or a tap on the backdrop. With a title typed, "Discard" is offered above the card (iPhone: the
+    /// keyboard steps down) and tapping anywhere else keeps editing; an empty card just closes.
     private func requestClose() {
-        if !usesPanel, quickAddHasContent, !confirmingDiscard {
+        switch Self.closeStep(hasContent: quickAddHasContent, confirming: confirmingDiscard,
+                              sinceOffered: Date.now.timeIntervalSince(discardOfferedAt)) {
+        case .askDiscard:
+            discardOfferedAt = .now
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
-            return
+        case .close:
+            if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
+        case .ignore:
+            break
         }
-        if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
     }
 
     private func resumeDraft() {
@@ -262,7 +290,7 @@ struct PopoutHost: ViewModifier {
 
     private func discardDraft() {
         popouts.discardQuickAddDraft()
-        retireQuickAdd()
+        if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
     }
 
     @ViewBuilder
@@ -280,8 +308,24 @@ struct PopoutHost: ViewModifier {
             // view, whose text then outlived the close and came back at the next launch.
             .id(cardID)
         if usesPanel {
-            PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
-                card.panelChrome()
+            PanelBackdrop(onDismiss: { if confirmingDiscard { resumeDraft() } else { requestClose() } }) {
+                VStack(spacing: 0) {
+                    // The iPhone card's bubble, hanging above the panel's top edge from a zero-height
+                    // anchor, so the panel itself doesn't move.
+                    Color.clear
+                        .frame(height: 0)
+                        .overlay(alignment: .bottom) {
+                            if confirmingDiscard {
+                                DiscardBubble(action: discardDraft)
+                                    .padding(.bottom, 10)
+                                    .fixedSize()
+                                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+                            }
+                        }
+                    card
+                        .panelChrome()
+                        .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
+                }
             }
             .transition(.opacity)
         } else {
@@ -506,6 +550,53 @@ struct DiscardBubble: View {
         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
         .accessibilityLabel("Discard draft")
         .accessibilityIdentifier("quickAddDiscard")
+    }
+}
+
+// MARK: - The editor panel's backdrop
+
+/// What a click on the dimmed backdrop around the editor panel (Mac, iPad) should do, as the editor says
+/// through `panelDismissGuard`: with typing it asks Discard (`onAttempt`), else the panel closes. A
+/// reference the host keeps, so the editor's latest word is read at click time.
+final class PanelDismissGuard {
+    var isActive = false
+    var onAttempt: () -> Void = {}
+
+    /// A click on the backdrop: true if the editor took it (it is asking Discard), false to close.
+    @discardableResult
+    func attempt() -> Bool {
+        guard isActive else { return false }
+        onAttempt()
+        return true
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by `PopoutHost` on the editor panel; nil elsewhere (sheet, Duo column, tests).
+    @Entry var panelDismissGuard: PanelDismissGuard?
+}
+
+extension View {
+    /// The editor panel (Mac, iPad): while `isActive` (there is typing to lose) a click on the dimmed
+    /// backdrop runs `onAttempt` (the editor asks Discard) instead of closing. The panel's twin of
+    /// `sheetSwipeGuard`. Apply inside the editor.
+    func panelDismissGuard(isActive: Bool, onAttempt: @escaping () -> Void) -> some View {
+        modifier(PanelDismissGuardReader(isActive: isActive, onAttempt: onAttempt))
+    }
+}
+
+private struct PanelDismissGuardReader: ViewModifier {
+    let isActive: Bool
+    let onAttempt: () -> Void
+    @Environment(\.panelDismissGuard) private var dismissGuard
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isActive, initial: true) { _, active in
+                dismissGuard?.isActive = active
+                dismissGuard?.onAttempt = onAttempt
+            }
+            .onDisappear { dismissGuard?.isActive = false }
     }
 }
 

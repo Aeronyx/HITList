@@ -105,6 +105,10 @@ struct TaskPopout: View {
         .onAppear {
             if taskID == nil { taskID = task.id }
         }
+        // Mac and iPad: a click on the dimmed backdrop with typing asks Discard too (`PopoutHost`).
+        .panelDismissGuard(isActive: isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        }
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: delete)
         } message: {
