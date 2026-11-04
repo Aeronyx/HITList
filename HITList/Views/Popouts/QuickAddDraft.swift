@@ -45,6 +45,10 @@ struct QuickAddDraft: Equatable, Codable {
     private(set) var inboxChosen = false
     /// The list's label taken off.
     private(set) var defaultLabelRemoved = false
+    /// The Reminder chip's offset picked before the task has a time (brief 41): shown on the chip, applied
+    /// once a time is typed or picked, never written into the title as "!15mb" (that would be plain text
+    /// until a time arrives). Nil when nothing is waiting; a reminder typed beside a time wins over it.
+    private(set) var pendingReminderMinutes: Int?
     /// Tokens switched off by tapping their highlight (brief 28): their words stay plain title text.
     private(set) var disabledTokens: Set<QuickAddTokenKey> = []
     /// "+" → Subtasks (brief 32): one line per sub-task, in order, empty ones included while typed. Kept
@@ -154,7 +158,7 @@ struct QuickAddDraft: Equatable, Codable {
             labelNames: result.labelNames,
             recurrence: result.recurrence,
             // A reminder picked before a time shows what was picked; it counts once a time is set.
-            reminderOffsetMinutes: result.reminderOffsetMinutes ?? parsed.pendingReminderMinutes,
+            reminderOffsetMinutes: result.reminderOffsetMinutes ?? pendingReminderMinutes,
             deadline: result.deadline,
             locationName: result.locationName)
     }
@@ -188,6 +192,10 @@ struct QuickAddDraft: Equatable, Codable {
            !result.labelNames.contains(where: { $0.caseInsensitiveCompare(label) == .orderedSame }) {
             result.labelNames.append(label)
         }
+        // The chip's reminder picked before a time counts once there is one, unless one is typed.
+        if result.reminderOffsetMinutes == nil, result.hasDueTime, let pendingReminderMinutes {
+            result.reminderOffsetMinutes = pendingReminderMinutes
+        }
         result.deadline = deadline
         result.locationName = trimmedLocation
         result.title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -203,6 +211,7 @@ struct QuickAddDraft: Equatable, Codable {
             append(QuickAddTokens.date(day, now: parser.dateParser.now, calendar: parser.dateParser.calendar))
             dateCleared = false
         } else {
+            holdReminderForLater(parser)
             text = removing([.date, .time, .recurrence], parser)
             dateCleared = context.defaultDate() != nil
         }
@@ -216,14 +225,31 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     mutating func clearTime(_ parser: QuickAddParser) {
+        holdReminderForLater(parser)
         text = removing([.time], parser)
     }
 
-    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it. Before
-    /// the task has a time the token is highlighted and waits; it counts once a time is set.
+    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it. Before the
+    /// task has a time nothing is written: the offset waits on the chip (`pendingReminderMinutes`) and counts
+    /// once a time is set (brief 41).
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
         text = removing([.reminder], parser)
-        if let minutes, minutes > 0 { append(ReminderOffset.token(minutes: minutes)) }
+        pendingReminderMinutes = nil
+        guard let minutes, minutes > 0 else { return }
+        if parsed(parser).hasDueTime {
+            append(ReminderOffset.token(minutes: minutes))
+        } else {
+            pendingReminderMinutes = minutes
+        }
+    }
+
+    /// The time is going: a reminder written beside it would be left as plain "!15mb" in the title, so it
+    /// comes out of the text and its offset waits on the chip instead.
+    private mutating func holdReminderForLater(_ parser: QuickAddParser) {
+        let parsed = parsed(parser)
+        guard let offset = parsed.reminderOffsetMinutes else { return }
+        text = Self.removing(parsed.tokens.filter { $0.kind == .reminder }, from: text)
+        pendingReminderMinutes = offset > 0 ? offset : nil
     }
 
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {

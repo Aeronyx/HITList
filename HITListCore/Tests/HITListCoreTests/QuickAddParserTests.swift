@@ -324,42 +324,43 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(r.tokens.filter(\.isSuperseded).map(\.text), ["!10m"])
     }
 
-    /// A reminder is relative to the due time; without one it sets nothing (George, 2026-11-03). Since brief
-    /// 37 it is still a highlighted token, out of the title, waiting: the Reminder chip writes "!15mb" before
-    /// a time is picked, and it takes effect as soon as a time is in the text.
-    func testAReminderWithoutADueTimeIsHighlightedAndWaits() {
-        for text in ["Pack tomorrow !1db", "Pack !1hb", "Pack !15mb", "Pack !at", "Pack in 3 days !1hb"] {
+    /// A reminder is relative to the due time; without one it is plain title text and sets nothing (George's
+    /// 0.4.1 rule, which brief 37 reversed and brief 41 brings back: "A typed reminder like '!15mb' should not
+    /// highlight before there's a time"). The Reminder chip picked before a time holds its offset in the
+    /// draft instead (`QuickAddDraft.pendingReminderMinutes`).
+    func testAReminderWithoutADueTimeIsPlainTitleText() {
+        for text in ["Pack tomorrow !1db", "Pack !1hb", "Pack !15mb", "Pack !at", "Pack in 3 days !1hb", "Pack !15mb !1db"] {
             let r = parser.parse(text)
             XCTAssertNil(r.reminderOffsetMinutes, text)
-            XCTAssertEqual(r.title, "Pack", text)
-            XCTAssertEqual(r.tokens.filter { $0.kind == .reminder }.count, 1, text)
+            XCTAssertEqual(r.title, text.replacingOccurrences(of: " tomorrow", with: "").replacingOccurrences(of: " in 3 days", with: ""), text)
+            XCTAssertFalse(r.tokens.contains { $0.kind == .reminder }, text)
         }
-        // A time anywhere in the text, or a phrase that sets one, makes it count.
+        XCTAssertEqual(parser.parse("Call !15mb").title, "Call !15mb")
+        // A time anywhere in the text, or a phrase that sets one, lights it up and makes it count.
         for text in ["Pack !1hb tomorrow 9am", "Pack tomorrow at 9 !1hb", "Call mum in 2 hours !15mb", "Pills every day 9pm !10m"] {
             let r = parser.parse(text)
             XCTAssertNotNil(r.reminderOffsetMinutes, text)
             XCTAssertTrue(r.tokens.contains { $0.kind == .reminder }, text)
         }
+        let lit = parser.parse("Call 3pm !15mb")
+        XCTAssertEqual(lit.title, "Call")
+        XCTAssertEqual(lit.tokens.map(\.kind), [.time, .reminder])
+        XCTAssertEqual(lit.reminderOffsetMinutes, 15)
         let r = parser.parse("Call mum in 2 hours !15mb")
         XCTAssertEqual(r.title, "Call mum")
         XCTAssertEqual(r.tokens.map(\.kind), [.date, .reminder])
         XCTAssertEqual(r.reminderOffsetMinutes, 15)
         // Not a reminder form: still title text.
         XCTAssertEqual(parser.parse("Fix sink !").title, "Fix sink !")
-        // What is waiting, for the chip; the last one wins here too.
-        XCTAssertEqual(parser.parse("Pack !1hb").pendingReminderMinutes, 60)
-        XCTAssertEqual(parser.parse("Pack !15mb !1db").pendingReminderMinutes, 1440)
-        XCTAssertEqual(parser.parse("Pack 9am !15mb").pendingReminderMinutes, 15)
-        XCTAssertNil(parser.parse("Pack 9am").pendingReminderMinutes)
     }
 
-    func testSwitchingOffTheTimeLeavesTheReminderWaiting() {
+    func testSwitchingOffTheTimeTurnsTheReminderBackIntoText() {
         let text = "Haircut tom 11am !15mb"
         let time = parser.parse(text).tokens.first { $0.kind == .time }!
         let r = parser.parse(text, disabling: [time.key])
         XCTAssertNil(r.reminderOffsetMinutes)
-        XCTAssertEqual(r.title, "Haircut 11am")
-        XCTAssertEqual(r.tokens.map(\.kind), [.date, .reminder])
+        XCTAssertEqual(r.title, "Haircut 11am !15mb")
+        XCTAssertEqual(r.tokens.map(\.kind), [.date])
     }
 
     func testOnlyTheDocumentedReminderFormsCount() {
