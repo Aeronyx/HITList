@@ -70,6 +70,38 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .flipboard, .upcoming])
     }
 
+    // MARK: Top-right control (brief 35)
+
+    func testTopRightIsSearchOnATabAndAGearFromBrowseOn() {
+        XCTAssertEqual(MobileTopControl.forScreen(atTabRoot: true), .browse, "Inbox, Today, Flipboard, Upcoming")
+        XCTAssertEqual(MobileTopControl.forScreen(atTabRoot: false), .settings,
+                       "Browse and the lists pushed from it never push a second Browse")
+    }
+
+    func testTopRightControlsLookAndRead() {
+        XCTAssertEqual(MobileTopControl.browse.symbol, "magnifyingglass")
+        XCTAssertEqual(MobileTopControl.browse.title, "Browse")
+        XCTAssertEqual(MobileTopControl.browse.identifier, "browseButton")
+        XCTAssertEqual(MobileTopControl.settings.symbol, "gearshape")
+        XCTAssertEqual(MobileTopControl.settings.title, "Settings")
+        XCTAssertEqual(MobileTopControl.settings.identifier, "settingsButton")
+    }
+
+    func testViewOptionsMenuRendersWithTheScreensItems() {
+        let view = ViewOptionsMenu { Toggle("Show completed", isOn: .constant(true)) }
+            .environment(\.screenMenuItems, AnyView(Button("Review Inbox…") {}))
+            .frame(width: 200, height: 60)
+            .preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: view).cgImage)
+    }
+
+    func testScreenOptionButtonRendersAloneAndWithItems() {
+        let plain = ScreenOptionButton(action: {}) { Image(systemName: "speaker.wave.2") }
+        XCTAssertNotNil(ImageRenderer(content: plain.frame(width: 60, height: 60)).cgImage)
+        let withItems = plain.environment(\.screenMenuItems, AnyView(Button("Add Switch…") {}))
+        XCTAssertNotNil(ImageRenderer(content: withItems.frame(width: 60, height: 60)).cgImage)
+    }
+
     func testViewOptionsMenuRenders() {
         let view = ViewOptionsMenu { Toggle("Show completed", isOn: .constant(true)) }
             .frame(width: 200, height: 60)
