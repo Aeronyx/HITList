@@ -48,6 +48,8 @@ final class CloudSyncMonitor {
     private let accountWatch = AccountWatch(defaults: AppGroup.defaults)
     /// Events that have started and not ended, by identifier, with their start time.
     private var inFlight: [UUID: Date] = [:]
+    /// Which of `inFlight` are imports (`isImporting`).
+    @ObservationIgnored private var inFlightImports: Set<UUID> = []
 
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var loggedState: String?
@@ -113,6 +115,13 @@ final class CloudSyncMonitor {
     private var isSyncing: Bool {
         let cutoff = Date().addingTimeInterval(-600)
         return inFlight.values.contains { $0 > cutoff }
+    }
+
+    /// An import is running (and started less than ten minutes ago, like `isSyncing`). `Deduplicator` waits
+    /// for it: the import's own end triggers the next pass.
+    var isImporting: Bool {
+        let cutoff = Date().addingTimeInterval(-600)
+        return inFlightImports.contains { inFlight[$0].map { $0 > cutoff } ?? false }
     }
 
     // MARK: - Starting
@@ -639,11 +648,13 @@ final class CloudSyncMonitor {
         let shortID = String(event.identifier.uuidString.prefix(8))
         guard let end = event.endDate else {
             inFlight[event.identifier] = event.startDate
+            if event.type == .import { inFlightImports.insert(event.identifier) }
             write(.event, "\(type.title) started", fields: ["id": shortID])
             watch(.eventStarted(id: event.identifier, type: type, at: event.startDate))
             return
         }
         inFlight[event.identifier] = nil
+        inFlightImports.remove(event.identifier)
         // The watchdog first: an export's line carries how long after the save it finished ("afterSave"),
         // and its other findings (late, recovered) follow the event's line.
         let failed = event.error != nil || !event.succeeded
