@@ -33,12 +33,50 @@ struct ProfileStore {
     let context: ModelContext
     var log: Log = ProfileStore.syncLog
     var clock: () -> Date = { Date() }
+    /// The signed-in iCloud account (`AccountIdentity.key`), once confirmed in this process; nil before.
+    var account: @MainActor () -> String? = { CloudSyncMonitor.shared.accountKey }
+    /// Which account each profile record was first seen with on this device.
+    var ownership = ProfileOwnership(defaults: AppGroup.defaults)
 
     // MARK: Reading
 
-    /// Every profile record, survivor first (`Deduplicator.precedes`' order: earliest `createdAt`, then id).
+    /// Every profile record of this account, survivor first (`Deduplicator.precedes`' order: earliest
+    /// `createdAt`, then id). A record seen before with another iCloud account is left out and logged
+    /// (`visible`): CloudKit's private database is per account and Core Data purges the store on a switch,
+    /// so it should never happen, and if it does the other person's name must not show or merge here.
     func all() throws -> [Profile] {
-        try context.fetch(FetchDescriptor<Profile>()).sorted(by: Self.precedes)
+        visible(try context.fetch(FetchDescriptor<Profile>())).sorted(by: Self.precedes)
+    }
+
+    /// `profiles` without another account's. With the account known, unclaimed records become this
+    /// account's; without it (the first second of a launch, signed out) nothing is claimed or left out.
+    func visible(_ profiles: [Profile]) -> [Profile] {
+        guard let account = account() else { return profiles }
+        ownership.claim(profiles.map(\.id), for: account)
+        let foreign = profiles.filter { ownership.owner(of: $0.id).map { $0 != account } ?? false }
+        guard !foreign.isEmpty else { return profiles }
+        let unlogged = foreign.filter { !Self.loggedForeign.contains($0.id) }
+        if !unlogged.isEmpty {
+            Self.loggedForeign.formUnion(unlogged.map(\.id))
+            log("Ignored a profile record from another iCloud account", .error, ["records": "\(foreign.count)"])
+        }
+        let ids = Set(foreign.map(\.id))
+        return profiles.filter { !ids.contains($0.id) }
+    }
+
+    /// Foreign records already logged in this process, so each is logged once.
+    private static var loggedForeign: Set<UUID> = []
+
+    /// The profile a view shows from its own `@Query`: this account's survivor. Pure apart from reading
+    /// the ownership; claims nothing and logs nothing (views call it on every body).
+    static func shown(_ profiles: [Profile]) -> Profile? {
+        shown(profiles, account: CloudSyncMonitor.shared.accountKey, ownership: ProfileOwnership(defaults: AppGroup.defaults))
+    }
+
+    static func shown(_ profiles: [Profile], account: String?, ownership: ProfileOwnership) -> Profile? {
+        profiles
+            .filter { profile in account.map { mine in ownership.owner(of: profile.id).map { $0 == mine } ?? true } ?? true }
+            .min(by: precedes)
     }
 
     /// The profile to show: the one a merge would keep. Nil when none exists yet.
@@ -91,6 +129,8 @@ struct ProfileStore {
             log("Profile picture refused: not a readable image", .error, ["bytes": "\(imageData.count)"])
             throw error
         }
+        // The same picture again (chosen twice, or the same photo): nothing to export.
+        if let current = try current(), current.avatarData == prepared { return }
         let profile = try fetchOrCreate()
         let now = clock()
         profile.avatarData = prepared
@@ -260,5 +300,41 @@ enum ProfileAvatar {
         guard let first = words.first?.first else { return nil }
         let last = words.count > 1 ? words.last?.first : nil
         return ([first] + (last.map { [$0] } ?? [])).map { String($0).uppercased() }.joined()
+    }
+}
+
+/// Which iCloud account each profile record belongs to on this device, by record id and hashed account
+/// (`AccountIdentity.key`), in the app group's defaults: per store, as the account memory is. A record is
+/// claimed by the first account it is seen with (`ProfileStore.visible`), and claims are never moved.
+struct ProfileOwnership {
+    let defaults: UserDefaults
+    var storeName: String = ModelContainerFactory.storeName
+
+    static let key = "profile.accounts"
+    /// More than this many claims (one per profile record ever seen) and the oldest are dropped.
+    static let maxClaims = 64
+
+    var keyName: String { CloudSyncMonitor.syncTimeKey(Self.key, storeName: storeName) }
+
+    private var claims: [String: String] { defaults.dictionary(forKey: keyName) as? [String: String] ?? [:] }
+
+    func owner(of id: UUID) -> String? { claims[id.uuidString] }
+
+    /// Claims the unclaimed `ids` for `account`; writes only when something was new.
+    func claim(_ ids: [UUID], for account: String) {
+        var claims = claims
+        let new = ids.map(\.uuidString).filter { claims[$0] == nil }
+        guard !new.isEmpty else { return }
+        for id in new { claims[id] = account }
+        if claims.count > Self.maxClaims {
+            // Claims carry no date. This account's older ones go first (mostly records merged away since);
+            // another account's are kept as long as possible, since they are what the guard is for.
+            let surplus = claims.count - Self.maxClaims
+            let mine = claims.filter { $0.value == account && !new.contains($0.key) }.map(\.key).sorted()
+            let others = claims.filter { $0.value != account }.map(\.key).sorted()
+            let drop = (mine + others).prefix(surplus)
+            for id in drop { claims[id] = nil }
+        }
+        defaults.set(claims, forKey: keyName)
     }
 }

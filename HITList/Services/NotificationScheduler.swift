@@ -92,6 +92,7 @@ enum NotificationScheduler {
     @MainActor
     static func bootstrap(container: ModelContainer, isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) {
         guard self.container == nil else { return }
+        defer { LaunchTiming.mark("reminders") }
         guard isMainStore else {
             log.notice("Reminders stand down: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); the pending reminders and the badge are HITList.store's")
             return
@@ -311,6 +312,36 @@ enum NotificationScheduler {
             """)
     }
 
+    // MARK: - Account change (brief 42)
+
+    /// What clearing for an account change needs from `UNUserNotificationCenter`, so tests use a fake: the
+    /// test host shares the bundle ID, and with it the pending reminders, of the TestFlight app on the Mac.
+    protocol Clearing {
+        func removeAllPendingNotificationRequests()
+        func removeAllDeliveredNotifications()
+        func setBadgeCount(_ newBadgeCount: Int) async throws
+    }
+
+    /// The iCloud account changed or signed out (`AccountSwitch`): every pending reminder and the morning
+    /// summary (they name the previous account's tasks), the delivered ones in Notification Center, the
+    /// badge, and the ledger of task ids already announced. The next import's reschedule adds the new
+    /// account's reminders. A reschedule waiting in the debounce still runs, against the purged store.
+    @MainActor
+    static func clearForAccountChange(center: Clearing = UNUserNotificationCenter.current(),
+                                      defaults: UserDefaults = AppGroup.defaults) async {
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        do {
+            try await center.setBadgeCount(0)
+            lastBadge = 0
+        } catch {
+            lastBadge = nil
+            log.error("Clearing the badge failed: \(error.localizedDescription, privacy: .public)")
+        }
+        defaults.removeObject(forKey: ledgerKey)
+        log.notice("Account changed: pending and delivered reminders, the badge and the ledger cleared")
+    }
+
     /// The last badge number set, so an unchanged count isn't written again on every reschedule.
     @MainActor private static var lastBadge: Int?
 
@@ -362,3 +393,5 @@ enum NotificationScheduler {
         return UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
     }
 }
+
+extension UNUserNotificationCenter: NotificationScheduler.Clearing {}

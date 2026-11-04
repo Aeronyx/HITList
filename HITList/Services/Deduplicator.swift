@@ -25,6 +25,11 @@ struct DedupeReport: Equatable, CustomStringConvertible {
     var profiles = 0
 
     var removed: Int { projects + labels + filters + profiles }
+    /// The sync log's fields: only the counts that aren't zero.
+    var fields: [String: String] {
+        let counts = [("groups", projects), ("labels", labels), ("filters", filters), ("profiles", profiles), ("subtasks", subtasks)]
+        return Dictionary(uniqueKeysWithValues: counts.filter { $0.1 > 0 }.map { ($0.0, "\($0.1)") })
+    }
     var description: String {
         "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s), \(profiles) profile(s); repaired \(subtasks) subtask(s)"
     }
@@ -68,17 +73,40 @@ enum Deduplicator {
         return report
     }
 
-    /// `run`, logging the report when anything was merged. Errors are logged, not thrown: a failed pass
-    /// is retried on the next import or launch.
-    static func runAndLog(in context: ModelContext, trigger: String) {
+    /// How a `runAndLog` pass ended.
+    enum Outcome: Equatable {
+        case ran(DedupeReport)
+        /// An import was still running: its records may be half arrived, and deleting a duplicate the import
+        /// is still writing to fails the save. The import's end triggers the next pass.
+        case postponed
+        case failed(String)
+    }
+
+    /// `run`, logging the report to the sync log when anything was merged. Errors are logged, not thrown:
+    /// a failed pass is retried on the next import or launch. A pass after an import waits while another
+    /// import is in flight (`CloudSyncMonitor.isImporting`); the launch pass never does.
+    @discardableResult
+    static func runAndLog(in context: ModelContext, trigger: String,
+                          importInFlight: @MainActor () -> Bool = { CloudSyncMonitor.shared.isImporting },
+                          syncLog: ProfileStore.Log = { CloudSyncMonitor.shared.write(.note, $0, level: $1, fields: $2) }) -> Outcome {
+        defer { if trigger == "launch" { LaunchTiming.mark("dedupe") } }
+        if trigger != "launch", importInFlight() {
+            log.info("dedupe after \(trigger, privacy: .public) postponed: an import is still running")
+            return .postponed
+        }
         do {
             let report = try run(in: context)
             if report.removed > 0 || report.subtasks > 0 {
                 log.notice("dedupe after \(trigger, privacy: .public): \(report.description, privacy: .public)")
+                syncLog("Duplicates merged after \(trigger)", .notice, report.fields)
             }
+            return .ran(report)
         } catch {
             context.rollback()
             log.error("dedupe after \(trigger, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+            syncLog("Merging duplicates after \(trigger) failed; tried again after the next import",
+                    .error, SyncLogFormat.errorFields(error))
+            return .failed(error.localizedDescription)
         }
     }
 
