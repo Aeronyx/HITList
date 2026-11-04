@@ -41,6 +41,10 @@ one George prefers has clearly more room above the Confirm pill, about the heigh
    `interactiveDismissDisabled` while dirty plus the existing Discard bubble is the likely shape. Test the
    dirty check.
 
+Master since the brief was written: briefs 34 (Profile, Settings → Account), 37 (superseded phrases, joined
+highlight boxes in `TokenHighlightField`: `groups`/`boxes`; the submit and Return lines are untouched and yours)
+and 38 (Mac Upcoming board) are merged.
+
 ## Ownership
 
 `HITList/Views/Popouts/TaskPopout.swift`, `Views/Popouts/Editor/*`, `QuickAddPopout.swift` (footer and the
