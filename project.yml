@@ -62,8 +62,8 @@ targets:
       path: HITList/Info.plist
       properties:
         CFBundleDisplayName: HITList
-        CFBundleShortVersionString: "0.4.1"
-        CFBundleVersion: "14"
+        CFBundleShortVersionString: "0.5.0"
+        CFBundleVersion: "15"
         LSApplicationCategoryType: public.app-category.productivity
         UIBackgroundModes: [remote-notification]
         UILaunchScreen: {}
@@ -89,8 +89,8 @@ targets:
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
-        CURRENT_PROJECT_VERSION: 14
-        MARKETING_VERSION: "0.4.1"
+        CURRENT_PROJECT_VERSION: 15
+        MARKETING_VERSION: "0.5.0"
         ENABLE_HARDENED_RUNTIME: YES
         DEAD_CODE_STRIPPING: YES
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark

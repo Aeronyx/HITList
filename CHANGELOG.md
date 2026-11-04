@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.5.0
+## 0.5.0 — build 15, 2026-11-04
 
 George's notes on build 14, in five sessions: an account and profile for friends on TestFlight, a privacy
 policy, the iPhone tabs, a roomier editor, quick-add highlights, and a board for the Mac's Upcoming.
