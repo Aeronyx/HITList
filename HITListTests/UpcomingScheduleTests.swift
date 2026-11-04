@@ -133,6 +133,120 @@ final class UpcomingScheduleTests: XCTestCase {
         XCTAssertTrue(dated.hasDueTime)
     }
 
+    func testSubtasksAreNeverRowsOfTheirOwn() {
+        let s = schedule([PlainTask(title: "Sub", dueDate: date(2026, 10, 28), isSubtask: true),
+                          PlainTask(title: "Old sub", dueDate: date(2026, 10, 2), isSubtask: true),
+                          task("Parent", date(2026, 10, 28))])
+        XCTAssertEqual(s.days[0].items.map(\.filterTitle), ["Parent"])
+        XCTAssertTrue(s.overdue.isEmpty)
+    }
+
+    // MARK: - Board (brief 38)
+
+    private func board(_ tasks: [PlainTask], offset: Int = 0, showOverdue: Bool = true) -> UpcomingBoardModel<PlainTask> {
+        UpcomingBoardModel(items: tasks, window: UpcomingWindow(offset: offset), now: now, showOverdue: showOverdue, calendar: calendar)
+    }
+
+    func testBoardIsSevenDaysFromToday() {
+        let b = board([])
+        XCTAssertEqual(b.columns.map(\.id), (28...31).map { .day(date(2026, 10, $0)) } + (1...3).map { .day(date(2026, 11, $0)) })
+        XCTAssertTrue(b.columns.allSatisfy { $0.items.isEmpty && $0.count == 0 })
+    }
+
+    func testBoardPutsOverdueFirstOnlyWhenShownAndNotEmpty() {
+        let late = task("Late", date(2026, 10, 20))
+        XCTAssertEqual(board([late]).columns.first?.id, .overdue)
+        XCTAssertEqual(board([late]).columns.count, 8)
+        XCTAssertEqual(board([late], showOverdue: false).columns.first?.id, .day(date(2026, 10, 28)))
+        XCTAssertEqual(board([late], showOverdue: false).columns.count, 7)
+        XCTAssertEqual(board([task("Soon", date(2026, 10, 29))]).columns.first?.id, .day(date(2026, 10, 28)),
+                       "no overdue tasks, no Overdue column")
+        XCTAssertEqual(board([late], offset: 9).columns.first?.id, .overdue, "Overdue stays first while looking ahead")
+    }
+
+    func testBoardColumnsOrderLikeUpcomingAndCount() {
+        let b = board([
+            task("9am p4", date(2026, 10, 30, 9), time: true),
+            task("all day p2", date(2026, 10, 30), priority: 2),
+            task("noon p1", date(2026, 10, 30, 12), time: true, priority: 1),
+            task("Done", date(2026, 10, 30), done: true),
+            PlainTask(title: "Sub", dueDate: date(2026, 10, 30), isSubtask: true),
+            task("Yesterday 3pm", date(2026, 10, 27, 15), time: true),
+            task("Last month", date(2026, 9, 2)),
+            task("Someday", nil),
+            task("Next month", date(2026, 11, 20)),
+        ])
+        XCTAssertEqual(b.columns[0].items.map(\.filterTitle), ["Last month", "Yesterday 3pm"])
+        XCTAssertEqual(b.columns[0].count, 2)
+        let friday = b.columns[3]
+        XCTAssertEqual(friday.id, .day(date(2026, 10, 30)))
+        XCTAssertEqual(friday.items.map(\.filterTitle), ["noon p1", "all day p2", "9am p4"])
+        XCTAssertEqual(friday.count, 3)
+        XCTAssertEqual(b.columns.map(\.count).reduce(0, +), 5, "undated, done, sub-tasks and later days are left out")
+    }
+
+    func testBoardWindowShowsTheDaysItHasMovedTo() {
+        let b = board([task("Mon", date(2026, 11, 2)), task("Today", date(2026, 10, 28)), task("Nov 9", date(2026, 11, 9))], offset: 5)
+        XCTAssertEqual(b.columns.first?.id, .day(date(2026, 11, 2)))
+        XCTAssertEqual(b.columns.last?.id, .day(date(2026, 11, 8)))
+        XCTAssertEqual(b.columns.first?.items.map(\.filterTitle), ["Mon"])
+        XCTAssertTrue(b.columns.allSatisfy { !$0.items.map(\.filterTitle).contains("Today") }, "days before the window are left out")
+        XCTAssertTrue(b.columns.allSatisfy { !$0.items.map(\.filterTitle).contains("Nov 9") })
+    }
+
+    func testWindowMovesADayAtATimeAndNeverBeforeToday() {
+        var w = UpcomingWindow()
+        XCTAssertTrue(w.isAtToday)
+        w.move(by: -1)
+        XCTAssertEqual(w.offset, 0, "‹ stops at today")
+        w.move(by: 1)
+        w.move(by: 1)
+        XCTAssertEqual(w.offset, 2)
+        XCTAssertFalse(w.isAtToday)
+        XCTAssertEqual(w.start(now: now, calendar: calendar), date(2026, 10, 30))
+        XCTAssertEqual(w.days(now: now, calendar: calendar).count, 7)
+        XCTAssertEqual(w.days(now: now, calendar: calendar).last, date(2026, 11, 5))
+        w.move(by: -1)
+        XCTAssertEqual(w.offset, 1)
+        w.goToToday()
+        XCTAssertEqual(w, UpcomingWindow())
+    }
+
+    func testWindowFollowsTheClockAcrossMidnight() {
+        let w = UpcomingWindow(offset: 1)
+        XCTAssertEqual(w.start(now: now, calendar: calendar), date(2026, 10, 29))
+        XCTAssertEqual(w.start(now: date(2026, 10, 29, 0, 5), calendar: calendar), date(2026, 10, 30),
+                       "the window counts from today, so it moves with the date")
+    }
+
+    func testWindowJumpsToAPickedDay() {
+        var w = UpcomingWindow()
+        w.jump(to: date(2026, 12, 24, 15), now: now, calendar: calendar)
+        XCTAssertEqual(w.start(now: now, calendar: calendar), date(2026, 12, 24))
+        w.jump(to: date(2026, 10, 1), now: now, calendar: calendar)
+        XCTAssertEqual(w.offset, 0, "a past day goes to today")
+        // Across the fall-back change (Nov 1): still whole days.
+        w.jump(to: date(2026, 11, 2), now: now, calendar: calendar)
+        XCTAssertEqual(w.offset, 5)
+        XCTAssertEqual(w.days(now: now, calendar: calendar).map { calendar.component(.hour, from: $0) }, Array(repeating: 0, count: 7))
+    }
+
+    func testWindowTitleFollowsTheFirstDayAndSpansAMonthEnd() {
+        func title(_ offset: Int) -> String { UpcomingWindow(offset: offset).title(now: now, calendar: calendar, locale: locale) }
+        XCTAssertEqual(title(0), "October – November 2026", "Oct 28 – Nov 3")
+        XCTAssertEqual(title(5), "November 2026", "Nov 2 – 8")
+        XCTAssertEqual(title(30), "November – December 2026", "Nov 27 – Dec 3")
+        XCTAssertEqual(title(62), "December 2026 – January 2027", "Dec 29 – Jan 4")
+        XCTAssertEqual(title(66), "January 2027")
+    }
+
+    func testBoardColumnHeaders() {
+        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 10, 28), now: now, calendar: calendar, locale: locale), "Oct 28 · Today · Wednesday")
+        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 10, 29), now: now, calendar: calendar, locale: locale), "Oct 29 · Tomorrow · Thursday")
+        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 11, 4), now: now, calendar: calendar, locale: locale), "Nov 4 · Wednesday")
+        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2027, 1, 1), now: now, calendar: calendar, locale: locale), "Jan 1, 2027 · Friday")
+    }
+
     // MARK: - Week strip
 
     private var strip: WeekStrip { WeekStrip(calendar: calendar) }

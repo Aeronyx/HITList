@@ -65,6 +65,7 @@ struct UpcomingView: View {
         var filterLabelNames: [String] { task.filterLabelNames }
         var filterIsRecurring: Bool { task.filterIsRecurring }
         var filterCreatedDate: Date? { task.filterCreatedDate }
+        var filterIsSubtask: Bool { task.filterIsSubtask }
     }
 
     private var entries: [Entry] {
