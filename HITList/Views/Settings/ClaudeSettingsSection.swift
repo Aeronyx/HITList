@@ -72,6 +72,7 @@ struct ClaudeSettingsSection: View {
             #endif
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 HITMenuRowLabel("Claude sees", systemImage: "eye")
+                    .foregroundStyle(HITColor.text)
                 HITSegmented(selection: $mode, segments: [
                     HITSegment(ClaudeAccessRule.Mode.allExceptHidden, "All but @\(rule.hiddenLabel)"),
                     HITSegment(ClaudeAccessRule.Mode.onlyShared, "Only @\(rule.sharedLabel)"),
@@ -79,22 +80,22 @@ struct ClaudeSettingsSection: View {
                 .accessibilityIdentifier("claude-mode")
             }
             .hitRowPadding()
-            HITMenuRow(mode == .allExceptHidden ? "Hide tasks labelled" : "Show tasks labelled", systemImage: "tag") {
+            HITMenuRow(mode == .allExceptHidden ? "Hidden label" : "Shared label", systemImage: "tag", trailing: {
                 HStack(spacing: 2) {
                     Text("@").foregroundStyle(Theme.secondaryText)
                     TextField("label", text: mode == .allExceptHidden ? $hiddenLabel : $sharedLabel)
                         .textFieldStyle(.plain)
                         .font(HITType.body)
                         .multilineTextAlignment(.trailing)
-                        .frame(maxWidth: 140)
+                        .frame(maxWidth: 120)
                         #if os(iOS)
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
                         .accessibilityIdentifier("claude-label")
                 }
-            }
-            HITMenuRow("Visible to Claude", systemImage: "checklist",
+            })
+            HITMenuRow("Visible now", systemImage: "checklist",
                        value: counts.map { "\($0.visible) of \($0.total) open tasks" } ?? "…")
         }
     }
@@ -121,6 +122,7 @@ struct ClaudeSettingsSection: View {
             .accessibilityIdentifier("claude-copy-export")
             ShareLink(item: exportText, subject: Text("HITList tasks"), preview: SharePreview("HITList tasks")) {
                 HITMenuRowLabel("Share…", systemImage: "square.and.arrow.up")
+                    .foregroundStyle(HITColor.text)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
             }
