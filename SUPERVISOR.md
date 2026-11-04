@@ -193,7 +193,17 @@ back on Dock click or ⌘Tab. iPhone list titles 16 pt with −0.3 tracking, car
 (14 was too small). The iPhone keeps a four-tab shell with the "+" oval above the tab bar; the Mac keeps
 the sidebar; settings open in-window on the Mac (`MacSettingsPage`), as a sheet on iPhone.
 
-## 8. Where things stand (2026-11-04, after round 9)
+## 8. Where things stand (2026-11-04, after round 10)
+
+Round 10 (briefs 39–46) is merged for 0.6.0 (16), no schema change: the Mac board's inline add card, the profile
+top-left (Mac sidebar, iPhone Browse), Flipboard rightmost again, quick-add polish, account-switch hygiene and sync
+hardening, the Claude connector (`hitlist-mcp` helper inside the Mac app, label-based privacy, `docs/connect-claude.md`
+at /claude/), App Intents (Siri, Shortcuts), holiday effects and the rare sky whale, and iPhone Duo layouts (outer
+display = tabs, inner = sidebar shell with an editor column). Open items are in COMMON's "Round 10 record". Shared
+Tasks was deferred on purpose: SwiftData has no CloudKit shared-database support, so it means Core Data + CKShare,
+a round of its own. George has not yet invited friends (TestFlight external group, Beta App Review).
+
+## 8a. Round 9 state (kept for the record)
 
 Round 9 (briefs 34–38) is merged for 0.5.0 (15): Settings → Account with a synced `Profile` (schema V4, in
 CloudKit Development until George deploys it), the privacy policy on GitHub Pages
