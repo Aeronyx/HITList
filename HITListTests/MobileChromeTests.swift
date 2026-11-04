@@ -46,12 +46,13 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(Preferences.startTabValue("inbox"), .inbox)
     }
 
-    // MARK: Tabs (brief 35)
+    // MARK: Tabs (brief 35, order swapped back in brief 40)
 
-    func testTabsRunInboxTodayFlipboardUpcoming() {
-        XCTAssertEqual(MobileTab.allCases, [.inbox, .today, .flipboard, .upcoming], "Upcoming furthest right")
-        XCTAssertEqual(MobileTab.allCases.map(\.title), ["Inbox", "Today", "Flipboard", "Upcoming"])
-        XCTAssertEqual(MobileTab.allCases.map(\.rawValue), ["inbox", "today", "flipboard", "upcoming"])
+    func testTabsRunInboxTodayUpcomingFlipboard() {
+        XCTAssertEqual(MobileTab.allCases, [.inbox, .today, .upcoming, .flipboard], "Flipboard furthest right")
+        XCTAssertEqual(MobileTab.allCases.map(\.title), ["Inbox", "Today", "Upcoming", "Flipboard"])
+        XCTAssertEqual(MobileTab.allCases.map(\.rawValue), ["inbox", "today", "upcoming", "flipboard"],
+                       "raw values unchanged: a stored start tab still means the same screen")
     }
 
     func testFlipboardTabLooksLikeItsSidebarRow() {
@@ -67,7 +68,7 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(Preferences.startTabValue("flipboard"), .flipboard)
         XCTAssertEqual(Preferences.startTabValue("upcoming"), .upcoming)
         XCTAssertEqual(Preferences.startTabValue("browse"), .today, "someone who chose Browse opens on Today")
-        XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .flipboard, .upcoming])
+        XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .upcoming, .flipboard])
     }
 
     // MARK: Top-right control (brief 35)
