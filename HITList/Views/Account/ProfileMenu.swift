@@ -72,7 +72,8 @@ struct ProfileMenu: View {
         _isOpen = State(initialValue: startsOpen)
     }
 
-    private var profile: Profile? { profiles.sorted(by: ProfileStore.precedes).first }
+    /// This iCloud account's profile; a record from another account is hidden (session 42).
+    private var profile: Profile? { ProfileStore.shown(profiles) }
 
     var body: some View {
         HStack(spacing: 0) {
