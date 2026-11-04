@@ -90,8 +90,23 @@ final class PopoutController {
     /// the same stored card again.
     private static var liveCards: Set<UUID> = []
 
-    init(draftDefaults: UserDefaults = AppGroup.defaults) {
+    init(draftDefaults: UserDefaults = AppGroup.defaults, center: NotificationCenter = .default) {
         self.draftDefaults = draftDefaults
+        // Another Apple account took over this device (`AccountSwitch`): nothing the previous person typed
+        // or completed stays on screen for the next one.
+        accountObserver = center.addObserver(forName: .accountDidSwitch, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.accountDidSwitch() }
+        }
+    }
+
+    /// Lives as long as the controller (one per window); the block holds it weakly.
+    @ObservationIgnored private var accountObserver: NSObjectProtocol?
+
+    /// Closes every popout (the card's stored draft goes with it) and drops the undo toasts without undoing.
+    func accountDidSwitch() {
+        closeAll()
+        _ = toast.takeAll()
+        listToast = nil
     }
     /// The task the task popout shows; kept in step with `state.taskID`.
     private(set) var task: TaskItem?

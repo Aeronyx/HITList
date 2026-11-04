@@ -225,4 +225,18 @@ final class AccountSwitchTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: aliceFolder.appending(path: "HITList-2026-11-01.json"), encoding: .utf8), "alice earlier")
         XCTAssertEqual(try String(contentsOf: documents.appending(path: "HITList-2026-11-01.json"), encoding: .utf8), "alice today")
     }
+
+    // MARK: Popouts (supervisor follow-up to brief 42)
+
+    func testAnAccountSwitchClosesTheOpenCardAndDropsTheUndoToast() {
+        let center = NotificationCenter()
+        let popouts = PopoutController(draftDefaults: defaults, center: center)
+        popouts.openQuickAdd()
+        _ = popouts.toast.add(CompletedTask(id: UUID(), title: "Alice's task", revert: .uncomplete))
+        XCTAssertTrue(popouts.state.isQuickAddOpen)
+        center.post(name: .accountDidSwitch, object: nil)
+        XCTAssertFalse(popouts.state.isQuickAddOpen, "the previous person's card is gone")
+        XCTAssertTrue(popouts.toast.completed.isEmpty, "and their Undo toast, without undoing anything")
+        XCTAssertNil(popouts.listToast)
+    }
 }
