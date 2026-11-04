@@ -193,9 +193,17 @@ back on Dock click or ⌘Tab. iPhone list titles 16 pt with −0.3 tracking, car
 (14 was too small). The iPhone keeps a four-tab shell with the "+" oval above the tab bar; the Mac keeps
 the sidebar; settings open in-window on the Mac (`MacSettingsPage`), as a sheet on iPhone.
 
-## 8. Where things stand (2026-11-04)
+## 8. Where things stand (2026-11-04, after round 9)
 
-TestFlight build 14 (0.4.1) is released and the CloudKit schema V3 is in Production. Not yet shared with
-friends. Round 9's queue is `briefs/ROUND-9.md`. Open small items: a reminder picked from the chip before
-a time leaves `!15mb` as plain text until a time is picked; swiping the editor sheet down discards unsaved
-typing; the ROADMAP table has a row per brief through 33.
+Round 9 (briefs 34–38) is merged for 0.5.0 (15): Settings → Account with a synced `Profile` (schema V4, in
+CloudKit Development until George deploys it), the privacy policy on GitHub Pages
+(https://aeronyx.github.io/HITList/privacy/, from `docs/`; the repo is public since 2026-11-04), the iPhone tabs
+Inbox · Today · Flipboard · Upcoming with Browse behind the magnifying glass, the taller editor and bigger
+Confirm, superseded quick-add phrases and joined highlight boxes, and the Mac Upcoming board. 0.5.0 is the first
+build meant for friends as external testers (Beta App Review). Open small items: tapping the dimmed list above
+an editor with typing blocks the close without asking Discard (iOS reports no dismiss attempt); the Mac board's
+cards use the 13 pt row title (`TaskRow` fixes it); the Mac Confirm pill stayed 34 pt. ROADMAP has a row per
+brief through 38. Starting sessions: the app refuses `start_session` with "user_asked" on a turn opened by a
+background task or another session's note, so start a round's sessions on a turn George began, or propose
+them as cards ("own_initiative") for George to click. Sessions ask George for simulator tap access in their
+own panel; tell George to grant it when they ask.

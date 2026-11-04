@@ -4,6 +4,39 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.5.0
+
+George's notes on build 14, in five sessions: an account and profile for friends on TestFlight, a privacy
+policy, the iPhone tabs, a roomier editor, quick-add highlights, and a board for the Mac's Upcoming.
+
+- Settings → Account: your name and picture, synced to all your devices through iCloud, and a plain answer
+  to "which iCloud am I on?" (signed in, signed out, restricted), how to sign out, and how to delete your
+  data. Delete profile removes only the name and picture. Your account is the Apple account the device uses
+  for iCloud; there is no separate login.
+- Privacy policy at aeronyx.github.io/HITList/privacy, linked from Settings → About. Short version: HITList
+  collects nothing. Copy diagnostics says whether a profile exists and has synced (never its name).
+- iPhone tabs: Inbox · Today · Flipboard · Upcoming. The magnifying glass at the top right opens Browse; on
+  Browse the gear there opens Settings. Browse shows who you are at the top (or "Add your name") and ends
+  with Completed and Settings. A screen's old "…" items (Review Inbox, Jump to today) are at the bottom of
+  its view-options menu; on Flipboard, long-press the sound button for Add Switch…. Flipboard can be the
+  start screen; a saved Browse start screen opens on Today.
+- The task editor opens taller (sub-tasks and Confirm fit without scrolling), the Confirm pill is bigger
+  (76 × 48 on iPhone, on both Add task and Edit task), and the "Created …" line moved to the bottom of the
+  editor's "…" menu.
+- iPhone: the keyboard has a plain return key and only the Confirm pill saves a task; Return in a title
+  does nothing. Swiping the editor down after typing asks Discard; with nothing typed it just closes.
+- Quick add: type a second date, time, priority, Group, repeat or reminder and the later one wins; tap it off
+  and the earlier one comes back ("jan 6 zach fox in a month" → tap "in a month" → Jan 6). Same-coloured
+  highlights next to each other read as one box ("tom 4"), and one tap turns the whole box back into text.
+  A reminder picked before the task has a time lights up at once and counts as soon as a time is added.
+- Mac (and iPad at full width): Upcoming is a board, an Overdue column then seven days side by side, each
+  with its count and its own scrolling. ‹ › move a day, Today comes back, the month title jumps to any day.
+  Drag a task to another day and it keeps its time and its repeat's time; Overdue's Reschedule moves every
+  overdue task; each day's "+ Add task" adds on that day. iPhone keeps its list.
+- The sync bolt stays grey, not red, for someone who has never signed in to iCloud; a task added from an
+  Upcoming day with a time and a priority or label lands on that day, not today.
+- Schema V4 adds `Profile` (additive; deployed to CloudKit Production before this build).
+
 ## 0.4.1 — build 14, 2026-11-03
 
 George's notes on build 13, split across three sessions: sub-tasks, a real task editor, quick-add time

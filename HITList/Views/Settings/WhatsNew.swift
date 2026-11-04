@@ -11,6 +11,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.5.0", items: [
+            "Settings → Account: your name and picture, synced through your iCloud; Browse shows who you are.",
+            "iPhone tabs: Inbox, Today, Flipboard, Upcoming. The magnifying glass opens Browse, its gear opens Settings.",
+            "The editor opens taller, Confirm is bigger, and only Confirm saves; swiping down after typing asks first.",
+            "Quick add: a later date or priority overrides an earlier one, tap it off to bring the first back; \"tom 4\" is one box.",
+            "Mac: Upcoming is a board of seven days; drag a task to another day to move it.",
+        ]),
         Entry(version: "0.4.1", items: [
             "Sub-tasks: a checklist inside any task, from the quick-add \"+\" or the editor; rows show \"2/5\".",
             "A new task editor with one Confirm that saves and closes.",

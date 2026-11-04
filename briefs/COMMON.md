@@ -66,6 +66,18 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 9 record (2026-11-04; sessions 34–38 merged for 0.5.0 (15))
+Five desktop-app sessions started by the Opus 5.5 supervisor: 34 `accounts-profile` (xhigh, 171 turns), 37
+`highlight-merge-override` (High, 96), 38 `mac-upcoming-board` (xhigh, 158) first; then 35 `tabs-browse` (High,
+26) and 36 `editor-space-confirm` (High, 247), cut from master after the first three merged. Sessions in the
+second wave were proposed as cards George started: the app refuses `start_session` on a turn opened by a
+background-task or session event. Supervisor follow-ups: the sync bolt and dot are grey for someone who never
+used iCloud (`SyncBolt.everSignedIn`), an Upcoming day's add card keeps the day when a priority/label/reminder sits
+beside the time, stale comments. Schema V4 (`Profile`) is in CloudKit Development; George deploys it before 0.5.0
+uploads. The repo is public and GitHub Pages serves `docs/` (privacy policy at
+https://aeronyx.github.io/HITList/privacy/). Sessions need George to grant simulator tap access in their own
+panel; 35 never got it, so the supervisor tapped its menus.
+
 ## Round 9 ownership (2026-11-04; briefs 34–38; 34, 37, 38 first, then 35 and 36)
 - `34-accounts-profile` (xhigh): `Models.swift`, `SchemaVersions.swift`, new `SchemaV3Models.swift`,
   `ModelContainerFactory` model list, new `Services/ProfileStore.swift`, `Deduplicator` (profile merge),
