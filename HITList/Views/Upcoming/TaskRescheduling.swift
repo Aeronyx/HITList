@@ -30,6 +30,14 @@ enum TaskRescheduling {
         return moving
     }
 
+    /// The Overdue column's Reschedule (and Upcoming's "Reschedule all to today"): every open task in
+    /// `tasks` to `day`, each keeping its time of day and its repeat's time.
+    @MainActor
+    static func reschedule(_ tasks: [TaskItem], to day: Date, calendar: Calendar = .current, in context: ModelContext) {
+        let target = calendar.startOfDay(for: day)
+        for task in tasks where !task.isCompleted { TaskActions.reschedule(task, to: target, in: context) }
+    }
+
     /// The day `offset` days from the task's due day, or from today for an undated task (⌘← / ⌘→).
     static func day(_ offset: Int, from due: Date?, now: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: due ?? now))!
