@@ -146,4 +146,32 @@ final class SyncStateTests: XCTestCase {
         XCTAssertTrue(SyncState.offline.showsInSidebar(hasSyncedBefore: true))
         XCTAssertTrue(SyncState.notSignedIn.showsInSidebar(hasSyncedBefore: true))
     }
+
+    // MARK: Launch timing (brief 42, item 5)
+
+    func testLaunchMillisecondsCountFromTheProcessStart() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(LaunchTiming.milliseconds(at: start.addingTimeInterval(0.4125), since: start), 413)
+        XCTAssertNil(LaunchTiming.milliseconds(at: start, since: nil))
+        let processStart = LaunchTiming.processStart
+        XCTAssertNotNil(processStart, "sysctl gives this process's start time")
+        if let processStart { XCTAssertLessThan(processStart, Date()) }
+    }
+
+    @MainActor
+    func testFirstFrameIsLoggedOnceWithTheMarks() {
+        LaunchTiming.reset()
+        defer { LaunchTiming.reset() }
+        LaunchTiming.mark("store")
+        var lines: [(String, [String: String])] = []
+        LaunchTiming.firstFrame { lines.append(($0, $1)) }
+        LaunchTiming.firstFrame { lines.append(($0, $1)) }
+        LaunchTiming.mark("late")
+        XCTAssertEqual(lines.count, 1, "one line per process")
+        XCTAssertTrue(lines[0].0.hasPrefix("First screen "), lines[0].0)
+        XCTAssertTrue(lines[0].0.hasSuffix(" ms after launch"), lines[0].0)
+        XCTAssertNotNil(lines[0].1["store"])
+        XCTAssertNotNil(lines[0].1["firstFrame"])
+        XCTAssertEqual(LaunchTiming.marks.map(\.name), ["store"], "marks after the first frame are ignored")
+    }
 }

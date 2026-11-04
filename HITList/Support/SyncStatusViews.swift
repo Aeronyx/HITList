@@ -158,6 +158,8 @@ struct SyncBolt: View {
             .accessibilityIdentifier("syncBolt")
             .help(state.summary(now: tick.date))
         }
+        // Every list screen draws the bolt, so its first appearance is the launch's first list frame.
+        .onAppear { LaunchTiming.firstFrame() }
         .onChange(of: monitor.lastChangeAt) { old, new in
             let now = Date()
             guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
