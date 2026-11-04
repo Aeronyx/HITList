@@ -13,7 +13,7 @@ import HITListCore
 /// - A sideways row of pills: Description, Priority, Reminder, Labels, Repeat, Deadline, Location,
 ///   outlined until set, filled with their value once set.
 /// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
-/// - A footer with when it was created and **Confirm**, the quick-add card's filled pill: one tap saves
+/// - A footer with **Confirm** (`ConfirmPill`, the quick-add card's pill; when it was created is in "…"): one tap saves
 ///   everything typed (title, description, the sub-task field, a rename) and closes. × and Esc close
 ///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. Return in the
 ///   title confirms; ⌘Return confirms on the Mac.
@@ -137,6 +137,12 @@ struct TaskPopout: View {
             .disabled(task.isCompleted)
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+            // When it was made (and done): the footer's old line, here since brief 36.
+            Section {
+                ForEach(Self.dateLines(for: task), id: \.self) { line in
+                    Button(line) {}.disabled(true)
+                }
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 17, weight: .semibold))
@@ -151,6 +157,15 @@ struct TaskPopout: View {
         .accessibilityLabel("More")
         .accessibilityIdentifier("popoutMore")
         .help("Duplicate, move or delete")
+    }
+
+    /// The "…" menu's last lines: when the task was created, and completed if it is.
+    static func dateLines(for task: TaskItem) -> [String] {
+        var lines = ["Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))"]
+        if let done = task.completedAt {
+            lines.append("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return lines
     }
 
     /// Menu titles carry their Mac shortcut, since `PopoutHost` handles the keys rather than the menu.
@@ -425,17 +440,10 @@ struct TaskPopout: View {
 
     // MARK: Footer
 
+    /// Just Confirm, on the editor's ground: no divider and no "Created" line (brief 36; the dates are in
+    /// the "…" menu).
     private var footer: some View {
         HStack(spacing: HITSpacing.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                if let done = task.completedAt {
-                    Text("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
-                }
-            }
-            .font(HITType.caption)
-            .foregroundStyle(Theme.secondaryText.opacity(0.8))
-            .lineLimit(1)
             Spacer(minLength: HITSpacing.s)
             // The quick-add card's send pill (George: "ideally the same as the Confirm add task button").
             ConfirmPill(action: confirm)
@@ -446,7 +454,6 @@ struct TaskPopout: View {
         }
         .padding(.horizontal, HITSpacing.l)
         .padding(.vertical, HITSpacing.m)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.separator.opacity(0.6)).frame(height: 1) }
     }
 
     // MARK: Confirm and close
