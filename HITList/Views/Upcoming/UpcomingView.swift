@@ -140,6 +140,8 @@ struct UpcomingView: View {
                              onToggleCompletion: { toggleCompletion($0) },
                              onOpen: { selectedTask = $0 },
                              onDrop: { drop($0, on: $1) },
+                             // The floating quick add (a 270 pt column is too narrow for the inline card).
+                             onAdd: { popouts.openQuickAdd(.day($0)) },
                              onRescheduleOverdue: { day in
                                  let held = completions.heldIDs
                                  let overdue = board.columns.first { $0.id == .overdue }?.items ?? []
