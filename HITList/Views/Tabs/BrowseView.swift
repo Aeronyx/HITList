@@ -3,10 +3,11 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The iPhone's Browse tab, the Mac sidebar as a page: a search field on top, then Groups (Inbox first,
-/// the default grey Group, then each Group in its colour with its open count), Labels and Filters, each
-/// header with its "+", then Completed, Flipboard and Settings. A row pushes its list in the Browse
-/// tab's stack, where the tab bar and the "+" stay. Typing in the search field swaps the sections for
+/// The iPhone's Browse, the Mac sidebar as a page, pushed onto the current tab's stack by the magnifying
+/// glass at the top right (brief 35; the gear there opens Settings): a search field on top, then Groups
+/// (Inbox first, the default grey Group, then each Group in its colour with its open count), Labels and
+/// Filters, each header with its "+", then Completed and Settings (`lastRows`; the Flipboard is a tab).
+/// A row pushes its list on the same stack, where the tab bar and the "+" stay. Typing in the search field swaps the sections for
 /// matching tasks (titles and notes, completed ones too); a result opens the task popout.
 struct BrowseView: View {
     @Environment(\.modelContext) private var context
@@ -129,25 +130,52 @@ struct BrowseView: View {
             }
 
             Section {
-                link(.completed) { BrowseRow(title: "Completed", symbol: "checkmark.circle", tint: Theme.accent) }
-                link(.flipboard) { BrowseRow(title: "Flipboard", symbol: "switch.2", tint: Theme.accent) }
-                Button { showSettings = true } label: {
-                    HStack {
-                        BrowseRow(title: "Settings", symbol: "gearshape", tint: Theme.secondaryText)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.secondaryText.opacity(0.6))
+                ForEach(Self.lastRows, id: \.self) { row in
+                    switch row {
+                    case .completed:
+                        link(.completed) { BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.accent) }
+                    case .settings:
+                        Button { showSettings = true } label: {
+                            HStack {
+                                BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.secondaryText)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(Theme.secondaryText.opacity(0.6))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .slateRow()
+                        .accessibilityIdentifier("browse-settings-row")
                     }
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .slateRow()
             }
         }
         .listStyle(.insetGrouped)
         .slateList()
         .scrollDismissesKeyboard(.immediately)
     }
+
+    /// The last section's rows, in order.
+    enum LastRow: Hashable {
+        case completed, settings
+
+        var title: String {
+            switch self {
+            case .completed: "Completed"
+            case .settings: "Settings"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .completed: "checkmark.circle"
+            case .settings: "gearshape"
+            }
+        }
+    }
+
+    static let lastRows: [LastRow] = [.completed, .settings]
 
     private func link<Label: View>(_ item: SidebarItem, @ViewBuilder label: () -> Label) -> some View {
         NavigationLink(value: item) { label() }
