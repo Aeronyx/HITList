@@ -24,9 +24,11 @@ struct AddTaskIntent: AppIntent {
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
-        let added = try IntentActions.addTask(text, group: group?.id, in: IntentStore.context())
-        return .result(dialog: IntentDialog(stringLiteral: added.dialog))
+    func perform() async throws -> some IntentResult & ReturnsValue<TaskEntity> & ProvidesDialog {
+        let context = try IntentStore.context()
+        let added = try IntentActions.addTask(text, group: group?.id, in: context)
+        guard let task = IntentActions.task(id: added.id, in: context) else { throw IntentFailure.taskNotFound }
+        return .result(value: TaskEntity(task), dialog: IntentDialog(stringLiteral: added.dialog))
     }
 }
 

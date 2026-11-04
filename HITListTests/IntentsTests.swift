@@ -187,4 +187,74 @@ final class IntentsTests: XCTestCase {
         XCTAssertTrue(summary.spoken.hasSuffix(", and 2 more."), summary.spoken)
         XCTAssertEqual(summary.spoken.components(separatedBy: "Task ").count - 1, 5)
     }
+
+    // MARK: Complete Task
+
+    func testCompleteTicksTheTaskAndItsOpenSubtasks() throws {
+        let parent = try insert("Pack", due: day(0))
+        let sub = try insert("Socks", due: nil, parent: parent)
+        let dialog = try IntentActions.complete(parent.id, in: context, now: now)
+        XCTAssertEqual(dialog, "Completed ‘Pack’.")
+        XCTAssertTrue(parent.isCompleted)
+        XCTAssertTrue(sub.isCompleted, "through TaskActions.toggleCompletion, which closes the checklist too")
+        XCTAssertFalse(context.hasChanges)
+    }
+
+    func testCompleteMovesARepeatingTaskOn() throws {
+        // The roll-over reads the real clock, so this one is set on the real today.
+        let calendar = Calendar.current
+        let realNow = Date()
+        let nine = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: realNow)!
+        let tomorrowNine = calendar.date(byAdding: .day, value: 1, to: nine)!
+        let task = try insert("Water plants", due: nine, time: true)
+        task.recurrence = RecurrenceRule.daily.encoded
+        try context.save()
+        let dialog = try IntentActions.complete(task.id, in: context, now: realNow)
+        XCTAssertFalse(task.isCompleted)
+        XCTAssertEqual(task.dueDate, tomorrowNine)
+        XCTAssertEqual(dialog, "Done. ‘Water plants’ is next due tomorrow \(tomorrowNine.formatted(.dateTime.hour().minute())).")
+    }
+
+    func testCompleteNeverReopensADoneTask() throws {
+        let task = try insert("Old", due: nil, done: true)
+        XCTAssertEqual(try IntentActions.complete(task.id, in: context, now: now), "‘Old’ is already done.")
+        XCTAssertTrue(task.isCompleted)
+        XCTAssertThrowsError(try IntentActions.complete(UUID(), in: context, now: now)) { error in
+            XCTAssertEqual(error as? IntentFailure, .taskNotFound)
+        }
+    }
+
+    func testTaskSearchFindsOpenTopLevelTasksOnly() throws {
+        let parent = try insert("Buy milk", due: nil)
+        try insert("Buy oat milk", due: nil, parent: parent)
+        try insert("Bought milk", due: nil, done: true)
+        try insert("Buy bread", due: nil)
+        XCTAssertEqual(try IntentActions.openTasks(matching: "milk", in: context).map(\.title), ["Buy milk"])
+        XCTAssertEqual(Set(try IntentActions.openTasks(matching: "buy", in: context).map(\.title)), ["Buy milk", "Buy bread"])
+        XCTAssertEqual(try IntentActions.tasks(ids: [parent.id], in: context).map(\.title), ["Buy milk"])
+    }
+
+    func testSuggestedTasksPutTodayFirst() throws {
+        try insert("Later p1", due: day(5), priority: 1)
+        try insert("Today", due: day(0))
+        try insert("Overdue", due: day(-2))
+        try insert("No date", due: nil)
+        try insert("Done", due: day(0), done: true)
+        let titles = try IntentActions.suggestedTasks(in: context, now: now).map(\.title)
+        XCTAssertEqual(Array(titles.prefix(2)), ["Overdue", "Today"])
+        XCTAssertEqual(Set(titles.dropFirst(2)), ["Later p1", "No date"])
+    }
+
+    func testTaskEntityDescribesItsDayAndGroup() throws {
+        let home = Project(name: "Home")
+        context.insert(home)
+        let task = try insert("Fix the tap", due: day(1, hour: 17), time: true)
+        task.project = home
+        let entity = TaskEntity(task, now: now)
+        XCTAssertEqual(entity.id, task.id)
+        XCTAssertEqual(entity.title, "Fix the tap")
+        XCTAssertEqual(entity.group, "Home")
+        XCTAssertEqual(entity.detail, "\(DueFormatter.text(for: day(1, hour: 17), hasTime: true, now: now)) · Home")
+        XCTAssertNil(TaskEntity(try insert("Plain", due: nil), now: now).detail)
+    }
 }
