@@ -132,4 +132,14 @@ final class MobileChromeTests: XCTestCase {
             XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(tab.title) menu didn't render")
         }
     }
+
+    #if os(iOS)
+    // MARK: Browse (brief 35)
+
+    func testBrowseEndsWithCompletedThenSettings() {
+        XCTAssertEqual(BrowseView.lastRows, [.completed, .settings], "no Flipboard row: it is a tab now")
+        XCTAssertEqual(BrowseView.lastRows.map(\.title), ["Completed", "Settings"])
+        XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape"])
+    }
+    #endif
 }
