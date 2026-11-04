@@ -24,6 +24,7 @@ struct SettingsView: View {
     /// (`MacSettingsSectionContent`).
     @ViewBuilder
     static var allGroups: some View {
+        AccountSettingsSection()
         GeneralSettingsSection()
         ICloudSyncGroup()
         ResetLocalCacheGroup()

@@ -19,16 +19,22 @@ import SwiftData
 // - `scripts/release.sh` refuses to upload while the Development schema differs from Production
 //   (needs a cktool management token; see the script header).
 //
-// How to add V4: move the live model classes in Models.swift from `extension HITListSchemaV3` to a new
-// `extension HITListSchemaV4`, leaving a frozen copy of V3's stored properties behind (as
-// SchemaV1Models.swift and SchemaV2Models.swift do), point the typealiases and `HITListSchema.current` at
-// V4, append V4 to `HITListMigrationPlan.schemas` and add `.lightweight(fromVersion: HITListSchemaV3.self,
-// toVersion: HITListSchemaV4.self)` to `stages`. (V3 was added this way on 2026-11-03.)
+// How to add V5: move the live model classes in Models.swift from `extension HITListSchemaV4` to a new
+// `extension HITListSchemaV5`, leaving a frozen copy of V4's stored properties behind (as
+// SchemaV1Models.swift to SchemaV3Models.swift do; V4 has a fifth model, Profile), point the typealiases and
+// `HITListSchema.current` at V5, append V5 to `HITListMigrationPlan.schemas` and add
+// `.lightweight(fromVersion: HITListSchemaV4.self, toVersion: HITListSchemaV5.self)` to `stages`. Pin V4's
+// hashes in `SchemaTests` first, while V4 is still live. (V3 was added this way on 2026-11-03, V4 on 2026-11-04.)
+//
+// A new entity or field reaches the CloudKit Development schema only on a record that has a value for it,
+// so `-seedSampleData` writes one of each (for V4, a sample Profile with a name and both a small and a large
+// picture: CloudKit keeps small binary data inline and large data as a CD_<name>_ckAsset field).
 //
 // `SchemaTests.testV1EntityHashesMatchShippedStore` pins V1's entity version hashes to the ones
 // recorded in build 1's store metadata, so an accidental shape change fails the tests;
 // `testV2OnlyAddsTaskItemAttributes` checks V2 against V1 the same way;
-// `testV2EntityHashesMatchShippedBuilds` pins V2 and `testV3OnlyAddsTheSubtaskRelationship` checks V3.
+// `testV2EntityHashesMatchShippedBuilds` pins V2 and `testV3OnlyAddsTheSubtaskRelationship` checks V3;
+// `testV3EntityHashesMatchShippedBuilds` pins V3 and `testV4OnlyAddsTheProfileEntity` checks V4.
 
 /// Builds 1–4 (0.1.0) schema, frozen in SchemaV1Models.swift. SwiftData names the entities (and so the
 /// CloudKit record types CD_TaskItem, CD_Project, CD_TaskLabel, CD_SavedFilter) after the bare class
@@ -51,7 +57,7 @@ enum HITListSchemaV2: VersionedSchema {
     }
 }
 
-/// 0.4.1 schema: the live models in Models.swift. TaskItem gains subtasks, one level deep: `parent`
+/// 0.4.1 (14) schema, frozen in SchemaV3Models.swift. TaskItem gains subtasks, one level deep: `parent`
 /// (to-one, nullify) and its inverse `subtasks` (to-many, cascade), both optional, so the CloudKit change
 /// is additive (a `CD_parent` reference field on CD_TaskItem) and the store migrates lightweight. Deploy
 /// the schema to Production in the CloudKit dashboard before 0.4.1 ships.
@@ -62,10 +68,24 @@ enum HITListSchemaV3: VersionedSchema {
     }
 }
 
+/// 0.5.0 schema: the live models in Models.swift. Adds the `Profile` entity (brief 34: a name and a picture
+/// per iCloud account) and changes nothing else, so the CloudKit change is additive (a new CD_Profile record
+/// type) and the store migrates lightweight. Deploy the schema to Production in the CloudKit dashboard
+/// before 0.5.0 ships.
+enum HITListSchemaV4: VersionedSchema {
+    static let versionIdentifier = Schema.Version(4, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [TaskItem.self, Project.self, TaskLabel.self, SavedFilter.self, Profile.self]
+    }
+}
+
 enum HITListMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [HITListSchemaV1.self, HITListSchemaV2.self, HITListSchemaV3.self] }
+    static var schemas: [any VersionedSchema.Type] {
+        [HITListSchemaV1.self, HITListSchemaV2.self, HITListSchemaV3.self, HITListSchemaV4.self]
+    }
     static var stages: [MigrationStage] {
         [.lightweight(fromVersion: HITListSchemaV1.self, toVersion: HITListSchemaV2.self),
-         .lightweight(fromVersion: HITListSchemaV2.self, toVersion: HITListSchemaV3.self)]
+         .lightweight(fromVersion: HITListSchemaV2.self, toVersion: HITListSchemaV3.self),
+         .lightweight(fromVersion: HITListSchemaV3.self, toVersion: HITListSchemaV4.self)]
     }
 }

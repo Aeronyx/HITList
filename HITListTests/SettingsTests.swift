@@ -203,9 +203,10 @@ final class SettingsTests: XCTestCase {
         let diagnostics = Diagnostics(
             version: "0.2.0", build: "6", os: "iOS 26.1 (Build 23B85)", device: "iPhone17,3",
             syncState: "Synced 2 min ago", lastImport: Date(timeIntervalSince1970: 1_793_000_000), lastExport: nil,
-            cloudKitEnvironment: "Production", storePath: "/path/HITList.store", notifications: "Allowed, reminders on")
+            cloudKitEnvironment: "Production", storePath: "/path/HITList.store", notifications: "Allowed, reminders on",
+            account: "Signed in", profile: "1 record, changed 2026-11-04T11:20:00-05:00, exported since")
         let lines = diagnostics.text.split(separator: "\n").map(String.init)
-        XCTAssertEqual(lines.count, 9)
+        XCTAssertEqual(lines.count, 11)
         XCTAssertEqual(lines[0], "HITList 0.2.0 (6)")
         XCTAssertEqual(lines[1], "OS: iOS 26.1 (Build 23B85)")
         XCTAssertEqual(lines[2], "Device: iPhone17,3")
@@ -215,6 +216,8 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(lines[6], "CloudKit environment: Production")
         XCTAssertEqual(lines[7], "Store: /path/HITList.store")
         XCTAssertEqual(lines[8], "Notifications: Allowed, reminders on")
+        XCTAssertEqual(lines[9], "iCloud account: Signed in")
+        XCTAssertEqual(lines[10], "Profile: 1 record, changed 2026-11-04T11:20:00-05:00, exported since")
     }
 
     /// Copy diagnostics said "Development (Mac)" for every Mac build, the TestFlight one included, which

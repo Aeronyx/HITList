@@ -23,6 +23,69 @@ final class SchemaTests: XCTestCase {
         "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
     ]
 
+    /// Entity version hashes of schema V3 as 0.4.1 (14) shipped it, taken from the live models before V4
+    /// moved them; `SchemaV3Models.swift` must keep producing them.
+    private let v3Hashes: [String: String] = [
+        "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
+        "SavedFilter": "LYBR+XsnEKMQlGwove4qW3exBMditLirAnGHJQ1i3FY=",
+        "TaskItem": "CaIg8hrcCjA7CUNM5wg7EJ9iELqQxeLqATCheceX1Kc=",
+        "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
+    ]
+
+    func testV3EntityHashesMatchShippedBuilds() throws {
+        let model = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV3.models))
+        let hashes = model.entityVersionHashesByName.mapValues { $0.base64EncodedString() }
+        XCTAssertEqual(hashes, v3Hashes)
+    }
+
+    /// Entity version hashes of schema V4, the live models (0.5.0). When V5 moves them, these must keep
+    /// matching the frozen copy.
+    private let v4Hashes: [String: String] = [
+        "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
+        "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
+        "SavedFilter": "LYBR+XsnEKMQlGwove4qW3exBMditLirAnGHJQ1i3FY=",
+        "TaskItem": "CaIg8hrcCjA7CUNM5wg7EJ9iELqQxeLqATCheceX1Kc=",
+        "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
+    ]
+
+    func testV4EntityHashes() throws {
+        let model = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV4.models))
+        let hashes = model.entityVersionHashesByName.mapValues { $0.base64EncodedString() }
+        XCTAssertEqual(hashes, v4Hashes)
+    }
+
+    /// CloudKit is additive only: V4 adds the Profile entity (every attribute optional or defaulted, the
+    /// picture in external storage so it syncs as a CKAsset) and leaves the other four exactly as V3 had them.
+    func testV4OnlyAddsTheProfileEntity() throws {
+        let v3 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV3.models))
+        let v4 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV4.models))
+        XCTAssertEqual(Set(v4.entitiesByName.keys).subtracting(v3.entitiesByName.keys), ["Profile"])
+        for (name, entity) in v3.entitiesByName {
+            XCTAssertEqual(entity.versionHash, v4.entitiesByName[name]?.versionHash, "\(name) changed in V4")
+        }
+        let profile = try XCTUnwrap(v4.entitiesByName["Profile"])
+        XCTAssertEqual(Set(profile.attributesByName.keys),
+                       ["id", "displayName", "nameUpdatedAt", "avatarData", "avatarUpdatedAt", "createdAt", "updatedAt"])
+        XCTAssertTrue(profile.relationshipsByName.isEmpty)
+        XCTAssertTrue(profile.uniquenessConstraints.isEmpty, "CloudKit: no unique constraints")
+        for attribute in profile.attributesByName.values {
+            XCTAssertTrue(attribute.isOptional || attribute.defaultValue != nil, "\(attribute.name) needs a default or to be optional")
+        }
+        let avatar = try XCTUnwrap(profile.attributesByName["avatarData"])
+        XCTAssertEqual(avatar.attributeType, .binaryDataAttributeType)
+        XCTAssertTrue(avatar.allowsExternalBinaryDataStorage, "the picture syncs as a CKAsset")
+        XCTAssertTrue(avatar.isOptional)
+    }
+
+    func testNewProfileIsEmpty() {
+        let profile = Profile()
+        XCTAssertEqual(profile.displayName, "")
+        XCTAssertNil(profile.nameUpdatedAt)
+        XCTAssertNil(profile.avatarData)
+        XCTAssertNil(profile.avatarUpdatedAt)
+        XCTAssertEqual(profile.createdAt, profile.updatedAt)
+    }
+
     func testV1EntityNamesAreTheCloudKitRecordTypes() {
         let names = Schema(versionedSchema: HITListSchemaV1.self).entities.map(\.name).sorted()
         XCTAssertEqual(names, ["Project", "SavedFilter", "TaskItem", "TaskLabel"])
@@ -44,7 +107,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(HITListSchemaV1.versionIdentifier, Schema.Version(1, 0, 0))
         XCTAssertEqual(HITListSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
         XCTAssertEqual(HITListSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
-        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV3.self))
+        XCTAssertEqual(HITListSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
+        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV4.self))
         XCTAssertEqual(HITListMigrationPlan.schemas.last.map(ObjectIdentifier.init), ObjectIdentifier(HITListSchema.current))
         XCTAssertEqual(HITListMigrationPlan.stages.count, HITListMigrationPlan.schemas.count - 1, "one lightweight stage per version step")
     }
@@ -150,6 +214,30 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(tasks.first?.locationName, "Costco")
         XCTAssertNil(tasks.first?.parent)
         XCTAssertEqual(tasks.first?.subtasks ?? [], [])
+    }
+
+    /// A store written by 0.4.1 (V3) opens under V4 with its rows intact, subtasks included, and no profile.
+    func testV3StoreMigratesToV4() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("schema-\(UUID().uuidString).store")
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix)) } }
+        do {
+            let schema = Schema(versionedSchema: HITListSchemaV3.self)
+            let v3 = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
+            let context = ModelContext(v3)
+            let trip = HITListSchemaV3.TaskItem(title: "Written by V3")
+            let socks = HITListSchemaV3.TaskItem(title: "Socks")
+            context.insert(trip)
+            context.insert(socks)
+            socks.parent = trip
+            try context.save()
+        }
+        let v4 = try ModelContainer(for: HITListSchema.schema, migrationPlan: HITListMigrationPlan.self,
+                                    configurations: [ModelConfiguration(schema: HITListSchema.schema, url: url, cloudKitDatabase: .none)])
+        let context = ModelContext(v4)
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        XCTAssertEqual(Set(tasks.map(\.title)), ["Written by V3", "Socks"])
+        XCTAssertEqual(tasks.first { $0.title == "Socks" }?.parent?.title, "Written by V3")
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Profile>()), 0)
     }
 
     func testDeletingATaskDeletesItsSubtasksButNotTheOtherWayRound() throws {

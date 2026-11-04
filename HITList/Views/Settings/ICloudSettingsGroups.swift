@@ -80,7 +80,7 @@ struct ICloudSyncGroup: View {
     @ViewBuilder
     private var syncDetails: some View {
         let monitor = CloudSyncMonitor.shared
-        detailRow("Account", CloudSyncMonitor.describe(monitor.accountStatus))
+        detailRow("Account", "\(AccountState.current.label) (\(CloudSyncMonitor.describe(monitor.accountStatus)))")
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         detailRow("Last import", timestamp(monitor.lastImportAt))
         detailRow("Last export", timestamp(monitor.lastExportAt))
@@ -163,18 +163,24 @@ struct SyncStuckRow: View {
     }
 }
 
-/// Which CloudKit environment and build this is ("Production · TestFlight build 11"), with the line
-/// that explains why two devices on different environments never see each other's tasks.
+/// Which CloudKit environment and build this is ("Production · TestFlight build 11") and which account state
+/// it is in, in the Account screen's words ("iCloud: Signed in"), with the line that explains why two devices
+/// on different environments never see each other's tasks.
 struct SyncEnvironmentRow: View {
     var environment: SyncEnvironment = .current
+    /// Nil: the live state (`AccountState.current`).
+    var account: AccountState?
+
+    static func subtitle(account: AccountState) -> String { "\(account.title). \(SyncEnvironment.explanation)" }
 
     var body: some View {
-        HITMenuRowLabel(environment.summary, subtitle: SyncEnvironment.explanation, systemImage: "server.rack",
+        let account = account ?? .current
+        HITMenuRowLabel(environment.summary, subtitle: Self.subtitle(account: account), systemImage: "server.rack",
                         iconTint: environment.cloudKit == .production ? Theme.secondaryText : HITColor.dueTomorrow)
             .frame(maxWidth: .infinity, alignment: .leading)
             .hitRowPadding()
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("CloudKit environment: \(environment.summary). \(SyncEnvironment.explanation)")
+            .accessibilityLabel("CloudKit environment: \(environment.summary). \(Self.subtitle(account: account))")
             .accessibilityIdentifier("settings-sync-environment")
     }
 }
