@@ -157,7 +157,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(Preferences.startTabValue(nil), .today)
         XCTAssertEqual(Preferences.startTabValue("nonsense"), .today, "an unknown value falls back")
         XCTAssertEqual(Preferences.startTabValue("inbox"), .inbox)
-        XCTAssertEqual(Preferences.startTabValue("browse"), .browse)
+        XCTAssertEqual(Preferences.startTabValue("browse"), .today, "Browse is no longer a tab (brief 35)")
         XCTAssertEqual(MobileTab(rawValue: Preferences.startTabDefault), .today)
     }
 

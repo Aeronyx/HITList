@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// The iPhone's four main screens, in tab bar order.
+/// The iPhone's four main screens, in tab bar order: Inbox, Today, Flipboard, Upcoming (furthest right).
+/// Browse is not a tab: it is pushed onto the current tab's stack by the magnifying glass at the top right
+/// (`MobileDestination.browse`, `screenChrome`).
 enum MobileTab: String, CaseIterable, Identifiable, Hashable {
-    case inbox, today, upcoming, browse
+    case inbox, today, flipboard, upcoming
 
     var id: String { rawValue }
 
@@ -10,20 +12,27 @@ enum MobileTab: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .inbox: "Inbox"
         case .today: "Today"
+        case .flipboard: "Flipboard"
         case .upcoming: "Upcoming"
-        case .browse: "Browse"
         }
     }
 
-    /// The SF Symbol; Today draws its own calendar page with the day number instead.
+    /// The SF Symbol; Today draws its own calendar page with the day number instead. Flipboard's is its
+    /// sidebar row's.
     var symbol: String {
         switch self {
         case .inbox: "tray"
         case .today: "calendar"
+        case .flipboard: "switch.2"
         case .upcoming: "calendar.badge.clock"
-        case .browse: "square.grid.2x2"
         }
     }
+}
+
+/// Screens the iPhone pushes onto a tab's stack that are not a `SidebarItem` list.
+enum MobileDestination: Hashable {
+    /// Groups, labels, filters, Completed and Settings: what was the Browse tab.
+    case browse
 }
 
 /// The floating island's measurements, as plain values (`MobileChromeTests` pins them). The island is a

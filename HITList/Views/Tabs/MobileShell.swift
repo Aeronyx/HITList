@@ -1,8 +1,8 @@
 import SwiftUI
 
 #if os(iOS)
-/// The iPhone shell (compact width): one screen per tab (Inbox, Today, Upcoming, Browse), each in its own
-/// `NavigationStack`, the floating island `MobileTabBar` near the bottom and the oval "+" above its right
+/// The iPhone shell (compact width): one screen per tab (Inbox, Today, Flipboard, Upcoming), each in its
+/// own `NavigationStack`, Browse pushed onto the current tab's stack (`MobileDestination.browse`), the floating island `MobileTabBar` near the bottom and the oval "+" above its right
 /// end. The island and the "+" are on every tab and every pushed screen (a Group, a label, a filter); the
 /// "+" hides while a popout is up. `ContentView` applies `popoutHost` outside this view, so popouts draw
 /// over the island. On iOS 26 the island and the "+" are Liquid Glass (`hitGlass`) in one `HITGlassContainer`.
@@ -11,7 +11,8 @@ struct MobileShell: View {
     /// Settings → General → Start screen; Today unless chosen otherwise.
     @State private var tab: MobileTab = Preferences.startTabValue()
     /// Each tab's pushed screens, kept while another tab is on show.
-    @State private var paths: [MobileTab: [SidebarItem]] = [:]
+    /// Holds `MobileDestination.browse` and the `SidebarItem` lists pushed from Browse.
+    @State private var paths: [MobileTab: NavigationPath] = [:]
     @State private var now = Date()
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -39,13 +40,13 @@ struct MobileShell: View {
                 .padding(.trailing, IslandMetrics.sideInset)
             MobileTabBar(selection: $tab, day: Calendar.current.component(.day, from: now)) { reselected in
                 // Tapping the current tab again goes back to its first screen.
-                paths[reselected] = []
+                paths[reselected] = NavigationPath()
             }
         }
     }
 
-    private func path(_ tab: MobileTab) -> Binding<[SidebarItem]> {
-        Binding(get: { paths[tab] ?? [] }, set: { paths[tab] = $0 })
+    private func path(_ tab: MobileTab) -> Binding<NavigationPath> {
+        Binding(get: { paths[tab] ?? NavigationPath() }, set: { paths[tab] = $0 })
     }
 
     @ViewBuilder
@@ -54,6 +55,11 @@ struct MobileShell: View {
             root(tab)
                 .navigationDestination(for: SidebarItem.self) { item in
                     ListScreen(item: item)
+                }
+                .navigationDestination(for: MobileDestination.self) { destination in
+                    switch destination {
+                    case .browse: BrowseView()
+                    }
                 }
         }
         .id(tab)
@@ -64,8 +70,8 @@ struct MobileShell: View {
         switch tab {
         case .inbox: ListScreen(item: .inbox)
         case .today: ListScreen(item: .today)
+        case .flipboard: ListScreen(item: .flipboard)
         case .upcoming: ListScreen(item: .upcoming)
-        case .browse: BrowseView()
         }
     }
 }
