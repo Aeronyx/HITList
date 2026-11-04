@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// The iPhone's four main screens, in tab bar order: Inbox, Today, Flipboard, Upcoming (furthest right).
+/// The iPhone's four main screens, in tab bar order: Inbox, Today, Upcoming, Flipboard (furthest right;
+/// George swapped it back in 0.6.0). The raw values are stored (the start screen), so the order may change
+/// but they may not.
 /// Browse is not a tab: it is pushed onto the current tab's stack by the magnifying glass at the top right
 /// (`MobileDestination.browse`, `screenChrome`).
 enum MobileTab: String, CaseIterable, Identifiable, Hashable {
-    case inbox, today, flipboard, upcoming
+    case inbox, today, upcoming, flipboard
 
     var id: String { rawValue }
 

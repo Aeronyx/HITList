@@ -112,6 +112,7 @@
 		75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */; };
 		77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */; };
 		79D44CE11E4002BD0DE04C52 /* CloudKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2D3D00811FB7ED869EAE0115 /* CloudKit.framework */; };
+		7A9330D103D698A912E0AF14 /* ProfileMenuTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB606C235A41C872012BAFC7 /* ProfileMenuTests.swift */; };
 		7AEF7B1FCC9604F964887C19 /* FilterQueryField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B28A9FE09B2F51E29D9AD05 /* FilterQueryField.swift */; };
 		7B59D9BD3695996D9D031875 /* InboxZeroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E098101387CC4E17342476ED /* InboxZeroView.swift */; };
 		7B84A8B88B5301495E5B236A /* ClaudeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71D7AFD21F170C23857C5C17 /* ClaudeSettings.swift */; };
@@ -208,6 +209,7 @@
 		EFF74DC0B928EAD8ABFF10AD /* AccountWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */; };
 		F08B3E77DEE13635559AA7E3 /* CompletionRowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */; };
 		F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */; };
+		F39BFE7FCD06D98108ED3865 /* ProfileMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4233FD83EC4A73BC7DC5A34 /* ProfileMenu.swift */; };
 		F70CC887D38395621DE10F49 /* ProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C2724E3421441280B8B8EA /* ProfileTests.swift */; };
 		F731493FD4E1A807845123C1 /* Debouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A889BC2315D60CA212A38FD /* Debouncer.swift */; };
 		F8458ACDEBB20AD4013AD07B /* FontTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825B734C651EF77EF1FA1410 /* FontTests.swift */; };
@@ -402,6 +404,7 @@
 		B7433290494D95848705DE1E /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelightSettingsSection.swift; sourceTree = "<group>"; };
 		BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		BB606C235A41C872012BAFC7 /* ProfileMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenuTests.swift; sourceTree = "<group>"; };
 		BC516A0557E14903E6331376 /* Inter_18pt-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-ExtraBold.ttf"; sourceTree = "<group>"; };
 		BCEA3CCC681372C04E433275 /* ListRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListRulesTests.swift; sourceTree = "<group>"; };
 		BD69DA3D48DE01A521546D67 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
@@ -413,6 +416,7 @@
 		C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackupTests.swift; sourceTree = "<group>"; };
 		C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlan.swift; sourceTree = "<group>"; };
 		C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaTests.swift; sourceTree = "<group>"; };
+		C4233FD83EC4A73BC7DC5A34 /* ProfileMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenu.swift; sourceTree = "<group>"; };
 		C50BDDCE5CD3BBAE4215CFE6 /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
 		C52D4DEDC8BFB16C07252D16 /* HITChip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITChip.swift; sourceTree = "<group>"; };
 		C81CBED17342C9994FC47A6E /* MobileShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileShell.swift; sourceTree = "<group>"; };
@@ -544,6 +548,7 @@
 				BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */,
 				AD12153261EC9FBC68657755 /* TaskListView.swift */,
 				42AC4E971C5262969197F1F3 /* TaskRow.swift */,
+				48AE9F48D14F4983E1EF74F5 /* Account */,
 				49ECF20A2ABA353E1651B428 /* Delight */,
 				A43A98B92AE329603535CE8D /* Filters */,
 				7C434BB7372CC0AAE65EDBDE /* Flipboard */,
@@ -587,6 +592,14 @@
 				F6E6CED5602E68567841C52F /* NotificationStatus.swift */,
 			);
 			path = Notifications;
+			sourceTree = "<group>";
+		};
+		48AE9F48D14F4983E1EF74F5 /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				C4233FD83EC4A73BC7DC5A34 /* ProfileMenu.swift */,
+			);
+			path = Account;
 			sourceTree = "<group>";
 		};
 		49ECF20A2ABA353E1651B428 /* Delight */ = {
@@ -762,6 +775,7 @@
 				0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */,
 				0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */,
 				41B7E9DC54A02E9D9682E9E7 /* PopoutTests.swift */,
+				BB606C235A41C872012BAFC7 /* ProfileMenuTests.swift */,
 				77C2724E3421441280B8B8EA /* ProfileTests.swift */,
 				375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */,
 				B2C0C42C15EA1C146A852A64 /* QuickAddDraftStoreTests.swift */,
@@ -1187,6 +1201,7 @@
 				6B070ADB5812F73B071950DC /* PopoutHost.swift in Sources */,
 				7FAF1E998F06E600F7C27C6A /* PopoutPickers.swift in Sources */,
 				42AB199282B3DEF749DD0750 /* Preferences.swift in Sources */,
+				F39BFE7FCD06D98108ED3865 /* ProfileMenu.swift in Sources */,
 				32EC8697D3216ABF194E6387 /* ProfileStore.swift in Sources */,
 				4E3CC00722B95EA5C12A9D06 /* ProjectEditorView.swift in Sources */,
 				2D9B3165524E299CDC86304B /* QuickAddContext.swift in Sources */,
@@ -1268,6 +1283,7 @@
 				5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */,
 				F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */,
 				E6B03B4FD68EEE02E6285504 /* PopoutTests.swift in Sources */,
+				7A9330D103D698A912E0AF14 /* ProfileMenuTests.swift in Sources */,
 				F70CC887D38395621DE10F49 /* ProfileTests.swift in Sources */,
 				D6D0CFCCBE7E6A804A288E03 /* QuickAddCreateTests.swift in Sources */,
 				15C8F8DB06E9760C3DA1330D /* QuickAddDraftStoreTests.swift in Sources */,

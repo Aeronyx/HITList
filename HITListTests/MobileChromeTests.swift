@@ -46,12 +46,13 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(Preferences.startTabValue("inbox"), .inbox)
     }
 
-    // MARK: Tabs (brief 35)
+    // MARK: Tabs (brief 35, order swapped back in brief 40)
 
-    func testTabsRunInboxTodayFlipboardUpcoming() {
-        XCTAssertEqual(MobileTab.allCases, [.inbox, .today, .flipboard, .upcoming], "Upcoming furthest right")
-        XCTAssertEqual(MobileTab.allCases.map(\.title), ["Inbox", "Today", "Flipboard", "Upcoming"])
-        XCTAssertEqual(MobileTab.allCases.map(\.rawValue), ["inbox", "today", "flipboard", "upcoming"])
+    func testTabsRunInboxTodayUpcomingFlipboard() {
+        XCTAssertEqual(MobileTab.allCases, [.inbox, .today, .upcoming, .flipboard], "Flipboard furthest right")
+        XCTAssertEqual(MobileTab.allCases.map(\.title), ["Inbox", "Today", "Upcoming", "Flipboard"])
+        XCTAssertEqual(MobileTab.allCases.map(\.rawValue), ["inbox", "today", "upcoming", "flipboard"],
+                       "raw values unchanged: a stored start tab still means the same screen")
     }
 
     func testFlipboardTabLooksLikeItsSidebarRow() {
@@ -67,7 +68,7 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(Preferences.startTabValue("flipboard"), .flipboard)
         XCTAssertEqual(Preferences.startTabValue("upcoming"), .upcoming)
         XCTAssertEqual(Preferences.startTabValue("browse"), .today, "someone who chose Browse opens on Today")
-        XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .flipboard, .upcoming])
+        XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .upcoming, .flipboard])
     }
 
     // MARK: Top-right control (brief 35)
@@ -142,11 +143,39 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape"])
     }
 
-    func testBrowseProfileRowAsksForANameUntilThereIsOne() {
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: nil), "Add your name", "no profile yet")
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: ""), "Add your name")
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: "  "), "Add your name")
-        XCTAssertNil(BrowseProfileRow.prompt(forName: "George"), "ProfileBadge shows the name")
+    // MARK: Browse's top left (brief 40)
+
+    func testBrowseProfileShowsTheNameThenTheFirstNameThenTheAvatar() {
+        let tenPerCharacter: (String) -> CGFloat = { CGFloat($0.count) * 10 }
+        func fit(_ name: String?, _ width: CGFloat = 100) -> BrowseProfileButton.Fit {
+            BrowseProfileButton.fit(name: name, maxWidth: width, width: tenPerCharacter)
+        }
+        XCTAssertEqual(fit("George"), .name("George"))
+        XCTAssertEqual(fit("George Trammell"), .name("George"), "too long: the first name")
+        XCTAssertEqual(fit("George Trammell", 150), .name("George Trammell"), "15 characters: fits exactly")
+        XCTAssertEqual(fit("Bartholomew Fitzgerald"), .avatarOnly, "not even the first name fits")
+        XCTAssertEqual(fit("  George  "), .name("George"), "trimmed")
+        XCTAssertEqual(fit(nil, 130), .prompt("Add your name"), "no profile yet")
+        XCTAssertEqual(fit("   ", 130), .prompt("Add your name"))
+        XCTAssertEqual(fit(nil), .prompt("Add name"), "the short prompt where the long one doesn't fit")
+        XCTAssertEqual(fit(nil, 40), .avatarOnly)
+        XCTAssertNil(BrowseProfileButton.Fit.avatarOnly.text)
+    }
+
+    func testBrowseProfileMeasuresWithItsOwnFont() {
+        let short = BrowseProfileButton.textWidth("Al")
+        let long = BrowseProfileButton.textWidth("Alexandria")
+        XCTAssertGreaterThan(short, 0)
+        XCTAssertGreaterThan(long, short)
+        // Measured on an iPhone 17 (2026-11-04): "George Tra" (80 pt) kept Browse's New and gear, "George
+        // Tram" (94 pt) pushed the gear into a "…" overflow. The room leaves a margin for an iPhone 16.
+        func real(_ name: String?) -> BrowseProfileButton.Fit {
+            BrowseProfileButton.fit(name: name, maxWidth: BrowseProfileButton.maxNameWidth, width: BrowseProfileButton.textWidth)
+        }
+        XCTAssertLessThan(BrowseProfileButton.maxNameWidth, 80)
+        XCTAssertEqual(real("George"), .name("George"))
+        XCTAssertEqual(real("George Trammell"), .name("George"))
+        XCTAssertEqual(real(nil), .prompt("Add name"))
     }
     #endif
 }
