@@ -53,12 +53,18 @@ struct MobileShell: View {
     private func stack(for tab: MobileTab) -> some View {
         NavigationStack(path: path(tab)) {
             root(tab)
+                .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: true)) {
+                    paths[tab, default: NavigationPath()].append(MobileDestination.browse)
+                })
                 .navigationDestination(for: SidebarItem.self) { item in
                     ListScreen(item: item)
+                        .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: false)))
                 }
                 .navigationDestination(for: MobileDestination.self) { destination in
                     switch destination {
-                    case .browse: BrowseView()
+                    case .browse:
+                        BrowseView()
+                            .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: false)))
                     }
                 }
         }

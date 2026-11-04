@@ -74,7 +74,7 @@ struct FlipboardView: View {
         // Adding lives in the grid (`AddSwitchTile`); the toolbar's control is the flip sound, and the
         // "…" keeps Add switch… as a second route. Same on every platform.
         .screenChrome {
-            Button { soundOn.toggle() } label: {
+            ScreenOptionButton { soundOn.toggle() } label: {
                 Label(soundOn ? "Flip sound on" : "Flip sound off", systemImage: soundOn ? "speaker.wave.2" : "speaker.slash")
                     .labelStyle(.iconOnly)
             }
