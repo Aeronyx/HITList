@@ -3,14 +3,16 @@ import HITListCore
 
 /// The quick-add title: `HITField`'s box (`HITFieldChrome`) around a wrapping text field, with each
 /// recognised token (dates, times, repeats, `#project`, `@label`, `p1`-`p4`, `!15mb`) tinted behind the
-/// text as you type, in a lightly rounded box that reads as a button. Tapping (clicking) a highlight
-/// switches that token off (`onDisable`): its words stay as plain text in the title. Return submits
+/// text as you type, in a lightly rounded box that reads as a button. Highlights of the same colour with
+/// only spaces between them are one box ("[tom 4]", brief 37). Tapping (clicking) a box switches its
+/// tokens off (`onDisable`, once per token): their words stay as plain text in the title. Return submits
 /// instead of starting a new line. `bordered: false` drops the box, for the quick-add card where the card
 /// itself is the frame.
 ///
 /// How the highlights are drawn and hit: under the field sits a copy of the text with clear glyphs, each
 /// token's words tagged with `TokenSpan`. SwiftUI reports that copy's line layout (`Text.LayoutKey`), and
-/// the runs carrying a `TokenSpan` give each token's rectangles on each line (`TokenHighlightField.areas`).
+/// the runs carrying a `TokenSpan` give each token's rectangles on each line (`TokenHighlightField.areas`),
+/// joined per line into boxes for runs of same-coloured tokens (`groups`, `boxes`).
 /// The tints are rounded rectangles drawn behind the field at those places, and the tap targets are clear
 /// shapes at the same places above it, so the field itself stays a plain `TextField` (iOS) / `TextEditor`
 /// (Mac) and keeps its focus, placeholder, Return and cap. A tap anywhere else still lands in the field.
@@ -48,6 +50,7 @@ struct TokenHighlightField: View {
 
     private var field: some View {
         let tokens = drawableTokens
+        let groups = Self.groups(tokens, in: text, priority: priority)
         return ZStack(alignment: .topLeading) {
             Self.highlightText(text, tokens: tokens)
                 .foregroundStyle(.clear)
@@ -57,11 +60,11 @@ struct TokenHighlightField: View {
                 .accessibilityHidden(true)
                 .backgroundPreferenceValue(Text.LayoutKey.self) { layouts in
                     GeometryReader { proxy in
-                        ForEach(Self.areas(layouts, in: proxy).filter { $0.token < tokens.count }) { area in
+                        ForEach(Self.boxes(Self.areas(layouts, in: proxy), groups: groups)) { box in
                             RoundedRectangle(cornerRadius: Self.highlightRadius, style: .continuous)
-                                .fill(PopoutTint.token(tokens[area.token].kind, priority: priority).opacity(Self.highlightOpacity))
-                                .frame(width: area.rect.width, height: area.rect.height)
-                                .position(x: area.rect.midX, y: area.rect.midY)
+                                .fill(PopoutTint.token(tokens[box.tokens[0]].kind, priority: priority).opacity(Self.highlightOpacity))
+                                .frame(width: box.rect.width, height: box.rect.height)
+                                .position(x: box.rect.midX, y: box.rect.midY)
                         }
                     }
                 }
@@ -71,8 +74,8 @@ struct TokenHighlightField: View {
         .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
             if let onDisable {
                 GeometryReader { proxy in
-                    ForEach(Self.areas(layouts, in: proxy).filter { $0.token < tokens.count }) { area in
-                        tapTarget(for: tokens[area.token], area: area, onDisable: onDisable)
+                    ForEach(Self.boxes(Self.areas(layouts, in: proxy), groups: groups)) { box in
+                        tapTarget(for: box.tokens.map { tokens[$0] }, box: box, onDisable: onDisable)
                     }
                 }
             }
@@ -85,12 +88,15 @@ struct TokenHighlightField: View {
         }
     }
 
-    /// The field, with "Keep “tom” as text" as a VoiceOver action per token when highlights can be tapped.
+    /// The field, with "Keep “tom 4” as text" as a VoiceOver action per box when highlights can be tapped.
     private var editor: some View {
-        input.accessibilityActions {
+        let tokens = drawableTokens
+        let members = Self.members(of: Self.groups(tokens, in: text, priority: priority))
+        return input.accessibilityActions {
             if let onDisable {
-                ForEach(Array(drawableTokens.enumerated()), id: \.offset) { _, token in
-                    Button("Keep “\(token.text)” as text") { onDisable(token) }
+                ForEach(Array(members.enumerated()), id: \.offset) { _, indices in
+                    let box = indices.map { tokens[$0] }
+                    Button("Keep “\(Self.words(of: box, in: text))” as text") { box.forEach(onDisable) }
                 }
             }
         }
@@ -135,23 +141,26 @@ struct TokenHighlightField: View {
         #endif
     }
 
-    /// A clear, rounded shape over one piece of a highlight; tapping it switches the token off.
-    private func tapTarget(for token: QuickAddToken, area: Area, onDisable: @escaping (QuickAddToken) -> Void) -> some View {
+    /// A clear, rounded shape over one piece of a box; tapping it switches off every token in the box (a
+    /// joined "[tom 4]" goes in one tap, whichever line the tap lands on).
+    private func tapTarget(for box: [QuickAddToken], box piece: Box, onDisable: @escaping (QuickAddToken) -> Void) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.highlightRadius, style: .continuous)
         return Color.clear
             .contentShape(shape)
-            .frame(width: area.rect.width, height: area.rect.height)
-            .onTapGesture { onDisable(token) }
+            .frame(width: piece.rect.width, height: piece.rect.height)
+            .onTapGesture { box.forEach(onDisable) }
             #if os(macOS)
             .pointerStyle(.link)
-            .help("Click to keep “\(token.text)” as text")
+            .help("Click to keep “\(Self.words(of: box, in: text))” as text")
             #endif
-            .position(x: area.rect.midX, y: area.rect.midY)
+            .position(x: piece.rect.midX, y: piece.rect.midY)
             .accessibilityHidden(true)
     }
 
-    /// The tokens that can be drawn on this text: in order, not overlapping, inside it.
-    private var drawableTokens: [QuickAddToken] {
+    private var drawableTokens: [QuickAddToken] { Self.drawable(tokens, in: text) }
+
+    /// The tokens that can be drawn on this text: not superseded, in order, not overlapping, inside it.
+    static func drawable(_ tokens: [QuickAddToken], in text: String) -> [QuickAddToken] {
         var result: [QuickAddToken] = []
         for token in tokens.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
             guard !token.isSuperseded, token.range.upperBound <= text.endIndex, !token.range.isEmpty,
@@ -161,11 +170,71 @@ struct TokenHighlightField: View {
         return result
     }
 
+    /// The words a box covers, as typed: "tom 4".
+    static func words(of box: [QuickAddToken], in text: String) -> String {
+        guard let first = box.first, let last = box.last, first.range.lowerBound <= last.range.upperBound,
+              last.range.upperBound <= text.endIndex else { return box.map(\.text).joined(separator: " ") }
+        return String(text[first.range.lowerBound..<last.range.upperBound])
+    }
+
     // MARK: Layout of the highlights (internal for the render tests)
 
     /// Tags the words of token number `index` in the clear copy.
     struct TokenSpan: TextAttribute {
         let index: Int
+    }
+
+    /// Which box each of `tokens` (drawable, in order) belongs to: neighbours of the same colour with only
+    /// spaces between them share one (George, 2026-11-04: "[tom] [4]" should be "[tom 4]"). Numbered from 0
+    /// in order; a word, an overridden phrase or another colour between two tokens starts a new box.
+    static func groups(_ tokens: [QuickAddToken], in text: String, priority: Priority) -> [Int] {
+        var groups: [Int] = []
+        for (index, token) in tokens.enumerated() {
+            guard let previous = groups.last else { groups.append(0); continue }
+            let before = tokens[index - 1]
+            let gap = before.range.upperBound <= token.range.lowerBound && token.range.lowerBound <= text.endIndex
+                ? text[before.range.upperBound..<token.range.lowerBound] : "x"
+            let joins = gap.allSatisfy { $0.isWhitespace && !$0.isNewline }
+                && PopoutTint.token(before.kind, priority: priority) == PopoutTint.token(token.kind, priority: priority)
+            groups.append(joins ? previous : previous + 1)
+        }
+        return groups
+    }
+
+    /// Token indices per group, in order.
+    static func members(of groups: [Int]) -> [[Int]] {
+        var members: [[Int]] = []
+        for (index, group) in groups.enumerated() {
+            if group < members.count { members[group].append(index) } else { members.append([index]) }
+        }
+        return members
+    }
+
+    /// One piece of a highlight box: the box's tokens' areas on one line joined into one rectangle, the
+    /// spaces between them included. A box that wraps has one piece per line; each stands for the box.
+    struct Box: Identifiable, Equatable {
+        /// Every token in the box (indices into the list given to `highlightText`), on any line.
+        var tokens: [Int]
+        var line: Int
+        var rect: CGRect
+        var id: String { "\(tokens[0]).\(line)" }
+    }
+
+    /// The boxes for `areas` (from `areas(_:in:)`), with `groups` from `groups(_:in:priority:)`.
+    static func boxes(_ areas: [Area], groups: [Int]) -> [Box] {
+        let members = members(of: groups)
+        var boxes: [Box] = []
+        var lastGroup: Int?
+        for area in areas where area.token < groups.count {
+            let group = groups[area.token]
+            if let last = boxes.indices.last, lastGroup == group, boxes[last].line == area.line {
+                boxes[last].rect = boxes[last].rect.union(area.rect)
+            } else {
+                boxes.append(Box(tokens: members[group], line: area.line, rect: area.rect))
+            }
+            lastGroup = group
+        }
+        return boxes
     }
 
     /// One rectangle of one token's highlight (a token that wraps has one per line).
