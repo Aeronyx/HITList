@@ -66,6 +66,19 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 10 record (2026-11-04; sessions 39–46 merged for 0.6.0 (16))
+Eight desktop-app sessions, all started on George's own turns: 39 `board-inline-add` (High), 40 `profile-chrome`
+(High), 41 `quick-add-polish` (High), 42 `sync-profile-hardening` (xhigh), 43 `claude-connector` (xhigh), 44
+`holiday-delight` (High), 45 `iphone-duo` (xhigh), 46 `app-intents` (High, started mid-round). Cross-session fixes went
+by `SendMessage` to the owning session while it still ran (42's `ProfileStore.shown` to 40; 41's Discard findings to
+39 and 45). Supervisor follow-ups: `PopoutController` listens for `.accountDidSwitch`; the holiday accent on the "+";
+privacy policy sections for Claude and Siri; 46's `.intentRouting` lines in the shells. No schema change. Known and
+open: the account-switch banner overlaps the large title on iPhone; Claude's completions post
+`.claudeDidCompleteTask` with no Undo toast listening; the Duo inner display shows the iPhone Upcoming list
+(`UpcomingView.showsBoard` is iPad-idiom only); editor typing is lost when the editor moves sheet ↔ column across a
+fold; the Mac lists' `InlineAddRow` × does not ask Discard. Lesson: a session given a Debug probe on the Mac must set
+`HITLIST_STORE_SUFFIX`, or an in-memory run can write into the TestFlight app's app-group defaults (39 did once).
+
 ## Round 10 ownership (2026-11-04; briefs 39–45 run in parallel, all seven at once)
 Next version 0.6.0 (16). No schema change this round: a fix that needs one stops and reports. Every session makes its
 own simulator (`HITList-NN`; 45 an iPhone Duo, 39 an iPad) and deletes it at the end.

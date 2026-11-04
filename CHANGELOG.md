@@ -4,6 +4,38 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.6.0
+
+George's notes on build 15 and his backburner list, in eight sessions: the Mac board's inline add, the
+profile in the corner, quick-add polish, sync and profile hardening, a Claude connector, Siri and Shortcuts,
+holidays, and the iPhone Duo.
+
+- Mac and iPad Upcoming board: "+ Add task" on a day opens a small add card right in that day's column, with
+  the cursor already in it. Add one task after another; Esc or × closes it and asks before throwing away
+  typing. Every Mac quick add (toolbar "+", ⌘N) starts with the cursor in the task name.
+- Your profile sits top-left: at the top of the Mac and iPad sidebar (picture and name, with a menu for
+  Account settings, Settings and the iCloud state) and at the top left of Browse on iPhone.
+- iPhone tabs: Inbox · Today · Upcoming · Flipboard (Flipboard back on the right).
+- Quick add: the pointing hand over highlighted words on the Mac; a phrase you switched off lights up again if
+  you delete it and type it again; "!15mb" stays plain until the task has a time (a reminder picked from the
+  chip waits on the chip). In the task editor, × and Esc ask Discard when you have typed something.
+- Claude: on the Mac, Settings → Claude → Allow Claude lets Claude Desktop and Claude Code list, add, complete
+  and edit your tasks while HITList is open (a small helper inside the app, reached only by HITList; no server).
+  Choose what Claude sees: everything except tasks labelled @private, or only tasks labelled @claude. Copy for
+  Claude on both platforms copies the allowed tasks as JSON. Setup guide at aeronyx.github.io/HITList/claude.
+- Siri and Shortcuts: "Add a task in HITList" (spoken the way you type, "Buy milk tomorrow 5pm p1 #Home"),
+  "What's on my HITList today", Complete Task, and Open Today / Inbox / Upcoming, from Siri, Shortcuts or the
+  Action button.
+- Holidays: completing a task throws snow dust at Christmas, fireworks on July 4th and New Year's, hearts,
+  bats, leaves and clovers on their days, with a tiny seasonal glyph on the "+". Once in a long while, a sky
+  whale swims by. Settings → Delight → Holiday touches and Rare surprises.
+- One device, two Apple accounts: switching accounts clears the previous person's open card, Undo toast,
+  reminders and badge, and sets their backups aside; nothing in iCloud is touched. Settings → iCloud and
+  Account show the same sync line; the profile picture is decoded once; saving the same name twice writes
+  nothing; duplicate tidying no longer collides with a download in progress; the sync log records the time
+  to first screen.
+- Privacy policy: new sections on the Claude connection and on Siri.
+
 ## 0.5.0 — build 15, 2026-11-04
 
 George's notes on build 14, in five sessions: an account and profile for friends on TestFlight, a privacy
