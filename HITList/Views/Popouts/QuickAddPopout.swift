@@ -392,11 +392,8 @@ struct QuickAddPopout: View {
                 .help("Close (Esc)")
             // Hollow and faded while there is nothing to add; filled with the accent from the first
             // character (George, build 11). A pill, so it never reads as a second "+".
-            Button { TapHaptic.play(); save() } label: {
-                Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                    .frame(width: 24)
-            }
-            .buttonStyle(HITButtonStyle(canAdd ? .primary : .secondary, shape: .pill))
+            // The same pill as the editor's Confirm (`ConfirmPill`, brief 36).
+            ConfirmPill(kind: canAdd ? .primary : .secondary) { TapHaptic.play(); save() }
             .opacity(canAdd ? 1 : 0.55)
             .animation(HITMotion.quick(reduceMotion: reduceMotion), value: canAdd)
             .disabled(!canAdd)

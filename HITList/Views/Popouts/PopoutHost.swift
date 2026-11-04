@@ -288,6 +288,67 @@ struct EditorOpeningDetent: CustomPresentationDetent {
 }
 #endif
 
+/// The Confirm pill both popouts end with (brief 36): the quick-add card's "Add task" and the editor's
+/// "Confirm", one size for both. iPhone: 48 pt tall and as wide as the "+" oval (76 pt), with a 17 pt
+/// semibold arrow (George, 0.4.1: "increase the size of the Confirm task button"). Mac: the 34 pt pill it
+/// was. `kind` is `.primary` (filled accent) or `.secondary` (hollow, while quick add has nothing to add).
+struct ConfirmPill: View {
+    #if os(iOS)
+    static let height: CGFloat = 48
+    static let width: CGFloat = FloatingAddButton.size.width
+    static let glyphSize: CGFloat = 17
+    static let glyphWeight: Font.Weight = .semibold
+    #else
+    static let height: CGFloat = HITButtonStyle.Size.regular.height
+    static let width: CGFloat = 56
+    static let glyphSize: CGFloat = 15
+    static let glyphWeight: Font.Weight = .bold
+    #endif
+
+    var kind: HITButtonStyle.Kind = .primary
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.up").font(.system(size: Self.glyphSize, weight: Self.glyphWeight))
+        }
+        .buttonStyle(ConfirmPillStyle(kind: kind))
+    }
+}
+
+/// `HITButtonStyle`'s colours and states at the Confirm pill's size.
+private struct ConfirmPillStyle: ButtonStyle {
+    let kind: HITButtonStyle.Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        ConfirmPillBody(configuration: configuration, kind: kind)
+    }
+}
+
+private struct ConfirmPillBody: View {
+    let configuration: ButtonStyle.Configuration
+    let kind: HITButtonStyle.Kind
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        let look = HITButtonStyle.Appearance(kind: kind, isPressed: configuration.isPressed,
+                                             isHovered: isHovered, isEnabled: isEnabled)
+        configuration.label
+            .foregroundStyle(look.foreground)
+            .frame(width: ConfirmPill.width, height: ConfirmPill.height)
+            .background(Capsule().fill(look.fill))
+            .overlay(Capsule().strokeBorder(look.border, lineWidth: 1))
+            .contentShape(Capsule())
+            .opacity(look.opacity)
+            .onHover { isHovered = $0 }
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
+            .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isEnabled)
+    }
+}
+
 /// "Discard" in a speech bubble pointing down at the quick-add card: a slate bubble, a lighter pill with
 /// the word in the danger colour, and a small pointer. Tapping it throws the draft away; tapping anywhere
 /// else keeps it.

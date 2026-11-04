@@ -1265,4 +1265,18 @@ final class PopoutTests: XCTestCase {
         XCTAssertGreaterThan(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 / 2, "still above medium")
     }
     #endif
+
+    /// One Confirm pill for the quick-add card and the editor (George: "increase the size of the Confirm task
+    /// button both on the edit screen and the Add task screen"): about 48 pt tall on the iPhone, as wide as
+    /// the "+" oval, with a 17 pt glyph. The Mac keeps the size it had.
+    func testBothPopoutsShareOneBiggerConfirmPill() {
+        #if os(iOS)
+        XCTAssertEqual(ConfirmPill.height, 48)
+        XCTAssertEqual(ConfirmPill.width, FloatingAddButton.size.width, "as wide as the + oval")
+        XCTAssertEqual(ConfirmPill.glyphSize, 17)
+        XCTAssertLessThanOrEqual(ConfirmPill.height, FloatingAddButton.size.height)
+        #else
+        XCTAssertEqual(ConfirmPill.height, HITButtonStyle.Size.regular.height)
+        #endif
+    }
 }
