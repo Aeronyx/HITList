@@ -129,7 +129,7 @@ struct PopoutHost: ViewModifier {
                 // The editor scrolls its own middle and pins its Confirm footer (brief 32).
                 TaskPopout(task: task)
                     .environment(popouts)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents(Self.editorDetents)
                     .presentationDragIndicator(.visible)
                     .presentationBackground(Theme.background)
                     .presentationCornerRadius(HITRadius.card + 10)
@@ -145,6 +145,16 @@ struct PopoutHost: ViewModifier {
         let rise: AnyTransition = reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity)
         return .asymmetric(insertion: rise.animation(HITMotion.enter(reduceMotion: reduceMotion)),
                            removal: .opacity.animation(HITMotion.exit(reduceMotion: reduceMotion)))
+    }
+
+    /// The editor sheet's heights: `EditorOpeningDetent` first (brief 36), then large. The Mac never
+    /// presents it (its editor is the panel).
+    static var editorDetents: Set<PresentationDetent> {
+        #if os(iOS)
+        [.custom(EditorOpeningDetent.self), .large]
+        #else
+        [.large]
+        #endif
     }
 
     /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
@@ -261,6 +271,22 @@ struct PopoutHost: ViewModifier {
     /// keeps it above the keyboard, so it floats rather than docks).
     static let ovalInset: CGFloat = 12
 }
+
+#if os(iOS)
+/// The iPhone editor sheet's opening height (brief 36, George: "give the Edit task pane some more screen
+/// space"): `EditorMetrics.sheetOpeningHeight`, so the title card, the pills, two sub-tasks and the Confirm
+/// pill fit with air above it, but never more than 85% of what the sheet can take, so a short screen
+/// still shows a strip of the list. The large detent stays above it.
+struct EditorOpeningDetent: CustomPresentationDetent {
+    static func height(in context: Context) -> CGFloat? {
+        openingHeight(maxDetentValue: context.maxDetentValue)
+    }
+
+    static func openingHeight(maxDetentValue: CGFloat) -> CGFloat {
+        min(EditorMetrics.sheetOpeningHeight, (maxDetentValue * 0.85).rounded())
+    }
+}
+#endif
 
 /// "Discard" in a speech bubble pointing down at the quick-add card: a slate bubble, a lighter pill with
 /// the word in the danger colour, and a small pointer. Tapping it throws the draft away; tapping anywhere
