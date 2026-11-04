@@ -45,6 +45,11 @@ targets:
       # Linked explicitly on purpose: on macOS 26 the App Sandbox only grants cloudd access when
       # CloudKit.framework is linked, and SwiftData alone loads it lazily (Apple forums 835400).
       - sdk: CloudKit.framework
+      # The Claude connector's MCP helper (brief 43), Mac only: HITList.app/Contents/MacOS/hitlist-mcp.
+      - target: hitlist-mcp
+        platformFilters: [macOS]
+        copy:
+          destination: executables
     entitlements:
       path: HITList/HITList.entitlements
       properties:
@@ -94,6 +99,32 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         DEAD_CODE_STRIPPING: YES
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+  # The Claude connector's MCP server (brief 43): a sandboxed command-line tool that Claude Desktop and
+  # Claude Code start over stdio. It holds only the app group and talks to the running app through the
+  # group's message port (ClaudeWire); it never opens the store. No version keys here: release.sh reads
+  # MARKETING_VERSION and CURRENT_PROJECT_VERSION expecting one line each; the helper reports the app's.
+  hitlist-mcp:
+    type: tool
+    platform: macOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: HITListMCP
+        excludes:
+          - "*.entitlements"
+    dependencies:
+      - package: HITListCore
+    settings:
+      base:
+        PRODUCT_NAME: hitlist-mcp
+        PRODUCT_BUNDLE_IDENTIFIER: com.trammells.hitlist.mcp
+        CODE_SIGN_ENTITLEMENTS: HITListMCP/hitlist-mcp.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        # A sandboxed tool needs an Info.plist (its bundle id names its container); it lives in the binary.
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        # Installed inside HITList.app, never on its own (an archive with a loose tool isn't an app archive).
+        SKIP_INSTALL: YES
+        DEAD_CODE_STRIPPING: YES
   HITListTests:
     type: bundle.unit-test
     supportedDestinations: [iOS, macOS]

@@ -127,8 +127,28 @@ final class ClaudeConnector {
     /// The endpoint for this run of the port: the token, the live switch, the tools on `context`.
     func makeEndpoint(token: String, context: ModelContext) -> ClaudeEndpoint {
         let settings = settings
-        return ClaudeEndpoint(token: token, isAllowed: { settings.isAllowed }) { tool, _ in
-            .error("Unknown tool: \(tool)")
+        return ClaudeEndpoint(token: token, isAllowed: { settings.isAllowed }) { tool, arguments in
+            // The rule is read per call, so a change in Settings → Claude applies to the next one.
+            ClaudeToolHandler(
+                context: context, rule: settings.rule,
+                log: { message, fields in
+                    _ = CloudSyncMonitor.shared.write(.note, message, fields: fields.merging(["via": "claude"]) { mine, _ in mine })
+                },
+                didWrite: { Task { await NotificationScheduler.reschedule(context: context) } },
+                didComplete: { completed in
+                    NotificationCenter.default.post(name: .claudeDidCompleteTask, object: nil,
+                                                    userInfo: [ClaudeConnector.completedTaskKey: completed])
+                }
+            ).call(tool, arguments)
         }
     }
+
+    /// The `CompletedTask` in a `.claudeDidCompleteTask` notification.
+    static let completedTaskKey = "completedTask"
+}
+
+extension Notification.Name {
+    /// Claude completed a task through the connector (main queue). `userInfo[ClaudeConnector.completedTaskKey]`
+    /// is the `CompletedTask` the Undo toast takes; whoever owns the toast (`PopoutController`) observes it.
+    static let claudeDidCompleteTask = Notification.Name("HITList.claudeDidCompleteTask")
 }
