@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// Todoist-style Upcoming: a swipeable week strip over a day-by-day list that starts today, with
-/// overdue tasks in a collapsible section on top. The list covers 30 days and grows as you scroll.
+/// Todoist-style Upcoming. iPhone (and a narrow iPad): a swipeable week strip over a day-by-day list that
+/// starts today, with overdue tasks in a collapsible section on top; the list covers 30 days and grows as
+/// you scroll. Mac (and a full-width iPad): a board of seven day columns (`UpcomingBoard`).
 struct UpcomingView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -16,10 +17,15 @@ struct UpcomingView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
     private var isCompact: Bool { sizeClass == .compact }
+    /// iPad at full width: the board. Never on iPhone, whose landscape Plus/Max sizes are also regular.
+    private var showsBoard: Bool { UIDevice.current.userInterfaceIdiom == .pad && sizeClass == .regular }
     #else
     private let isCompact = false
+    private let showsBoard = true
     #endif
     @State private var now = Date()
+    /// The board's seven days (Mac, iPad).
+    @State private var window = UpcomingWindow()
     @State private var dayCount = UpcomingView.pageDays
     @State private var overdueExpanded = true
     /// The week strip's page, in weeks from the current one.
@@ -65,6 +71,7 @@ struct UpcomingView: View {
         var filterLabelNames: [String] { task.filterLabelNames }
         var filterIsRecurring: Bool { task.filterIsRecurring }
         var filterCreatedDate: Date? { task.filterCreatedDate }
+        var filterIsSubtask: Bool { task.filterIsSubtask }
     }
 
     private var entries: [Entry] {
@@ -79,20 +86,13 @@ struct UpcomingView: View {
 
     var body: some View {
         let entries = entries
-        let schedule = UpcomingSchedule(items: entries, now: now, dayCount: dayCount, calendar: calendar)
         VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                VStack(spacing: 0) {
-                    WeekStripView(strip: strip, today: today, focusedDay: focusedDay,
-                                  counts: UpcomingSchedule.counts(of: entries, calendar: calendar),
-                                  weeks: Self.weeks, visibleWeek: $visibleWeek, dropTarget: $dropTarget,
-                                  onDrop: { drop($0, on: $1) }) { day in
-                        jump(to: day, schedule: schedule, proxy: proxy)
-                    }
-                    Divider()
-                    list(schedule)
+            SwiftUI.Group {
+                if showsBoard {
+                    board(entries)
+                } else {
+                    weekList(entries)
                 }
-                .onChange(of: jumpToTodayRequest) { _, _ in jump(to: today, schedule: schedule, proxy: proxy) }
             }
             // iPhone: drawn by PopoutHost above the island and the "+".
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
@@ -107,20 +107,66 @@ struct UpcomingView: View {
         .screenChrome {
             ViewOptionsMenu {
                 Toggle("Show overdue", isOn: $overdueExpanded)
-                Picker("Days shown", selection: $dayCount) {
-                    Text("2 weeks").tag(14)
-                    Text("1 month").tag(30)
-                    Text("2 months").tag(60)
+                // The board always shows seven days.
+                if !showsBoard {
+                    Picker("Days shown", selection: $dayCount) {
+                        Text("2 weeks").tag(14)
+                        Text("1 month").tag(30)
+                        Text("2 months").tag(60)
+                    }
                 }
             }
         } menu: {
-            Button { jumpToTodayRequest += 1 } label: { Label("Jump to today", systemImage: "calendar") }
+            Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
         .onReceive(clock) { now = $0 }
         .onAppear { CompletionFeedback.shared.prepare() }
     }
 
+    private func jumpToToday() {
+        if showsBoard {
+            withAnimation(reduceMotion ? nil : .snappy) { window.goToToday() }
+        } else {
+            jumpToTodayRequest += 1
+        }
+    }
+
+    // MARK: - Board
+
+    private func board(_ entries: [Entry]) -> some View {
+        let board = UpcomingBoardModel(items: entries, window: window, now: now, showOverdue: overdueExpanded, calendar: calendar)
+        return UpcomingBoard(board: board, window: $window, now: now, calendar: calendar,
+                             phase: { completions.phase(of: $0) },
+                             onToggleCompletion: { toggleCompletion($0) },
+                             onOpen: { selectedTask = $0 },
+                             onDrop: { drop($0, on: $1) },
+                             // The floating quick add (a 270 pt column is too narrow for the inline card).
+                             onAdd: { popouts.openQuickAdd(.day($0)) },
+                             onRescheduleOverdue: { day in
+                                 let held = completions.heldIDs
+                                 let overdue = board.columns.first { $0.id == .overdue }?.items ?? []
+                                 rescheduleAll(overdue.map(\.task).filter { !held.contains($0.id) }, to: day)
+                             })
+    }
+
     // MARK: - List
+
+    private func weekList(_ entries: [Entry]) -> some View {
+        let schedule = UpcomingSchedule(items: entries, now: now, dayCount: dayCount, calendar: calendar)
+        return ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                WeekStripView(strip: strip, today: today, focusedDay: focusedDay,
+                              counts: UpcomingSchedule.counts(of: entries, calendar: calendar),
+                              weeks: Self.weeks, visibleWeek: $visibleWeek, dropTarget: $dropTarget,
+                              onDrop: { drop($0, on: $1) }) { day in
+                    jump(to: day, schedule: schedule, proxy: proxy)
+                }
+                Divider()
+                list(schedule)
+            }
+            .onChange(of: jumpToTodayRequest) { _, _ in jump(to: today, schedule: schedule, proxy: proxy) }
+        }
+    }
 
     private func list(_ schedule: UpcomingSchedule<Entry>) -> some View {
         List(selection: $selectedTask) {
@@ -276,7 +322,7 @@ struct UpcomingView: View {
             Spacer()
             Button("Reschedule all to today") {
                 let held = completions.heldIDs
-                rescheduleAll(overdue.map(\.task).filter { !held.contains($0.id) })
+                rescheduleAll(overdue.map(\.task).filter { !held.contains($0.id) }, to: today)
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
@@ -404,16 +450,14 @@ struct UpcomingView: View {
 
     // MARK: - Actions
 
-    /// Reschedules dropped tasks onto `day`, keeping their times. Days before today don't take drops.
+    /// Reschedules dropped tasks onto `day`, keeping their times (`TaskRescheduling.drop`). Days before
+    /// today don't take drops.
     private func drop(_ payload: [String], on day: Date) -> Bool {
         dropTarget = nil
-        guard day >= today else { return false }
-        let ids = Set(TaskRescheduling.taskIDs(in: payload))
-        let tasks = allTasks.filter { ids.contains($0.id) && !$0.isCompleted }
-        guard !tasks.isEmpty else { return false }
-        withAnimation(reduceMotion ? nil : .snappy) {
-            for task in tasks { TaskActions.reschedule(task, to: day, in: context) }
+        let moved = withAnimation(reduceMotion ? nil : .snappy) {
+            TaskRescheduling.drop(payload, on: day, among: allTasks, now: now, calendar: calendar, in: context)
         }
+        guard !moved.isEmpty else { return false }
         rescheduleNotifications()
         return true
     }
@@ -427,10 +471,8 @@ struct UpcomingView: View {
         rescheduleNotifications()
     }
 
-    private func rescheduleAll(_ tasks: [TaskItem]) {
-        withAnimation(reduceMotion ? nil : .snappy) {
-            for task in tasks { TaskActions.reschedule(task, to: today, in: context) }
-        }
+    private func rescheduleAll(_ tasks: [TaskItem], to day: Date) {
+        withAnimation(reduceMotion ? nil : .snappy) { TaskRescheduling.reschedule(tasks, to: day, calendar: calendar, in: context) }
         rescheduleNotifications()
     }
 
@@ -574,8 +616,8 @@ extension QuickAddResult {
     }
 }
 
-/// What a dragged row looks like under the finger or pointer.
-private struct DragPreview: View {
+/// What a dragged row (or board card) looks like under the finger or pointer.
+struct DragPreview: View {
     let title: String
 
     var body: some View {
