@@ -174,6 +174,20 @@ struct UpcomingBoard: View {
         }
     }
 
+    /// × or Escape on the card: an empty card closes; with typing "Discard" shows first, and a second ×
+    /// or Escape discards.
+    private func requestClose(_ key: String) {
+        switch BoardInlineAdd.close(hasContent: inlineHasContent, confirmingDiscard: confirmingDiscard) {
+        case .close:
+            popouts.closeInline(key)
+        case .askDiscard:
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .discard:
+            popouts.discardQuickAddDraft()
+            popouts.closeInline(key)
+        }
+    }
+
     private func openInline(_ context: QuickAddContext, day: Date) {
         let key = BoardInlineAdd.key(for: day, calendar: calendar)
         guard openInlineKey != key else { return }
@@ -185,7 +199,7 @@ struct UpcomingBoard: View {
         let key = BoardInlineAdd.key(for: day, calendar: calendar)
         if popouts.state.isInlineOpen(key) {
             CompactQuickAddCard(context: context, isConfirmingDiscard: confirmingDiscard,
-                                onClose: { popouts.closeInline(key) },
+                                onClose: { requestClose(key) },
                                 onSaved: { popouts.didSave() },
                                 onDraftChange: { inlineHasContent = $0 },
                                 onDiscard: {
