@@ -194,6 +194,7 @@
 		E6FE83269AD26F3CF0583A8F /* CompletionSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FE40ED6927C3D829A1EAE13 /* CompletionSound.swift */; };
 		E827A02D378F4FACBA546668 /* OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = C91DD9F46FB90E53ECB075CB /* OFL.txt */; };
 		E8B78F8F8B858A38DA4721D8 /* AccountSwitchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66D3EBF11AEEB13847A0856 /* AccountSwitchTests.swift */; };
+		EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */; };
 		ECCFD227CF85F94C563A169D /* NotificationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E6CED5602E68567841C52F /* NotificationStatus.swift */; };
 		EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */; };
 		EDBEC249FA6239C0F6E4A5B8 /* UpcomingScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */; };
@@ -421,6 +422,7 @@
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
 		FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RareVisitor.swift; sourceTree = "<group>"; };
+		FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListShortcuts.swift; sourceTree = "<group>"; };
 		FDE419EFB9497F9FB13FE74B /* HITTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTokens.swift; sourceTree = "<group>"; };
 		FEBD86391030BCFC15AD273A /* MacAboutSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAboutSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -825,6 +827,7 @@
 			isa = PBXGroup;
 			children = (
 				2396DF976859CE0B43B5E43A /* AddTaskIntent.swift */,
+				FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */,
 				1EF80B50B96770FD7E915BE6 /* IntentStore.swift */,
 				3F67BFA78B2D6749106DD883 /* ScreenIntents.swift */,
 				655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */,
@@ -1042,6 +1045,7 @@
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
 				92973FBF19DB570087754456 /* HITField.swift in Sources */,
 				2627D544E45DE46036EB040C /* HITListApp.swift in Sources */,
+				EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */,
 				DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */,
 				348542A3EA0C03CA7BF3E6D0 /* HITMenuRow.swift in Sources */,
 				640EED72AFC56C6A4E158F26 /* HITSegmented.swift in Sources */,
