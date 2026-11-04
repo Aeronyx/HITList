@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import HITListCore
 @testable import HITList
 
@@ -241,4 +242,99 @@ final class HolidayEffectsTests: XCTestCase {
         model.prune(now: t0.addingTimeInterval(RareVisitor.duration + 0.1))
         XCTAssertTrue(model.isIdle)
     }
+
+    // MARK: - Drawing (both platforms)
+
+    /// How many pixels of a 200 × 200 canvas the drawing touches.
+    private func paintedPixels(_ draw: @escaping (GraphicsContext, CGSize) -> Void) throws -> Int {
+        let renderer = ImageRenderer(content: Canvas { context, size in draw(context, size) }.frame(width: 200, height: 200))
+        renderer.scale = 1
+        let image = try XCTUnwrap(renderer.cgImage)
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let space = CGColorSpaceCreateDeviceRGB()
+        let ctx = try XCTUnwrap(CGContext(data: &pixels, width: width, height: height, bitsPerComponent: 8,
+                                          bytesPerRow: width * 4, space: space,
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return stride(from: 3, to: pixels.count, by: 4).filter { pixels[$0] > 20 }.count
+    }
+
+    func testEveryBurstDrawsAtTheCheckbox() throws {
+        for kind in HolidayBurstKind.allCases {
+            let field = ParticleField(kind: kind, seed: 5)
+            let mid = try paintedPixels { context, _ in field.draw(at: 0.4, origin: CGPoint(x: 100, y: 100), in: context) }
+            XCTAssertGreaterThan(mid, 20, "\(kind) draws something mid-burst")
+            let after = try paintedPixels { context, _ in field.draw(at: field.duration + 0.1, origin: CGPoint(x: 100, y: 100), in: context) }
+            XCTAssertEqual(after, 0, "\(kind) leaves nothing behind")
+        }
+    }
+
+    func testTheVisitorDrawsOnItsLine() throws {
+        let painted = try paintedPixels { context, size in
+            RareVisitor.draw(at: 1.0, width: size.width, cruise: 40, in: context)
+        }
+        XCTAssertGreaterThan(painted, 200, "the whale is on screen halfway across")
+        let gone = try paintedPixels { context, size in
+            RareVisitor.draw(at: RareVisitor.duration + 0.1, width: size.width, cruise: 40, in: context)
+        }
+        XCTAssertEqual(gone, 0)
+    }
+
+    #if os(macOS)
+    // MARK: - The Mac overlay
+
+    /// The panel covers the window's content exactly, sits above it as a child, never takes the mouse,
+    /// and leaves with `hide`.
+    func testTheMacOverlayLiesOverTheWindowsContent() throws {
+        let host = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 640, height: 480),
+                            styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        host.orderFront(nil)
+        defer { host.orderOut(nil) }
+        let overlay = DelightOverlay()
+        overlay.show(stage: DelightStage(), over: host)
+        let panel = try XCTUnwrap(overlay.panel)
+        let content = try XCTUnwrap(host.contentView)
+        XCTAssertEqual(panel.frame, host.convertToScreen(content.convert(content.bounds, to: nil)))
+        XCTAssertTrue(host.childWindows?.contains(panel) == true)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertFalse(panel.canBecomeKey)
+        XCTAssertFalse(panel.isOpaque)
+        overlay.hide()
+        XCTAssertFalse(host.childWindows?.contains(panel) == true)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    /// A view's `.global` frame (what the row reports) is measured from the top-left of the window's
+    /// content view (under the title bar), which is where the overlay's canvas starts too.
+    func testGlobalFramesAreMeasuredFromTheContentsTopLeft() throws {
+        final class Box { var frame: CGRect? }
+        let box = Box()
+        let root = VStack(spacing: 0) {
+            Color.clear.frame(height: 120)
+            HStack(spacing: 0) {
+                Color.clear.frame(width: 30, height: 20)
+                Color.red.frame(width: 24, height: 20)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { box.frame = $0 }
+                Spacer()
+            }
+            .frame(height: 20)
+            Spacer()
+        }
+        let host = NSWindow(contentRect: NSRect(x: 200, y: 200, width: 400, height: 400),
+                            styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)
+        host.isReleasedWhenClosed = false
+        host.contentView = NSHostingView(rootView: root.frame(width: 400, height: 400))
+        host.orderFront(nil)
+        defer { host.orderOut(nil) }
+        host.contentView?.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        let frame = try XCTUnwrap(box.frame)
+        // SwiftUI keeps the content below the title bar (its safe area), so the red box is 120 pt under it.
+        let titleBar = host.frame.height - host.contentLayoutRect.height
+        XCTAssertEqual(frame.minX, 30, accuracy: 0.5)
+        XCTAssertEqual(frame.minY, titleBar + 120, accuracy: 0.5)
+    }
+    #endif
 }
