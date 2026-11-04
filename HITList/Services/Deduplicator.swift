@@ -71,6 +71,7 @@ enum Deduplicator {
     /// `run`, logging the report when anything was merged. Errors are logged, not thrown: a failed pass
     /// is retried on the next import or launch.
     static func runAndLog(in context: ModelContext, trigger: String) {
+        defer { if trigger == "launch" { LaunchTiming.mark("dedupe") } }
         do {
             let report = try run(in: context)
             if report.removed > 0 || report.subtasks > 0 {

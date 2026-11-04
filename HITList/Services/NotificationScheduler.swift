@@ -92,6 +92,7 @@ enum NotificationScheduler {
     @MainActor
     static func bootstrap(container: ModelContainer, isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) {
         guard self.container == nil else { return }
+        defer { LaunchTiming.mark("reminders") }
         guard isMainStore else {
             log.notice("Reminders stand down: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); the pending reminders and the badge are HITList.store's")
             return

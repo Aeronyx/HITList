@@ -121,6 +121,7 @@ final class CloudSyncMonitor {
     func start() {
         guard !started else { return }
         started = true
+        LaunchTiming.mark("monitor")
         recordLaunch()
         refreshAccountStatus()
         let center = NotificationCenter.default
@@ -168,6 +169,7 @@ final class CloudSyncMonitor {
 
     /// Called from `HITListApp.init` once `ModelContainerFactory.make()` returned.
     func containerReady(_ container: ModelContainer) {
+        LaunchTiming.mark("store")
         let url = container.configurations.first?.url
         var fields = ["store": url?.path ?? "unknown"]
         if ModelContainerFactory.didResetStore { fields["reset"] = "store moved to Trash; CloudKit re-imports" }
