@@ -254,7 +254,7 @@ final class UpcomingBoardTests: XCTestCase {
 
     /// Brief 39: today's column with its inline add card open, empty and then with "Call Sam p1 3pm" typed
     /// (the card reads its stored draft back, as after a relaunch), rendered offscreen to PNGs for a person to
-    /// look at. Checks the card drew inside the column with its own draft.
+    /// look at. Checks the card drew inside the column and that the title has the keyboard.
     func testTheInlineCardRendersInItsColumn() throws {
         for t in [("Water the plants", day(0)), ("Standup", day(0, 9, 30)), ("Call Mom", day(1, 18, 30))] {
             context.insert(TaskItem(title: t.0, dueDate: t.1, hasDueTime: t.1 != cal.startOfDay(for: t.1)))
@@ -311,6 +311,7 @@ final class UpcomingBoardTests: XCTestCase {
             let frame = field.convert(field.bounds, to: host)
             XCTAssertLessThan(frame.width, UpcomingBoard.cardWidth, "\(name): inside its column")
             XCTAssertEqual(field.string, text, "\(name): the card's own draft")
+            XCTAssertTrue(window.firstResponder === field, "\(name): the title has the keyboard without a click")
             QuickAddDraftStore.clear(card: card, from: defaults)
         }
     }
