@@ -31,7 +31,15 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     var context: QuickAddContext
-    var text = ""
+    /// Every change is followed by the switched-off phrases (brief 41): one whose words are edited or deleted
+    /// is forgotten, so typing it again highlights it again.
+    var text = "" {
+        didSet {
+            guard text != oldValue, let phrases = storedDisabledPhrases else { return }
+            let carried = QuickAddDisabledPhrase.carried(phrases, from: oldValue, to: text)
+            storedDisabledPhrases = carried.isEmpty ? nil : carried
+        }
+    }
     var notes = ""
     /// The "+" options revealed in the card.
     var extras: Set<Extra> = []
@@ -49,8 +57,16 @@ struct QuickAddDraft: Equatable, Codable {
     /// once a time is typed or picked, never written into the title as "!15mb" (that would be plain text
     /// until a time arrives). Nil when nothing is waiting; a reminder typed beside a time wins over it.
     private(set) var pendingReminderMinutes: Int?
-    /// Tokens switched off by tapping their highlight (brief 28): their words stay plain title text.
-    private(set) var disabledTokens: Set<QuickAddTokenKey> = []
+    /// Tokens switched off by tapping their highlight (brief 28), each where it sits in the text (brief 41):
+    /// their words stay plain title text; the same words typed elsewhere are read as usual. Kept optional on
+    /// disk like the sub-task lines (a card stored by 0.5.0 kept keys only; its switched-off words light up
+    /// again when it is restored).
+    private var storedDisabledPhrases: Set<QuickAddDisabledPhrase>?
+
+    var disabledPhrases: Set<QuickAddDisabledPhrase> { storedDisabledPhrases ?? [] }
+
+    /// The kinds and words switched off, wherever they sit.
+    var disabledTokens: Set<QuickAddTokenKey> { Set(disabledPhrases.map(\.key)) }
     /// "+" → Subtasks (brief 32): one line per sub-task, in order, empty ones included while typed. Kept
     /// optional on disk so a card stored before 0.4.1, which has no such key, still decodes.
     private var storedSubtaskLines: [String]?
@@ -123,13 +139,15 @@ struct QuickAddDraft: Equatable, Codable {
     /// and the choice holds while the rest of the text is edited. A phrase it had overridden ("jan 6" before
     /// "in a month") applies again. Only the keys are kept: which phrases are overridden follows from the
     /// text and this set, so a card restored after a kill (`QuickAddDraftStore`) shows the same boxes.
+    /// `token` comes from parsing the current text (`parsed(_:)`).
     mutating func disable(_ token: QuickAddToken) {
-        disabledTokens.insert(token.key)
+        guard let phrase = QuickAddDisabledPhrase(token, in: text) else { return }
+        storedDisabledPhrases = disabledPhrases.union([phrase])
     }
 
     /// The text as the parser reads it, switched-off tokens left as plain words.
     func parsed(_ parser: QuickAddParser) -> QuickAddResult {
-        parser.parse(text, disabling: disabledTokens)
+        parser.parse(text, switchedOff: disabledPhrases)
     }
 
     /// Ready for the next task: empty text, the list's defaults back.
@@ -306,7 +324,8 @@ struct QuickAddDraft: Equatable, Codable {
     /// Switches back on every token with these words, whatever its kind.
     private mutating func enable(_ words: String) {
         let text = QuickAddTokenKey(kind: .date, text: words).text
-        disabledTokens = disabledTokens.filter { $0.text != text }
+        let kept = disabledPhrases.filter { $0.key.text != text }
+        storedDisabledPhrases = kept.isEmpty ? nil : kept
     }
 
     /// The text without the tokens of these kinds the parser sees (switched-off ones stay).

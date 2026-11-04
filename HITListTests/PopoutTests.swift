@@ -1397,4 +1397,64 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(restored.chips(p).reminderOffsetMinutes, 30)
         XCTAssertEqual(restored, draft)
     }
+
+    // MARK: Brief 41: a switched-off phrase comes back when retyped
+
+    func testASwitchedOffPhraseDeletedAndRetypedIsHighlightedAgain() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call tom 3")
+        for token in draft.parsed(p).tokens { draft.disable(token) }
+        XCTAssertTrue(draft.parsed(p).tokens.isEmpty)
+        // Backspace "tom 3" away a character at a time, then type it again.
+        for text in ["Call tom ", "Call tom", "Call to", "Call t", "Call ", "Call t", "Call to", "Call tom", "Call tom ", "Call tom 3"] {
+            draft.text = text
+        }
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["tom", "3"])
+        XCTAssertEqual(draft.result(p).title, "Call")
+        XCTAssertEqual(draft.chips(p).dueDate, calendar.date(bySettingHour: 3, minute: 0, second: 0, of: day(1)))
+    }
+
+    func testASwitchedOffPhraseStaysPlainWhileTheRestIsEdited() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call tom 3")
+        for token in draft.parsed(p).tokens { draft.disable(token) }
+        for text in ["Ring tom 3", "Ring tom 3 about", "Ring tom 3 about the parcel p2"] { draft.text = text }
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["p2"])
+        XCTAssertEqual(draft.result(p).title, "Ring tom 3 about the parcel")
+        XCTAssertNil(draft.chips(p).dueDate)
+    }
+
+    func testTheSameWordTypedAgainLaterIsHighlightedAndTheFirstStaysPlain() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call tom")
+        draft.disable(try token("tom", in: draft, p))
+        for text in ["Call tom ", "Call tom o", "Call tom or", "Call tom or ", "Call tom or t", "Call tom or to", "Call tom or tom"] {
+            draft.text = text
+        }
+        let tokens = draft.parsed(p).tokens
+        XCTAssertEqual(tokens.map(\.text), ["tom"])
+        XCTAssertEqual(tokens.first.map { draft.text.distance(from: draft.text.startIndex, to: $0.range.lowerBound) }, 12,
+                       "the new one")
+        XCTAssertEqual(draft.result(p).title, "Call tom or")
+        XCTAssertEqual(draft.chips(p).dueDate, day(1))
+    }
+
+    func testARestoredCardKeepsWhichCopyIsPlain() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call tom")
+        draft.disable(try token("tom", in: draft, p))
+        draft.text = "Call tom or tom"
+        let card = UUID()
+        QuickAddDraftStore.save(draft, card: card, to: defaults)
+        var restored = try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults))
+        XCTAssertEqual(restored, draft)
+        XCTAssertEqual(restored.parsed(p), draft.parsed(p))
+        // Edits after the restore follow the same rules.
+        restored.text = "Call to or tom"
+        restored.text = "Call tom or tom"
+        XCTAssertEqual(restored.parsed(p).tokens.count, 2, "the first tom was edited, so it is a new phrase")
+    }
 }
