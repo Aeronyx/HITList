@@ -283,6 +283,8 @@ enum TaskActions {
             try context.save()
             // Schema V3's `parent` reaches CloudKit only on a record that has one.
             try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
+            // Schema V4's Profile, the same way (brief 34).
+            try ProfileStore(context: context).seedSampleProfiles()
         } catch {
             print("seedSampleData failed: \(error)")
         }

@@ -21,10 +21,12 @@ struct DedupeReport: Equatable, CustomStringConvertible {
     var filters = 0
     /// Subtasks put back under the one-level rule or into their parent's Group (nothing deleted).
     var subtasks = 0
+    /// Duplicate profile records merged into the survivor (`ProfileStore.mergeDuplicates`).
+    var profiles = 0
 
-    var removed: Int { projects + labels + filters }
+    var removed: Int { projects + labels + filters + profiles }
     var description: String {
-        "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s); repaired \(subtasks) subtask(s)"
+        "removed \(projects) project(s), \(labels) label(s), \(filters) filter(s), \(profiles) profile(s); repaired \(subtasks) subtask(s)"
     }
 }
 
@@ -39,13 +41,15 @@ struct DedupeReport: Equatable, CustomStringConvertible {
 /// duplicates, so a second pass changes nothing.
 ///
 /// Then subtasks follow their parent (`repairSubtasks`): into the surviving Group, and back to one level
-/// when two devices' edits nested them deeper.
+/// when two devices' edits nested them deeper. Last, two devices' profiles become one
+/// (`ProfileStore.mergeDuplicates`: newest name, newest picture, never none when either had one).
 @MainActor
 enum Deduplicator {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "dedupe")
 
     @discardableResult
-    static func run(in context: ModelContext) throws -> DedupeReport {
+    /// `profileLog` is where the profile merge's line goes (the sync log; tests pass their own).
+    static func run(in context: ModelContext, profileLog: @escaping ProfileStore.Log = ProfileStore.syncLog) throws -> DedupeReport {
         var report = DedupeReport()
         report.projects = try collapse(Project.self, in: context) { loser, winner in
             for task in loser.tasks ?? [] { task.project = winner }
@@ -59,6 +63,7 @@ enum Deduplicator {
         }
         report.filters = try collapse(SavedFilter.self, in: context) { _, _ in }
         report.subtasks = try repairSubtasks(in: context)
+        report.profiles = try ProfileStore(context: context, log: profileLog).mergeDuplicates()
         if context.hasChanges { try context.save() }
         return report
     }
