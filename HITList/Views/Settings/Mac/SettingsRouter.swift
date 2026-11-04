@@ -6,7 +6,8 @@ import Observation
 /// scene (for ⌘, in the app menu), and selects `SidebarItem.settings` whenever `open()` is called.
 ///
 ///     @Environment(SettingsRouter.self) private var router: SettingsRouter?
-///     Button("Settings…") { router?.open() }
+///     Button("Settings…") { router?.open() }                      // the section last shown
+///     Button("Account settings…") { router?.open(at: .account) }  // straight at a section
 @MainActor
 @Observable
 final class SettingsRouter {
@@ -15,9 +16,21 @@ final class SettingsRouter {
     private(set) var openRequests = 0
     /// Advances when the page's Done is pressed; `SplitContent` goes back to the list it came from.
     private(set) var closeRequests = 0
+    /// Where the page's chosen section is remembered (`MacSettingsPage` reads the same key).
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = AppGroup.defaults) {
+        self.defaults = defaults
+    }
 
     func open() {
         openRequests += 1
+    }
+
+    /// Opens the page at `section`: remembers it as the chosen section, which the page shows, then opens.
+    func open(at section: MacSettingsSection) {
+        MacSettingsSection.save(section, to: defaults)
+        open()
     }
 
     func close() {
