@@ -116,7 +116,9 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     /// Switches a highlighted token off: its words stay in the title as typed, the chips stop showing it,
-    /// and the choice holds while the rest of the text is edited.
+    /// and the choice holds while the rest of the text is edited. A phrase it had overridden ("jan 6" before
+    /// "in a month") applies again. Only the keys are kept: which phrases are overridden follows from the
+    /// text and this set, so a card restored after a kill (`QuickAddDraftStore`) shows the same boxes.
     mutating func disable(_ token: QuickAddToken) {
         disabledTokens.insert(token.key)
     }
