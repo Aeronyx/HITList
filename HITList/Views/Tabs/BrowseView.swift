@@ -275,7 +275,8 @@ struct BrowseProfileButton: View {
     }
 
     var body: some View {
-        let profile = profiles.sorted(by: ProfileStore.precedes).first
+        // This iCloud account's profile; a record from another account is hidden (session 42).
+        let profile = ProfileStore.shown(profiles)
         let fit = Self.fit(name: profile?.displayName, maxWidth: Self.maxNameWidth, width: Self.textWidth)
         HStack(spacing: HITSpacing.s) {
             ProfileAvatarView(imageData: profile?.avatarData, name: ProfileMenuModel.displayName(profile?.displayName) ?? "",
