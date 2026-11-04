@@ -16,7 +16,8 @@ distributed through Apple's TestFlight. In this policy "we" means George, the de
 
 Nothing. HITList has no account system of its own, no servers, no analytics, no advertising and no
 crash-reporting service. The app does not send your tasks, your profile or anything about how you use it
-to us or to anyone else. There is no server of ours for it to contact.
+to us or to anyone else. There is no server of ours for it to contact. The only way tasks leave your iCloud
+is the optional Claude connection described below, which you switch on and connect yourself.
 
 ## Where your data lives
 
@@ -31,6 +32,21 @@ iCloud, your data stays on the device. Apple's handling of iCloud data is covere
 The name and picture you set in Settings → Account are stored the same way as your tasks: in your iCloud
 private database, visible only to you on your own devices. The picture is shrunk on your device (512
 pixels at most) before it is saved.
+
+## Claude (optional, off unless you turn it on)
+
+HITList can let Claude, Anthropic's assistant, work with your tasks. It is off until you switch on Settings →
+Claude → Allow Claude on your Mac and connect Claude Desktop or Claude Code yourself. While it is on and HITList
+is open, the Claude app on your Mac can list, add, complete and edit the tasks your privacy setting allows
+(everything except tasks labelled `@private`, or only tasks labelled `@claude`); hidden tasks are never shown
+to it. What Claude does with what it reads is covered by Anthropic's terms and privacy policy, between you and
+Anthropic: HITList sends nothing to us or to Anthropic on its own. "Copy for Claude" only puts the allowed tasks
+on your clipboard for you to paste wherever you choose.
+
+## Siri and Shortcuts
+
+HITList's Siri phrases and Shortcuts actions run on your device and use the same data as the app. What you say
+to Siri is handled by Apple under Apple's privacy policy.
 
 ## Notifications
 

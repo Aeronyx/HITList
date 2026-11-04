@@ -102,6 +102,8 @@ struct FloatingAddButton: View {
             .font(.system(size: Self.glyphSize, weight: .semibold))
             .foregroundStyle(HITColor.onAccent)
             .frame(width: Self.size.width, height: Self.size.height)
+            // A tiny seasonal glyph inside the oval during a holiday (brief 44; Settings → Delight).
+            .holidayAccent(size: 9, outside: false)
     }
 }
 
