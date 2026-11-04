@@ -5,18 +5,22 @@ import AppKit
 #endif
 
 extension View {
-    /// Draws the window's popouts over this view. Applied once, by `ContentView`.
-    func popoutHost(_ popouts: PopoutController) -> some View {
-        modifier(PopoutHost(popouts: popouts))
+    /// Draws the window's popouts over this view, the way `style` says. Applied once, by `ContentView`,
+    /// outside whichever shell is on show, so an open card or editor outlives a change of shell. Without
+    /// a style (tests), the size class decides: compact is the phone, regular the panel.
+    func popoutHost(_ popouts: PopoutController, style: PopoutHost.Style? = nil) -> some View {
+        modifier(PopoutHost(popouts: popouts, chosenStyle: style))
     }
 }
 
 /// Where the popouts appear. iPhone: the quick-add card as a detached oval floating 12 pt above the
 /// keyboard (12 pt from the screen edges) over a black 0.5 backdrop that closes it on tap; the task in a
 /// bottom sheet. Mac (and iPad): both as a 560 pt panel centred about 18% from the top of
-/// the window over a dimmed backdrop.
+/// the window over a dimmed backdrop. iPhone Duo, inner display (brief 45): the iPhone's oval card,
+/// the task in the panel, and the undo toasts where the iPad has them.
 struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
+    var chosenStyle: Style?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -29,28 +33,66 @@ struct PopoutHost: ViewModifier {
     /// iPhone: "Discard?" is showing above the card, keyboard down.
     @State private var confirmingDiscard = false
 
-    /// The Mac's panel style; iPad gets it too.
-    private var usesPanel: Bool {
-        #if os(macOS)
-        true
+    /// How the popouts are drawn for each shell (`AppShell`).
+    enum Style: Equatable {
+        /// The iPhone's four tabs: the oval card above the keyboard, the editor in a sheet, undo toasts
+        /// beside the "+".
+        case phone
+        /// The Mac and the iPad (and an iPhone Max on its side): both in the centred panel.
+        case panel
+        /// The iPhone Duo's inner display: the oval card, the editor in the panel.
+        case duo
+
+        init(_ shell: AppShell) {
+            switch shell {
+            case .tabs: self = .phone
+            case .split: self = .panel
+            case .duo: self = .duo
+            }
+        }
+
+        enum Editor: Equatable { case sheet, panel, column }
+
+        var editor: Editor {
+            switch self {
+            case .phone: .sheet
+            case .panel: .panel
+            case .duo: .panel
+            }
+        }
+
+        /// The quick-add card in the panel (else the oval).
+        var panelQuickAdd: Bool { self == .panel }
+        /// Undo toasts at the bottom-trailing corner, lists drawing their own (else beside the iPhone's
+        /// "+", the host drawing the lists' too).
+        var cornerToasts: Bool { self != .phone }
+    }
+
+    private var style: Style {
+        if let chosenStyle { return chosenStyle }
+        #if os(iOS)
+        return sizeClass == .compact ? .phone : .panel
         #else
-        sizeClass == .regular
+        return .panel
         #endif
     }
+
+    /// The Mac's panel style; iPad gets it too.
+    private var usesPanel: Bool { style.panelQuickAdd }
 
     @Environment(\.modelContext) private var context
 
     func body(content: Content) -> some View {
         content
-            .overlay(alignment: usesPanel ? .bottomTrailing : .bottomLeading) {
+            .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
                 // iPhone: every undo toast is drawn here, the lists' included (`completionToast`), over
                 // the shell, to the left of the oval "+" and centred on it (George, build 13: not above it).
                 // This overlay has the shell's own frame, so its bottom edge is the one the island stands
                 // on whatever the screen size; a toast inside a list sat under the chrome and depended on
                 // that list's frame. Mac and iPad: the popout's toast at the window's bottom-trailing
                 // corner, a row above where a list's own toast sits.
-                VStack(alignment: usesPanel ? .trailing : .leading, spacing: HITSpacing.s) {
-                    if !usesPanel, let listToast = popouts.listToast {
+                VStack(alignment: style.cornerToasts ? .trailing : .leading, spacing: HITSpacing.s) {
+                    if !style.cornerToasts, let listToast = popouts.listToast {
                         CompletionToast(message: listToast.message, onUndo: listToast.undo) {
                             // The list sees its toast go and clears it (`ListCompletionToast`).
                             popouts.hideListToast(owner: listToast.owner)
@@ -66,8 +108,8 @@ struct PopoutHost: ViewModifier {
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                     }
                 }
-                .frame(maxWidth: usesPanel ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
-                .padding(usesPanel ? Self.panelToastInsets : Self.phoneToastInsets)
+                .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
+                .padding(style.cornerToasts ? Self.panelToastInsets : Self.phoneToastInsets)
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -75,7 +117,7 @@ struct PopoutHost: ViewModifier {
                 }
             }
             .overlay {
-                if usesPanel, let task = popouts.task {
+                if style.editor == .panel, let task = popouts.task {
                     PanelBackdrop(onDismiss: { popouts.closeTask() }) {
                         TaskPopout(task: task)
                             .id(task.id)
@@ -92,7 +134,7 @@ struct PopoutHost: ViewModifier {
             // new Mac window if its own window was closed.
             .onAppear { popouts.reopenStoredQuickAdd() }
             .onDisappear { popouts.windowClosed() }
-            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
+            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: style.editor == .panel && popouts.state.isTaskOpen)
             // A task deleted elsewhere (another device, window or a script) closes its popout, panel or
             // sheet: the query for it empties as the deletion reaches this context, and every finished
             // import checks again.
@@ -159,8 +201,8 @@ struct PopoutHost: ViewModifier {
 
     /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
     private var sheetTask: Binding<TaskItem?> {
-        Binding<TaskItem?>(get: { usesPanel ? nil : popouts.task },
-                           set: { if $0 == nil, !usesPanel { popouts.closeTask() } })
+        Binding<TaskItem?>(get: { style.editor == .sheet ? popouts.task : nil },
+                           set: { if $0 == nil, style.editor == .sheet { popouts.closeTask() } })
     }
 
     // MARK: Quick add
