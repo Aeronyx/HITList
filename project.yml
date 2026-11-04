@@ -47,7 +47,7 @@ targets:
       - sdk: CloudKit.framework
       # The Claude connector's MCP helper (brief 43), Mac only: HITList.app/Contents/MacOS/hitlist-mcp.
       - target: hitlist-mcp
-        platformFilters: [macOS]
+        destinationFilters: [macOS]
         copy:
           destination: executables
     entitlements:

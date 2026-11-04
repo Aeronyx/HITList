@@ -237,6 +237,8 @@ struct MacSettingsSectionContent: View {
                 MacAppearanceSection()
             case .data:
                 MacDataSection()
+            case .claude:
+                ClaudeSettingsSection()
             case .about:
                 MacAboutSection()
             }

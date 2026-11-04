@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import SwiftUI
 import HITListCore
 @testable import HITList
 
@@ -439,3 +440,78 @@ final class ClaudeToolTests: XCTestCase {
         XCTAssertTrue(handler().call("delete_task", [:]).isError)
     }
 }
+
+/// "Copy for Claude" (brief 43): only what the privacy rule allows, in the backup's snapshot shape.
+@MainActor
+final class ClaudeExportTests: XCTestCase {
+    func testExportHoldsOnlyVisibleTasksAndTheirGroupsAndLabels() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let secret = TaskLabel(name: "private"), home = TaskLabel(name: "home")
+        let hiddenGroup = Project(name: "Therapy"), work = Project(name: "Work")
+        [secret, home].forEach(context.insert)
+        [hiddenGroup, work].forEach(context.insert)
+        let open = TaskItem(title: "Ship it", project: work, labels: [home])
+        let hidden = TaskItem(title: "Session notes", project: hiddenGroup, labels: [secret])
+        [open, hidden].forEach(context.insert)
+        context.insert(SavedFilter(name: "Secret", query: "@private"))
+        try context.save()
+        let visibleSub = try TaskActions.addSubtask("Tag release", to: open, in: context)
+        _ = try TaskActions.addSubtask("Hidden step", to: hidden, in: context)
+
+        let snapshot = try ClaudeExport.snapshot(from: context, rule: ClaudeAccessRule())
+        XCTAssertEqual(Set(snapshot.tasks.map(\.title)), ["Ship it", "Tag release"])
+        XCTAssertEqual(snapshot.tasks.first { $0.id == visibleSub.id }?.parentID, open.id)
+        XCTAssertEqual(snapshot.projects.map(\.name), ["Work"])
+        XCTAssertEqual(snapshot.labels.map(\.name), ["home"])
+        XCTAssertTrue(snapshot.filters.isEmpty, "saved filters can name a hidden label")
+        XCTAssertEqual(snapshot.deviceName, "HITList")
+
+        let text = try ClaudeExport.text(for: snapshot)
+        XCTAssertTrue(text.hasPrefix(ClaudeExport.schemaNote))
+        for leak in ["Session notes", "Hidden step", "Therapy", "private", "Secret"] {
+            XCTAssertFalse(text.contains(leak), leak)
+        }
+        let json = try XCTUnwrap(text.components(separatedBy: "```json\n").last?.components(separatedBy: "\n```").first)
+        let decoded = try Snapshot.from(json: Data(json.utf8))  // the backup format, readable by Import
+        XCTAssertEqual(decoded.tasks.map(\.id), snapshot.tasks.map(\.id))
+        XCTAssertEqual(decoded.projects.map(\.name), ["Work"])
+
+        let shared = try ClaudeExport.snapshot(from: context, rule: ClaudeAccessRule(mode: .onlyShared))
+        XCTAssertTrue(shared.tasks.isEmpty, "nothing is labelled @claude yet")
+        XCTAssertTrue(shared.labels.isEmpty)
+    }
+
+    // MARK: Setup snippets
+
+    func testClaudeDesktopConfig() throws {
+        let config = ClaudeSetup.desktopConfig(helperPath: "/Applications/HITList.app/Contents/MacOS/hitlist-mcp", storeSuffix: nil)
+        let json = try JSONValue.decode(Data(config.utf8))
+        XCTAssertEqual(json, ["mcpServers": ["hitlist": ["command": "/Applications/HITList.app/Contents/MacOS/hitlist-mcp"]]])
+        let debug = try JSONValue.decode(Data(ClaudeSetup.desktopConfig(helperPath: "/x/hitlist-mcp", storeSuffix: "Development").utf8))
+        XCTAssertEqual(debug["mcpServers"]?["hitlist"]?["args"], ["--store", "Development"])
+    }
+
+    func testClaudeCodeCommand() {
+        XCTAssertEqual(ClaudeSetup.claudeCodeCommand(helperPath: "/Applications/HITList.app/Contents/MacOS/hitlist-mcp", storeSuffix: nil),
+                       "claude mcp add --scope user hitlist -- /Applications/HITList.app/Contents/MacOS/hitlist-mcp")
+        XCTAssertEqual(ClaudeSetup.claudeCodeCommand(helperPath: "/Users/g/My Builds/HITList.app/Contents/MacOS/hitlist-mcp",
+                                                     storeSuffix: "Development"),
+                       "claude mcp add --scope user hitlist -- '/Users/g/My Builds/HITList.app/Contents/MacOS/hitlist-mcp' --store Development")
+        XCTAssertEqual(ClaudeSetup.shellQuoted("it's"), "'it'\\''s'")
+    }
+
+    #if os(macOS)
+    func testTheHelperShipsInsideTheMacApp() {
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: ClaudeSetup.helperURL.path),
+                      "hitlist-mcp is embedded at HITList.app/Contents/MacOS")
+    }
+    #endif
+
+    func testSettingsSectionRenders() {
+        let container = ModelContainerFactory.preview()
+        let view = ClaudeSettingsSection().modelContainer(container).frame(width: 600).preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: view).cgImage)
+    }
+}
+
