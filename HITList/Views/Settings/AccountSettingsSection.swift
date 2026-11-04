@@ -126,12 +126,15 @@ enum AccountState: Equatable {
 
 /// The words of the Account screen that don't depend on state. Pure, so tests pin the paths.
 enum AccountCopy {
-    static let storage = "Your tasks are stored in your iCloud account and sync to every device signed in to it. HITList has no sign-in of its own: your Apple account is your account."
+    /// Under the Account group. The status row above it says where the tasks are right now.
+    static let storage = "HITList has no sign-in of its own: your Apple account is your account, and your tasks live in its private iCloud database, which the app's developer can't see."
 
     #if os(macOS)
+    static let signOutTitle = "Sign out in System Settings"
     static let signOut = "To sign out, use System Settings → [your name] → Sign Out. Signing out never deletes your tasks: they stay in iCloud and come back when you sign in again."
     static let deleteAll = "To delete everything HITList keeps in iCloud, on every device: System Settings → [your name] → iCloud → Manage → HITList → Delete from iCloud. HITList never deletes in bulk itself. This can't be undone, so export your tasks first if you might want them."
     #else
+    static let signOutTitle = "Sign out in the Settings app"
     static let signOut = "To sign out, use the Settings app → [your name] → Sign Out. Signing out never deletes your tasks: they stay in iCloud and come back when you sign in again."
     static let deleteAll = "To delete everything HITList keeps in iCloud, on every device: the Settings app → [your name] → iCloud → Storage (on iOS 18: Manage Account Storage) → HITList → Delete Data from iCloud. HITList never deletes in bulk itself. This can't be undone, so export your tasks first if you might want them."
     #endif
@@ -173,9 +176,8 @@ struct AccountSettingsSection: View {
         .onDisappear { saveName() }
         .accessibilityIdentifier("settings-account")
 
-        HITGroup("Signing out", footer: AccountCopy.signOut) {
-            HITMenuRowLabel("Signed in through iCloud", subtitle: "Signing out is done in the system's settings, for every app at once.",
-                            systemImage: "person.crop.circle.badge.checkmark")
+        HITGroup("Signing out") {
+            HITMenuRowLabel(AccountCopy.signOutTitle, subtitle: AccountCopy.signOut, systemImage: "rectangle.portrait.and.arrow.right")
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
         }
