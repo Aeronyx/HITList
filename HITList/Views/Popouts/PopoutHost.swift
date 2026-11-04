@@ -16,8 +16,9 @@ extension View {
 /// Where the popouts appear. iPhone: the quick-add card as a detached oval floating 12 pt above the
 /// keyboard (12 pt from the screen edges) over a black 0.5 backdrop that closes it on tap; the task in a
 /// bottom sheet. Mac (and iPad): both as a 560 pt panel centred about 18% from the top of
-/// the window over a dimmed backdrop. iPhone Duo, inner display (brief 45): the iPhone's oval card,
-/// the task in the panel, and the undo toasts where the iPad has them.
+/// the window over a dimmed backdrop. iPhone Duo, inner display (brief 45): the iPhone's oval card
+/// (centred, no wider than the panel), the task in the column beside the list (`DuoDetail`), and the
+/// undo toasts where the iPad has them.
 struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
     var chosenStyle: Style?
@@ -32,6 +33,13 @@ struct PopoutHost: ViewModifier {
     @State private var quickAddHasContent = false
     /// iPhone: "Discard?" is showing above the card, keyboard down.
     @State private var confirmingDiscard = false
+    /// The style as of the latest body, for the editor sheet's setter (`sheetTask`).
+    @State private var latestStyle = StyleBox()
+
+    /// A reference, so a binding made by an earlier body reads the style of the current one.
+    final class StyleBox {
+        var style: Style?
+    }
 
     /// How the popouts are drawn for each shell (`AppShell`).
     enum Style: Equatable {
@@ -40,7 +48,7 @@ struct PopoutHost: ViewModifier {
         case phone
         /// The Mac and the iPad (and an iPhone Max on its side): both in the centred panel.
         case panel
-        /// The iPhone Duo's inner display: the oval card, the editor in the panel.
+        /// The iPhone Duo's inner display: the oval card, the editor in a column of the layout.
         case duo
 
         init(_ shell: AppShell) {
@@ -57,7 +65,7 @@ struct PopoutHost: ViewModifier {
             switch self {
             case .phone: .sheet
             case .panel: .panel
-            case .duo: .panel
+            case .duo: .column
             }
         }
 
@@ -83,7 +91,8 @@ struct PopoutHost: ViewModifier {
     @Environment(\.modelContext) private var context
 
     func body(content: Content) -> some View {
-        content
+        latestStyle.style = style
+        return content
             .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
                 // iPhone: every undo toast is drawn here, the lists' included (`completionToast`), over
                 // the shell, to the left of the oval "+" and centred on it (George, build 13: not above it).
@@ -199,10 +208,15 @@ struct PopoutHost: ViewModifier {
         #endif
     }
 
-    /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
+    /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead,
+    /// and on the Duo's inner display, where its column does. Unfolding with the sheet up dismisses the
+    /// sheet without closing the task, and the column shows it; folding brings the sheet back up. The
+    /// setter SwiftUI calls as that sheet goes can be one an earlier body made, with the phone's style
+    /// captured in it, so it asks `latestStyle` (it closed the task on unfolding before it did).
     private var sheetTask: Binding<TaskItem?> {
-        Binding<TaskItem?>(get: { style.editor == .sheet ? popouts.task : nil },
-                           set: { if $0 == nil, style.editor == .sheet { popouts.closeTask() } })
+        let latest = latestStyle
+        return Binding<TaskItem?>(get: { (latest.style ?? style).editor == .sheet ? popouts.task : nil },
+                                  set: { if $0 == nil, (latest.style ?? style).editor == .sheet { popouts.closeTask() } })
     }
 
     // MARK: Quick add

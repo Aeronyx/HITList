@@ -2,8 +2,8 @@ import XCTest
 import SwiftUI
 @testable import HITList
 
-/// The iPhone Duo (brief 45): which shell each display gets, and that folding and unfolding keeps the
-/// list on show (tab ↔ sidebar item, lists opened from Browse).
+/// The iPhone Duo (brief 45): which shell each display gets, that folding and unfolding keeps the list
+/// on show (tab ↔ sidebar item, lists opened from Browse), and how the inner display's columns divide.
 @MainActor
 final class DuoLayoutTests: XCTestCase {
     // The two displays, in points (1398 × 2034 and 2007 × 2853 px at 3×).
@@ -127,6 +127,63 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertTrue(PhoneStack().path.isEmpty)
     }
 
+    // MARK: Columns
+
+    func testUprightTheEditorAndTheListMeetAtTheFold() {
+        let plan = DuoColumns.plan(width: inner.width, sidebarWidth: 240, editorOpen: true, showsToday: false)
+        XCTAssertFalse(plan.showsSidebar, "no room for sidebar, list and editor upright")
+        XCTAssertEqual(plan.editorWidth, (inner.width / 2).rounded())
+        XCTAssertNil(plan.nextDaysWidth)
+    }
+
+    func testAReportedFoldPlacesTheSplit() {
+        let plan = DuoColumns.plan(width: inner.width, sidebarWidth: 240, editorOpen: true, showsToday: false, fold: 349)
+        XCTAssertEqual(plan.editorWidth, inner.width - 349)
+        let wild = DuoColumns.plan(width: inner.width, sidebarWidth: 240, editorOpen: true, showsToday: false, fold: 40)
+        XCTAssertEqual(wild.editorWidth, inner.width - DuoColumns.minListWidth, "the list keeps its minimum")
+    }
+
+    func testOnItsSideTheSidebarStaysBesideListAndEditor() {
+        let plan = DuoColumns.plan(width: innerOnItsSide.width, sidebarWidth: 240, editorOpen: true, showsToday: true)
+        XCTAssertTrue(plan.showsSidebar)
+        let editor = try! XCTUnwrap(plan.editorWidth)
+        XCTAssertTrue(DuoColumns.editorWidths.contains(editor))
+        XCTAssertGreaterThanOrEqual(innerOnItsSide.width - 240 - editor, DuoColumns.minListWidth)
+        XCTAssertNil(plan.nextDaysWidth, "the editor takes the next days' place")
+    }
+
+    func testTodayShowsTheNextDaysOnlyWhereTheyFit() {
+        let side = DuoColumns.plan(width: innerOnItsSide.width, sidebarWidth: 240, editorOpen: false, showsToday: true)
+        let nextDays = try! XCTUnwrap(side.nextDaysWidth)
+        XCTAssertTrue(DuoColumns.nextDaysWidths.contains(nextDays))
+        XCTAssertGreaterThanOrEqual(innerOnItsSide.width - 240 - nextDays, DuoColumns.minListWidth)
+
+        XCTAssertNil(DuoColumns.plan(width: inner.width, sidebarWidth: 240, editorOpen: false, showsToday: true).nextDaysWidth,
+                     "upright there is no room")
+        XCTAssertNil(DuoColumns.plan(width: innerOnItsSide.width, sidebarWidth: 240, editorOpen: false, showsToday: false).nextDaysWidth,
+                     "only Today")
+    }
+
+    // MARK: Next days
+
+    func testNextDaysAreTomorrowThroughAWeekOutInOrder() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York")!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 15))!
+        func at(_ day: Int, _ hour: Int = 9) -> Date {
+            calendar.date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
+        }
+        let items: [(String, Date?)] = [
+            ("today", at(4, 20)), ("overdue", at(2)), ("undated", nil),
+            ("fri late", at(6, 22)), ("tomorrow", at(5)), ("fri", at(6, 8)),
+            ("a week out", at(11, 23)), ("too far", at(12, 0)),
+        ]
+        let days = DuoNextDays.group(items, due: \.1, now: now, calendar: calendar)
+        XCTAssertEqual(days.map(\.day), [at(5, 0), at(6, 0), at(11, 0)])
+        XCTAssertEqual(days.map { $0.items.map(\.0) }, [["tomorrow"], ["fri late", "fri"], ["a week out"]],
+                       "within a day, the order given (the query's, by date)")
+    }
+
     // MARK: Popouts per shell
 
     func testEachShellDrawsItsPopoutsItsOwnWay() {
@@ -136,7 +193,7 @@ final class DuoLayoutTests: XCTestCase {
 
         XCTAssertEqual(PopoutHost.Style.phone.editor, .sheet)
         XCTAssertEqual(PopoutHost.Style.panel.editor, .panel)
-        XCTAssertEqual(PopoutHost.Style.duo.editor, .panel)
+        XCTAssertEqual(PopoutHost.Style.duo.editor, .column, "the Duo's editor opens beside the list")
 
         XCTAssertFalse(PopoutHost.Style.duo.panelQuickAdd, "the Duo keeps the phone's card above the keyboard")
         XCTAssertTrue(PopoutHost.Style.panel.panelQuickAdd)

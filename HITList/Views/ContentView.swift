@@ -51,7 +51,7 @@ struct ContentView: View {
             case .tabs:
                 MobileShell(place: $place)
             case .duo:
-                SplitContent(place: $place, duo: true)
+                SplitContent(place: $place, duo: true, geometry: geometry)
                     // The inner display may report a compact width, as an iPhone does; the split view,
                     // the lists and the floating "+" lay out as on an iPad there.
                     .environment(\.horizontalSizeClass, .regular)
@@ -80,33 +80,46 @@ struct ContentView: View {
 /// The sidebar and the selected list, side by side. On the Mac, Settings is one more destination here
 /// (`SidebarItem.settings`), opened through this window's `SettingsRouter`: the sidebar column shows the
 /// Settings sections while it is selected (`MacSettingsSidebar`) and the detail column the chosen section.
-/// With `duo` (the iPhone Duo's inner display, brief 45) it keeps its sidebar beside the list.
+/// With `duo` (the iPhone Duo's inner display, brief 45) the detail column is `DuoDetail`: the list with
+/// the editor or Today's next days beside it, the sidebar stepping aside when the editor needs its room.
 private struct SplitContent: View {
     @Environment(PopoutController.self) private var popouts
     @Binding var place: ShellPlace
     var duo = false
+    var geometry = WindowGeometry()
     @State private var selection: SidebarItem?
     @State private var settingsRouter = SettingsRouter()
     /// Where to go back to when the Settings page is closed.
     @State private var beforeSettings: SidebarItem? = .today
+    /// Duo: the sidebar steps aside while the editor needs its room (`DuoColumns`). Elsewhere the
+    /// system's own choice, as before.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     /// Mac: the Settings sections are showing in the sidebar column. Follows `selection == .settings` one
     /// run-loop turn later, so the detail column has already swapped when the sidebar starts to fade.
     @State private var settingsSidebarShown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(place: Binding<ShellPlace>, duo: Bool = false) {
+    init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
         _place = place
         self.duo = duo
+        self.geometry = geometry
         _selection = State(initialValue: place.wrappedValue.list)
     }
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            if duo {
+                sidebar.navigationSplitViewColumnWidth(DuoSplit.sidebarWidth)
+            } else {
+                sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            }
         } detail: {
-            ListScreen(item: selection ?? .today)
-                .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+            if duo {
+                DuoDetail(item: selection ?? .today, geometry: geometry, columnVisibility: $columnVisibility)
+            } else {
+                ListScreen(item: selection ?? .today)
+                    .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+            }
         }
         // Duo: side by side, never the sidebar sliding over the list as an upright iPad's does.
         .modifier(BalancedSplit(isOn: duo))
