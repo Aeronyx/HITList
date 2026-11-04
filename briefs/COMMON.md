@@ -50,15 +50,39 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 - Final message always includes: what changed per commit, test counts before/after, how you verified
   it running (simulator and/or Mac), the branch name, and anything George must do.
 
-## How sessions run (from 2026-11-03, round 8)
-Sessions are Claude Code sessions the desktop app starts from Fable's session on George's subscription
-(no API key): each in its own git worktree on a branch named after its brief, cut from master. Fable sends
-each session its brief, reads its final report, reviews, tests, merges and prepares the release; George runs
-`scripts/release.sh`. Before that (rounds 3–7) they ran through `scripts/session.sh` on API credit.
-TestFlight build 13 (0.4.0) is live on George's devices and not yet shared with friends; the next upload is
-0.4.1 (14). Production's CloudKit schema was deployed on 2026-11-02 (`reminderOffsetMinutes`); session 32
-adds a schema V3 (subtasks) that George must deploy before 0.4.1 ships. `scripts/release.sh` checks drift
-before anything else.
+## How sessions run (from 2026-11-04, round 9)
+Sessions are Claude Code sessions the desktop app starts from the supervisor's session (an Opus 5.5 session
+following `SUPERVISOR.md`) on George's subscription: each in its own git worktree on a branch named after its
+brief, cut from master. The supervisor reads each final report, merges, tests and prepares the release; George
+runs `scripts/release.sh`. TestFlight build 14 (0.4.1) is live on George's devices and about to go to friends as
+external testers; the next upload is 0.5.0 (15). Production's CloudKit schema is V3 (deployed 2026-11-03);
+session 34 adds V4 (`Profile`), which George must deploy to Production before 0.5.0 uploads.
+
+**Your own simulator.** Several sessions run at once and the shared "iPhone 17" simulator would get every
+session's build installed over the others'. Make your own at the start and delete it at the end:
+`xcrun simctl create "HITList-NN" "iPhone 17"` (NN = your brief number; it prints the UDID), boot it, build with
+`-destination 'platform=iOS Simulator,id=<UDID>' -derivedDataPath build.noindex/sim`, launch it with the iOS
+Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scripts/test.sh ios`. When done:
+`xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
+session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
+
+## Round 9 ownership (2026-11-04; briefs 34–38; 34, 37, 38 first, then 35 and 36)
+- `34-accounts-profile` (xhigh): `Models.swift`, `SchemaVersions.swift`, new `SchemaV3Models.swift`,
+  `ModelContainerFactory` model list, new `Services/ProfileStore.swift`, `Deduplicator` (profile merge),
+  `SyncLog` category, new `Views/Settings/AccountSettingsSection.swift`, one line each in `SettingsView.swift`
+  and the Mac settings section list, `AboutSettingsGroup`/`MacAboutSection` (privacy link), `Diagnostics.swift`,
+  `ICloudSettingsGroups.swift` (account lines), new `docs/`, `SchemaTests`, new `ProfileTests`.
+- `35-tabs-browse` (High): `Views/Tabs/*` (iPhone), `BrowseView`, `ScreenMenu` iPhone branch, start tab in
+  `SettingsPreferences`/`GeneralSettingsSection`, `screenChrome` call-site items, `MobileChromeTests`.
+- `36-editor-space-confirm` (High): `TaskPopout`, `Editor/*`, `QuickAddPopout` footer + title submit,
+  `TokenHighlightField` submit/Return lines, `PopoutHost` detents and editor dismiss, `PopoutTests`.
+- `37-highlight-merge-override` (High): HITListCore `QuickAddParser` (+Disabled), `TokenHighlightField` areas,
+  drawing and tap targets, `QuickAddDraft` (`disable`, reminder text), new `HighlightAreaTests`.
+- `38-mac-upcoming-board` (xhigh): `Views/Upcoming/*` (iPhone branch unchanged), new `UpcomingBoard`,
+  `UpcomingSchedule`, `TaskRescheduling`, `QuickAddContext` day context, `UpcomingScheduleTests`, new
+  `UpcomingBoardTests`.
+- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything
+  else. ROADMAP: only your row. `project.yml`: add files only.
 
 ## Round 8 record (2026-11-03; sessions 31–33 merged for 0.4.1 (14))
 Three desktop-app sessions on the subscription, all merged by Fable the same day: 31 `quick-add-language`
