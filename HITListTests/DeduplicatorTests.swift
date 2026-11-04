@@ -251,4 +251,37 @@ final class DeduplicatorTests: XCTestCase {
         XCTAssertEqual(bottom.project?.name, "Home")
         XCTAssertEqual(try Deduplicator.run(in: context).removed + (try Deduplicator.run(in: context).subtasks), 0, "a second pass changes nothing")
     }
+
+    // MARK: Scheduling (brief 42)
+
+    func testAPassAfterAnImportWaitsWhileAnotherImportIsRunning() throws {
+        _ = project("Home", createdAt: 0)
+        _ = project("home", createdAt: 10)
+        try context.save()
+        var lines: [(String, SyncLogEntry.Level, [String: String])] = []
+        let log: ProfileStore.Log = { lines.append(($0, $1, $2)) }
+
+        XCTAssertEqual(Deduplicator.runAndLog(in: context, trigger: "import", importInFlight: { true }, syncLog: log), .postponed)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).count, 2, "nothing touched while records may be half arrived")
+        XCTAssertTrue(lines.isEmpty)
+
+        guard case .ran(let report) = Deduplicator.runAndLog(in: context, trigger: "import", importInFlight: { false }, syncLog: log) else {
+            return XCTFail("the pass after the import ends runs")
+        }
+        XCTAssertEqual(report.projects, 1)
+        XCTAssertEqual(lines.map(\.0), ["Duplicates merged after import"], "merges reach the sync log, not only os_log")
+        XCTAssertEqual(lines.first?.2, ["groups": "1"])
+    }
+
+    func testTheLaunchPassNeverWaits() {
+        guard case .ran = Deduplicator.runAndLog(in: context, trigger: "launch", importInFlight: { true }, syncLog: { _, _, _ in }) else {
+            return XCTFail("at launch nothing has been imported yet in this process")
+        }
+    }
+
+    func testANothingToDoPassLogsNothing() {
+        var lines = 0
+        _ = Deduplicator.runAndLog(in: context, trigger: "import", importInFlight: { false }, syncLog: { _, _, _ in lines += 1 })
+        XCTAssertEqual(lines, 0)
+    }
 }

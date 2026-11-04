@@ -204,6 +204,164 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(try context.fetch(FetchDescriptor<TaskItem>()).first?.project?.name, "Home")
     }
 
+    // MARK: Robustness (brief 42, item 3)
+
+    /// Saves that reached the store (`ModelContext.didSave`) while `body` ran: each one is a CloudKit export.
+    private func saves(during body: () throws -> Void) rethrows -> Int {
+        var count = 0
+        let observer = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: context, queue: nil) { _ in count += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        try body()
+        return count
+    }
+
+    func testTheSameNameTwiceSavesNothing() throws {
+        try store.setName("George")
+        XCTAssertEqual(try saves { try store.setName("George") }, 0)
+        XCTAssertEqual(try saves { try store.setName("  George\n") }, 0, "the same name once trimmed")
+        XCTAssertEqual(try saves { try store.setName("") ; try store.setName("") }, 1, "clearing saves once")
+    }
+
+    func testTheSamePictureTwiceSavesNothing() throws {
+        let png = try Self.png(width: 300, height: 300)
+        try store.setAvatar(imageData: png)
+        let stamped = try XCTUnwrap(try store.current()?.avatarUpdatedAt)
+        now = now.addingTimeInterval(60)
+        let lines = logged.count
+        XCTAssertEqual(try saves { try store.setAvatar(imageData: png) }, 0, "the same photo chosen again")
+        XCTAssertEqual(try store.current()?.avatarUpdatedAt, stamped)
+        XCTAssertEqual(logged.count, lines)
+        XCTAssertEqual(try saves { try store.setAvatar(imageData: nil); try store.setAvatar(imageData: nil) }, 1, "removing saves once")
+    }
+
+    /// A device of its own: an in-memory store, its own profile, its own clock.
+    @MainActor private struct Device {
+        let container = ModelContainerFactory.preview()
+        var context: ModelContext { container.mainContext }
+        func store(at time: Date) -> ProfileStore {
+            ProfileStore(context: context, log: { _, _, _ in }, clock: { time })
+        }
+        func profiles() throws -> [Profile] { try context.fetch(FetchDescriptor<Profile>()).sorted(by: ProfileStore.precedes) }
+
+        /// What CloudKit's import does with another device's record: the same record (same id, same values).
+        func importRecord(_ other: Profile) throws {
+            let id = other.id
+            if let existing = try context.fetch(FetchDescriptor<Profile>(predicate: #Predicate { $0.id == id })).first {
+                existing.displayName = other.displayName
+                existing.nameUpdatedAt = other.nameUpdatedAt
+                existing.avatarData = other.avatarData
+                existing.avatarUpdatedAt = other.avatarUpdatedAt
+                existing.updatedAt = other.updatedAt
+                existing.createdAt = other.createdAt
+            } else {
+                let copy = Profile()
+                copy.id = other.id
+                copy.createdAt = other.createdAt
+                copy.displayName = other.displayName
+                copy.nameUpdatedAt = other.nameUpdatedAt
+                copy.avatarData = other.avatarData
+                copy.avatarUpdatedAt = other.avatarUpdatedAt
+                copy.updatedAt = other.updatedAt
+                context.insert(copy)
+            }
+            try context.save()
+        }
+
+        func merge() throws { try Deduplicator.run(in: context, profileLog: { _, _, _ in }) }
+    }
+
+    func testAProfileEditedOnTwoDevicesOfflineConvergesInEitherImportOrder() throws {
+        let picture = try ProfileAvatar.prepare(Self.png(width: 64, height: 64))
+        for phoneFirst in [true, false] {
+            // Offline: the Mac makes the profile first and names it; the phone, later, picks a picture and then
+            // a newer name. Neither has seen the other's record.
+            let mac = Device(), phone = Device()
+            try mac.store(at: now).setName("George")
+            try phone.store(at: now.addingTimeInterval(10)).setAvatar(imageData: try Self.png(width: 64, height: 64))
+            try phone.store(at: now.addingTimeInterval(20)).setName("George T.")
+            try mac.store(at: now.addingTimeInterval(30)).setName("George")   // unchanged: no write
+            let macRecord = try XCTUnwrap(mac.profiles().first), phoneRecord = try XCTUnwrap(phone.profiles().first)
+
+            // Back online: each imports the other's record, in either order, and merges.
+            if phoneFirst {
+                try mac.importRecord(phoneRecord); try mac.merge()
+                try phone.importRecord(macRecord); try phone.merge()
+            } else {
+                try phone.importRecord(macRecord); try phone.merge()
+                try mac.importRecord(phoneRecord); try mac.merge()
+            }
+            // Each device's merge result reaches the other (survivor updated, loser deleted on both).
+            for (from, to) in [(mac, phone), (phone, mac)] {
+                for record in try from.profiles() { try to.importRecord(record) }
+                try to.merge()
+            }
+
+            for device in [mac, phone] {
+                let records = try device.profiles()
+                XCTAssertEqual(records.count, 1, "one profile on each device (phone first: \(phoneFirst))")
+                XCTAssertEqual(records.first?.id, macRecord.id, "the earliest record survives everywhere")
+                XCTAssertEqual(records.first?.displayName, "George T.", "the newest name, from the phone")
+                XCTAssertEqual(records.first?.avatarData, picture, "the phone's picture")
+                XCTAssertEqual(records.first?.updatedAt, now.addingTimeInterval(20))
+            }
+            XCTAssertEqual(try saves { try mac.merge() }, 0, "a converged store has nothing left to merge")
+        }
+    }
+
+    func testAProfileFromAnotherAccountIsIgnoredAndLogged() throws {
+        let suite = "HITListTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let ownership = ProfileOwnership(defaults: defaults, storeName: ModelContainerFactory.mainStoreName)
+        let alice = AccountIdentity.key(recordName: "_alice"), bob = AccountIdentity.key(recordName: "_bob")
+        var account: String? = alice
+        var store = self.store
+        store.account = { account }
+        store.ownership = ownership
+
+        try store.setName("Alice")
+        let alices = try XCTUnwrap(try store.current())
+        XCTAssertEqual(ownership.owner(of: alices.id), alice, "claimed by the account it was seen with")
+
+        // Bob signs in. Core Data should purge Alice's record; suppose it didn't, and Bob's arrives.
+        account = bob
+        let bobs = otherDevicesProfile(name: "Bob", nameAt: -1, createdAt: 50)
+        XCTAssertEqual(try store.current()?.id, bobs.id, "Alice's record isn't shown to Bob, though it's older")
+        XCTAssertEqual(try store.current()?.displayName, "Bob")
+        XCTAssertEqual(ProfileStore.shown(try profiles(), account: bob, ownership: ownership)?.id, bobs.id, "nor in the badge")
+        XCTAssertEqual(logged.filter { $0.message == "Ignored a profile record from another iCloud account" }.count, 1)
+        XCTAssertEqual(logged.last { $0.message.hasPrefix("Ignored") }?.level, .error)
+
+        let merged = try store.mergeDuplicates()
+        XCTAssertEqual(merged, 0, "never merged into Bob's: Alice's name can't win a merge here")
+        XCTAssertEqual(try profiles().count, 2, "and never deleted: it's Alice's iCloud data")
+        _ = try store.current()
+        XCTAssertEqual(logged.filter { $0.message.hasPrefix("Ignored") }.count, 1, "logged once per record")
+        XCTAssertFalse(logged.contains { line in line.fields.values.contains { $0.contains("acct1:") || $0.contains("Alice") } })
+
+        // Before the account is known (the first second of a launch), nothing is hidden or claimed.
+        account = nil
+        XCTAssertEqual(try store.all().count, 2)
+    }
+
+    func testThePictureIsDecodedOncePerPicture() throws {
+        let cache = ProfileAvatarCache.shared
+        cache.removeAll()
+        let picture = try ProfileAvatar.prepare(Self.png(width: 200, height: 200))
+        let before = cache.decodeCount
+        for _ in 0..<20 { XCTAssertNotNil(cache.image(for: picture)) }
+        XCTAssertEqual(cache.decodeCount - before, 1, "twenty bodies, one decode")
+        XCTAssertNotNil(ProfileAvatarView.image(from: picture))
+        XCTAssertEqual(cache.decodeCount - before, 1, "the view goes through the cache")
+        let garbage = Data(repeating: 7, count: 100)
+        XCTAssertNil(cache.image(for: garbage))
+        XCTAssertNil(cache.image(for: garbage))
+        XCTAssertEqual(cache.decodeCount - before, 2, "an unreadable picture isn't tried again either")
+        cache.removeAll()
+        _ = cache.image(for: picture)
+        XCTAssertEqual(cache.decodeCount - before, 3, "an account switch empties it")
+    }
+
     // MARK: Picture
 
     func testPreparedPictureIsAJPEGWithinTheLimitsAndNeverUpscaled() throws {
@@ -322,6 +480,7 @@ final class ProfileTests: XCTestCase {
         render(ProfileBadge(), "badge")
         render(ProfileAvatarView(imageData: nil, name: "", size: 40), "avatar, empty", width: 40)
         for s in [AccountState.signedIn, .neverSignedIn, .restricted] { render(AccountStatusRow(state: s), "status \(s)") }
+        render(AccountStatusRow(state: .signedIn, sync: .synced(now)), "status with a sync state")
     }
 
     // MARK: Helpers

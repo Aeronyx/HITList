@@ -245,6 +245,30 @@ final class SyncLog: @unchecked Sendable {
         return d
     }()
 
+    /// The number of lines in the file at `url`, counted on a memory-mapped copy without splitting it: the
+    /// first line each launch writes counts the whole log (up to `defaultMaxBytes`), on the main thread.
+    /// Splitting it into a `Data` per line, as before 0.6.0, took several milliseconds of launch time.
+    static func countLines(at url: URL) -> Int {
+        guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return 0 }
+        return countLines(in: data)
+    }
+
+    /// Non-empty lines in `data`, as `lines(in:)` would split them.
+    static func countLines(in data: Data) -> Int {
+        data.withUnsafeBytes { (raw: UnsafeRawBufferPointer) -> Int in
+            guard let base = raw.baseAddress, raw.count > 0 else { return 0 }
+            var count = 0
+            var start = 0
+            while start < raw.count {
+                guard let hit = memchr(base + start, 0x0A, raw.count - start) else { return count + 1 }
+                let end = base.distance(to: UnsafeRawPointer(hit))
+                if end > start { count += 1 }
+                start = end + 1
+            }
+            return count
+        }
+    }
+
     static func lines(in data: Data) -> [Data] {
         data.split(separator: 0x0A, omittingEmptySubsequences: true).map { Data($0) }
     }
@@ -260,7 +284,7 @@ final class SyncLog: @unchecked Sendable {
         guard let sizeBefore else { return }
         if knownSize != sizeBefore { lineCount = nil }
         knownSize = sizeBefore + Int64(line.count)
-        let count = lineCount.map { $0 + 1 } ?? Self.lines(in: (try? Data(contentsOf: url)) ?? Data()).count
+        let count = lineCount.map { $0 + 1 } ?? Self.countLines(at: url)
         lineCount = count
         if count > maxEntries || (knownSize ?? 0) > Int64(maxBytes) { trim(url) }
     }
