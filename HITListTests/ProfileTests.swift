@@ -279,6 +279,33 @@ final class ProfileTests: XCTestCase {
         XCTAssertTrue(AccountCopy.deleteProfile.contains("tasks"))
     }
 
+    // MARK: Diagnostics, About, iCloud screen
+
+    func testDiagnosticsProfileLineNeverHoldsTheNameOrPicture() throws {
+        XCTAssertEqual(Diagnostics.profileLine(for: [], lastExport: now), "none on this device")
+        try store.setName("George Trammell")
+        try store.setAvatar(imageData: try Self.png(width: 64, height: 64))
+        let line = Diagnostics.profileLine(for: try profiles(), lastExport: now.addingTimeInterval(5))
+        XCTAssertTrue(line.hasPrefix("1 record, changed "), line)
+        XCTAssertTrue(line.hasSuffix(", exported since"), line)
+        XCTAssertFalse(line.contains("George"))
+        XCTAssertTrue(Diagnostics.profileLine(records: 1, updatedAt: now, lastExport: now.addingTimeInterval(-1)).hasSuffix("not exported since"))
+        XCTAssertTrue(Diagnostics.profileLine(records: 1, updatedAt: now, lastExport: nil).hasSuffix("never exported"))
+        XCTAssertTrue(Diagnostics.profileLine(records: 2, updatedAt: now, lastExport: nil).hasPrefix("2 records (merged after the next import)"))
+    }
+
+    func testThePrivacyLinkIsTheDocsPermalink() throws {
+        XCTAssertEqual(AboutInfo.privacyPolicyURL.absoluteString, "https://aeronyx.github.io/HITList/privacy/")
+        render(VStack { AboutSettingsGroup() }, "about")
+        render(VStack { MacAboutSection() }, "mac about")
+    }
+
+    func testTheICloudScreenNamesTheAccountStateLikeTheAccountScreen() {
+        XCTAssertTrue(SyncEnvironmentRow.subtitle(account: .signedIn).hasPrefix("iCloud: Signed in. "))
+        XCTAssertTrue(SyncEnvironmentRow.subtitle(account: .neverSignedIn).hasPrefix(AccountState.neverSignedIn.title))
+        render(SyncEnvironmentRow(account: .switched), "environment row")
+    }
+
     // MARK: Views
 
     private func render<V: View>(_ view: V, _ name: String, width: CGFloat = 390, file: StaticString = #filePath, line: UInt = #line) {
