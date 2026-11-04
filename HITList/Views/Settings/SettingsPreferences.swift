@@ -80,8 +80,12 @@ extension Preferences {
 
     static var isBadgeOn: Bool { value(showBadge, default: showBadgeDefault) }
 
-    /// The tab the iPhone opens on: the stored one if it names a tab, otherwise Today.
+    /// The tab the iPhone opens on: the stored one if it names a tab, otherwise Today. Browse stopped being a
+    /// tab in brief 35, so a stored "browse" (someone who chose it as their start screen) opens on Today.
     static func startTabValue(_ stored: String? = AppGroup.defaults.string(forKey: startTab)) -> MobileTab {
         stored.flatMap(MobileTab.init(rawValue:)) ?? MobileTab(rawValue: startTabDefault) ?? .today
     }
+
+    /// Settings → General → Start screen's choices: every tab, in tab bar order (Flipboard included).
+    static var startScreenChoices: [MobileTab] { MobileTab.allCases }
 }
