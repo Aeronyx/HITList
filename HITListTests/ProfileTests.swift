@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import SwiftData
 import CloudKit
 import CoreGraphics
@@ -222,6 +223,78 @@ final class ProfileTests: XCTestCase {
         XCTAssertEqual(ProfileAvatar.initials(for: "Émile Zola"), "ÉZ")
         XCTAssertNil(ProfileAvatar.initials(for: ""))
         XCTAssertNil(ProfileAvatar.initials(for: "   "))
+    }
+
+    // MARK: Account state
+
+    private func state(_ status: CKAccountStatus?, notice: AccountWatch.Notice? = nil, ever: Bool = true,
+                       cloudKit: Bool = true) -> AccountState {
+        AccountState.derive(cloudKitEnabled: cloudKit, localOnlyReason: "store opened without CloudKit",
+                            status: status, notice: notice, everSignedIn: ever)
+    }
+
+    func testAccountStateCoversEveryStatusHonestly() {
+        XCTAssertEqual(state(.available), .signedIn)
+        XCTAssertEqual(state(.available).title, "iCloud: Signed in")
+        XCTAssertEqual(state(.available).detail,
+                       "Your tasks are stored in your iCloud account and sync to every device signed in to it.")
+        XCTAssertEqual(state(.available, notice: .switched), .switched)
+        XCTAssertEqual(state(.available, notice: .signedOut), .signedIn, "a stale signed-out banner doesn't outrank a sign-in")
+        XCTAssertEqual(state(.noAccount, ever: true), .signedOut)
+        XCTAssertEqual(state(.noAccount, ever: false), .neverSignedIn)
+        XCTAssertEqual(state(.restricted), .restricted)
+        XCTAssertEqual(state(.temporarilyUnavailable), .needsSignInAgain)
+        XCTAssertEqual(state(.couldNotDetermine), .couldNotDetermine)
+        XCTAssertEqual(state(nil), .checking)
+        XCTAssertEqual(state(.available, cloudKit: false), .localOnly("store opened without CloudKit"))
+        XCTAssertEqual(state(.couldNotDetermine).title, "iCloud: Couldn't check")
+    }
+
+    func testANewTesterWithoutICloudIsNotWarned() {
+        XCTAssertFalse(state(.noAccount, ever: false).isWarning, "someone who never used iCloud isn't shouted at")
+        XCTAssertTrue(state(.noAccount, ever: true).isWarning)
+        XCTAssertFalse(state(.available).isWarning)
+        XCTAssertTrue(state(.restricted).isWarning)
+    }
+
+    func testEveryAccountStateSaysWhatItMeansAndNeverMentionsDeleting() {
+        let all: [AccountState] = [.checking, .signedIn, .switched, .signedOut, .neverSignedIn, .restricted,
+                                   .needsSignInAgain, .couldNotDetermine, .localOnly("x")]
+        XCTAssertEqual(Set(all.map(\.label)).count, all.count, "each state reads differently")
+        for s in all {
+            XCTAssertFalse(s.detail.isEmpty)
+            XCTAssertTrue(s.title.hasPrefix("iCloud: "))
+            XCTAssertFalse(s.detail.localizedCaseInsensitiveContains("delete"), "\(s): an account change never deletes")
+        }
+    }
+
+    func testAccountCopyGivesTheSystemsPaths() {
+        XCTAssertTrue(AccountCopy.signOut.contains("Sign Out"))
+        XCTAssertTrue(AccountCopy.signOut.contains("never deletes"))
+        #if os(macOS)
+        XCTAssertTrue(AccountCopy.deleteAll.contains("System Settings → [your name] → iCloud → Manage → HITList → Delete from iCloud"))
+        #else
+        XCTAssertTrue(AccountCopy.deleteAll.contains("iCloud → Storage (on iOS 18: Manage Account Storage) → HITList → Delete Data from iCloud"))
+        #endif
+        XCTAssertTrue(AccountCopy.deleteProfile.contains("tasks"))
+    }
+
+    // MARK: Views
+
+    private func render<V: View>(_ view: V, _ name: String, width: CGFloat = 390, file: StaticString = #filePath, line: UInt = #line) {
+        let content = view.modelContainer(container).frame(width: width).background(Theme.background).preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: content).cgImage, "\(name) didn't render", file: file, line: line)
+    }
+
+    func testAccountViewsRenderWithAndWithoutAProfile() throws {
+        render(VStack { AccountSettingsSection() }, "account, no profile")
+        try store.setName("George Trammell")
+        render(VStack { AccountSettingsSection() }, "account, name only")
+        try store.setAvatar(imageData: try Self.png(width: 300, height: 300))
+        render(VStack { AccountSettingsSection() }, "account, name and picture")
+        render(ProfileBadge(), "badge")
+        render(ProfileAvatarView(imageData: nil, name: "", size: 40), "avatar, empty", width: 40)
+        for s in [AccountState.signedIn, .neverSignedIn, .restricted] { render(AccountStatusRow(state: s), "status \(s)") }
     }
 
     // MARK: Helpers
