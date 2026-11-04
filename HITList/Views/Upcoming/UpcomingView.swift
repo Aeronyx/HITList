@@ -448,16 +448,14 @@ struct UpcomingView: View {
 
     // MARK: - Actions
 
-    /// Reschedules dropped tasks onto `day`, keeping their times. Days before today don't take drops.
+    /// Reschedules dropped tasks onto `day`, keeping their times (`TaskRescheduling.drop`). Days before
+    /// today don't take drops.
     private func drop(_ payload: [String], on day: Date) -> Bool {
         dropTarget = nil
-        guard day >= today else { return false }
-        let ids = Set(TaskRescheduling.taskIDs(in: payload))
-        let tasks = allTasks.filter { ids.contains($0.id) && !$0.isCompleted }
-        guard !tasks.isEmpty else { return false }
-        withAnimation(reduceMotion ? nil : .snappy) {
-            for task in tasks { TaskActions.reschedule(task, to: day, in: context) }
+        let moved = withAnimation(reduceMotion ? nil : .snappy) {
+            TaskRescheduling.drop(payload, on: day, among: allTasks, now: now, calendar: calendar, in: context)
         }
+        guard !moved.isEmpty else { return false }
         rescheduleNotifications()
         return true
     }

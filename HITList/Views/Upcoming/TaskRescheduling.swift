@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 import HITListCore
 
 /// Moving tasks between days: what a dragged row carries, and the quick dates the row menu offers.
@@ -9,6 +10,24 @@ enum TaskRescheduling {
     /// The task ids in a drop, ignoring anything that isn't one.
     static func taskIDs(in payload: [String]) -> [UUID] {
         payload.compactMap { UUID(uuidString: $0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+    }
+
+    /// Drops `payload` (dragged task ids) on `day`: each open task among `tasks` named there moves to
+    /// that day, keeping its time of day and its repeat's time (`TaskActions.reschedule`). Days before
+    /// today take nothing (they are the Overdue column's); a task already on `day` is left untouched, so
+    /// dropping a card back where it came from saves and syncs nothing. Returns the tasks that moved.
+    @MainActor @discardableResult
+    static func drop(_ payload: [String], on day: Date, among tasks: [TaskItem], now: Date,
+                     calendar: Calendar = .current, in context: ModelContext) -> [TaskItem] {
+        let target = calendar.startOfDay(for: day)
+        guard target >= calendar.startOfDay(for: now) else { return [] }
+        let ids = Set(taskIDs(in: payload))
+        let moving = tasks.filter { task in
+            guard ids.contains(task.id), !task.isCompleted else { return false }
+            return task.dueDate.map { calendar.startOfDay(for: $0) } != target
+        }
+        for task in moving { TaskActions.reschedule(task, to: target, in: context) }
+        return moving
     }
 
     /// The day `offset` days from the task's due day, or from today for an undated task (⌘← / ⌘→).
