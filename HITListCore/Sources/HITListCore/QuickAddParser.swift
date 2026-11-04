@@ -28,6 +28,12 @@ public struct QuickAddResult: Equatable, Sendable {
     public var locationName: String?
     public var tokens: [QuickAddToken]
 
+    /// The offset of the winning reminder token, whether or not there is a time for it to count against
+    /// (`reminderOffsetMinutes` is nil until there is): what the Reminder chip shows.
+    public var pendingReminderMinutes: Int? {
+        tokens.last { $0.kind == .reminder && !$0.isSuperseded }.flatMap { ReminderOffset.minutes(fromToken: $0.text) }
+    }
+
     public init(title: String = "", dueDate: Date? = nil, hasDueTime: Bool = false, priority: Priority = .p4,
                 projectName: String? = nil, labelNames: [String] = [], recurrence: RecurrenceRule? = nil,
                 reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
@@ -95,8 +101,6 @@ public struct QuickAddParser: Sendable {
         var date: Date? = nil
         /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
         var moment: Date? = nil
-        /// Where the reminder tokens are, so they can go back to the title when nothing sets a time.
-        var reminderWords: [Int] = []
         /// The winning token of each kind that holds one value, by index in `result.tokens`.
         var winner: [QuickAddToken.Kind: Int] = [:]
         /// Words of superseded tokens: matched, so no other rule reads them, but title text.
@@ -144,7 +148,7 @@ public struct QuickAddParser: Sendable {
             }
             // Reminder offset: !15mb, !1hb, !1db (the "b" optional), !0 / !at
             if let minutes = ReminderOffset.minutes(fromToken: w) {
-                result.reminderOffsetMinutes = minutes; reminderWords.append(i); win(i, 1, .reminder); i += 1; continue
+                result.reminderOffsetMinutes = minutes; win(i, 1, .reminder); i += 1; continue
             }
             // Recurrence
             if let (rule, n) = Self.matchRecurrence(lowers, at: i) {
@@ -172,13 +176,10 @@ public struct QuickAddParser: Sendable {
             i += 1
         }
 
-        // A reminder is relative to the due time: with no time typed (or set by "in 2 hours") it means
-        // nothing, and stays in the title as typed, unhighlighted (George, 2026-11-03).
-        if !reminderWords.isEmpty, time == nil, moment == nil {
-            for k in reminderWords { consumed[k] = false }
-            result.reminderOffsetMinutes = nil
-            result.tokens.removeAll { $0.kind == .reminder }
-        }
+        // A reminder is relative to the due time: with no time typed (or set by "in 2 hours") it sets
+        // nothing (George, 2026-11-03). It stays a highlighted token, waiting for a time (brief 37: the
+        // Reminder chip writes "!15mb" before a time is picked); `pendingReminderMinutes` reads it.
+        if time == nil, moment == nil { result.reminderOffsetMinutes = nil }
 
         // Title = whatever was not consumed or was superseded, with surrounding quotes stripped.
         var titleWords: [String] = []
@@ -320,7 +321,8 @@ public struct QuickAddParser: Sendable {
 ///
 /// `!Nm` / `!Nmb` = N minutes before the due time, `!Nh` / `!Nhb` = N hours, `!Nd` / `!Ndb` = N days
 /// (N ≥ 1, up to four weeks); `!0` and `!at` = at the due time. Nothing else is a reminder (`!`, `!0mb`,
-/// `!m`, `!15`). The parser only reads one when the task has a due time (`QuickAddParser.parse`).
+/// `!m`, `!15`). The parser highlights one anywhere but it only counts when the task has a due time
+/// (`QuickAddParser.parse`, `QuickAddResult.pendingReminderMinutes`).
 public enum ReminderOffset {
     /// The longest offset accepted: four weeks.
     public static let maxMinutes = 28 * 24 * 60

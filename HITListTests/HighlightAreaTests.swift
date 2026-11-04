@@ -143,6 +143,37 @@ final class HighlightAreaTests: XCTestCase {
         XCTAssertEqual(draft.text, "Ship now p2 ")
     }
 
+    // MARK: The reminder chip before a time
+
+    func testAReminderPickedBeforeATimeIsHighlightedAndCountsOnceATimeArrives() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Ping tom")
+        draft.setReminderOffset(15, p)
+        XCTAssertEqual(draft.text, "Ping tom !15mb ")
+        let waiting = draft.parsed(p)
+        XCTAssertEqual(waiting.tokens.map(\.text), ["tom", "!15mb"], "highlighted as soon as it is there")
+        XCTAssertEqual(draft.result(p).title, "Ping")
+        XCTAssertNil(draft.result(p).reminderOffsetMinutes, "no time yet: nothing to remind before")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15, "the chip shows what was picked")
+        XCTAssertFalse(draft.chips(p).hasDueTime)
+        // Joined with tom: both green, a space apart.
+        XCTAssertEqual(layout(draft.text).boxes.count, 1)
+
+        draft.setTime(hour: 17, minute: 0, p)
+        let timed = draft.result(p)
+        XCTAssertEqual(timed.reminderOffsetMinutes, 15)
+        XCTAssertEqual(timed.dueDate, at(day(1), 17))
+        XCTAssertEqual(timed.title, "Ping")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15)
+
+        draft.clearTime(p)
+        XCTAssertNil(draft.result(p).reminderOffsetMinutes, "back to waiting")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15)
+        draft.setReminderOffset(nil, p)
+        XCTAssertEqual(draft.text, "Ping tom ")
+        XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
+    }
+
     // MARK: Rendering
 
     private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }

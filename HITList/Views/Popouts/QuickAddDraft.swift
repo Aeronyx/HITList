@@ -151,7 +151,8 @@ struct QuickAddDraft: Equatable, Codable {
             projectIsDefault: parsed.projectName == nil && result.projectName != nil,
             labelNames: result.labelNames,
             recurrence: result.recurrence,
-            reminderOffsetMinutes: result.reminderOffsetMinutes,
+            // A reminder picked before a time shows what was picked; it counts once a time is set.
+            reminderOffsetMinutes: result.reminderOffsetMinutes ?? parsed.pendingReminderMinutes,
             deadline: result.deadline,
             locationName: result.locationName)
     }
@@ -213,7 +214,8 @@ struct QuickAddDraft: Equatable, Codable {
         text = removing([.time], parser)
     }
 
-    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it.
+    /// Writes the reminder offset as `!15mb` / `!1hb` / `!1db`; nil or 0 (at the time) removes it. Before
+    /// the task has a time the token is highlighted and waits; it counts once a time is set.
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
         text = removing([.reminder], parser)
         if let minutes, minutes > 0 { append(ReminderOffset.token(minutes: minutes)) }
