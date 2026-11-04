@@ -2,6 +2,7 @@ import SwiftUI
 import SwiftData
 import PhotosUI
 import CloudKit
+import ImageIO
 #if os(iOS)
 import UIKit
 #else
@@ -159,7 +160,7 @@ struct AccountSettingsSection: View {
     @State private var showDeleteAll = false
     @State private var exportDocument: SnapshotDocument?
 
-    private var profile: Profile? { profiles.sorted(by: ProfileStore.precedes).first }
+    private var profile: Profile? { ProfileStore.shown(profiles) }
     private var store: ProfileStore { ProfileStore(context: context) }
     private var storedName: String { profile?.displayName ?? "" }
     private var nameIsDirty: Bool { ProfileStore.cleanName(draftName) != storedName }
@@ -352,12 +353,45 @@ struct ProfileAvatarView: View {
         .accessibilityLabel(name.isEmpty ? "Profile picture" : "Profile picture of \(name)")
     }
 
+    /// The picture, decoded once per distinct picture (`ProfileAvatarCache`), never on every body.
     static func image(from data: Data) -> Image? {
-        #if os(iOS)
-        UIImage(data: data).map(Image.init(uiImage:))
-        #else
-        NSImage(data: data).map(Image.init(nsImage:))
-        #endif
+        ProfileAvatarCache.shared.image(for: data).map { Image(decorative: $0, scale: 1, orientation: .up) }
+    }
+}
+
+/// Decoded profile pictures (brief 42): `ProfileAvatarView` asks on every body, and decoding a 512 px JPEG
+/// each time cost a few milliseconds per frame in Settings and on Browse. The last few pictures are kept
+/// decoded (`kCGImageSourceShouldCacheImmediately`), looked up by their bytes; a picture that doesn't decode
+/// is remembered too, so it isn't tried again. An account switch empties it (`AccountSwitch`).
+@MainActor
+final class ProfileAvatarCache {
+    static let shared = ProfileAvatarCache()
+    /// The badge, the Account screen and a picture being replaced: a handful is plenty.
+    static let capacity = 4
+
+    /// How many decodes ran, for tests.
+    private(set) var decodeCount = 0
+    /// Most recently used last.
+    private var entries: [(data: Data, image: CGImage?)] = []
+
+    func image(for data: Data) -> CGImage? {
+        if let index = entries.firstIndex(where: { $0.data.count == data.count && $0.data == data }) {
+            let entry = entries.remove(at: index)
+            entries.append(entry)
+            return entry.image
+        }
+        let image = Self.decode(data)
+        decodeCount += 1
+        entries.append((data, image))
+        if entries.count > Self.capacity { entries.removeFirst(entries.count - Self.capacity) }
+        return image
+    }
+
+    func removeAll() { entries.removeAll() }
+
+    private static func decode(_ data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else { return nil }
+        return CGImageSourceCreateImageAtIndex(source, 0, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary)
     }
 }
 
@@ -368,7 +402,7 @@ struct ProfileBadge: View {
     var avatarSize: CGFloat = 28
 
     var body: some View {
-        if let profile = profiles.sorted(by: ProfileStore.precedes).first {
+        if let profile = ProfileStore.shown(profiles) {
             HStack(spacing: HITSpacing.s) {
                 ProfileAvatarView(imageData: profile.avatarData, name: profile.displayName, size: avatarSize)
                 if !profile.displayName.isEmpty {
