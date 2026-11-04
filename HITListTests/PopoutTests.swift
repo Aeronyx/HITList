@@ -1457,4 +1457,22 @@ final class PopoutTests: XCTestCase {
         restored.text = "Call tom or tom"
         XCTAssertEqual(restored.parsed(p).tokens.count, 2, "the first tom was edited, so it is a new phrase")
     }
+
+    // MARK: Brief 41: × asks Discard
+
+    /// George (0.5.0): "'X' should still ask Discard". The editor's × (and Esc) with typing Confirm would
+    /// save asks first; a second × while asking discards; with no typing it closes at once.
+    func testTheEditorsCloseAsksDiscardOnlyWithTyping() throws {
+        let (task, _) = editorTask()
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .close, "nothing typed: × closes")
+        draft.notes = "  "
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .close, "blanks are not typing")
+        draft.title = "Buy oat milk"
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .askDiscard)
+        XCTAssertEqual(draft.closeStep(for: task, asking: true), .close, "× again while asking: Discard")
+        draft.title = task.title
+        draft.newSubtask = "Eggs"
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .askDiscard, "a sub-task in the field")
+    }
 }

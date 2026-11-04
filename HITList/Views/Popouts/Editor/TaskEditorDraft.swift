@@ -4,7 +4,7 @@ import HITListCore
 
 /// What the task editor holds until Confirm: the typing. The title, the description, the open "Add
 /// Sub-task" field and a sub-task being renamed wait here; Confirm (`commit`) saves them all and the
-/// editor closes in the same tap. × and Esc drop them. Everything picked rather than typed (date, Group,
+/// editor closes in the same tap. × and Esc ask Discard first, then drop them (brief 41). Everything picked rather than typed (date, Group,
 /// priority, labels, reminder, repeat, deadline, location, ticking a sub-task) lands at once, as before.
 struct TaskEditorDraft: Equatable {
     /// A sub-task's title being edited in place.
@@ -55,6 +55,20 @@ struct TaskEditorDraft: Equatable {
     /// content"); otherwise it just closes. Picked values have already landed and never count.
     func asksBeforeSwipeClose(for task: TaskItem) -> Bool {
         hasPendingChanges(for: task)
+    }
+
+    /// What × (and Esc on the Mac) does (brief 41, George: "'X' should still ask Discard").
+    enum CloseStep: Equatable {
+        /// Show "Discard" above the footer; the typing stays until it is tapped.
+        case askDiscard
+        /// Close, dropping any typing.
+        case close
+    }
+
+    /// × with typing Confirm would save asks Discard first, on the iPhone and the Mac alike; × again while
+    /// asking is the Discard. With no typing it closes at once.
+    func closeStep(for task: TaskItem, asking: Bool) -> CloseStep {
+        !asking && hasPendingChanges(for: task) ? .askDiscard : .close
     }
 
     /// Confirm: saves what was typed. True if anything changed. The sub-task field's text becomes a sub-task;

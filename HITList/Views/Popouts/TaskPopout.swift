@@ -15,9 +15,9 @@ import HITListCore
 /// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
 /// - A footer with **Confirm** (`ConfirmPill`, the quick-add card's pill; when it was created is in "…"): one tap saves
 ///   everything typed (title, description, the sub-task field, a rename) and closes. × and Esc close
-///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. On the Mac
-///   Return in the title and ⌘Return confirm; on the iPhone only the pill does (brief 36), and a swipe
-///   down with typing asks Discard first.
+///   without saving typing, asking Discard first when there is any (brief 41); what was picked (date,
+///   Group, chips, ticks) has already landed. On the Mac Return in the title and ⌘Return confirm; on the
+///   iPhone only the pill does (brief 36), and a swipe down with typing asks Discard first too.
 struct TaskPopout: View {
     @Bindable var task: TaskItem
 
@@ -39,8 +39,12 @@ struct TaskPopout: View {
     @State private var pops = 0
     /// Confirm (or Return) ran: a second one in the same instant does nothing.
     @State private var isClosing = false
-    /// iPhone: a swipe down met typing Confirm would save; "Discard" shows above the footer (brief 36).
+    /// × (or, on the iPhone, a swipe down) met typing Confirm would save; "Discard" shows above the footer
+    /// (briefs 36 and 41).
     @State private var confirmingDiscard = false
+    /// When "Discard" was offered: one Esc can reach both the ×'s shortcut and the exit command, and must
+    /// not ask and discard in the same press.
+    @State private var discardOfferedAt = Date.distantPast
     /// The scrolling middle's height, so the panel is as tall as its content (up to a cap).
     @State private var bodyHeight: CGFloat = 0
     /// The task's id, read once while it certainly exists: the popout may close because the task was
@@ -96,10 +100,10 @@ struct TaskPopout: View {
         .sheetSwipeGuard(isActive: !isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
         }
-        .onChange(of: draft) { _, _ in
-            if confirmingDiscard, !draft.asksBeforeSwipeClose(for: task) { confirmingDiscard = false }
-        }
         #endif
+        .onChange(of: draft) { _, _ in
+            if confirmingDiscard, !draft.hasPendingChanges(for: task) { confirmingDiscard = false }
+        }
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -111,7 +115,7 @@ struct TaskPopout: View {
             Text("“\(task.title)” will be deleted on all your devices.")
         }
         #if os(macOS)
-        .onExitCommand(perform: close)
+        .onExitCommand(perform: requestClose)
         #endif
     }
 
@@ -119,11 +123,11 @@ struct TaskPopout: View {
 
     private var topBar: some View {
         HStack(spacing: HITSpacing.s) {
-            Button(action: close) { Image(systemName: "xmark").frame(width: 32, height: 32).contentShape(Rectangle()) }
+            Button(action: requestClose) { Image(systemName: "xmark").frame(width: 32, height: 32).contentShape(Rectangle()) }
                 .buttonStyle(HITIconButtonStyle(font: .system(size: 16, weight: .semibold)))
                 .keyboardShortcut(.cancelAction)
                 .accessibilityLabel("Close")
-                .help("Close without saving typing (Esc)")
+                .help("Close (Esc); asks before dropping typing")
             Spacer()
             moreMenu
         }
@@ -475,7 +479,7 @@ struct TaskPopout: View {
         .padding(.vertical, HITSpacing.m)
     }
 
-    // MARK: Discard (iPhone, a swipe down with typing)
+    // MARK: Discard (×, Esc, or on the iPhone a swipe down, with typing)
 
     /// Over the editor above the footer: a dimmed layer that means "keep editing" when tapped, and the
     /// quick-add card's Discard bubble pointing at the footer, whose Confirm still saves.
@@ -510,6 +514,18 @@ struct TaskPopout: View {
         isClosing = true
         commitDraft()
         popouts.closeTask()
+    }
+
+    /// × and Esc: with typing, "Discard" first (brief 41); × again (or Discard) closes. Nothing typed: closes.
+    private func requestClose() {
+        switch draft.closeStep(for: task, asking: confirmingDiscard) {
+        case .askDiscard:
+            discardOfferedAt = .now
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .close:
+            if confirmingDiscard, Date.now.timeIntervalSince(discardOfferedAt) < 0.3 { return }
+            discardTyping()
+        }
     }
 
     /// Closes without saving typing (picked values have landed already).
