@@ -6,14 +6,30 @@ import SwiftUI
 /// end. The island and the "+" are on every tab and every pushed screen (a Group, a label, a filter); the
 /// "+" hides while a popout is up. `ContentView` applies `popoutHost` outside this view, so popouts draw
 /// over the island. On iOS 26 the island and the "+" are Liquid Glass (`hitGlass`) in one `HITGlassContainer`.
+///
+/// `place` (kept by `ContentView`) is where the shell starts and what it reports back: the tab and what
+/// is pushed on it, so an iPhone Duo folding from its inner display opens on the list the sidebar had,
+/// and unfolding hands the sidebar the list on show here (brief 45).
 struct MobileShell: View {
     @Environment(PopoutController.self) private var popouts
-    /// Settings → General → Start screen; Today unless chosen otherwise.
-    @State private var tab: MobileTab = Preferences.startTabValue()
+    @Binding var place: ShellPlace
+    /// Settings → General → Start screen at launch (through `place`); Today unless chosen otherwise.
+    @State private var tab: MobileTab
     /// Each tab's pushed screens, kept while another tab is on show.
     /// Holds `MobileDestination.browse` and the `SidebarItem` lists pushed from Browse.
-    @State private var paths: [MobileTab: NavigationPath] = [:]
+    @State private var paths: [MobileTab: NavigationPath]
+    /// The same screens as values (`PhoneStack`): a `NavigationPath` can't be read back.
+    @State private var stacks: [MobileTab: PhoneStack]
     @State private var now = Date()
+
+    init(place: Binding<ShellPlace>) {
+        _place = place
+        let start = place.wrappedValue
+        let stack = PhoneStack(start.routes)
+        _tab = State(initialValue: start.tab)
+        _paths = State(initialValue: start.routes.isEmpty ? [:] : [start.tab: stack.path])
+        _stacks = State(initialValue: start.routes.isEmpty ? [:] : [start.tab: stack])
+    }
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -30,7 +46,7 @@ struct MobileShell: View {
         }
         // The quick-add card docks above the keyboard; the island stays put underneath it.
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .onChange(of: tab) { _, _ in popouts.closeAll() }
+        .onChange(of: tab) { _, _ in popouts.closeAll(); report() }
         .onReceive(clock) { now = $0 }
     }
 
@@ -41,12 +57,30 @@ struct MobileShell: View {
             MobileTabBar(selection: $tab, day: Calendar.current.component(.day, from: now)) { reselected in
                 // Tapping the current tab again goes back to its first screen.
                 paths[reselected] = NavigationPath()
+                stacks[reselected] = PhoneStack()
+                report()
             }
         }
     }
 
     private func path(_ tab: MobileTab) -> Binding<NavigationPath> {
-        Binding(get: { paths[tab] ?? NavigationPath() }, set: { paths[tab] = $0 })
+        Binding(get: { paths[tab] ?? NavigationPath() }, set: { path in
+            paths[tab] = path
+            stacks[tab, default: PhoneStack()].sync(count: path.count)
+            report()
+        })
+    }
+
+    /// A pushed screen is on show on `tab`'s stack, at its path's depth.
+    private func appeared(_ route: MobileRoute, on tab: MobileTab) {
+        stacks[tab, default: PhoneStack()].appeared(route, depth: paths[tab]?.count ?? 0)
+        report()
+    }
+
+    /// Hands `ContentView` where this shell is.
+    private func report() {
+        let now = ShellPlace(tab: tab, routes: stacks[tab]?.routes ?? [])
+        if place != now { place = now }
     }
 
     @ViewBuilder
@@ -59,12 +93,14 @@ struct MobileShell: View {
                 .navigationDestination(for: SidebarItem.self) { item in
                     ListScreen(item: item)
                         .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: false)))
+                        .onAppear { appeared(.list(item), on: tab) }
                 }
                 .navigationDestination(for: MobileDestination.self) { destination in
                     switch destination {
                     case .browse:
                         BrowseView()
                             .environment(\.mobileChrome, MobileChrome(control: .forScreen(atTabRoot: false)))
+                            .onAppear { appeared(.browse, on: tab) }
                     }
                 }
         }
