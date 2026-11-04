@@ -143,11 +143,31 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape"])
     }
 
-    func testBrowseProfileRowAsksForANameUntilThereIsOne() {
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: nil), "Add your name", "no profile yet")
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: ""), "Add your name")
-        XCTAssertEqual(BrowseProfileRow.prompt(forName: "  "), "Add your name")
-        XCTAssertNil(BrowseProfileRow.prompt(forName: "George"), "ProfileBadge shows the name")
+    // MARK: Browse's top left (brief 40)
+
+    func testBrowseProfileShowsTheNameThenTheFirstNameThenTheAvatar() {
+        let tenPerCharacter: (String) -> CGFloat = { CGFloat($0.count) * 10 }
+        func fit(_ name: String?, _ width: CGFloat = 100) -> BrowseProfileButton.Fit {
+            BrowseProfileButton.fit(name: name, maxWidth: width, width: tenPerCharacter)
+        }
+        XCTAssertEqual(fit("George"), .name("George"))
+        XCTAssertEqual(fit("George Trammell"), .name("George"), "too long: the first name")
+        XCTAssertEqual(fit("George Trammell", 150), .name("George Trammell"), "15 characters: fits exactly")
+        XCTAssertEqual(fit("Bartholomew Fitzgerald"), .avatarOnly, "not even the first name fits")
+        XCTAssertEqual(fit("  George  "), .name("George"), "trimmed")
+        XCTAssertEqual(fit(nil), .prompt, "no profile yet: Add your name")
+        XCTAssertEqual(fit("   "), .prompt)
+        XCTAssertEqual(BrowseProfileButton.Fit.prompt.text, "Add your name")
+        XCTAssertNil(BrowseProfileButton.Fit.avatarOnly.text)
+    }
+
+    func testBrowseProfileMeasuresWithItsOwnFont() {
+        let short = BrowseProfileButton.textWidth("Al")
+        let long = BrowseProfileButton.textWidth("Alexandria")
+        XCTAssertGreaterThan(short, 0)
+        XCTAssertGreaterThan(long, short)
+        XCTAssertEqual(BrowseProfileButton.fit(name: "George", maxWidth: BrowseProfileButton.maxNameWidth,
+                                               width: BrowseProfileButton.textWidth), .name("George"))
     }
     #endif
 }
