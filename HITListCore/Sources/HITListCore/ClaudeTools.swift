@@ -73,7 +73,7 @@ public enum ClaudeTools {
             name: completeTask, title: "Complete a task",
             description: """
                 Completes a task (or a subtask). A repeating task isn't marked done: it moves to its next \
-                date, as in the app. Completing a task also completes its open subtasks. The user can undo it in HITList.
+                date, as in the app. Completing a task also completes its open subtasks. The user can reopen it in HITList.
                 """,
             inputSchema: schema(["id": idProperty], required: ["id"]),
             readOnly: false),
