@@ -224,32 +224,41 @@ struct BrowseView: View {
 }
 
 /// Browse's top left: the profile's avatar and name, small. A name too wide for the space beside Back
-/// shows its first word, then only the avatar; before a name is set, the empty avatar and "Add your name".
+/// shows its first word, then only the avatar; before a name is set, the empty avatar and "Add your name"
+/// (or "Add name" where that doesn't fit).
 struct BrowseProfileButton: View {
     @Query private var profiles: [Profile]
 
     static let avatarSize: CGFloat = 28
-    /// The name's room: beside Back and clear of the inline title once Browse scrolls.
-    static let maxNameWidth: CGFloat = 120
+    /// The name's room. The iOS 26 bar keeps the centre free for the inline title: on an iPhone 17 a leading
+    /// item whose text is wider than 80–94 pt pushes Browse's New and gear into a "…" overflow (measured
+    /// 2026-11-04), and an iPhone 16 is 9 pt narrower. 74 pt keeps both buttons on every current iPhone.
+    static let maxNameWidth: CGFloat = 74
+    /// Before a name is set, longest first.
+    static let prompts = [ProfileMenuModel.addNamePrompt, "Add name"]
     static let font = HITType.subheadlineSemibold
 
     enum Fit: Equatable {
         case name(String)
-        case prompt
+        case prompt(String)
         case avatarOnly
 
         var text: String? {
             switch self {
-            case .name(let name): name
-            case .prompt: ProfileMenuModel.addNamePrompt
+            case .name(let text), .prompt(let text): text
             case .avatarOnly: nil
             }
         }
+
+        var isPrompt: Bool { if case .prompt = self { true } else { false } }
     }
 
-    /// The whole name if it fits in `maxWidth`, else its first word, else nothing beside the avatar.
+    /// The whole name if it fits in `maxWidth`, else its first word, else nothing beside the avatar. Without a
+    /// name, the longest prompt that fits.
     static func fit(name raw: String?, maxWidth: CGFloat, width: (String) -> CGFloat) -> Fit {
-        guard let name = ProfileMenuModel.displayName(raw) else { return .prompt }
+        guard let name = ProfileMenuModel.displayName(raw) else {
+            return prompts.first { width($0) <= maxWidth }.map(Fit.prompt) ?? .avatarOnly
+        }
         if width(name) <= maxWidth { return .name(name) }
         if let first = name.split(whereSeparator: \.isWhitespace).first.map(String.init),
            first != name, width(first) <= maxWidth {
@@ -274,7 +283,7 @@ struct BrowseProfileButton: View {
             if let text = fit.text {
                 Text(text)
                     .font(Self.font)
-                    .foregroundStyle(fit == .prompt ? Theme.secondaryText : HITColor.text)
+                    .foregroundStyle(fit.isPrompt ? Theme.secondaryText : HITColor.text)
                     .lineLimit(1)
                     .fixedSize()
             }

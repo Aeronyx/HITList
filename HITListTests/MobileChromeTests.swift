@@ -155,9 +155,10 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(fit("George Trammell", 150), .name("George Trammell"), "15 characters: fits exactly")
         XCTAssertEqual(fit("Bartholomew Fitzgerald"), .avatarOnly, "not even the first name fits")
         XCTAssertEqual(fit("  George  "), .name("George"), "trimmed")
-        XCTAssertEqual(fit(nil), .prompt, "no profile yet: Add your name")
-        XCTAssertEqual(fit("   "), .prompt)
-        XCTAssertEqual(BrowseProfileButton.Fit.prompt.text, "Add your name")
+        XCTAssertEqual(fit(nil, 130), .prompt("Add your name"), "no profile yet")
+        XCTAssertEqual(fit("   ", 130), .prompt("Add your name"))
+        XCTAssertEqual(fit(nil), .prompt("Add name"), "the short prompt where the long one doesn't fit")
+        XCTAssertEqual(fit(nil, 40), .avatarOnly)
         XCTAssertNil(BrowseProfileButton.Fit.avatarOnly.text)
     }
 
@@ -166,8 +167,15 @@ final class MobileChromeTests: XCTestCase {
         let long = BrowseProfileButton.textWidth("Alexandria")
         XCTAssertGreaterThan(short, 0)
         XCTAssertGreaterThan(long, short)
-        XCTAssertEqual(BrowseProfileButton.fit(name: "George", maxWidth: BrowseProfileButton.maxNameWidth,
-                                               width: BrowseProfileButton.textWidth), .name("George"))
+        // Measured on an iPhone 17 (2026-11-04): "George Tra" (80 pt) kept Browse's New and gear, "George
+        // Tram" (94 pt) pushed the gear into a "…" overflow. The room leaves a margin for an iPhone 16.
+        func real(_ name: String?) -> BrowseProfileButton.Fit {
+            BrowseProfileButton.fit(name: name, maxWidth: BrowseProfileButton.maxNameWidth, width: BrowseProfileButton.textWidth)
+        }
+        XCTAssertLessThan(BrowseProfileButton.maxNameWidth, 80)
+        XCTAssertEqual(real("George"), .name("George"))
+        XCTAssertEqual(real("George Trammell"), .name("George"))
+        XCTAssertEqual(real(nil), .prompt("Add name"))
     }
     #endif
 }
