@@ -62,6 +62,7 @@
 		45ECCAFF0C36623DD6DDD8E8 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD12153261EC9FBC68657755 /* TaskListView.swift */; };
 		46E3CA552C5BA9E3EB324B94 /* MacSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88742D1EA977BE9D0D07677 /* MacSettingsSection.swift */; };
 		478C1FA711477C9F2DDDC17C /* AppearanceSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */; };
+		47BD085667FD840F097A05B4 /* HolidayAccent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */; };
 		48B5F9A8831978AD2FD46F36 /* MobileChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5144DA93AF367608CA17BD2E /* MobileChromeTests.swift */; };
 		490CBF09443A68F306B100F1 /* TaskActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966FF672CF1AE97484CD00CE /* TaskActions.swift */; };
 		49985B167209401E0166CB1B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F2C6F0B31F217723029B1AA /* Assets.xcassets */; };
@@ -335,6 +336,7 @@
 		A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackup.swift; sourceTree = "<group>"; };
 		A8604832F30E9E7C59B06C9C /* GeneralSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralSettingsSection.swift; sourceTree = "<group>"; };
 		AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardRules.swift; sourceTree = "<group>"; };
+		AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HolidayAccent.swift; sourceTree = "<group>"; };
 		AB5A392B0DEB0C542676DBCF /* UpcomingBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingBoard.swift; sourceTree = "<group>"; };
 		AC2B9A3C265599BBA1928813 /* CompletionMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionMotion.swift; sourceTree = "<group>"; };
 		AD12153261EC9FBC68657755 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
@@ -529,6 +531,7 @@
 				6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */,
 				A338322304B439BDD33BB454 /* CompletionToast.swift */,
 				B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */,
+				AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */,
 				4FD507EEBD7A6AAD5F22146C /* HolidayEffects.swift */,
 			);
 			path = Delight;
@@ -1002,6 +1005,7 @@
 				5C5E91D28A1DDFA63FAE4B45 /* HITSheetChrome.swift in Sources */,
 				3F58DD5F0B30EBAAC935ECAD /* HITToggleStyle.swift in Sources */,
 				926274475D6599BDD81C3CF2 /* HITTokens.swift in Sources */,
+				47BD085667FD840F097A05B4 /* HolidayAccent.swift in Sources */,
 				9A2EB2729C739BDEEE95FB40 /* HolidayDelight.swift in Sources */,
 				548AA92042E74504EBE5C6DE /* HolidayEffects.swift in Sources */,
 				D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */,

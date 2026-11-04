@@ -3,7 +3,7 @@ import HITListCore
 @testable import HITList
 
 /// Brief 44: the holiday particle bursts (budget, motion, determinism), what a completion celebrates under
-/// which settings, the overlay stage's bookkeeping and the Debug launch arguments.
+/// which settings, the overlay stage's bookkeeping, the holiday accent and the Debug launch arguments.
 @MainActor
 final class HolidayEffectsTests: XCTestCase {
     private var suites: [String] = []
@@ -146,5 +146,24 @@ final class HolidayEffectsTests: XCTestCase {
         model.prune(now: t0.addingTimeInterval(5))
         XCTAssertTrue(model.isIdle)
         XCTAssertNil(model.endsAt)
+    }
+
+    // MARK: - Holiday touches (the accent)
+
+    func testEveryHolidayHasAnAccent() {
+        for holiday in Holiday.allCases {
+            XCTAssertFalse(HolidayAccent.symbol(for: holiday).isEmpty, "\(holiday)")
+        }
+        XCTAssertEqual(HolidayAccent.symbol(for: .christmas), "snowflake")
+    }
+
+    func testTheAccentNeedsHolidayTouches() {
+        let defaults = makeDefaults()
+        let christmasEve = Calendar.current.date(from: DateComponents(year: 2026, month: 12, day: 24, hour: 12))!
+        let ordinary = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 12))!
+        XCTAssertEqual(HolidayAccent.current(at: christmasEve, defaults: defaults, launch: .none), .christmas)
+        XCTAssertNil(HolidayAccent.current(at: ordinary, defaults: defaults, launch: .none))
+        defaults.set(false, forKey: Preferences.holidayTouches)
+        XCTAssertNil(HolidayAccent.current(at: christmasEve, defaults: defaults, launch: .none))
     }
 }
