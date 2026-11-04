@@ -78,6 +78,14 @@ struct BrowseView: View {
     private var sections: some View {
         let open = openTasks
         return List {
+            // Who this is: a quiet row that opens Settings, whose first group is Account.
+            Section {
+                Button { showSettings = true } label: { BrowseProfileRow() }
+                    .buttonStyle(.plain)
+                    .slateRow()
+                    .accessibilityIdentifier("browse-profile")
+            }
+
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,
@@ -197,6 +205,40 @@ struct BrowseView: View {
 
     private func delete(_ label: TaskLabel) {
         context.delete(label); try? context.save()
+    }
+}
+
+/// The top of Browse: the profile's avatar and name (`ProfileBadge`, session 34), or, before a name is
+/// set, the empty avatar and "Add your name". Tapping it opens Settings, where Account comes first.
+struct BrowseProfileRow: View {
+    @Query private var profiles: [Profile]
+
+    /// What the row says instead of a name; nil once there is one for `ProfileBadge` to show.
+    static func prompt(forName name: String?) -> String? {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "Add your name" : nil
+    }
+
+    var body: some View {
+        let profile = profiles.sorted(by: ProfileStore.precedes).first
+        HStack(spacing: HITSpacing.s) {
+            if let prompt = Self.prompt(forName: profile?.displayName) {
+                ProfileAvatarView(imageData: profile?.avatarData, name: "", size: 28)
+                Text(prompt)
+                    .font(HITType.callout)
+                    .foregroundStyle(Theme.secondaryText)
+            } else {
+                ProfileBadge()
+            }
+            Spacer(minLength: HITSpacing.s)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.secondaryText.opacity(0.6))
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Settings")
     }
 }
 
