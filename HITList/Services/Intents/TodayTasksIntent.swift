@@ -14,9 +14,11 @@ struct TodayTasksIntent: AppIntent {
     static let openAppWhenRun = false
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
-        let summary = try IntentActions.today(in: IntentStore.context())
-        return .result(dialog: IntentDialog(full: "\(summary.spoken)", supporting: "\(summary.headline)"),
+    func perform() async throws -> some IntentResult & ReturnsValue<[TaskEntity]> & ProvidesDialog & ShowsSnippetView {
+        let context = try IntentStore.context()
+        let summary = try IntentActions.today(in: context)
+        let tasks = try IntentActions.tasks(ids: summary.lines.map(\.id), in: context).map { TaskEntity($0) }
+        return .result(value: tasks, dialog: IntentDialog(full: "\(summary.spoken)", supporting: "\(summary.headline)"),
                        view: TodaySnippet(summary: summary))
     }
 }
