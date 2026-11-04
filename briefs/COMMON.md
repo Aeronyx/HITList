@@ -66,6 +66,26 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 10 ownership (2026-11-04; briefs 39–45 run in parallel, all seven at once)
+Next version 0.6.0 (16). No schema change this round: a fix that needs one stops and reports. Every session makes its
+own simulator (`HITList-NN`; 45 an iPhone Duo, 39 an iPad) and deletes it at the end.
+- `39-board-inline-add` (High): `UpcomingBoard` (+ card file), new `CompactQuickAddCard`, `QuickAddPopout.swift`,
+  `QuickAddEntry.swift` (Mac focus), `UpcomingBoardTests`, new `CompactQuickAddTests`.
+- `40-profile-chrome` (High): `MobileTabBar`, `BrowseView`, `SidebarView`, new `Views/Account/ProfileMenu.swift`,
+  `SettingsRouter`, `MobileChromeTests`, new `ProfileMenuTests`.
+- `41-quick-add-polish` (High): parser (+Disabled), `TokenHighlightField`, `QuickAddDraft`, `TaskPopout`/`Editor/*`
+  (× only), `HighlightAreaTests`, `PopoutTests`.
+- `42-sync-profile-hardening` (xhigh): `ProfileStore`, `Deduplicator`, `CloudSyncMonitor`, `AccountWatch`,
+  `Services/Sync/*`, `ModelContainerFactory`, `LocalBackup`, notifications (account switch), `AccountSettingsSection`,
+  `ICloudSettingsGroups`, `SyncStatusViews`, new `AccountSwitchTests`.
+- `43-claude-connector` (xhigh): new `Services/Claude/*`, new helper target, `project.yml` target, Mac entitlements,
+  new `ClaudeSettingsSection`, one line in `SettingsView`, the Claude entry in `MacSettingsSection`, `docs/claude.md`.
+- `44-holiday-delight` (High): new HITListCore `Holidays.swift`, `Views/Delight/*`, `Support/Delight/*`,
+  `DelightSettingsSection`, `TaskRow` overlay hook only.
+- `45-iphone-duo` (xhigh): `ContentView`, `MobileShell`, `PopoutHost`, new `Views/Duo/*`, new `DuoLayoutTests`.
+- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything else.
+  ROADMAP: only your row. `project.yml`: add files only (43 also adds its target).
+
 ## Round 9 record (2026-11-04; sessions 34–38 merged for 0.5.0 (15))
 Five desktop-app sessions started by the Opus 5.5 supervisor: 34 `accounts-profile` (xhigh, 171 turns), 37
 `highlight-merge-override` (High, 96), 38 `mac-upcoming-board` (xhigh, 158) first; then 35 `tabs-browse` (High,
