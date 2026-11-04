@@ -5,7 +5,7 @@ import HITListCore
 @testable import HITList
 
 /// The board's actions on real tasks (brief 38): dropping a card on a day, the Overdue column's
-/// Reschedule, the day column's "+ Add task" context.
+/// Reschedule, the day column's "+ Add task" context, and (Mac) the board rendered offscreen.
 /// `TaskActions` uses `Calendar.current`, so dates here are relative to today in the current calendar.
 @MainActor
 final class UpcomingBoardTests: XCTestCase {
@@ -166,4 +166,79 @@ final class UpcomingBoardTests: XCTestCase {
         let data = try JSONEncoder().encode(QuickAddContext.day(day(2)))
         XCTAssertEqual(try JSONDecoder().decode(QuickAddContext.self, from: data), .day(day(2)))
     }
+
+    // MARK: - Render check (Mac)
+
+    #if os(macOS)
+    /// Renders the board with sample tasks across Overdue and three days into a window offscreen, writes
+    /// the PNG (the sandboxed test host's temporary folder; its path is printed), and checks the columns
+    /// drew. The PNG is for a person to look at; no session can see the Mac's screen.
+    func testBoardRendersOffscreen() throws {
+        let work = Project(name: "Work", colorHex: "#5E81F4")
+        let home = Project(name: "Home", colorHex: "#46A758")
+        context.insert(work)
+        context.insert(home)
+        let samples: [(String, String, Date?, Bool, Int, Project?, RecurrenceRule?)] = [
+            ("Renew passport", "Photos are in the desk drawer", day(-3), false, 1, home, nil),
+            ("Send invoice #42", "", day(-1, 17, 0), true, 2, work, nil),
+            ("Water the plants", "", day(0), false, 4, home, RecurrenceRule(frequency: .daily, interval: 3)),
+            ("Standup", "", day(0, 9, 30), true, 3, work, RecurrenceRule.weekdays.withTime(hour: 9, minute: 30)),
+            ("Write the quarterly review for the team and the board", "First draft only; numbers come Friday",
+             day(0, 14, 0), true, 1, work, nil),
+            ("Call Mom", "", day(1, 18, 30), true, 4, nil, nil),
+            ("Dentist", "Bring the insurance card", day(3, 10, 0), true, 2, home, nil),
+            ("Groceries", "Milk, eggs, coffee", day(3), false, 4, home, nil),
+        ]
+        for (title, notes, due, timed, priority, project, rule) in samples {
+            let t = TaskItem(title: title, notes: notes, priority: priority, dueDate: due, hasDueTime: timed)
+            t.project = project
+            t.recurrenceRule = rule
+            context.insert(t)
+        }
+        try context.save()
+
+        let entries = try allTasks().map { UpcomingView.Entry(task: $0, filterDueDate: $0.dueDate, filterIsCompleted: $0.isCompleted) }
+        let board = UpcomingBoardModel(items: entries, window: UpcomingWindow(), now: now, showOverdue: true, calendar: cal)
+        XCTAssertEqual(board.columns.count, 8, "Overdue and seven days")
+
+        let size = CGSize(width: 1280, height: 640)
+        let root = UpcomingBoard(board: board, window: .constant(UpcomingWindow()), now: now)
+            .frame(width: size.width, height: size.height)
+            .environment(PopoutController())
+            .modelContainer(container)
+            .font(HITType.body)
+            .preferredColorScheme(.dark)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        let host = NSHostingView(rootView: root)
+        host.frame = NSRect(origin: .zero, size: size)
+        window.contentView = host
+        defer { window.close() }
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        host.layoutSubtreeIfNeeded()
+
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("upcoming-board.png")
+        try png.write(to: url)
+        print("UPCOMING_BOARD_PNG \(url.path)")
+        let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+        attachment.name = "upcoming-board"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        // Something besides the background drew in the card columns' area: count pixels that differ from
+        // the top-left corner (the background) along a row through the cards.
+        let background = rep.colorAt(x: 2, y: 2)
+        var differing = 0
+        for x in stride(from: 0, to: rep.pixelsWide, by: 4) {
+            if let c = rep.colorAt(x: x, y: rep.pixelsHigh / 4), c != background { differing += 1 }
+        }
+        XCTAssertGreaterThan(differing, 40, "the columns drew")
+    }
+    #endif
 }
