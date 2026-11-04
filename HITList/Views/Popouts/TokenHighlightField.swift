@@ -154,7 +154,7 @@ struct TokenHighlightField: View {
     private var drawableTokens: [QuickAddToken] {
         var result: [QuickAddToken] = []
         for token in tokens.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
-            guard token.range.upperBound <= text.endIndex, !token.range.isEmpty,
+            guard !token.isSuperseded, token.range.upperBound <= text.endIndex, !token.range.isEmpty,
                   result.last.map({ $0.range.upperBound <= token.range.lowerBound }) ?? true else { continue }
             result.append(token)
         }
