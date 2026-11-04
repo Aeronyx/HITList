@@ -1343,4 +1343,58 @@ final class PopoutTests: XCTestCase {
         draft.renaming?.text = "Oat, barista"
         XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "a rename")
     }
+
+    // MARK: Brief 41: the Reminder chip before a time
+
+    func testTheReminderChipBeforeATimeHoldsTheOffsetOutOfTheTitle() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call")
+        draft.setReminderOffset(15, p)
+        XCTAssertEqual(draft.text, "Call", "nothing written until there is a time")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15, "the chip shows what was picked")
+        XCTAssertNil(draft.result(p).reminderOffsetMinutes)
+
+        draft.text = "Call 3pm"
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 15, "a typed time picks it up")
+        XCTAssertEqual(draft.result(p).title, "Call")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15)
+
+        // With a time the chip writes its token, as before.
+        draft.setReminderOffset(60, p)
+        XCTAssertEqual(draft.text, "Call 3pm !1hb ")
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
+
+        // Taking the time away from the chip keeps the pick on the chip, not as plain "!1hb" in the title.
+        draft.clearTime(p)
+        XCTAssertEqual(draft.text.trimmingCharacters(in: .whitespaces), "Call")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
+        XCTAssertNil(draft.result(p).reminderOffsetMinutes)
+        draft.setReminderOffset(nil, p)
+        XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
+        draft.text = "Call 3pm"
+        XCTAssertNil(draft.result(p).reminderOffsetMinutes)
+    }
+
+    func testATypedReminderWinsOverTheChipsPick() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call")
+        draft.setReminderOffset(15, p)
+        draft.text = "Call 3pm !1hb"
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
+    }
+
+    func testAPendingReminderSurvivesTheStoredCard() throws {
+        let suite = "PopoutTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call")
+        draft.setReminderOffset(30, p)
+        let card = UUID()
+        QuickAddDraftStore.save(draft, card: card, to: defaults)
+        let restored = try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults))
+        XCTAssertEqual(restored.chips(p).reminderOffsetMinutes, 30)
+        XCTAssertEqual(restored, draft)
+    }
 }

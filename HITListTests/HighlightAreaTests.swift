@@ -5,7 +5,7 @@ import HITListCore
 
 /// Brief 37 (George, 2026-11-04): highlights of the same colour with only spaces between them read as one
 /// box ("[tom 4]", not "[tom] [4]"); a phrase overridden by a later one of its kind is not drawn, and
-/// comes back when the later one is tapped off; a reminder picked before a time is highlighted at once.
+/// comes back when the later one is tapped off. Brief 41: a reminder lights up only beside a time.
 @MainActor
 final class HighlightAreaTests: XCTestCase {
     private var calendar: Calendar = {
@@ -145,19 +145,19 @@ final class HighlightAreaTests: XCTestCase {
 
     // MARK: The reminder chip before a time
 
-    func testAReminderPickedBeforeATimeIsHighlightedAndCountsOnceATimeArrives() throws {
+    /// Brief 41 (George, 0.5.0: "A typed reminder like '!15mb' should not highlight before there's a time"):
+    /// the chip picked before a time holds the offset itself, shows it, and writes nothing into the title; a
+    /// time typed or picked later picks it up.
+    func testAReminderPickedBeforeATimeWaitsOnTheChipAndCountsOnceATimeArrives() throws {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Ping tom")
         draft.setReminderOffset(15, p)
-        XCTAssertEqual(draft.text, "Ping tom !15mb ")
-        let waiting = draft.parsed(p)
-        XCTAssertEqual(waiting.tokens.map(\.text), ["tom", "!15mb"], "highlighted as soon as it is there")
+        XCTAssertEqual(draft.text, "Ping tom", "nothing written into the title")
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["tom"])
         XCTAssertEqual(draft.result(p).title, "Ping")
         XCTAssertNil(draft.result(p).reminderOffsetMinutes, "no time yet: nothing to remind before")
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 15, "the chip shows what was picked")
         XCTAssertFalse(draft.chips(p).hasDueTime)
-        // Joined with tom: both green, a space apart.
-        XCTAssertEqual(layout(draft.text).boxes.count, 1)
 
         draft.setTime(hour: 17, minute: 0, p)
         let timed = draft.result(p)
@@ -172,6 +172,12 @@ final class HighlightAreaTests: XCTestCase {
         draft.setReminderOffset(nil, p)
         XCTAssertEqual(draft.text, "Ping tom ")
         XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
+    }
+
+    func testATypedReminderLightsUpOnlyBesideATime() {
+        XCTAssertTrue(layout("Call !15mb").tokens.isEmpty, "plain until there is a time")
+        let lit = layout("Call 3pm !15mb")
+        XCTAssertEqual(lit.boxes.map { texts($0, lit.tokens) }, [["3pm", "!15mb"]])
     }
 
     // MARK: The stored card
