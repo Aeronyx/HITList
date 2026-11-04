@@ -50,6 +50,9 @@ final class CloudSyncMonitor {
     private var inFlight: [UUID: Date] = [:]
     /// Which of `inFlight` are imports (`isImporting`).
     @ObservationIgnored private var inFlightImports: Set<UUID> = []
+    /// The signed-in iCloud account as `AccountIdentity.key`, once CloudKit confirmed it in this process;
+    /// nil before that, signed out, or without CloudKit. Never the account's record name.
+    private(set) var accountKey: String?
 
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var loggedState: String?
@@ -161,6 +164,7 @@ final class CloudSyncMonitor {
             Task { @MainActor in self?.networkChanged(online: online, description: description) }
         }
         pathMonitor.start(queue: DispatchQueue(label: "com.trammells.hitlist.network"))
+        AccountSwitch.simulateIfRequested()
     }
 
     /// What `HITListApp.init` did before opening the store: waited for a relaunched-from instance to
@@ -384,13 +388,19 @@ final class CloudSyncMonitor {
 
     /// After a reset the old store's sync times no longer describe this store; the watchdog forgets them
     /// too, so the re-import counts as a first import (`SyncWatchdog.Rules.firstImportStalledAfter`).
-    func forgetLastSync() {
+    /// An account switch does the same (`AccountSwitch`): the times were the other account's.
+    func forgetLastSync(reason: String = "Local store was reset") {
         lastImportAt = nil
         lastExportAt = nil
         watchdog.forgetLastSync()
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastImportKey))
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastExportKey))
-        write(.note, "Local store was reset; sync times cleared", level: .notice)
+        write(.note, "\(reason); sync times cleared", level: .notice)
+    }
+
+    /// `AccountSwitch.simulateIfRequested` (Debug only): the banner a real switch would show.
+    func simulateSwitchNotice() {
+        setNotice(.switched)
     }
 
     func dismissAccountNotice() {
@@ -416,6 +426,11 @@ final class CloudSyncMonitor {
         if status == .available { signedOutDismissed = false }
         setNotice(accountWatch.update(status: status, shown: accountNotice, signedOutDismissed: signedOutDismissed))
         logStateIfChanged()
+        if status != .available, status != .couldNotDetermine, status != .temporarilyUnavailable { accountKey = nil }
+        // Signed out (now, or while the app was closed): the reminders name tasks the purge took away.
+        if status == .noAccount, previous == .available {
+            Task { await AccountSwitch.handleSignOut() }
+        }
         guard status == .available else { return }
         container.fetchUserRecordID { [weak self] id, error in
             Task { @MainActor in
@@ -425,9 +440,18 @@ final class CloudSyncMonitor {
                                         fields: error.map { SyncLogFormat.errorFields($0) } ?? [:])
                     return
                 }
-                self.setNotice(self.accountWatch.update(userRecordName: name, shown: self.accountNotice))
+                self.accountIdentified(self.accountWatch.identify(userRecordName: name))
             }
         }
+    }
+
+    /// The signed-in account is known (hashed). A different one than last time: the banner, and this
+    /// device's local state of the previous account cleared (`AccountSwitch`).
+    private func accountIdentified(_ identity: AccountWatch.Identity) {
+        accountKey = identity.account
+        guard identity.isSwitch, let previous = identity.previous else { return }
+        setNotice(.switched)
+        Task { await AccountSwitch.handleSwitch(from: previous, to: identity.account) }
     }
 
     // MARK: - Network
