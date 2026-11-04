@@ -48,6 +48,8 @@ struct MobileShell: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onChange(of: tab) { _, _ in popouts.closeAll(); report() }
         .onReceive(clock) { now = $0 }
+        // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
+        .intentRouting(tab: $tab)
     }
 
     private var chrome: some View {

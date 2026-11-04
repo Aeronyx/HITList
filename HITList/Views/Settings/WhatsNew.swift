@@ -11,6 +11,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.6.0", items: [
+            "Claude: on the Mac, Settings → Claude lets Claude Desktop and Claude Code work with the tasks you allow.",
+            "Siri and Shortcuts: \"Add a task in HITList\", \"What's on my HITList today\", complete and open from Siri.",
+            "Mac board: \"Add task\" opens a small card in that day's column, ready to type; your profile sits top-left.",
+            "Holidays bring snow, fireworks and more to completing a task; once in a long while, a sky whale swims by.",
+            "Quick add polish, safer account switching, iPhone tabs with Flipboard on the right, and iPhone Duo layouts.",
+        ]),
         Entry(version: "0.5.0", items: [
             "Settings → Account: your name and picture, synced through your iCloud; Browse shows who you are.",
             "iPhone tabs: Inbox, Today, Flipboard, Upcoming. The magnifying glass opens Browse, its gear opens Settings.",
