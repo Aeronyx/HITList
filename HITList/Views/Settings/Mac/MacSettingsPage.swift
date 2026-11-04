@@ -220,6 +220,8 @@ struct MacSettingsSectionContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.xl) {
             switch section {
+            case .account:
+                AccountSettingsSection()
             case .general:
                 GeneralSettingsSection()
                 KeyboardShortcutsGroups()

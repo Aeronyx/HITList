@@ -22,10 +22,10 @@ final class MacSettingsTests: XCTestCase {
 
     func testSectionsAreStableInIdsAndOrder() {
         XCTAssertEqual(MacSettingsSection.allCases.map(\.rawValue),
-                       ["general", "iCloud", "reminders", "completing", "appearance", "data", "about"],
-                       "stored in preferences: never rename, only append")
+                       ["account", "general", "iCloud", "reminders", "completing", "appearance", "data", "about"],
+                       "stored in preferences: never rename; Account (0.5.0) leads, as on the iPhone")
         XCTAssertEqual(MacSettingsSection.allCases.map(\.title),
-                       ["General", "iCloud", "Reminders", "Completing tasks", "Appearance", "Data", "About"])
+                       ["Account", "General", "iCloud", "Reminders", "Completing tasks", "Appearance", "Data", "About"])
         for section in MacSettingsSection.allCases {
             XCTAssertFalse(section.caption.isEmpty, "\(section) has a caption")
             // About 23 characters of caption2 fit beside the icon in the 200 pt column without "…".
@@ -57,7 +57,8 @@ final class MacSettingsTests: XCTestCase {
     func testArrowKeysMoveBetweenSectionsAndStopAtTheEnds() {
         XCTAssertEqual(MacSettingsSectionList.moved(.general, by: 1), .iCloud)
         XCTAssertEqual(MacSettingsSectionList.moved(.data, by: -1), .appearance)
-        XCTAssertNil(MacSettingsSectionList.moved(.general, by: -1))
+        XCTAssertEqual(MacSettingsSectionList.moved(.general, by: -1), .account)
+        XCTAssertNil(MacSettingsSectionList.moved(.account, by: -1))
         XCTAssertNil(MacSettingsSectionList.moved(.about, by: 1))
     }
 

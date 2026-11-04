@@ -1,14 +1,16 @@
 import SwiftUI
 
 /// The sections of the Mac Settings page, in the order the left column lists them. The raw values are
-/// stored (`Preferences.macSettingsSection`), so keep them stable once shipped.
+/// stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change
+/// (Account, added in 0.5.0, comes first, as on the iPhone).
 enum MacSettingsSection: String, CaseIterable, Identifiable {
-    case general, iCloud, reminders, completing, appearance, data, about
+    case account, general, iCloud, reminders, completing, appearance, data, about
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
+        case .account: "Account"
         case .general: "General"
         case .iCloud: "iCloud"
         case .reminders: "Reminders"
@@ -22,6 +24,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
     /// The one line under the title in the section list.
     var caption: String {
         switch self {
+        case .account: "Name, picture, iCloud"
         case .general: "Week, badge, shortcuts"
         case .iCloud: "Sync status and checks"
         case .reminders: "Alerts and summary"
@@ -34,6 +37,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
+        case .account: "person.crop.circle.fill"
         case .general: "gearshape.fill"
         case .iCloud: "icloud.fill"
         case .reminders: "bell.badge.fill"
@@ -48,6 +52,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
     /// the same in every theme, so a section is recognisable by colour alone.
     var tint: Color {
         switch self {
+        case .account: Color(hex: "#14B8A6")
         case .general: Color(hex: "#8E8E93")
         case .iCloud: Color(hex: "#3B82F6")
         case .reminders: Color(hex: "#EF4444")
