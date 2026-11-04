@@ -286,7 +286,13 @@ final class UpcomingBoardTests: XCTestCase {
             host.frame = NSRect(origin: .zero, size: size)
             window.contentView = host
             window.makeKeyAndOrderFront(nil)
-            defer { window.orderOut(nil); window.close() }
+            // The views go before the container does (a hosted `@Query` left behind traps in a later save).
+            defer {
+                window.contentView = nil
+                RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+                window.orderOut(nil)
+                window.close()
+            }
             let deadline = Date().addingTimeInterval(1.0)
             while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
             host.layoutSubtreeIfNeeded()
