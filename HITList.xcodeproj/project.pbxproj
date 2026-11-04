@@ -39,6 +39,7 @@
 		314F390CE31AB982B5B4678D /* MacAppearanceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */; };
 		31BBC88473658DE0A316EBC6 /* InboxProcessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E2352DC18108A2E7F789F /* InboxProcessView.swift */; };
 		32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179EC0133891B8DCC4B358ED /* MobileTabBar.swift */; };
+		32EC8697D3216ABF194E6387 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC03BAE77E261B696BF81D54 /* ProfileStore.swift */; };
 		348542A3EA0C03CA7BF3E6D0 /* HITMenuRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DC5CAB524A97500619271F4 /* HITMenuRow.swift */; };
 		3823282AA34F38C7D2FBB63C /* SchemaV1Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3B7CF30F03F2BFC2FA0C00 /* SchemaV1Models.swift */; };
 		384392355165F856C2318A7A /* UpcomingSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A064393556C9800A4628092 /* UpcomingSchedule.swift */; };
@@ -180,6 +181,7 @@
 		EFF74DC0B928EAD8ABFF10AD /* AccountWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */; };
 		F08B3E77DEE13635559AA7E3 /* CompletionRowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */; };
 		F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */; };
+		F70CC887D38395621DE10F49 /* ProfileTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77C2724E3421441280B8B8EA /* ProfileTests.swift */; };
 		F731493FD4E1A807845123C1 /* Debouncer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A889BC2315D60CA212A38FD /* Debouncer.swift */; };
 		F8458ACDEBB20AD4013AD07B /* FontTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825B734C651EF77EF1FA1410 /* FontTests.swift */; };
 		FAA36AA5C80F0B9C974F38FA /* TaskPopout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 172507FC4FF599F803EE8248 /* TaskPopout.swift */; };
@@ -280,6 +282,7 @@
 		71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		722F59CFBA88B4A8E210E039 /* CompletionSoundTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionSoundTests.swift; sourceTree = "<group>"; };
 		72D42216CE90731EFBEC0C6B /* HITList-macOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "HITList-macOS.entitlements"; sourceTree = "<group>"; };
+		77C2724E3421441280B8B8EA /* ProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTests.swift; sourceTree = "<group>"; };
 		7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionToastStateTests.swift; sourceTree = "<group>"; };
 		7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxPicker.swift; sourceTree = "<group>"; };
 		7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppearanceSection.swift; sourceTree = "<group>"; };
@@ -355,6 +358,7 @@
 		D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPlacement.swift; sourceTree = "<group>"; };
 		D5F4EFFF4EA0167D686BDF26 /* AppInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoTests.swift; sourceTree = "<group>"; };
 		D756AF47EBCBD00580C2A32D /* ScreenMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenMenu.swift; sourceTree = "<group>"; };
+		DC03BAE77E261B696BF81D54 /* ProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileStore.swift; sourceTree = "<group>"; };
 		DC2B45AA9BAF7ED9ACFDB96F /* SyncState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncState.swift; sourceTree = "<group>"; };
 		DC4D93807A35FCE5D6C76B9A /* WeekStripView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeekStripView.swift; sourceTree = "<group>"; };
 		DC6B43A27F6D86FFFA01232F /* TaskActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActionsTests.swift; sourceTree = "<group>"; };
@@ -553,6 +557,7 @@
 				A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */,
 				528485A27E1D787530779DBE /* LocalCacheReset.swift */,
 				8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */,
+				DC03BAE77E261B696BF81D54 /* ProfileStore.swift */,
 				3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */,
 				DC2B45AA9BAF7ED9ACFDB96F /* SyncState.swift */,
 				966FF672CF1AE97484CD00CE /* TaskActions.swift */,
@@ -650,6 +655,7 @@
 				0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */,
 				0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */,
 				41B7E9DC54A02E9D9682E9E7 /* PopoutTests.swift */,
+				77C2724E3421441280B8B8EA /* ProfileTests.swift */,
 				375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */,
 				B2C0C42C15EA1C146A852A64 /* QuickAddDraftStoreTests.swift */,
 				C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */,
@@ -1004,6 +1010,7 @@
 				6B070ADB5812F73B071950DC /* PopoutHost.swift in Sources */,
 				7FAF1E998F06E600F7C27C6A /* PopoutPickers.swift in Sources */,
 				42AB199282B3DEF749DD0750 /* Preferences.swift in Sources */,
+				32EC8697D3216ABF194E6387 /* ProfileStore.swift in Sources */,
 				4E3CC00722B95EA5C12A9D06 /* ProjectEditorView.swift in Sources */,
 				2D9B3165524E299CDC86304B /* QuickAddContext.swift in Sources */,
 				9580397F7D4ADFFD9422A015 /* QuickAddDraft.swift in Sources */,
@@ -1076,6 +1083,7 @@
 				5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */,
 				F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */,
 				E6B03B4FD68EEE02E6285504 /* PopoutTests.swift in Sources */,
+				F70CC887D38395621DE10F49 /* ProfileTests.swift in Sources */,
 				D6D0CFCCBE7E6A804A288E03 /* QuickAddCreateTests.swift in Sources */,
 				15C8F8DB06E9760C3DA1330D /* QuickAddDraftStoreTests.swift in Sources */,
 				B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */,
