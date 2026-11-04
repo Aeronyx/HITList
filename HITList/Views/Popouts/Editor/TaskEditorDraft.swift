@@ -4,8 +4,9 @@ import HITListCore
 
 /// What the task editor holds until Confirm: the typing. The title, the description, the open "Add
 /// Sub-task" field and a sub-task being renamed wait here; Confirm (`commit`) saves them all and the
-/// editor closes in the same tap. × and Esc ask Discard first, then drop them (brief 41). Everything picked rather than typed (date, Group,
-/// priority, labels, reminder, repeat, deadline, location, ticking a sub-task) lands at once, as before.
+/// editor closes in the same tap. × and Esc ask Discard first, then drop them (brief 41). Everything picked
+/// rather than typed (date, Group, priority, labels, reminder, repeat, deadline, location, ticking a sub-task)
+/// lands at once, as before.
 struct TaskEditorDraft: Equatable {
     /// A sub-task's title being edited in place.
     struct Rename: Equatable {
