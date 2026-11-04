@@ -20,25 +20,41 @@ struct DelightStageModel {
     static let maxBursts = 3
 
     private(set) var bursts: [Burst] = []
+    /// When the rare visitor set off, and the line it swims along; nil when it isn't crossing.
+    private(set) var visitorStart: Date?
+    private(set) var visitorCruise: CGFloat = 0
 
-    var isIdle: Bool { bursts.isEmpty }
+    var isIdle: Bool { bursts.isEmpty && visitorStart == nil }
+
+    private var visitorEnd: Date? { visitorStart?.addingTimeInterval(RareVisitor.duration) }
 
     /// When the last thing on stage finishes; nil when idle.
-    var endsAt: Date? { bursts.map(\.end).max() }
+    var endsAt: Date? { (bursts.map(\.end) + [visitorEnd].compactMap { $0 }).max() }
 
     mutating func add(_ field: ParticleField, at origin: CGPoint, now: Date) {
         bursts.append(Burst(field: field, origin: origin, start: now))
         if bursts.count > Self.maxBursts { bursts.removeFirst(bursts.count - Self.maxBursts) }
     }
 
+    /// Sends the visitor across along `cruise` (a y in window coordinates), unless it is already crossing.
+    mutating func launchVisitor(now: Date, cruise: CGFloat) {
+        if let end = visitorEnd, end > now { return }
+        visitorStart = now
+        visitorCruise = cruise
+    }
+
     mutating func prune(now: Date) {
         bursts.removeAll { $0.end <= now }
+        if let end = visitorEnd, end <= now { visitorStart = nil }
     }
 
     /// Draws everything on stage at `now`.
     func draw(in context: GraphicsContext, size: CGSize, now: Date) {
         for burst in bursts {
             burst.field.draw(at: now.timeIntervalSince(burst.start), origin: burst.origin, in: context)
+        }
+        if let visitorStart {
+            RareVisitor.draw(at: now.timeIntervalSince(visitorStart), width: size.width, cruise: visitorCruise, in: context)
         }
     }
 }
@@ -68,6 +84,10 @@ final class DelightStage {
             seed &+= 0x9E37_79B9
             model.add(ParticleField(kind: kind, seed: seed), at: origin, now: now)
             Self.log.debug("Holiday burst: \(kind.rawValue, privacy: .public)")
+        }
+        if celebration.visitor {
+            model.launchVisitor(now: now, cruise: overlay.visitorCruise)
+            Self.log.info("The rare visitor is crossing")
         }
         guard !model.isIdle else { return }
         overlay.show(stage: self)
@@ -119,6 +139,12 @@ private final class OverlayHostingController: UIHostingController<DelightStageVi
 private final class DelightOverlay {
     private var window: UIWindow?
 
+    /// Just under the status bar and the Dynamic Island, above the screen's title.
+    var visitorCruise: CGFloat {
+        let top = activeScene?.keyWindow?.safeAreaInsets.top ?? 47
+        return top + RareVisitor.size.height / 2 + 6
+    }
+
     private var activeScene: UIWindowScene? {
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         return scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
@@ -155,6 +181,13 @@ private final class OverlayPanel: NSPanel {
 private final class DelightOverlay {
     private var panel: OverlayPanel?
     private weak var parent: NSWindow?
+
+    /// Just below the toolbar (the content view runs under the title bar).
+    var visitorCruise: CGFloat {
+        guard let host = hostWindow else { return 72 }
+        let titleBar = host.frame.height - host.contentLayoutRect.height
+        return titleBar + RareVisitor.size.height / 2 + 10
+    }
 
     /// The window the user just completed a task in.
     private var hostWindow: NSWindow? {

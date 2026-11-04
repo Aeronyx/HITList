@@ -5,6 +5,8 @@ extension Preferences {
     /// Settings → Delight → Holiday touches: the completion bursts and the small seasonal accents during a
     /// holiday's window (`Holiday`). On by default.
     static let holidayTouches = "delight.holidayTouches"
+    /// Settings → Delight → Rare surprises: the 1-in-10,000 visitor (`RareVisitor`). On by default.
+    static let rareSurprises = "delight.rareSurprises"
 }
 
 /// The holiday side of completion delight: which holiday it is (the calendar, or a Debug launch argument)
@@ -18,6 +20,10 @@ enum HolidayDelight {
 
     static func holidayTouchesEnabled(in defaults: UserDefaults = AppGroup.defaults) -> Bool {
         defaults.object(forKey: Preferences.holidayTouches) as? Bool ?? true
+    }
+
+    static func rareSurprisesEnabled(in defaults: UserDefaults = AppGroup.defaults) -> Bool {
+        defaults.object(forKey: Preferences.rareSurprises) as? Bool ?? true
     }
 }
 
@@ -41,10 +47,12 @@ struct CompletionCelebration: Equatable {
 }
 
 /// Debug-only launch arguments that demo the delight without waiting for a holiday:
-/// `-forceHoliday christmas` (any `Holiday(argument:)` name) treats every day as that holiday.
+/// `-forceHoliday christmas` (any `Holiday(argument:)` name) treats every day as that holiday, and
+/// `-forceRareVisitor` sends the visitor on every completion (still subject to Rare surprises and Reduce Motion).
 /// Release builds ignore them (`current` reads no arguments there).
 struct DelightLaunchOptions: Equatable {
     var forcedHoliday: Holiday?
+    var forceRareVisitor = false
 
     static let none = DelightLaunchOptions(arguments: [])
 
@@ -59,6 +67,11 @@ struct DelightLaunchOptions: Equatable {
     init(arguments: [String]) {
         if let i = arguments.firstIndex(of: "-forceHoliday"), i + 1 < arguments.count {
             forcedHoliday = Holiday(argument: arguments[i + 1])
+        }
+        if let i = arguments.firstIndex(of: "-forceRareVisitor") {
+            // A bare flag, or followed by a value as a defaults-style argument would be ("YES" / "NO").
+            let value = i + 1 < arguments.count ? arguments[i + 1].lowercased() : ""
+            forceRareVisitor = !["no", "false", "0"].contains(value)
         }
     }
 }

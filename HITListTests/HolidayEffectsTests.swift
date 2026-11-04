@@ -3,7 +3,8 @@ import HITListCore
 @testable import HITList
 
 /// Brief 44: the holiday particle bursts (budget, motion, determinism), what a completion celebrates under
-/// which settings, the overlay stage's bookkeeping, the holiday accent and the Debug launch arguments.
+/// which settings, the overlay stage's bookkeeping, the holiday accent, the rare visitor and the Debug
+/// launch arguments.
 @MainActor
 final class HolidayEffectsTests: XCTestCase {
     private var suites: [String] = []
@@ -165,5 +166,79 @@ final class HolidayEffectsTests: XCTestCase {
         XCTAssertNil(HolidayAccent.current(at: ordinary, defaults: defaults, launch: .none))
         defaults.set(false, forKey: Preferences.holidayTouches)
         XCTAssertNil(HolidayAccent.current(at: christmasEve, defaults: defaults, launch: .none))
+    }
+
+    // MARK: - The rare visitor
+
+    func testTheVisitorComesAboutOnceInTenThousand() {
+        XCTAssertEqual(RareVisitor.odds, 10_000)
+        var g = SplitMix64(seed: 2026)
+        let visits = (0..<1_000_000).reduce(0) { n, _ in n + (RareVisitor.rolls(using: &g) ? 1 : 0) }
+        XCTAssertTrue((60...140).contains(visits), "\(visits) visits in a million")
+    }
+
+    func testTheVisitorNeedsRareSurprisesAndMotion() {
+        func decide(rare: Bool = true, roll: Bool = true, calm: Bool = false) -> Bool {
+            CompletionCelebration.decide(holiday: nil, holidayTouches: true, rareSurprises: rare,
+                                         calmMotion: calm, visitorRoll: roll).visitor
+        }
+        XCTAssertTrue(decide())
+        XCTAssertFalse(decide(roll: false))
+        XCTAssertFalse(decide(rare: false))
+        XCTAssertFalse(decide(calm: true), "Reduce Motion skips it")
+        // A holiday burst and the visitor together.
+        let both = CompletionCelebration.decide(holiday: .christmas, holidayTouches: true, rareSurprises: true,
+                                                calmMotion: false, visitorRoll: true)
+        XCTAssertEqual(both, CompletionCelebration(burst: .snow, visitor: true))
+    }
+
+    func testRareSurprisesDefaultsOn() {
+        let defaults = makeDefaults()
+        XCTAssertTrue(HolidayDelight.rareSurprisesEnabled(in: defaults))
+        defaults.set(false, forKey: Preferences.rareSurprises)
+        XCTAssertFalse(HolidayDelight.rareSurprisesEnabled(in: defaults))
+    }
+
+    func testTheVisitorCrossesTheWholeWindowInTwoSeconds() {
+        XCTAssertEqual(RareVisitor.duration, 2.0)
+        let width: CGFloat = 402
+        let start = RareVisitor.position(at: 0, width: width, cruise: 80)
+        let end = RareVisitor.position(at: RareVisitor.duration, width: width, cruise: 80)
+        XCTAssertLessThanOrEqual(start.x + RareVisitor.size.width, 0, "starts off the left edge")
+        XCTAssertGreaterThanOrEqual(end.x - RareVisitor.trailLength, width, "its wake has left the right edge")
+        var last = start.x
+        for step in 1...20 {
+            let p = RareVisitor.position(at: Double(step) / 10, width: width, cruise: 80)
+            XCTAssertGreaterThanOrEqual(p.x, last, "always swims forward")
+            XCTAssertEqual(p.y + RareVisitor.size.height / 2, 80, accuracy: 6, "stays on its line, bobbing a little")
+            last = p.x
+        }
+    }
+
+    func testTheSpriteIsRectangular() {
+        for map in [RareVisitor.Sprite.tailUpMap, RareVisitor.Sprite.tailDownMap] {
+            XCTAssertEqual(map.count, RareVisitor.Sprite.height)
+            for row in map { XCTAssertEqual(row.count, RareVisitor.Sprite.width, row) }
+        }
+        XCTAssertFalse(RareVisitor.Sprite.tailUp.isEmpty)
+        XCTAssertFalse(RareVisitor.Sprite.tailDown.isEmpty)
+    }
+
+    func testLaunchArgumentsForceTheVisitor() {
+        XCTAssertTrue(DelightLaunchOptions(arguments: ["app", "-forceRareVisitor"]).forceRareVisitor)
+        XCTAssertTrue(DelightLaunchOptions(arguments: ["app", "-forceRareVisitor", "YES"]).forceRareVisitor)
+        XCTAssertFalse(DelightLaunchOptions(arguments: ["app", "-forceRareVisitor", "NO"]).forceRareVisitor)
+        XCTAssertFalse(DelightLaunchOptions(arguments: ["app"]).forceRareVisitor)
+    }
+
+    func testTheStageHoldsOneVisitorAtATime() {
+        var model = DelightStageModel()
+        let t0 = Date(timeIntervalSinceReferenceDate: 1_000)
+        model.launchVisitor(now: t0, cruise: 80)
+        model.launchVisitor(now: t0.addingTimeInterval(0.5), cruise: 80)
+        XCTAssertEqual(model.visitorStart, t0, "a second roll mid-crossing doesn't restart it")
+        XCTAssertEqual(model.endsAt, t0.addingTimeInterval(RareVisitor.duration))
+        model.prune(now: t0.addingTimeInterval(RareVisitor.duration + 0.1))
+        XCTAssertTrue(model.isIdle)
     }
 }
