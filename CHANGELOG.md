@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.4.1
+## 0.4.1 — build 14, 2026-11-03
 
 George's notes on build 13, split across three sessions: sub-tasks, a real task editor, quick-add time
 phrases, and the feel of taps, toasts and buttons.
