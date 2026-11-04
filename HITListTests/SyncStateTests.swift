@@ -174,4 +174,13 @@ final class SyncStateTests: XCTestCase {
         XCTAssertNotNil(lines[0].1["firstFrame"])
         XCTAssertEqual(LaunchTiming.marks.map(\.name), ["store"], "marks after the first frame are ignored")
     }
+
+    // MARK: Sync log line count (brief 42, item 1)
+
+    func testCountingLinesMatchesSplittingThem() {
+        for text in ["", "a", "a\n", "a\nb", "a\n\nb\n", "\n\n", String(repeating: "{\"n\":1}\n", count: 500)] {
+            let data = Data(text.utf8)
+            XCTAssertEqual(SyncLog.countLines(in: data), SyncLog.lines(in: data).count, text.debugDescription)
+        }
+    }
 }
