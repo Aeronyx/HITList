@@ -50,6 +50,15 @@ George's words, from the 0.4.1 (14) feedback on 2026-11-04:
    switching, notifications that open a tab, `PopoutHost` assumptions about the tab bar's height or count)
    still works; the "+" oval and the Undo toast sit where they did.
 
+6. **Who is signed in, on Browse** (`BrowseView.swift`): session 34 (merged) built `ProfileBadge` (avatar and
+   name) in `Views/Settings/AccountSettingsSection.swift` and left it unplaced. Put it at the top of Browse as a
+   quiet header row that opens Settings → Account (or Settings, if a direct route to Account is more than a few
+   lines); with no name set it reads "Add your name". Use it as it is; if it needs a change, report it.
+
+Master since the brief was written: briefs 34, 37 and 38 are merged; `SyncBolt.look` and
+`SyncIndicatorDot.color` take an `everSignedIn` argument (grey for someone who never used iCloud) and one line of
+`MobileChromeTests` passes `everSignedIn: true`.
+
 ## Ownership
 
 `HITList/Views/Tabs/MobileShell.swift`, `MobileTabBar.swift`, `BrowseView.swift`, `ScreenMenu.swift` (iPhone
