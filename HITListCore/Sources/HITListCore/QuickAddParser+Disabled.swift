@@ -28,8 +28,10 @@ extension QuickAddToken {
 extension QuickAddParser {
     /// `parse(_:)`, with every token whose key is in `disabled` left as plain title text: it sets
     /// nothing, is not in `tokens`, and its words appear in `title` exactly as typed. Words the parser
-    /// would have read differently once a token is off are read again (a second "p2" takes over from a
-    /// switched-off "p1"; another copy of a switched-off "tom" stays plain too). Token ranges index `input`.
+    /// would have read differently once a token is off are read again (switching off the winning "p3"
+    /// lets the superseded "p2" before it apply again; another copy of a switched-off "tom" stays plain
+    /// too). A superseded token whose key is switched off is masked as well, so it never comes back.
+    /// Token ranges index `input`.
     ///
     /// How: each switched-off span is swapped for a one-character placeholder no rule matches and the
     /// text is parsed again, until no switched-off token is left; ranges and the title are then mapped
@@ -50,7 +52,7 @@ extension QuickAddParser {
         result.tokens = result.tokens.map { token in
             let offsets = masked.originalOffsets(of: token.range)
             let range = masked.originalIndex(offsets.lowerBound)..<masked.originalIndex(offsets.upperBound)
-            return QuickAddToken(kind: token.kind, range: range, text: String(input[range]))
+            return QuickAddToken(kind: token.kind, range: range, text: String(input[range]), isSuperseded: token.isSuperseded)
         }
         result.title = masked.restoringPlaceholders(in: result.title)
         return result

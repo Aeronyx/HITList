@@ -316,10 +316,12 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertNil(parser.parse("x !!2").reminderOffsetMinutes)
     }
 
-    func testOnlyTheFirstReminderTokenCounts() {
+    /// Brief 37: the later reminder overrides the earlier one (it used to be the first that counted).
+    func testTheLastReminderTokenCounts() {
         let r = parser.parse("Pills 9pm !10m !1h")
-        XCTAssertEqual(r.reminderOffsetMinutes, 10)
-        XCTAssertEqual(r.title, "Pills !1h")
+        XCTAssertEqual(r.reminderOffsetMinutes, 60)
+        XCTAssertEqual(r.title, "Pills !10m")
+        XCTAssertEqual(r.tokens.filter(\.isSuperseded).map(\.text), ["!10m"])
     }
 
     /// A reminder is relative to the due time; without one it means nothing (George, 2026-11-03), so it is

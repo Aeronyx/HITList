@@ -6,6 +6,10 @@ public struct QuickAddToken: Equatable, Sendable {
     public var kind: Kind
     public var range: Range<String.Index>
     public var text: String
+    /// Overridden by a later phrase of the same kind (brief 37: "p1 … p3", "jan 6 … in a month"): not
+    /// highlighted, sets nothing, its words are title text. It applies again once every later phrase of its
+    /// kind is switched off (`parse(_:disabling:)`).
+    public var isSuperseded = false
 }
 
 public struct QuickAddResult: Equatable, Sendable {
@@ -91,8 +95,12 @@ public struct QuickAddParser: Sendable {
         var date: Date? = nil
         /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
         var moment: Date? = nil
-        /// Where the reminder token is, so it can go back to the title when nothing sets a time.
-        var reminderWord: Int? = nil
+        /// Where the reminder tokens are, so they can go back to the title when nothing sets a time.
+        var reminderWords: [Int] = []
+        /// The winning token of each kind that holds one value, by index in `result.tokens`.
+        var winner: [QuickAddToken.Kind: Int] = [:]
+        /// Words of superseded tokens: matched, so no other rule reads them, but title text.
+        var supersededWords = Set<Int>()
 
         func mark(_ i: Int, _ n: Int, _ kind: QuickAddToken.Kind) {
             guard n > 0 else { return }
@@ -101,19 +109,30 @@ public struct QuickAddParser: Sendable {
             result.tokens.append(QuickAddToken(kind: kind, range: range, text: String(input[range])))
         }
 
+        /// `mark`, for a kind that holds one value: a later phrase overrides the earlier one (George,
+        /// 2026-11-04), which stays in `tokens` as superseded and goes back to the title.
+        func win(_ i: Int, _ n: Int, _ kind: QuickAddToken.Kind) {
+            if let earlier = winner[kind] {
+                result.tokens[earlier].isSuperseded = true
+                supersededWords.formUnion(words.indices.filter { result.tokens[earlier].range.contains(words[$0].range.lowerBound) })
+            }
+            mark(i, n, kind)
+            winner[kind] = result.tokens.count - 1
+        }
+
         var i = 0
         while i < words.count {
             if consumed[i] { i += 1; continue }
             let w = lowers[i]
 
             // Priority: p1..p4, !!1..!!4
-            if result.priority == .p4, let p = Self.priority(from: w) {
-                result.priority = p; mark(i, 1, .priority); i += 1; continue
+            if let p = Self.priority(from: w) {
+                result.priority = p; win(i, 1, .priority); i += 1; continue
             }
             // Project: #Name, #"Two Words", or #two words matching a known project
-            if w.hasPrefix("#"), w.count > 1, result.projectName == nil {
+            if w.hasPrefix("#"), w.count > 1 {
                 let (name, n) = matchName(words: words, at: i, prefix: "#", known: knownProjects)
-                result.projectName = name; mark(i, n, .project); i += n; continue
+                result.projectName = name; win(i, n, .project); i += n; continue
             }
             // Label: @name
             if w.hasPrefix("@"), w.count > 1 {
@@ -124,28 +143,29 @@ public struct QuickAddParser: Sendable {
                 mark(i, n, .label); i += n; continue
             }
             // Reminder offset: !15mb, !1hb, !1db (the "b" optional), !0 / !at
-            if result.reminderOffsetMinutes == nil, let minutes = ReminderOffset.minutes(fromToken: w) {
-                result.reminderOffsetMinutes = minutes; reminderWord = i; mark(i, 1, .reminder); i += 1; continue
+            if let minutes = ReminderOffset.minutes(fromToken: w) {
+                result.reminderOffsetMinutes = minutes; reminderWords.append(i); win(i, 1, .reminder); i += 1; continue
             }
             // Recurrence
-            if result.recurrence == nil, let (rule, n) = Self.matchRecurrence(lowers, at: i) {
-                result.recurrence = rule; mark(i, n, .recurrence); i += n; continue
+            if let (rule, n) = Self.matchRecurrence(lowers, at: i) {
+                result.recurrence = rule; win(i, n, .recurrence); i += n; continue
             }
             // "in 10 minutes", "in two hours": a date token that sets the time as well
-            if date == nil, let (at, n) = dateParser.matchRelativeTime(in: lowers, at: i) {
-                moment = at; date = dateParser.startOfDay(at); mark(i, n, .date); i += n; continue
+            if let (at, n) = dateParser.matchRelativeTime(in: lowers, at: i) {
+                moment = at; date = dateParser.startOfDay(at); win(i, n, .date); i += n; continue
             }
             // Time
-            if time == nil, let t = dateParser.matchTime(in: lowers, at: i) {
-                time = (t.hour, t.minute); mark(i, t.consumed, .time); i += t.consumed; continue
+            if let t = dateParser.matchTime(in: lowers, at: i) {
+                time = (t.hour, t.minute); win(i, t.consumed, .time); i += t.consumed; continue
             }
-            // Date
-            if date == nil, let (pd, n) = dateParser.matchDate(in: lowers, at: i) {
-                date = pd.date; mark(i, n, .date); i += n
+            // Date (a plain day drops the moment of an earlier "in 2 hours")
+            if let (pd, n) = dateParser.matchDate(in: lowers, at: i) {
+                date = pd.date; moment = nil; win(i, n, .date); i += n
                 // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
+                // Only when no time is typed yet: a bare number is too weak to override "5pm".
                 if time == nil, i < words.count, !consumed[i],
                    let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true) {
-                    time = (t.hour, t.minute); mark(i, t.consumed, .time); i += t.consumed
+                    time = (t.hour, t.minute); win(i, t.consumed, .time); i += t.consumed
                 }
                 continue
             }
@@ -154,15 +174,15 @@ public struct QuickAddParser: Sendable {
 
         // A reminder is relative to the due time: with no time typed (or set by "in 2 hours") it means
         // nothing, and stays in the title as typed, unhighlighted (George, 2026-11-03).
-        if let k = reminderWord, time == nil, moment == nil {
-            consumed[k] = false
+        if !reminderWords.isEmpty, time == nil, moment == nil {
+            for k in reminderWords { consumed[k] = false }
             result.reminderOffsetMinutes = nil
             result.tokens.removeAll { $0.kind == .reminder }
         }
 
-        // Title = whatever was not consumed, with surrounding quotes stripped.
+        // Title = whatever was not consumed or was superseded, with surrounding quotes stripped.
         var titleWords: [String] = []
-        for (k, word) in words.enumerated() where !consumed[k] {
+        for (k, word) in words.enumerated() where !consumed[k] || supersededWords.contains(k) {
             var t = word.text
             if t.count >= 2, t.hasPrefix("\""), t.hasSuffix("\"") { t = String(t.dropFirst().dropLast()) }
             titleWords.append(t)
