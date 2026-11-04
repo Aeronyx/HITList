@@ -26,9 +26,9 @@ final class HighlightAreaTests: XCTestCase {
     }
 
     /// What the field draws for this text: the drawable tokens, their colour groups, and the boxes.
-    private func layout(_ text: String, width: CGFloat? = nil, disabling: Set<QuickAddTokenKey> = [])
+    private func layout(_ text: String, width: CGFloat? = nil, switchedOff: Set<QuickAddDisabledPhrase> = [])
         -> (tokens: [QuickAddToken], boxes: [TokenHighlightField.Box]) {
-        let parsed = parser().parse(text, disabling: disabling)
+        let parsed = parser().parse(text, switchedOff: switchedOff)
         let tokens = TokenHighlightField.drawable(parsed.tokens, in: text)
         let groups = TokenHighlightField.groups(tokens, in: text, priority: parsed.priority)
         let areas = renderAreas(text, tokens: tokens, width: width)
@@ -120,12 +120,12 @@ final class HighlightAreaTests: XCTestCase {
     func testOnlyTheLaterPhraseIsDrawnAndTappingItBringsTheEarlierBack() throws {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "jan 6 zach fox in a month")
-        var drawn = layout(draft.text, disabling: draft.disabledTokens)
+        var drawn = layout(draft.text, switchedOff: draft.disabledPhrases)
         XCTAssertEqual(drawn.tokens.map(\.text), ["in a month"])
         XCTAssertEqual(draft.chips(p).dueDate, calendar.date(byAdding: .month, value: 1, to: today))
 
         draft.disable(try XCTUnwrap(drawn.tokens.first))
-        drawn = layout(draft.text, disabling: draft.disabledTokens)
+        drawn = layout(draft.text, switchedOff: draft.disabledPhrases)
         XCTAssertEqual(drawn.tokens.map(\.text), ["jan 6"])
         XCTAssertEqual(draft.chips(p).dueDate, calendar.date(from: DateComponents(year: 2027, month: 1, day: 6)))
         XCTAssertEqual(draft.result(p).title, "zach fox in a month")
@@ -197,11 +197,11 @@ final class HighlightAreaTests: XCTestCase {
                 }
                 QuickAddDraftStore.save(draft, card: card, to: defaults)
                 let restored = try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults))
-                XCTAssertEqual(restored.disabledTokens, draft.disabledTokens, text)
+                XCTAssertEqual(restored.disabledPhrases, draft.disabledPhrases, text)
                 XCTAssertEqual(restored.parsed(p), draft.parsed(p), text)
                 XCTAssertEqual(restored.chips(p), draft.chips(p), text)
-                XCTAssertEqual(layout(restored.text, disabling: restored.disabledTokens).boxes,
-                               layout(draft.text, disabling: draft.disabledTokens).boxes, text)
+                XCTAssertEqual(layout(restored.text, switchedOff: restored.disabledPhrases).boxes,
+                               layout(draft.text, switchedOff: draft.disabledPhrases).boxes, text)
             }
         }
     }
