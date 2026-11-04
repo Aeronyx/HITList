@@ -12,7 +12,7 @@ import OSLog
 ///   (task ids): cleared. The next import reschedules the new account's.
 /// - Daily backups (`LocalBackup`): moved out of the visible folder into a folder of the previous account's
 ///   own, keyed by its hashed id; the new account's earlier backups come back if it used this device before.
-/// - The sync times ("Synced 3 hr ago" was the other account's).
+/// - The sync times ("Synced 3 hr ago" was the other account's), and the decoded profile picture.
 /// - The open card and the undo toast on screen: `Notification.Name.accountDidSwitch` is posted for the
 ///   views that hold them.
 ///
@@ -30,7 +30,7 @@ enum AccountSwitch {
         var clearReminders: @MainActor () async -> Void
         /// Sets aside the previous account's backups, brings back the current one's.
         var setAsideBackups: @MainActor (_ previous: String, _ current: String) -> LocalBackup.SetAside
-        /// Forgets the sync times.
+        /// Forgets the sync times and the decoded profile picture.
         var forgetCaches: @MainActor () -> Void
 
         static var live: Cleanup {
@@ -40,6 +40,7 @@ enum AccountSwitch {
                 setAsideBackups: { LocalBackup.setAside(previousAccount: $0, currentAccount: $1) },
                 forgetCaches: {
                     CloudSyncMonitor.shared.forgetLastSync(reason: "iCloud account changed")
+                    ProfileAvatarCache.shared.removeAll()
                 })
         }
     }
