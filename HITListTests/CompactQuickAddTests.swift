@@ -63,6 +63,14 @@ final class CompactQuickAddTests: XCTestCase {
                        "with Discard showing, a click elsewhere goes back to typing (only Discard throws it away)")
     }
 
+    /// × and Escape (supervisor, from session 41): an empty card closes at once; with typing they ask Discard
+    /// first, like the iPhone card, and a second × or Escape while Discard shows throws the typing away.
+    func testCloseAsksBeforeLosingTyping() {
+        XCTAssertEqual(BoardInlineAdd.close(hasContent: false, confirmingDiscard: false), .close)
+        XCTAssertEqual(BoardInlineAdd.close(hasContent: true, confirmingDiscard: false), .askDiscard)
+        XCTAssertEqual(BoardInlineAdd.close(hasContent: true, confirmingDiscard: true), .discard)
+    }
+
     // MARK: - The day chip's ×
 
     func testTheDayChipsCrossLeavesTheTaskUndated() {
@@ -108,6 +116,15 @@ final class CompactQuickAddTests: XCTestCase {
         return (window, host)
     }
 
+    /// Takes the SwiftUI views down while their model container is still alive (a hosted `@Query` left behind
+    /// trapped in a later test's save), then closes the window.
+    private func tearDown(_ window: NSWindow) {
+        window.contentView = nil
+        spin(0.05)
+        window.orderOut(nil)
+        window.close()
+    }
+
     private func spin(_ seconds: TimeInterval) {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
@@ -149,7 +166,7 @@ final class CompactQuickAddTests: XCTestCase {
         let board = UpcomingBoardModel<UpcomingView.Entry>(items: [], window: UpcomingWindow(), now: Date(), showOverdue: false, calendar: cal)
         let (window, host) = keyWindow(UpcomingBoard(board: board, window: .constant(UpcomingWindow()), now: Date())
             .environment(popouts).modelContainer(container).preferredColorScheme(.dark))
-        defer { window.orderOut(nil); window.close() }
+        defer { tearDown(window) }
         XCTAssertNil(textView(in: host), "no card yet")
         // A real click on today's "+ Add task" (the first column's foot: the board is empty).
         click(window, host, at: CGPoint(x: 70, y: 103))
@@ -180,10 +197,50 @@ final class CompactQuickAddTests: XCTestCase {
             spin(0.6)
             if let field = textView(in: window.contentView!), window.firstResponder === field {} else { missed.append(attempt) }
             popouts.closeAll()
-            window.orderOut(nil)
-            window.close()
+            tearDown(window)
         }
         XCTAssertEqual(missed, [], "the title had the keyboard every time")
+    }
+
+    /// Escape on the board's card, as the keyboard sends it: with typing it asks Discard and the card stays;
+    /// Escape again discards; an empty card closes at once.
+    func testEscapeAsksDiscardOverTypingOnTheBoard() throws {
+        let container = ModelContainerFactory.preview()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAddFocus-\(UUID().uuidString)"))
+        let popouts = PopoutController(draftDefaults: defaults)
+        let key = BoardInlineAdd.key(for: today, calendar: cal)
+        popouts.openQuickAdd(.day(today), placement: .inline(key))
+        let card = try XCTUnwrap(popouts.state.quickAdd?.id)
+        QuickAddDraftStore.save(QuickAddDraft(context: .day(today), text: "Call Sam"), card: card, to: defaults)
+        let board = UpcomingBoardModel<UpcomingView.Entry>(items: [], window: UpcomingWindow(), now: Date(), showOverdue: false, calendar: cal)
+        let (window, host) = keyWindow(UpcomingBoard(board: board, window: .constant(UpcomingWindow()), now: Date())
+            .environment(popouts).modelContainer(container).preferredColorScheme(.dark))
+        defer { popouts.closeAll(); tearDown(window) }
+        spin(0.4)
+        XCTAssertEqual(textView(in: host)?.string, "Call Sam")
+
+        escape(window)
+        XCTAssertTrue(popouts.state.isInlineOpen(key), "typing: Escape asks first, the card stays")
+        XCTAssertEqual(QuickAddDraftStore.draft(for: card, from: defaults)?.text, "Call Sam", "and so does the typing")
+        escape(window)
+        XCTAssertNil(popouts.state.quickAdd, "Escape again discards")
+        XCTAssertNil(QuickAddDraftStore.draft(for: card, from: defaults))
+
+        popouts.openQuickAdd(.day(today), placement: .inline(key))
+        spin(0.4)
+        escape(window)
+        XCTAssertNil(popouts.state.quickAdd, "an empty card closes at once")
+    }
+
+    private func escape(_ window: NSWindow) {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                         windowNumber: window.windowNumber, context: nil, characters: "\u{1b}",
+                                         charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+            if type == .keyDown, !window.performKeyEquivalent(with: event) { window.sendEvent(event) }
+            else if type == .keyUp { window.sendEvent(event) }
+        }
+        spin(0.4)
     }
 
     /// The toolbar "+" and ⌘N: the panel (`PopoutHost`) over the window as the app has it, a split view with
@@ -195,7 +252,7 @@ final class CompactQuickAddTests: XCTestCase {
         let split = FocusSplit()
         let (window, host) = keyWindow(split.popoutHost(popouts).environment(popouts).modelContainer(container)
             .preferredColorScheme(.dark))
-        defer { popouts.closeAll(); window.orderOut(nil); window.close() }
+        defer { popouts.closeAll(); tearDown(window) }
         func table(in view: NSView) -> NSTableView? {
             if let t = view as? NSTableView { return t }
             for sub in view.subviews { if let found = table(in: sub) { return found } }

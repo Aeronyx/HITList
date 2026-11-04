@@ -6,9 +6,9 @@ import SwiftUI
 /// style: the same draft, parser, highlights, chips and sticky draft), laid out for 270 pt: the title, the
 /// chips wrapping onto as many lines as they need, then × and the Confirm pill.
 ///
-/// Confirm adds the task on the column's day and leaves the card open and empty for the next one; Escape or
-/// × closes it. A click elsewhere on the board closes an empty card; with something typed, "Discard" is
-/// offered above the card first (the iPhone card's rule), and a click on the card goes back to typing.
+/// Confirm adds the task on the column's day and leaves the card open and empty for the next one. Escape, ×
+/// or a click elsewhere on the board closes an empty card; with something typed, "Discard" is offered above
+/// the card first (the iPhone card's rule): Escape or × again discards, a click on the card goes back to typing.
 /// One inline card at a time: the board's cards are `PopoutState.Placement.inline` cards keyed by day
 /// (`BoardInlineAdd.key`), and the controller holds at most one quick add.
 struct CompactQuickAddCard: View {
@@ -79,6 +79,21 @@ enum BoardInlineAdd {
 
     static func clickAway(hasContent: Bool, confirmingDiscard: Bool) -> ClickAway {
         if confirmingDiscard { return .keepEditing }
+        return hasContent ? .askDiscard : .close
+    }
+
+    /// What × or Escape does on an open card.
+    enum Close: Equatable {
+        /// Nothing typed: the card closes.
+        case close
+        /// Something typed: "Discard" shows above the card first (the iPhone card's rule).
+        case askDiscard
+        /// "Discard" is already showing: × or Escape again throws the typing away.
+        case discard
+    }
+
+    static func close(hasContent: Bool, confirmingDiscard: Bool) -> Close {
+        if confirmingDiscard { return .discard }
         return hasContent ? .askDiscard : .close
     }
 }
