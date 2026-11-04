@@ -18,30 +18,58 @@ extension SidebarItem {
 }
 
 /// Mac and iPad: sidebar + list, Todoist style, no detail column. iPhone (compact width): the four-tab
-/// shell (`MobileShell`: Inbox, Today, Flipboard, Upcoming; Browse behind the top-right magnifying glass) with the oval "+". Opening a task or adding one
-/// pops a card out over everything, the tab bar included (`PopoutHost`).
+/// shell (`MobileShell`: Inbox, Today, Upcoming, Flipboard; Browse behind the top-right magnifying glass) with the oval "+". Opening a task or adding one
+/// pops a card out over everything, the tab bar included (`PopoutHost`). The iPhone Duo's inner display
+/// (brief 45): the sidebar layout with the editor in a column beside the list (`AppShell.duo`).
+///
+/// The shell follows the window (`AppShell.shell`), so folding or unfolding a Duo swaps it while the app
+/// runs. What survives the swap lives here, above both shells: the popouts (an open quick-add card, its
+/// sticky draft, an open editor) and `place`, the list on show.
 struct ContentView: View {
     @State private var popouts = PopoutController()
+    /// The list on show, in terms both shells read and write, so a fold lands on the same list. Phones
+    /// start on Settings → General → Start screen; the Mac and the iPad on Today, as before.
+    @State private var place = ShellPlace(tab: AppShell.currentIdiom == .phone ? Preferences.startTabValue() : .today)
+    /// Phones: the window's size and fold (`.zero` until the first layout pass).
+    @State private var geometry = WindowGeometry()
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
+    private var shell: AppShell {
+        #if os(iOS)
+        AppShell.shell(idiom: AppShell.currentIdiom, horizontalSizeClass: sizeClass, size: geometry.fullSize)
+        #else
+        .split
+        #endif
+    }
+
     var body: some View {
         SwiftUI.Group {
+            switch shell {
             #if os(iOS)
-            if sizeClass == .compact {
-                MobileShell()
-            } else {
-                SplitContent()
-            }
-            #else
-            SplitContent()
+            case .tabs:
+                MobileShell(place: $place)
+            case .duo:
+                SplitContent(place: $place, duo: true, geometry: geometry)
+                    // The inner display may report a compact width, as an iPhone does; the split view,
+                    // the lists and the floating "+" lay out as on an iPad there.
+                    .environment(\.horizontalSizeClass, .regular)
             #endif
+            default:
+                SplitContent(place: $place)
+            }
         }
-        .popoutHost(popouts)
+        .popoutHost(popouts, style: PopoutHost.Style(shell))
         .environment(popouts)
         .focusedSceneValue(\.popouts, popouts)
         .background(Theme.background)
+        #if os(iOS)
+        // Phones only: the shell of an iPad or a Mac never depends on the window's size.
+        .onGeometryChange(for: WindowGeometry.self) { WindowGeometry($0) } action: { new in
+            if AppShell.currentIdiom == .phone { geometry = new }
+        }
+        #endif
         #if os(macOS)
         .containerBackground(Theme.background, for: .window)
         .frame(minWidth: 760, minHeight: 560)
@@ -52,27 +80,52 @@ struct ContentView: View {
 /// The sidebar and the selected list, side by side. On the Mac, Settings is one more destination here
 /// (`SidebarItem.settings`), opened through this window's `SettingsRouter`: the sidebar column shows the
 /// Settings sections while it is selected (`MacSettingsSidebar`) and the detail column the chosen section.
+/// With `duo` (the iPhone Duo's inner display, brief 45) the detail column is `DuoDetail`: the list with
+/// the editor or Today's next days beside it, the sidebar stepping aside when the editor needs its room.
 private struct SplitContent: View {
     @Environment(PopoutController.self) private var popouts
-    @State private var selection: SidebarItem? = .today
+    @Binding var place: ShellPlace
+    var duo = false
+    var geometry = WindowGeometry()
+    @State private var selection: SidebarItem?
     @State private var settingsRouter = SettingsRouter()
     /// Where to go back to when the Settings page is closed.
     @State private var beforeSettings: SidebarItem? = .today
+    /// Duo: the sidebar steps aside while the editor needs its room (`DuoColumns`). Elsewhere the
+    /// system's own choice, as before.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     /// Mac: the Settings sections are showing in the sidebar column. Follows `selection == .settings` one
     /// run-loop turn later, so the detail column has already swapped when the sidebar starts to fade.
     @State private var settingsSidebarShown = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
+        _place = place
+        self.duo = duo
+        self.geometry = geometry
+        _selection = State(initialValue: place.wrappedValue.list)
+    }
+
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240)
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            if duo {
+                sidebar.navigationSplitViewColumnWidth(DuoSplit.sidebarWidth)
+            } else {
+                sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
+            }
         } detail: {
-            ListScreen(item: selection ?? .today)
-                .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+            if duo {
+                DuoDetail(item: selection ?? .today, geometry: geometry, columnVisibility: $columnVisibility)
+            } else {
+                ListScreen(item: selection ?? .today)
+                    .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+            }
         }
+        // Duo: side by side, never the sidebar sliding over the list as an upright iPad's does.
+        .modifier(BalancedSplit(isOn: duo))
         .onChange(of: selection) { old, new in
             popouts.closeAll()
+            if let new, new != .settings { place.select(new) }
             if new == .settings, old != .settings { beforeSettings = old }
             #if os(macOS)
             let showing = new == .settings
@@ -113,6 +166,15 @@ private struct SplitContent: View {
         #else
         SidebarView(selection: $selection)
         #endif
+    }
+}
+
+/// `.balanced` where asked (the Duo), else the split view's own style, as before.
+private struct BalancedSplit: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn { content.navigationSplitViewStyle(.balanced) } else { content }
     }
 }
 

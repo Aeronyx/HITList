@@ -5,18 +5,23 @@ import AppKit
 #endif
 
 extension View {
-    /// Draws the window's popouts over this view. Applied once, by `ContentView`.
-    func popoutHost(_ popouts: PopoutController) -> some View {
-        modifier(PopoutHost(popouts: popouts))
+    /// Draws the window's popouts over this view, the way `style` says. Applied once, by `ContentView`,
+    /// outside whichever shell is on show, so an open card or editor outlives a change of shell. Without
+    /// a style (tests), the size class decides: compact is the phone, regular the panel.
+    func popoutHost(_ popouts: PopoutController, style: PopoutHost.Style? = nil) -> some View {
+        modifier(PopoutHost(popouts: popouts, chosenStyle: style))
     }
 }
 
 /// Where the popouts appear. iPhone: the quick-add card as a detached oval floating 12 pt above the
 /// keyboard (12 pt from the screen edges) over a black 0.5 backdrop that closes it on tap; the task in a
 /// bottom sheet. Mac (and iPad): both as a 560 pt panel centred about 18% from the top of
-/// the window over a dimmed backdrop.
+/// the window over a dimmed backdrop. iPhone Duo, inner display (brief 45): the iPhone's oval card
+/// (centred, no wider than the panel), the task in the column beside the list (`DuoDetail`), and the
+/// undo toasts where the iPad has them.
 struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
+    var chosenStyle: Style?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -26,31 +31,84 @@ struct PopoutHost: ViewModifier {
     #endif
     /// iPhone: the card has a title, so closing it asks first.
     @State private var quickAddHasContent = false
-    /// iPhone: "Discard?" is showing above the card, keyboard down.
+    /// "Discard?" is showing above the card (iPhone: keyboard down).
     @State private var confirmingDiscard = false
+    /// When "Discard?" was offered: on the Mac one Esc reaches both the ×'s shortcut and the exit command,
+    /// and must not ask and discard in the same press.
+    @State private var discardOfferedAt = Date.distantPast
+    /// The editor panel's say on a click on its backdrop (`panelDismissGuard`).
+    @State private var editorGuard = PanelDismissGuard()
+    /// The style as of the latest body, for the editor sheet's setter (`sheetTask`).
+    @State private var latestStyle = StyleBox()
 
-    /// The Mac's panel style; iPad gets it too.
-    private var usesPanel: Bool {
-        #if os(macOS)
-        true
+    /// A reference, so a binding made by an earlier body reads the style of the current one.
+    final class StyleBox {
+        var style: Style?
+    }
+
+    /// How the popouts are drawn for each shell (`AppShell`).
+    enum Style: Equatable {
+        /// The iPhone's four tabs: the oval card above the keyboard, the editor in a sheet, undo toasts
+        /// beside the "+".
+        case phone
+        /// The Mac and the iPad (and an iPhone Max on its side): both in the centred panel.
+        case panel
+        /// The iPhone Duo's inner display: the oval card, the editor in a column of the layout.
+        case duo
+
+        init(_ shell: AppShell) {
+            switch shell {
+            case .tabs: self = .phone
+            case .split: self = .panel
+            case .duo: self = .duo
+            }
+        }
+
+        enum Editor: Equatable { case sheet, panel, column }
+
+        var editor: Editor {
+            switch self {
+            case .phone: .sheet
+            case .panel: .panel
+            case .duo: .column
+            }
+        }
+
+        /// The quick-add card in the panel (else the oval).
+        var panelQuickAdd: Bool { self == .panel }
+        /// Undo toasts at the bottom-trailing corner, lists drawing their own (else beside the iPhone's
+        /// "+", the host drawing the lists' too).
+        var cornerToasts: Bool { self != .phone }
+        /// The oval card's widest: the phone's full width, the panel's on the Duo's big screen.
+        var ovalMaxWidth: CGFloat? { self == .duo ? PanelBackdrop<EmptyView>.width : nil }
+    }
+
+    private var style: Style {
+        if let chosenStyle { return chosenStyle }
+        #if os(iOS)
+        return sizeClass == .compact ? .phone : .panel
         #else
-        sizeClass == .regular
+        return .panel
         #endif
     }
+
+    /// The Mac's panel style; iPad gets it too.
+    private var usesPanel: Bool { style.panelQuickAdd }
 
     @Environment(\.modelContext) private var context
 
     func body(content: Content) -> some View {
-        content
-            .overlay(alignment: usesPanel ? .bottomTrailing : .bottomLeading) {
+        latestStyle.style = style
+        return content
+            .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
                 // iPhone: every undo toast is drawn here, the lists' included (`completionToast`), over
                 // the shell, to the left of the oval "+" and centred on it (George, build 13: not above it).
                 // This overlay has the shell's own frame, so its bottom edge is the one the island stands
                 // on whatever the screen size; a toast inside a list sat under the chrome and depended on
                 // that list's frame. Mac and iPad: the popout's toast at the window's bottom-trailing
                 // corner, a row above where a list's own toast sits.
-                VStack(alignment: usesPanel ? .trailing : .leading, spacing: HITSpacing.s) {
-                    if !usesPanel, let listToast = popouts.listToast {
+                VStack(alignment: style.cornerToasts ? .trailing : .leading, spacing: HITSpacing.s) {
+                    if !style.cornerToasts, let listToast = popouts.listToast {
                         CompletionToast(message: listToast.message, onUndo: listToast.undo) {
                             // The list sees its toast go and clears it (`ListCompletionToast`).
                             popouts.hideListToast(owner: listToast.owner)
@@ -66,8 +124,8 @@ struct PopoutHost: ViewModifier {
                         .transition(CompletionMotion.toastTransition(reduceMotion: reduceMotion))
                     }
                 }
-                .frame(maxWidth: usesPanel ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
-                .padding(usesPanel ? Self.panelToastInsets : Self.phoneToastInsets)
+                .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
+                .padding(style.cornerToasts ? Self.panelToastInsets : Self.phoneToastInsets)
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -75,10 +133,12 @@ struct PopoutHost: ViewModifier {
                 }
             }
             .overlay {
-                if usesPanel, let task = popouts.task {
-                    PanelBackdrop(onDismiss: { popouts.closeTask() }) {
+                if style.editor == .panel, let task = popouts.task {
+                    // A click on the backdrop with typing asks Discard first, as × does (session 41's report).
+                    PanelBackdrop(onDismiss: { if !editorGuard.attempt() { popouts.closeTask() } }) {
                         TaskPopout(task: task)
                             .id(task.id)
+                            .environment(\.panelDismissGuard, editorGuard)
                             .panelChrome()
                     }
                     .transition(.opacity)
@@ -92,7 +152,7 @@ struct PopoutHost: ViewModifier {
             // new Mac window if its own window was closed.
             .onAppear { popouts.reopenStoredQuickAdd() }
             .onDisappear { popouts.windowClosed() }
-            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: usesPanel && popouts.state.isTaskOpen)
+            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: style.editor == .panel && popouts.state.isTaskOpen)
             // A task deleted elsewhere (another device, window or a script) closes its popout, panel or
             // sheet: the query for it empties as the deletion reaches this context, and every finished
             // import checks again.
@@ -157,10 +217,15 @@ struct PopoutHost: ViewModifier {
         #endif
     }
 
-    /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead.
+    /// iPhone: the task on show as the sheet's item; nil on the Mac, where the panel draws it instead,
+    /// and on the Duo's inner display, where its column does. Unfolding with the sheet up dismisses the
+    /// sheet without closing the task, and the column shows it; folding brings the sheet back up. The
+    /// setter SwiftUI calls as that sheet goes can be one an earlier body made, with the phone's style
+    /// captured in it, so it asks `latestStyle` (it closed the task on unfolding before it did).
     private var sheetTask: Binding<TaskItem?> {
-        Binding<TaskItem?>(get: { usesPanel ? nil : popouts.task },
-                           set: { if $0 == nil, !usesPanel { popouts.closeTask() } })
+        let latest = latestStyle
+        return Binding<TaskItem?>(get: { (latest.style ?? style).editor == .sheet ? popouts.task : nil },
+                                  set: { if $0 == nil, (latest.style ?? style).editor == .sheet { popouts.closeTask() } })
     }
 
     // MARK: Quick add
@@ -187,15 +252,36 @@ struct PopoutHost: ViewModifier {
         }
     }
 
-    /// × or a tap on the backdrop. iPhone: with a title typed, the keyboard steps down and "Discard" is
-    /// offered above the card (George, build 11: a draft is never lost by accident); tapping anywhere
-    /// else brings the keyboard back. An empty card, and the Mac panel, just close.
+    /// What × (or Esc, or a tap on the backdrop) does to the quick-add card.
+    enum CloseStep: Equatable {
+        /// Offer "Discard" above the card.
+        case askDiscard
+        /// Close (and with "Discard" already offered, drop the draft).
+        case close
+        /// The same press that just offered "Discard": nothing.
+        case ignore
+    }
+
+    /// George's rule (build 11, and for the Mac and iPad panel too since round 10): a card with content
+    /// is never closed by one tap; the first asks Discard, a second (× again, Esc again) closes.
+    static func closeStep(hasContent: Bool, confirming: Bool, sinceOffered: TimeInterval) -> CloseStep {
+        if !confirming { return hasContent ? .askDiscard : .close }
+        return sinceOffered < 0.3 ? .ignore : .close
+    }
+
+    /// × or a tap on the backdrop. With a title typed, "Discard" is offered above the card (iPhone: the
+    /// keyboard steps down) and tapping anywhere else keeps editing; an empty card just closes.
     private func requestClose() {
-        if !usesPanel, quickAddHasContent, !confirmingDiscard {
+        switch Self.closeStep(hasContent: quickAddHasContent, confirming: confirmingDiscard,
+                              sinceOffered: Date.now.timeIntervalSince(discardOfferedAt)) {
+        case .askDiscard:
+            discardOfferedAt = .now
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
-            return
+        case .close:
+            if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
+        case .ignore:
+            break
         }
-        if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
     }
 
     private func resumeDraft() {
@@ -204,7 +290,7 @@ struct PopoutHost: ViewModifier {
 
     private func discardDraft() {
         popouts.discardQuickAddDraft()
-        retireQuickAdd()
+        if usesPanel { popouts.closeQuickAdd() } else { retireQuickAdd() }
     }
 
     @ViewBuilder
@@ -222,8 +308,24 @@ struct PopoutHost: ViewModifier {
             // view, whose text then outlived the close and came back at the next launch.
             .id(cardID)
         if usesPanel {
-            PanelBackdrop(onDismiss: { popouts.closeQuickAdd() }) {
-                card.panelChrome()
+            PanelBackdrop(onDismiss: { if confirmingDiscard { resumeDraft() } else { requestClose() } }) {
+                VStack(spacing: 0) {
+                    // The iPhone card's bubble, hanging above the panel's top edge from a zero-height
+                    // anchor, so the panel itself doesn't move.
+                    Color.clear
+                        .frame(height: 0)
+                        .overlay(alignment: .bottom) {
+                            if confirmingDiscard {
+                                DiscardBubble(action: discardDraft)
+                                    .padding(.bottom, 10)
+                                    .fixedSize()
+                                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
+                            }
+                        }
+                    card
+                        .panelChrome()
+                        .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
+                }
             }
             .transition(.opacity)
         } else {
@@ -250,6 +352,7 @@ struct PopoutHost: ViewModifier {
                             // A tap on the card itself also means "keep editing".
                             .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                     }
+                    .frame(maxWidth: style.ovalMaxWidth)
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset + aboveKeyboard)
                     .opacity(closing ? 0 : 1)
@@ -447,6 +550,53 @@ struct DiscardBubble: View {
         .shadow(color: .black.opacity(0.35), radius: 14, y: 6)
         .accessibilityLabel("Discard draft")
         .accessibilityIdentifier("quickAddDiscard")
+    }
+}
+
+// MARK: - The editor panel's backdrop
+
+/// What a click on the dimmed backdrop around the editor panel (Mac, iPad) should do, as the editor says
+/// through `panelDismissGuard`: with typing it asks Discard (`onAttempt`), else the panel closes. A
+/// reference the host keeps, so the editor's latest word is read at click time.
+final class PanelDismissGuard {
+    var isActive = false
+    var onAttempt: () -> Void = {}
+
+    /// A click on the backdrop: true if the editor took it (it is asking Discard), false to close.
+    @discardableResult
+    func attempt() -> Bool {
+        guard isActive else { return false }
+        onAttempt()
+        return true
+    }
+}
+
+extension EnvironmentValues {
+    /// Set by `PopoutHost` on the editor panel; nil elsewhere (sheet, Duo column, tests).
+    @Entry var panelDismissGuard: PanelDismissGuard?
+}
+
+extension View {
+    /// The editor panel (Mac, iPad): while `isActive` (there is typing to lose) a click on the dimmed
+    /// backdrop runs `onAttempt` (the editor asks Discard) instead of closing. The panel's twin of
+    /// `sheetSwipeGuard`. Apply inside the editor.
+    func panelDismissGuard(isActive: Bool, onAttempt: @escaping () -> Void) -> some View {
+        modifier(PanelDismissGuardReader(isActive: isActive, onAttempt: onAttempt))
+    }
+}
+
+private struct PanelDismissGuardReader: ViewModifier {
+    let isActive: Bool
+    let onAttempt: () -> Void
+    @Environment(\.panelDismissGuard) private var dismissGuard
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isActive, initial: true) { _, active in
+                dismissGuard?.isActive = active
+                dismissGuard?.onAttempt = onAttempt
+            }
+            .onDisappear { dismissGuard?.isActive = false }
     }
 }
 
