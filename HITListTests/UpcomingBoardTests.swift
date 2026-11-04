@@ -251,5 +251,68 @@ final class UpcomingBoardTests: XCTestCase {
         }
         XCTAssertGreaterThan(differing, 40, "the columns drew")
     }
+
+    /// Brief 39: today's column with its inline add card open, empty and then with "Call Sam p1 3pm" typed
+    /// (the card reads its stored draft back, as after a relaunch), rendered offscreen to PNGs for a person to
+    /// look at. Checks the card drew inside the column with its own draft.
+    func testTheInlineCardRendersInItsColumn() throws {
+        for t in [("Water the plants", day(0)), ("Standup", day(0, 9, 30)), ("Call Mom", day(1, 18, 30))] {
+            context.insert(TaskItem(title: t.0, dueDate: t.1, hasDueTime: t.1 != cal.startOfDay(for: t.1)))
+        }
+        try context.save()
+        let entries = try allTasks().map { UpcomingView.Entry(task: $0, filterDueDate: $0.dueDate, filterIsCompleted: $0.isCompleted) }
+        let board = UpcomingBoardModel(items: entries, window: UpcomingWindow(), now: now, showOverdue: false, calendar: cal)
+
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAdd-\(UUID().uuidString)"))
+        for (name, text) in [("board-inline-empty", ""), ("board-inline-typed", "Call Sam p1 3pm")] {
+            let popouts = PopoutController(draftDefaults: defaults)
+            popouts.openQuickAdd(.day(today), placement: .inline(BoardInlineAdd.key(for: today, calendar: cal)))
+            let card = try XCTUnwrap(popouts.state.quickAdd?.id)
+            if !text.isEmpty {
+                QuickAddDraftStore.save(QuickAddDraft(context: .day(today), text: text), card: card, to: defaults)
+            }
+            let size = CGSize(width: 900, height: 520)
+            let root = UpcomingBoard(board: board, window: .constant(UpcomingWindow()), now: now)
+                .frame(width: size.width, height: size.height)
+                .environment(popouts)
+                .modelContainer(container)
+                .font(HITType.body)
+                .preferredColorScheme(.dark)
+            let window = NSWindow(contentRect: NSRect(origin: CGPoint(x: -4000, y: -4000), size: size), styleMask: [.titled],
+                                  backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.appearance = NSAppearance(named: .darkAqua)
+            let host = NSHostingView(rootView: root)
+            host.frame = NSRect(origin: .zero, size: size)
+            window.contentView = host
+            window.makeKeyAndOrderFront(nil)
+            defer { window.orderOut(nil); window.close() }
+            let deadline = Date().addingTimeInterval(1.0)
+            while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+            host.layoutSubtreeIfNeeded()
+
+            let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: rep)
+            let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+            let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(name).png")
+            try png.write(to: url)
+            print("UPCOMING_BOARD_PNG \(url.path)")
+            let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+
+            func find(_ view: NSView) -> NSTextView? {
+                if let text = view as? NSTextView { return text }
+                for sub in view.subviews { if let found = find(sub) { return found } }
+                return nil
+            }
+            let field = try XCTUnwrap(find(host), "the card's title field is in the column")
+            let frame = field.convert(field.bounds, to: host)
+            XCTAssertLessThan(frame.width, UpcomingBoard.cardWidth, "\(name): inside its column")
+            XCTAssertEqual(field.string, text, "\(name): the card's own draft")
+            QuickAddDraftStore.clear(card: card, from: defaults)
+        }
+    }
     #endif
 }

@@ -13,7 +13,9 @@ import HITListCore
 /// into the text. Return adds the task and keeps the card open, empty, for the next one; Escape, ×, or
 /// a tap on the dimmed backdrop closes it.
 struct QuickAddPopout: View {
-    enum Style { case floating, inline }
+    /// `compact`: the Upcoming board's card inside a 270 pt day column (`CompactQuickAddCard`, brief 39):
+    /// less padding, the chips wrapping instead of scrolling, and a × on the day chip.
+    enum Style { case floating, inline, compact }
 
     /// The iPhone oval's corner radius.
     static let cardRadius: CGFloat = 28
@@ -124,7 +126,7 @@ struct QuickAddPopout: View {
             }
             footer(canAdd: !result.title.isEmpty)
         }
-        .padding(Self.padding)
+        .padding(style == .compact ? CompactQuickAddCard.padding : Self.padding)
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: draft.extras)
@@ -178,25 +180,36 @@ struct QuickAddPopout: View {
         titleFocused = true
     }
 
-    /// One slim row that scrolls sideways, edge to edge inside the card.
+    /// One slim row that scrolls sideways, edge to edge inside the card; in the board's compact card the
+    /// chips wrap onto as many lines as the column needs instead.
+    @ViewBuilder
     private func optionBar(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                plusMenu
-                dateChip(chips, parser: parser)
-                priorityChip(chips, parser: parser)
-                reminderChip(chips, parser: parser)
-                groupChip(chips, parser: parser)
-                if !chips.labelNames.isEmpty || draft.shows(.labels) { labelsChip(chips, parser: parser) }
-                if chips.deadline != nil || draft.shows(.deadline) { deadlineChip(chips) }
-                if chips.recurrence != nil || draft.shows(.repeating) { repeatChip(chips, parser: parser) }
+        if style == .compact {
+            HITFlowLayout(spacing: 6) { optionChips(chips, parser: parser) }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("quickAddOptionBar")
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) { optionChips(chips, parser: parser) }
+                    .padding(.horizontal, Self.padding)
+                    .padding(.vertical, 1)
             }
-            .padding(.horizontal, Self.padding)
-            .padding(.vertical, 1)
+            .padding(.horizontal, -Self.padding)
+            .frame(height: HITChip.Size.compact.height + 2)
+            .accessibilityIdentifier("quickAddOptionBar")
         }
-        .padding(.horizontal, -Self.padding)
-        .frame(height: HITChip.Size.compact.height + 2)
-        .accessibilityIdentifier("quickAddOptionBar")
+    }
+
+    @ViewBuilder
+    private func optionChips(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
+        plusMenu
+        dateChip(chips, parser: parser)
+        priorityChip(chips, parser: parser)
+        reminderChip(chips, parser: parser)
+        groupChip(chips, parser: parser)
+        if !chips.labelNames.isEmpty || draft.shows(.labels) { labelsChip(chips, parser: parser) }
+        if chips.deadline != nil || draft.shows(.deadline) { deadlineChip(chips) }
+        if chips.recurrence != nil || draft.shows(.repeating) { repeatChip(chips, parser: parser) }
     }
 
     /// "+": the options that have no chip until you ask for them.
@@ -253,7 +266,10 @@ struct QuickAddPopout: View {
         return HITChip(chips.dueDate.map { DueFormatter.text(for: $0, hasTime: false, now: now) } ?? "Date",
                        systemImage: chips.recurrence == nil ? "calendar" : "repeat",
                        tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
-                       isSelected: chips.dueDate != nil, size: .compact, action: { openChip = .date })
+                       isSelected: chips.dueDate != nil, size: .compact,
+                       // The board's card shows its day with a × (no date: the task goes undated).
+                       onDismiss: style == .compact && chips.dueDate != nil ? { draft.setDate(nil, parser) } : nil,
+                       action: { openChip = .date })
             .pickerAnchor(.date, isPresented: chipBinding(.date)) {
                 DatePickerCard(selected: chips.dueDate, now: now, onPick: { day in
                     draft.setDate(day, parser)
