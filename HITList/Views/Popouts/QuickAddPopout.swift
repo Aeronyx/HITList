@@ -109,7 +109,12 @@ struct QuickAddPopout: View {
             if draft.shows(.location) {
                 HITField("Location", text: $draft.locationName, systemImage: "mappin.and.ellipse", clearable: true)
                     .focused($locationFocused)
+                    // Only the pill adds on the iPhone (brief 36): Return goes back to the title.
+                    #if os(macOS)
                     .onSubmit(save)
+                    #else
+                    .onSubmit { titleFocused = true }
+                    #endif
                     .transition(.opacity)
                     .accessibilityIdentifier("quickAddLocation")
             }
