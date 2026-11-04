@@ -74,6 +74,8 @@ struct PopoutHost: ViewModifier {
         /// Undo toasts at the bottom-trailing corner, lists drawing their own (else beside the iPhone's
         /// "+", the host drawing the lists' too).
         var cornerToasts: Bool { self != .phone }
+        /// The oval card's widest: the phone's full width, the panel's on the Duo's big screen.
+        var ovalMaxWidth: CGFloat? { self == .duo ? PanelBackdrop<EmptyView>.width : nil }
     }
 
     private var style: Style {
@@ -306,6 +308,7 @@ struct PopoutHost: ViewModifier {
                             // A tap on the card itself also means "keep editing".
                             .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                     }
+                    .frame(maxWidth: style.ovalMaxWidth)
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset + aboveKeyboard)
                     .opacity(closing ? 0 : 1)

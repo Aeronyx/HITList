@@ -18,7 +18,7 @@ extension SidebarItem {
 }
 
 /// Mac and iPad: sidebar + list, Todoist style, no detail column. iPhone (compact width): the four-tab
-/// shell (`MobileShell`: Inbox, Today, Flipboard, Upcoming; Browse behind the top-right magnifying glass) with the oval "+". Opening a task or adding one
+/// shell (`MobileShell`: Inbox, Today, Upcoming, Flipboard; Browse behind the top-right magnifying glass) with the oval "+". Opening a task or adding one
 /// pops a card out over everything, the tab bar included (`PopoutHost`). The iPhone Duo's inner display
 /// (brief 45): the sidebar layout with the editor in a column beside the list (`AppShell.duo`).
 ///
