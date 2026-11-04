@@ -470,9 +470,7 @@ struct UpcomingView: View {
     }
 
     private func rescheduleAll(_ tasks: [TaskItem], to day: Date) {
-        withAnimation(reduceMotion ? nil : .snappy) {
-            for task in tasks { TaskActions.reschedule(task, to: day, in: context) }
-        }
+        withAnimation(reduceMotion ? nil : .snappy) { TaskRescheduling.reschedule(tasks, to: day, calendar: calendar, in: context) }
         rescheduleNotifications()
     }
 

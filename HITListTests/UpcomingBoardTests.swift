@@ -4,7 +4,8 @@ import SwiftData
 import HITListCore
 @testable import HITList
 
-/// The board's actions on real tasks (brief 38): dropping a card on a day.
+/// The board's actions on real tasks (brief 38): dropping a card on a day, the Overdue column's
+/// Reschedule.
 /// `TaskActions` uses `Calendar.current`, so dates here are relative to today in the current calendar.
 @MainActor
 final class UpcomingBoardTests: XCTestCase {
@@ -106,5 +107,23 @@ final class UpcomingBoardTests: XCTestCase {
         XCTAssertEqual(board.columns.first?.id, .overdue)
         XCTAssertFalse(board.columns[0].acceptsDrops)
         XCTAssertTrue(board.columns.dropFirst().allSatisfy(\.acceptsDrops))
+    }
+
+    // MARK: - Overdue Reschedule
+
+    func testRescheduleMovesEveryOverdueTaskKeepingItsTime() throws {
+        let a = try task("a", due: day(-1, 18, 0), time: true)
+        let b = try task("b", due: day(-6))
+        let later = try task("later", due: day(5))
+        TaskRescheduling.reschedule([a, b], to: day(1), in: context)
+        XCTAssertEqual(a.dueDate, day(1, 18, 0))
+        XCTAssertEqual(b.dueDate, day(1))
+        XCTAssertEqual(later.dueDate, day(5), "only the tasks passed move")
+    }
+
+    func testRescheduleSkipsCompletedTasks() throws {
+        let done = try task("done", due: day(-2), done: true)
+        TaskRescheduling.reschedule([done], to: day(0), in: context)
+        XCTAssertEqual(done.dueDate, day(-2))
     }
 }
