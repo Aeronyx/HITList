@@ -13,10 +13,11 @@ import HITListCore
 /// - A sideways row of pills: Description, Priority, Reminder, Labels, Repeat, Deadline, Location,
 ///   outlined until set, filled with their value once set.
 /// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
-/// - A footer with when it was created and **Confirm**, the quick-add card's filled pill: one tap saves
+/// - A footer with **Confirm** (`ConfirmPill`, the quick-add card's pill; when it was created is in "…"): one tap saves
 ///   everything typed (title, description, the sub-task field, a rename) and closes. × and Esc close
-///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. Return in the
-///   title confirms; ⌘Return confirms on the Mac.
+///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. On the Mac
+///   Return in the title and ⌘Return confirm; on the iPhone only the pill does (brief 36), and a swipe
+///   down with typing asks Discard first.
 struct TaskPopout: View {
     @Bindable var task: TaskItem
 
@@ -38,6 +39,8 @@ struct TaskPopout: View {
     @State private var pops = 0
     /// Confirm (or Return) ran: a second one in the same instant does nothing.
     @State private var isClosing = false
+    /// iPhone: a swipe down met typing Confirm would save; "Discard" shows above the footer (brief 36).
+    @State private var confirmingDiscard = false
     /// The scrolling middle's height, so the panel is as tall as its content (up to a cap).
     @State private var bodyHeight: CGFloat = 0
     /// The task's id, read once while it certainly exists: the popout may close because the task was
@@ -65,26 +68,38 @@ struct TaskPopout: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            ScrollView {
-                VStack(alignment: .leading, spacing: HITSpacing.l) {
-                    titleCard
-                    pillRow
-                    if task.recurrence != nil, !task.isSubtask { flipboardRow }
-                    if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+            VStack(spacing: 0) {
+                topBar
+                ScrollView {
+                    VStack(alignment: .leading, spacing: HITSpacing.l) {
+                        titleCard
+                        pillRow
+                        if task.recurrence != nil, !task.isSubtask { flipboardRow }
+                        if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+                    }
+                    .padding(.horizontal, HITSpacing.l)
+                    .padding(.top, HITSpacing.xs)
+                    .padding(.bottom, HITSpacing.l)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
                 }
-                .padding(.horizontal, HITSpacing.l)
-                .padding(.top, HITSpacing.xs)
-                .padding(.bottom, HITSpacing.l)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+                .frame(idealHeight: bodyHeight)
+                .frame(maxHeight: isPanel ? EditorMetrics.panelBodyMaxHeight : .infinity)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
-            .frame(idealHeight: bodyHeight)
-            .frame(maxHeight: isPanel ? EditorMetrics.panelBodyMaxHeight : .infinity)
+            .overlay(alignment: .bottom) { if confirmingDiscard { discardLayer } }
             footer
         }
         .background(Theme.background)
+        #if os(iOS)
+        // A swipe down (or a tap above the sheet) with typing asks Discard; with none it just closes.
+        .sheetSwipeGuard(isActive: !isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        }
+        .onChange(of: draft) { _, _ in
+            if confirmingDiscard, !draft.asksBeforeSwipeClose(for: task) { confirmingDiscard = false }
+        }
+        #endif
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -137,6 +152,12 @@ struct TaskPopout: View {
             .disabled(task.isCompleted)
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
+            // When it was made (and done): the footer's old line, here since brief 36.
+            Section {
+                ForEach(Self.dateLines(for: task), id: \.self) { line in
+                    Button(line) {}.disabled(true)
+                }
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 17, weight: .semibold))
@@ -151,6 +172,15 @@ struct TaskPopout: View {
         .accessibilityLabel("More")
         .accessibilityIdentifier("popoutMore")
         .help("Duplicate, move or delete")
+    }
+
+    /// The "…" menu's last lines: when the task was created, and completed if it is.
+    static func dateLines(for task: TaskItem) -> [String] {
+        var lines = ["Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))"]
+        if let done = task.completedAt {
+            lines.append("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
+        }
+        return lines
     }
 
     /// Menu titles carry their Mac shortcut, since `PopoutHost` handles the keys rather than the menu.
@@ -193,13 +223,17 @@ struct TaskPopout: View {
                         .lineLimit(1...6)
                         .frame(minHeight: EditorMetrics.titleLine, alignment: .leading)
                         .focused($titleFocused)
+                        #if os(macOS)
                         .onSubmit(confirm)
-                        .onChange(of: draft.title) { _, title in
-                            // Return confirms (George: one tap, or one key) instead of adding a line.
-                            if title.contains(where: \.isNewline) {
-                                draft.title = TaskLimits.singleLine(title)
-                                confirm()
-                            }
+                        #else
+                        // A plain "return" key that does nothing: only Confirm saves (brief 36).
+                        .submitLabel(.return)
+                        #endif
+                        .onChange(of: draft.title) { old, title in
+                            // Return never adds a line: the Mac confirms, the iPhone drops it (`TitleReturn`).
+                            guard let outcome = TitleReturn.resolve(old: old, new: title) else { return }
+                            draft.title = outcome.text
+                            if outcome.submits { confirm() }
                         }
                         .accessibilityIdentifier("editorTitle")
                     if showsNotes {
@@ -425,24 +459,13 @@ struct TaskPopout: View {
 
     // MARK: Footer
 
+    /// Just Confirm, on the editor's ground: no divider and no "Created" line (brief 36; the dates are in
+    /// the "…" menu).
     private var footer: some View {
         HStack(spacing: HITSpacing.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Created \(task.createdAt.formatted(date: .abbreviated, time: .shortened))")
-                if let done = task.completedAt {
-                    Text("Completed \(done.formatted(date: .abbreviated, time: .shortened))")
-                }
-            }
-            .font(HITType.caption)
-            .foregroundStyle(Theme.secondaryText.opacity(0.8))
-            .lineLimit(1)
             Spacer(minLength: HITSpacing.s)
             // The quick-add card's send pill (George: "ideally the same as the Confirm add task button").
-            Button(action: confirm) {
-                Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                    .frame(width: 24)
-            }
-            .buttonStyle(HITButtonStyle(.primary, shape: .pill))
+            ConfirmPill(action: confirm)
             .keyboardShortcut(.return, modifiers: .command)
             .accessibilityLabel("Confirm")
             .accessibilityIdentifier("editorConfirm")
@@ -450,7 +473,33 @@ struct TaskPopout: View {
         }
         .padding(.horizontal, HITSpacing.l)
         .padding(.vertical, HITSpacing.m)
-        .overlay(alignment: .top) { Rectangle().fill(Theme.separator.opacity(0.6)).frame(height: 1) }
+    }
+
+    // MARK: Discard (iPhone, a swipe down with typing)
+
+    /// Over the editor above the footer: a dimmed layer that means "keep editing" when tapped, and the
+    /// quick-add card's Discard bubble pointing at the footer, whose Confirm still saves.
+    private var discardLayer: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: keepEditing)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Keep editing")
+            DiscardBubble(action: discardTyping)
+                .padding(.bottom, HITSpacing.m)
+        }
+        .transition(.opacity)
+    }
+
+    private func keepEditing() {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+    }
+
+    /// Drops the typing and closes, as × does.
+    private func discardTyping() {
+        confirmingDiscard = false
+        close()
     }
 
     // MARK: Confirm and close

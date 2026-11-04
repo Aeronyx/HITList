@@ -29,6 +29,11 @@ enum EditorMetrics {
     static let subtaskLine: CGFloat = 24
     static let rowHeight: CGFloat = 48
     static let panelBodyMaxHeight: CGFloat = 560
+    /// The iPhone sheet's opening height (brief 36; `EditorOpeningDetent`): the top bar, the title card, the
+    /// pills, the Sub-tasks header and a card with two sub-tasks and "Add Sub-task", then at least 24 pt of
+    /// air above the Confirm pill and the footer. Measured on the iPhone 17 simulator: the old medium
+    /// detent was 451 pt and showed only the first sub-task above the footer.
+    static let sheetOpeningHeight: CGFloat = 550
     #endif
     static var textLeading: CGFloat { inset + iconColumn + gap }
 }
