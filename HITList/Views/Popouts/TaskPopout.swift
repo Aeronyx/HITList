@@ -438,11 +438,7 @@ struct TaskPopout: View {
             .lineLimit(1)
             Spacer(minLength: HITSpacing.s)
             // The quick-add card's send pill (George: "ideally the same as the Confirm add task button").
-            Button(action: confirm) {
-                Image(systemName: "arrow.up").font(.system(size: 15, weight: .bold))
-                    .frame(width: 24)
-            }
-            .buttonStyle(HITButtonStyle(.primary, shape: .pill))
+            ConfirmPill(action: confirm)
             .keyboardShortcut(.return, modifiers: .command)
             .accessibilityLabel("Confirm")
             .accessibilityIdentifier("editorConfirm")
