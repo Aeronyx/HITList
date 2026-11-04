@@ -6,7 +6,8 @@ import HITListCore
 /// side, each about 270 pt wide and scrolling on its own, the row of columns scrolling sideways.
 ///
 /// It only draws: `UpcomingView` owns the tasks, the window, the completion animation and its toast, and
-/// passes what a click, a drop or an add should do. Kept that way so a test can render it offscreen.
+/// passes what a click or a drop should do. Kept that way so a test can render it offscreen. The one thing
+/// it opens itself is a day's inline add card (`CompactQuickAddCard`, brief 39), through the popouts.
 struct UpcomingBoard: View {
     typealias Entry = UpcomingView.Entry
 
@@ -20,18 +21,27 @@ struct UpcomingBoard: View {
     var onOpen: (TaskItem) -> Void = { _ in }
     /// Task ids dropped on a day; true if anything moved.
     var onDrop: ([String], Date) -> Bool = { _, _ in false }
-    /// The day column's "+ Add task".
+    /// Not called since brief 39: a day's "+ Add task" opens the column's own inline card
+    /// (`CompactQuickAddCard`) through the popouts. Kept so `UpcomingView`'s call compiles; it can go with it.
     var onAdd: (Date) -> Void = { _ in }
     /// The Overdue column's Reschedule: every overdue task to the picked day.
     var onRescheduleOverdue: (Date) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(PopoutController.self) private var popouts
     @State private var dropTarget: Date?
+    /// The open inline card has something typed (it says so through `onDraftChange`).
+    @State private var inlineHasContent = false
+    /// "Discard" is showing above the open inline card.
+    @State private var confirmingDiscard = false
     @State private var pickingMonth = false
     @State private var reschedulingOverdue = false
 
     static let columnWidth: CGFloat = 270
     static let columnSpacing: CGFloat = 14
+    /// A card inside a column (a task, or the inline add card): the column less its 4 pt sides and the
+    /// cards' 2 pt inset.
+    static let cardWidth: CGFloat = columnWidth - 2 * 4 - 2 * 2
 
     private var today: Date { calendar.startOfDay(for: now) }
 
@@ -41,6 +51,15 @@ struct UpcomingBoard: View {
             columns
         }
         .background(Theme.background)
+        .onChange(of: openInlineKey) { _, _ in
+            inlineHasContent = false
+            confirmingDiscard = false
+        }
+        // Leaving Upcoming with an empty card open puts it away; one with typing stays (stored, as every
+        // open card is) and is there again when the board comes back.
+        .onDisappear {
+            if openInlineKey != nil, !inlineHasContent { popouts.closeQuickAdd() }
+        }
         // The month calendar and the Reschedule card are the popouts' picker cards (drawn inside the window
         // on the Mac, popovers on iPad).
         .pickerOverlay()
@@ -130,6 +149,58 @@ struct UpcomingBoard: View {
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .scrollIndicators(.automatic)
+        // While an inline card is open, a click on the board outside every card and button is a click away.
+        // The card, the task cards and the buttons take their own clicks first.
+        .gesture(TapGesture().onEnded { clickAway() }, including: openInlineKey == nil ? .subviews : .all)
+    }
+
+    // MARK: - Inline add (brief 39)
+
+    /// The board card that is open, if the open quick add is one of the board's.
+    private var openInlineKey: String? { BoardInlineAdd.openKey(in: popouts.state) }
+
+    /// A click somewhere else on the board while a card is open. An empty card closes and `then` runs;
+    /// with typing, "Discard" shows and nothing else happens; with "Discard" showing, back to typing.
+    private func clickAway(then action: (() -> Void)? = nil) {
+        guard let key = openInlineKey else { action?(); return }
+        switch BoardInlineAdd.clickAway(hasContent: inlineHasContent, confirmingDiscard: confirmingDiscard) {
+        case .close:
+            popouts.closeInline(key)
+            action?()
+        case .askDiscard:
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .keepEditing:
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+        }
+    }
+
+    private func openInline(_ context: QuickAddContext, day: Date) {
+        let key = BoardInlineAdd.key(for: day, calendar: calendar)
+        guard openInlineKey != key else { return }
+        clickAway { popouts.openQuickAdd(context, placement: .inline(key)) }
+    }
+
+    @ViewBuilder
+    private func addSlot(_ context: QuickAddContext, day: Date) -> some View {
+        let key = BoardInlineAdd.key(for: day, calendar: calendar)
+        if popouts.state.isInlineOpen(key) {
+            CompactQuickAddCard(context: context, isConfirmingDiscard: confirmingDiscard,
+                                onClose: { popouts.closeInline(key) },
+                                onSaved: { popouts.didSave() },
+                                onDraftChange: { inlineHasContent = $0 },
+                                onDiscard: {
+                                    popouts.discardQuickAddDraft()
+                                    popouts.closeInline(key)
+                                },
+                                onKeepEditing: {
+                                    withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+                                })
+                // One view per card, so a card opened again starts from its own (empty) draft.
+                .id(popouts.state.quickAdd?.id)
+                .transition(.opacity)
+        } else {
+            AddTaskCardRow { openInline(context, day: day) }
+        }
     }
 
     private func columnView(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
@@ -137,19 +208,29 @@ struct UpcomingBoard: View {
         return VStack(alignment: .leading, spacing: 0) {
             columnHeader(column)
             Rectangle().fill(targeted ? Theme.accent : Theme.separator).frame(height: targeted ? 2 : 1)
-            ScrollView(.vertical) {
-                LazyVStack(alignment: .leading, spacing: HITSpacing.s) {
-                    ForEach(column.items) { entry in
-                        card(entry, inOverdue: column.day == nil)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    LazyVStack(alignment: .leading, spacing: HITSpacing.s) {
+                        ForEach(column.items) { entry in
+                            card(entry, inOverdue: column.day == nil)
+                        }
+                        if let day = column.day, let context = column.addContext {
+                            addSlot(context, day: day)
+                                .id(Self.addSlotID)
+                        }
                     }
-                    if let day = column.day {
-                        AddTaskCardRow { onAdd(day) }
+                    .padding(.vertical, HITSpacing.s)
+                    .padding(.horizontal, 2)
+                }
+                .scrollIndicators(.never)
+                // The column scrolls so its card is in view when it opens and after each task it adds.
+                .onChange(of: inlineCardRevision(for: column)) { _, revision in
+                    guard revision != nil else { return }
+                    Task { @MainActor in
+                        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(Self.addSlotID, anchor: .bottom) }
                     }
                 }
-                .padding(.vertical, HITSpacing.s)
-                .padding(.horizontal, 2)
             }
-            .scrollIndicators(.never)
         }
         .padding(.horizontal, 4)
         .background {
@@ -163,6 +244,16 @@ struct UpcomingBoard: View {
         .contentShape(Rectangle())
         .modifier(DayDropTarget(day: column.day, today: today, dropTarget: $dropTarget,
                                 reduceMotion: reduceMotion, onDrop: onDrop))
+    }
+
+    /// The add slot's scroll id inside its column.
+    private static let addSlotID = "boardAddSlot"
+
+    /// Changes when this column's card opens and when it adds a task; nil while it has none.
+    private func inlineCardRevision(for column: UpcomingBoardModel<Entry>.Column) -> Int? {
+        guard let day = column.day, let quickAdd = popouts.state.quickAdd,
+              quickAdd.placement == .inline(BoardInlineAdd.key(for: day, calendar: calendar)) else { return nil }
+        return quickAdd.id.hashValue &+ quickAdd.savedCount
     }
 
     private func columnHeader(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
@@ -211,7 +302,8 @@ struct UpcomingBoard: View {
                     onToggleCompletion: { onToggleCompletion(task) })
         }
         .opacity(phase == .animating ? 0 : 1)
-        .onTapGesture { onOpen(task) }
+        // With a card open, a click on a task is a click away first.
+        .onTapGesture { clickAway { onOpen(task) } }
         .draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
         .accessibilityAction(named: "Open") { onOpen(task) }
     }
