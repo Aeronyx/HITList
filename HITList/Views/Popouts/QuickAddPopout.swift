@@ -138,11 +138,11 @@ struct QuickAddPopout: View {
                 draft = stored
             }
             titleFocused = true
-            #if os(macOS)
-            claimTitleFocus()
-            #endif
             onDraftChange(draft.hasContent)
         }
+        #if os(macOS)
+        .task(claimTitleFocus)
+        #endif
         .onChange(of: isClosing) { _, closing in
             if closing { titleFocused = false; notesFocused = false; locationFocused = false; endLineEditing() }
         }
@@ -178,12 +178,17 @@ struct QuickAddPopout: View {
     /// card up, a board column coming back into view) and can be lost to the click that opened it, so the
     /// card asks again over the next half second until the title has it, unless something else in the card
     /// was picked meanwhile.
-    private func claimTitleFocus() {
-        Task { @MainActor in
+    ///
+    /// The task holds only the focus and state bindings, never the card itself: a card holding its own
+    /// queries past its model container (a render that never disappears, in tests) trapped in a later save.
+    private var claimTitleFocus: @Sendable () async -> Void {
+        let title = $titleFocused, notes = $notesFocused, location = $locationFocused
+        let chip = $openChip, line = $focusedLine
+        return { @MainActor in
             for delay in [0, 30, 80, 150, 250] {
-                try? await Task.sleep(for: .milliseconds(delay))
-                guard !isClosing, !isPaused, openChip == nil, !notesFocused, !locationFocused, focusedLine == nil else { return }
-                if !titleFocused { titleFocused = true }
+                guard (try? await Task.sleep(for: .milliseconds(delay))) != nil else { return }
+                guard chip.wrappedValue == nil, !notes.wrappedValue, !location.wrappedValue, line.wrappedValue == nil else { return }
+                if !title.wrappedValue { title.wrappedValue = true }
             }
         }
     }
