@@ -3,7 +3,12 @@ import SwiftData
 
 struct SidebarView: View {
     @Binding var selection: SidebarItem?
+    /// For the offscreen renders in `ProfileMenuTests`.
+    var profileMenuStartsOpen = false
     @Environment(\.modelContext) private var context
+    #if os(macOS)
+    @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
+    #endif
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
@@ -99,6 +104,9 @@ struct SidebarView: View {
                 sectionHeader("Labels") { creatingLabel = true }
             }
         }
+        // Who this is, at the top of the sidebar's own area (below the traffic lights and the sidebar
+        // toggle, which live in the window's toolbar): Todoist's account button (brief 40).
+        .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
         // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
         .navigationTitle("HITList")
         .scrollContentBackground(.hidden)
@@ -124,6 +132,42 @@ struct SidebarView: View {
         .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
         .sheet(isPresented: $creatingLabel) { LabelEditorView(label: nil).slateSheet() }
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
+    }
+
+    /// From the sidebar's leading edge to the account button's fill, the same as the Settings button at the
+    /// foot, so the avatar lines up with the gear.
+    static let profileInset: CGFloat = HITSpacing.s + 2
+
+    private var profileHeader: some View {
+        ProfileMenu(startsOpen: profileMenuStartsOpen, onAccountSettings: openAccountSettings, onSettings: openSettings)
+            .padding(.horizontal, Self.profileInset)
+            .padding(.top, ProfileButtonMetrics.top)
+            .padding(.bottom, HITSpacing.xs)
+            .background(Theme.surface)
+            .zIndex(1)
+    }
+
+    /// Mac: the Settings page straight at Account. iPad: the Settings sheet, whose first group is Account.
+    private func openAccountSettings() {
+        #if os(macOS)
+        if let settingsRouter {
+            settingsRouter.open(at: .account)
+        } else {
+            MacSettingsSection.save(.account)
+            selection = .settings
+        }
+        #else
+        showSettings = true
+        #endif
+    }
+
+    /// Mac: the Settings page at the section last shown. iPad: the Settings sheet.
+    private func openSettings() {
+        #if os(macOS)
+        if let settingsRouter { settingsRouter.open() } else { selection = .settings }
+        #else
+        showSettings = true
+        #endif
     }
 
     private var filtersSnapshot: [SavedFilter] {

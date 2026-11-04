@@ -7,6 +7,8 @@ import HITListCore
 /// glass at the top right (brief 35; the gear there opens Settings): a search field on top, then Groups
 /// (Inbox first, the default grey Group, then each Group in its colour with its open count), Labels and
 /// Filters, each header with its "+", then Completed and Settings (`lastRows`; the Flipboard is a tab).
+/// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens
+/// Settings, whose first group is Account.
 /// A row pushes its list on the same stack, where the tab bar and the "+" stay. Typing in the search field swaps the sections for
 /// matching tasks (titles and notes, completed ones too); a result opens the task popout.
 struct BrowseView: View {
@@ -47,6 +49,7 @@ struct BrowseView: View {
         .background(Theme.background)
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
+        .toolbar { profileItem }
         .screenChrome {
             Menu {
                 Button { creatingProject = true } label: { Label("New Group…", systemImage: "circle.fill") }
@@ -71,6 +74,26 @@ struct BrowseView: View {
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
     }
 
+    // MARK: - Profile
+
+    /// Top left, beside Back. Plain on iOS 26 (outside the toolbar's shared glass), like the sync bolt.
+    @ToolbarContentBuilder
+    private var profileItem: some ToolbarContent {
+        if #available(iOS 26, *) {
+            ToolbarItem(placement: .topBarLeading) { profileButton }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .topBarLeading) { profileButton }
+        }
+    }
+
+    private var profileButton: some View {
+        Button { showSettings = true } label: { BrowseProfileButton() }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens Settings")
+            .accessibilityIdentifier("browse-profile")
+    }
+
     // MARK: - Sections
 
     private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted && !$0.isSubtask } }
@@ -78,14 +101,6 @@ struct BrowseView: View {
     private var sections: some View {
         let open = openTasks
         return List {
-            // Who this is: a quiet row that opens Settings, whose first group is Account.
-            Section {
-                Button { showSettings = true } label: { BrowseProfileRow() }
-                    .buttonStyle(.plain)
-                    .slateRow()
-                    .accessibilityIdentifier("browse-profile")
-            }
-
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,
@@ -208,37 +223,77 @@ struct BrowseView: View {
     }
 }
 
-/// The top of Browse: the profile's avatar and name (`ProfileBadge`, session 34), or, before a name is
-/// set, the empty avatar and "Add your name". Tapping it opens Settings, where Account comes first.
-struct BrowseProfileRow: View {
+/// Browse's top left: the profile's avatar and name, small. A name too wide for the space beside Back
+/// shows its first word, then only the avatar; before a name is set, the empty avatar and "Add your name"
+/// (or "Add name" where that doesn't fit).
+struct BrowseProfileButton: View {
     @Query private var profiles: [Profile]
 
-    /// What the row says instead of a name; nil once there is one for `ProfileBadge` to show.
-    static func prompt(forName name: String?) -> String? {
-        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? "Add your name" : nil
+    static let avatarSize: CGFloat = 28
+    /// The name's room. The iOS 26 bar keeps the centre free for the inline title: on an iPhone 17 a leading
+    /// item whose text is wider than 80–94 pt pushes Browse's New and gear into a "…" overflow (measured
+    /// 2026-11-04), and an iPhone 16 is 9 pt narrower. 74 pt keeps both buttons on every current iPhone.
+    static let maxNameWidth: CGFloat = 74
+    /// Before a name is set, longest first.
+    static let prompts = [ProfileMenuModel.addNamePrompt, "Add name"]
+    static let font = HITType.subheadlineSemibold
+
+    enum Fit: Equatable {
+        case name(String)
+        case prompt(String)
+        case avatarOnly
+
+        var text: String? {
+            switch self {
+            case .name(let text), .prompt(let text): text
+            case .avatarOnly: nil
+            }
+        }
+
+        var isPrompt: Bool { if case .prompt = self { true } else { false } }
+    }
+
+    /// The whole name if it fits in `maxWidth`, else its first word, else nothing beside the avatar. Without a
+    /// name, the longest prompt that fits.
+    static func fit(name raw: String?, maxWidth: CGFloat, width: (String) -> CGFloat) -> Fit {
+        guard let name = ProfileMenuModel.displayName(raw) else {
+            return prompts.first { width($0) <= maxWidth }.map(Fit.prompt) ?? .avatarOnly
+        }
+        if width(name) <= maxWidth { return .name(name) }
+        if let first = name.split(whereSeparator: \.isWhitespace).first.map(String.init),
+           first != name, width(first) <= maxWidth {
+            return .name(first)
+        }
+        return .avatarOnly
+    }
+
+    /// The width of `text` in the button's font (Inter SemiBold at the subheadline size).
+    static func textWidth(_ text: String) -> CGFloat {
+        let size = UIFontMetrics(forTextStyle: .subheadline).scaledValue(for: 15)
+        let font = UIFont(name: HITFont.postScriptName(.semibold), size: size) ?? .systemFont(ofSize: size, weight: .semibold)
+        return ceil((text as NSString).size(withAttributes: [.font: font]).width)
     }
 
     var body: some View {
-        let profile = profiles.sorted(by: ProfileStore.precedes).first
+        // This iCloud account's profile; a record from another account is hidden (session 42).
+        let profile = ProfileStore.shown(profiles)
+        let fit = Self.fit(name: profile?.displayName, maxWidth: Self.maxNameWidth, width: Self.textWidth)
         HStack(spacing: HITSpacing.s) {
-            if let prompt = Self.prompt(forName: profile?.displayName) {
-                ProfileAvatarView(imageData: profile?.avatarData, name: "", size: 28)
-                Text(prompt)
-                    .font(HITType.callout)
-                    .foregroundStyle(Theme.secondaryText)
-            } else {
-                ProfileBadge()
+            ProfileAvatarView(imageData: profile?.avatarData, name: ProfileMenuModel.displayName(profile?.displayName) ?? "",
+                              size: Self.avatarSize)
+            if let text = fit.text {
+                Text(text)
+                    .font(Self.font)
+                    .foregroundStyle(fit.isPrompt ? Theme.secondaryText : HITColor.text)
+                    .lineLimit(1)
+                    .fixedSize()
             }
-            Spacer(minLength: HITSpacing.s)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Theme.secondaryText.opacity(0.6))
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, HITSpacing.xs)
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens Settings")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(ProfileMenuModel.accessibilityLabel(forName: profile?.displayName))
     }
 }
 
