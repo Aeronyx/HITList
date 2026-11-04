@@ -174,6 +174,32 @@ final class HighlightAreaTests: XCTestCase {
         XCTAssertNil(draft.chips(p).reminderOffsetMinutes)
     }
 
+    // MARK: The stored card
+
+    func testARestoredCardShowsTheSameBoxes() throws {
+        let suite = "HighlightAreaTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let p = parser()
+        let card = UUID()
+        for text in ["jan 6 zach fox in a month", "Call tomorrow or friday or jan 6 p1 p3", "test 2 p1 tom 4 !15mb"] {
+            var draft = QuickAddDraft(context: .inbox, text: text)
+            // One card as typed, one with its winning date switched off.
+            for disable in [false, true] {
+                if disable, let date = draft.parsed(p).tokens.last(where: { $0.kind == .date && !$0.isSuperseded }) {
+                    draft.disable(date)
+                }
+                QuickAddDraftStore.save(draft, card: card, to: defaults)
+                let restored = try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults))
+                XCTAssertEqual(restored.disabledTokens, draft.disabledTokens, text)
+                XCTAssertEqual(restored.parsed(p), draft.parsed(p), text)
+                XCTAssertEqual(restored.chips(p), draft.chips(p), text)
+                XCTAssertEqual(layout(restored.text, disabling: restored.disabledTokens).boxes,
+                               layout(draft.text, disabling: draft.disabledTokens).boxes, text)
+            }
+        }
+    }
+
     // MARK: Rendering
 
     private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }
