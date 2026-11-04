@@ -30,6 +30,7 @@ struct HITListApp: App {
         CloudSyncMonitor.shared.recordLaunchGuards(waitedForPrevious: waited, isolatedStoreSuffix: isolated)
         container = ModelContainerFactory.make()
         CloudSyncMonitor.shared.containerReady(container)
+        IntentStore.register(container) // Siri and Shortcuts write through this one container (brief 46).
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         TaskActions.seedDefaultsIfNeeded(in: context)
