@@ -480,6 +480,7 @@ final class ProfileTests: XCTestCase {
         render(ProfileBadge(), "badge")
         render(ProfileAvatarView(imageData: nil, name: "", size: 40), "avatar, empty", width: 40)
         for s in [AccountState.signedIn, .neverSignedIn, .restricted] { render(AccountStatusRow(state: s), "status \(s)") }
+        render(AccountStatusRow(state: .signedIn, sync: .synced(now)), "status with a sync state")
     }
 
     // MARK: Helpers

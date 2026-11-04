@@ -307,18 +307,29 @@ struct AccountSettingsSection: View {
     }
 }
 
-/// The iCloud account's state, as a row: "iCloud: Signed in" and what it means.
+/// The iCloud account's state, as a row: the sync health line ("iCloud: Signed in · Synced 2 min ago", the
+/// same words as Settings → iCloud's status line, `SyncHealth`) and what the account state means.
 struct AccountStatusRow: View {
     let state: AccountState
+    /// Nil: the live sync state.
+    var sync: SyncState?
+
+    /// The row's title: exactly the iCloud screen's status line for the same state.
+    static func title(account: AccountState, sync: SyncState, now: Date = .now) -> String {
+        SyncHealth(account: account, sync: sync).line(now: now)
+    }
 
     var body: some View {
-        HITMenuRowLabel(state.title, subtitle: state.detail, systemImage: state.systemImage,
-                        iconTint: state.isWarning ? HITColor.dueTomorrow : Theme.secondaryText)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .hitRowPadding()
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("settings-account-icloud")
+        TimelineView(.periodic(from: .now, by: 30)) { tick in
+            HITMenuRowLabel(Self.title(account: state, sync: sync ?? CloudSyncMonitor.shared.state, now: tick.date),
+                            subtitle: state.detail, systemImage: state.systemImage,
+                            iconTint: state.isWarning ? HITColor.dueTomorrow : Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .hitRowPadding()
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("settings-account-icloud")
+        }
     }
 }
 

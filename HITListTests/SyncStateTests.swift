@@ -175,6 +175,35 @@ final class SyncStateTests: XCTestCase {
         XCTAssertEqual(LaunchTiming.marks.map(\.name), ["store"], "marks after the first frame are ignored")
     }
 
+    // MARK: Health line (brief 42, item 4)
+
+    func testTheHealthLinePutsTheAccountFirstAndTheSyncAfterOnlyWhenThereIsAnAccount() {
+        let synced = SyncState.synced(now.addingTimeInterval(-120))
+        func line(_ account: AccountState, _ sync: SyncState) -> String { SyncHealth(account: account, sync: sync).line(now: now) }
+        XCTAssertEqual(line(.signedIn, synced), "iCloud: Signed in · Synced 2 min ago")
+        XCTAssertEqual(line(.signedIn, .offline), "iCloud: Signed in · Offline, changes will sync later")
+        XCTAssertEqual(line(.switched, .syncing), "iCloud: Signed in to another account · Syncing…")
+        XCTAssertEqual(line(.checking, .syncing), "iCloud: Checking… · Syncing…")
+        XCTAssertEqual(line(.signedOut, .notSignedIn), "iCloud: Signed out", "not \"Not signed in to iCloud\" beside it")
+        XCTAssertEqual(line(.neverSignedIn, .notSignedIn), "iCloud: Not signed in")
+        XCTAssertEqual(line(.restricted, .restricted), "iCloud: Restricted")
+        XCTAssertEqual(line(.needsSignInAgain, .error("iCloud needs you to sign in again", now)), "iCloud: Sign in again")
+        XCTAssertEqual(line(.localOnly("iCloud sync turned off"), .localOnly("iCloud sync turned off")),
+                       "iCloud: Not in use · iCloud sync turned off")
+    }
+
+    func testTheICloudAndAccountScreensSayTheSameWords() {
+        let accounts: [AccountState] = [.checking, .signedIn, .switched, .signedOut, .neverSignedIn, .restricted,
+                                        .needsSignInAgain, .couldNotDetermine, .localOnly("iCloud sync turned off")]
+        let syncs: [SyncState] = [.synced(now), .syncing, .offline, .notSignedIn, .restricted, .error("iCloud is busy, will retry", now)]
+        for account in accounts {
+            for sync in syncs {
+                XCTAssertEqual(SyncStatusLine.text(account: account, sync: sync, now: now),
+                               AccountStatusRow.title(account: account, sync: sync, now: now), "\(account) / \(sync)")
+            }
+        }
+    }
+
     // MARK: Sync log line count (brief 42, item 1)
 
     func testCountingLinesMatchesSplittingThem() {
