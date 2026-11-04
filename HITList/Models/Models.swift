@@ -2,17 +2,19 @@ import Foundation
 import SwiftData
 import HITListCore
 
-// The current schema version (V3). V1 and V2 are frozen in SchemaV1Models.swift and SchemaV2Models.swift.
+// The current schema version (V4). V1, V2 and V3 are frozen in SchemaV1Models.swift, SchemaV2Models.swift and
+// SchemaV3Models.swift.
 // CloudKit rules shaped these models: every attribute has a default or is optional,
 // every relationship is optional, and there are no unique constraints. The full rule list is at the
 // top of SchemaVersions.swift; read it before changing anything here.
 
-typealias Project = HITListSchemaV3.Project
-typealias TaskLabel = HITListSchemaV3.TaskLabel
-typealias TaskItem = HITListSchemaV3.TaskItem
-typealias SavedFilter = HITListSchemaV3.SavedFilter
+typealias Project = HITListSchemaV4.Project
+typealias TaskLabel = HITListSchemaV4.TaskLabel
+typealias TaskItem = HITListSchemaV4.TaskItem
+typealias SavedFilter = HITListSchemaV4.SavedFilter
+typealias Profile = HITListSchemaV4.Profile
 
-extension HITListSchemaV3 {
+extension HITListSchemaV4 {
     @Model
     final class Project {
         var id: UUID = UUID()
@@ -36,7 +38,7 @@ extension HITListSchemaV3 {
     }
 }
 
-extension HITListSchemaV3 {
+extension HITListSchemaV4 {
     @Model
     final class TaskLabel {
         var id: UUID = UUID()
@@ -58,7 +60,7 @@ extension HITListSchemaV3 {
     }
 }
 
-extension HITListSchemaV3 {
+extension HITListSchemaV4 {
     @Model
     final class TaskItem {
         var id: UUID = UUID()
@@ -175,7 +177,7 @@ extension TaskItem {
     }
 }
 
-extension HITListSchemaV3 {
+extension HITListSchemaV4 {
     @Model
     final class SavedFilter {
         var id: UUID = UUID()
@@ -200,9 +202,37 @@ extension HITListSchemaV3 {
     }
 }
 
+extension HITListSchemaV4 {
+    /// V4 (0.5.0, brief 34): the account's profile, a name and a picture, one per iCloud account. It lives in
+    /// the same private store as the tasks and syncs the same way (record type CD_Profile). Two devices that
+    /// each made one before they synced end up with two; `Deduplicator` merges them (`ProfileStore.mergeDuplicates`):
+    /// the newest name, the newest picture, never none when either had one. Read and write it only through
+    /// `ProfileStore`, which keeps the per-field times the merge needs and logs every write.
+    @Model
+    final class Profile {
+        var id: UUID = UUID()
+        /// The name as typed, trimmed; empty when none was set.
+        var displayName: String = ""
+        /// When `displayName` was last set on some device; nil until it first is. The merge keeps the newest.
+        var nameUpdatedAt: Date? = nil
+        /// A JPEG of at most 512 × 512 pixels and 200 KB (`ProfileAvatar.prepare`); synced as a CKAsset.
+        @Attribute(.externalStorage) var avatarData: Data? = nil
+        /// When the picture was last set or removed; nil until it first is.
+        var avatarUpdatedAt: Date? = nil
+        var createdAt: Date = Date()
+        var updatedAt: Date = Date()
+
+        init() {
+            self.id = UUID()
+            self.createdAt = Date()
+            self.updatedAt = self.createdAt
+        }
+    }
+}
+
 enum HITListSchema {
     /// The schema version the app runs on. Bump together with the typealiases at the top of this file.
-    static let current: any VersionedSchema.Type = HITListSchemaV3.self
+    static let current: any VersionedSchema.Type = HITListSchemaV4.self
     static var models: [any PersistentModel.Type] { current.models }
     static var schema: Schema { Schema(versionedSchema: current) }
     static let cloudKitContainerID = "iCloud.com.trammells.hitlist"

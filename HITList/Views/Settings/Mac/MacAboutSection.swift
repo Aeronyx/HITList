@@ -20,6 +20,7 @@ struct MacAboutSection: View {
             }
             .help(AboutInfo.changelogURL(version: AppInfo.version).absoluteString)
             .accessibilityIdentifier("settings-changelog")
+            PrivacyPolicyRow()
         }
 
         if let current = WhatsNew.current {
@@ -51,6 +52,9 @@ struct MacAboutSection: View {
 enum AboutInfo {
     /// The repository's releases, one per version tag (`v0.3.0`); the page lists the CHANGELOG notes.
     static let releasesURL = URL(string: "https://github.com/Aeronyx/HITList/releases")!
+
+    /// The privacy policy (`docs/privacy.md`, published by GitHub Pages from master's `docs/`).
+    static let privacyPolicyURL = URL(string: "https://aeronyx.github.io/HITList/privacy/")!
 
     /// The GitHub release for `version` ("…/releases/tag/v0.3.0"); the releases list for an unusable one.
     static func changelogURL(version: String) -> URL {

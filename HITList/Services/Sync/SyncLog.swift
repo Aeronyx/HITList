@@ -25,6 +25,9 @@ struct SyncLogEntry: Codable, Equatable, Identifiable, Sendable {
         case watchdog
         /// Anything else: Check iCloud, a relaunch, a store guard.
         case note
+        /// The account's profile (brief 34): created, name or picture set, merged, deleted. Never the
+        /// name or the picture themselves.
+        case profile
 
         var title: String {
             switch self {
@@ -38,6 +41,7 @@ struct SyncLogEntry: Codable, Equatable, Identifiable, Sendable {
             case .push: "Push"
             case .watchdog: "Watchdog"
             case .note: "Note"
+            case .profile: "Profile"
             }
         }
 
@@ -53,6 +57,7 @@ struct SyncLogEntry: Codable, Equatable, Identifiable, Sendable {
             case .push: "bell.badge"
             case .watchdog: "stopwatch"
             case .note: "text.bubble"
+            case .profile: "person.text.rectangle"
             }
         }
     }
