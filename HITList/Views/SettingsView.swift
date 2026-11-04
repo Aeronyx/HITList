@@ -33,6 +33,7 @@ struct SettingsView: View {
         RemindersSettingsSection()
         DelightSettingsSection()
         AppearanceSettingsSection()
+        ClaudeSettingsSection()
         AboutSettingsGroup()
     }
 }

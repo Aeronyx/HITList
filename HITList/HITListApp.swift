@@ -43,6 +43,7 @@ struct HITListApp: App {
             }
         }
         NotificationScheduler.bootstrap(container: container)
+        ClaudeConnector.start(container: container)  // brief 43: the Mac's Claude connector, if allowed
     }
 
     var body: some Scene {
