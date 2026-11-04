@@ -1279,4 +1279,15 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(ConfirmPill.height, HITButtonStyle.Size.regular.height)
         #endif
     }
+
+    /// The editor's footer no longer shows when the task was made; its "…" menu does, as disabled lines
+    /// (George: "remove the Created at … line and breakline").
+    func testTheCreationDateMovesToTheEditorsMoreMenu() {
+        let (task, context) = editorTask()
+        let created = task.createdAt.formatted(date: .abbreviated, time: .shortened)
+        XCTAssertEqual(TaskPopout.dateLines(for: task), ["Created \(created)"])
+        TaskActions.toggleCompletion(task, in: context)
+        let done = try! XCTUnwrap(task.completedAt).formatted(date: .abbreviated, time: .shortened)
+        XCTAssertEqual(TaskPopout.dateLines(for: task), ["Created \(created)", "Completed \(done)"])
+    }
 }
