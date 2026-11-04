@@ -143,3 +143,299 @@ final class ClaudeConnectorTests: XCTestCase {
     }
     #endif
 }
+
+/// The connector's tools against an in-memory store through the app-side handler (brief 43). Fixed clock:
+/// Wednesday 2026-11-04 10:00 in New York.
+@MainActor
+final class ClaudeToolTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private var logged: [(String, [String: String])] = []
+    private var completed: [CompletedTask] = []
+    private var writes = 0
+    private var ids: [String: UUID] = [:]
+
+    private static var calendar: Calendar {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "America/New_York")!
+        return c
+    }
+    private static let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 4, hour: 10))!
+    private static var today: Date { calendar.startOfDay(for: now) }
+
+    override func setUp() async throws {
+        container = ModelContainerFactory.preview()
+        let errand = TaskLabel(name: "errand"), secret = TaskLabel(name: "private"), shared = TaskLabel(name: "claude")
+        let travel = Project(name: "Travel"), hidden = Project(name: "Therapy"), empty = Project(name: "Someday")
+        [errand, secret, shared].forEach(context.insert)
+        [travel, hidden, empty].forEach(context.insert)
+        func add(_ title: String, project: Project? = nil, labels: [TaskLabel] = [], due: Date? = nil, priority: Int = 4) -> TaskItem {
+            let task = TaskItem(title: title, priority: priority, dueDate: due, project: project, labels: labels)
+            context.insert(task)
+            ids[title] = task.id
+            return task
+        }
+        _ = add("Buy milk", labels: [errand], due: Self.today)
+        _ = add("Session notes", project: hidden, labels: [secret], due: Self.today, priority: 1)
+        let trip = add("Plan trip", project: travel, priority: 2)
+        _ = add("Shared idea", labels: [shared])
+        let done = add("Old thing")
+        done.isCompleted = true
+        done.completedAt = Self.now
+        let water = add("Water plants", due: Self.today)
+        water.recurrenceRule = .daily
+        let secretParent = add("Gift for G", labels: [secret])
+        try context.save()
+        let flights = try TaskActions.addSubtask("Book flights", to: trip, in: context)
+        ids["Book flights"] = flights.id
+        let wrap = try TaskActions.addSubtask("Wrap it", to: secretParent, in: context)
+        ids["Wrap it"] = wrap.id
+        logged = []; completed = []; writes = 0
+    }
+
+    override func tearDown() async throws { container = nil }
+
+    private let hiddenTitles = ["Session notes", "Gift for G", "Wrap it", "Therapy", "private"]
+
+    private func handler(_ rule: ClaudeAccessRule = ClaudeAccessRule()) -> ClaudeToolHandler {
+        ClaudeToolHandler(context: context, rule: rule, now: Self.now, calendar: Self.calendar, weekStart: 2,
+                          log: { [unowned self] in logged.append(($0, $1)) },
+                          didWrite: { [unowned self] in writes += 1 },
+                          didComplete: { [unowned self] in completed.append($0) })
+    }
+
+    private func call(_ tool: String, _ arguments: [String: JSONValue] = [:], rule: ClaudeAccessRule = ClaudeAccessRule()) throws -> (MCPToolResult, JSONValue) {
+        let result = handler(rule).call(tool, arguments)
+        return (result, (try? JSONValue.decode(Data(result.text.utf8))) ?? .null)
+    }
+
+    private func titles(_ json: JSONValue) -> [String] {
+        json["tasks"]?.arrayValue?.compactMap { $0["title"]?.stringValue } ?? []
+    }
+
+    private func assertNoHiddenText(_ result: MCPToolResult, file: StaticString = #filePath, line: UInt = #line) {
+        for hidden in hiddenTitles {
+            XCTAssertFalse(result.text.localizedCaseInsensitiveContains(hidden), "\"\(hidden)\" leaked", file: file, line: line)
+        }
+    }
+
+    private func fetch(_ title: String) throws -> TaskItem {
+        let id = try XCTUnwrap(ids[title])
+        return try XCTUnwrap(context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+    }
+
+    // MARK: list_tasks
+
+    func testListShowsOpenVisibleTasksOnly() throws {
+        let (result, json) = try call(ClaudeTools.listTasks)
+        XCTAssertFalse(result.isError)
+        XCTAssertEqual(titles(json), ["Buy milk", "Water plants", "Plan trip", "Shared idea"])
+        XCTAssertEqual(json["total"], 4, "hidden tasks aren't counted")
+        XCTAssertEqual(json["today"], "2026-11-04")
+        assertNoHiddenText(result)
+        let trip = try XCTUnwrap(json["tasks"]?.arrayValue?.first { $0["title"] == "Plan trip" })
+        XCTAssertEqual(trip["group"], "Travel")
+        XCTAssertEqual(trip["priority"], 2)
+        XCTAssertEqual(trip["subtasks_done"], "0 of 1")
+        let milk = try XCTUnwrap(json["tasks"]?.arrayValue?.first)
+        XCTAssertEqual(milk["due"], "2026-11-04")
+        XCTAssertEqual(milk["labels"], ["errand"])
+        XCTAssertEqual(milk["group"], "Inbox")
+        XCTAssertEqual(try XCTUnwrap(json["tasks"]?.arrayValue?[1])["repeats"], .string(RecurrenceRule.daily.displayText))
+    }
+
+    func testHiddenTasksCannotBeSearchedOrFiltered() throws {
+        for filter in ["@private", "#Therapy", "search: session", "\"gift\"", "p1", "today & p1", "completed"] {
+            let (result, json) = try call(ClaudeTools.listTasks, ["filter": .string(filter), "include_completed": true])
+            XCTAssertFalse(result.isError, filter)
+            XCTAssertFalse(titles(json).contains { hiddenTitles.contains($0) }, filter)
+            // The reply echoes the filter Claude sent; everything else must hold nothing hidden.
+            assertNoHiddenText(MCPToolResult(text: (json["tasks"] ?? .null).prettyString()))
+        }
+        XCTAssertEqual(titles(try call(ClaudeTools.listTasks, ["filter": "today"]).1), ["Buy milk", "Water plants"])
+    }
+
+    func testCompletedTasksOnlyWhenAsked() throws {
+        XCTAssertEqual(titles(try call(ClaudeTools.listTasks, ["filter": "completed"]).1), ["Old thing"])
+        XCTAssertEqual(try call(ClaudeTools.listTasks, ["include_completed": true]).1["total"], 5)
+    }
+
+    func testLimitAndBadFilters() throws {
+        let (_, json) = try call(ClaudeTools.listTasks, ["limit": 1])
+        XCTAssertEqual(json["returned"], 1)
+        XCTAssertEqual(json["total"], 4)
+        XCTAssertEqual(try call(ClaudeTools.listTasks, ["limit": 0]).1["returned"], 1, "clamped to at least one")
+        let (bad, _) = try call(ClaudeTools.listTasks, ["filter": "today &"])
+        XCTAssertTrue(bad.isError)
+        XCTAssertTrue(bad.text.contains("didn't parse"))
+    }
+
+    // MARK: get_task
+
+    func testHiddenIdsLookExactlyLikeMissingOnes() throws {
+        let missing = try call(ClaudeTools.getTask, ["id": .string(UUID().uuidString)]).0
+        XCTAssertTrue(missing.isError)
+        for title in ["Session notes", "Gift for G", "Wrap it"] {
+            for tool in [ClaudeTools.getTask, ClaudeTools.completeTask, ClaudeTools.updateTask] {
+                var arguments: [String: JSONValue] = ["id": .string(try XCTUnwrap(ids[title]).uuidString)]
+                if tool == ClaudeTools.updateTask { arguments["title"] = "Changed" }
+                let result = try call(tool, arguments).0
+                XCTAssertEqual(result, missing, "\(tool) on \(title)")
+            }
+        }
+        XCTAssertFalse(try fetch("Gift for G").isCompleted)
+        XCTAssertEqual(try fetch("Session notes").title, "Session notes")
+        XCTAssertEqual(writes, 0)
+        XCTAssertTrue(logged.isEmpty)
+    }
+
+    func testGetTaskHasSubtasksAndTheParent() throws {
+        let (_, trip) = try call(ClaudeTools.getTask, ["id": .string(try XCTUnwrap(ids["Plan trip"]).uuidString)])
+        XCTAssertEqual(trip["subtasks"]?.arrayValue?.first?["title"], "Book flights")
+        let (_, flights) = try call(ClaudeTools.getTask, ["id": .string(try XCTUnwrap(ids["Book flights"]).uuidString)])
+        XCTAssertEqual(flights["parent"]?["title"], "Plan trip")
+        XCTAssertEqual(try call(ClaudeTools.getTask, ["id": "not-a-uuid"]).0.isError, true)
+    }
+
+    // MARK: add_task
+
+    func testAddParsesQuickAddTextLikeTheApp() throws {
+        let (result, json) = try call(ClaudeTools.addTask, ["text": "Call mum tomorrow 5pm p1 #Family @phone",
+                                                           "description": "  Ask about the weekend  "])
+        XCTAssertFalse(result.isError, result.text)
+        let added = try XCTUnwrap(json["added"])
+        XCTAssertEqual(added["title"], "Call mum")
+        XCTAssertEqual(added["priority"], 1)
+        XCTAssertEqual(added["group"], "Family")
+        XCTAssertEqual(added["labels"], ["phone"])
+        XCTAssertEqual(added["due"], "2026-11-05T17:00:00-05:00")
+        XCTAssertEqual(added["description"], "Ask about the weekend")
+        let id = try XCTUnwrap(added["id"]?.stringValue.flatMap(UUID.init(uuidString:)))
+        let task = try XCTUnwrap(context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        XCTAssertEqual(task.project?.name, "Family")
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(logged.map(\.0), ["Claude added a task"])
+        XCTAssertEqual(logged.first?.1["task"], id.uuidString)
+        XCTAssertFalse(logged.description.contains("Call mum"), "never task text in the log")
+    }
+
+    func testAddInOnlySharedModeKeepsTheTaskVisible() throws {
+        let rule = ClaudeAccessRule(mode: .onlyShared)
+        let (_, json) = try call(ClaudeTools.addTask, ["text": "Draft the plan @work"], rule: rule)
+        XCTAssertEqual(json["added"]?["labels"], ["claude", "work"])
+        XCTAssertNil(json["note"])
+        XCTAssertEqual(titles(try call(ClaudeTools.listTasks, rule: rule).1), ["Shared idea", "Draft the plan"])
+    }
+
+    func testAddingAPrivateTaskSaysItIsNowHidden() throws {
+        let (result, json) = try call(ClaudeTools.addTask, ["text": "Diary @private"])
+        XCTAssertFalse(result.isError)
+        XCTAssertNotNil(json["note"])
+        XCTAssertFalse(titles(try call(ClaudeTools.listTasks).1).contains("Diary"))
+    }
+
+    func testAddNeedsATitle() throws {
+        XCTAssertTrue(try call(ClaudeTools.addTask, ["text": "  "]).0.isError)
+        XCTAssertTrue(try call(ClaudeTools.addTask, ["text": "tomorrow p1"]).0.isError)
+        XCTAssertEqual(writes, 0)
+    }
+
+    // MARK: complete_task
+
+    func testCompleteMarksDoneOffersUndoAndLogs() throws {
+        let (result, json) = try call(ClaudeTools.completeTask, ["id": .string(try XCTUnwrap(ids["Plan trip"]).uuidString)])
+        XCTAssertFalse(result.isError)
+        XCTAssertEqual(json["completed"], true)
+        XCTAssertTrue(try fetch("Plan trip").isCompleted)
+        XCTAssertTrue(try fetch("Book flights").isCompleted, "its open subtasks complete with it, as in the app")
+        XCTAssertEqual(completed.map(\.title), ["Plan trip"])
+        XCTAssertEqual(completed.first?.revert, .uncomplete)
+        XCTAssertEqual(logged.first?.1["tool"], "complete_task")
+        XCTAssertTrue(try call(ClaudeTools.completeTask, ["id": .string(try XCTUnwrap(ids["Plan trip"]).uuidString)]).0.isError,
+                      "already completed")
+    }
+
+    func testCompletingARepeatingTaskMovesItOn() throws {
+        let (_, json) = try call(ClaudeTools.completeTask, ["id": .string(try XCTUnwrap(ids["Water plants"]).uuidString)])
+        XCTAssertEqual(json["repeats"], true)
+        XCTAssertEqual(json["next_due"], "2026-11-05")
+        XCTAssertFalse(try fetch("Water plants").isCompleted)
+        XCTAssertEqual(completed.first?.revert, .restoreDueDate(Self.today))
+    }
+
+    // MARK: update_task
+
+    func testUpdateChangesEachField() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
+        let (result, json) = try call(ClaudeTools.updateTask, ["id": id, "title": "Buy oat milk", "description": "2 cartons",
+                                                              "due": "fri 6pm", "priority": 3, "labels": ["@Shop", "errand"],
+                                                              "group": "#Groceries"])
+        XCTAssertFalse(result.isError, result.text)
+        let task = try fetch("Buy milk")
+        XCTAssertEqual(task.title, "Buy oat milk")
+        XCTAssertEqual(task.notes, "2 cartons")
+        XCTAssertEqual(json["updated"]?["due"], "2026-11-06T18:00:00-05:00")
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(task.priority, 3)
+        XCTAssertEqual(task.labelList.map(\.name), ["Shop", "errand"])
+        XCTAssertEqual(task.project?.name, "Groceries")
+        XCTAssertEqual(logged.first?.1["fields"], "description,due,group,labels,priority,title")
+
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "none", "group": "Inbox"])
+        XCTAssertNil(task.dueDate)
+        XCTAssertFalse(task.hasDueTime)
+        XCTAssertNil(task.project)
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "every monday 9am"])
+        XCTAssertNotNil(task.recurrenceRule)
+        XCTAssertTrue(task.hasDueTime)
+    }
+
+    func testABadFieldChangesNothing() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
+        for bad: [String: JSONValue] in [["title": "Renamed", "due": "someday maybe"], ["title": "Renamed", "priority": 7],
+                                         ["title": ""], ["labels": "errand"], [:]] {
+            var arguments = bad
+            arguments["id"] = id
+            XCTAssertTrue(try call(ClaudeTools.updateTask, arguments).0.isError, "\(bad)")
+        }
+        XCTAssertEqual(try fetch("Buy milk").title, "Buy milk")
+        XCTAssertEqual(writes, 0)
+    }
+
+    func testSubtasksTakeOnlyTitleAndDescription() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Book flights"]).uuidString)
+        XCTAssertTrue(try call(ClaudeTools.updateTask, ["id": id, "due": "tomorrow"]).0.isError)
+        XCTAssertFalse(try call(ClaudeTools.updateTask, ["id": id, "title": "Book flights to Lisbon"]).0.isError)
+        XCTAssertEqual(try fetch("Book flights").title, "Book flights to Lisbon")
+    }
+
+    func testOnlySharedModeKeepsTheSharedLabelOnUpdate() throws {
+        let rule = ClaudeAccessRule(mode: .onlyShared)
+        let id = JSONValue.string(try XCTUnwrap(ids["Shared idea"]).uuidString)
+        _ = try call(ClaudeTools.updateTask, ["id": id, "labels": []], rule: rule)
+        XCTAssertEqual(try fetch("Shared idea").labelList.map(\.name), ["claude"])
+    }
+
+    // MARK: Groups and labels
+
+    func testGroupsAndLabelsNeverNameHiddenOnes() throws {
+        let (groups, groupsJSON) = try call(ClaudeTools.listGroups)
+        XCTAssertEqual(groupsJSON["groups"], [["name": "Inbox", "open_tasks": 3], ["name": "Someday", "open_tasks": 0],
+                                              ["name": "Travel", "open_tasks": 1]], "Group order, then name")
+        assertNoHiddenText(groups)
+        let (labels, labelsJSON) = try call(ClaudeTools.listLabels)
+        XCTAssertEqual(labelsJSON["labels"], [["name": "claude", "open_tasks": 1], ["name": "errand", "open_tasks": 1]])
+        assertNoHiddenText(labels)
+        let shared = try call(ClaudeTools.listLabels, rule: ClaudeAccessRule(mode: .onlyShared)).1
+        XCTAssertEqual(shared["labels"], [["name": "claude", "open_tasks": 1]])
+    }
+
+    func testOnlySharedModeSeesOnlyClaudeTasks() throws {
+        XCTAssertEqual(titles(try call(ClaudeTools.listTasks, rule: ClaudeAccessRule(mode: .onlyShared)).1), ["Shared idea"])
+    }
+
+    func testUnknownTool() {
+        XCTAssertTrue(handler().call("delete_task", [:]).isError)
+    }
+}
