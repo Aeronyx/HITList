@@ -22,7 +22,7 @@ In HITList, open **Settings → Claude** (on the Mac: Settings, then **Claude** 
   find them again.
 
 You can rename either label in the row below the choice. A hidden task's subtasks are hidden with it, and a
-Group whose tasks are all hidden is never named to Claude. **Visible to Claude** shows how many open tasks
+Group whose tasks are all hidden is never named to Claude. **Visible now** shows how many open tasks
 Claude can see.
 
 ## 2. Allow Claude (Mac)
