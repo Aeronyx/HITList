@@ -169,3 +169,45 @@ struct ShellPlace: Equatable {
         }
     }
 }
+
+/// How the Duo's detail column divides its width (`DuoSplit`). The editor opens beside the list, never
+/// over it; where both and the sidebar don't fit (the inner display upright), the sidebar steps aside
+/// while the editor is open and the two meet at the fold. Today shows the next days beside it where
+/// there is room for both (the inner display on its side).
+struct DuoColumns: Equatable {
+    var showsSidebar: Bool
+    var editorWidth: CGFloat?
+    var nextDaysWidth: CGFloat?
+
+    static let minListWidth: CGFloat = 300
+    static let editorWidths: ClosedRange<CGFloat> = 320...420
+    static let nextDaysWidths: ClosedRange<CGFloat> = 280...360
+
+    /// - Parameters:
+    ///   - width: the whole window.
+    ///   - sidebarWidth: the sidebar column while it shows.
+    ///   - fold: the hinge's x in the window, when the system reports one (a `division` reserved
+    ///     region); else the middle.
+    static func plan(width: CGFloat, sidebarWidth: CGFloat, editorOpen: Bool, showsToday: Bool,
+                     fold: CGFloat? = nil) -> DuoColumns {
+        let detail = width - sidebarWidth
+        if editorOpen {
+            if detail >= minListWidth + editorWidths.lowerBound + 40 {
+                return DuoColumns(showsSidebar: true, editorWidth: clamp(detail / 2, to: editorWidths), nextDaysWidth: nil)
+            }
+            // No room for three: list and editor share the window, split at the fold.
+            let split = fold.map { min(max($0, minListWidth), width - editorWidths.lowerBound) } ?? width / 2
+            let editor = max(editorWidths.lowerBound, (width - split).rounded())
+            return DuoColumns(showsSidebar: false, editorWidth: min(editor, width - minListWidth), nextDaysWidth: nil)
+        }
+        if showsToday, detail >= minListWidth + nextDaysWidths.lowerBound + 40 {
+            return DuoColumns(showsSidebar: true, editorWidth: nil,
+                              nextDaysWidth: clamp((detail * 0.42).rounded(), to: nextDaysWidths))
+        }
+        return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nil)
+    }
+
+    private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {
+        min(max(value, range.lowerBound), range.upperBound).rounded()
+    }
+}
