@@ -39,6 +39,8 @@ struct TaskPopout: View {
     @State private var pops = 0
     /// Confirm (or Return) ran: a second one in the same instant does nothing.
     @State private var isClosing = false
+    /// iPhone: a swipe down met typing Confirm would save; "Discard" shows above the footer (brief 36).
+    @State private var confirmingDiscard = false
     /// The scrolling middle's height, so the panel is as tall as its content (up to a cap).
     @State private var bodyHeight: CGFloat = 0
     /// The task's id, read once while it certainly exists: the popout may close because the task was
@@ -66,26 +68,38 @@ struct TaskPopout: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            topBar
-            ScrollView {
-                VStack(alignment: .leading, spacing: HITSpacing.l) {
-                    titleCard
-                    pillRow
-                    if task.recurrence != nil, !task.isSubtask { flipboardRow }
-                    if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+            VStack(spacing: 0) {
+                topBar
+                ScrollView {
+                    VStack(alignment: .leading, spacing: HITSpacing.l) {
+                        titleCard
+                        pillRow
+                        if task.recurrence != nil, !task.isSubtask { flipboardRow }
+                        if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
+                    }
+                    .padding(.horizontal, HITSpacing.l)
+                    .padding(.top, HITSpacing.xs)
+                    .padding(.bottom, HITSpacing.l)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
                 }
-                .padding(.horizontal, HITSpacing.l)
-                .padding(.top, HITSpacing.xs)
-                .padding(.bottom, HITSpacing.l)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { bodyHeight = $0 }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+                .frame(idealHeight: bodyHeight)
+                .frame(maxHeight: isPanel ? EditorMetrics.panelBodyMaxHeight : .infinity)
             }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
-            .frame(idealHeight: bodyHeight)
-            .frame(maxHeight: isPanel ? EditorMetrics.panelBodyMaxHeight : .infinity)
+            .overlay(alignment: .bottom) { if confirmingDiscard { discardLayer } }
             footer
         }
         .background(Theme.background)
+        #if os(iOS)
+        // A swipe down (or a tap above the sheet) with typing asks Discard; with none it just closes.
+        .sheetSwipeGuard(isActive: !isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        }
+        .onChange(of: draft) { _, _ in
+            if confirmingDiscard, !draft.asksBeforeSwipeClose(for: task) { confirmingDiscard = false }
+        }
+        #endif
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -459,6 +473,33 @@ struct TaskPopout: View {
         }
         .padding(.horizontal, HITSpacing.l)
         .padding(.vertical, HITSpacing.m)
+    }
+
+    // MARK: Discard (iPhone, a swipe down with typing)
+
+    /// Over the editor above the footer: a dimmed layer that means "keep editing" when tapped, and the
+    /// quick-add card's Discard bubble pointing at the footer, whose Confirm still saves.
+    private var discardLayer: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: keepEditing)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Keep editing")
+            DiscardBubble(action: discardTyping)
+                .padding(.bottom, HITSpacing.m)
+        }
+        .transition(.opacity)
+    }
+
+    private func keepEditing() {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+    }
+
+    /// Drops the typing and closes, as × does.
+    private func discardTyping() {
+        confirmingDiscard = false
+        close()
     }
 
     // MARK: Confirm and close

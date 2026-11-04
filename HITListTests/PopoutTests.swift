@@ -1313,4 +1313,34 @@ final class PopoutTests: XCTestCase {
         XCTAssertTrue(R.returnSubmits)
         #endif
     }
+
+    /// A swipe down on the iPhone editor asks Discard only when Confirm would save typing; picks have
+    /// already landed and never count (brief 36).
+    func testSwipingTheEditorDownAsksOnlyWhenTypingWouldBeLost() throws {
+        let (task, context) = editorTask(notes: "Semi-skimmed")
+        let subtask = try TaskActions.addSubtask("Oat", to: task, in: context)
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "nothing typed: it just closes")
+
+        task.priorityValue = .p1
+        draft.isAddingSubtask = true
+        draft.newSubtask = "  "
+        draft.notes = "Semi-skimmed \n"
+        draft.title = " Buy milk "
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "a pick, blanks and the same words are not typing")
+
+        draft.title = "Buy oat milk"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "an edited title")
+        draft.title = task.title
+        draft.notes = "Whole"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "an edited description")
+        draft.notes = task.notes
+        draft.newSubtask = "Eggs"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "a sub-task in the field")
+        draft.newSubtask = ""
+        draft.beginRenaming(subtask)
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "a rename that has not changed anything yet")
+        draft.renaming?.text = "Oat, barista"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "a rename")
+    }
 }
