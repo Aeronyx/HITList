@@ -4,7 +4,7 @@ import SwiftUI
 /// stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change
 /// (Account, added in 0.5.0, comes first, as on the iPhone).
 enum MacSettingsSection: String, CaseIterable, Identifiable {
-    case account, general, iCloud, reminders, completing, appearance, data, about
+    case account, general, iCloud, reminders, completing, appearance, data, claude, about
 
     var id: String { rawValue }
 
@@ -17,6 +17,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .completing: "Completing tasks"
         case .appearance: "Appearance"
         case .data: "Data"
+        case .claude: "Claude"
         case .about: "About"
         }
     }
@@ -31,6 +32,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .completing: "Sound and haptics"
         case .appearance: "Themes and effects"
         case .data: "Counts, export, backups"
+        case .claude: "Connector and privacy"
         case .about: "Version and what's new"
         }
     }
@@ -44,6 +46,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .completing: "checkmark.circle.fill"
         case .appearance: "paintpalette.fill"
         case .data: "externaldrive.fill"
+        case .claude: "sparkles"
         case .about: "info.circle.fill"
         }
     }
@@ -59,6 +62,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .completing: Color(hex: "#22C55E")
         case .appearance: Color(hex: "#A855F7")
         case .data: Color(hex: "#F59E0B")
+        case .claude: Color(hex: "#D97757")
         case .about: Color(hex: "#64748B")
         }
     }

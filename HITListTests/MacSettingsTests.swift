@@ -22,10 +22,10 @@ final class MacSettingsTests: XCTestCase {
 
     func testSectionsAreStableInIdsAndOrder() {
         XCTAssertEqual(MacSettingsSection.allCases.map(\.rawValue),
-                       ["account", "general", "iCloud", "reminders", "completing", "appearance", "data", "about"],
+                       ["account", "general", "iCloud", "reminders", "completing", "appearance", "data", "claude", "about"],
                        "stored in preferences: never rename; Account (0.5.0) leads, as on the iPhone")
         XCTAssertEqual(MacSettingsSection.allCases.map(\.title),
-                       ["Account", "General", "iCloud", "Reminders", "Completing tasks", "Appearance", "Data", "About"])
+                       ["Account", "General", "iCloud", "Reminders", "Completing tasks", "Appearance", "Data", "Claude", "About"])
         for section in MacSettingsSection.allCases {
             XCTAssertFalse(section.caption.isEmpty, "\(section) has a caption")
             // About 23 characters of caption2 fit beside the icon in the 200 pt column without "…".
