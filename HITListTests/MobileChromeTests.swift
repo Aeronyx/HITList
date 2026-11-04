@@ -141,5 +141,12 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(BrowseView.lastRows.map(\.title), ["Completed", "Settings"])
         XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape"])
     }
+
+    func testBrowseProfileRowAsksForANameUntilThereIsOne() {
+        XCTAssertEqual(BrowseProfileRow.prompt(forName: nil), "Add your name", "no profile yet")
+        XCTAssertEqual(BrowseProfileRow.prompt(forName: ""), "Add your name")
+        XCTAssertEqual(BrowseProfileRow.prompt(forName: "  "), "Add your name")
+        XCTAssertNil(BrowseProfileRow.prompt(forName: "George"), "ProfileBadge shows the name")
+    }
     #endif
 }
