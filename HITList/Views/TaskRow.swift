@@ -63,6 +63,7 @@ struct TaskRow: View {
                     .hitCelebratePop(trigger: pops)
                     .animation(HITMotion.standard, value: isChecked)
                     .frame(width: checkSize + 2, height: lineHeight)
+                    .completionDelight(completing: completionPhase == .pending)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
