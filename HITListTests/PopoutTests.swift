@@ -1290,4 +1290,27 @@ final class PopoutTests: XCTestCase {
         let done = try! XCTUnwrap(task.completedAt).formatted(date: .abbreviated, time: .shortened)
         XCTAssertEqual(TaskPopout.dateLines(for: task), ["Created \(created)", "Completed \(done)"])
     }
+
+    /// iPhone: Return in a title does nothing (George: "only allow task confirmation via the Confirm task
+    /// button"): the typed line break is dropped and the text stays exactly as it was, wherever the cursor
+    /// was. A pasted line break still becomes a space. The Mac keeps Return = confirm.
+    func testReturnInATitleIsDroppedOnTheIPhoneAndConfirmsOnTheMac() {
+        typealias R = TitleReturn
+        XCTAssertNil(R.resolve(old: "Buy milk", new: "Buy milks", returnSubmits: false), "no line break: nothing to do")
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy milk\n", returnSubmits: false), .init(text: "Buy milk", submits: false))
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy\n milk", returnSubmits: false), .init(text: "Buy milk", submits: false),
+                       "Return mid-title leaves it as it was, not with a space added")
+        XCTAssertEqual(R.resolve(old: "Buymilk", new: "Buy\nmilk", returnSubmits: false), .init(text: "Buymilk", submits: false))
+        XCTAssertEqual(R.resolve(old: "", new: "\n", returnSubmits: false), .init(text: "", submits: false))
+        XCTAssertEqual(R.resolve(old: "Call ", new: "Call Tom\nabout it", returnSubmits: false),
+                       .init(text: "Call Tom about it", submits: false), "a paste with a line break becomes one line")
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy milk\n", returnSubmits: true), .init(text: "Buy milk", submits: true),
+                       "the Mac: Return confirms, as before")
+        XCTAssertEqual(R.resolve(old: "Buy", new: "Buy\nmilk", returnSubmits: true), .init(text: "Buy milk", submits: true))
+        #if os(iOS)
+        XCTAssertFalse(R.returnSubmits)
+        #else
+        XCTAssertTrue(R.returnSubmits)
+        #endif
+    }
 }

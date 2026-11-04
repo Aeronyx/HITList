@@ -15,8 +15,9 @@ import HITListCore
 /// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
 /// - A footer with **Confirm** (`ConfirmPill`, the quick-add card's pill; when it was created is in "…"): one tap saves
 ///   everything typed (title, description, the sub-task field, a rename) and closes. × and Esc close
-///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. Return in the
-///   title confirms; ⌘Return confirms on the Mac.
+///   without saving typing; what was picked (date, Group, chips, ticks) has already landed. On the Mac
+///   Return in the title and ⌘Return confirm; on the iPhone only the pill does (brief 36), and a swipe
+///   down with typing asks Discard first.
 struct TaskPopout: View {
     @Bindable var task: TaskItem
 
@@ -208,13 +209,17 @@ struct TaskPopout: View {
                         .lineLimit(1...6)
                         .frame(minHeight: EditorMetrics.titleLine, alignment: .leading)
                         .focused($titleFocused)
+                        #if os(macOS)
                         .onSubmit(confirm)
-                        .onChange(of: draft.title) { _, title in
-                            // Return confirms (George: one tap, or one key) instead of adding a line.
-                            if title.contains(where: \.isNewline) {
-                                draft.title = TaskLimits.singleLine(title)
-                                confirm()
-                            }
+                        #else
+                        // A plain "return" key that does nothing: only Confirm saves (brief 36).
+                        .submitLabel(.return)
+                        #endif
+                        .onChange(of: draft.title) { old, title in
+                            // Return never adds a line: the Mac confirms, the iPhone drops it (`TitleReturn`).
+                            guard let outcome = TitleReturn.resolve(old: old, new: title) else { return }
+                            draft.title = outcome.text
+                            if outcome.submits { confirm() }
                         }
                         .accessibilityIdentifier("editorTitle")
                     if showsNotes {
