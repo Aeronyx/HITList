@@ -2,7 +2,8 @@ import SwiftUI
 
 extension View {
     /// On a row's checkbox: when `completing` turns true (the list has started this row's completion
-    /// animation), plays whatever `CompletionCelebration` the moment calls for from the checkbox's centre.
+    /// animation), plays whatever `CompletionCelebration` the moment calls for: the holiday's burst from the
+    /// checkbox's centre, and once in 10,000 the rare visitor across the top of the window.
     /// One line in `TaskRow`, so every list and the Mac board's cards get it.
     func completionDelight(completing: Bool) -> some View {
         modifier(CompletionDelightHook(completing: completing))
@@ -30,12 +31,13 @@ private struct CompletionDelightHook: ViewModifier {
 
     private func celebrate() {
         let defaults = AppGroup.defaults
+        let launch = DelightLaunchOptions.current
         let celebration = CompletionCelebration.decide(
-            holiday: HolidayDelight.holiday(at: .now),
+            holiday: HolidayDelight.holiday(at: .now, launch: launch),
             holidayTouches: HolidayDelight.holidayTouchesEnabled(in: defaults),
-            rareSurprises: false,
+            rareSurprises: HolidayDelight.rareSurprisesEnabled(in: defaults),
             calmMotion: reduceMotion || (defaults.object(forKey: Preferences.reduceEffects) as? Bool ?? false),
-            visitorRoll: false)
+            visitorRoll: launch.forceRareVisitor || RareVisitor.rolls())
         guard celebration != .none, let frame = anchor.frame else { return }
         DelightStage.shared.play(celebration, at: CGPoint(x: frame.midX, y: frame.midY))
     }

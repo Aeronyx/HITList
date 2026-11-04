@@ -39,6 +39,7 @@
 		2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */; };
 		2F12AFD28F5482882F03955C /* FlipSound.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F69C7AD0F70F6C933CC821D /* FlipSound.swift */; };
 		2F873DA550AA0FE85094E337 /* Inter_18pt-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */; };
+		2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */; };
 		314F390CE31AB982B5B4678D /* MacAppearanceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */; };
 		31BBC88473658DE0A316EBC6 /* InboxProcessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E2352DC18108A2E7F789F /* InboxProcessView.swift */; };
 		32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179EC0133891B8DCC4B358ED /* MobileTabBar.swift */; };
@@ -399,6 +400,7 @@
 		F32A742F83D1AB9E93A17857 /* SubtaskChecklist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtaskChecklist.swift; sourceTree = "<group>"; };
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
+		FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RareVisitor.swift; sourceTree = "<group>"; };
 		FDE419EFB9497F9FB13FE74B /* HITTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTokens.swift; sourceTree = "<group>"; };
 		FEBD86391030BCFC15AD273A /* MacAboutSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAboutSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -533,6 +535,7 @@
 				B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */,
 				AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */,
 				4FD507EEBD7A6AAD5F22146C /* HolidayEffects.swift */,
+				FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */,
 			);
 			path = Delight;
 			sourceTree = "<group>";
@@ -1052,6 +1055,7 @@
 				9580397F7D4ADFFD9422A015 /* QuickAddDraft.swift in Sources */,
 				9C99912454DD44480CCEE61E /* QuickAddEntry.swift in Sources */,
 				A8CEEB66309F56025E17DD1C /* QuickAddPopout.swift in Sources */,
+				2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */,
 				B45177102F56678B6535528C /* ReminderPickerCard.swift in Sources */,
 				8657C41CB79A77C4A9253FBE /* RemindersSettingsSection.swift in Sources */,
 				6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */,

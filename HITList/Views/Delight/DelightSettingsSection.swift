@@ -8,6 +8,7 @@ import HITListCore
 struct DelightSettingsSection: View {
     @AppStorage(CompletionFeedback.hapticsKey, store: AppGroup.defaults) private var haptics = true
     @AppStorage(Preferences.holidayTouches, store: AppGroup.defaults) private var holidayTouches = true
+    @AppStorage(Preferences.rareSurprises, store: AppGroup.defaults) private var rareSurprises = true
     @State private var sound: CompletionSound
     @State private var customName: String?
     @State private var isImporting = false
@@ -51,6 +52,9 @@ struct DelightSettingsSection: View {
                 .toggleStyle(.hit)
                 .hitRowPadding()
             holidayTouchesRow
+            Toggle(isOn: $rareSurprises) { HITMenuRowLabel("Rare surprises", systemImage: "moon.stars") }
+                .toggleStyle(.hit)
+                .hitRowPadding()
         }
         .onChange(of: sound) { _, new in CompletionSound.select(new, in: AppGroup.defaults) }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: Self.audioTypes) { result in
@@ -71,7 +75,7 @@ struct DelightSettingsSection: View {
     #else
     private let footer = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad. " + Self.holidayFooter
     #endif
-    private static let holidayFooter = "Holiday touches: snow dust around Christmas, fireworks on July 4th and New Year, hearts, leaves, bats and more around the holidays. Reduce Motion turns them off."
+    private static let holidayFooter = "Holiday touches: snow dust around Christmas, fireworks on July 4th and New Year, hearts, leaves, bats and more around the holidays. Rare surprises: once in a long while, someone drops by. Reduce Motion turns both off."
 
     /// Holiday touches, with today's holiday (if any) as its icon and subtitle, so the row shows what it does.
     private var holidayTouchesRow: some View {
