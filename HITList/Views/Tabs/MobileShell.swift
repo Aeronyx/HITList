@@ -1,7 +1,7 @@
 import SwiftUI
 
 #if os(iOS)
-/// The iPhone shell (compact width): one screen per tab (Inbox, Today, Flipboard, Upcoming), each in its
+/// The iPhone shell (compact width): one screen per tab (Inbox, Today, Upcoming, Flipboard), each in its
 /// own `NavigationStack`, Browse pushed onto the current tab's stack (`MobileDestination.browse`), the floating island `MobileTabBar` near the bottom and the oval "+" above its right
 /// end. The island and the "+" are on every tab and every pushed screen (a Group, a label, a filter); the
 /// "+" hides while a popout is up. `ContentView` applies `popoutHost` outside this view, so popouts draw

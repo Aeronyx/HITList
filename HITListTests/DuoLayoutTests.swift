@@ -199,5 +199,8 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertTrue(PopoutHost.Style.panel.panelQuickAdd)
         XCTAssertFalse(PopoutHost.Style.phone.cornerToasts)
         XCTAssertTrue(PopoutHost.Style.duo.cornerToasts, "lists draw their own toasts there, as on the iPad")
+
+        XCTAssertNil(PopoutHost.Style.phone.ovalMaxWidth)
+        XCTAssertEqual(PopoutHost.Style.duo.ovalMaxWidth, 560, "no wider than the panel on the big screen")
     }
 }
