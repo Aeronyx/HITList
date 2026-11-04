@@ -1,7 +1,8 @@
 import SwiftUI
 import OSLog
 
-/// "Synced 2 min ago" with its icon. Re-renders every 30 s so the relative time stays current while visible.
+/// "iCloud: Signed in · Synced 2 min ago" with its icon: the sync health line (`SyncHealth`), word for word
+/// what Settings → Account's status row says. Re-renders every 30 s so the relative time stays current while visible.
 /// When a sync finishes while it is on screen, the icon turns into a checkmark for a few seconds
 /// (`contentTransition(.symbolEffect(.replace))`; a plain swap under Reduce Motion), the text reads
 /// "Synced just now", and then it settles back to the usual icon.
@@ -13,9 +14,10 @@ struct SyncStatusLine: View {
 
     var body: some View {
         let state = monitor.state
+        let account = AccountState.current
         TimelineView(.periodic(from: .now, by: 30)) { context in
             Label {
-                Text(state.summary(now: context.date))
+                Text(Self.text(account: account, sync: state, now: context.date))
             } icon: {
                 Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
                     .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
@@ -34,6 +36,11 @@ struct SyncStatusLine: View {
             }
         }
         .onDisappear { confirmTask?.cancel() }
+    }
+
+    /// The line's text: `SyncHealth.line`, shared with `AccountStatusRow.title`.
+    static func text(account: AccountState, sync: SyncState, now: Date = .now) -> String {
+        SyncHealth(account: account, sync: sync).line(now: now)
     }
 
     private func color(for state: SyncState) -> Color {
