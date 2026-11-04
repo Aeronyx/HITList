@@ -63,6 +63,13 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertNil(MobileTab(rawValue: "browse"), "Browse is a pushed screen now, not a tab")
     }
 
+    func testFlipboardIsAStartScreenAndBrowseFallsBackToToday() {
+        XCTAssertEqual(Preferences.startTabValue("flipboard"), .flipboard)
+        XCTAssertEqual(Preferences.startTabValue("upcoming"), .upcoming)
+        XCTAssertEqual(Preferences.startTabValue("browse"), .today, "someone who chose Browse opens on Today")
+        XCTAssertEqual(Preferences.startScreenChoices, [.inbox, .today, .flipboard, .upcoming])
+    }
+
     func testViewOptionsMenuRenders() {
         let view = ViewOptionsMenu { Toggle("Show completed", isOn: .constant(true)) }
             .frame(width: 200, height: 60)

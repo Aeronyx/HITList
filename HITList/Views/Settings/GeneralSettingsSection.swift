@@ -17,8 +17,10 @@ struct GeneralSettingsSection: View {
             // `trailing:` spelled out: a bare trailing closure picks HITMenuRow's action initializer.
             HITMenuRow("Start screen", systemImage: "house", trailing: {
                 Menu {
-                    Picker("Start screen", selection: $startTab) {
-                        ForEach(MobileTab.allCases) { tab in Text(tab.title).tag(tab.rawValue) }
+                    // Read through startTabValue so a stored "browse" (no longer a tab) ticks Today.
+                    Picker("Start screen", selection: Binding(get: { Preferences.startTabValue(startTab).rawValue },
+                                                              set: { startTab = $0 })) {
+                        ForEach(Preferences.startScreenChoices) { tab in Text(tab.title).tag(tab.rawValue) }
                     }
                     .pickerStyle(.inline)
                 } label: {
