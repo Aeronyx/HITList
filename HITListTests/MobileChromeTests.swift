@@ -43,8 +43,24 @@ final class MobileChromeTests: XCTestCase {
     func testStartTabFallsBackToToday() {
         XCTAssertEqual(Preferences.startTabValue(nil), .today)
         XCTAssertEqual(Preferences.startTabValue("nonsense"), .today)
-        XCTAssertEqual(Preferences.startTabValue("browse"), .browse)
         XCTAssertEqual(Preferences.startTabValue("inbox"), .inbox)
+    }
+
+    // MARK: Tabs (brief 35)
+
+    func testTabsRunInboxTodayFlipboardUpcoming() {
+        XCTAssertEqual(MobileTab.allCases, [.inbox, .today, .flipboard, .upcoming], "Upcoming furthest right")
+        XCTAssertEqual(MobileTab.allCases.map(\.title), ["Inbox", "Today", "Flipboard", "Upcoming"])
+        XCTAssertEqual(MobileTab.allCases.map(\.rawValue), ["inbox", "today", "flipboard", "upcoming"])
+    }
+
+    func testFlipboardTabLooksLikeItsSidebarRow() {
+        // SidebarView: row("Flipboard", "switch.2", .flipboard).
+        XCTAssertEqual(MobileTab.flipboard.symbol, "switch.2")
+        XCTAssertEqual(MobileTab.flipboard.title, "Flipboard")
+        XCTAssertEqual(MobileTab.inbox.symbol, "tray")
+        XCTAssertEqual(MobileTab.upcoming.symbol, "calendar.badge.clock")
+        XCTAssertNil(MobileTab(rawValue: "browse"), "Browse is a pushed screen now, not a tab")
     }
 
     func testViewOptionsMenuRenders() {
