@@ -123,6 +123,8 @@ private struct SplitContent: View {
         }
         // Duo: side by side, never the sidebar sliding over the list as an upright iPad's does.
         .modifier(BalancedSplit(isOn: duo))
+        // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
+        .intentRouting(selection: $selection)
         .onChange(of: selection) { old, new in
             popouts.closeAll()
             if let new, new != .settings { place.select(new) }

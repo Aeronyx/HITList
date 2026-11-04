@@ -34,6 +34,12 @@ holidays, and the iPhone Duo.
   Account show the same sync line; the profile picture is decoded once; saving the same name twice writes
   nothing; duplicate tidying no longer collides with a download in progress; the sync log records the time
   to first screen.
+- iPhone Duo: folded, the outer screen keeps the iPhone tabs; unfolded, the inner screen becomes the sidebar
+  layout with the task editor in a column beside the list (no sheet) and Today showing the next days alongside.
+  Folding or unfolding keeps you on the same list and keeps an open quick-add card.
+- Mac and iPad: the quick-add panel's ×, Esc or a click on the dimmed backdrop, and a backdrop click around the
+  editor, ask Discard before throwing away typing.
+- Siri and Shortcuts "Open Today / Inbox / Upcoming" switch to that screen.
 - Privacy policy: new sections on the Claude connection and on Siri.
 
 ## 0.5.0 — build 15, 2026-11-04
