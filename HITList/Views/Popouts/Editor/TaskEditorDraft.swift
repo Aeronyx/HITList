@@ -50,6 +50,13 @@ struct TaskEditorDraft: Equatable {
             || !Self.trimmed(newSubtask).isEmpty || renameToSave(for: task) != nil
     }
 
+    /// A swipe down on the iPhone sheet (brief 36): with typing Confirm would save, the sheet stays and asks
+    /// Discard (George's rule for the quick-add card: "tapping away asks Discard whenever the card has any
+    /// content"); otherwise it just closes. Picked values have already landed and never count.
+    func asksBeforeSwipeClose(for task: TaskItem) -> Bool {
+        hasPendingChanges(for: task)
+    }
+
     /// Confirm: saves what was typed. True if anything changed. The sub-task field's text becomes a sub-task;
     /// the field closes.
     @MainActor

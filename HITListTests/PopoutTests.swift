@@ -1249,4 +1249,98 @@ final class PopoutTests: XCTestCase {
         draft = QuickAddDraft(context: .inbox, text: "   ")
         XCTAssertFalse(draft.hasContent, "whitespace is nothing")
     }
+
+    // MARK: Taller editor, bigger Confirm, confirm by button (brief 36)
+
+    #if os(iOS)
+    /// The iPhone editor opens tall enough for the title card, the pills, a Sub-tasks card with two lines and
+    /// the Confirm pill with air above it (George, 0.4.1: "give the Edit task pane some more screen space"),
+    /// and never more than most of a short screen; the large detent stays.
+    func testTheEditorSheetOpensTallerThanHalfTheScreen() {
+        let opening = EditorOpeningDetent.openingHeight(maxDetentValue: 800)
+        XCTAssertEqual(opening, EditorMetrics.sheetOpeningHeight, "an iPhone 17 has room for the whole design height")
+        XCTAssertGreaterThanOrEqual(opening, 451 + 48, "at least a card row more than the old medium detent (451 pt)")
+        XCTAssertLessThanOrEqual(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 * 0.86,
+                                 "a short screen keeps some of the list in view")
+        XCTAssertGreaterThan(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 / 2, "still above medium")
+    }
+    #endif
+
+    /// One Confirm pill for the quick-add card and the editor (George: "increase the size of the Confirm task
+    /// button both on the edit screen and the Add task screen"): about 48 pt tall on the iPhone, as wide as
+    /// the "+" oval, with a 17 pt glyph. The Mac keeps the size it had.
+    func testBothPopoutsShareOneBiggerConfirmPill() {
+        #if os(iOS)
+        XCTAssertEqual(ConfirmPill.height, 48)
+        XCTAssertEqual(ConfirmPill.width, FloatingAddButton.size.width, "as wide as the + oval")
+        XCTAssertEqual(ConfirmPill.glyphSize, 17)
+        XCTAssertLessThanOrEqual(ConfirmPill.height, FloatingAddButton.size.height)
+        #else
+        XCTAssertEqual(ConfirmPill.height, HITButtonStyle.Size.regular.height)
+        #endif
+    }
+
+    /// The editor's footer no longer shows when the task was made; its "…" menu does, as disabled lines
+    /// (George: "remove the Created at … line and breakline").
+    func testTheCreationDateMovesToTheEditorsMoreMenu() {
+        let (task, context) = editorTask()
+        let created = task.createdAt.formatted(date: .abbreviated, time: .shortened)
+        XCTAssertEqual(TaskPopout.dateLines(for: task), ["Created \(created)"])
+        TaskActions.toggleCompletion(task, in: context)
+        let done = try! XCTUnwrap(task.completedAt).formatted(date: .abbreviated, time: .shortened)
+        XCTAssertEqual(TaskPopout.dateLines(for: task), ["Created \(created)", "Completed \(done)"])
+    }
+
+    /// iPhone: Return in a title does nothing (George: "only allow task confirmation via the Confirm task
+    /// button"): the typed line break is dropped and the text stays exactly as it was, wherever the cursor
+    /// was. A pasted line break still becomes a space. The Mac keeps Return = confirm.
+    func testReturnInATitleIsDroppedOnTheIPhoneAndConfirmsOnTheMac() {
+        typealias R = TitleReturn
+        XCTAssertNil(R.resolve(old: "Buy milk", new: "Buy milks", returnSubmits: false), "no line break: nothing to do")
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy milk\n", returnSubmits: false), .init(text: "Buy milk", submits: false))
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy\n milk", returnSubmits: false), .init(text: "Buy milk", submits: false),
+                       "Return mid-title leaves it as it was, not with a space added")
+        XCTAssertEqual(R.resolve(old: "Buymilk", new: "Buy\nmilk", returnSubmits: false), .init(text: "Buymilk", submits: false))
+        XCTAssertEqual(R.resolve(old: "", new: "\n", returnSubmits: false), .init(text: "", submits: false))
+        XCTAssertEqual(R.resolve(old: "Call ", new: "Call Tom\nabout it", returnSubmits: false),
+                       .init(text: "Call Tom about it", submits: false), "a paste with a line break becomes one line")
+        XCTAssertEqual(R.resolve(old: "Buy milk", new: "Buy milk\n", returnSubmits: true), .init(text: "Buy milk", submits: true),
+                       "the Mac: Return confirms, as before")
+        XCTAssertEqual(R.resolve(old: "Buy", new: "Buy\nmilk", returnSubmits: true), .init(text: "Buy milk", submits: true))
+        #if os(iOS)
+        XCTAssertFalse(R.returnSubmits)
+        #else
+        XCTAssertTrue(R.returnSubmits)
+        #endif
+    }
+
+    /// A swipe down on the iPhone editor asks Discard only when Confirm would save typing; picks have
+    /// already landed and never count (brief 36).
+    func testSwipingTheEditorDownAsksOnlyWhenTypingWouldBeLost() throws {
+        let (task, context) = editorTask(notes: "Semi-skimmed")
+        let subtask = try TaskActions.addSubtask("Oat", to: task, in: context)
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "nothing typed: it just closes")
+
+        task.priorityValue = .p1
+        draft.isAddingSubtask = true
+        draft.newSubtask = "  "
+        draft.notes = "Semi-skimmed \n"
+        draft.title = " Buy milk "
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "a pick, blanks and the same words are not typing")
+
+        draft.title = "Buy oat milk"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "an edited title")
+        draft.title = task.title
+        draft.notes = "Whole"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "an edited description")
+        draft.notes = task.notes
+        draft.newSubtask = "Eggs"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "a sub-task in the field")
+        draft.newSubtask = ""
+        draft.beginRenaming(subtask)
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "a rename that has not changed anything yet")
+        draft.renaming?.text = "Oat, barista"
+        XCTAssertTrue(draft.asksBeforeSwipeClose(for: task), "a rename")
+    }
 }

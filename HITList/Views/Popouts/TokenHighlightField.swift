@@ -5,8 +5,8 @@ import HITListCore
 /// recognised token (dates, times, repeats, `#project`, `@label`, `p1`-`p4`, `!15mb`) tinted behind the
 /// text as you type, in a lightly rounded box that reads as a button. Highlights of the same colour with
 /// only spaces between them are one box ("[tom 4]", brief 37). Tapping (clicking) a box switches its
-/// tokens off (`onDisable`, once per token): their words stay as plain text in the title. Return submits
-/// instead of starting a new line. `bordered: false` drops the box, for the quick-add card where the card
+/// tokens off (`onDisable`, once per token): their words stay as plain text in the title. Return never
+/// starts a new line: on the Mac it submits, on iOS it does nothing (`TitleReturn`, brief 36). `bordered: false` drops the box, for the quick-add card where the card
 /// itself is the frame.
 ///
 /// How the highlights are drawn and hit: under the field sits a copy of the text with clear glyphs, each
@@ -80,11 +80,12 @@ struct TokenHighlightField: View {
                 }
             }
         }
-        .onChange(of: text) { _, new in
-            // A vertical field takes Return as a newline; treat it as submit.
-            guard new.contains(where: \.isNewline) else { return }
-            text = TaskLimits.singleLine(new)
-            onSubmit()
+        .onChange(of: text) { old, new in
+            // A vertical field takes Return as a newline. iPhone: dropped, the text stays as it was (brief 36:
+            // confirm only by the button); the Mac: submit. A pasted line break becomes a space on both.
+            guard let outcome = TitleReturn.resolve(old: old, new: new) else { return }
+            text = outcome.text
+            if outcome.submits { onSubmit() }
         }
     }
 
@@ -112,8 +113,9 @@ struct TokenHighlightField: View {
         .lineLimit(1...4)
         .foregroundStyle(HITColor.text)
         .focused(focus)
-        .onSubmit(onSubmit)
-        .submitLabel(.done)
+        // A plain "return" key, not the blue check: Return does nothing here (`TitleReturn`), and the card's
+        // Confirm pill is the only way to add (George, 0.4.1).
+        .submitLabel(.return)
         // Standard autocorrect and sentence capitals (George, 0.4.0): the parser reads tokens without
         // regard to case, so "Tom" and "P1" still work.
         .textInputAutocapitalization(.sentences)
@@ -285,5 +287,38 @@ struct TokenHighlightField: View {
             }
         }
         return areas
+    }
+}
+
+/// Return typed into a one-line title (the quick-add field and the editor's title, both vertical fields that
+/// take it as a line break). iPhone and iPad (brief 36, George: "only allow task confirmation via the
+/// Confirm task button"): the typed break is dropped and the title stays exactly as it was. The Mac: Return
+/// confirms, as before. A pasted line break becomes a space either way (`TaskLimits.singleLine`).
+enum TitleReturn {
+    struct Outcome: Equatable {
+        var text: String
+        var submits: Bool
+    }
+
+    #if os(macOS)
+    static let returnSubmits = true
+    #else
+    static let returnSubmits = false
+    #endif
+
+    /// What the field's text becomes after a change from `old` to `new`; nil when `new` has no line break.
+    static func resolve(old: String, new: String, returnSubmits: Bool = returnSubmits) -> Outcome? {
+        guard new.contains(where: \.isNewline) else { return nil }
+        if returnSubmits { return Outcome(text: TaskLimits.singleLine(new), submits: true) }
+        if isTypedReturn(old: old, new: new) { return Outcome(text: old, submits: false) }
+        return Outcome(text: TaskLimits.singleLine(new), submits: false)
+    }
+
+    /// `new` is `old` with one line break put in somewhere: the Return key, not a paste.
+    private static func isTypedReturn(old: String, new: String) -> Bool {
+        let before = Array(old), after = Array(new)
+        guard after.count == before.count + 1 else { return false }
+        let i = zip(before, after).prefix { $0 == $1 }.count
+        return after[i].isNewline && after[(i + 1)...].elementsEqual(before[i...])
     }
 }
