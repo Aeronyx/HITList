@@ -361,8 +361,8 @@ struct ProfileAvatarView: View {
     }
 }
 
-/// The profile's avatar and name, small, for a list header (Browse, the Mac sidebar). Not placed yet:
-/// session 35 owns Browse and the supervisor decides where it goes. Shows nothing without a profile.
+/// The profile's avatar and name, small, for a list header. Browse's top row uses it (with its own
+/// "Add your name" fallback, since this shows nothing without a profile).
 struct ProfileBadge: View {
     @Query private var profiles: [Profile]
     var avatarSize: CGFloat = 28

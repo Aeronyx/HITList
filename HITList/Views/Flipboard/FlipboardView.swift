@@ -71,8 +71,8 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // Adding lives in the grid (`AddSwitchTile`); the toolbar's control is the flip sound, and the
-        // "…" keeps Add switch… as a second route. Same on every platform.
+        // Adding lives in the grid (`AddSwitchTile`); the toolbar's control is the flip sound. Add switch…
+        // is a second route: in the "…" on the Mac and iPad, a long press on the sound button on iPhone.
         .screenChrome {
             ScreenOptionButton { soundOn.toggle() } label: {
                 Label(soundOn ? "Flip sound on" : "Flip sound off", systemImage: soundOn ? "speaker.wave.2" : "speaker.slash")
