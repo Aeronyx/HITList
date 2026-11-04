@@ -288,6 +288,74 @@ struct EditorOpeningDetent: CustomPresentationDetent {
 }
 #endif
 
+#if os(iOS)
+extension View {
+    /// The iPhone editor sheet (brief 36): while `isActive` (there is typing to lose) a swipe down, or a tap
+    /// on the dimmed list above the sheet, does not close it; `onAttempt` runs instead, and the editor asks
+    /// Discard. While inactive the sheet closes as usual. Apply inside the sheet's content.
+    func sheetSwipeGuard(isActive: Bool, onAttempt: @escaping () -> Void) -> some View {
+        interactiveDismissDisabled(isActive)
+            .background(SheetDismissAttemptReader(onAttempt: onAttempt).frame(width: 0, height: 0).accessibilityHidden(true))
+    }
+}
+
+/// Hears UIKit's "the user tried to dismiss this sheet but it is modal" (`presentationControllerDidAttemptToDismiss`),
+/// which SwiftUI does not surface. It stands in as the sheet's presentation-controller delegate and forwards
+/// everything else to SwiftUI's own delegate, which keeps the sheet's binding and detents working.
+private struct SheetDismissAttemptReader: UIViewControllerRepresentable {
+    let onAttempt: () -> Void
+
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+
+    func updateUIViewController(_ controller: Controller, context: Context) {
+        controller.onAttempt = onAttempt
+        controller.install()
+    }
+
+    final class Controller: UIViewController, UIAdaptivePresentationControllerDelegate {
+        var onAttempt: () -> Void = {}
+        /// SwiftUI's delegate, which gets every call but the attempt first-hand.
+        private weak var original: UIAdaptivePresentationControllerDelegate?
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            install()
+        }
+
+        override func didMove(toParent parent: UIViewController?) {
+            super.didMove(toParent: parent)
+            install()
+        }
+
+        /// Takes the delegate's place on the presented controller this view sits in (once per presentation;
+        /// again if SwiftUI put its own back).
+        func install() {
+            guard parent != nil else { return }
+            var root: UIViewController = self
+            while let next = root.parent { root = next }
+            guard root.presentingViewController != nil, let presentation = root.presentationController,
+                  presentation.delegate !== self else { return }
+            original = presentation.delegate
+            presentation.delegate = self
+        }
+
+        func presentationControllerDidAttemptToDismiss(_ presentationController: UIPresentationController) {
+            original?.presentationControllerDidAttemptToDismiss?(presentationController)
+            onAttempt()
+        }
+
+        override func responds(to aSelector: Selector!) -> Bool {
+            super.responds(to: aSelector) || (original?.responds(to: aSelector) ?? false)
+        }
+
+        override func forwardingTarget(for aSelector: Selector!) -> Any? {
+            if !super.responds(to: aSelector), let original, original.responds(to: aSelector) { return original }
+            return super.forwardingTarget(for: aSelector)
+        }
+    }
+}
+#endif
+
 /// The Confirm pill both popouts end with (brief 36): the quick-add card's "Add task" and the editor's
 /// "Confirm", one size for both. iPhone: 48 pt tall and as wide as the "+" oval (76 pt), with a 17 pt
 /// semibold arrow (George, 0.4.1: "increase the size of the Confirm task button"). Mac: the 34 pt pill it
