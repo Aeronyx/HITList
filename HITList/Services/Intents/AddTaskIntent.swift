@@ -116,7 +116,11 @@ enum IntentActions {
 
     /// `DueFormatter.text` with its relative days in lower case, to sit inside a sentence: "tomorrow 17:00".
     static func spokenDue(_ date: Date, hasTime: Bool, now: Date = Date()) -> String {
-        let text = DueFormatter.text(for: date, hasTime: hasTime, now: now)
+        lowercasedRelativeDay(DueFormatter.text(for: date, hasTime: hasTime, now: now))
+    }
+
+    /// "Tomorrow 17:00" → "tomorrow 17:00"; dates and weekdays keep their capitals.
+    nonisolated static func lowercasedRelativeDay(_ text: String) -> String {
         for word in ["Today", "Tomorrow", "Yesterday"] where text.hasPrefix(word) {
             return word.lowercased() + text.dropFirst(word.count)
         }

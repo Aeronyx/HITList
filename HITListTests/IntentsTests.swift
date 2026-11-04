@@ -114,4 +114,77 @@ final class IntentsTests: XCTestCase {
         XCTAssertEqual(try IntentActions.groups(matching: "ho", in: context).map(\.name), ["Home"])
         XCTAssertEqual(try IntentActions.groups(ids: [home.id], in: context).map(\.name), ["Home"])
     }
+
+    // MARK: Open screens
+
+    func testOpenIntentsMapToTabsAndSidebarItems() {
+        XCTAssertEqual(HITScreen.allCases.map(\.mobileTab), [.today, .inbox, .upcoming])
+        XCTAssertEqual(HITScreen.allCases.map(\.sidebarItem), [.today, .inbox, .upcoming])
+    }
+
+    func testOpenRequestWaitsForAShellAndIsTakenOnce() async throws {
+        let router = IntentRouter()
+        XCTAssertNil(router.take())
+        router.open(.inbox)
+        XCTAssertEqual(router.request?.screen, .inbox, "kept until a shell appears (a cold launch from Siri)")
+        let first = router.request
+        router.open(.inbox)
+        XCTAssertNotEqual(router.request, first, "opening the same screen again is a new request")
+        XCTAssertEqual(router.take(), .inbox)
+        XCTAssertNil(router.take())
+        XCTAssertNil(router.request)
+    }
+
+    func testOpenScreenIntentSendsItsScreenToTheRouter() async throws {
+        _ = try await OpenScreenIntent(.upcoming).perform()
+        XCTAssertEqual(IntentRouter.shared.take(), .upcoming)
+    }
+
+    // MARK: Today's tasks
+
+    @discardableResult
+    private func insert(_ title: String, due: Date?, time: Bool = false, priority: Int = 4, done: Bool = false,
+                        parent: TaskItem? = nil) throws -> TaskItem {
+        let task = TaskItem(title: title, priority: priority, dueDate: due, hasDueTime: time)
+        task.isCompleted = done
+        context.insert(task)
+        task.parent = parent
+        try context.save()
+        return task
+    }
+
+    func testTodayListsOverdueFirstThenTodayInTheTodayScreensOrder() throws {
+        try insert("Pay rent", due: day(-1))
+        try insert("Buy milk", due: day(0, hour: 17), time: true)
+        let urgent = try insert("Call Sam", due: day(0), priority: 1)
+        try insert("Done already", due: day(0), done: true)
+        try insert("Sub-task", due: day(0), parent: urgent)
+        try insert("Tomorrow's", due: day(1))
+        try insert("Someday", due: nil)
+
+        let summary = try IntentActions.today(in: context, now: now)
+        XCTAssertEqual(summary.lines.map(\.title), ["Pay rent", "Call Sam", "Buy milk"])
+        XCTAssertEqual(summary.lines.map(\.isOverdue), [true, false, false])
+        XCTAssertEqual(summary.lines.map(\.when), ["Yesterday", nil, DueFormatter.timeText(for: day(0, hour: 17))])
+        XCTAssertEqual(summary.overdueCount, 1)
+        XCTAssertEqual(summary.headline, "3 tasks today, 1 overdue.")
+        XCTAssertEqual(summary.spoken,
+                       "3 tasks today, 1 overdue: Pay rent from yesterday, Call Sam, and Buy milk at \(DueFormatter.timeText(for: day(0, hour: 17))).")
+    }
+
+    func testTodaySaysSoWhenNothingIsDue() throws {
+        try insert("Tomorrow's", due: day(1))
+        let summary = try IntentActions.today(in: context, now: now)
+        XCTAssertTrue(summary.lines.isEmpty)
+        XCTAssertEqual(summary.headline, "Nothing due today.")
+        XCTAssertEqual(summary.spoken, "Nothing due today.")
+    }
+
+    func testTodaySpeaksFiveTitlesAndCountsTheRest() throws {
+        for i in 1...7 { try insert("Task \(i)", due: day(0)) }
+        let summary = try IntentActions.today(in: context, now: now)
+        XCTAssertEqual(summary.headline, "7 tasks today.")
+        XCTAssertTrue(summary.spoken.hasSuffix(", and 2 more."), summary.spoken)
+        XCTAssertEqual(summary.spoken.components(separatedBy: "Task ").count - 1, 5)
+    }
 }
