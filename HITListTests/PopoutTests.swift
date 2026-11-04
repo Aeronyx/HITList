@@ -1249,4 +1249,20 @@ final class PopoutTests: XCTestCase {
         draft = QuickAddDraft(context: .inbox, text: "   ")
         XCTAssertFalse(draft.hasContent, "whitespace is nothing")
     }
+
+    // MARK: Taller editor, bigger Confirm, confirm by button (brief 36)
+
+    #if os(iOS)
+    /// The iPhone editor opens tall enough for the title card, the pills, a Sub-tasks card with two lines and
+    /// the Confirm pill with air above it (George, 0.4.1: "give the Edit task pane some more screen space"),
+    /// and never more than most of a short screen; the large detent stays.
+    func testTheEditorSheetOpensTallerThanHalfTheScreen() {
+        let opening = EditorOpeningDetent.openingHeight(maxDetentValue: 800)
+        XCTAssertEqual(opening, EditorMetrics.sheetOpeningHeight, "an iPhone 17 has room for the whole design height")
+        XCTAssertGreaterThanOrEqual(opening, 451 + 48, "at least a card row more than the old medium detent (451 pt)")
+        XCTAssertLessThanOrEqual(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 * 0.86,
+                                 "a short screen keeps some of the list in view")
+        XCTAssertGreaterThan(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 / 2, "still above medium")
+    }
+    #endif
 }
