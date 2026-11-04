@@ -5,7 +5,7 @@ import HITListCore
 @testable import HITList
 
 /// The board's actions on real tasks (brief 38): dropping a card on a day, the Overdue column's
-/// Reschedule.
+/// Reschedule, the day column's "+ Add task" context.
 /// `TaskActions` uses `Calendar.current`, so dates here are relative to today in the current calendar.
 @MainActor
 final class UpcomingBoardTests: XCTestCase {
@@ -125,5 +125,45 @@ final class UpcomingBoardTests: XCTestCase {
         let done = try task("done", due: day(-2), done: true)
         TaskRescheduling.reschedule([done], to: day(0), in: context)
         XCTAssertEqual(done.dueDate, day(-2))
+    }
+
+    // MARK: - Add task in a column
+
+    func testADayColumnsAddRowAddsOnThatDay() throws {
+        let board = UpcomingBoardModel<PlainTask>(items: [], window: UpcomingWindow(offset: 3), now: now,
+                                                  showOverdue: true, calendar: cal)
+        let column = try XCTUnwrap(board.columns.first)
+        XCTAssertEqual(column.addContext, .day(day(3)))
+        let context = try XCTUnwrap(column.addContext)
+        XCTAssertEqual(context.defaultDate(now: now, calendar: cal), day(3), "the card's date is the column's day")
+        XCTAssertNil(context.defaultProjectName, "and the task goes to the Inbox unless the text names a Group")
+        XCTAssertNil(context.defaultLabelName)
+    }
+
+    func testTheCardOpenedFromAColumnAddsOnItsDay() throws {
+        let board = UpcomingBoardModel<PlainTask>(items: [], window: UpcomingWindow(offset: 2), now: now,
+                                                  showOverdue: true, calendar: cal)
+        let context = try XCTUnwrap(board.columns.last?.addContext)  // today + 8
+        let parser = QuickAddParser(now: now, calendar: cal)
+        let plain = QuickAddDraft(context: context, text: "Call Sam").result(parser)
+        XCTAssertEqual(plain.dueDate, day(8))
+        XCTAssertFalse(plain.hasDueTime, "all day")
+        let timed = QuickAddDraft(context: context, text: "Call Sam 3pm").result(parser)
+        XCTAssertEqual(timed.dueDate, day(8, 15, 0), "only a time typed: that time on the column's day")
+        let dated = QuickAddDraft(context: context, text: "Call Sam tomorrow").result(parser)
+        XCTAssertEqual(dated.dueDate, day(1), "a day typed in the card wins")
+    }
+
+    func testTheOverdueColumnHasNoAddRow() throws {
+        let late = PlainTask(title: "late", dueDate: day(-1))
+        let board = UpcomingBoardModel(items: [late], window: UpcomingWindow(), now: now, showOverdue: true, calendar: cal)
+        XCTAssertEqual(board.columns.first?.id, .overdue)
+        XCTAssertNil(board.columns.first?.addContext)
+    }
+
+    func testTheAddContextSurvivesTheStoredCardRoundTrip() throws {
+        // An open card's list is stored with its draft (`QuickAddDraftStore`), so a day must encode.
+        let data = try JSONEncoder().encode(QuickAddContext.day(day(2)))
+        XCTAssertEqual(try JSONDecoder().decode(QuickAddContext.self, from: data), .day(day(2)))
     }
 }
