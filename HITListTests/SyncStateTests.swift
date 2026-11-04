@@ -90,6 +90,17 @@ final class SyncStateTests: XCTestCase {
         XCTAssertEqual(derive(syncing: false, synced: -900, stalled: -700), .error(SyncState.stalledReason, now.addingTimeInterval(-700)))
     }
 
+    func testABoltForSomeoneWhoNeverUsedICloudIsGreyNotRed() {
+        // A friend on TestFlight without iCloud keeps tasks on the device: nothing is wrong, so no red bolt.
+        XCTAssertEqual(SyncBolt.look(for: .notSignedIn, everSignedIn: false).color, Theme.secondaryText)
+        XCTAssertEqual(SyncBolt.look(for: .notSignedIn, everSignedIn: true).color, HITColor.dueOverdue,
+                       "signed out after using iCloud still needs attention")
+        let defaults = UserDefaults(suiteName: "SyncBoltTests-\(UUID().uuidString)")!
+        XCTAssertFalse(SyncBolt.everSignedIn(defaults))
+        defaults.set(true, forKey: AccountWatch.everSignedInKey)
+        XCTAssertTrue(SyncBolt.everSignedIn(defaults))
+    }
+
     func testAccountAndNetworkStillComeFirst() {
         XCTAssertEqual(derive(online: false, stalled: -130), .offline)
         XCTAssertEqual(derive(account: .noAccount, stalled: -130), .notSignedIn)

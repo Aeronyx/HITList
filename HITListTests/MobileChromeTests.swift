@@ -63,7 +63,7 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(SyncBolt.look(for: .synced(now.addingTimeInterval(-2 * SyncBolt.staleAfter)), now: now).symbol,
                        "bolt.slash.fill", "stale: struck through")
         XCTAssertEqual(SyncBolt.look(for: .synced(now), now: now).color, Theme.bolt, "the theme's bolt pastel, not the accent")
-        XCTAssertEqual(SyncBolt.look(for: .notSignedIn).color, HITColor.dueOverdue)
+        XCTAssertEqual(SyncBolt.look(for: .notSignedIn, everSignedIn: true).color, HITColor.dueOverdue)
         XCTAssertEqual(SyncBolt.look(for: .offline).color, Theme.secondaryText)
     }
 

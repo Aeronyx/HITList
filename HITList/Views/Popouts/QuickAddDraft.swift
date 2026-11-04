@@ -168,15 +168,18 @@ struct QuickAddDraft: Equatable, Codable {
     func result(_ parser: QuickAddParser, parsed: QuickAddResult) -> QuickAddResult {
         var result = parsed
         let calendar = parser.dateParser.calendar
-        let kinds = Set(result.tokens.map(\.kind))
+        // Only the phrases that count: an overridden date or time no longer decides anything.
+        let kinds = Set(result.tokens.filter { !$0.isSuperseded }.map(\.kind))
+        let dateKinds = kinds.intersection([.date, .time, .recurrence])
         let defaultDay = dateCleared ? nil : context.defaultDate(now: parser.dateParser.now, calendar: calendar)
-        if kinds.isDisjoint(with: [.date, .time, .recurrence]) {
+        if dateKinds.isEmpty {
             // Nothing typed: the list's day, all day.
             result.dueDate = defaultDay
             result.hasDueTime = false
-        } else if kinds == [.time], let defaultDay, let due = result.dueDate,
+        } else if dateKinds == [.time], let defaultDay, let due = result.dueDate,
                   !calendar.isDate(defaultDay, inSameDayAs: parser.dateParser.today) {
-            // Only a time typed in an Upcoming day's row: that time on that day.
+            // Only a time typed in an Upcoming day's row (a priority, label or reminder beside it is fine):
+            // that time on that day.
             let parts = calendar.dateComponents([.hour, .minute], from: due)
             result.dueDate = parser.dateParser.date(defaultDay, hour: parts.hour ?? 9, minute: parts.minute ?? 0)
         }
