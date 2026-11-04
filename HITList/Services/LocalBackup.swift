@@ -87,6 +87,61 @@ enum LocalBackup {
         return url
     }
 
+    // MARK: - Account switch (brief 42)
+
+    /// Where the backups of accounts no longer signed in wait: inside the app's own container, out of the
+    /// Files app and of "Show backups in Finder", one folder per hashed account (`AccountIdentity`).
+    static var setAsideRoot: URL { URL.applicationSupportDirectory.appending(path: "Backups by account", directoryHint: .isDirectory) }
+
+    struct SetAside: Equatable {
+        var movedAside = 0
+        var restored = 0
+    }
+
+    /// The folder `account`'s set-aside backups go in: the hex part of its key.
+    static func setAsideFolder(for account: String, in root: URL = setAsideRoot) -> URL {
+        let name = account.hasPrefix(AccountIdentity.prefix) ? String(account.dropFirst(AccountIdentity.prefix.count)) : account
+        return root.appending(path: name, directoryHint: .isDirectory)
+    }
+
+    /// The iCloud account changed: moves the backups in `directory` (the previous account's data) into the
+    /// previous account's own folder, and brings back the current account's, if it set any aside on this
+    /// device before. Nothing is deleted: a backup that would land on a file of the same name stays where it
+    /// is. Forgets the last backup date, so the new account's data is backed up once it has arrived.
+    @discardableResult
+    static func setAside(previousAccount: String, currentAccount: String, directory: URL = directory,
+                         root: URL = setAsideRoot, defaults: UserDefaults = AppGroup.defaults) -> SetAside {
+        let fm = FileManager.default
+        var result = SetAside()
+        let previousFolder = setAsideFolder(for: previousAccount, in: root)
+        let leaving = backups(in: directory)
+        if !leaving.isEmpty {
+            do {
+                try fm.createDirectory(at: previousFolder, withIntermediateDirectories: true)
+                for file in leaving {
+                    let target = previousFolder.appending(path: file.lastPathComponent)
+                    guard !fm.fileExists(atPath: target.path) else { continue }
+                    do { try fm.moveItem(at: file, to: target); result.movedAside += 1 }
+                    catch { log.error("Setting a backup aside failed: \(error.localizedDescription, privacy: .public)") }
+                }
+            } catch {
+                log.error("Backups by account folder unavailable: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        let currentFolder = setAsideFolder(for: currentAccount, in: root)
+        let returning = backups(in: currentFolder)
+        if !returning.isEmpty { try? fm.createDirectory(at: directory, withIntermediateDirectories: true) }
+        for file in returning {
+            let target = directory.appending(path: file.lastPathComponent)
+            guard !fm.fileExists(atPath: target.path) else { continue }
+            do { try fm.moveItem(at: file, to: target); result.restored += 1 }
+            catch { log.error("Restoring a set-aside backup failed: \(error.localizedDescription, privacy: .public)") }
+        }
+        defaults.removeObject(forKey: lastBackupKey)
+        log.notice("Account changed: \(result.movedAside) backup(s) set aside, \(result.restored) restored")
+        return result
+    }
+
     enum BackupError: LocalizedError, Equatable {
         /// This launch opened another store (named), not HITList.store.
         case notTheRealStore(String)
