@@ -40,6 +40,7 @@ struct SyncStatusLine: View {
         switch state {
         case .synced: return .green
         case .syncing, .offline: return Theme.secondaryText
+        case .notSignedIn where !SyncBolt.everSignedIn(): return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly: return .orange
         }
     }
@@ -177,8 +178,17 @@ struct SyncBolt: View {
         var opacity: Double
     }
 
-    static func look(for state: SyncState, now: Date = Date()) -> Look {
+    /// Whether this device has ever seen an iCloud account (`AccountWatch`). A tester who never signed in
+    /// to iCloud is not in trouble: their tasks stay on the device, so the bolt and the dot stay grey
+    /// instead of the red and orange that mean "sync needs attention".
+    static func everSignedIn(_ defaults: UserDefaults = AppGroup.defaults) -> Bool {
+        defaults.bool(forKey: AccountWatch.everSignedInKey)
+    }
+
+    static func look(for state: SyncState, now: Date = Date(), everSignedIn: Bool = SyncBolt.everSignedIn()) -> Look {
         switch state {
+        case .notSignedIn where !everSignedIn:
+            return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .synced(let at) where now.timeIntervalSince(at) > staleAfter:
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .synced:
@@ -232,10 +242,11 @@ struct SyncIndicatorDot: View {
         }
     }
 
-    static func color(for state: SyncState) -> Color {
+    static func color(for state: SyncState, everSignedIn: Bool = SyncBolt.everSignedIn()) -> Color {
         switch state {
         case .synced: return HITColor.dueToday
         case .syncing, .offline: return Theme.secondaryText
+        case .notSignedIn where !everSignedIn: return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
         }
     }

@@ -154,6 +154,17 @@ final class UpcomingBoardTests: XCTestCase {
         XCTAssertEqual(dated.dueDate, day(1), "a day typed in the card wins")
     }
 
+    func testATimeWithOtherPhrasesStillLandsOnTheColumnsDay() throws {
+        let board = UpcomingBoardModel<PlainTask>(items: [], window: UpcomingWindow(offset: 2), now: now,
+                                                  showOverdue: true, calendar: cal)
+        let context = try XCTUnwrap(board.columns.last?.addContext)  // today + 8
+        let parser = QuickAddParser(now: now, calendar: cal)
+        for text in ["Call Sam 5pm p1", "Call Sam 5pm @calls", "Call Sam 5pm !15mb"] {
+            let result = QuickAddDraft(context: context, text: text).result(parser)
+            XCTAssertEqual(result.dueDate, day(8, 17, 0), "\(text): a priority, label or reminder beside the time keeps the day")
+        }
+    }
+
     func testTheOverdueColumnHasNoAddRow() throws {
         let late = PlainTask(title: "late", dueDate: day(-1))
         let board = UpcomingBoardModel(items: [late], window: UpcomingWindow(), now: now, showOverdue: true, calendar: cal)

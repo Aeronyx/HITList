@@ -43,7 +43,9 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(SyncIndicatorDot.color(for: .synced(now)), HITColor.dueToday)
         XCTAssertEqual(SyncIndicatorDot.color(for: .syncing), Theme.secondaryText)
         XCTAssertEqual(SyncIndicatorDot.color(for: .offline), Theme.secondaryText)
-        XCTAssertEqual(SyncIndicatorDot.color(for: .notSignedIn), HITColor.dueTomorrow)
+        XCTAssertEqual(SyncIndicatorDot.color(for: .notSignedIn, everSignedIn: true), HITColor.dueTomorrow)
+        XCTAssertEqual(SyncIndicatorDot.color(for: .notSignedIn, everSignedIn: false), Theme.secondaryText,
+                       "someone who never used iCloud is not in trouble")
         XCTAssertEqual(SyncIndicatorDot.color(for: .error("x", now)), HITColor.dueTomorrow)
     }
 
