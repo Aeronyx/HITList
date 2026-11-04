@@ -172,14 +172,14 @@ private final class DelightOverlay {
 }
 #else
 /// A borderless, click-through panel the size of the app window's content, kept above it as a child window.
-private final class OverlayPanel: NSPanel {
+final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 }
 
 @MainActor
-private final class DelightOverlay {
-    private var panel: OverlayPanel?
+final class DelightOverlay {
+    private(set) var panel: OverlayPanel?
     private weak var parent: NSWindow?
 
     /// Just below the toolbar (the content view runs under the title bar).
@@ -196,7 +196,13 @@ private final class DelightOverlay {
     }
 
     func show(stage: DelightStage) {
-        guard let host = hostWindow, let content = host.contentView else { return }
+        guard let host = hostWindow else { return }
+        show(stage: stage, over: host)
+    }
+
+    /// Lays the panel exactly over `host`'s content view and keeps it above as a child window.
+    func show(stage: DelightStage, over host: NSWindow) {
+        guard let content = host.contentView else { return }
         let panel = self.panel ?? makePanel(stage: stage)
         self.panel = panel
         // SwiftUI's `.global` space is the content view's, top-left origin.
