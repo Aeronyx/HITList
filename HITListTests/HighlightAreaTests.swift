@@ -1,5 +1,8 @@
 import XCTest
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 import HITListCore
 @testable import HITList
 
@@ -205,6 +208,72 @@ final class HighlightAreaTests: XCTestCase {
             }
         }
     }
+
+    // MARK: The pointing hand (brief 41)
+
+    #if os(macOS)
+    private struct FieldHost: View {
+        @State var text: String
+        @FocusState private var focused: Bool
+        var tokens: [QuickAddToken]
+        var body: some View {
+            TokenHighlightField(placeholder: "Task name", text: $text, tokens: tokens, priority: .p4, focus: $focused,
+                                bordered: false, onDisable: { _ in }, onSubmit: {})
+                .frame(width: 360)
+                .padding(20)
+        }
+    }
+
+    private func clickTargets(in view: NSView) -> [TokenHighlightField.ClickTarget.View] {
+        view.subviews.flatMap { ($0 as? TokenHighlightField.ClickTarget.View).map { [$0] } ?? clickTargets(in: $0) }
+    }
+
+    /// George (0.5.0): "on desktop my cursor should replace with the 'clickable' cursor". Over a highlight box
+    /// the click target (an AppKit view above the text view) is what the pointer meets, and it shows the
+    /// pointing hand; elsewhere in the text the text view keeps its I-beam.
+    func testTheMacShowsThePointingHandOverAHighlight() throws {
+        let text = "Call tom 3 about the parcel p1"
+        let tokens = parser().parse(text).tokens
+        let host = NSHostingView(rootView: FieldHost(text: text, tokens: tokens))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 120), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = host
+        host.frame = window.contentView?.bounds ?? .zero
+        var targets: [TokenHighlightField.ClickTarget.View] = []
+        for _ in 0..<20 where targets.count < 2 {
+            host.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            targets = clickTargets(in: host)
+        }
+        XCTAssertEqual(targets.count, 2, "[tom 3] and [p1]: one target per box")
+
+        for target in targets {
+            XCTAssertGreaterThan(target.bounds.width, 4)
+            let centre = target.convert(NSPoint(x: target.bounds.midX, y: target.bounds.midY), to: host)
+            XCTAssertTrue(host.hitTest(host.convert(centre, to: host.superview)) === target,
+                          "the pointer over a box meets the target, not the text view under it")
+            XCTAssertEqual(target.trackingAreas.filter { $0.options.contains(.cursorUpdate) }.count, 1)
+            NSCursor.iBeam.set()
+            target.cursorUpdate(with: try XCTUnwrap(mouseMoved(in: window)))
+            XCTAssertEqual(NSCursor.current, NSCursor.pointingHand)
+        }
+
+        // Between the boxes ("about the parcel") the text view is what the pointer meets.
+        let sorted = targets.sorted { $0.convert($0.bounds, to: host).minX < $1.convert($1.bounds, to: host).minX }
+        let left = sorted[0].convert(sorted[0].bounds, to: host), right = sorted[1].convert(sorted[1].bounds, to: host)
+        let between = NSPoint(x: (left.maxX + right.minX) / 2, y: left.midY)
+        let hit = host.hitTest(host.convert(between, to: host.superview))
+        XCTAssertFalse(hit is TokenHighlightField.ClickTarget.View)
+        XCTAssertTrue(hit is NSTextView, "the words between keep the I-beam: \(String(describing: hit))")
+    }
+
+    private func mouseMoved(in window: NSWindow) -> NSEvent? {
+        NSEvent.mouseEvent(with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
+                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
+    }
+    #endif
 
     // MARK: Rendering
 

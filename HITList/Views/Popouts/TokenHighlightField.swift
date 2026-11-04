@@ -144,20 +144,69 @@ struct TokenHighlightField: View {
     }
 
     /// A clear, rounded shape over one piece of a box; tapping it switches off every token in the box (a
-    /// joined "[tom 4]" goes in one tap, whichever line the tap lands on).
+    /// joined "[tom 4]" goes in one tap, whichever line the tap lands on). On the Mac it is an AppKit view
+    /// (`ClickTarget`) so the pointer shows the pointing hand over it (brief 41); on an iPad with a pointer
+    /// the pointer takes the box's shape.
+    @ViewBuilder
     private func tapTarget(for box: [QuickAddToken], box piece: Box, onDisable: @escaping (QuickAddToken) -> Void) -> some View {
         let shape = RoundedRectangle(cornerRadius: Self.highlightRadius, style: .continuous)
-        return Color.clear
-            .contentShape(shape)
+        #if os(macOS)
+        ClickTarget(help: "Click to keep “\(Self.words(of: box, in: text))” as text") { box.forEach(onDisable) }
             .frame(width: piece.rect.width, height: piece.rect.height)
-            .onTapGesture { box.forEach(onDisable) }
-            #if os(macOS)
-            .pointerStyle(.link)
-            .help("Click to keep “\(Self.words(of: box, in: text))” as text")
-            #endif
             .position(x: piece.rect.midX, y: piece.rect.midY)
             .accessibilityHidden(true)
+        #else
+        Color.clear
+            .contentShape(shape)
+            .contentShape(.hoverEffect, shape)
+            .hoverEffect(.highlight)
+            .frame(width: piece.rect.width, height: piece.rect.height)
+            .onTapGesture { box.forEach(onDisable) }
+            .position(x: piece.rect.midX, y: piece.rect.midY)
+            .accessibilityHidden(true)
+        #endif
     }
+
+    #if os(macOS)
+    /// A highlight box's click target on the Mac: an AppKit view above the text, so the pointing hand wins
+    /// over the I-beam (George, 0.5.0: "my cursor should replace with the 'clickable' cursor"). SwiftUI's
+    /// `.pointerStyle(.link)` on a shape lost to the `TextEditor` underneath: the text view's own cursor rect
+    /// and its mouse-moved I-beam came first. This view is what the pointer meets over a box (`hitTest`), it
+    /// sets the hand on entering and on every move, and a click on it switches the box off.
+    struct ClickTarget: NSViewRepresentable {
+        var help: String
+        var action: () -> Void
+
+        func makeNSView(context: Context) -> View { View() }
+
+        func updateNSView(_ view: View, context: Context) {
+            view.action = action
+            view.toolTip = help
+        }
+
+        final class View: NSView {
+            var action: () -> Void = {}
+
+            override func resetCursorRects() {
+                addCursorRect(bounds, cursor: .pointingHand)
+            }
+
+            override func updateTrackingAreas() {
+                super.updateTrackingAreas()
+                for area in trackingAreas where area.owner === self { removeTrackingArea(area) }
+                addTrackingArea(NSTrackingArea(rect: .zero, options: [.cursorUpdate, .mouseMoved, .mouseEnteredAndExited,
+                                                                      .activeInKeyWindow, .inVisibleRect],
+                                               owner: self))
+            }
+
+            override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
+            override func mouseEntered(with event: NSEvent) { NSCursor.pointingHand.set() }
+            override func mouseMoved(with event: NSEvent) { NSCursor.pointingHand.set() }
+            override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+            override func mouseDown(with event: NSEvent) { action() }
+        }
+    }
+    #endif
 
     private var drawableTokens: [QuickAddToken] { Self.drawable(tokens, in: text) }
 
