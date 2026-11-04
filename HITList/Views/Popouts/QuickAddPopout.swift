@@ -138,6 +138,9 @@ struct QuickAddPopout: View {
                 draft = stored
             }
             titleFocused = true
+            #if os(macOS)
+            claimTitleFocus()
+            #endif
             onDraftChange(draft.hasContent)
         }
         .onChange(of: isClosing) { _, closing in
@@ -167,6 +170,24 @@ struct QuickAddPopout: View {
         .onExitCommand(perform: onClose)
         #endif
     }
+
+    #if os(macOS)
+    /// The Mac: the title has the keyboard the moment the card shows, with no click in it (George, 0.5.0),
+    /// whether the toolbar "+", ⌘N or a board day's "Add task" opened it. The focus asked for in `onAppear`
+    /// is dropped when the card appears in the same pass as the view that holds it (a window opening with a
+    /// card up, a board column coming back into view) and can be lost to the click that opened it, so the
+    /// card asks again over the next half second until the title has it, unless something else in the card
+    /// was picked meanwhile.
+    private func claimTitleFocus() {
+        Task { @MainActor in
+            for delay in [0, 30, 80, 150, 250] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard !isClosing, !isPaused, openChip == nil, !notesFocused, !locationFocused, focusedLine == nil else { return }
+                if !titleFocused { titleFocused = true }
+            }
+        }
+    }
+    #endif
 
     // MARK: The option bar
 

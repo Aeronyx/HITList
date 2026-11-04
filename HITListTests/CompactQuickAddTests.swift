@@ -6,7 +6,7 @@ import HITListCore
 
 /// The Upcoming board's inline add card (brief 39): one card per day column, one open across the board,
 /// Confirm keeps it open for the next task, a click away closes an empty card and asks before losing
-/// typing.
+/// typing; and (Mac) every quick-add card has the keyboard the moment it appears.
 @MainActor
 final class CompactQuickAddTests: XCTestCase {
     private let cal = Calendar.current
@@ -90,4 +90,139 @@ final class CompactQuickAddTests: XCTestCase {
         XCTAssertEqual(Set(laid.frames.map(\.minY)).count, 2, "two lines")
         XCTAssertLessThanOrEqual(laid.size.width, width - 2 * CompactQuickAddCard.padding)
     }
+
+    // MARK: - Focus at once (Mac)
+
+    #if os(macOS)
+    /// A window with `root` in it, key, on screen but out of sight; the run loop turns for `seconds`.
+    private func keyWindow<V: View>(_ root: V, size: CGSize = CGSize(width: 900, height: 600)) -> (NSWindow, NSHostingView<V>) {
+        let window = NSWindow(contentRect: NSRect(origin: CGPoint(x: -4000, y: -4000), size: size), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        let host = NSHostingView(rootView: root)
+        host.frame = NSRect(origin: .zero, size: size)
+        window.contentView = host
+        NSApp.activate()
+        window.makeKeyAndOrderFront(nil)
+        spin(0.3)
+        return (window, host)
+    }
+
+    private func spin(_ seconds: TimeInterval) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    }
+
+    /// A left click at `point` (top-left origin, in `host`), as the mouse sends it.
+    private func click(_ window: NSWindow, _ host: NSView, at point: CGPoint) {
+        let local = host.isFlipped ? point : CGPoint(x: point.x, y: host.bounds.height - point.y)
+        let location = host.convert(local, to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1,
+                                           pressure: type == .leftMouseDown ? 1 : 0)!
+            window.sendEvent(event)
+            spin(0.05)
+        }
+    }
+
+    private func textView(in view: NSView) -> NSTextView? {
+        if let text = view as? NSTextView { return text }
+        for sub in view.subviews { if let found = textView(in: sub) { return found } }
+        return nil
+    }
+
+    /// The window's own text view (the title) is first responder: typing goes into the card.
+    private func assertTitleHasKeyboard(_ window: NSWindow, _ host: NSView, _ what: String,
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        guard let field = textView(in: host) else { return XCTFail("\(what): no title field", file: file, line: line) }
+        XCTAssertTrue(window.firstResponder === field, "\(what): the title has the keyboard without a click "
+                      + "(first responder: \(String(describing: window.firstResponder)))", file: file, line: line)
+    }
+
+    /// A day's "+ Add task" clicked on a board already on screen: the card that replaces the row has the
+    /// keyboard, with no click in it.
+    func testTheBoardCardHasTheKeyboardAtOnce() throws {
+        let container = ModelContainerFactory.preview()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAddFocus-\(UUID().uuidString)"))
+        let popouts = PopoutController(draftDefaults: defaults)
+        let board = UpcomingBoardModel<UpcomingView.Entry>(items: [], window: UpcomingWindow(), now: Date(), showOverdue: false, calendar: cal)
+        let (window, host) = keyWindow(UpcomingBoard(board: board, window: .constant(UpcomingWindow()), now: Date())
+            .environment(popouts).modelContainer(container).preferredColorScheme(.dark))
+        defer { window.orderOut(nil); window.close() }
+        XCTAssertNil(textView(in: host), "no card yet")
+        // A real click on today's "+ Add task" (the first column's foot: the board is empty).
+        click(window, host, at: CGPoint(x: 70, y: 103))
+        spin(0.6)
+        XCTAssertEqual(BoardInlineAdd.openKey(in: popouts.state), BoardInlineAdd.key(for: today, calendar: cal),
+                       "the click opened today's card")
+        assertTitleHasKeyboard(window, host, "board card")
+    }
+
+    /// A card that is already open when its view comes to the screen (a board column scrolled back into view, a
+    /// window opened with a card up, the card reopened at launch) asks for the keyboard as it appears; the Mac
+    /// dropped that request (eight times out of eight here) until the card asked again once it was in place.
+    func testACardAppearingWithItsWindowHasTheKeyboardEveryTime() throws {
+        let container = ModelContainerFactory.preview()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAddFocus-\(UUID().uuidString)"))
+        var missed: [Int] = []
+        for attempt in 0..<8 {
+            let popouts = PopoutController(draftDefaults: defaults)
+            popouts.openQuickAdd(.day(today), placement: .inline(BoardInlineAdd.key(for: today, calendar: cal)))
+            let root = CompactQuickAddCard(context: .day(today), onClose: {})
+                .frame(width: UpcomingBoard.cardWidth)
+                .environment(popouts).modelContainer(container).preferredColorScheme(.dark)
+            let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 300, height: 260), styleMask: [.titled],
+                                  backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: root)
+            window.makeKeyAndOrderFront(nil)
+            spin(0.6)
+            if let field = textView(in: window.contentView!), window.firstResponder === field {} else { missed.append(attempt) }
+            popouts.closeAll()
+            window.orderOut(nil)
+            window.close()
+        }
+        XCTAssertEqual(missed, [], "the title had the keyboard every time")
+    }
+
+    /// The toolbar "+" and ⌘N: the panel (`PopoutHost`) over the window as the app has it, a split view with
+    /// the sidebar's list holding the keyboard (it does after a click on a sidebar row).
+    func testThePanelHasTheKeyboardAtOnce() throws {
+        let container = ModelContainerFactory.preview()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAddFocus-\(UUID().uuidString)"))
+        let popouts = PopoutController(draftDefaults: defaults)
+        let split = FocusSplit()
+        let (window, host) = keyWindow(split.popoutHost(popouts).environment(popouts).modelContainer(container)
+            .preferredColorScheme(.dark))
+        defer { popouts.closeAll(); window.orderOut(nil); window.close() }
+        func table(in view: NSView) -> NSTableView? {
+            if let t = view as? NSTableView { return t }
+            for sub in view.subviews { if let found = table(in: sub) { return found } }
+            return nil
+        }
+        let sidebar = try XCTUnwrap(table(in: host))
+        window.makeFirstResponder(sidebar)
+        spin(0.2)
+        XCTAssertTrue(window.firstResponder === sidebar)
+        popouts.openQuickAdd(.today)
+        spin(0.6)
+        assertTitleHasKeyboard(window, host, "panel")
+    }
+    #endif
 }
+
+#if os(macOS)
+/// The app window's shape for the focus test: a sidebar list with a selection beside a detail list.
+private struct FocusSplit: View {
+    @State private var item: String? = "Today"
+    @State private var row: String?
+    var body: some View {
+        NavigationSplitView {
+            List(["Inbox", "Today", "Upcoming"], id: \.self, selection: $item) { Text($0) }
+        } detail: {
+            List(["A task", "Another"], id: \.self, selection: $row) { Text($0) }
+        }
+    }
+}
+#endif
