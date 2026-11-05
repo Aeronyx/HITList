@@ -57,12 +57,21 @@ public struct Snapshot: Codable, Equatable, Sendable {
         // Schema V3 (0.4.1). The task this one is a subtask of; nil for a task in its own right, and in
         // every backup written before 0.4.1 (which had no subtasks).
         public var parentID: UUID?
+        // Schema V5 (0.7.0, brief 48). The task's own reminder moment ("!15m"); nil for none, and in every
+        // backup written before 0.7.0. `schemaVersion` says which: 0.7.0 and later always write it.
+        public var reminderDate: Date?
+        /// The schema version of the build that wrote this record (`currentSchemaVersion`); nil before 0.7.0.
+        public var schemaVersion: Int?
+
+        /// What this build writes as `schemaVersion`.
+        public static let currentSchemaVersion = 5
 
         public init(id: UUID, title: String, notes: String, priority: Int, dueDate: Date?, hasDueTime: Bool,
                     isCompleted: Bool, completedAt: Date?, recurrence: String?, sortOrder: Int, projectID: UUID?,
                     labelIDs: [UUID], createdAt: Date, updatedAt: Date,
                     reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
-                    flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil, parentID: UUID? = nil) {
+                    flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil, parentID: UUID? = nil,
+                    reminderDate: Date? = nil, schemaVersion: Int? = nil) {
             self.id = id; self.title = title; self.notes = notes; self.priority = priority; self.dueDate = dueDate
             self.hasDueTime = hasDueTime; self.isCompleted = isCompleted; self.completedAt = completedAt
             self.recurrence = recurrence; self.sortOrder = sortOrder; self.projectID = projectID
@@ -70,10 +79,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
             self.reminderOffsetMinutes = reminderOffsetMinutes; self.deadline = deadline; self.locationName = locationName
             self.flipTarget = flipTarget; self.flipCount = flipCount; self.flipPeriodStart = flipPeriodStart
             self.parentID = parentID
+            self.reminderDate = reminderDate; self.schemaVersion = schemaVersion
         }
 
         /// Whether this record carries the V2 fields (it was written by 0.3.6 or later).
         public var hasV2Fields: Bool { flipTarget != nil }
+
+        /// Whether this record carries the V5 field `reminderDate` (it was written by 0.7.0 or later).
+        public var hasV5Fields: Bool { (schemaVersion ?? 0) >= 5 }
     }
 
     public struct FilterRecord: Codable, Equatable, Sendable, Identifiable {

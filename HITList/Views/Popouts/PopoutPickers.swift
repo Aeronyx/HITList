@@ -119,15 +119,45 @@ struct PriorityChipPopover: View {
 
 // MARK: - Reminder (the due time, and how long before it)
 
-/// What the Reminder chip reads: "11:00 AM", "11:00 AM · 15 min before", "15 min before" (an offset
-/// still waiting for a time), or "Reminder".
+/// What the Reminder chip and pill read: "11:00 AM", "11:00 AM · 15 min before", "15 min before" (an offset
+/// still waiting for a time), or "Reminder"; with a reminder moment of the task's own (brief 48) "In 15 min ·
+/// 3:47 PM" (typed "!15m"), "Remind 4:30 PM" (picked, or saved), after the time when there is one:
+/// "5:00 PM · in 15 min".
 enum ReminderChipText {
-    static func title(time: Date?, offsetMinutes: Int?) -> String {
+    static func title(time: Date?, offsetMinutes: Int?, reminderDate: Date? = nil, fromNow: ReminderSpan? = nil,
+                      now: Date = Date(), calendar: Calendar = .current) -> String {
         let offset = (offsetMinutes ?? 0) > 0 ? ReminderOffset.label(minutes: offsetMinutes!) : nil
-        guard let time else { return offset ?? "Reminder" }
-        let clock = time.formatted(date: .omitted, time: .shortened)
-        return offset.map { "\(clock) · \($0)" } ?? clock
+        var parts: [String] = []
+        if let time { parts.append(time.formatted(date: .omitted, time: .shortened)) }
+        if let offset { parts.append(offset) }
+        if let reminderDate {
+            parts.append(moment(reminderDate, fromNow: fromNow, now: now, calendar: calendar, leading: parts.isEmpty))
+        }
+        return parts.isEmpty ? "Reminder" : parts.joined(separator: " · ")
     }
+
+    /// "In 15 min · 3:47 PM" / "in 15 min" for a typed span, "Remind 4:30 PM" / "remind Tomorrow 9:00 AM" for
+    /// a moment; capitalised when it leads the chip.
+    static func moment(_ date: Date, fromNow: ReminderSpan?, now: Date = Date(), calendar: Calendar = .current,
+                       leading: Bool = true) -> String {
+        let when = when(date, now: now, calendar: calendar)
+        if let fromNow { return leading ? "In \(fromNow.text) · \(when)" : "in \(fromNow.text)" }
+        return (leading ? "Remind " : "remind ") + when
+    }
+
+    /// "3:47 PM" today, "Tomorrow 9:00 AM", "Fri 9:00 AM", "Nov 12 9:00 AM" (`DueFormatter`).
+    static func when(_ date: Date, now: Date = Date(), calendar: Calendar = .current) -> String {
+        calendar.isDate(date, inSameDayAs: now)
+            ? date.formatted(date: .omitted, time: .shortened)
+            : DueFormatter.text(for: date, hasTime: true, now: now, calendar: calendar)
+    }
+}
+
+/// The Reminder card's "from now" choices (brief 48): that long from now ("In 15 minutes", "In 1 hour"), or a
+/// moment picked as a time ("Later today…").
+enum ReminderMomentPick: Equatable {
+    case span(ReminderSpan)
+    case at(Date)
 }
 
 // MARK: - Project

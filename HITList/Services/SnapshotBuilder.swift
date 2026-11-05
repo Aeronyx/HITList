@@ -28,7 +28,8 @@ enum SnapshotBuilder {
                       projectID: $0.project?.id, labelIDs: ($0.labels ?? []).map(\.id), createdAt: $0.createdAt, updatedAt: $0.updatedAt,
                       reminderOffsetMinutes: $0.reminderOffsetMinutes, deadline: $0.deadline, locationName: $0.locationName,
                       flipTarget: $0.flipTarget, flipCount: $0.flipCount, flipPeriodStart: $0.flipPeriodStart,
-                      parentID: $0.parent?.id)
+                      parentID: $0.parent?.id, reminderDate: $0.reminderDate,
+                      schemaVersion: Snapshot.TaskRecord.currentSchemaVersion)
             },
             filters: filters.map { .init(id: $0.id, name: $0.name, query: $0.query, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
         )
@@ -127,6 +128,8 @@ enum SnapshotBuilder {
                 target.flipCount = r.flipCount ?? 0
                 target.flipPeriodStart = r.flipPeriodStart
             }
+            // Schema V5's reminder moment ("!15m"), the same way: a backup from before 0.7.0 doesn't say.
+            if r.hasV5Fields { target.reminderDate = r.reminderDate }
             target.updatedAt = r.updatedAt
         }
         // Subtasks once every task exists (a child may come before its parent). One level only: a parent

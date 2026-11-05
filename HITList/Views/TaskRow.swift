@@ -94,7 +94,7 @@ struct TaskRow: View {
                 HStack(spacing: HITSpacing.s + 2) {
                     // The date, labels and note icon keep their full width; a long Group name truncates.
                     HStack(spacing: HITSpacing.s + 2) {
-                        if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject) {
+                        if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
                             if let due = task.dueDate {
                                 let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
                                 if !hidesDay {
@@ -106,6 +106,11 @@ struct TaskRow: View {
                                     MetaItem(nil, systemImage: "repeat", tint: tint)
                                         .accessibilityLabel("Repeats")
                                 }
+                            }
+                            // Its own reminder still to come (brief 48, "!15m"): a small bell and the time.
+                            if let reminder = Self.reminderText(for: task, now: now) {
+                                MetaItem(reminder, systemImage: "bell", tint: Theme.secondaryText)
+                                    .accessibilityLabel("Reminder \(reminder)")
                             }
                             // Its checklist (brief 32): "2/5" by a checklist glyph, nothing without one.
                             if let checklist = Self.checklistText(for: task) {
@@ -166,10 +171,18 @@ struct TaskRow: View {
     }
 
     /// Whether the second line has anything to show (an all-day task under Today's header may not).
-    static func hasMeta(_ task: TaskItem, hidesDay: Bool, showProject: Bool) -> Bool {
+    static func hasMeta(_ task: TaskItem, hidesDay: Bool, showProject: Bool, now: Date = Date()) -> Bool {
         if let _ = task.dueDate, !hidesDay || task.hasDueTime || task.recurrence != nil { return true }
         if showProject, task.project != nil { return true }
+        if reminderText(for: task, now: now) != nil { return true }
         return !task.labelList.isEmpty || task.subtaskProgress != nil
+    }
+
+    /// The bell's text for an open task's own reminder still to come ("!15m", brief 48): "3:47 PM" today,
+    /// "Tomorrow 9:00 AM" on another day; nil when there is none, it has gone off, or the task is done.
+    static func reminderText(for task: TaskItem, now: Date, calendar: Calendar = .current) -> String? {
+        guard !task.isCompleted, let at = task.reminderDate, at > now else { return nil }
+        return ReminderChipText.when(at, now: now, calendar: calendar)
     }
 
     /// "2/5" for a task with sub-tasks; nil without.
