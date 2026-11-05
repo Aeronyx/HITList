@@ -97,6 +97,9 @@ struct QuickAddPopout: View {
                                 onDisable: { token in
                                     withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.disable(token) }
                                 },
+                                onEnable: { token in
+                                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchBackOn(token) }
+                                },
                                 onSubmit: save)
                 .accessibilityIdentifier("quickAddTitle")
             if draft.shows(.description) {

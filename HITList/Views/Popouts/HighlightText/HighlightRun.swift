@@ -8,8 +8,8 @@ import AppKit
 
 /// One highlight box in the quick-add title as the native text view keeps it (brief 47): the stretch of the
 /// title from a box's first token to its last ("tom 4" in "[tom 4]", spaces between included), as UTF-16
-/// offsets of the text view's string, with the box's colour and what switching it off does.
-/// `TokenHighlightField` builds them from the parse; the text views draw and hit-test by them.
+/// offsets of the text view's string, with the box's colour and what switching it off and back on does.
+/// `TokenHighlightField` builds them from the parse; the text views draw, hit-test and Backspace by them.
 struct HighlightRun {
     /// From the first token's first character to the last token's last (`NSString` offsets).
     var range: NSRange
@@ -19,6 +19,8 @@ struct HighlightRun {
     var words: String
     /// Switches every token in the box off (`TokenHighlightField.onDisable`, once per token).
     var switchOff: () -> Void
+    /// Undo of `switchOff`: the box lights up again. Nil leaves nothing to undo.
+    var switchOn: (() -> Void)?
 
     /// Same place and colour: nothing to redraw.
     func looksLike(_ other: HighlightRun) -> Bool {
@@ -28,6 +30,15 @@ struct HighlightRun {
 
 /// The rules the text views share, kept pure for the tests.
 enum HighlightRules {
+    /// The box that Backspace switches off instead of deleting (George, 2026-11-05: "if I were to press
+    /// backspace after typing it … it first removes the highlight without deleting a letter"): the caret sits
+    /// exactly at the end of a box, nothing is selected and nothing is being composed. Nil: Backspace deletes.
+    /// The end of a box is the end of its last phrase; inside a joined "[tom 4]" Backspace deletes as usual.
+    static func backspaceTarget(_ ranges: [NSRange], selection: NSRange, composing: Bool) -> Int? {
+        guard !composing, selection.length == 0, selection.location != NSNotFound, selection.location > 0 else { return nil }
+        return ranges.firstIndex { NSMaxRange($0) == selection.location && $0.length > 0 }
+    }
+
     /// Where a box is after an edit that replaced `old` (a range of the text before it) with `newLength`
     /// characters, until the next parse redraws it: a box before the edit stays, one after it moves with it,
     /// one whose characters the edit replaces or splits is not drawn (the parse decides what it is now).

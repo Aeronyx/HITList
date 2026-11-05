@@ -9,8 +9,9 @@ import AppKit
 /// The text view decides its own pointer: the pointing hand over a box and the I-beam elsewhere, from its
 /// cursor rects, `cursorUpdate` and `mouseMoved` alike, so nothing above it fights the I-beam it sets on
 /// every move (what made the old overlay's hand flicker). A click on a box switches it off and leaves the
-/// caret where it was; a click elsewhere places the caret. Return (and ⌘Return, ⌥Return, Enter) confirms;
-/// a pasted or dropped line break becomes a space.
+/// caret where it was; a click elsewhere places the caret. Backspace with the caret right after a box
+/// switches the box off and deletes nothing; ⌘Z brings it back. Return (and ⌘Return, ⌥Return, Enter)
+/// confirms; a pasted or dropped line break becomes a space.
 struct HighlightTextField: NSViewRepresentable {
     var placeholder: String
     @Binding var text: String
@@ -256,6 +257,18 @@ final class HighlightNSTextView: NSTextView {
         return false
     }
 
+    /// Backspace: with the caret right after a box (nothing selected, nothing being composed), the box goes
+    /// and no letter does; otherwise a letter goes as usual.
+    override func deleteBackward(_ sender: Any?) {
+        let visible = highlightLayout.visibleRuns
+        if let target = HighlightRules.backspaceTarget(visible.map { highlightLayout.runs[$0].range },
+                                                       selection: selectedRange(), composing: hasMarkedText()) {
+            switchOff(visible[target])
+            return
+        }
+        super.deleteBackward(sender)
+    }
+
     // MARK: Boxes
 
     /// The visible boxes' pieces in this view's coordinates.
@@ -271,11 +284,27 @@ final class HighlightNSTextView: NSTextView {
         HighlightGeometry.run(at: point, in: boxPieces())
     }
 
-    /// Switches box `index` off (its tokens' `onDisable`), at once on screen.
+    /// Switches box `index` off (its tokens' `onDisable`), at once on screen, and lets ⌘Z bring it back.
     func switchOff(_ index: Int) {
         guard highlightLayout.runs.indices.contains(index) else { return }
         let run = highlightLayout.runs.remove(at: index)
         run.switchOff()
+        if let on = run.switchOn {
+            breakUndoCoalescing()
+            registerUndo(on, inverse: run.switchOff)
+        }
+    }
+
+    private func registerUndo(_ action: @escaping () -> Void, inverse: @escaping () -> Void) {
+        guard let undo = undoManager else { return }
+        // A step of its own, whatever group the event has open: Undo takes back the switch, not the typing too.
+        undo.beginUndoGrouping()
+        undo.registerUndo(withTarget: self) { view in
+            action()
+            view.registerUndo(inverse, inverse: action)
+        }
+        undo.setActionName("Highlight")
+        undo.endUndoGrouping()
     }
 
     private func runsChanged() {
