@@ -8,7 +8,19 @@ import SwiftUI
 ///   display (669 × 951 pt): the Duo shell, its columns, Upcoming's board, Flipboard's even grid.
 /// - `-duoCrease 360`: a 24 pt crease from top to bottom centred at that x, as the system reports the fold
 ///   while the device is partly open (an active `division` region), where the system reports none.
+/// - `-duoFoldDemo 8`: with `-duoStandIn`, the window swaps between the folded layout (the four tabs, as on the
+///   outer display) and the unfolded one every 8 seconds, as folding and unfolding would, so the swap and the
+///   editor's kept typing can be watched.
 enum DuoDebug {
+    static var foldDemoInterval: Double? {
+        #if DEBUG
+        let seconds = UserDefaults.standard.double(forKey: "duoFoldDemo")
+        return seconds > 0 ? seconds : nil
+        #else
+        return nil
+        #endif
+    }
+
     static var standIn: Bool {
         #if DEBUG
         UserDefaults.standard.bool(forKey: "duoStandIn")

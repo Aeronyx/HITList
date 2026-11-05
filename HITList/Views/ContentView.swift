@@ -38,9 +38,17 @@ struct ContentView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
 
+    #if DEBUG
+    /// `-duoFoldDemo`: the stand-in is "folded" (`DuoDebug.foldDemoInterval`).
+    @State private var debugFolded = false
+    #endif
+
     private var shell: AppShell {
         #if os(iOS)
-        AppShell.shell(idiom: AppShell.currentIdiom, horizontalSizeClass: sizeClass, size: geometry.fullSize)
+        #if DEBUG
+        if debugFolded { return .tabs }
+        #endif
+        return AppShell.shell(idiom: AppShell.currentIdiom, horizontalSizeClass: sizeClass, size: geometry.fullSize)
         #else
         .split
         #endif
@@ -52,6 +60,9 @@ struct ContentView: View {
             #if os(iOS)
             case .tabs:
                 MobileShell(place: $place)
+                    #if DEBUG
+                    .environment(\.horizontalSizeClass, debugFolded ? .compact : sizeClass)
+                    #endif
             case .duo:
                 SplitContent(place: $place, duo: true, geometry: geometry)
                     // The inner display may report a compact width, as an iPhone does; the split view,
@@ -83,6 +94,15 @@ struct ContentView: View {
             .id(hingeStatus)
         }
         .onHingeStatusChange { hingeStatus = $0 }
+        #endif
+        #if DEBUG
+        .task {
+            guard let seconds = DuoDebug.foldDemoInterval else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(seconds))
+                debugFolded.toggle()
+            }
+        }
         #endif
         #if os(macOS)
         .containerBackground(Theme.background, for: .window)
@@ -130,7 +150,10 @@ private struct SplitContent: View {
             }
         } detail: {
             if duo {
+                // Narrow enough for half the display, so a sidebar that ends at the crease stays beside it rather
+                // than sliding over a dimmed list (brief 50).
                 DuoDetail(item: selection ?? .today, geometry: geometry, columnVisibility: $columnVisibility)
+                    .navigationSplitViewColumnWidth(min: DuoColumns.minListWidth, ideal: geometry.width)
             } else {
                 ListScreen(item: selection ?? .today)
                     .navigationSplitViewColumnWidth(min: 420, ideal: 640)

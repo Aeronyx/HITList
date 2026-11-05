@@ -42,6 +42,7 @@ struct DuoDetail: View {
         }
         // Partly open upright the sidebar ends at the crease; the detail's content starts past it (brief 50).
         .padding(.leading, plan.detailLeadingInset)
+        .background(Theme.background)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: popouts.state.taskID)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: plan)
         .onChange(of: plan.showsSidebar, initial: true) { _, shows in
