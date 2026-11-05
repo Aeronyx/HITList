@@ -1,9 +1,11 @@
 import SwiftUI
 import HITListCore
 
-/// The Reminder chip's card. A task reminds at its time, or a while before it: the offsets (At time,
-/// 5, 10, 15, 30 min, 1 hour, 1 day before) as chips two per row, the last cell a custom "N min
-/// before" field; then the time row (typed, or 9 AM / Noon / 5 PM / 8 PM) and when it fires ("Fires
+/// The Reminder chip's card. First, a reminder of its own from now (brief 48): "In 15 minutes", "In 1 hour"
+/// (they write `!15m` / `!1h`) and "Later today…" (a time; tomorrow's if it has passed), whatever the task's
+/// date; tapping the chosen one again takes it away. Then a task reminds at its time, or a while before it:
+/// the offsets (At time, 5, 10, 15, 30 min, 1 hour, 1 day before) as chips two per row, the last cell a custom
+/// "N min before" field; then the time row (typed, or 9 AM / Noon / 5 PM / 8 PM) and when it fires ("Fires
 /// 10:45 AM"). Offsets write `!15mb` and keep the card open so a time can follow; a time closes it.
 struct ReminderPickerCard: View {
     /// The task's day (nil: today).
@@ -18,8 +20,29 @@ struct ReminderPickerCard: View {
     var onClear: () -> Void
     /// Nil hides the offsets.
     var onOffset: ((Int?) -> Void)?
+    /// The task's own reminder moment ("!15m"), and the span it was typed as (quick add, before it is saved).
+    var reminderDate: Date? = nil
+    var fromNow: ReminderSpan? = nil
+    /// A "from now" choice; nil takes the moment away. Nil hides the choices.
+    var onMoment: ((ReminderMomentPick?) -> Void)? = nil
 
     @Environment(\.pickerFocusRequest) private var focusRequest
+    /// "Later today…" was tapped: its time field shows.
+    @State private var picksLater = false
+
+    /// The "from now" spans offered as chips.
+    static let fromNowPresets: [ReminderSpan] = [ReminderSpan(minutes: 15), ReminderSpan(minutes: 60)]
+
+    /// "Later today…" at `time`: today, or tomorrow when that time has already gone.
+    static func laterToday(_ time: PickerTime, now: Date = Date(), calendar: Calendar = .current) -> Date {
+        let today = time.on(now, calendar: calendar)
+        return today > now ? today : time.on(calendar.date(byAdding: .day, value: 1, to: now) ?? now, calendar: calendar)
+    }
+
+    /// "In 15 minutes", "In 1 hour".
+    static func fromNowTitle(_ span: ReminderSpan) -> String {
+        span.totalMinutes == 60 ? "In 1 hour" : span.totalMinutes == 15 ? "In 15 minutes" : "In " + span.text
+    }
 
     /// The offsets, in minutes before the time.
     static let offsetPresets: [Int] = [0, 5, 10, 15, 30, 60, 1440]
@@ -61,6 +84,10 @@ struct ReminderPickerCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.s) {
+            if let onMoment {
+                fromNowSection(onMoment)
+                Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, HITSpacing.xs)
+            }
             if let onOffset {
                 header("Remind me before the time")
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
@@ -103,7 +130,7 @@ struct ReminderPickerCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
-                if time != nil {
+                if time != nil || reminderDate != nil {
                     Button("No reminder", role: .destructive, action: onClear)
                         .buttonStyle(HITButtonStyle(.destructive, size: .small))
                 }
@@ -115,6 +142,45 @@ struct ReminderPickerCard: View {
 
     private func header(_ title: String) -> some View {
         Text(title).font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+    }
+
+    /// "Remind me from now": the spans, "Later today…" and its time field, and when it goes off.
+    @ViewBuilder
+    private func fromNowSection(_ onMoment: @escaping (ReminderMomentPick?) -> Void) -> some View {
+        let picked = reminderDate != nil && !Self.fromNowPresets.contains { $0 == fromNow }
+        header("Remind me from now")
+        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
+                            GridItem(.flexible(), alignment: .leading)],
+                  alignment: .leading, spacing: 6) {
+            ForEach(Self.fromNowPresets, id: \.self) { span in
+                let selected = reminderDate != nil && fromNow == span
+                HITChip(Self.fromNowTitle(span), systemImage: "timer", tint: Theme.accent, isSelected: selected,
+                        action: { onMoment(selected ? nil : .span(span)) })
+                    .accessibilityIdentifier("reminderFromNow\(span.totalMinutes)")
+            }
+            HITChip("Later today…", systemImage: "clock", tint: Theme.accent, isSelected: picked || picksLater,
+                    action: {
+                        if picked { onMoment(nil); picksLater = false } else { picksLater.toggle() }
+                    })
+                .accessibilityIdentifier("reminderLaterToday")
+        }
+        if picksLater || picked {
+            PickerTimeField(time: picked ? reminderDate.map { PickerTime($0) } : nil, placeholder: "Remind at…") { time in
+                onMoment(time.map { .at(Self.laterToday($0, now: now)) })
+                if time == nil { picksLater = false }
+            }
+            .accessibilityIdentifier("reminderLaterTodayTime")
+        }
+        if let reminderDate {
+            HStack(spacing: 4) {
+                Image(systemName: "bell.fill").font(.system(size: 10, weight: .semibold))
+                Text("Goes off " + ReminderChipText.when(reminderDate, now: now))
+                    .font(HITType.captionBold)
+            }
+            .foregroundStyle(Theme.accent)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("reminderMomentFires")
+        }
     }
 }
 
