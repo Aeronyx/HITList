@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.6.0
+## 0.6.0 — build 16, 2026-11-05
 
 George's notes on build 15 and his backburner list, in eight sessions: the Mac board's inline add, the
 profile in the corner, quick-add polish, sync and profile hardening, a Claude connector, Siri and Shortcuts,
