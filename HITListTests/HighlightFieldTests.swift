@@ -116,7 +116,8 @@ final class HighlightFieldTests: XCTestCase {
             VStack(alignment: .leading) {
                 TokenHighlightField(placeholder: "Task Name", text: $model.draft.text, tokens: parsed.tokens,
                                     priority: parsed.priority, focus: $focused, bordered: false,
-                                    onDisable: { model.draft.disable($0) }, onSubmit: { model.submits += 1 })
+                                    onDisable: { model.draft.disable($0) }, onEnable: { model.draft.switchBackOn($0) },
+                                    onSubmit: { model.submits += 1 })
                 Text("\(model.unrelated)")
                 Spacer()
             }
@@ -524,6 +525,173 @@ final class HighlightFieldTests: XCTestCase {
         XCTAssertEqual(text.rect, field.bounds)
     }
     #endif
+
+    // MARK: Backspace removes the highlight first (item 3)
+
+    /// George (2026-11-05): "if I were to press backspace after typing it … it first removes the highlight
+    /// without deleting a letter". The caret right after a box's last letter, nothing selected, nothing being
+    /// composed: that box. Anywhere else: Backspace deletes.
+    func testTheCaretRuleForBackspace() {
+        typealias R = HighlightRules
+        // "Buy milk [today] [p1]" and a joined "Call [tom 4]" further on.
+        let boxes = [NSRange(location: 9, length: 5), NSRange(location: 15, length: 2), NSRange(location: 23, length: 5)]
+        XCTAssertEqual(R.backspaceTarget(boxes, selection: NSRange(location: 17, length: 0), composing: false), 1, "right after p1")
+        XCTAssertEqual(R.backspaceTarget(boxes, selection: NSRange(location: 14, length: 0), composing: false), 0,
+                       "right after today, with the caret moved back to it")
+        XCTAssertEqual(R.backspaceTarget(boxes, selection: NSRange(location: 28, length: 0), composing: false), 2,
+                       "after a joined box: the whole box")
+        XCTAssertNil(R.backspaceTarget(boxes, selection: NSRange(location: 26, length: 0), composing: false),
+                     "inside the joined box (after \"tom\"): a letter")
+        XCTAssertNil(R.backspaceTarget(boxes, selection: NSRange(location: 16, length: 0), composing: false), "inside p1")
+        XCTAssertNil(R.backspaceTarget(boxes, selection: NSRange(location: 18, length: 0), composing: false),
+                     "a space after the box: the space goes first")
+        XCTAssertNil(R.backspaceTarget(boxes, selection: NSRange(location: 15, length: 2), composing: false), "a selection")
+        XCTAssertNil(R.backspaceTarget(boxes, selection: NSRange(location: 17, length: 0), composing: true), "an input method composing")
+        XCTAssertNil(R.backspaceTarget([], selection: NSRange(location: 17, length: 0), composing: false))
+    }
+
+    private func backspace(_ hosted: Hosted) {
+        #if os(iOS)
+        hosted.field.deleteBackward()
+        #else
+        hosted.field.deleteBackward(nil)
+        #endif
+        spin(0.15)
+    }
+
+    /// "Buy milk today p1": Backspace once, p1's box goes and its letters stay; again, a letter goes.
+    func testBackspaceSwitchesTheBoxOffThenDeletesALetter() throws {
+        let model = FieldModel(text: "Buy milk today p1", focused: true)
+        let hosted = try host(model)
+        defer { hosted.close() }
+        caret(hosted, at: 17)
+        backspace(hosted)
+        XCTAssertEqual(hosted.field.text(), "Buy milk today p1", "no letter deleted")
+        XCTAssertEqual(model.draft.text, "Buy milk today p1")
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+        XCTAssertEqual(model.draft.result(parser()).priority, .p4, "p1 is title text now")
+        XCTAssertEqual(model.draft.result(parser()).title, "Buy milk p1")
+        backspace(hosted)
+        XCTAssertEqual(hosted.field.text(), "Buy milk today p")
+        XCTAssertEqual(model.draft.text, "Buy milk today p")
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+    }
+
+    /// A space after the phrase: the first Backspace deletes the space, the next removes the box.
+    func testWithASpaceAfterThePhraseTheSpaceGoesFirst() throws {
+        let model = FieldModel(text: "Buy milk today ", focused: true)
+        let hosted = try host(model)
+        defer { hosted.close() }
+        caret(hosted, at: 15)
+        backspace(hosted)
+        XCTAssertEqual(model.draft.text, "Buy milk today")
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+        backspace(hosted)
+        XCTAssertEqual(model.draft.text, "Buy milk today")
+        XCTAssertEqual(boxWords(hosted.field), [])
+        backspace(hosted)
+        XCTAssertEqual(model.draft.text, "Buy milk toda")
+    }
+
+    /// After a joined "[tom 4]" one Backspace switches off the whole box; with the caret moved back to the end of
+    /// a box mid-title, that box goes and the rest stay.
+    func testBackspaceAfterAJoinedBoxOrMidTitle() throws {
+        let model = FieldModel(text: "Call tom 4 about it p1", focused: true)
+        let hosted = try host(model)
+        defer { hosted.close() }
+        caret(hosted, at: 10)
+        backspace(hosted)
+        XCTAssertEqual(model.draft.text, "Call tom 4 about it p1")
+        XCTAssertEqual(boxWords(hosted.field), ["p1"])
+        XCTAssertNil(model.draft.result(parser()).dueDate)
+        XCTAssertEqual(hosted.field.selectedRangeForTests, NSRange(location: 10, length: 0), "the caret stays put")
+    }
+
+    /// ⌘Z (or shake) brings a box switched off by Backspace or a tap back; redo switches it off again; typing
+    /// before it is undone in its own step after.
+    func testUndoBringsASwitchedOffBoxBack() throws {
+        let model = FieldModel(text: "", focused: true)
+        let hosted = try host(model)
+        defer { hosted.close() }
+        spin(1) { isFirstResponder(hosted) }
+        type(hosted, "Buy today")
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+        let undo = try XCTUnwrap(hosted.field.undoManager)
+        endEvent(undo)
+        backspace(hosted)
+        endEvent(undo)
+        XCTAssertEqual(boxWords(hosted.field), [])
+        XCTAssertTrue(undo.canUndo)
+        XCTAssertEqual(undo.undoActionName, "Highlight")
+        undo.undo()
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), ["today"], "undo: the box is back")
+        XCTAssertEqual(model.draft.text, "Buy today", "and the words are as they were")
+        XCTAssertTrue(undo.canRedo)
+        undo.redo()
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), [], "redo: off again")
+        undo.undo()
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+
+        // A tap's switch-off is undone the same way.
+        let piece = try XCTUnwrap(hosted.field.boxPieces().first)
+        tap(hosted, at: CGPoint(x: piece.rect.midX, y: piece.rect.midY))
+        endEvent(undo)
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), [])
+        undo.undo()
+        spin(0.2)
+        XCTAssertEqual(boxWords(hosted.field), ["today"])
+
+        // Then the typing itself.
+        undo.undo()
+        spin(0.2)
+        XCTAssertEqual(model.draft.text, "", "the typing is undone after the box")
+    }
+
+    /// What the end of a key or mouse event does to the undo history in the app: the event's automatic undo
+    /// group closes. UIKit's text undo closes it as the run loop turns; AppKit's only after an event the
+    /// application dispatched, which a test never has, so the Mac closes it by hand.
+    private func endEvent(_ undo: UndoManager) {
+        #if os(macOS)
+        while undo.groupingLevel > 0 { undo.endUndoGrouping() }
+        #else
+        spin(0.05)
+        #endif
+    }
+
+    /// The draft's half of undo: only the phrase that was switched off lights up again, the text is as it was,
+    /// and other switched-off phrases (another copy of the same word too) stay off.
+    func testSwitchingBackOnRestoresOnlyThatPhrase() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call tom 5pm p1 #Work")
+        let tokens = draft.parsed(p).tokens
+        let tom = try XCTUnwrap(tokens.first { $0.text == "tom" }), p1 = try XCTUnwrap(tokens.first { $0.text == "p1" })
+        draft.disable(tom)
+        draft.disable(p1)
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["5pm", "#Work"])
+        draft.switchBackOn(tom)
+        XCTAssertEqual(draft.text, "Call tom 5pm p1 #Work")
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["tom", "5pm", "#Work"])
+        XCTAssertEqual(draft.disabledPhrases, [try XCTUnwrap(QuickAddDisabledPhrase(p1, in: draft.text))])
+        draft.switchBackOn(tom)
+        XCTAssertEqual(draft.parsed(p).tokens.map(\.text), ["tom", "5pm", "#Work"], "twice: nothing more")
+
+        // Two copies of a word: the second one switched off and back on; the first stays off throughout.
+        var twice = QuickAddDraft(context: .inbox, text: "@calls then @calls")
+        let labels = twice.parsed(p).tokens.filter { $0.kind == .label }
+        XCTAssertEqual(labels.count, 2)
+        twice.disable(labels[0])
+        twice.disable(labels[1])
+        twice.switchBackOn(labels[1])
+        let lit = twice.parsed(p).tokens.filter { $0.kind == .label }
+        XCTAssertEqual(lit.count, 1)
+        XCTAssertEqual(lit.first.map { twice.text.distance(from: twice.text.startIndex, to: $0.range.lowerBound) }, 12,
+                       "the second copy is back, the first stays plain")
+    }
 
     #if os(macOS)
     /// The Mac's inline "Add task" row, open with "Call Tom p2", in a real window: what a click on a word hits

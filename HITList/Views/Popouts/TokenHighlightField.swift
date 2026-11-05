@@ -4,15 +4,18 @@ import HITListCore
 /// The quick-add title: `HITField`'s box (`HITFieldChrome`) around a wrapping text field, with each
 /// recognised token (dates, times, repeats, `#project`, `@label`, `p1`-`p4`, `!15mb`) tinted behind the
 /// text as you type, in a lightly rounded box that reads as a button. Highlights of the same colour with
-/// only spaces between them are one box ("[tom 4]", brief 37). Tapping (clicking) a box switches its
-/// tokens off (`onDisable`, once per token): their words stay as plain text in the title. Return never
-/// starts a new line: on the Mac it submits, on iOS it does nothing (`TitleReturn`, brief 36).
-/// `bordered: false` drops the box, for the quick-add card where the card itself is the frame.
+/// only spaces between them are one box ("[tom 4]", brief 37). A box is switched off two ways (George,
+/// 2026-11-05): a tap or click on it, or Backspace with the caret right after it, which deletes nothing the
+/// first time (the next Backspace deletes a letter). Either way `onDisable` runs once per token in the box
+/// and the words stay as plain title text; Undo brings the box back (`onEnable`). Return never starts a new
+/// line: on the Mac it submits, on iOS it does nothing (`TitleReturn`, brief 36). `bordered: false` drops
+/// the box, for the quick-add card where the card itself is the frame.
 ///
 /// How the highlights are drawn and hit (brief 47): the field is the platform's own text view
 /// (`HighlightTextField`: `UITextView` / `NSTextView` on TextKit 1), whose layout manager draws each box
 /// behind its glyphs from the text view's own line layout, so boxes sit on the words at every width, wrap
-/// and scroll. The same view hit-tests the boxes for taps and clicks; nothing is layered above it.
+/// and scroll. The same view hit-tests the boxes for taps, clicks, the Mac's pointing hand and the iPad
+/// pointer, and owns Backspace; nothing is layered above it.
 struct TokenHighlightField: View {
     let placeholder: String
     @Binding var text: String
@@ -20,8 +23,10 @@ struct TokenHighlightField: View {
     var priority: Priority
     var focus: FocusState<Bool>.Binding
     var bordered = true
-    /// A highlight was tapped or clicked; nil leaves the highlights as decoration.
+    /// A highlight was tapped, clicked or backspaced; nil leaves the highlights as decoration.
     var onDisable: ((QuickAddToken) -> Void)? = nil
+    /// Undo of `onDisable`: the token lights up again. Nil: switching off is not undoable.
+    var onEnable: ((QuickAddToken) -> Void)? = nil
     var onSubmit: () -> Void
 
     /// The highlight's corners (George, brief 28: "slightly rounded, like a button").
@@ -52,7 +57,7 @@ struct TokenHighlightField: View {
             }
     }
 
-    /// The boxes as the text view keeps them: place, colour, words, and switching off.
+    /// The boxes as the text view keeps them: place, colour, words, and switching off and back on.
     private var runs: [HighlightRun] {
         let tokens = Self.drawable(tokens, in: text)
         return Self.spans(tokens, in: text, priority: priority).map { span in
@@ -60,7 +65,8 @@ struct TokenHighlightField: View {
             let tint = PopoutTint.token(members[0].kind, priority: priority).opacity(Self.highlightOpacity)
             return HighlightRun(range: span.range, color: HighlightPlatformColor(tint).cgColor,
                                 words: Self.words(of: members, in: text),
-                                switchOff: { [onDisable] in members.forEach { onDisable?($0) } })
+                                switchOff: { [onDisable] in members.forEach { onDisable?($0) } },
+                                switchOn: onEnable.map { enable in { members.reversed().forEach(enable) } })
         }
     }
 

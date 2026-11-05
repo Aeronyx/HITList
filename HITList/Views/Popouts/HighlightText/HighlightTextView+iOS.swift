@@ -3,12 +3,14 @@ import SwiftUI
 import UIKit
 
 /// The quick-add title on iPhone and iPad (brief 47): a `UITextView` on a TextKit 1 stack whose layout
-/// manager draws the highlight boxes behind the glyphs (`HighlightLayoutManager`). A tap on a box switches
-/// it off (it wins over the text view's own caret tap there); an iPad pointer takes the box's shape
-/// over it and the I-beam elsewhere.
+/// manager draws the highlight boxes behind the glyphs (`HighlightLayoutManager`). Being the text view
+/// itself, it sees the software keyboard's Backspace (`deleteBackward`), which a SwiftUI field cannot:
+/// with the caret right after a box, Backspace switches the box off and deletes nothing. A tap on a box
+/// switches it off too (it wins over the text view's own caret tap there); an iPad pointer takes the box's
+/// shape over it and the I-beam elsewhere.
 ///
 /// Return does nothing (brief 36: the card's Confirm adds) and the key reads "return"; a pasted, dropped or
-/// dictated line break becomes a space.
+/// dictated line break becomes a space. Undo (shake, three-finger swipe, ⌘Z) brings a switched-off box back.
 struct HighlightTextField: UIViewRepresentable {
     var placeholder: String
     @Binding var text: String
@@ -258,11 +260,47 @@ final class HighlightUITextView: UITextView {
         return (bounds, nil)
     }
 
-    /// Switches box `index` off (its tokens' `onDisable`), at once on screen.
+    /// Backspace: with the caret right after a box (nothing selected, nothing being composed), the box goes
+    /// and no letter does; otherwise a letter goes as usual.
+    override func deleteBackward() {
+        let visible = highlightLayout.visibleRuns
+        if let target = HighlightRules.backspaceTarget(visible.map { highlightLayout.runs[$0].range },
+                                                       selection: selectedRange, composing: markedTextRange != nil) {
+            switchOff(visible[target])
+            return
+        }
+        super.deleteBackward()
+    }
+
+    /// Switches box `index` off (its tokens' `onDisable`), at once on screen, and lets Undo bring it back.
     func switchOff(_ index: Int) {
         guard highlightLayout.runs.indices.contains(index) else { return }
         let run = highlightLayout.runs.remove(at: index)
         run.switchOff()
+        if let on = run.switchOn { registerUndo(on, inverse: run.switchOff) }
+        resyncKeyboard()
+    }
+
+    /// The keyboard took Backspace for a deleted letter and offers words for what it thinks is left ("p" after
+    /// "p1"); it reads the text again once told it changed, after the key is done.
+    private func resyncKeyboard() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.isFirstResponder, self.markedTextRange == nil else { return }
+            self.inputDelegate?.textWillChange(self)
+            self.inputDelegate?.textDidChange(self)
+        }
+    }
+
+    private func registerUndo(_ action: @escaping () -> Void, inverse: @escaping () -> Void) {
+        guard let undo = undoManager else { return }
+        // A step of its own, whatever group the event has open: Undo takes back the switch, not the typing too.
+        undo.beginUndoGrouping()
+        undo.registerUndo(withTarget: self) { view in
+            action()
+            view.registerUndo(inverse, inverse: action)
+        }
+        undo.setActionName("Highlight")
+        undo.endUndoGrouping()
     }
 
     @objc private func tapBox(_ recognizer: UITapGestureRecognizer) {
