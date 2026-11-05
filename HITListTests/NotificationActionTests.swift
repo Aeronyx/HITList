@@ -88,6 +88,20 @@ final class NotificationActionTests: XCTestCase {
         await fulfillment(of: [posted], timeout: 1)
     }
 
+    func testTappingAReminderAsksTheShellToOpenItsTask() async throws {
+        // Before 0.7.0 nothing listened for .openTask: the app opened on whatever screen it was on.
+        let id = UUID()
+        _ = IntentRouter.shared.takeTask(); _ = IntentRouter.shared.take()
+        await NotificationResponder(container: container).handle(action: UNNotificationDefaultActionIdentifier, taskID: id)
+        XCTAssertEqual(IntentRouter.shared.takeTask(), id, "the shell on show opens this task")
+    }
+
+    func testTappingTheMorningSummaryAsksForToday() async throws {
+        _ = IntentRouter.shared.takeTask(); _ = IntentRouter.shared.take()
+        await NotificationResponder(container: container).openToday(action: UNNotificationDefaultActionIdentifier)
+        XCTAssertEqual(IntentRouter.shared.take(), .today)
+    }
+
     func testCategoryOffersCompleteAndSnooze() {
         let category = NotificationResponder.category
         XCTAssertEqual(category.identifier, "TASK_DUE")

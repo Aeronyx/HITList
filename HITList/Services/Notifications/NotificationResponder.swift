@@ -80,6 +80,9 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
         guard let taskID else { return }  // the summary notification has no task
         switch action {
         case UNNotificationDefaultActionIdentifier:
+            // Tapping a reminder opens its task: the shells take the request from `IntentRouter` (as a
+            // Spotlight result does), even on a cold launch before any window exists.
+            IntentRouter.shared.open(task: taskID)
             NotificationCenter.default.post(name: .openTask, object: nil, userInfo: [NotificationScheduler.taskIDKey: taskID])
         case Self.completeAction, Self.snoozeAction:
             let context = container.mainContext
@@ -105,12 +108,13 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
-    /// The morning summary was tapped. The system brings the app to the front; whoever shows the screens
-    /// listens for `.openToday` (on iPhone the app opens on its start screen until then).
+    /// The morning summary was tapped. The system brings the app to the front, and the shell on show
+    /// switches to Today (`IntentRouter`, the same path as Siri's "Open Today").
     @MainActor
     func openToday(action: String) async {
         guard action == UNNotificationDefaultActionIdentifier else { return }
         Self.log.info("Morning summary opened")
+        IntentRouter.shared.open(.today)
         NotificationCenter.default.post(name: .openToday, object: nil)
     }
 
