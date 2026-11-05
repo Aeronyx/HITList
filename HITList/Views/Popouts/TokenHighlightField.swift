@@ -6,16 +6,13 @@ import HITListCore
 /// text as you type, in a lightly rounded box that reads as a button. Highlights of the same colour with
 /// only spaces between them are one box ("[tom 4]", brief 37). Tapping (clicking) a box switches its
 /// tokens off (`onDisable`, once per token): their words stay as plain text in the title. Return never
-/// starts a new line: on the Mac it submits, on iOS it does nothing (`TitleReturn`, brief 36). `bordered: false` drops the box, for the quick-add card where the card
-/// itself is the frame.
+/// starts a new line: on the Mac it submits, on iOS it does nothing (`TitleReturn`, brief 36).
+/// `bordered: false` drops the box, for the quick-add card where the card itself is the frame.
 ///
-/// How the highlights are drawn and hit: under the field sits a copy of the text with clear glyphs, each
-/// token's words tagged with `TokenSpan`. SwiftUI reports that copy's line layout (`Text.LayoutKey`), and
-/// the runs carrying a `TokenSpan` give each token's rectangles on each line (`TokenHighlightField.areas`),
-/// joined per line into boxes for runs of same-coloured tokens (`groups`, `boxes`).
-/// The tints are rounded rectangles drawn behind the field at those places, and the tap targets are clear
-/// shapes at the same places above it, so the field itself stays a plain `TextField` (iOS) / `TextEditor`
-/// (Mac) and keeps its focus, placeholder, Return and cap. A tap anywhere else still lands in the field.
+/// How the highlights are drawn and hit (brief 47): the field is the platform's own text view
+/// (`HighlightTextField`: `UITextView` / `NSTextView` on TextKit 1), whose layout manager draws each box
+/// behind its glyphs from the text view's own line layout, so boxes sit on the words at every width, wrap
+/// and scroll. The same view hit-tests the boxes for taps and clicks; nothing is layered above it.
 struct TokenHighlightField: View {
     let placeholder: String
     @Binding var text: String
@@ -23,7 +20,7 @@ struct TokenHighlightField: View {
     var priority: Priority
     var focus: FocusState<Bool>.Binding
     var bordered = true
-    /// A highlight was tapped; nil leaves the highlights as decoration.
+    /// A highlight was tapped or clicked; nil leaves the highlights as decoration.
     var onDisable: ((QuickAddToken) -> Void)? = nil
     var onSubmit: () -> Void
 
@@ -31,14 +28,6 @@ struct TokenHighlightField: View {
     static let highlightRadius: CGFloat = 4
     /// The highlight's tint strength, as before.
     static let highlightOpacity: Double = 0.3
-    #if os(macOS)
-    /// The Mac `TextEditor` starts its text this far in (its text container's line-fragment padding, which
-    /// `PopoutTests.testTheMacEditorInsetMatchesTheHighlightCopy` pins); the clear copy is inset the same so
-    /// the tints sit under the words.
-    static let editorTextInset: CGFloat = 5
-    #else
-    static let editorTextInset: CGFloat = 0
-    #endif
 
     var body: some View {
         if bordered {
@@ -49,123 +38,108 @@ struct TokenHighlightField: View {
     }
 
     private var field: some View {
-        let tokens = drawableTokens
-        let groups = Self.groups(tokens, in: text, priority: priority)
-        return ZStack(alignment: .topLeading) {
-            Self.highlightText(text, tokens: tokens)
-                .foregroundStyle(.clear)
-                .lineLimit(1...4)
-                .padding(.horizontal, Self.editorTextInset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityHidden(true)
-                .backgroundPreferenceValue(Text.LayoutKey.self) { layouts in
-                    GeometryReader { proxy in
-                        ForEach(Self.boxes(Self.areas(layouts, in: proxy), groups: groups)) { box in
-                            RoundedRectangle(cornerRadius: Self.highlightRadius, style: .continuous)
-                                .fill(PopoutTint.token(tokens[box.tokens[0]].kind, priority: priority).opacity(Self.highlightOpacity))
-                                .frame(width: box.rect.width, height: box.rect.height)
-                                .position(x: box.rect.midX, y: box.rect.midY)
-                        }
-                    }
-                }
-            editor
-        }
-        .font(HITType.taskName)
-        .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
-            if let onDisable {
-                GeometryReader { proxy in
-                    ForEach(Self.boxes(Self.areas(layouts, in: proxy), groups: groups)) { box in
-                        tapTarget(for: box.tokens.map { tokens[$0] }, box: box, onDisable: onDisable)
-                    }
-                }
+        HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: .current(),
+                           isFocused: focus.wrappedValue, onFocusChange: { focus.wrappedValue = $0 },
+                           onSubmit: onSubmit)
+            .focused(focus)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onChange(of: text) { old, new in
+                // The text views turn Return and pasted line breaks into what they should be before they land;
+                // a line break that arrives some other way (the owner's text) is resolved here, as before.
+                guard let outcome = TitleReturn.resolve(old: old, new: new) else { return }
+                text = outcome.text
+                if outcome.submits { onSubmit() }
             }
-        }
-        .onChange(of: text) { old, new in
-            // A vertical field takes Return as a newline. iPhone: dropped, the text stays as it was (brief 36:
-            // confirm only by the button); the Mac: submit. A pasted line break becomes a space on both.
-            guard let outcome = TitleReturn.resolve(old: old, new: new) else { return }
-            text = outcome.text
-            if outcome.submits { onSubmit() }
+    }
+
+    /// The boxes as the text view keeps them: place, colour, words, and switching off.
+    private var runs: [HighlightRun] {
+        let tokens = Self.drawable(tokens, in: text)
+        return Self.spans(tokens, in: text, priority: priority).map { span in
+            let members = span.tokens.map { tokens[$0] }
+            let tint = PopoutTint.token(members[0].kind, priority: priority).opacity(Self.highlightOpacity)
+            return HighlightRun(range: span.range, color: HighlightPlatformColor(tint).cgColor,
+                                words: Self.words(of: members, in: text),
+                                switchOff: { [onDisable] in members.forEach { onDisable?($0) } })
         }
     }
 
-    /// The field, with "Keep “tom 4” as text" as a VoiceOver action per box when highlights can be tapped.
-    private var editor: some View {
-        let tokens = drawableTokens
-        let members = Self.members(of: Self.groups(tokens, in: text, priority: priority))
-        return input.accessibilityActions {
-            if let onDisable {
-                ForEach(Array(members.enumerated()), id: \.offset) { _, indices in
-                    let box = indices.map { tokens[$0] }
-                    Button("Keep “\(Self.words(of: box, in: text))” as text") { box.forEach(onDisable) }
-                }
-            }
+    /// The tokens that can be drawn on this text: not superseded, in order, not overlapping, inside it.
+    static func drawable(_ tokens: [QuickAddToken], in text: String) -> [QuickAddToken] {
+        var result: [QuickAddToken] = []
+        for token in tokens.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
+            guard !token.isSuperseded, token.range.upperBound <= text.endIndex, !token.range.isEmpty,
+                  result.last.map({ $0.range.upperBound <= token.range.lowerBound }) ?? true else { continue }
+            result.append(token)
+        }
+        return result
+    }
+
+    /// The words a box covers, as typed: "tom 4".
+    static func words(of box: [QuickAddToken], in text: String) -> String {
+        guard let first = box.first, let last = box.last, first.range.lowerBound <= last.range.upperBound,
+              last.range.upperBound <= text.endIndex else { return box.map(\.text).joined(separator: " ") }
+        return String(text[first.range.lowerBound..<last.range.upperBound])
+    }
+
+    // MARK: Boxes (internal for the tests)
+
+    /// Which box each of `tokens` (drawable, in order) belongs to: neighbours of the same colour with only
+    /// spaces between them share one (George, 2026-11-04: "[tom] [4]" should be "[tom 4]"). Numbered from 0
+    /// in order; a word, an overridden phrase or another colour between two tokens starts a new box.
+    static func groups(_ tokens: [QuickAddToken], in text: String, priority: Priority) -> [Int] {
+        var groups: [Int] = []
+        for (index, token) in tokens.enumerated() {
+            guard let previous = groups.last else { groups.append(0); continue }
+            let before = tokens[index - 1]
+            let gap = before.range.upperBound <= token.range.lowerBound && token.range.lowerBound <= text.endIndex
+                ? text[before.range.upperBound..<token.range.lowerBound] : "x"
+            let joins = gap.allSatisfy { $0.isWhitespace && !$0.isNewline }
+                && PopoutTint.token(before.kind, priority: priority) == PopoutTint.token(token.kind, priority: priority)
+            groups.append(joins ? previous : previous + 1)
+        }
+        return groups
+    }
+
+    /// Token indices per group, in order.
+    static func members(of groups: [Int]) -> [[Int]] {
+        var members: [[Int]] = []
+        for (index, group) in groups.enumerated() {
+            if group < members.count { members[group].append(index) } else { members.append([index]) }
+        }
+        return members
+    }
+
+    /// One highlight box's stretch of the title: its tokens, and the text from the first one's start to the
+    /// last one's end (spaces between included), in the text view's UTF-16 offsets. Where the box is drawn,
+    /// line by line, is the text view's layout (`HighlightGeometry.pieces`).
+    struct Span: Equatable {
+        /// Indices into the drawable tokens.
+        var tokens: [Int]
+        var range: NSRange
+    }
+
+    /// The boxes' spans for `tokens` (drawable, in order) in `text`.
+    static func spans(_ tokens: [QuickAddToken], in text: String, priority: Priority) -> [Span] {
+        members(of: groups(tokens, in: text, priority: priority)).compactMap { indices in
+            guard let first = indices.first, let last = indices.last,
+                  tokens[first].range.lowerBound <= tokens[last].range.upperBound,
+                  let range = HighlightRules.nsRange(tokens[first].range.lowerBound..<tokens[last].range.upperBound, in: text)
+            else { return nil }
+            return Span(tokens: indices, range: range)
         }
     }
 
-    @ViewBuilder
-    private var input: some View {
-        #if os(iOS)
-        TextField(text: $text, axis: .vertical) {
-            Text(placeholder).foregroundStyle(Theme.secondaryText)
-        }
-        .textFieldStyle(.plain)
-        .lineLimit(1...4)
-        .foregroundStyle(HITColor.text)
-        .focused(focus)
-        // A plain "return" key, not the blue check: Return does nothing here (`TitleReturn`), and the card's
-        // Confirm pill is the only way to add (George, 0.4.1).
-        .submitLabel(.return)
-        // Standard autocorrect and sentence capitals (George, 0.4.0): the parser reads tokens without
-        // regard to case, so "Tom" and "P1" still work.
-        .textInputAutocapitalization(.sentences)
-        #else
-        // On the Mac a vertical-axis TextField kept drawing its text view's grey box behind the
-        // words whatever was asked of it; a plain TextEditor honours a hidden background. Return
-        // still submits (the newline check above), and the placeholder is drawn by hand.
-        ZStack(alignment: .topLeading) {
-            if text.isEmpty {
-                Text(placeholder)
-                    .foregroundStyle(Theme.secondaryText)
-                    .padding(.leading, Self.editorTextInset)
-                    .allowsHitTesting(false)
-            }
-            TextEditor(text: $text)
-                .textEditorStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .scrollDisabled(true)
-                .focusEffectDisabled()
-                .foregroundStyle(HITColor.text)
-                .focused(focus)
-                .frame(minHeight: 24, maxHeight: 96)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        #endif
-    }
+    // MARK: The SwiftUI copy and click targets (no longer drawn; item 4 removes them)
 
-    /// A clear, rounded shape over one piece of a box; tapping it switches off every token in the box (a
-    /// joined "[tom 4]" goes in one tap, whichever line the tap lands on). On the Mac it is an AppKit view
-    /// (`ClickTarget`) so the pointer shows the pointing hand over it (brief 41); on an iPad with a pointer
-    /// the pointer takes the box's shape.
-    @ViewBuilder
-    private func tapTarget(for box: [QuickAddToken], box piece: Box, onDisable: @escaping (QuickAddToken) -> Void) -> some View {
-        let shape = RoundedRectangle(cornerRadius: Self.highlightRadius, style: .continuous)
-        #if os(macOS)
-        ClickTarget(help: "Click to keep “\(Self.words(of: box, in: text))” as text") { box.forEach(onDisable) }
-            .frame(width: piece.rect.width, height: piece.rect.height)
-            .position(x: piece.rect.midX, y: piece.rect.midY)
-            .accessibilityHidden(true)
-        #else
-        Color.clear
-            .contentShape(shape)
-            .contentShape(.hoverEffect, shape)
-            .hoverEffect(.highlight)
-            .frame(width: piece.rect.width, height: piece.rect.height)
-            .onTapGesture { box.forEach(onDisable) }
-            .position(x: piece.rect.midX, y: piece.rect.midY)
-            .accessibilityHidden(true)
-        #endif
-    }
+    #if os(macOS)
+    /// The Mac `TextEditor` starts its text this far in (its text container's line-fragment padding, which
+    /// `PopoutTests.testTheMacEditorInsetMatchesTheHighlightCopy` pins); the clear copy is inset the same so
+    /// the tints sit under the words.
+    static let editorTextInset: CGFloat = 5
+    #else
+    static let editorTextInset: CGFloat = 0
+    #endif
 
     #if os(macOS)
     /// A highlight box's click target on the Mac: an AppKit view above the text, so the pointing hand wins
@@ -208,57 +182,9 @@ struct TokenHighlightField: View {
     }
     #endif
 
-    private var drawableTokens: [QuickAddToken] { Self.drawable(tokens, in: text) }
-
-    /// The tokens that can be drawn on this text: not superseded, in order, not overlapping, inside it.
-    static func drawable(_ tokens: [QuickAddToken], in text: String) -> [QuickAddToken] {
-        var result: [QuickAddToken] = []
-        for token in tokens.sorted(by: { $0.range.lowerBound < $1.range.lowerBound }) {
-            guard !token.isSuperseded, token.range.upperBound <= text.endIndex, !token.range.isEmpty,
-                  result.last.map({ $0.range.upperBound <= token.range.lowerBound }) ?? true else { continue }
-            result.append(token)
-        }
-        return result
-    }
-
-    /// The words a box covers, as typed: "tom 4".
-    static func words(of box: [QuickAddToken], in text: String) -> String {
-        guard let first = box.first, let last = box.last, first.range.lowerBound <= last.range.upperBound,
-              last.range.upperBound <= text.endIndex else { return box.map(\.text).joined(separator: " ") }
-        return String(text[first.range.lowerBound..<last.range.upperBound])
-    }
-
-    // MARK: Layout of the highlights (internal for the render tests)
-
     /// Tags the words of token number `index` in the clear copy.
     struct TokenSpan: TextAttribute {
         let index: Int
-    }
-
-    /// Which box each of `tokens` (drawable, in order) belongs to: neighbours of the same colour with only
-    /// spaces between them share one (George, 2026-11-04: "[tom] [4]" should be "[tom 4]"). Numbered from 0
-    /// in order; a word, an overridden phrase or another colour between two tokens starts a new box.
-    static func groups(_ tokens: [QuickAddToken], in text: String, priority: Priority) -> [Int] {
-        var groups: [Int] = []
-        for (index, token) in tokens.enumerated() {
-            guard let previous = groups.last else { groups.append(0); continue }
-            let before = tokens[index - 1]
-            let gap = before.range.upperBound <= token.range.lowerBound && token.range.lowerBound <= text.endIndex
-                ? text[before.range.upperBound..<token.range.lowerBound] : "x"
-            let joins = gap.allSatisfy { $0.isWhitespace && !$0.isNewline }
-                && PopoutTint.token(before.kind, priority: priority) == PopoutTint.token(token.kind, priority: priority)
-            groups.append(joins ? previous : previous + 1)
-        }
-        return groups
-    }
-
-    /// Token indices per group, in order.
-    static func members(of groups: [Int]) -> [[Int]] {
-        var members: [[Int]] = []
-        for (index, group) in groups.enumerated() {
-            if group < members.count { members[group].append(index) } else { members.append([index]) }
-        }
-        return members
     }
 
     /// One piece of a highlight box: the box's tokens' areas on one line joined into one rectangle, the
