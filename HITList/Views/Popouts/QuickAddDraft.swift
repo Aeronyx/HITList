@@ -145,9 +145,12 @@ struct QuickAddDraft: Equatable, Codable {
         storedDisabledPhrases = disabledPhrases.union([phrase])
     }
 
-    /// The text as the parser reads it, switched-off tokens left as plain words.
-    func parsed(_ parser: QuickAddParser) -> QuickAddResult {
-        parser.parse(text, switchedOff: disabledPhrases)
+    /// The text as the parser reads it, switched-off tokens left as plain words. `.live` (the default) is what
+    /// the card shows while it is typed in: a "!" phrase at the very end lights up and counts only once a space
+    /// follows it (brief 48). `result(_:)` and the chips' edits read it `.final`, the end of the text counting
+    /// as complete, so "Call mom !15m" + Confirm still sets the reminder.
+    func parsed(_ parser: QuickAddParser, _ mode: QuickAddParser.Mode = .live) -> QuickAddResult {
+        parser.parse(text, switchedOff: disabledPhrases, mode: mode)
     }
 
     /// Ready for the next task: empty text, the list's defaults back.
@@ -181,12 +184,14 @@ struct QuickAddDraft: Equatable, Codable {
             locationName: result.locationName)
     }
 
-    /// The task to create: the parsed text with the list's defaults wherever the text is silent.
+    /// The task to create (Confirm): the text read as complete (`.final`), with the list's defaults wherever
+    /// the text is silent.
     func result(_ parser: QuickAddParser) -> QuickAddResult {
-        result(parser, parsed: parsed(parser))
+        result(parser, parsed: parsed(parser, .final))
     }
 
-    /// `result(_:)` from a parse already made (`parsed(_:)`).
+    /// `result(_:)` from a parse already made (`parsed(_:_:)`; the card passes its live parse, so what it
+    /// shows leaves out a "!" phrase still being typed).
     func result(_ parser: QuickAddParser, parsed: QuickAddResult) -> QuickAddResult {
         var result = parsed
         let calendar = parser.dateParser.calendar
@@ -254,7 +259,7 @@ struct QuickAddDraft: Equatable, Codable {
         text = removing([.reminder], parser)
         pendingReminderMinutes = nil
         guard let minutes, minutes > 0 else { return }
-        if parsed(parser).hasDueTime {
+        if parsed(parser, .final).hasDueTime {
             append(ReminderOffset.token(minutes: minutes))
         } else {
             pendingReminderMinutes = minutes
@@ -264,7 +269,7 @@ struct QuickAddDraft: Equatable, Codable {
     /// The time is going: a reminder written beside it would be left as plain "!15mb" in the title, so it
     /// comes out of the text and its offset waits on the chip instead.
     private mutating func holdReminderForLater(_ parser: QuickAddParser) {
-        let parsed = parsed(parser)
+        let parsed = parsed(parser, .final)
         guard let offset = parsed.reminderOffsetMinutes else { return }
         text = Self.removing(parsed.tokens.filter { $0.kind == .reminder }, from: text)
         pendingReminderMinutes = offset > 0 ? offset : nil
@@ -287,7 +292,7 @@ struct QuickAddDraft: Equatable, Codable {
     }
 
     mutating func toggleLabel(_ name: String, _ parser: QuickAddParser) {
-        let typed = parsed(parser).tokens.filter { $0.kind == .label && Self.name(of: $0) == name.lowercased() }
+        let typed = parsed(parser, .final).tokens.filter { $0.kind == .label && Self.name(of: $0) == name.lowercased() }
         if !typed.isEmpty {
             text = Self.removing(typed, from: text)
         } else if let label = context.defaultLabelName, label.caseInsensitiveCompare(name) == .orderedSame {
@@ -328,9 +333,10 @@ struct QuickAddDraft: Equatable, Codable {
         storedDisabledPhrases = kept.isEmpty ? nil : kept
     }
 
-    /// The text without the tokens of these kinds the parser sees (switched-off ones stay).
+    /// The text without the tokens of these kinds the parser sees (switched-off ones stay). Read as complete:
+    /// a chip replaces a phrase still being typed at the end rather than leaving it behind as title text.
     private func removing(_ kinds: Set<QuickAddToken.Kind>, _ parser: QuickAddParser) -> String {
-        Self.removing(parsed(parser).tokens.filter { kinds.contains($0.kind) }, from: text)
+        Self.removing(parsed(parser, .final).tokens.filter { kinds.contains($0.kind) }, from: text)
     }
 
     // MARK: Text surgery
