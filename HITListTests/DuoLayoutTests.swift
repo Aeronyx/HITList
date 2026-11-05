@@ -349,7 +349,8 @@ final class DuoLayoutTests: XCTestCase {
 
     // MARK: Reserved regions: the fold (brief 50)
 
-    /// The inner display upright and partly open: the system reports a `division` region down the middle.
+    /// Partly open with the fold running top to bottom: the system reports a `division` region down the middle.
+    /// (On HITList-50 that is the inner display on its side, 951 pt wide; these use the upright width for the arithmetic.)
     private var crease: CGRect { CGRect(x: 322, y: 0, width: 25, height: inner.height) }
 
     func testPartlyOpenTheSidebarEndsAtTheFold() {
