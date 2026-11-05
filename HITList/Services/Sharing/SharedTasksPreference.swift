@@ -35,12 +35,9 @@ enum SharedTasksPreference {
         return "SharedTasks.json"
     }
 
-    /// Where the running build keeps its shared lists: beside its task store in the app group (the app's own
-    /// Application Support when the group is unavailable).
-    static var fileURL: URL {
-        let folder = AppGroup.containerURL ?? URL.applicationSupportDirectory
-        return folder.appending(path: fileName(storeName: ModelContainerFactory.storeName))
-    }
+    /// Where the shared lists' files live: beside the task store in the app group (the app's own Application Support
+    /// when the group is unavailable).
+    static var folder: URL { AppGroup.containerURL ?? URL.applicationSupportDirectory }
 
     /// The running build's switch.
     static var isOn: Bool { isOn(in: AppGroup.defaults, storeName: ModelContainerFactory.storeName) }

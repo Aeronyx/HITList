@@ -407,4 +407,120 @@ final class SharedTasksTests: XCTestCase {
         XCTAssertEqual(SharedTasksSchema.zoneWideShareRecordName, CKRecordNameZoneWideShare)
         XCTAssertNotEqual(SharedTasksSchema.containerID, HITListSchema.cloudKitContainerID)
     }
+
+    // MARK: - CloudKit records
+
+    private func ownedList(_ id: UUID = UUID()) -> SharedList {
+        SharedList(id: id, scope: .owned, ownerName: CKCurrentUserDefaultName,
+                   fields: SharedListFields(title: Stamped("Groceries", at: at(1)), colorHex: Stamped("#4FD1E8", at: at(2)), createdAt: at(0)))
+    }
+
+    func testATaskRecordCarriesEveryFieldAndComesBackTheSame() throws {
+        var original = task("Oat milk", titleAt: 3, notes: "2 litres", notesAt: 4,
+                            completion: SharedCompletion(at: at(9), by: sam, byName: "Sam"), completionAt: 9)
+        original.priority = Stamped(2, at: at(5))
+        original.due = Stamped(SharedDue(date: at(86_400), hasTime: true), at: at(6))
+        let list = ownedList()
+        let record = SharedTasksRecords.taskRecord(original, in: list)
+        XCTAssertEqual(record.recordType, "SharedTask")
+        XCTAssertEqual(record.recordID.recordName, "task-\(original.id.uuidString)")
+        XCTAssertEqual(record.recordID.zoneID, CKRecordZone.ID(zoneName: "list-\(list.id.uuidString)", ownerName: CKCurrentUserDefaultName))
+        let decoded = try XCTUnwrap(SharedTasksRecords.task(from: record))
+        var expected = original
+        expected.systemFields = decoded.systemFields
+        XCTAssertEqual(decoded, expected)
+    }
+
+    func testClearedValuesTravelAsFlagsWithPlaceholders() throws {
+        let open = task("Bread")
+        let record = SharedTasksRecords.taskRecord(open, in: ownedList())
+        XCTAssertEqual(record["hasDueDate"] as? Int64, 0)
+        XCTAssertEqual(record["isCompleted"] as? Int64, 0)
+        XCTAssertNotNil(record["dueDate"], "every field is written on every save, so clearing never relies on a removal")
+        XCTAssertEqual(record["completedBy"] as? String, "")
+        let decoded = try XCTUnwrap(SharedTasksRecords.task(from: record))
+        XCTAssertNil(decoded.due.value)
+        XCTAssertNil(decoded.completion.value)
+    }
+
+    func testARecordIsRebuiltFromItsSystemFields() {
+        let list = ownedList()
+        let first = SharedTasksRecords.listRecord(list)
+        var saved = list
+        saved.systemFields = SharedTasksRecords.systemFields(of: first)
+        let again = SharedTasksRecords.listRecord(saved)
+        XCTAssertEqual(again.recordID, first.recordID)
+        XCTAssertEqual(again["title"] as? String, "Groceries")
+        XCTAssertEqual(SharedTasksRecords.listFields(from: again), list.fields)
+        // System fields of another record are never borrowed.
+        let other = SharedTasksRecords.restored(saved.systemFields, type: "SharedTask",
+                                                id: CKRecord.ID(recordName: "task-x", zoneID: first.recordID.zoneID))
+        XCTAssertEqual(other.recordID.recordName, "task-x")
+    }
+
+    func testAMemberRecordCarriesThePictureAsAnAsset() throws {
+        let picture = try XCTUnwrap(SharedTasksDebug.swatch("#8FD694"))
+        let member = SharedMember(id: sam, name: Stamped("Sam", at: at(1)), avatar: Stamped(picture, at: at(2)), joinedAt: at(0))
+        let record = SharedTasksRecords.memberRecord(member, in: ownedList())
+        XCTAssertNotNil(record["avatar"] as? CKAsset)
+        XCTAssertEqual(record["hasAvatar"] as? Int64, 1)
+        let decoded = try XCTUnwrap(SharedTasksRecords.member(from: record))
+        XCTAssertEqual(decoded.avatar.value, picture)
+        XCTAssertEqual(decoded.name, member.name)
+
+        var noPicture = member
+        noPicture.avatar = Stamped(nil, at: at(3))
+        XCTAssertNil(try XCTUnwrap(SharedTasksRecords.member(from: SharedTasksRecords.memberRecord(noPicture, in: ownedList()))).avatar.value)
+    }
+
+    func testAPictureIsCopiedSmall() throws {
+        let big = try XCTUnwrap(SharedTasksDebug.swatch("#B07CF5")) // 64 px: already small, kept as is
+        XCTAssertEqual(SharedTasksRecords.smallAvatar(big), big)
+    }
+
+    func testAShareKeepsItselfForTheShareSheetAndNamesMeForTheCurrentUser() throws {
+        let zone = CKRecordZone.ID(zoneName: SharedTasksSchema.zoneName(for: UUID()), ownerName: CKCurrentUserDefaultName)
+        let share = CKShare(recordZoneID: zone)
+        let info = SharedTasksRecords.shareInfo(from: share, me: me)
+        let restored = try XCTUnwrap(SharedTasksRecords.unarchiveShare(info.archive))
+        XCTAssertEqual(restored.recordID, share.recordID)
+        XCTAssertEqual(share.recordID.recordName, SharedTasksSchema.zoneWideShareRecordName)
+        XCTAssertFalse(info.participants.contains { $0.userID == CKCurrentUserDefaultName }, "the placeholder becomes my record name")
+    }
+
+    func testRecordsOfOtherZonesAndTypesAreLeftAlone() {
+        let foreign = CKRecord(recordType: "CD_TaskItem", recordID: CKRecord.ID(recordName: "x", zoneID: CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone")))
+        guard case .other = SharedTasksRecords.decode(foreign) else { return XCTFail("a task-store record is not a Shared Tasks record") }
+    }
+
+    // MARK: - Pushes and the switch
+
+    func testOnlyTheSharedContainersPushesGoToSharedTasks() {
+        func push(_ container: String) -> [AnyHashable: Any] {
+            ["aps": ["content-available": 1], "ck": ["cid": container, "ce": 1, "nid": "abc", "met": ["sid": "sub", "dbs": 1]]]
+        }
+        XCTAssertTrue(SharedTasksPush.isForSharedTasks(push(SharedTasksSchema.containerID)))
+        XCTAssertFalse(SharedTasksPush.isForSharedTasks(push(HITListSchema.cloudKitContainerID)), "the task store's pushes stay with its monitor")
+        XCTAssertFalse(SharedTasksPush.isForSharedTasks(["aps": ["alert": "Hi"]]))
+    }
+
+    func testSwitchedOffNothingStarts() async throws {
+        let suite = "SharedTasksTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let center = SharedTasksCenter(defaults: defaults, storeName: "HITList-test.store", isTesting: false)
+        XCTAssertFalse(center.isOn)
+        center.startIfOn()
+        XCTAssertNil(center.store, "off: no store, no file, no CloudKit")
+        XCTAssertEqual(center.phase, .off)
+        let ran = await center.handlePush()
+        XCTAssertFalse(ran, "a push while off runs nothing")
+        XCTAssertNil(center.store)
+
+        // Hosted tests never start it, even switched on, and never write the switch.
+        let testing = SharedTasksCenter(defaults: defaults, storeName: "HITList-test.store", isTesting: true)
+        testing.setOn(true)
+        XCTAssertNil(testing.store)
+        XCTAssertNil(defaults.object(forKey: SharedTasksPreference.key(storeName: "HITList-test.store")))
+    }
 }

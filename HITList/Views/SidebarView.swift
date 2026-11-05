@@ -42,6 +42,7 @@ struct SidebarView: View {
                 row("Upcoming", "calendar.badge.clock", .upcoming)
                 row("Flipboard", "switch.2", .flipboard)
                 row("Completed", "checkmark.circle", .completed)
+                SharedTasksSidebarRow() // Shared Tasks preview (brief 51): opens the Shared screen in a sheet
             }
 
             Section {
