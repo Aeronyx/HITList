@@ -2,7 +2,7 @@ import Foundation
 import HITListCore
 
 /// Settings → Claude's choices (brief 43), kept in `AppGroup.defaults` so the `hitlist-mcp` helper can
-/// read "Allow Claude" too. Per store: a Debug build on its side store (`HITLIST_STORE_SUFFIX`) has its
+/// read the switch too. Per store: a Debug build on its side store (`HITLIST_STORE_SUFFIX`) has its
 /// own switch and rule, so trying the connector there never opens the TestFlight app's tasks. Device-local,
 /// like every preference: each Mac and iPhone is set on its own.
 struct ClaudeSettings {
@@ -15,7 +15,8 @@ struct ClaudeSettings {
         self.storeSuffix = ClaudeWire.cleanSuffix(storeSuffix)
     }
 
-    /// The master switch "Allow Claude": off by default. Off, the app keeps no port open at all.
+    /// The master switch "Claude integration" (0.6.0 called it "Allow Claude"; same key, so whoever turned
+    /// that on keeps it on): off by default. Off, the app keeps no port open and offers no Copy for Claude.
     var allowedKey: String { ClaudeWire.allowedKey(storeSuffix: storeSuffix) }
     var modeKey: String { key(Preferences.claudeMode) }
     var hiddenLabelKey: String { key(Preferences.claudeHiddenLabel) }
@@ -44,7 +45,7 @@ struct ClaudeSettings {
 }
 
 /// The connector's preference keys (brief 43). `ClaudeSettings` adds the store suffix for a side store;
-/// "Allow Claude" is `ClaudeWire.allowedKey`, which the helper reads as well.
+/// The switch is `ClaudeWire.allowedKey`, which the helper reads as well.
 extension Preferences {
     static let claudeMode = "claude.mode"
     static let claudeHiddenLabel = "claude.hiddenLabel"
