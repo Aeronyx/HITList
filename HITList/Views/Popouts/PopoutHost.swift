@@ -23,6 +23,9 @@ struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
     var chosenStyle: Style?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
+    /// the bottom beside the "+" at its foot (brief 50).
+    @Environment(\.islandPlacement) private var islandPlacement
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// The keyboard the card sits above; `heldKeyboardHeight` is its height when the card began closing.
@@ -40,6 +43,8 @@ struct PopoutHost: ViewModifier {
     @State private var editorGuard = PanelDismissGuard()
     /// The style as of the latest body, for the editor sheet's setter (`sheetTask`).
     @State private var latestStyle = StyleBox()
+    /// The editor's typing, kept while the iPhone Duo's fold swaps its sheet for its column and back (brief 50).
+    @State private var carryOver = EditorCarryOver()
 
     /// A reference, so a binding made by an earlier body reads the style of the current one.
     final class StyleBox {
@@ -100,6 +105,8 @@ struct PopoutHost: ViewModifier {
     func body(content: Content) -> some View {
         latestStyle.style = style
         return content
+            // The Duo's editor column (`DuoEditorColumn`) is part of the shell.
+            .environment(\.editorCarryOver, carryOver)
             .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
                 // iPhone: every undo toast is drawn here, the lists' included (`completionToast`), over
                 // the shell, to the left of the oval "+" and centred on it (George, build 13: not above it).
@@ -125,7 +132,8 @@ struct PopoutHost: ViewModifier {
                     }
                 }
                 .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
-                .padding(style.cornerToasts ? Self.panelToastInsets : Self.phoneToastInsets)
+                .padding(style.cornerToasts ? Self.panelToastInsets
+                         : Self.phoneToastInsets(for: islandPlacement))
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -136,7 +144,7 @@ struct PopoutHost: ViewModifier {
                 if style.editor == .panel, let task = popouts.task {
                     // A click on the backdrop with typing asks Discard first, as × does (session 41's report).
                     PanelBackdrop(onDismiss: { if !editorGuard.attempt() { popouts.closeTask() } }) {
-                        TaskPopout(task: task)
+                        TaskPopout(task: task, carryOver: carryOver)
                             .id(task.id)
                             .environment(\.panelDismissGuard, editorGuard)
                             .panelChrome()
@@ -162,6 +170,8 @@ struct PopoutHost: ViewModifier {
                         .id(id)
                 }
             }
+            // Closing the editor, or opening another task, drops typing kept for a fold.
+            .onChange(of: popouts.state.taskID) { _, id in carryOver.editorShows(id) }
             .onReceive(NotificationCenter.default.publisher(for: .cloudKitImportSucceeded)) { _ in
                 popouts.closeTaskIfDeleted(in: context)
             }
@@ -187,7 +197,7 @@ struct PopoutHost: ViewModifier {
             #endif
             .sheet(item: sheetTask) { task in
                 // The editor scrolls its own middle and pins its Confirm footer (brief 32).
-                TaskPopout(task: task)
+                TaskPopout(task: task, carryOver: carryOver)
                     .environment(popouts)
                     .presentationDetents(Self.editorDetents)
                     .presentationDragIndicator(.visible)
@@ -701,6 +711,20 @@ extension PopoutHost {
     static var phoneToastInsets: EdgeInsets {
         EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: toastClearance, trailing: toastTrailingClearance)
     }
+    /// iPhone, wherever the island stands. Upright in the system's bar column (the Duo's outer display, brief
+    /// 50) the toast sits at the bottom of the content, centred on the "+" at the island's foot; the safe area
+    /// already keeps it off the column, so only a gap separates them.
+    static func phoneToastInsets(for placement: IslandPlacement) -> EdgeInsets {
+        let bottom = IslandMetrics.bottomGap + (IslandMetrics.sideAddButtonSize.height - CompletionToast.height) / 2
+        switch placement {
+        case .bottom:
+            return phoneToastInsets
+        case .side(.leading):
+            return EdgeInsets(top: 0, leading: HITSpacing.m, bottom: bottom, trailing: IslandMetrics.sideInset)
+        case .side:
+            return EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: bottom, trailing: HITSpacing.m)
+        }
+    }
     /// Mac and iPad: the popout's toast sits one toast and a gap above a list's (`ListCompletionToast`).
     static var panelToastInsets: EdgeInsets {
         EdgeInsets(top: 0, leading: HITSpacing.l, bottom: HITSpacing.l + CompletionToast.height + HITSpacing.s,
@@ -727,6 +751,9 @@ private struct ListCompletionToast: ViewModifier {
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
+    /// the bottom beside the "+" at its foot (brief 50).
+    @Environment(\.islandPlacement) private var islandPlacement
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var drawnByHost: Bool { sizeClass == .compact }

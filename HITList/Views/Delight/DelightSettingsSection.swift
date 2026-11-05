@@ -56,6 +56,7 @@ struct DelightSettingsSection: View {
             Toggle(isOn: $rareSurprises) { HITMenuRowLabel("Rare surprises", systemImage: "moon.stars") }
                 .toggleStyle(.hit)
                 .hitRowPadding()
+            HingeCreakSettingsRow()
         }
         .onChange(of: sound) { _, new in CompletionSound.select(new, in: AppGroup.defaults) }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: Self.audioTypes) { result in

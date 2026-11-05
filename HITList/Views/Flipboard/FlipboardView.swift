@@ -11,6 +11,8 @@ struct FlipboardView: View {
     @Environment(\.modelContext) private var context
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    /// The iPhone Duo's inner display: an even number of columns (brief 50).
+    @Environment(\.appShell) private var shell
     #endif
     @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.recurrence != nil }) private var recurring: [TaskItem]
     @State private var now = Date()
@@ -32,8 +34,17 @@ struct FlipboardView: View {
         #endif
     }
 
+    private var onDuoInnerDisplay: Bool {
+        #if os(iOS)
+        shell == .duo
+        #else
+        false
+        #endif
+    }
+
     private var columns: [GridItem] {
-        let count = FlipboardLayout.columnCount(width: width, compact: isCompact, spacing: Self.spacing)
+        let count = FlipboardLayout.columnCount(width: width, compact: isCompact, spacing: Self.spacing,
+                                                even: onDuoInnerDisplay)
         return Array(repeating: GridItem(.flexible(), spacing: Self.spacing, alignment: .top), count: count)
     }
 
@@ -118,9 +129,12 @@ enum FlipboardLayout {
     static let minimumTileWidth: CGFloat = 150
 
     /// 2 columns on iPhone; 3 to 5 on the Mac and iPad, as many as fit.
-    static func columnCount(width: CGFloat, compact: Bool, spacing: CGFloat) -> Int {
+    /// `even` (the iPhone Duo's inner display, brief 50; Apple: "In a grid-style layout, prefer an even
+    /// number of columns so content divides cleanly"): 2 or 4, as many as fit.
+    static func columnCount(width: CGFloat, compact: Bool, spacing: CGFloat, even: Bool = false) -> Int {
         guard !compact else { return 2 }
         let fit = Int((width + spacing) / (minimumTileWidth + spacing))
+        if even { return min(4, max(2, fit)) / 2 * 2 }
         return min(5, max(3, fit))
     }
 }
