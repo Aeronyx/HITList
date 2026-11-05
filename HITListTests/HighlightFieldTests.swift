@@ -285,7 +285,8 @@ final class HighlightFieldTests: XCTestCase {
             let glyphs = field.highlightLayout.glyphRange(forCharacterRange: word, actualCharacterRange: nil)
             let bounds = field.highlightLayout.boundingRect(forGlyphRange: glyphs, in: field.highlightLayout.textContainers[0])
             let letters = bounds.offsetBy(dx: field.containerOriginForTests.x, dy: field.containerOriginForTests.y)
-            XCTAssertEqual(piece.rect.midX, letters.midX, accuracy: 0.01, "on its word")
+            XCTAssertLessThanOrEqual(piece.rect.minX, letters.minX + 0.01, "on its word")
+            XCTAssertGreaterThanOrEqual(piece.rect.maxX, letters.maxX - 0.01)
             XCTAssertGreaterThan(piece.rect.width, letters.width, "with room either side")
             XCTAssertTrue(field.shownRectForTests.contains(piece.rect), "inside what the field shows: never clipped")
         }
@@ -319,7 +320,9 @@ final class HighlightFieldTests: XCTestCase {
         let glyphs = field.highlightLayout.glyphRange(forCharacterRange: work, actualCharacterRange: nil)
         let bounds = field.highlightLayout.boundingRect(forGlyphRange: glyphs, in: field.highlightLayout.textContainers[0])
         let last = try XCTUnwrap(pieces.last)
-        XCTAssertEqual(last.rect.midX, bounds.midX + field.containerOriginForTests.x, accuracy: 0.5, "on \"#Work\"")
+        // On "#Work" (a box at the line's end stops at the field's edge).
+        XCTAssertLessThanOrEqual(last.rect.minX, bounds.minX + field.containerOriginForTests.x + 0.01, "on \"#Work\"")
+        XCTAssertGreaterThanOrEqual(last.rect.maxX, bounds.maxX + field.containerOriginForTests.x - 0.01)
         XCTAssertTrue(last.rect.insetBy(dx: 0, dy: 2).intersects(bounds.offsetBy(dx: 0, dy: field.containerOriginForTests.y)),
                       "on its line, lines down")
         XCTAssertGreaterThan(last.rect.minY, field.visibleHeightForTests, "below the first lines: reached by scrolling")
