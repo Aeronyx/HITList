@@ -61,6 +61,8 @@ struct ContentView: View {
             }
         }
         .popoutHost(popouts, style: PopoutHost.Style(shell))
+        // The Duo's outer display: the island follows the system's vertical bar (brief 50).
+        .readsVerticalBarEdge()
         .environment(popouts)
         .focusedSceneValue(\.popouts, popouts)
         .background(Theme.background)
