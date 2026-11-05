@@ -40,7 +40,7 @@ struct DuoDetail: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        // Partly open upright the sidebar ends at the crease; the detail's content starts past it (brief 50).
+        // Partly open, the sidebar ends at a top-to-bottom crease; the detail's content starts past it (brief 50).
         .padding(.leading, plan.detailLeadingInset)
         .background(Theme.background)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: popouts.state.taskID)

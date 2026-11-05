@@ -143,7 +143,7 @@ private struct SplitContent: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             if duo {
-                // Partly open upright, the sidebar ends where the crease starts (brief 50).
+                // Partly open with the crease top to bottom, the sidebar ends where it starts (brief 50).
                 sidebar.navigationSplitViewColumnWidth(DuoColumns.sidebarWidth(width: geometry.width, crease: geometry.crease))
             } else {
                 sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)

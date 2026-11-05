@@ -60,7 +60,8 @@ struct WindowGeometry: Equatable {
     var fullSize: CGSize = .zero
     /// The width inside the safe areas, which the Duo's columns divide.
     var width: CGFloat = 0
-    /// The fold while the device is partly open and upright: the active `division` reserved region (iOS 27.1)
+    /// The fold while the device is partly open, when it runs top to bottom (the inner display held like a book,
+    /// on its side, as Device Hub opens it): the active `division` reserved region (iOS 27.1)
     /// that runs from top to bottom, its frame including the margins the system asks interactive content to
     /// keep (brief 50). Nil open flat, closed, on its side, and on every other device.
     var crease: CGRect?
@@ -83,8 +84,8 @@ struct WindowGeometry: Equatable {
     }
 
     /// The first of `frames` that divides the window into a left and a right part: at least half its height,
-    /// under a quarter of its width. A crease across the window (the inner display on its side, partly open
-    /// like a laptop) is not one: columns run top to bottom and must cross it, as the system's own do.
+    /// under a quarter of its width. A crease across the window (the inner display upright and partly open, checked
+    /// on HITList-50) is not one: columns run top to bottom and cross it, as the system's own split view's do.
     static func verticalCrease(among frames: [CGRect], in size: CGSize) -> CGRect? {
         frames.first { $0.height >= size.height / 2 && $0.width < size.width / 4 }
     }
@@ -194,7 +195,7 @@ struct ShellPlace: Equatable {
 /// while the editor is open and the two meet at the fold. Today shows the next days beside it where
 /// there is room for both (the inner display on its side).
 ///
-/// Partly open and upright (brief 50; Apple: "split views adapt their columns' width and margins to match the
+/// Partly open with the crease top to bottom (brief 50; Apple: "split views adapt their columns' width and margins to match the
 /// symmetry of the inner display"), the columns meet at the crease and nothing sits in it: the sidebar ends
 /// where the crease starts and the detail's content starts past it, so a list, the board or the Flipboard
 /// grid stays whole on one side; with the editor open, the list ends and the editor starts either side of it.
@@ -222,7 +223,7 @@ struct DuoColumns: Equatable {
         return crease
     }
 
-    /// The sidebar column's width: up to the crease while partly open upright, else `DuoSplit.sidebarWidth`.
+    /// The sidebar column's width: up to a top-to-bottom crease while partly open, else `DuoSplit.sidebarWidth`.
     static func sidebarWidth(width: CGFloat, crease: CGRect?) -> CGFloat {
         usableCrease(crease, width: width)?.minX.rounded() ?? DuoSplit.sidebarWidth
     }
@@ -232,7 +233,7 @@ struct DuoColumns: Equatable {
     ///   - sidebarWidth: the sidebar column while it shows, open flat.
     ///   - fold: the hinge's x in the window, when the system reports one (a `division` reserved
     ///     region); else the middle.
-    ///   - crease: the whole `division` region while partly open upright (`WindowGeometry.crease`), which
+    ///   - crease: the whole top-to-bottom `division` region while partly open (`WindowGeometry.crease`), which
     ///     the columns keep out of.
     static func plan(width: CGFloat, sidebarWidth: CGFloat, editorOpen: Bool, showsToday: Bool,
                      fold: CGFloat? = nil, crease: CGRect? = nil) -> DuoColumns {
