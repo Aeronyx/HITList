@@ -9,6 +9,11 @@ import OSLog
 /// Debug-only launch arguments for Shared Tasks (brief 51). None of this is in a Release build, and none of it writes
 /// the switch: each turns Shared Tasks on for that run only.
 ///
+/// - `-sharedTasksOn YES`: on for this run, with CloudKit, its own file (use it with a `HITLIST_STORE_SUFFIX`).
+/// - `-sharedTasksSelfTest YES`: the owner's actions against the shared container's Development database, through the
+///   same calls the screens make: a list with tasks, a real two-device conflict (another "device" changes the notes on
+///   the server while this one renames), share, stop sharing, delete; each step logs PASS or FAIL ("Shared Tasks
+///   self-test:"). It shows the list and its People in a sheet for 8 s while shared, for a screenshot.
 /// - `-seedSharedTasksSample YES`: an in-memory store with sample lists and people, no CloudKit (screenshots).
 /// - `-openSharedTasks YES` (with `-openSharedList N`, `-openSharedPeople YES`): opens the Shared screen in a sheet a
 ///   moment after launch, at the Nth list and its People.
@@ -23,7 +28,9 @@ enum SharedTasksDebug {
     static var opensScreen: Bool { UserDefaults.standard.bool(forKey: "openSharedTasks") }
     static var openListIndex: Int? { UserDefaults.standard.object(forKey: "openSharedList").map { _ in UserDefaults.standard.integer(forKey: "openSharedList") } }
     static var opensPeople: Bool { UserDefaults.standard.bool(forKey: "openSharedPeople") }
-    static var forcesOn: Bool { seedsSample || pushesSchema }
+    static var switchedOnForRun: Bool { UserDefaults.standard.bool(forKey: "sharedTasksOn") }
+    static var selfTests: Bool { UserDefaults.standard.bool(forKey: "sharedTasksSelfTest") }
+    static var forcesOn: Bool { seedsSample || pushesSchema || switchedOnForRun || selfTests }
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sharing")
     private static var didRunLaunchHooks = false
@@ -34,6 +41,7 @@ enum SharedTasksDebug {
         guard !didRunLaunchHooks else { return }
         didRunLaunchHooks = true
         if pushesSchema { Task { await pushSchema(center) } }
+        if selfTests { Task { await selfTest(center) } }
         if opensScreen {
             Task {
                 try? await Task.sleep(for: .seconds(1.5))
@@ -105,6 +113,87 @@ enum SharedTasksDebug {
         guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
         CGImageDestinationAddImage(dest, image, nil)
         return CGImageDestinationFinalize(dest) ? out as Data : nil
+    }
+
+    // MARK: - Self-test
+
+    /// Waits for Shared Tasks to know who this account is (`connect`), up to 60 s.
+    @MainActor
+    private static func connected(_ center: SharedTasksCenter, say: (String) -> Void) async -> (SharedTasksStore, SharedTasksSync)? {
+        for _ in 0..<60 where center.store?.me == nil || center.phase != .ready {
+            if center.phase == .noAccount { say("no iCloud account; stopping"); return nil }
+            try? await Task.sleep(for: .seconds(1))
+        }
+        guard let store = center.store, store.me != nil, let sync = center.syncForDebug else { say("not connected after 60 s; stopping"); return nil }
+        return (store, sync)
+    }
+
+    /// Sends until nothing is pending (up to 30 s).
+    private static func sendAll(_ sync: SharedTasksSync) async {
+        for _ in 0..<30 {
+            await sync.sendNow()
+            let state = sync.engine(.owned).state
+            if state.pendingRecordZoneChanges.isEmpty && state.pendingDatabaseChanges.isEmpty { return }
+            try? await Task.sleep(for: .seconds(1))
+        }
+    }
+
+    @MainActor
+    static func selfTest(_ center: SharedTasksCenter) async {
+        func say(_ message: String) { log.notice("Shared Tasks self-test: \(message, privacy: .public)") }
+        func verdict(_ ok: Bool) -> String { ok ? "PASS" : "FAIL" }
+        say("starting (\(ModelContainerFactory.storeName))")
+        guard let (store, sync) = await connected(center, say: say) else { return }
+        let database = sync.container.privateCloudDatabase
+        do {
+            let list = try center.createList(title: "Self-test \(Date().formatted(date: .omitted, time: .standard))")
+            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))!
+            let milk = try store.addTask(to: list.id, title: "Milk", priority: 2, due: SharedDue(date: tomorrow, hasTime: false))
+            _ = try store.addTask(to: list.id, title: "Bread")
+            try store.setCompleted(true, task: milk.id, in: list.id)
+            await sendAll(sync)
+            let zoneID = SharedTasksRecords.zoneID(listID: list.id, ownerName: CKCurrentUserDefaultName)
+            let milkID = CKRecord.ID(recordName: SharedTasksSchema.taskRecordName(for: milk.id), zoneID: zoneID)
+            let saved = try await database.record(for: milkID)
+            say("1 list, two tasks, Milk completed and due tomorrow, saved: \(verdict(saved["isCompleted"] as? Int64 == 1 && saved["hasDueDate"] as? Int64 == 1))")
+
+            // Another device changes the notes on the server; this one renames on its older change tag.
+            saved["notes"] = "From another device"
+            saved["notesChangedAt"] = SharedClock.stamp(Date().addingTimeInterval(1))
+            _ = try await database.modifyRecords(saving: [saved], deleting: [])
+            try store.setTitle("Oat milk", task: milk.id, in: list.id)
+            await sendAll(sync)
+            let merged = try await database.record(for: milkID)
+            let mergedOK = merged["title"] as? String == "Oat milk" && merged["notes"] as? String == "From another device"
+                && merged["isCompleted"] as? Int64 == 1
+            say("2 conflict merged per field on the server (title \(merged["title"] as? String ?? "?"), notes \(merged["notes"] as? String ?? "?")): \(verdict(mergedOK))")
+            let local = store.list(list.id)?.task(milk.id)
+            say("2 this device has both too: \(verdict(local?.title.value == "Oat milk" && local?.notes.value == "From another device"))")
+
+            let share = try await center.prepareShare(for: list.id)
+            let shareID = SharedTasksRecords.shareRecordID(listID: list.id, ownerName: CKCurrentUserDefaultName)
+            let onServer = (try? await database.record(for: shareID)) is CKShare
+            say("3 shared (url \(share.url != nil ? "yes" : "no"), on the server \(onServer)): \(verdict(onServer && share.url != nil))")
+            let again = try await center.prepareShare(for: list.id)
+            say("3 Invite again reuses the share: \(verdict(again.recordID == share.recordID))")
+
+            SharedTasksPresenter.presentScreen(list: list.id, people: true)
+            say("showing the list and People")
+            try? await Task.sleep(for: .seconds(8))
+            SharedTasksPresenter.dismiss()
+
+            try await center.stopSharing(list.id)
+            let shareGone = (try? await database.record(for: shareID)) == nil
+            say("4 stopped sharing, the owner keeps the list: \(verdict(shareGone && store.list(list.id) != nil && store.list(list.id)?.share == nil))")
+
+            try center.deleteList(list.id)
+            await sendAll(sync)
+            let zoneGone = (try? await database.recordZone(for: zoneID)) == nil
+            say("5 deleted for everyone (zone gone): \(verdict(zoneGone && store.list(list.id) == nil))")
+            say("done")
+        } catch {
+            say("failed: \(error)")
+        }
     }
 
     // MARK: - Schema push

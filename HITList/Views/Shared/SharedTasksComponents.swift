@@ -31,7 +31,7 @@ struct SharedAvatarStack: View {
         let shown = Array(people.prefix(limit))
         HStack(spacing: -size * 0.3) {
             ForEach(shown) { person in
-                ProfileAvatarView(imageData: person.avatar, name: person.name, size: size)
+                ProfileAvatarView(imageData: person.avatar, name: person.avatarName, size: size)
                     .overlay(Circle().strokeBorder(Theme.background, lineWidth: 1.5))
                     .opacity(person.isPending ? 0.5 : 1)
             }
@@ -132,7 +132,7 @@ struct SharedTaskRow: View {
             }
             Spacer(minLength: 0)
             if let completer {
-                ProfileAvatarView(imageData: completer.avatar, name: completer.name, size: 20)
+                ProfileAvatarView(imageData: completer.avatar, name: completer.avatarName, size: 20)
                     .frame(height: lineHeight)
                     .accessibilityHidden(true)
             }

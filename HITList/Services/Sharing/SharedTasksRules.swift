@@ -47,12 +47,17 @@ struct SharedPerson: Identifiable, Equatable {
     var memberID: SharedMemberID?
     /// The address an invitation went to (owner's view), for withdrawing one nobody accepted.
     var contact: String? = nil
+
+    /// The name to draw initials from: none for "You" or "Someone", which get the plain person symbol.
+    var avatarName: String { name == SharedPeople.you || name == SharedPeople.someone ? "" : name }
 }
 
 /// Names and faces: a member's HITList profile where they copied one in (`SharedMember`), else the name iCloud
 /// sharing gives, else the address the invitation went to.
 enum SharedPeople {
     static let someone = "Someone"
+    /// Me, before I have a HITList name and before iCloud gives one.
+    static let you = "You"
 
     /// Owner first, then me, then the others who joined (by name), then invitations not accepted yet.
     static func people(in list: SharedList, me: SharedMemberID?) -> [SharedPerson] {
@@ -67,7 +72,7 @@ enum SharedPeople {
             seen.insert(key)
             let member = list.member(resolvedID)
             let profileName = member.map(\.name.value).flatMap(nonEmpty)
-            let name = profileName ?? participant?.name.flatMap(nonEmpty) ?? participant?.contact.flatMap(nonEmpty) ?? someone
+            let name = profileName ?? participant?.name.flatMap(nonEmpty) ?? participant?.contact.flatMap(nonEmpty) ?? (isMe ? you : someone)
             people.append(SharedPerson(id: key, name: name, avatar: member?.avatar.value, isOwner: isOwner, isMe: isMe,
                                        isPending: participant?.status == .pending, memberID: resolvedID,
                                        contact: participant?.contact))

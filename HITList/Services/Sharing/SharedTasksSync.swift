@@ -131,7 +131,7 @@ final class SharedTasksSync: CKSyncEngineDelegate, @unchecked Sendable {
                     }
                     for deletion in changes.deletions {
                         guard let listID = SharedTasksSchema.listID(fromZoneName: deletion.zoneID.zoneName) else { continue }
-                        Self.log.notice("Shared Tasks: a \(scope.rawValue, privacy: .public) list's zone is gone (\(String(describing: deletion.reason), privacy: .public))")
+                        Self.log.notice("Shared Tasks: a list's zone is gone from the \(scope == .owned ? "private" : "shared", privacy: .public) database (\(String(describing: deletion.reason), privacy: .public))")
                         store.applyDeletedZone(listID)
                     }
                 }
@@ -300,9 +300,20 @@ final class SharedTasksSync: CKSyncEngineDelegate, @unchecked Sendable {
 
     @MainActor
     private func report(_ error: Error, doing what: String) {
+        if let ck = error as? CKError, Self.isHandledPerRecord(ck) {
+            // A conflict or a missing record: already resolved record by record in the engine's events.
+            Self.log.notice("Shared Tasks: \(what, privacy: .public) finished with per-record results: \(error.localizedDescription, privacy: .public)")
+            return
+        }
         Self.log.error("Shared Tasks: couldn't \(what, privacy: .public): \(error.localizedDescription, privacy: .public)")
         if let ck = error as? CKError, Self.isRetriedByEngine(ck) { return }
         onProblem?(Self.describe(error))
+    }
+
+    /// A send or fetch that "fails" only because some records did (a conflict merged and saved again, a record
+    /// deleted elsewhere): `sentRecordZoneChanges` / `didFetchRecordZoneChanges` deal with each one.
+    static func isHandledPerRecord(_ error: CKError) -> Bool {
+        [.partialFailure, .serverRecordChanged, .batchRequestFailed, .unknownItem, .zoneNotFound, .userDeletedZone].contains(error.code)
     }
 
     /// Errors CKSyncEngine retries by itself: nothing to show beyond "Syncing…".

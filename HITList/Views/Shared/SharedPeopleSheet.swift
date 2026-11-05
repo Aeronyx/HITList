@@ -86,10 +86,10 @@ struct SharedPeopleSheet: View {
 
     private func personRow(_ person: SharedPerson, canRemove: Bool) -> some View {
         HStack(spacing: HITSpacing.m) {
-            ProfileAvatarView(imageData: person.avatar, name: person.name, size: 32)
+            ProfileAvatarView(imageData: person.avatar, name: person.avatarName, size: 32)
                 .opacity(person.isPending ? 0.5 : 1)
             VStack(alignment: .leading, spacing: 1) {
-                Text(person.isMe ? "\(person.name) (you)" : person.name)
+                Text(person.isMe && person.name != SharedPeople.you ? "\(person.name) (you)" : person.name)
                     .font(HITType.body)
                     .foregroundStyle(HITColor.text)
                     .lineLimit(1)
