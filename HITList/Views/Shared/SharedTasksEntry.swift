@@ -32,8 +32,22 @@ struct SharedTasksSidebarRow: View {
 
     var body: some View {
         Button { showing = true } label: {
-            SharedTasksEntryLabel(symbolSize: 13)
-                .contentShape(Rectangle())
+            // Drawn like the sidebar's other rows (`SidebarView.row`): icon in the accent, title, count.
+            Label {
+                HStack(spacing: 6) {
+                    Text("Shared Tasks").lineLimit(1).layoutPriority(1)
+                    SharedPreviewBadge(compact: true)
+                    Spacer(minLength: 4)
+                    if center.pendingInvitation != nil {
+                        Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityLabel("Invitation waiting")
+                    } else if let count = SharedTasksEntryLabel.openCount(center), count > 0 {
+                        Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
+                    }
+                }
+            } icon: {
+                Image(systemName: "person.2").foregroundStyle(Color.accentColor)
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .slateRow()
@@ -62,7 +76,7 @@ struct SharedTasksEntryLabel: View {
             Spacer(minLength: HITSpacing.s)
             if center.pendingInvitation != nil {
                 Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityLabel("Invitation waiting")
-            } else if let count = openCount, count > 0 {
+            } else if let count = Self.openCount(center), count > 0 {
                 Text("\(count)").font(HITType.subheadline).monospacedDigit().foregroundStyle(Theme.secondaryText)
             }
         }
@@ -70,7 +84,8 @@ struct SharedTasksEntryLabel: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var openCount: Int? {
+    /// Open tasks across the shared lists; nil while Shared Tasks isn't running.
+    static func openCount(_ center: SharedTasksCenter) -> Int? {
         center.store.map { $0.lists.reduce(0) { $0 + $1.tasks.filter { !$0.isCompleted }.count } }
     }
 }
@@ -99,7 +114,7 @@ struct SharedTasksSheet: View {
         }
         .slateSheet()
         #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 600, minHeight: 560, idealHeight: 680)
+        .frame(minWidth: 520, idealWidth: 600, minHeight: 420, idealHeight: 560)
         #endif
     }
 }
@@ -120,14 +135,27 @@ enum SharedTasksPresenter {
         present(SharedTasksSheet(showsList: list, showsPeople: people, onClose: dismiss))
     }
 
+    /// A cold launch from an invitation link arrives before the window exists: try again a few times.
+    private static func retry<V: View>(_ view: V, attempt: Int) {
+        guard attempt < 10 else {
+            Logger(subsystem: "com.trammells.hitlist", category: "sharing").error("Shared Tasks: no window to show the sheet in")
+            return
+        }
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            present(view, attempt: attempt + 1)
+        }
+    }
+
     #if os(iOS)
     private static weak var host: UIViewController?
 
-    private static func present<V: View>(_ view: V) {
+    private static func present<V: View>(_ view: V, attempt: Int = 0) {
+        guard host == nil else { return }
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
         guard var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController else {
-            Logger(subsystem: "com.trammells.hitlist", category: "sharing").error("Shared Tasks: no window to show the sheet in")
+            retry(view, attempt: attempt)
             return
         }
         while let presented = top.presentedViewController { top = presented }
@@ -144,11 +172,16 @@ enum SharedTasksPresenter {
     #else
     private static weak var host: NSViewController?
 
-    private static func present<V: View>(_ view: V) {
+    private static func present<V: View>(_ view: V, attempt: Int = 0) {
+        guard host == nil else { return }
         guard let window = NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where: { $0.isVisible && $0.styleMask.contains(.titled) }),
-              let root = window.contentViewController else { return }
+              let root = window.contentViewController else {
+            retry(view, attempt: attempt)
+            return
+        }
         let controller = NSHostingController(rootView: view.preferredColorScheme(.dark).tint(Theme.accent).font(HITType.body))
-        controller.preferredContentSize = NSSize(width: 560, height: 640)
+        controller.title = "Shared Tasks"
+        controller.preferredContentSize = NSSize(width: 560, height: min(600, max(420, window.frame.height - 80)))
         host = controller
         root.presentAsSheet(controller)
     }

@@ -49,6 +49,8 @@ final class SharedTasksCenter {
     var pendingInvitation: Invitation?
 
     @ObservationIgnored private var sync: SharedTasksSync?
+    /// An invitation opened while on is being joined without asking (`userAccepted`).
+    @ObservationIgnored private var joiningAtOnce = false
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let storeName: String
@@ -218,7 +220,8 @@ final class SharedTasksCenter {
         guard let store, let sync, let list = store.list(listID) else { throw SharedTasksStore.StoreError.noSuchList }
         guard SharedTasksPermissions.allows(.invite, in: list) else { throw SharedTasksStore.StoreError.notAllowed }
         let zoneID = SharedTasksRecords.zoneID(of: list)
-        try await sync.engine(.owned).sendChanges(.init(scope: .zoneIDs([zoneID])))
+        // The zone and the list's records reach the server first: a share of a zone that isn't there fails.
+        try await sync.engine(.owned).sendChanges()
         let database = sync.container.privateCloudDatabase
         let shareID = SharedTasksRecords.shareRecordID(listID: listID, ownerName: list.ownerName)
         if let existing = try? await database.record(for: shareID) as? CKShare {
@@ -277,7 +280,7 @@ final class SharedTasksCenter {
         let participant = share.participants.first { p in
             if let id = person.memberID, p.userIdentity.userRecordID?.recordName == id { return true }
             let contact = p.userIdentity.lookupInfo?.emailAddress ?? p.userIdentity.lookupInfo?.phoneNumber
-            return person.memberID == nil && contact != nil && contact == person.name
+            return person.memberID == nil && contact != nil && contact == person.contact
         }
         if let participant {
             share.removeParticipant(participant)
@@ -304,8 +307,9 @@ final class SharedTasksCenter {
 
     // MARK: - Invitations
 
-    /// Someone opened an invitation link and the system handed it to the app. On: join at once and show the list.
-    /// Off: keep it and show the explainer, whose Join switches the preview on.
+    /// Someone opened an invitation link and the system handed it to the app. On: join at once and show the list
+    /// (the invitation sheet, with the error, if joining fails). Off: keep it and show the explainer, whose Join
+    /// switches the preview on.
     func userAccepted(_ metadata: CKShare.Metadata) {
         guard !isTesting else { return }
         guard metadata.containerIdentifier == SharedTasksSchema.containerID else {
@@ -314,12 +318,27 @@ final class SharedTasksCenter {
         }
         Self.log.notice("Shared Tasks: an invitation was opened (preview \(self.isOn ? "on" : "off", privacy: .public))")
         pendingInvitation = Invitation(metadata: metadata)
-        presentPendingInvitation()
+        guard isOn else {
+            presentPendingInvitation()
+            return
+        }
+        joiningAtOnce = true
+        Task {
+            do {
+                let listID = try await joinPendingInvitation()
+                joiningAtOnce = false
+                if let listID { SharedTasksPresenter.presentScreen(list: listID) }
+            } catch {
+                joiningAtOnce = false
+                problem = SharedTasksSync.describe(error)
+                presentPendingInvitation()
+            }
+        }
     }
 
-    /// Shows the waiting invitation, once there is a window to show it in.
+    /// Shows the waiting invitation, once there is a window to show it in (not while it is being joined at once).
     func presentPendingInvitation() {
-        guard pendingInvitation != nil else { return }
+        guard pendingInvitation != nil, !joiningAtOnce else { return }
         SharedTasksPresenter.presentInvitation()
     }
 

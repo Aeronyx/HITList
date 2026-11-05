@@ -150,6 +150,7 @@ struct SharedListsView: View {
                         .buttonStyle(HITButtonStyle(.secondary, size: .small))
                         .disabled(newTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
+                .disabled(center.phase == .noAccount)
                 .slateRow()
                 if let error {
                     Text(error).font(HITType.footnote).foregroundStyle(HITColor.danger).slateRow()

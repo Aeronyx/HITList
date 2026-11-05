@@ -356,6 +356,7 @@ final class SharedTasksTests: XCTestCase {
         XCTAssertEqual(people.map(\.isOwner), [true, false, false, false, false])
         XCTAssertEqual(people.map(\.isMe), [false, true, false, false, false])
         XCTAssertEqual(people.last?.isPending, true)
+        XCTAssertEqual(people.last?.contact, "kim@example.com", "an invitation is withdrawn by its address")
         XCTAssertEqual(people.first?.avatar, Data([1]))
     }
 
