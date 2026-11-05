@@ -43,6 +43,7 @@ final class HingeCreak {
     @ObservationIgnored private var enabled = HingeCreak.isEnabled(in: AppGroup.defaults)
     @ObservationIgnored private var inForeground = true
     @ObservationIgnored private var lastUpdate = 0.0
+    @ObservationIgnored private var lastReportedEvent: UInt64 = 0
     #if os(iOS)
     private let engine = HingeCreakEngine()
     #endif
@@ -75,12 +76,19 @@ final class HingeCreak {
             Self.log.info("Hinge reported at \(degrees, format: .fixed(precision: 1))°: squeaky hinge \(self.enabled ? "on" : "off", privacy: .public)")
             refresh()
         }
-        // Every update, for reading a real fold's rate back (`log stream --level debug`; not kept otherwise).
-        Self.log.debug("Hinge \(degrees, format: .fixed(precision: 1))°, \((seconds - self.lastUpdate) * 1000, format: .fixed(precision: 1)) ms after the last")
+        // Every update, for reading a real fold's rate back (`log stream --level debug`; not kept otherwise), with
+        // how long ago the audio thread last rendered (a stall shows here).
+        #if os(iOS)
+        let audio = engine.sinceLastRender.map { String(format: "%.1f ms ago", $0 * 1000) } ?? "never"
+        let engineRunning = engine.isRunning
+        #else
+        let audio = "n/a", engineRunning = false
+        #endif
+        Self.log.debug("Hinge \(degrees, format: .fixed(precision: 1))°, \((seconds - self.lastUpdate) * 1000, format: .fixed(precision: 1)) ms after the last; audio rendered \(audio, privacy: .public), engine \(engineRunning ? "running" : "stopped", privacy: .public)")
         guard running, let drive = motion.update(degrees: degrees, at: seconds) else { return }
         #if os(iOS)
         engine.play(drive, eventHostTime: hostTime)
-        if drive.kick { reportLatency(of: hostTime) }
+        if drive.kick { reportLatency() }
         #endif
     }
 
@@ -95,11 +103,13 @@ final class HingeCreak {
     }
 
     #if os(iOS)
-    /// Reads what the audio thread measured for the creak that `eventHost` started, once it has played.
-    private func reportLatency(of eventHost: UInt64) {
+    /// Logs what the audio thread measured for the latest creak to start, once it has played.
+    private func reportLatency() {
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
-            guard let latency = engine.measuredLatency(forEvent: eventHost) else { return }
+            // Kicks close together overwrite one measurement: report the latest one measured, once.
+            guard let (event, latency) = engine.latestMeasurement(), event != lastReportedEvent else { return }
+            lastReportedEvent = event
             latencies = Array((latencies + [latency]).suffix(20))
             Self.log.info("""
                 Hinge creak: event → render callback \(latency.toCallback * 1000, format: .fixed(precision: 1)) ms, \
@@ -208,12 +218,16 @@ private struct HingeInteractionView: UIViewRepresentable {
 /// the hinge update behind the latest kick, and back from the audio thread, what it measured for that kick.
 final class HingeCreakMailbox: Sendable {
     let drive = Atomic<UInt64>(0)
+    /// When the hinge update behind the latest drive arrived (mach ticks), written before the drive.
+    let driveEventHost = Atomic<UInt64>(0)
     /// The last drive sequence the audio thread applied.
     let applied = Atomic<UInt8>(0)
     let kickEventHost = Atomic<UInt64>(0)
     let measuredEventHost = Atomic<UInt64>(0)
     let measuredCallbackHost = Atomic<UInt64>(0)
     let measuredBufferHost = Atomic<UInt64>(0)
+    /// When the audio thread last rendered (mach ticks), so a log line can say whether audio was flowing.
+    let lastRenderHost = Atomic<UInt64>(0)
 }
 
 /// The audio thread's side: the synth and the last drive it applied. Touched only inside the render callback.
@@ -229,18 +243,19 @@ private final class HingeCreakRenderState: @unchecked Sendable {
 
     func render(isSilence: UnsafeMutablePointer<ObjCBool>, timestamp: UnsafePointer<AudioTimeStamp>,
                 frames: AVAudioFrameCount, buffers: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
+        mailbox.lastRenderHost.store(mach_absolute_time(), ordering: .relaxed)
         let word = mailbox.drive.load(ordering: .acquiring)
         let sequence = HingeCreakMotion.Drive.sequence(of: word)
         if sequence != lastSequence {
             lastSequence = sequence
-            let drive = HingeCreakMotion.Drive(packed: word)
-            synth.apply(drive)
             mailbox.applied.store(sequence, ordering: .releasing)
-            if drive.kick {
-                let stamp = timestamp.pointee
-                mailbox.measuredCallbackHost.store(mach_absolute_time(), ordering: .relaxed)
-                mailbox.measuredBufferHost.store(stamp.mFlags.contains(.hostTimeValid) ? stamp.mHostTime : 0, ordering: .relaxed)
-                mailbox.measuredEventHost.store(mailbox.kickEventHost.load(ordering: .relaxed), ordering: .releasing)
+            // Picked up late (the audio route stalled while the window moved): only what is left of it.
+            let event = mailbox.driveEventHost.load(ordering: .relaxed)
+            let now = mach_absolute_time()
+            let age = event > 0 && now > event ? HostClock.seconds(now - event) : 0
+            if let drive = HingeCreakMotion.Drive(packed: word).picked(upAfter: age) {
+                synth.apply(drive)
+                if drive.kick { measure(timestamp, at: now) }
             }
         }
         let list = UnsafeMutableAudioBufferListPointer(buffers)
@@ -253,7 +268,16 @@ private final class HingeCreakRenderState: @unchecked Sendable {
         if !sounding { isSilence.pointee = true }
         return noErr
     }
+
+    /// The kick's timing, for `HingeCreakEngine.latestMeasurement`.
+    private func measure(_ timestamp: UnsafePointer<AudioTimeStamp>, at now: UInt64) {
+        let stamp = timestamp.pointee
+        mailbox.measuredCallbackHost.store(now, ordering: .relaxed)
+        mailbox.measuredBufferHost.store(stamp.mFlags.contains(.hostTimeValid) ? stamp.mHostTime : 0, ordering: .relaxed)
+        mailbox.measuredEventHost.store(mailbox.kickEventHost.load(ordering: .relaxed), ordering: .releasing)
+    }
 }
+
 
 /// A pre-warmed `AVAudioEngine` with one source node playing `HingeCreakSynth`, on the Ambient session with a
 /// 5 ms buffer. Main thread only; the render block runs on the audio thread.
@@ -264,7 +288,8 @@ final class HingeCreakEngine {
     private var engine: AVAudioEngine?
     private let mailbox = HingeCreakMailbox()
     private var sequence: UInt8 = 0
-    private var lastWasKick = false
+    /// The latest drive carried a kick (fresh or carried over).
+    private var kickPending = false
     private var observers: [NSObjectProtocol] = []
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "delight")
 
@@ -275,7 +300,7 @@ final class HingeCreakEngine {
         }
         // A fresh start: no drive left over from before the engine last stopped.
         sequence = 0
-        lastWasKick = false
+        kickPending = false
         mailbox.drive.store(0, ordering: .releasing)
         let session = AVAudioSession.sharedInstance()
         do {
@@ -318,23 +343,36 @@ final class HingeCreakEngine {
 
     func play(_ drive: HingeCreakMotion.Drive, eventHostTime: UInt64) {
         var drive = drive
+        // Each fresh kick is timed from its own hinge update (one right after another used to keep the first's
+        // time, which made the measured latency look seconds long).
+        if drive.kick { mailbox.kickEventHost.store(eventHostTime, ordering: .relaxed) }
         // A kick the audio thread hasn't picked up yet is carried by the next drive rather than lost to it.
-        if lastWasKick, mailbox.applied.load(ordering: .acquiring) != sequence { drive.kick = true }
-        if drive.kick && !lastWasKick { mailbox.kickEventHost.store(eventHostTime, ordering: .relaxed) }
-        lastWasKick = drive.kick
+        if kickPending, mailbox.applied.load(ordering: .acquiring) != sequence { drive.kick = true }
+        kickPending = drive.kick
         sequence &+= 1
+        mailbox.driveEventHost.store(eventHostTime, ordering: .relaxed)
         mailbox.drive.store(drive.packed(sequence: sequence), ordering: .releasing)
     }
 
-    /// What the audio thread measured for the kick that the hinge update at `eventHost` started.
-    func measuredLatency(forEvent eventHost: UInt64) -> HingeCreakLatency? {
-        guard mailbox.measuredEventHost.load(ordering: .acquiring) == eventHost else { return nil }
+    /// Seconds since the audio thread last rendered (nil before it has).
+    var sinceLastRender: Double? {
+        let last = mailbox.lastRenderHost.load(ordering: .relaxed)
+        let now = mach_absolute_time()
+        return last == 0 || now < last ? nil : HostClock.seconds(now - last)
+    }
+
+    var isRunning: Bool { engine?.isRunning ?? false }
+
+    /// What the audio thread measured for the latest kick it started, with that kick's hinge update time.
+    func latestMeasurement() -> (event: UInt64, latency: HingeCreakLatency)? {
+        let eventHost = mailbox.measuredEventHost.load(ordering: .acquiring)
+        guard eventHost != 0 else { return nil }
         let session = AVAudioSession.sharedInstance()
         let buffer = mailbox.measuredBufferHost.load(ordering: .relaxed)
-        return HingeCreakLatency(eventSeconds: HostClock.seconds(eventHost),
-                                 callbackSeconds: HostClock.seconds(mailbox.measuredCallbackHost.load(ordering: .relaxed)),
-                                 bufferStartSeconds: buffer == 0 ? 0 : HostClock.seconds(buffer),
-                                 outputLatency: session.outputLatency, ioBuffer: session.ioBufferDuration)
+        return (eventHost, HingeCreakLatency(eventSeconds: HostClock.seconds(eventHost),
+                                             callbackSeconds: HostClock.seconds(mailbox.measuredCallbackHost.load(ordering: .relaxed)),
+                                             bufferStartSeconds: buffer == 0 ? 0 : HostClock.seconds(buffer),
+                                             outputLatency: session.outputLatency, ioBuffer: session.ioBufferDuration))
     }
 
     /// A route change or an interruption stops the engine; start it again when it's over.

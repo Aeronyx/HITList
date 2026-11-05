@@ -7,7 +7,8 @@ import Foundation
 /// synth once the hinge has travelled `stepDegrees` one way (sensor wobble at rest changes direction and never
 /// adds up); its intensity (pitch and loudness) follows the angular speed, its grain rate is one grain per
 /// `grainDegrees` of travel at that speed, and it sustains until the next update is due, so the sound runs on
-/// between sparse updates and stops soon after the hinge does. The first movement after the sound has stopped
+/// between sparse updates and stops soon after the hinge does; a fast movement sustains for the travel it has left
+/// (momentum, up to 0.8 s), which carries the creak across the moment the window moves to the other display. The first movement after the sound has stopped
 /// `kick`s: the synth starts a grain with its next buffer instead of waiting for the grain clock.
 struct HingeCreakMotion {
     struct Drive: Equatable {
@@ -37,6 +38,14 @@ struct HingeCreakMotion {
     static let fastSpeed = 540.0
     static let grainRates: ClosedRange<Double> = 8...45
     static let sustains: ClosedRange<TimeInterval> = 0.06...0.25
+    /// Fully open. Closed is 0.
+    static let fullyOpenDegrees = 180.0
+    /// Momentum: a movement at least this intense keeps creaking for the time the travel left would take at its
+    /// speed, up to `momentumCap`, so the sound carries on while no updates come (on the simulator, 0.6–0.8 s while
+    /// the system moves the window between the displays). Slow movements, and the last few degrees, stop promptly.
+    static let momentumIntensity = 0.5
+    static let momentumCap: TimeInterval = 0.8
+    static let momentumMinTravel = 5.0
 
     private var last: (angle: Double, time: TimeInterval)?
     /// Travel toward the next drive (keeps the remainder past each step).
@@ -80,10 +89,15 @@ struct HingeCreakMotion {
         windowTravel = 0
         windowStart = time
         let interval = resting ? Self.nominalInterval : elapsed
-        let sustain = min(max(2 * interval, Self.sustains.lowerBound), Self.sustains.upperBound)
+        var sustain = min(max(2 * interval, Self.sustains.lowerBound), Self.sustains.upperBound)
+        let intensity = Self.intensity(forSpeed: speed)
+        let travelLeft = sign > 0 ? max(0, Self.fullyOpenDegrees - angle) : max(0, angle)
+        if intensity >= Self.momentumIntensity, travelLeft > Self.momentumMinTravel {
+            sustain = max(sustain, min(Self.momentumCap, travelLeft / speed))
+        }
         let kick = time > soundingUntil
         soundingUntil = time + sustain
-        return Drive(intensity: Self.intensity(forSpeed: speed),
+        return Drive(intensity: intensity,
                      grainRate: min(max(speed / Self.grainDegrees, Self.grainRates.lowerBound), Self.grainRates.upperBound),
                      sustain: sustain, kick: kick, opening: sign > 0)
     }
@@ -123,4 +137,19 @@ extension HingeCreakMotion.Drive {
     static func sequence(of word: UInt64) -> UInt8 {
         UInt8(truncatingIfNeeded: word >> 56)
     }
+
+    /// The drive as the audio thread should play it when it picks it up `age` seconds after the hinge update:
+    /// as sent within a couple of buffers; later, only the rest of its sustain and no kick (that movement's
+    /// moment has passed); nil once the sustain has run out, so a stalled audio route never squeaks late.
+    func picked(upAfter age: TimeInterval) -> Self? {
+        guard age > Self.freshAge else { return self }
+        guard age < sustain else { return nil }
+        var late = self
+        late.sustain = sustain - age
+        late.kick = false
+        return late
+    }
+
+    /// Picked up sooner than this (a few buffers; the simulator renders in ~20 ms slices), a drive plays as sent.
+    static let freshAge: TimeInterval = 0.05
 }

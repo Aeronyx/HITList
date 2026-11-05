@@ -113,6 +113,45 @@ final class HingeCreakTests: XCTestCase {
         XCTAssertFalse(back.opening)
     }
 
+    func testAFastMovementCreaksOnThroughTheWindowMovingToTheOtherDisplay() throws {
+        // On the HITList-50 simulator, unfolding sent ~20° and then nothing for 0.6–0.8 s while the system moved the
+        // window to the inner display (its main thread busy), then ~170°. A fast movement keeps creaking for as long as
+        // the travel left would take at its speed, so the sound doesn't stop halfway.
+        var motion = HingeCreakMotion()
+        _ = motion.update(degrees: 0, at: 0)
+        let opening = try XCTUnwrap(motion.update(degrees: 10, at: 0.033))
+        XCTAssertGreaterThan(opening.sustain, 0.5, "170° left at ~300°/s")
+        XCTAssertLessThanOrEqual(opening.sustain, HingeCreakMotion.momentumCap)
+
+        var closing = HingeCreakMotion()
+        _ = closing.update(degrees: 180, at: 0)
+        let shut = try XCTUnwrap(closing.update(degrees: 150, at: 0.033))
+        XCTAssertEqual(shut.sustain, 150 / (30 / 0.033), accuracy: 0.01, "flung shut: the 150° left at ~900°/s")
+        XCTAssertFalse(shut.opening)
+    }
+
+    func testSlowOrFinishingMovementsStopPromptly() throws {
+        var slow = HingeCreakMotion()
+        _ = slow.update(degrees: 90, at: 0)
+        let crawl = try XCTUnwrap(slow.update(degrees: 92, at: 0.05))
+        XCTAssertLessThanOrEqual(crawl.sustain, HingeCreakMotion.sustains.upperBound, "40°/s: no momentum")
+
+        var finishing = HingeCreakMotion()
+        _ = finishing.update(degrees: 170, at: 0)
+        let end = try XCTUnwrap(finishing.update(degrees: 177, at: 0.017))
+        XCTAssertLessThanOrEqual(end.sustain, HingeCreakMotion.sustains.upperBound, "3° from fully open: nothing left to carry")
+    }
+
+    func testADriveTheAudioThreadPicksUpLateOnlyPlaysWhatIsLeft() throws {
+        let drive = HingeCreakMotion.Drive(intensity: 0.6, grainRate: 30, sustain: 0.2, kick: true, opening: true)
+        XCTAssertEqual(drive.picked(upAfter: 0.004), drive, "picked up within a buffer or two: as sent")
+        XCTAssertEqual(drive.picked(upAfter: 0.04), drive, "the simulator renders in ~20 ms slices: still a fresh kick")
+        let late = try XCTUnwrap(drive.picked(upAfter: 0.15))
+        XCTAssertEqual(late.sustain, 0.05, accuracy: 1e-9, "the rest of its sustain")
+        XCTAssertFalse(late.kick, "no fresh grain for a movement that is already over")
+        XCTAssertNil(drive.picked(upAfter: 2.4), "seconds late (the audio route stalled while the window moved): silence, not a stray squeak")
+    }
+
     // MARK: Sound
 
     private let sampleRate = 48_000.0
