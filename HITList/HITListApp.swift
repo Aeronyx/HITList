@@ -31,6 +31,7 @@ struct HITListApp: App {
         container = ModelContainerFactory.make()
         CloudSyncMonitor.shared.containerReady(container)
         IntentStore.register(container) // Siri and Shortcuts write through this one container (brief 46).
+        HITTips.configure() // first-run tips, once, on this store's own datastore (brief 52).
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         TaskActions.seedDefaultsIfNeeded(in: context)
