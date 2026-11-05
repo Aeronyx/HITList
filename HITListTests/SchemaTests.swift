@@ -38,8 +38,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(hashes, v3Hashes)
     }
 
-    /// Entity version hashes of schema V4, the live models (0.5.0). When V5 moves them, these must keep
-    /// matching the frozen copy.
+    /// Entity version hashes of schema V4 as 0.5.0–0.6.0 (15–16) shipped it, taken from the live models before
+    /// V5 moved them; `SchemaV4Models.swift` must keep producing them.
     private let v4Hashes: [String: String] = [
         "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
         "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
@@ -77,6 +77,82 @@ final class SchemaTests: XCTestCase {
         XCTAssertTrue(avatar.isOptional)
     }
 
+    /// CloudKit is additive only: V5 adds one optional attribute, `TaskItem.reminderDate` (brief 48: "!15m",
+    /// a reminder 15 minutes from now), and leaves everything else exactly as V4 had it.
+    func testV5OnlyAddsReminderDate() throws {
+        let v4 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV4.models))
+        let v5 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV5.models))
+        XCTAssertEqual(Set(v4.entitiesByName.keys), Set(v5.entitiesByName.keys))
+        for (name, entity) in v4.entitiesByName where name != "TaskItem" {
+            XCTAssertEqual(entity.versionHash, v5.entitiesByName[name]?.versionHash, "\(name) changed in V5")
+        }
+        let before = try XCTUnwrap(v4.entitiesByName["TaskItem"]), after = try XCTUnwrap(v5.entitiesByName["TaskItem"])
+        XCTAssertEqual(Set(after.propertiesByName.keys).subtracting(before.propertiesByName.keys), ["reminderDate"])
+        XCTAssertTrue(Set(before.propertiesByName.keys).isSubset(of: after.propertiesByName.keys))
+        for (name, attribute) in before.attributesByName {
+            XCTAssertEqual(attribute.attributeType, after.attributesByName[name]?.attributeType, "\(name) changed type")
+            XCTAssertEqual(attribute.isOptional, after.attributesByName[name]?.isOptional, "\(name) changed optionality")
+        }
+        for (name, relationship) in before.relationshipsByName {
+            let now = try XCTUnwrap(after.relationshipsByName[name], name)
+            XCTAssertEqual(relationship.destinationEntity?.name, now.destinationEntity?.name, name)
+            XCTAssertEqual(relationship.deleteRule, now.deleteRule, name)
+            XCTAssertEqual(relationship.isToMany, now.isToMany, name)
+        }
+        let reminder = try XCTUnwrap(after.attributesByName["reminderDate"])
+        XCTAssertEqual(reminder.attributeType, .dateAttributeType)
+        XCTAssertTrue(reminder.isOptional, "CloudKit: a new attribute must be optional or defaulted")
+        XCTAssertNil(reminder.defaultValue)
+        XCTAssertTrue(after.uniquenessConstraints.isEmpty, "CloudKit: no unique constraints")
+    }
+
+    func testV5EntityHashes() throws {
+        let model = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV5.models))
+        let hashes = model.entityVersionHashesByName.mapValues { $0.base64EncodedString() }
+        XCTAssertEqual(hashes, v5Hashes)
+    }
+
+    /// Entity version hashes of schema V5, the live models (0.7.0). When V6 moves them, these must keep
+    /// matching the frozen copy.
+    private let v5Hashes: [String: String] = [
+        "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
+        "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
+        "SavedFilter": "LYBR+XsnEKMQlGwove4qW3exBMditLirAnGHJQ1i3FY=",
+        "TaskItem": "RyChVfD/kAlVXWZyVVlssicbubYbibgfHmEpfhVyjD8=",
+        "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
+    ]
+
+    /// A store written by 0.5.0–0.6.0 (V4) opens under V5 with its rows intact, its profile and subtasks
+    /// included, and no reminder dates.
+    func testV4StoreMigratesToV5() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("schema-\(UUID().uuidString).store")
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix)) } }
+        do {
+            let schema = Schema(versionedSchema: HITListSchemaV4.self)
+            let v4 = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
+            let context = ModelContext(v4)
+            let trip = HITListSchemaV4.TaskItem(title: "Written by V4")
+            trip.reminderOffsetMinutes = 15
+            let socks = HITListSchemaV4.TaskItem(title: "Socks")
+            let profile = HITListSchemaV4.Profile()
+            profile.displayName = "George"
+            context.insert(trip)
+            context.insert(socks)
+            context.insert(profile)
+            socks.parent = trip
+            try context.save()
+        }
+        let v5 = try ModelContainer(for: HITListSchema.schema, migrationPlan: HITListMigrationPlan.self,
+                                    configurations: [ModelConfiguration(schema: HITListSchema.schema, url: url, cloudKitDatabase: .none)])
+        let context = ModelContext(v5)
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        XCTAssertEqual(Set(tasks.map(\.title)), ["Written by V4", "Socks"])
+        XCTAssertEqual(tasks.first { $0.title == "Socks" }?.parent?.title, "Written by V4")
+        XCTAssertEqual(tasks.first { $0.title == "Written by V4" }?.reminderOffsetMinutes, 15)
+        XCTAssertTrue(tasks.allSatisfy { $0.reminderDate == nil })
+        XCTAssertEqual(try context.fetch(FetchDescriptor<Profile>()).map(\.displayName), ["George"])
+    }
+
     func testNewProfileIsEmpty() {
         let profile = Profile()
         XCTAssertEqual(profile.displayName, "")
@@ -108,7 +184,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(HITListSchemaV2.versionIdentifier, Schema.Version(2, 0, 0))
         XCTAssertEqual(HITListSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
         XCTAssertEqual(HITListSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
-        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV4.self))
+        XCTAssertEqual(HITListSchemaV5.versionIdentifier, Schema.Version(5, 0, 0))
+        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV5.self))
         XCTAssertEqual(HITListMigrationPlan.schemas.last.map(ObjectIdentifier.init), ObjectIdentifier(HITListSchema.current))
         XCTAssertEqual(HITListMigrationPlan.stages.count, HITListMigrationPlan.schemas.count - 1, "one lightweight stage per version step")
     }
@@ -168,6 +245,7 @@ final class SchemaTests: XCTestCase {
         XCTAssertNil(task.flipPeriodStart)
         XCTAssertNil(task.parent)
         XCTAssertEqual(task.subtasks ?? [], [])
+        XCTAssertNil(task.reminderDate)
     }
 
     /// A store written by build 4 (V1) opens under the migration plan with its rows intact and the new
