@@ -6,8 +6,11 @@ import AppKit
 /// the highlight boxes behind the glyphs (`HighlightLayoutManager`), in a borderless scroll view that shows
 /// up to `HighlightTextStyle.maxLines` lines.
 ///
-/// A click on a box switches it off and leaves the caret where it was; a click elsewhere places the caret.
-/// Return (and ⌘Return, ⌥Return, Enter) confirms; a pasted or dropped line break becomes a space.
+/// The text view decides its own pointer: the pointing hand over a box and the I-beam elsewhere, from its
+/// cursor rects, `cursorUpdate` and `mouseMoved` alike, so nothing above it fights the I-beam it sets on
+/// every move (what made the old overlay's hand flicker). A click on a box switches it off and leaves the
+/// caret where it was; a click elsewhere places the caret. Return (and ⌘Return, ⌥Return, Enter) confirms;
+/// a pasted or dropped line break becomes a space.
 struct HighlightTextField: NSViewRepresentable {
     var placeholder: String
     @Binding var text: String
@@ -277,6 +280,7 @@ final class HighlightNSTextView: NSTextView {
 
     private func runsChanged() {
         needsDisplay = true
+        window?.invalidateCursorRects(for: self)
         setAccessibilityCustomActions(highlightLayout.visibleRuns.map { index in
             let words = highlightLayout.runs[index].words
             return NSAccessibilityCustomAction(name: "Keep “\(words)” as text") { [weak self] in
@@ -287,13 +291,52 @@ final class HighlightNSTextView: NSTextView {
         })
     }
 
+    // MARK: Pointer (brief 47: no flicker)
+
+    /// The pointing hand over every box, the I-beam over the rest of what is visible, never overlapping.
+    override func resetCursorRects() {
+        removeAllToolTips()
+        let boxes = boxPieces().map { $0.rect.intersection(visibleRect) }.filter { !$0.isEmpty }
+        guard !boxes.isEmpty else { return super.resetCursorRects() }
+        for rect in boxes { addToolTip(rect, owner: self, userData: nil) }
+        for rect in HighlightCursor.rects(visibleRect, excluding: boxes) { addCursorRect(rect, cursor: .iBeam) }
+        for rect in boxes { addCursorRect(rect, cursor: .pointingHand) }
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        if run(at: convert(event.locationInWindow, from: nil)) != nil {
+            NSCursor.pointingHand.set()
+        } else {
+            super.cursorUpdate(with: event)
+        }
+    }
+
+    /// The text view sets the I-beam on every move; over a box it does not get the chance.
+    override func mouseMoved(with event: NSEvent) {
+        if run(at: convert(event.locationInWindow, from: nil)) != nil {
+            NSCursor.pointingHand.set()
+        } else {
+            super.mouseMoved(with: event)
+        }
+    }
+
     /// A click (or a tap on a touch Mac) on a box switches it off; anywhere else it is the text view's.
     override func mouseDown(with event: NSEvent) {
         if let index = run(at: convert(event.locationInWindow, from: nil)) {
             switchOff(index)
+            NSCursor.iBeam.set()
             return
         }
         super.mouseDown(with: event)
+    }
+}
+
+extension HighlightNSTextView: NSViewToolTipOwner {
+    /// Over a box: what a click does (as the old click target's help said).
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
+              userData data: UnsafeMutableRawPointer?) -> String {
+        guard let index = run(at: point) else { return "" }
+        return "Click to keep “\(highlightLayout.runs[index].words)” as text"
     }
 }
 
@@ -309,6 +352,30 @@ final class HighlightScrollView: NSScrollView {
             textView.minSize = NSSize(width: 0, height: size.height)
             textView.sizeToFit()
         }
+    }
+}
+
+/// Splitting the visible text into cursor rects that never overlap (AppKit leaves overlapping rects of one
+/// view undefined): the boxes, and the rest of the visible rect around them.
+enum HighlightCursor {
+    static func rects(_ area: CGRect, excluding holes: [CGRect]) -> [CGRect] {
+        var pieces = [area]
+        for hole in holes {
+            pieces = pieces.flatMap { subtract(hole, from: $0) }
+        }
+        return pieces.filter { $0.width > 0 && $0.height > 0 }
+    }
+
+    /// `rect` minus `hole`: up to four rectangles (above, below, left, right).
+    static func subtract(_ hole: CGRect, from rect: CGRect) -> [CGRect] {
+        let cut = rect.intersection(hole)
+        guard !cut.isNull, cut.width > 0, cut.height > 0 else { return [rect] }
+        var out: [CGRect] = []
+        if cut.minY > rect.minY { out.append(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: cut.minY - rect.minY)) }
+        if cut.maxY < rect.maxY { out.append(CGRect(x: rect.minX, y: cut.maxY, width: rect.width, height: rect.maxY - cut.maxY)) }
+        if cut.minX > rect.minX { out.append(CGRect(x: rect.minX, y: cut.minY, width: cut.minX - rect.minX, height: cut.height)) }
+        if cut.maxX < rect.maxX { out.append(CGRect(x: cut.maxX, y: cut.minY, width: rect.maxX - cut.maxX, height: cut.height)) }
+        return out
     }
 }
 #endif
