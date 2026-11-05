@@ -22,6 +22,8 @@ enum TaskActions {
                             project: project, labels: labels, recurrence: parsed.recurrence)
         // Zero ("!at") is the same as no offset: remind at the due time.
         if let offset = parsed.reminderOffsetMinutes, offset > 0 { task.reminderOffsetMinutes = offset }
+        // "!15m": a reminder at a moment of its own, dated or not (brief 48).
+        task.reminderDate = parsed.reminderDate
         if let deadline = parsed.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
         if let location = parsed.locationName?.trimmingCharacters(in: .whitespacesAndNewlines), !location.isEmpty {
             task.locationName = location
@@ -70,6 +72,8 @@ enum TaskActions {
             if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime) }
             task.dueDate = next.nextDueDate(from: due, now: Date())
             if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
+            // A "from now" reminder goes off once (brief 48): it belonged to the occurrence just done.
+            task.reminderDate = nil
         } else {
             task.isCompleted = true
             task.completedAt = Date()
@@ -148,6 +152,7 @@ enum TaskActions {
         task.hasDueTime = false
         task.recurrence = nil
         task.reminderOffsetMinutes = nil
+        task.reminderDate = nil
         task.deadline = nil
         task.priority = Priority.p4.rawValue
         task.labels = []
@@ -210,6 +215,15 @@ enum TaskActions {
             if date == nil { task.hasDueTime = false }
         }
         syncRepeatTime(of: task)
+        task.touch()
+        try? context.save()
+    }
+
+    /// Sets (or, with nil, removes) the task's own reminder moment ("!15m", brief 48) and saves. Its
+    /// notification follows on the save (`NotificationScheduler.triggers`).
+    static func setReminderDate(_ date: Date?, of task: TaskItem, in context: ModelContext) {
+        guard task.reminderDate != date else { return }
+        task.reminderDate = date
         task.touch()
         try? context.save()
     }
