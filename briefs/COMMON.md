@@ -80,8 +80,11 @@ Mac app's window (never the whole screen, which shows George's own windows):
    George's real app reads; only a schema push run keeps CloudKit on, still with its own suffix.)
 3. `scripts/window-shot.sh <pid> build.noindex/shot-NN.png`, then Read the PNG (shrink it first with
    `sips -Z 1400`). Quit the Debug app with `kill <pid>` when done; never touch `/Applications/HITList.app`.
-Clicking is still not possible (no Accessibility access): drive state with Debug-only launch arguments or hosted-window
-tests. iPhone/iPad: your own simulator as before; ask George once for tap access and carry on meanwhile.
+4. Click and type in it (George granted Accessibility, 2026-11-05): `scripts/window-drive.sh <pid> click X Y wait 1
+   type "Call Sam p1" key escape shot build.noindex/s.png` (points from the window's top-left = capture pixels / 2;
+   actions click, dclick, move, type, key, wait, shot). It refuses anything but a Debug HITList under `build.noindex`
+   or the Simulator, acts only while that app is frontmost (George may be at the Mac: it stops if he takes over), and
+   hands focus back afterwards. Keep runs short. iPhone/iPad: your own simulator as before; ask George once for tap access and carry on meanwhile.
 
 **Decisions from 2026-11-05 (George):** no login system ever (the Apple account is the identity; profiles serve
 Shared Tasks); the Claude integration is off and hidden by default, its privacy choices shown only once switched on;
