@@ -60,6 +60,7 @@ struct ContentView: View {
                 SplitContent(place: $place)
             }
         }
+        .environment(\.appShell, shell)
         .popoutHost(popouts, style: PopoutHost.Style(shell))
         // The Duo's outer display: the island follows the system's vertical bar (brief 50).
         .readsVerticalBarEdge()

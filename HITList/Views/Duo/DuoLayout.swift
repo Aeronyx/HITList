@@ -38,10 +38,19 @@ enum AppShell: Equatable {
     }
 
     #if os(iOS)
-    static var currentIdiom: Idiom { UIDevice.current.userInterfaceIdiom == .pad ? .pad : .phone }
+    static var currentIdiom: Idiom {
+        if DuoDebug.standIn { return .phone }
+        return UIDevice.current.userInterfaceIdiom == .pad ? .pad : .phone
+    }
     #else
     static let currentIdiom = Idiom.mac
     #endif
+}
+
+extension EnvironmentValues {
+    /// The shell on show (`ContentView`), for the lists that lay out differently on the Duo's inner display
+    /// (Upcoming's board, Flipboard's even columns; brief 50). Nil outside `ContentView` (tests, previews).
+    @Entry var appShell: AppShell? = nil
 }
 
 /// What `ContentView` keeps of the window's geometry: only what the layouts use, so the keyboard coming
