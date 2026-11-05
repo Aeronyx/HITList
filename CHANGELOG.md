@@ -4,6 +4,40 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.7.0
+
+George's notes on build 16 and a read of Apple's design guidelines, in six sessions: highlights rebuilt on
+native text views, reminders "from now", Extras and a quieter Claude, the iPhone Duo done Apple's way with a
+squeaky hinge, a Shared Tasks preview, and first-run tips with Spotlight.
+
+- Quick-add highlights are drawn by the text view itself: boxes sit evenly on the words at any width, and on the
+  Mac the pointer is a steady pointing hand over a highlight and the text cursor elsewhere (no more flicker).
+- Backspace right after a highlighted phrase removes the highlight first and keeps the letters; the next
+  Backspace deletes as usual. ⌘Z (or shake) brings the highlight back. Clicking/tapping it still works too.
+- Reminders: `!15m`, `!2h`, `!1d` (and `!1h30m`) remind you that long from now, with or without a due date;
+  `!15mb` is 15 minutes before the due time, as before. A "!" phrase lights up once you type the space after it.
+  The Reminder chip offers "In 15 minutes / In 1 hour / Later today…", the editor and the task row show the time,
+  and tapping a reminder notification now opens its task (the morning summary opens Today).
+- Settings → Claude is one switch, off: only once it is on do the privacy choice, the Mac setup and Copy for
+  Claude appear. A task Claude completes shows the usual Undo toast.
+- "Completing Tasks" in Settings is now "Extras". The profile button has a little more room above Inbox.
+- Mac and iPad: the "Discard this task?" question sits inside the board's add card (and the lists' inline add
+  row) instead of floating above it; × or Esc there now asks too.
+- iPhone Duo: on the outer display the tab island stands on the side where Apple puts bars; the inner display
+  shows Upcoming's board; typing in the editor survives a fold; the crease is kept clear when it's half open.
+  With HITList open, the hinge creaks as it moves (Settings → Extras → Squeaky hinge; silent switch respected).
+- Shared Tasks (preview, off until you switch it on in Browse → Shared Tasks): make a list, invite friends with
+  Messages, Mail or a link, and everyone can add, complete and edit; each task says who completed it. No sign-up:
+  it uses your Apple Account and shows people by their HITList name and picture.
+- First-run tips for new people (the quick-add syntax, how to undo a highlight, Browse, Flipboard, the board's
+  Add task); Settings → About → Show tips again. Open tasks show up in Spotlight and open in the editor.
+- Mac Settings: the window title names the pane, and Settings reopens on the last pane.
+- Housekeeping: unused code and 66 MB of unused font files removed; test runs on a side store keep their own
+  settings, so they never change the real app's.
+- Privacy policy: sections for Shared Tasks and the switched-off Claude integration.
+- Schema V5 adds `TaskItem.reminderDate`, and Shared Tasks uses its own container
+  (`iCloud.com.trammells.hitlist.shared`); both deployed to CloudKit Production before this build.
+
 ## 0.6.0 — build 16, 2026-11-05
 
 George's notes on build 15 and his backburner list, in eight sessions: the Mac board's inline add, the
