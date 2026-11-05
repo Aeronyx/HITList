@@ -214,6 +214,8 @@ struct UpcomingBoard: View {
                 .transition(.opacity)
         } else {
             AddTaskCardRow { openInline(context, day: day) }
+                // First-run tip (brief 52), on today's column only.
+                .hitTip(calendar.isDate(day, inSameDayAs: today) ? HITTip(.boardAddTask) : nil)
         }
     }
 

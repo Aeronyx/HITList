@@ -1,7 +1,7 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → About: the version, Copy diagnostics, What's new (a sheet) and the privacy policy. The iPhone sheet's group;
+/// Settings → About: the version, Copy diagnostics, What's new (a sheet), Show tips again and the privacy policy. The iPhone sheet's group;
 /// the Mac page's About section builds on the same rows.
 struct AboutSettingsGroup: View {
     @State private var showWhatsNew = false
@@ -13,6 +13,7 @@ struct AboutSettingsGroup: View {
             CopyDiagnosticsRow()
             HITMenuRow("What's new", systemImage: "sparkles") { showWhatsNew = true }
                 .accessibilityIdentifier("settings-whats-new")
+            ShowTipsAgainRow()
             PrivacyPolicyRow()
         }
         .sheet(isPresented: $showWhatsNew) {
@@ -34,6 +35,26 @@ struct PrivacyPolicyRow: View {
         .help(AboutInfo.privacyPolicyURL.absoluteString)
         #endif
         .accessibilityIdentifier("settings-privacy-policy")
+    }
+}
+
+/// "Show tips again": every first-run tip (`HITTips`) shows once more, the next time its moment comes.
+/// Says "Done" for two seconds.
+struct ShowTipsAgainRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var done = false
+
+    var body: some View {
+        HITMenuRow("Show tips again", subtitle: "The short tips new people see, once each",
+                   systemImage: "lightbulb", value: done ? "Done" : nil, accessory: .none) {
+            HITTips.showAgain()
+            Task {
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { done = true }
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { done = false }
+            }
+        }
+        .accessibilityIdentifier("settings-show-tips")
     }
 }
 
