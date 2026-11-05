@@ -16,7 +16,7 @@ public enum ClaudeWire {
     /// The only message id in use: one tool call.
     public static let callMessageID: Int32 = 1
 
-    /// The setting "Allow Claude" for the store with this suffix, in the app group's defaults. The helper
+    /// The setting "Claude integration" for the store with this suffix, in the app group's defaults. The helper
     /// reads it only to tell "access is off" from "HITList isn't running" when the port is missing.
     public static func allowedKey(storeSuffix: String?) -> String { "claude.allowed" + suffixPart(storeSuffix) }
 
@@ -62,7 +62,7 @@ public enum ClaudeWire {
 
     // The words both sides use for the two ways a call can't reach the tasks.
     public static let notRunningMessage = "HITList isn't running on this Mac. Open HITList on this Mac, then try again."
-    public static let accessOffMessage = "HITList's Claude access is off. Turn on Allow Claude in HITList → Settings → Claude."
+    public static let accessOffMessage = "Claude integration is off in HITList. Turn it on in HITList → Settings → Claude."
 }
 
 #if os(macOS)

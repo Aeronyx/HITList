@@ -3,8 +3,8 @@ import SwiftData
 import HITListCore
 
 /// "Copy for Claude" (brief 43): the tasks the privacy rule allows, in the snapshot JSON shape the
-/// backups use, after one paragraph that tells any AI how to read it. Works on every platform and
-/// whether or not "Allow Claude" is on (it is the person's own copy, made by hand).
+/// backups use, after one paragraph that tells any AI how to read it. Works on every platform, and is
+/// offered only while Claude integration is on (brief 49: `ClaudeIntegration.offersExport`).
 @MainActor
 enum ClaudeExport {
     /// The store's snapshot with every hidden task, the subtasks of hidden tasks, and every Group or label

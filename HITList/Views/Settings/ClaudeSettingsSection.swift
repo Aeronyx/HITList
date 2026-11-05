@@ -2,14 +2,17 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// Settings → Claude (brief 43). On the Mac: "Allow Claude", which tasks Claude sees, the setup snippets
-/// for Claude Desktop and Claude Code, Test connection, and Copy for Claude. On the iPhone and iPad only
-/// the rule and the export: Claude's apps there can't start a local helper.
+/// Settings → Claude (briefs 43, 49). Off by default, it is one switch, "Claude integration", and one
+/// sentence of what it does. Turning it on asks first, saying what Claude will see and do
+/// (`ClaudeIntegration.confirmation`). Only while it is on do the rest appear (`ClaudeIntegration.parts`):
+/// which tasks Claude sees, Copy for Claude, and on the Mac the setup snippets for Claude Desktop and Claude
+/// Code and Test connection. On the Mac the switch also opens and closes the connector's port.
 struct ClaudeSettingsSection: View {
     @Environment(\.modelContext) private var context
-    private let settings = ClaudeSettings()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let settings: ClaudeSettings
 
-    @State private var allowed: Bool
+    @State private var toggle: ClaudeIntegration.Switch
     @State private var mode: ClaudeAccessRule.Mode
     @State private var hiddenLabel: String
     @State private var sharedLabel: String
@@ -23,10 +26,10 @@ struct ClaudeSettingsSection: View {
         case done(String, ok: Bool)
     }
 
-    init() {
-        let settings = ClaudeSettings()
+    init(settings: ClaudeSettings = ClaudeSettings()) {
+        self.settings = settings
         let rule = settings.rule
-        _allowed = State(initialValue: settings.isAllowed)
+        _toggle = State(initialValue: ClaudeIntegration.Switch(isOn: settings.isAllowed))
         _mode = State(initialValue: rule.mode)
         _hiddenLabel = State(initialValue: rule.hiddenLabel)
         _sharedLabel = State(initialValue: rule.sharedLabel)
@@ -36,40 +39,64 @@ struct ClaudeSettingsSection: View {
         ClaudeAccessRule(mode: mode, hiddenLabel: hiddenLabel, sharedLabel: sharedLabel)
     }
 
+    #if os(macOS)
+    private static let isMac = true
+    #else
+    private static let isMac = false
+    #endif
+
+    private var parts: [ClaudeIntegration.Part] { ClaudeIntegration.parts(enabled: toggle.isOn, mac: Self.isMac) }
+
     var body: some View {
+        let parts = parts
+        let question = ClaudeIntegration.confirmation(rule: rule, mac: Self.isMac)
         VStack(alignment: .leading, spacing: HITSpacing.xl) {
-            accessGroup
-            exportGroup
+            masterGroup
+            if parts.contains(.privacy) { accessGroup.transition(.opacity) }
+            if parts.contains(.export) { exportGroup.transition(.opacity) }
             #if os(macOS)
-            setupGroups
+            if parts.contains(.setup) { setupGroups.transition(.opacity) }
+            if parts.contains(.test) { testGroup.transition(.opacity) }
             #endif
         }
-        .onAppear(perform: refresh)
+        .animation(HITMotion.standard(reduceMotion: reduceMotion), value: toggle.isOn)
+        .onAppear { if toggle.isOn { refresh() } }
         .onChange(of: rule) { _, new in
             settings.rule = new
             refresh()
         }
-        .onChange(of: allowed) { _, on in
+        .onChange(of: toggle.isOn) { _, on in
             settings.isAllowed = on
             ClaudeConnector.shared.refresh()
             testState = .idle
+            if on { refresh() } else { exportText = ""; counts = nil }
+        }
+        .alert(question.title, isPresented: Binding(get: { toggle.isAsking }, set: { if !$0 { toggle.cancel() } })) {
+            Button(question.confirm) { toggle.confirm() }
+            Button("Cancel", role: .cancel) { toggle.cancel() }
+        } message: {
+            Text(question.message)
+        }
+    }
+
+    // MARK: The switch
+
+    private var masterGroup: some View {
+        HITGroup("Claude") {
+            Toggle(isOn: Binding(get: { toggle.isOn }, set: { toggle.request($0) })) {
+                HITMenuRowLabel(ClaudeIntegration.switchTitle, subtitle: ClaudeIntegration.summary(mac: Self.isMac),
+                                systemImage: "sparkles")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .accessibilityIdentifier("claude-allow")
         }
     }
 
     // MARK: Access
 
     private var accessGroup: some View {
-        HITGroup("Claude", footer: accessFooter) {
-            #if os(macOS)
-            Toggle(isOn: $allowed) {
-                HITMenuRowLabel("Allow Claude",
-                                subtitle: "Claude Desktop and Claude Code can read, add, complete and change the tasks it can see, while HITList is open on this Mac.",
-                                systemImage: "sparkles")
-            }
-            .toggleStyle(.hit)
-            .hitRowPadding()
-            .accessibilityIdentifier("claude-allow")
-            #endif
+        HITGroup("What Claude Sees", footer: accessFooter) {
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 HITMenuRowLabel("Claude sees", systemImage: "eye")
                     .foregroundStyle(HITColor.text)
@@ -105,7 +132,7 @@ struct ClaudeSettingsSection: View {
             ? "Label a task @\(rule.hiddenLabel) to keep it from Claude."
             : "Label a task @\(rule.sharedLabel) to share it with Claude; tasks Claude adds get the label too."
         #if os(macOS)
-        return "\(rest) A hidden task's subtasks are hidden with it. Off, nothing on this Mac can reach your tasks."
+        return "\(rest) A hidden task's subtasks are hidden with it. With Claude integration off, nothing on this Mac can reach your tasks."
         #else
         return "\(rest) This applies to Copy for Claude here, and to Claude on a Mac when you set it there; Claude's iPhone app can't connect to HITList."
         #endif
@@ -147,6 +174,9 @@ struct ClaudeSettingsSection: View {
         HITGroup("Claude Code", footer: "Run this once in Terminal; every Claude Code session then has HITList's tools. `claude mcp list` shows it.") {
             snippet(code, id: "code")
         }
+    }
+
+    private var testGroup: some View {
         HITGroup(footer: "Asks HITList through the same door Claude uses, as Claude would.") {
             HITMenuRow("Test connection", systemImage: "bolt.horizontal", accessory: .none, action: runTest)
                 .disabled(testState == .running)
@@ -177,8 +207,8 @@ struct ClaudeSettingsSection: View {
     }
 
     private func runTest() {
-        guard allowed else {
-            testState = .done("Turn on Allow Claude first.", ok: false)
+        guard toggle.isOn else {
+            testState = .done("Turn on Claude integration first.", ok: false)
             return
         }
         ClaudeConnector.shared.refresh()
