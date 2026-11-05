@@ -23,6 +23,9 @@ struct PopoutHost: ViewModifier {
     @Bindable var popouts: PopoutController
     var chosenStyle: Style?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
+    /// the bottom beside the "+" at its foot (brief 50).
+    @Environment(\.verticalBarEdge) private var verticalBarEdge
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// The keyboard the card sits above; `heldKeyboardHeight` is its height when the card began closing.
@@ -125,7 +128,8 @@ struct PopoutHost: ViewModifier {
                     }
                 }
                 .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
-                .padding(style.cornerToasts ? Self.panelToastInsets : Self.phoneToastInsets)
+                .padding(style.cornerToasts ? Self.panelToastInsets
+                         : Self.phoneToastInsets(for: IslandPlacement(verticalBarEdge: verticalBarEdge)))
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -701,6 +705,20 @@ extension PopoutHost {
     static var phoneToastInsets: EdgeInsets {
         EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: toastClearance, trailing: toastTrailingClearance)
     }
+    /// iPhone, wherever the island stands. Upright in the system's bar column (the Duo's outer display, brief
+    /// 50) the toast sits at the bottom of the content, centred on the "+" at the island's foot; the safe area
+    /// already keeps it off the column, so only a gap separates them.
+    static func phoneToastInsets(for placement: IslandPlacement) -> EdgeInsets {
+        let bottom = IslandMetrics.bottomGap + (IslandMetrics.sideAddButtonSize.height - CompletionToast.height) / 2
+        switch placement {
+        case .bottom:
+            return phoneToastInsets
+        case .side(.leading):
+            return EdgeInsets(top: 0, leading: HITSpacing.m, bottom: bottom, trailing: IslandMetrics.sideInset)
+        case .side:
+            return EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: bottom, trailing: HITSpacing.m)
+        }
+    }
     /// Mac and iPad: the popout's toast sits one toast and a gap above a list's (`ListCompletionToast`).
     static var panelToastInsets: EdgeInsets {
         EdgeInsets(top: 0, leading: HITSpacing.l, bottom: HITSpacing.l + CompletionToast.height + HITSpacing.s,
@@ -727,6 +745,9 @@ private struct ListCompletionToast: ViewModifier {
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
+    /// the bottom beside the "+" at its foot (brief 50).
+    @Environment(\.verticalBarEdge) private var verticalBarEdge
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var drawnByHost: Bool { sizeClass == .compact }

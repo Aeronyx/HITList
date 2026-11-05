@@ -216,6 +216,7 @@
 		EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */; };
 		EDBEC249FA6239C0F6E4A5B8 /* UpcomingScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */; };
 		EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */; };
+		EE4CDE8C463A7D82AA0E4020 /* VerticalBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6371FB0617E5C6B42D5FA759 /* VerticalBar.swift */; };
 		EFE641180B1826E940580ED8 /* InboxProcessQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D205E4007ED3FF4C43D51EE /* InboxProcessQueueTests.swift */; };
 		EFF74DC0B928EAD8ABFF10AD /* AccountWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */; };
 		F08B3E77DEE13635559AA7E3 /* CompletionRowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */; };
@@ -348,6 +349,7 @@
 		5764B62739B38F9D4F936CB1 /* SyncLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLog.swift; sourceTree = "<group>"; };
 		5E0F881764310827D1A610F1 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactQuickAddTests.swift; sourceTree = "<group>"; };
+		6371FB0617E5C6B42D5FA759 /* VerticalBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalBar.swift; sourceTree = "<group>"; };
 		655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEntity.swift; sourceTree = "<group>"; };
 		659074BDF3973B67D923222D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		65DBCFC9B67D1B0D889D68A7 /* Inter_18pt-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-SemiBold.ttf"; sourceTree = "<group>"; };
@@ -567,6 +569,7 @@
 				2B628E6843BB58819E0920AB /* DuoLayout.swift */,
 				1960A13263E02500E37004C0 /* DuoNextDays.swift */,
 				430C53233DBC58D5311A9305 /* DuoSplit.swift */,
+				6371FB0617E5C6B42D5FA759 /* VerticalBar.swift */,
 			);
 			path = Duo;
 			sourceTree = "<group>";
@@ -1309,6 +1312,7 @@
 				3B3D35BD35C09D053F10CBF6 /* UpcomingBoard.swift in Sources */,
 				384392355165F856C2318A7A /* UpcomingSchedule.swift in Sources */,
 				50966C1D4A63EBAC1A08B11D /* UpcomingView.swift in Sources */,
+				EE4CDE8C463A7D82AA0E4020 /* VerticalBar.swift in Sources */,
 				5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */,
 				69A4CC554774E422023A8E61 /* WhatsNew.swift in Sources */,
 			);
