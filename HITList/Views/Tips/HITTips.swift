@@ -41,7 +41,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .quickAddSyntax: "text.cursor"
-        case .keepAsText: "character.cursor.ibeam"
+        case .keepAsText: "highlighter"
         case .browse: "magnifyingglass"
         case .flipboard: "switch.2"
         case .boardAddTask: "calendar.badge.plus"

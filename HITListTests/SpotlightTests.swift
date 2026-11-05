@@ -140,6 +140,23 @@ final class SpotlightTests: XCTestCase {
         _ = bread
     }
 
+    func testSavesWhileARefreshWaitsJoinItInsteadOfPushingItBack() async throws {
+        try task("Buy milk")
+        let sync = SpotlightSync(index: index, defaults: defaults, refreshDelay: .milliseconds(100))
+        for _ in 0..<5 {
+            sync.scheduleRefresh(in: context)
+            try await Task.sleep(for: .milliseconds(30))
+        }
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(index.batches.count, 1, "five saves 30 ms apart: one refresh, 100 ms after the first")
+        XCTAssertEqual(index.indexed.map(\.title), ["Buy milk"])
+
+        try task("Buy bread")
+        sync.scheduleRefresh(in: context)
+        try await Task.sleep(for: .milliseconds(300))
+        XCTAssertEqual(index.indexed.map(\.title), ["Buy milk", "Buy bread"], "the next save gets a refresh of its own")
+    }
+
     func testCompletingOrDeletingATaskTakesItOutOfSpotlight() async throws {
         let milk = try task("Buy milk")
         let bread = try task("Buy bread")
