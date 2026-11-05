@@ -49,6 +49,35 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(back.tasks[0].hasV2Fields)
     }
 
+    /// Schema V5 (brief 48): a task's own reminder moment ("!15m") goes into backups and comes back, with the
+    /// record saying it was written by a build that knows the field (so a restore can tell "none" from "too old
+    /// to say").
+    func testTheReminderDateRoundTrips() throws {
+        let record = Snapshot.TaskRecord(id: UUID(), title: "Call mom", notes: "", priority: 4, dueDate: nil, hasDueTime: false,
+                                         isCompleted: false, completedAt: nil, recurrence: nil, sortOrder: 0, projectID: nil,
+                                         labelIDs: [], createdAt: Fixed.now, updatedAt: Fixed.now, flipTarget: 1, flipCount: 0,
+                                         reminderDate: Fixed.date(2026, 10, 21, 14, 45), schemaVersion: Snapshot.TaskRecord.currentSchemaVersion)
+        XCTAssertTrue(record.hasV5Fields)
+        let data = try Snapshot(exportedAt: Fixed.now, deviceName: "x", projects: [], labels: [], tasks: [record], filters: []).jsonData()
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("\"reminderDate\" : \"2026-10-21T14:45:00Z\""))
+        let back = try Snapshot.from(json: data)
+        XCTAssertEqual(back.tasks, [record])
+        XCTAssertEqual(Snapshot.TaskRecord.currentSchemaVersion, 5)
+    }
+
+    func testABackupFromBeforeV5DoesNotSayAboutTheReminderDate() throws {
+        let json = """
+            {"deviceName":"iPhone","exportedAt":"2026-10-21T14:30:00Z","filters":[],"labels":[],"projects":[],"version":1,
+             "tasks":[{"createdAt":"2026-10-21T14:30:00Z","hasDueTime":false,"id":"6B1F3E2A-9C4D-4E5F-8A7B-1D2C3E4F5A6B",
+                       "isCompleted":false,"labelIDs":[],"notes":"","priority":4,"sortOrder":0,"title":"0.6.0",
+                       "updatedAt":"2026-10-21T14:30:00Z","flipTarget":1,"flipCount":0}]}
+            """
+        let task = try XCTUnwrap(try Snapshot.from(json: Data(json.utf8)).tasks.first)
+        XCTAssertTrue(task.hasV2Fields)
+        XCTAssertFalse(task.hasV5Fields)
+        XCTAssertNil(task.reminderDate)
+    }
+
     func testRejectsNewerVersion() throws {
         var snap = Snapshot(deviceName: "x", projects: [], labels: [], tasks: [], filters: [])
         snap.version = 99

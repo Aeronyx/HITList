@@ -352,6 +352,81 @@ final class ReminderDateTests: XCTestCase {
         XCTAssertNil(child.reminderDate)
     }
 
+    // MARK: Everywhere the data goes (item 6)
+
+    func testBackupsCarryTheReminderDateAndRestoreIt() throws {
+        let context = store()
+        let task = TaskItem(title: "Call mom")
+        task.reminderDate = minutes(15)
+        context.insert(task)
+        try context.save()
+        let snapshot = try SnapshotBuilder.build(from: context)
+        let record = try XCTUnwrap(snapshot.tasks.first)
+        XCTAssertEqual(record.reminderDate, minutes(15))
+        XCTAssertTrue(record.hasV5Fields)
+
+        let other = store()
+        try SnapshotBuilder.restore(try Snapshot.from(json: snapshot.jsonData()), into: other)
+        XCTAssertEqual(try other.fetch(FetchDescriptor<TaskItem>()).first?.reminderDate, minutes(15))
+    }
+
+    /// A backup from 0.6.0 says nothing about the field: restoring it over a task leaves the task's reminder
+    /// moment alone. One from 0.7.0 with none takes it away.
+    func testRestoringAnOlderBackupLeavesTheReminderDateAlone() throws {
+        let context = store()
+        let task = TaskItem(title: "Call mom")
+        task.reminderDate = minutes(15)
+        context.insert(task)
+        try context.save()
+        var record = try XCTUnwrap(SnapshotBuilder.build(from: context).tasks.first)
+        record.updatedAt = task.updatedAt.addingTimeInterval(60)
+        record.reminderDate = nil
+        record.schemaVersion = nil
+        try SnapshotBuilder.restore(Snapshot(deviceName: "x", projects: [], labels: [], tasks: [record], filters: []), into: context)
+        XCTAssertEqual(task.reminderDate, minutes(15), "0.6.0 couldn't say")
+        record.updatedAt = record.updatedAt.addingTimeInterval(60)
+        record.schemaVersion = Snapshot.TaskRecord.currentSchemaVersion
+        try SnapshotBuilder.restore(Snapshot(deviceName: "x", projects: [], labels: [], tasks: [record], filters: []), into: context)
+        XCTAssertNil(task.reminderDate, "0.7.0 says there is none")
+    }
+
+    /// Duplicate Groups and labels merge by moving their tasks; a task keeps its reminder moment.
+    func testMergingDuplicateGroupsKeepsTheTasksReminderDate() throws {
+        let context = store()
+        let first = Project(name: "Family"), second = Project(name: "Family")
+        second.createdAt = first.createdAt.addingTimeInterval(10)
+        let task = TaskItem(title: "Call mom", project: second)
+        task.reminderDate = minutes(15)
+        for model in [first, second] { context.insert(model) }
+        context.insert(task)
+        try context.save()
+        let report = try Deduplicator.run(in: context, profileLog: { _, _, _ in })
+        XCTAssertEqual(report.projects, 1)
+        XCTAssertEqual(task.project?.id, first.id)
+        XCTAssertEqual(task.reminderDate, minutes(15))
+    }
+
+    /// Siri's Add Task reads the dictated text as quick add does (final): "remind me in 15 minutes" is a due
+    /// time 15 minutes away, as before, not a "from now" reminder; a typed "!15m" (Shortcuts) is one.
+    func testSiriPhrasingDoesNothingSurprising() throws {
+        let context = store()
+        let spoken = try IntentActions.addTask("Remind me in 15 minutes to call mom", group: nil, in: context, now: now)
+        let task = try XCTUnwrap(IntentActions.task(id: spoken.id, in: context))
+        XCTAssertEqual(task.title, "Remind me to call mom")
+        XCTAssertEqual(task.dueDate, minutes(15))
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertNil(task.reminderDate)
+        XCTAssertNil(task.reminderOffsetMinutes)
+
+        let exclaimed = try IntentActions.addTask("Call mom!", group: nil, in: context, now: now)
+        XCTAssertEqual(try XCTUnwrap(IntentActions.task(id: exclaimed.id, in: context)).title, "Call mom!")
+
+        let typed = try IntentActions.addTask("Call mom !15m", group: nil, in: context, now: now)
+        let typedTask = try XCTUnwrap(IntentActions.task(id: typed.id, in: context))
+        XCTAssertEqual(typedTask.title, "Call mom")
+        XCTAssertEqual(typedTask.reminderDate, minutes(15), "the last word counts: Siri's text is complete")
+    }
+
     // MARK: Notification actions (item 4)
 
     /// Snooze on a "from now" reminder moves the reminder an hour on, not the task: an undated task stays undated.
