@@ -124,6 +124,41 @@ final class ClaudeGatingTests: XCTestCase {
     }
     #endif
 
+    // MARK: Claude's completions get the Undo toast (item 2)
+
+    func testAClaudeCompletionShowsTheUndoToast() {
+        let center = NotificationCenter()
+        let popouts = PopoutController(draftDefaults: defaults, center: center)
+        let record = CompletedTask(id: UUID(), title: "Call the dentist", revert: .uncomplete)
+        center.post(name: .claudeDidCompleteTask, object: nil, userInfo: [ClaudeConnector.completedTaskKey: record])
+        XCTAssertEqual(popouts.toast.completed, [record])
+        XCTAssertEqual(popouts.toast.message, "Completed ‘Call the dentist’")
+    }
+
+    func testAClaudeCompletionIsOneTapFromUndone() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "From Claude")
+        context.insert(task)
+        TaskActions.toggleCompletion(task, in: context)
+        XCTAssertTrue(task.isCompleted)
+
+        let center = NotificationCenter()
+        let popouts = PopoutController(draftDefaults: defaults, center: center)
+        center.post(name: .claudeDidCompleteTask, object: nil,
+                    userInfo: [ClaudeConnector.completedTaskKey: CompletedTask(id: task.id, title: task.title, revert: .uncomplete)])
+        popouts.undoCompletions(in: context)
+        XCTAssertFalse(task.isCompleted)
+        XCTAssertFalse(popouts.toast.isVisible)
+    }
+
+    func testANotificationWithoutARecordIsIgnored() {
+        let center = NotificationCenter()
+        let popouts = PopoutController(draftDefaults: defaults, center: center)
+        center.post(name: .claudeDidCompleteTask, object: nil, userInfo: ["completedTask": "junk"])
+        XCTAssertFalse(popouts.toast.isVisible)
+    }
+
     // MARK: Renders
 
     func testSectionRendersOffAndOn() {
