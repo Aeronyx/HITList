@@ -494,13 +494,14 @@ final class CloudSyncMonitor {
     /// For Settings → Details: "registered", "failed: <reason>", or nil before either happened.
     private(set) var pushRegistration: String?
 
-    /// From the app delegate's launch: whether the app is registered for pushes yet.
-    func pushLaunchState(registered: Bool, launchedByPush: Bool) {
+    /// From the app delegate's launch. It deliberately doesn't ask `isRegisteredForRemoteNotifications`: that
+    /// is a synchronous call to the push service, which on a cold boot answered after 25 s and held the first
+    /// frame that long (iOS's launch watchdog kills an app at about 20 s). Whether registration worked arrives
+    /// with the token (`pushRegistered(tokenBytes:)`) or its error.
+    func pushLaunchState(launchedByPush: Bool) {
         var fields = ["aps": SyncEnvironment.current.push ?? "unknown"]
         if launchedByPush { fields["launchedBy"] = "push" }
-        if registered { pushRegistration = "registered" }
-        write(.push, registered ? "Registered for remote notifications at launch" : "Not yet registered for remote notifications at launch",
-              fields: fields)
+        write(.push, "Registering for remote notifications at launch", fields: fields)
     }
 
     func pushRegistered(tokenBytes: Int) {
