@@ -269,4 +269,60 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertFalse(UpcomingView.showsBoard(idiom: .pad, sizeClass: .compact, shell: .tabs))
         XCTAssertTrue(UpcomingView.showsBoard(idiom: .mac, sizeClass: nil, shell: .split), "the Mac as before")
     }
+
+    // MARK: Typing kept across a fold (brief 50)
+
+    func testTypingIsKeptForTheNextEditorOfTheSameTask() {
+        let carry = EditorCarryOver()
+        let task = TaskItem(title: "Buy milk")
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "Buy oat milk"
+        draft.notes = "The barista one"
+        draft.isAddingSubtask = true
+        draft.newSubtask = "Check the date"
+        carry.keep(draft, showsNotes: true, for: task)
+
+        XCTAssertEqual(carry.kept(for: task.id)?.draft, draft)
+        XCTAssertEqual(carry.kept(for: task.id)?.showsNotes, true)
+        XCTAssertNil(carry.kept(for: UUID()), "another task's editor starts from what is stored")
+    }
+
+    func testANewEditorStartsFromTheKeptTypingOrFromTheTask() {
+        let carry = EditorCarryOver()
+        let task = TaskItem(title: "Buy milk", notes: "")
+        XCTAssertEqual(EditorCarryOver.start(for: task, from: carry).draft, TaskEditorDraft(task: task), "nothing kept")
+        XCTAssertFalse(EditorCarryOver.start(for: task, from: carry).showsNotes)
+        XCTAssertEqual(EditorCarryOver.start(for: task, from: nil).draft, TaskEditorDraft(task: task), "no carry-over (Mac, tests)")
+
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "Buy oat milk"
+        carry.keep(draft, showsNotes: true, for: task)
+        let start = EditorCarryOver.start(for: task, from: carry)
+        XCTAssertEqual(start.draft.title, "Buy oat milk", "the sheet's typing reaches the column, and back")
+        XCTAssertTrue(start.showsNotes)
+
+        // Typing taken back to nothing (or saved) leaves nothing to carry, so a later editor starts from the
+        // task as stored, which may have changed since.
+        carry.keep(TaskEditorDraft(task: task), showsNotes: false, for: task)
+        XCTAssertNil(carry.kept(for: task.id))
+        task.title = "Buy milk and eggs"
+        XCTAssertEqual(EditorCarryOver.start(for: task, from: carry).draft.title, "Buy milk and eggs")
+    }
+
+    func testClosingOrSwitchingTheEditorDropsTheKeptTyping() {
+        let carry = EditorCarryOver()
+        let task = TaskItem(title: "Buy milk")
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "Buy oat milk"
+        carry.keep(draft, showsNotes: false, for: task)
+
+        carry.editorShows(task.id)
+        XCTAssertNotNil(carry.kept(for: task.id), "the same task still open (a fold): kept")
+        carry.editorShows(UUID())
+        XCTAssertNil(carry.kept(for: task.id), "another task opened: dropped")
+
+        carry.keep(draft, showsNotes: false, for: task)
+        carry.editorShows(nil)
+        XCTAssertNil(carry.kept(for: task.id), "closed (Confirm, ×, Discard, swipe): dropped, so it opens fresh next time")
+    }
 }

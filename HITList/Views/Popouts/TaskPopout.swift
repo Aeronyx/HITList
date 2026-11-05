@@ -55,10 +55,17 @@ struct TaskPopout: View {
 
     enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
 
-    init(task: TaskItem) {
+    /// The iPhone Duo's fold (brief 50): the editor moves between the outer display's sheet and the inner
+    /// display's column as a new view; this one writes its typing to `carryOver` as it changes, and starts from
+    /// what an earlier one left there.
+    private let carryOver: EditorCarryOver?
+
+    init(task: TaskItem, carryOver: EditorCarryOver? = nil) {
         self.task = task
-        _draft = State(initialValue: TaskEditorDraft(task: task))
-        _showsNotes = State(initialValue: !task.notes.isEmpty)
+        self.carryOver = carryOver
+        let start = EditorCarryOver.start(for: task, from: carryOver)
+        _draft = State(initialValue: start.draft)
+        _showsNotes = State(initialValue: start.showsNotes)
     }
 
     /// The panel (Mac, iPad) sizes to its content; the iPhone sheet fills its detent.
@@ -103,7 +110,9 @@ struct TaskPopout: View {
         #endif
         .onChange(of: draft) { _, _ in
             if confirmingDiscard, !draft.hasPendingChanges(for: task) { confirmingDiscard = false }
+            keepTyping()
         }
+        .onChange(of: showsNotes) { _, _ in keepTyping() }
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -530,6 +539,13 @@ struct TaskPopout: View {
             if confirmingDiscard, Date.now.timeIntervalSince(discardOfferedAt) < 0.3 { return }
             discardTyping()
         }
+    }
+
+    /// Hands the typing to the next editor of this task, should a fold replace this one (brief 50). Not while
+    /// closing: Confirm and Discard are done with it.
+    private func keepTyping() {
+        guard let carryOver, taskID != nil, !isClosing else { return }
+        carryOver.keep(draft, showsNotes: showsNotes, for: task)
     }
 
     /// Closes without saving typing (picked values have landed already).
