@@ -46,6 +46,10 @@ enum SharedTasksSchema {
     static let listRecordName = "list"
     static let taskRecordPrefix = "task-"
     static let memberRecordPrefix = "member-"
+    /// `CKCurrentUserDefaultName`: how a zone in my own private database names its owner (me).
+    static let currentUserOwnerName = "__defaultOwner__"
+    /// `CKRecordNameZoneWideShare`: the record name of a zone-wide share.
+    static let zoneWideShareRecordName = "cloudkit.zoneshare"
 
     static func zoneName(for listID: UUID) -> String { zonePrefix + listID.uuidString }
 
