@@ -25,7 +25,7 @@ struct PopoutHost: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
     /// the bottom beside the "+" at its foot (brief 50).
-    @Environment(\.verticalBarEdge) private var verticalBarEdge
+    @Environment(\.islandPlacement) private var islandPlacement
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// The keyboard the card sits above; `heldKeyboardHeight` is its height when the card began closing.
@@ -133,7 +133,7 @@ struct PopoutHost: ViewModifier {
                 }
                 .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
                 .padding(style.cornerToasts ? Self.panelToastInsets
-                         : Self.phoneToastInsets(for: IslandPlacement(verticalBarEdge: verticalBarEdge)))
+                         : Self.phoneToastInsets(for: islandPlacement))
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -753,7 +753,7 @@ private struct ListCompletionToast: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
     /// the bottom beside the "+" at its foot (brief 50).
-    @Environment(\.verticalBarEdge) private var verticalBarEdge
+    @Environment(\.islandPlacement) private var islandPlacement
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     private var drawnByHost: Bool { sizeClass == .compact }

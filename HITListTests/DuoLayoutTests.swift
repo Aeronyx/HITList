@@ -207,10 +207,21 @@ final class DuoLayoutTests: XCTestCase {
     // MARK: Vertical controls (brief 50)
 
     func testTheIslandFollowsTheSystemsVerticalBar() {
-        XCTAssertEqual(IslandPlacement(verticalBarEdge: nil), .bottom,
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: nil, windowHeight: outer.height), .bottom,
                        "every other iPhone, and wherever the system keeps its bars horizontal")
-        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing), .side(.trailing), "the Duo's outer display")
-        XCTAssertEqual(IslandPlacement(verticalBarEdge: .leading), .side(.leading))
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: outer.height), .side(.trailing),
+                       "the Duo's outer display")
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .leading, windowHeight: outer.height), .side(.leading))
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: 0), .side(.trailing),
+                       "before the window is measured, the system's edge decides")
+    }
+
+    func testOnItsSideTheOuterDisplayKeepsTheIslandAtTheBottom() {
+        // The outer display on its side (678 × 466): the system's column holds its own Back and toolbar items
+        // and has no room left for four tabs and the + under them; standing there, the island covered them.
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .leading, windowHeight: outer.width), .bottom)
+        XCTAssertLessThan(outer.width, IslandPlacement.sideMinimumWindowHeight)
+        XCTAssertGreaterThan(outer.height, IslandPlacement.sideMinimumWindowHeight)
     }
 
     func testOnTheSideTheListsGetTheirRoomBack() {
@@ -228,6 +239,16 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertEqual(IslandPlacement.bottom.listSideMargin(columnWidth: 0), 0)
         XCTAssertGreaterThan(IslandMetrics.sideColumnWidth, IslandMetrics.sideWidth, "air on both sides of the island")
         XCTAssertEqual(IslandMetrics.sideAddButtonSize.width, IslandMetrics.sideWidth, "the + is as wide as the island")
+    }
+
+    func testTheSideIslandLinesUpWithTheCameraAsTheSystemsBarDoes() {
+        // Outer display: the bar column is 84 pt (382–466); the camera, and the system's own controls under it,
+        // are centred 36 pt into it, not 42.
+        XCTAssertEqual(IslandPlacement.sideOffset(columnWidth: 84, cameraCentre: 36), -6)
+        XCTAssertEqual(IslandPlacement.sideOffset(columnWidth: 84, cameraCentre: nil), 0, "no camera reported: the column's middle")
+        XCTAssertEqual(IslandPlacement.sideOffset(columnWidth: 84, cameraCentre: -200), 0, "a camera elsewhere doesn't count")
+        XCTAssertEqual(IslandPlacement.sideOffset(columnWidth: 84, cameraCentre: 80), 0,
+                       "never so far that the island leaves the column")
     }
 
     func testTheSideIslandIsTallEnoughForEveryTab() {

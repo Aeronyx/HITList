@@ -66,7 +66,7 @@ enum IslandMetrics {
     /// The upright island's width: an icon and a short label per tab.
     static let sideWidth: CGFloat = 60
     /// One tab's cell, top to bottom.
-    static let sideItemHeight: CGFloat = 56
+    static let sideItemHeight: CGFloat = 52
     /// The four cells and the pill's inset above and below them.
     static var sideHeight: CGFloat { CGFloat(MobileTab.allCases.count) * sideItemHeight + 2 * pillInset }
     /// The "+" at the island's foot: as wide as the island, as tall as the bottom island's "+".
@@ -77,16 +77,28 @@ enum IslandMetrics {
 
 /// Where the iPhone shell's island and "+" stand (brief 50). Apple's iPhone Duo guidelines: "Follow the
 /// system's vertical layout for toolbars, tab bars, and navigation controls" and "don't override the default
-/// bar placement". Where the system puts its bars in a column on one edge (`\.verticalBarEdge`: the Duo's
+/// bar placement". Where the system puts its bars in a column on one edge (`\.islandPlacement`: the Duo's
 /// outer display) the island stands upright in that column, the tabs in the same order top to bottom as
 /// left to right, with the "+" at its foot, and the lists get the bottom of the screen back. Everywhere else
 /// (every other iPhone; the inner display upright, which has the sidebar layout anyway) it stays at the bottom.
+/// So does the outer display on its side: there the column, 466 pt tall, has the system's Back and toolbar
+/// items and no room under them for four tabs and the "+", which would cover them.
 enum IslandPlacement: Equatable {
     case bottom
     case side(HorizontalEdge)
 
-    init(verticalBarEdge: HorizontalEdge?) {
-        self = verticalBarEdge.map { .side($0) } ?? .bottom
+    /// The window height (safe areas included, so the keyboard changes nothing) below which the column is too
+    /// short: the system's items take up to about 335 pt from the top, the island and the "+" about 290 from the
+    /// bottom. The outer display upright is 678 pt tall, on its side 466.
+    static let sideMinimumWindowHeight: CGFloat = 600
+
+    /// `windowHeight` 0 (not yet measured) goes by the edge alone.
+    init(verticalBarEdge: HorizontalEdge?, windowHeight: CGFloat) {
+        guard let edge = verticalBarEdge, windowHeight == 0 || windowHeight >= Self.sideMinimumWindowHeight else {
+            self = .bottom
+            return
+        }
+        self = .side(edge)
     }
 
     var isSide: Bool { self != .bottom }
@@ -101,6 +113,18 @@ enum IslandPlacement: Equatable {
     /// the island needs, which the lists keep clear as a margin on that edge. Nil-free: 0 when it fits.
     func listSideMargin(columnWidth: CGFloat) -> CGFloat {
         isSide ? max(0, IslandMetrics.sideColumnWidth - columnWidth) : 0
+    }
+
+    /// How far to move the upright island from the middle of the bar column so it shares the system's centre
+    /// line. The system lines its vertical bar up with the outer camera ("vertically aligned with controls on the
+    /// side"), which the system reports as an `occlusion` reserved region; `cameraCentre` is its middle, measured
+    /// from the column's inner edge. A camera outside the column, or one the island can't follow without leaving
+    /// the column, leaves the island in the middle.
+    static func sideOffset(columnWidth: CGFloat, cameraCentre: CGFloat?) -> CGFloat {
+        guard let cameraCentre, cameraCentre > 0, cameraCentre < columnWidth else { return 0 }
+        let offset = cameraCentre - columnWidth / 2
+        let room = (columnWidth - IslandMetrics.sideWidth) / 2
+        return abs(offset) <= room ? offset : 0
     }
 
     /// Where the chrome stands in the shell.

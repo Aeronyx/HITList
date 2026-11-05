@@ -11,15 +11,15 @@ import SwiftUI
 /// is pushed on it, so an iPhone Duo folding from its inner display opens on the list the sidebar had,
 /// and unfolding hands the sidebar the list on show here (brief 45).
 ///
-/// Where the system puts its bars in a column on one edge (the Duo's outer display, `\.verticalBarEdge`), the
+/// Where the system puts its bars in a column on one edge (the Duo's outer display, `\.islandPlacement`), the
 /// island stands upright in that column with the "+" at its foot, and the lists keep the whole height
 /// (`IslandPlacement`, brief 50). The tab, the pushed screens and any open popout stay as they are when it
 /// changes sides: only the chrome moves.
 struct MobileShell: View {
     @Environment(PopoutController.self) private var popouts
-    @Environment(\.verticalBarEdge) private var verticalBarEdge
-    /// The safe area on each side: on the Duo's outer display the trailing one is the system's bar column.
-    @State private var sideInsets = EdgeInsets()
+    @Environment(\.islandPlacement) private var placement
+    /// The system's bar column, measured: on the Duo's outer display it is the trailing safe area.
+    @State private var bar = BarColumn()
     @Binding var place: ShellPlace
     /// Settings → General → Start screen at launch (through `place`); Today unless chosen otherwise.
     @State private var tab: MobileTab
@@ -44,7 +44,7 @@ struct MobileShell: View {
     var body: some View {
         // Only the tab on show is built, so the list on screen is the one whose `.quickAddEntry` sets
         // `popouts.listContext` for the "+" (its onAppear runs on every switch and every pop).
-        let placement = IslandPlacement(verticalBarEdge: verticalBarEdge)
+        let placement = placement
         ZStack(alignment: placement.alignment) {
             stack(for: tab)
                 // Lists scroll under the chrome and show through the gaps around the island; the margin
@@ -57,7 +57,7 @@ struct MobileShell: View {
         }
         // The quick-add card docks above the keyboard; the island stays put underneath it.
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { sideInsets = $0 }
+        .onGeometryChange(for: BarColumn.self) { BarColumn($0) } action: { bar = $0 }
         .onChange(of: tab) { _, _ in popouts.closeAll(); report() }
         .onReceive(clock) { now = $0 }
         // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
@@ -68,8 +68,34 @@ struct MobileShell: View {
     private func barColumnWidth(_ placement: IslandPlacement) -> CGFloat {
         switch placement {
         case .bottom: 0
-        case .side(.leading): sideInsets.leading
-        case .side: sideInsets.trailing
+        case .side(.leading): bar.insets.leading
+        case .side: bar.insets.trailing
+        }
+    }
+
+    /// The outer camera's middle, measured from the bar column's left edge, when the system reports it.
+    private func cameraCentre(_ placement: IslandPlacement) -> CGFloat? {
+        guard let camera = bar.camera else { return nil }
+        return placement == .side(.leading) ? camera.midX + bar.insets.leading : camera.midX - bar.width
+    }
+
+    /// The shell's safe area, its width, and the always-on camera (an `occlusion` reserved region, iOS 27.1),
+    /// which the system's vertical bar lines up with.
+    private struct BarColumn: Equatable {
+        var insets = EdgeInsets()
+        var width: CGFloat = 0
+        var camera: CGRect?
+
+        init() {}
+
+        init(_ proxy: GeometryProxy) {
+            insets = proxy.safeAreaInsets
+            width = proxy.size.width
+            #if compiler(>=6.4)
+            if #available(iOS 27.1, *) {
+                camera = proxy.reservedRegions(kind: .occlusion).first(where: \.isActive)?.frame
+            }
+            #endif
         }
     }
 
@@ -86,12 +112,15 @@ struct MobileShell: View {
             // Upright in the bar column, the "+" at its foot, standing on the home indicator's gap. The column
             // is the safe area on that edge, so the stack steps out of it; where the column is narrower than the
             // island, the island keeps its width and the lists their margin (`listSideMargin`).
+            let column = max(barColumnWidth(placement), IslandMetrics.sideColumnWidth)
             VStack(spacing: IslandMetrics.addButtonGap) {
                 tabBar(axis: .vertical)
                 IslandAddButton { popouts.openQuickAdd() }
             }
+            // On the system's centre line: under the camera, as its own controls are.
+            .offset(x: IslandPlacement.sideOffset(columnWidth: column, cameraCentre: cameraCentre(placement)))
             .padding(.bottom, IslandMetrics.bottomGap)
-            .frame(width: max(barColumnWidth(placement), IslandMetrics.sideColumnWidth))
+            .frame(width: column)
             .ignoresSafeArea(.container, edges: edge == .leading ? .leading : .trailing)
             .transition(.opacity)
         }
