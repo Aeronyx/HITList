@@ -17,8 +17,13 @@
 #
 # Safety, all enforced here: the target must be a HITList built under a build.noindex folder (never
 # /Applications/HITList.app) or the Simulator; the target is brought to the front and every event is refused
-# unless it is still frontmost (George may be using the Mac); clicks must land inside the window; the app that
-# was in front before is brought back at the end.
+# unless it is still frontmost (George may be using the Mac); clicks must land inside the window and on the
+# topmost window at that point (nothing of George's covering it); the app that was in front before is brought
+# back at the end.
+#
+# Launch the Debug app in the background so it never takes George's typing (round 11 lesson):
+#   open -g -n --env HITLIST_STORE_SUFFIX=sNN build.noindex/mac-NN/Build/Products/Debug/HITList.app --args -disableCloudKit YES
+# (find its pid with `pgrep -f mac-NN/Build/Products/Debug/HITList.app`); this script brings it forward itself.
 #
 #   DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/window-drive.sh 12345 click 84 172 wait 1 shot build.noindex/a.png
 set -euo pipefail
@@ -59,7 +64,15 @@ func windowBounds() -> CGRect {
 let previous = NSWorkspace.shared.frontmostApplication
 func frontmostIsTarget() -> Bool { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
 target.activate()
-for _ in 0..<40 where !frontmostIsTarget() { usleep(50_000) }
+for _ in 0..<20 where !frontmostIsTarget() { usleep(50_000) }
+if !frontmostIsTarget(), let bundle = target.bundleURL {
+    // An app launched with `open -g` refuses activate(); LaunchServices can still bring it forward.
+    let config = NSWorkspace.OpenConfiguration()
+    config.activates = true
+    config.createsNewApplicationInstance = false
+    NSWorkspace.shared.openApplication(at: bundle, configuration: config) { _, _ in }
+    for _ in 0..<40 where !frontmostIsTarget() { usleep(50_000) }
+}
 guard frontmostIsTarget() else { fail("could not bring pid \(pid) to the front") }
 usleep(150_000)
 
@@ -67,7 +80,20 @@ func guardFront() { if !frontmostIsTarget() { fail("another app came to the fron
 func point(_ x: Double, _ y: Double) -> CGPoint {
     let b = windowBounds()
     guard x >= 0, y >= 0, x <= b.width, y <= b.height else { fail("(\(x), \(y)) is outside the \(Int(b.width))x\(Int(b.height)) window") }
-    return CGPoint(x: b.minX + x, y: b.minY + y)
+    let p = CGPoint(x: b.minX + x, y: b.minY + y)
+    // Front-to-back: the first visible window under the point must be the target's, or the event would land in
+    // whatever covers it (a window of George's, a banner).
+    let all = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    for w in all {
+        guard let d = w[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: d), r.contains(p),
+              ((w[kCGWindowAlpha as String] as? Double) ?? 1) > 0.01 else { continue }
+        let owner = (w[kCGWindowOwnerPID as String] as? Int32) ?? -1
+        if owner == pid { break }
+        let name = (w[kCGWindowOwnerName as String] as? String) ?? "?"
+        if name == "Window Server" || name == "Dock" && (w[kCGWindowLayer as String] as? Int ?? 0) > 0 && r.height < 5 { continue }
+        fail("(\(x), \(y)) is covered by a window of \(name); not clicking")
+    }
+    return p
 }
 func mouse(_ type: CGEventType, _ p: CGPoint, clicks: Int64 = 1) {
     let e = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: p, mouseButton: .left)!

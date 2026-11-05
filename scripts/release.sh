@@ -30,6 +30,7 @@ export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Develope
 
 TEAM_ID=UC8N98H3RT
 CONTAINER_ID=iCloud.com.trammells.hitlist
+SHARED_CONTAINER_ID=iCloud.com.trammells.hitlist.shared
 KEY_ID="${ASC_KEY_ID:-RWK3KKN75R}"
 ISSUER_ID="${ASC_ISSUER_ID:-1858583d-d6ee-4039-968e-e9c2c66e3ddd}"
 
@@ -72,19 +73,22 @@ fi
 if (( SCHEMA_CHECK && UPLOAD )); then
   step "CloudKit schema drift check"
   TMP=$(mktemp -d)
-  if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
-       --environment development --output-file "$TMP/dev.ckdb" >/dev/null 2>&1 &&
-     xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CONTAINER_ID" \
-       --environment production --output-file "$TMP/prod.ckdb" >/dev/null 2>&1; then
-    if ! diff -q "$TMP/dev.ckdb" "$TMP/prod.ckdb" >/dev/null; then
-      diff "$TMP/dev.ckdb" "$TMP/prod.ckdb" || true
-      print -P "%F{yellow}Deploy first: icloud.developer.apple.com → CloudKit Database → iCloud.com.trammells.hitlist → Development → Deploy Schema Changes… → Production. Then run this again (nothing was changed here).%f"
-      fail "Development schema differs from Production (see the lines above: '<' is Development, '>' Production). Or pass --skip-schema-check."
+  # Every container the app syncs with: the task store's, and Shared Tasks' own (brief 51, 0.7.0).
+  for CID in "$CONTAINER_ID" "$SHARED_CONTAINER_ID"; do
+    if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
+         --environment development --output-file "$TMP/$CID-dev.ckdb" >/dev/null 2>&1 &&
+       xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
+         --environment production --output-file "$TMP/$CID-prod.ckdb" >/dev/null 2>&1; then
+      if ! diff -q "$TMP/$CID-dev.ckdb" "$TMP/$CID-prod.ckdb" >/dev/null; then
+        diff "$TMP/$CID-dev.ckdb" "$TMP/$CID-prod.ckdb" || true
+        print -P "%F{yellow}Deploy first: icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Production. Then run this again (nothing was changed here).%f"
+        fail "$CID: Development schema differs from Production (see the lines above: '<' is Development, '>' Production). Or pass --skip-schema-check."
+      fi
+      echo "$CID: Development and Production schemas match."
+    else
+      print -P "%F{yellow}$CID: could not export its schemas (no cktool management token saved?); skipping its drift check. Run: xcrun cktool save-token --type management%f"
     fi
-    echo "Development and Production schemas match."
-  else
-    print -P "%F{yellow}No cktool management token saved; skipping drift check. Run: xcrun cktool save-token --type management%f"
-  fi
+  done
 fi
 
 # ---- build number -------------------------------------------------------------------------------
