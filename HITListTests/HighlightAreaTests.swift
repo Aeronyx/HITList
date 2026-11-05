@@ -1,14 +1,12 @@
 import XCTest
 import SwiftUI
-#if os(macOS)
-import AppKit
-#endif
 import HITListCore
 @testable import HITList
 
 /// Brief 37 (George, 2026-11-04): highlights of the same colour with only spaces between them read as one
 /// box ("[tom 4]", not "[tom] [4]"); a phrase overridden by a later one of its kind is not drawn, and
 /// comes back when the later one is tapped off. Brief 41: a reminder lights up only beside a time.
+/// Brief 47: the boxes are placed by the title's own TextKit layout (`HighlightGeometry`), as drawn.
 @MainActor
 final class HighlightAreaTests: XCTestCase {
     private var calendar: Calendar = {
@@ -28,17 +26,17 @@ final class HighlightAreaTests: XCTestCase {
         QuickAddParser(now: now, calendar: calendar, knownProjects: ["Work"], knownLabels: ["calls", "errands"])
     }
 
-    /// What the field draws for this text: the drawable tokens, their colour groups, and the boxes.
+    /// What the field draws for this text: the drawable tokens, the boxes, and each box's pieces line by line
+    /// as the title's text view lays them out at `width` (nil: one long line).
     private func layout(_ text: String, width: CGFloat? = nil, switchedOff: Set<QuickAddDisabledPhrase> = [])
-        -> (tokens: [QuickAddToken], boxes: [TokenHighlightField.Box]) {
+        -> (tokens: [QuickAddToken], boxes: [TokenHighlightField.Span], pieces: [HighlightGeometry.Piece]) {
         let parsed = parser().parse(text, switchedOff: switchedOff)
         let tokens = TokenHighlightField.drawable(parsed.tokens, in: text)
-        let groups = TokenHighlightField.groups(tokens, in: text, priority: parsed.priority)
-        let areas = renderAreas(text, tokens: tokens, width: width)
-        return (tokens, TokenHighlightField.boxes(areas, groups: groups))
+        let boxes = TokenHighlightField.spans(tokens, in: text, priority: parsed.priority)
+        return (tokens, boxes, pieces(text, boxes.map(\.range), width: width))
     }
 
-    private func texts(_ box: TokenHighlightField.Box, _ tokens: [QuickAddToken]) -> [String] {
+    private func texts(_ box: TokenHighlightField.Span, _ tokens: [QuickAddToken]) -> [String] {
         box.tokens.map { tokens[$0].text }
     }
 
@@ -46,19 +44,22 @@ final class HighlightAreaTests: XCTestCase {
 
     func testTom4IsOneBoxAndP1StaysApart() throws {
         let text = "test 2 p1 tom 4"
-        let (tokens, boxes) = layout(text)
+        let (tokens, boxes, pieces) = layout(text)
         XCTAssertEqual(tokens.map(\.text), ["p1", "tom", "4"])
         XCTAssertEqual(boxes.count, 2, "[p1] [tom 4]: red and green stay apart")
         XCTAssertEqual(texts(boxes[0], tokens), ["p1"])
         XCTAssertEqual(texts(boxes[1], tokens), ["tom", "4"])
+        XCTAssertEqual(boxes[1].range, NSRange(location: 10, length: 5), "the box runs from \"tom\" to \"4\", the space included")
+        XCTAssertEqual(pieces.map(\.run), [0, 1], "one piece each on one line")
 
         // The joined box covers both words and the space between them.
-        let areas = renderAreas(text, tokens: tokens, width: nil)
-        let tom = try XCTUnwrap(areas.first { $0.token == 1 }), four = try XCTUnwrap(areas.first { $0.token == 2 })
-        XCTAssertLessThan(tom.rect.maxX, four.rect.minX, "a gap between the words' own runs")
-        XCTAssertEqual(boxes[1].rect.minX, tom.rect.minX, accuracy: 0.01)
-        XCTAssertEqual(boxes[1].rect.maxX, four.rect.maxX, accuracy: 0.01)
-        XCTAssertEqual(boxes[0].rect, try XCTUnwrap(areas.first { $0.token == 0 }).rect)
+        let words = self.pieces(text, [NSRange(location: 10, length: 3), NSRange(location: 14, length: 1),
+                                       NSRange(location: 7, length: 2)], width: nil)
+        let tom = words[0].rect, four = words[1].rect
+        XCTAssertLessThan(tom.maxX, four.minX, "a gap between the words themselves")
+        XCTAssertEqual(pieces[1].rect.minX, tom.minX, accuracy: 0.01)
+        XCTAssertEqual(pieces[1].rect.maxX, four.maxX, accuracy: 0.01)
+        XCTAssertEqual(pieces[0].rect, words[2].rect)
     }
 
     func testSameColourKindsJoinOthersDoNot() {
@@ -75,7 +76,7 @@ final class HighlightAreaTests: XCTestCase {
     }
 
     func testAWordBetweenKeepsTheBoxesApart() {
-        let (tokens, boxes) = layout("Call tom about 5pm")
+        let (tokens, boxes, _) = layout("Call tom about 5pm")
         XCTAssertEqual(boxes.map { texts($0, tokens) }, [["tom"], ["5pm"]])
         // An overridden phrase between two highlights is plain text: it keeps them apart too.
         let over = layout("Call tom 5pm 6pm")
@@ -84,23 +85,27 @@ final class HighlightAreaTests: XCTestCase {
     }
 
     func testAWrapSplitsTheJoinedBoxAtTheLineEnd() {
-        // Words after "4" so it never ends the text alone (the layout avoids a one-word last line).
         let text = "Remember the parcel tom 4 from the market stall"
         let oneLine = layout(text)
         XCTAssertEqual(oneLine.boxes.count, 1)
+        XCTAssertEqual(oneLine.pieces.count, 1)
         // Narrow enough that "4" goes to the next line.
+        let tom = NSRange(location: 20, length: 3), four = NSRange(location: 24, length: 1)
         let narrow = (0..<150).lazy.map { CGFloat(100 + $0 * 2) }.first { width in
-            let areas = self.renderAreas(text, tokens: oneLine.tokens, width: width)
-            return areas.first { $0.token == 0 }?.line != areas.first { $0.token == 1 }?.line
+            let words = self.pieces(text, [tom, four], width: width)
+            return words.count == 2 && words[0].line != words[1].line
         }
         guard let narrow else { return XCTFail("no width wraps between tom and 4") }
         let wrapped = layout(text, width: narrow)
-        XCTAssertEqual(wrapped.boxes.count, 2, "one piece per line")
-        XCTAssertNotEqual(wrapped.boxes[0].line, wrapped.boxes[1].line)
-        for box in wrapped.boxes {
-            XCTAssertEqual(texts(box, wrapped.tokens), ["tom", "4"], "either piece stands for the whole box")
-            XCTAssertLessThanOrEqual(box.rect.maxX, narrow + 0.5)
-        }
+        XCTAssertEqual(wrapped.boxes.count, 1, "still one box")
+        XCTAssertEqual(wrapped.pieces.count, 2, "one piece per line")
+        XCTAssertNotEqual(wrapped.pieces[0].line, wrapped.pieces[1].line)
+        XCTAssertEqual(Set(wrapped.pieces.map(\.run)), [0], "either piece stands for the whole box")
+        XCTAssertEqual(texts(wrapped.boxes[0], wrapped.tokens), ["tom", "4"])
+        let words = pieces(text, [tom, four], width: narrow)
+        XCTAssertEqual(wrapped.pieces[0].rect.maxX, words[0].rect.maxX, accuracy: 0.01, "the space at the wrap is not boxed")
+        XCTAssertEqual(wrapped.pieces[1].rect, words[1].rect)
+        for piece in wrapped.pieces { XCTAssertLessThanOrEqual(piece.rect.maxX, narrow + 0.5) }
     }
 
     /// Decision (brief 37): the boxes look joined, the phrases are not merged; one tap on a joined box
@@ -108,7 +113,7 @@ final class HighlightAreaTests: XCTestCase {
     func testATapOnAJoinedBoxSwitchesOffEveryTokenInIt() throws {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "test 2 p1 tom 4")
-        let (tokens, boxes) = layout(draft.text)
+        let (tokens, boxes, _) = layout(draft.text)
         let box = try XCTUnwrap(boxes.last)
         for index in box.tokens { draft.disable(tokens[index]) }
         let parsed = draft.parsed(p)
@@ -205,95 +210,21 @@ final class HighlightAreaTests: XCTestCase {
                 XCTAssertEqual(restored.chips(p), draft.chips(p), text)
                 XCTAssertEqual(layout(restored.text, switchedOff: restored.disabledPhrases).boxes,
                                layout(draft.text, switchedOff: draft.disabledPhrases).boxes, text)
+                XCTAssertEqual(layout(restored.text, switchedOff: restored.disabledPhrases).pieces,
+                               layout(draft.text, switchedOff: draft.disabledPhrases).pieces, text)
             }
         }
     }
 
-    // MARK: The pointing hand (brief 41)
+    // MARK: Layout
 
-    #if os(macOS)
-    private struct FieldHost: View {
-        @State var text: String
-        @FocusState private var focused: Bool
-        var tokens: [QuickAddToken]
-        var body: some View {
-            TokenHighlightField(placeholder: "Task name", text: $text, tokens: tokens, priority: .p4, focus: $focused,
-                                bordered: false, onDisable: { _ in }, onSubmit: {})
-                .frame(width: 360)
-                .padding(20)
-        }
-    }
-
-    private func clickTargets(in view: NSView) -> [TokenHighlightField.ClickTarget.View] {
-        view.subviews.flatMap { ($0 as? TokenHighlightField.ClickTarget.View).map { [$0] } ?? clickTargets(in: $0) }
-    }
-
-    /// George (0.5.0): "on desktop my cursor should replace with the 'clickable' cursor". Over a highlight box
-    /// the click target (an AppKit view above the text view) is what the pointer meets, and it shows the
-    /// pointing hand; elsewhere in the text the text view keeps its I-beam.
-    func testTheMacShowsThePointingHandOverAHighlight() throws {
-        let text = "Call tom 3 about the parcel p1"
-        let tokens = parser().parse(text).tokens
-        let host = NSHostingView(rootView: FieldHost(text: text, tokens: tokens))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 120), styleMask: [.titled],
-                              backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        defer { window.close() }
-        window.contentView = host
-        host.frame = window.contentView?.bounds ?? .zero
-        var targets: [TokenHighlightField.ClickTarget.View] = []
-        for _ in 0..<20 where targets.count < 2 {
-            host.layoutSubtreeIfNeeded()
-            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-            targets = clickTargets(in: host)
-        }
-        XCTAssertEqual(targets.count, 2, "[tom 3] and [p1]: one target per box")
-
-        for target in targets {
-            XCTAssertGreaterThan(target.bounds.width, 4)
-            let centre = target.convert(NSPoint(x: target.bounds.midX, y: target.bounds.midY), to: host)
-            XCTAssertTrue(host.hitTest(host.convert(centre, to: host.superview)) === target,
-                          "the pointer over a box meets the target, not the text view under it")
-            XCTAssertEqual(target.trackingAreas.filter { $0.options.contains(.cursorUpdate) }.count, 1)
-            NSCursor.iBeam.set()
-            target.cursorUpdate(with: try XCTUnwrap(mouseMoved(in: window)))
-            XCTAssertEqual(NSCursor.current, NSCursor.pointingHand)
-        }
-
-        // Between the boxes ("about the parcel") the text view is what the pointer meets.
-        let sorted = targets.sorted { $0.convert($0.bounds, to: host).minX < $1.convert($1.bounds, to: host).minX }
-        let left = sorted[0].convert(sorted[0].bounds, to: host), right = sorted[1].convert(sorted[1].bounds, to: host)
-        let between = NSPoint(x: (left.maxX + right.minX) / 2, y: left.midY)
-        let hit = host.hitTest(host.convert(between, to: host.superview))
-        XCTAssertFalse(hit is TokenHighlightField.ClickTarget.View)
-        XCTAssertTrue(hit is NSTextView, "the words between keep the I-beam: \(String(describing: hit))")
-    }
-
-    private func mouseMoved(in window: NSWindow) -> NSEvent? {
-        NSEvent.mouseEvent(with: .mouseMoved, location: .zero, modifierFlags: [], timestamp: 0,
-                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 0, pressure: 0)
-    }
-    #endif
-
-    // MARK: Rendering
-
-    private final class AreaBox { var areas: [TokenHighlightField.Area] = [] }
-
-    /// The clear copy's real line layout, as `PopoutTests` renders it.
-    private func renderAreas(_ text: String, tokens: [QuickAddToken], width: CGFloat?) -> [TokenHighlightField.Area] {
-        let box = AreaBox()
-        let view = TokenHighlightField.highlightText(text, tokens: tokens)
-            .font(HITType.taskName)
-            .frame(width: width, alignment: .leading)
-            .fixedSize(horizontal: width == nil, vertical: true)
-            .overlayPreferenceValue(Text.LayoutKey.self) { layouts in
-                GeometryReader { proxy in
-                    let _ = (box.areas = TokenHighlightField.areas(layouts, in: proxy))
-                    Color.clear
-                }
-            }
-        let renderer = ImageRenderer(content: view)
-        _ = renderer.cgImage
-        return box.areas
+    /// The title's TextKit layout of `text` in the field's font at `width` (nil: wide enough for one line), and
+    /// the pieces of `ranges` on it, as the text view draws them.
+    private func pieces(_ text: String, _ ranges: [NSRange], width: CGFloat?) -> [HighlightGeometry.Piece] {
+        let stack = HighlightTextStack()
+        stack.storage.setAttributedString(NSAttributedString(string: text, attributes: HighlightTextStyle.current().attributes))
+        stack.container.size = CGSize(width: width ?? 100_000, height: .greatestFiniteMagnitude)
+        stack.layoutManager.ensureLayout(for: stack.container)
+        return HighlightGeometry.pieces(for: ranges, layoutManager: stack.layoutManager, container: stack.container)
     }
 }

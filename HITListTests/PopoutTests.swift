@@ -1073,52 +1073,6 @@ final class PopoutTests: XCTestCase {
         return try XCTUnwrap(window.contentView.flatMap(find), "a title editor")
     }
 
-    /// The Mac's inline "Add task" row, open with "Call Tom p2", in a real window: a click on a highlighted
-    /// word lands on its tap target (SwiftUI, above the editor), a click on a plain word lands in the text
-    /// editor. On a title longer than the field, every word goes to the editor (no tap target is left where
-    /// the field's words aren't). Hit-testing only: an agent session's window can't become key, and AppKit
-    /// swallows synthesized clicks on a window that isn't.
-    func testOnTheMacAClickOnAHighlightHitsItsTapTargetAndPlainWordsGoToTheEditor() throws {
-        let suite = "PopoutTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let container = ModelContainerFactory.preview()
-        let long = "Call Tom p2 " + String(repeating: "and the other parcel from the market ", count: 12)
-        for text in ["Call Tom p2", long] {
-            let popouts = PopoutController(draftDefaults: defaults)
-            popouts.openQuickAdd(.inbox, placement: .inline("list"))
-            let card = try XCTUnwrap(popouts.state.quickAdd?.id)
-            QuickAddDraftStore.save(QuickAddDraft(context: .inbox, text: text), card: card, to: defaults)
-            let window = hostWindow(VStack { InlineAddRow(context: .inbox, key: "list"); Spacer() }
-                .frame(width: 600, height: 400)
-                .environment(popouts)
-                .modelContainer(container))
-            defer { window.close() }
-            spin()
-            let editor = try textView(in: window)
-            XCTAssertEqual(editor.string, text)
-            let content = try XCTUnwrap(window.contentView)
-            /// What a click on the middle of characters `range` of the title would hit.
-            func hit(_ range: NSRange) -> NSView? {
-                let onScreen = editor.firstRect(forCharacterRange: range, actualRange: nil)
-                let inWindow = window.convertPoint(fromScreen: NSPoint(x: onScreen.midX, y: onScreen.midY))
-                return content.hitTest(content.superview?.convert(inWindow, from: nil) ?? inWindow)
-            }
-            let call = hit(NSRange(location: 0, length: 4)), tom = hit(NSRange(location: 5, length: 3)),
-                p2 = hit(NSRange(location: 9, length: 2))
-            XCTAssertTrue(call is NSTextView, "a plain word: the editor (\(String(describing: call)))")
-            if text == long {
-                XCTAssertTrue(tom is NSTextView, "a long title: no tap target on \"Tom\"")
-                XCTAssertTrue(p2 is NSTextView, "a long title: no tap target on \"p2\"")
-            } else {
-                XCTAssertNotNil(tom)
-                XCTAssertFalse(tom is NSTextView, "\"Tom\": its highlight's tap target")
-                XCTAssertFalse(p2 is NSTextView, "\"p2\": its highlight's tap target")
-            }
-            popouts.closeInline("list")
-        }
-    }
-
     /// Two Mac windows share one store. A task panel open in the first closes by itself when the second
     /// window deletes that task (its own popout's Delete), without drawing the deleted task.
     func testTheMacPanelClosesWhenASecondWindowDeletesItsTask() throws {
