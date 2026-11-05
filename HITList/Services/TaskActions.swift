@@ -279,6 +279,9 @@ enum TaskActions {
             let label = try findOrCreateLabel(named: "sample", in: context)
             let task = TaskItem(title: "Sample task (safe to delete)", notes: "Created by -seedSampleData", priority: 2,
                                 dueDate: Calendar.current.startOfDay(for: Date()), project: project, labels: [label])
+            // Schema V5's `reminderDate` (brief 48) reaches CloudKit only on a record that has one. A side store
+            // never schedules notifications (`NotificationScheduler.bootstrap`), so this one never goes off.
+            task.reminderDate = Date().addingTimeInterval(15 * 60)
             context.insert(task)
             try context.save()
             // Schema V3's `parent` reaches CloudKit only on a record that has one.
