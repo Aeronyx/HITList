@@ -42,15 +42,20 @@ struct HighlightTextField: UIViewRepresentable {
         view.highlightLayout.runs = runs
         view.updatePlaceholder()
 
-        // Focus is edge-triggered: a stale value in an unrelated update never takes the keyboard away.
+        // Focus is edge-triggered: a stale value in an unrelated update never takes the keyboard away, and only
+        // the owner's changes move it (not the field's own reports coming back, `HighlightFocusReport`). The
+        // owner's "let go" acts at once; "take it" waits a turn, as the view may not be in a window yet, and is
+        // dropped if the owner let go meanwhile.
         let coordinator = context.coordinator
-        view.wantsFocus = isFocused
         if isFocused != coordinator.lastFocus {
             coordinator.lastFocus = isFocused
-            if isFocused {
-                DispatchQueue.main.async { if view.wantsFocus, view.window != nil, !view.isFirstResponder { view.becomeFirstResponder() } }
-            } else if view.isFirstResponder {
-                DispatchQueue.main.async { if !view.wantsFocus, view.isFirstResponder { view.resignFirstResponder() } }
+            if !context.transaction[HighlightFocusReport.self] {
+                view.wantsFocus = isFocused
+                if isFocused {
+                    DispatchQueue.main.async { view.takeKeyboardForOwner() }
+                } else {
+                    view.giveUpKeyboardForOwner()
+                }
             }
         }
     }
@@ -78,16 +83,27 @@ struct HighlightTextField: UIViewRepresentable {
             view.invalidateIntrinsicContentSize()
         }
 
+        /// The keyboard arrived. Told to the owner only when it came by itself (a tap): when the owner asked,
+        /// it already knows, and one writer per change keeps the two from racing.
         func textViewDidBeginEditing(_ textView: UITextView) {
-            (textView as? HighlightUITextView)?.wantsFocus = true
+            guard let view = textView as? HighlightUITextView else { return }
+            view.wantsFocus = true
             lastFocus = true
-            parent.onFocusChange(true)
+            if !view.isMovingKeyboardForOwner { parent.onFocusChange(true) }
         }
 
+        /// The keyboard left. Told to the owner only when it went by itself (another field, the system), after the
+        /// update that moved it, and not if the owner has asked for it back by then.
         func textViewDidEndEditing(_ textView: UITextView) {
-            (textView as? HighlightUITextView)?.wantsFocus = false
+            guard let view = textView as? HighlightUITextView else { return }
+            view.wantsFocus = false
             lastFocus = false
-            parent.onFocusChange(false)
+            guard !view.isMovingKeyboardForOwner else { return }
+            let report = parent.onFocusChange
+            DispatchQueue.main.async { [weak view] in
+                guard let view, !view.wantsFocus, !view.isFirstResponder else { return }
+                report(false)
+            }
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
@@ -119,6 +135,24 @@ final class HighlightUITextView: UITextView {
     weak var coordinator: HighlightTextField.Coordinator?
     /// The owner wants the keyboard here; honoured once the view is in a window.
     var wantsFocus = false
+    /// The keyboard is moving because the owner asked (not because of a tap or another field).
+    private(set) var isMovingKeyboardForOwner = false
+
+    /// The owner asked for the keyboard: take it, if it still wants it and the view is in a window.
+    func takeKeyboardForOwner() {
+        guard wantsFocus, window != nil, !isFirstResponder else { return }
+        isMovingKeyboardForOwner = true
+        becomeFirstResponder()
+        isMovingKeyboardForOwner = false
+    }
+
+    /// The owner let the keyboard go.
+    func giveUpKeyboardForOwner() {
+        guard isFirstResponder else { return }
+        isMovingKeyboardForOwner = true
+        resignFirstResponder()
+        isMovingKeyboardForOwner = false
+    }
     private(set) var style = HighlightTextStyle.current()
     private let placeholderLabel = UILabel()
     private lazy var boxTap = UITapGestureRecognizer(target: self, action: #selector(tapBox(_:)))
@@ -232,12 +266,9 @@ final class HighlightUITextView: UITextView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        // After the update that inserted the view: taking focus reports it to SwiftUI, which must not happen
-        // inside that update.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.wantsFocus, self.window != nil, !self.isFirstResponder else { return }
-            self.becomeFirstResponder()
-        }
+        // The keyboard can only arrive once the view is in a window: an owner's request made before that is
+        // honoured now, after the update that inserted the view.
+        DispatchQueue.main.async { [weak self] in self?.takeKeyboardForOwner() }
     }
 
     // MARK: Boxes
