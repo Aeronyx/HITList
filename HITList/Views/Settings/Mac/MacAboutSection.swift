@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Settings → About on the Mac: version and build date, Copy diagnostics, the Changelog on GitHub, then
+/// Settings → About on the Mac: version and build date, Copy diagnostics, the Changelog on GitHub, Show
+/// tips again, then
 /// What's new inline (this version's list, earlier versions behind a disclosure row) instead of a sheet.
 struct MacAboutSection: View {
     @Environment(\.openURL) private var openURL
@@ -20,6 +21,7 @@ struct MacAboutSection: View {
             }
             .help(AboutInfo.changelogURL(version: AppInfo.version).absoluteString)
             .accessibilityIdentifier("settings-changelog")
+            ShowTipsAgainRow()
             PrivacyPolicyRow()
         }
 

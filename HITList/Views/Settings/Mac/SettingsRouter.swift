@@ -19,9 +19,19 @@ final class SettingsRouter {
     /// Where the page's chosen section is remembered (`MacSettingsPage` reads the same key).
     private let defaults: UserDefaults
 
-    init(defaults: UserDefaults = AppGroup.defaults) {
+    init(defaults: UserDefaults = AppGroup.defaults, arguments: [String] = ProcessInfo.processInfo.arguments) {
         self.defaults = defaults
+        #if DEBUG
+        // `-openSettings` (Debug, side store only): opens the page on the remembered section a moment after
+        // launch, for window captures. It never picks a section: the section lives in the app group's
+        // defaults, which every build on this Mac shares with the TestFlight app.
+        if Self.opensAtLaunch(arguments: arguments), ModelContainerFactory.storeName != ModelContainerFactory.mainStoreName {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.open() }
+        }
+        #endif
     }
+
+    static func opensAtLaunch(arguments: [String]) -> Bool { arguments.contains("-openSettings") }
 
     func open() {
         openRequests += 1

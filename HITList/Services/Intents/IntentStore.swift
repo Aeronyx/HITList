@@ -13,8 +13,11 @@ import SwiftData
 enum IntentStore {
     private(set) static var container: ModelContainer?
 
+    /// Also starts Spotlight indexing on the same container (`SpotlightSync`, brief 52), which does nothing
+    /// under tests or on a side store.
     static func register(_ container: ModelContainer) {
         self.container = container
+        SpotlightSync.shared.start(container: container)
     }
 
     /// The app's main context, or `IntentFailure.appNotReady` if the app has not built its container.

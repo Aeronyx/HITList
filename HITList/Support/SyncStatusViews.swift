@@ -53,43 +53,6 @@ struct SyncStatusLine: View {
     }
 }
 
-/// One quiet line at the bottom of the sidebar, shown only when sync is not in its normal state.
-struct SyncStatusFooter: View {
-    var action: () -> Void
-    private var monitor: CloudSyncMonitor { .shared }
-
-    var body: some View {
-        let state = monitor.state
-        if state.showsInSidebar(hasSyncedBefore: monitor.lastSyncedAt != nil) {
-            Button(action: action) {
-                Label(state.summary(), systemImage: state.symbol)
-                    .font(HITType.caption)
-                    .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(Theme.surface)
-            .help("iCloud Sync settings")
-        }
-    }
-}
-
-extension SyncState {
-    /// The sidebar stays silent when synced, and while a routine sync runs after an edit. A first
-    /// download (nothing synced yet, e.g. after resetting the local cache) is worth a line.
-    func showsInSidebar(hasSyncedBefore: Bool) -> Bool {
-        switch self {
-        case .synced: return false
-        case .syncing: return !hasSyncedBefore
-        default: return true
-        }
-    }
-}
-
 /// Explains an empty list after an iCloud sign-out or account switch. Placed above ContentView by
 /// HITListApp so no list view has to know about it.
 struct AccountChangeBanner: View {

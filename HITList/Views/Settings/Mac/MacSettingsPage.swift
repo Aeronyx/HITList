@@ -3,8 +3,10 @@ import SwiftUI
 /// Settings inside the Mac window (`SidebarItem.settings`), laid out like System Settings: the window's
 /// sidebar column shows the sections (`MacSettingsSidebar`, with Back) and the detail column, this page,
 /// the chosen section in a scroll view at most 620 pt wide under a large title. The chosen section is
-/// remembered across launches (`Preferences.macSettingsSection`). The sections reuse the iPhone sheet's
-/// groups (`MacSettingsSectionContent`), so a row added to one shows up in both.
+/// remembered across launches (`Preferences.macSettingsSection`), so ⌘, and every other plain `open()`
+/// come back to it, and the window's title names it (HIG, Settings: "General", not "Settings"). The
+/// sections reuse the iPhone sheet's groups (`MacSettingsSectionContent`), so a row added to one shows up
+/// in both.
 struct MacSettingsPage: View {
     @AppStorage(Preferences.macSettingsSection, store: AppGroup.defaults)
     private var storedSection = MacSettingsSection.general.rawValue
@@ -14,6 +16,9 @@ struct MacSettingsPage: View {
     static let contentMaxWidth: CGFloat = 620
 
     private var section: MacSettingsSection { MacSettingsSection.remembered(storedSection) }
+
+    /// The window's title while Settings shows: the visible pane's name.
+    static func windowTitle(for section: MacSettingsSection) -> String { section.title }
 
     var body: some View {
         ScrollView {
@@ -32,7 +37,7 @@ struct MacSettingsPage: View {
         .scrollBounceBehavior(.basedOnSize)
         .background(Theme.background)
         .foregroundStyle(HITColor.text)
-        .navigationTitle("Settings")
+        .navigationTitle(Self.windowTitle(for: section))
         .accessibilityIdentifier("mac-settings-page")
     }
 }
@@ -67,7 +72,7 @@ struct MacSettingsSidebar: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.surface)
-        .navigationTitle("Settings")
+        .navigationTitle(MacSettingsPage.windowTitle(for: section))
         .accessibilityIdentifier("mac-settings-sidebar")
     }
 }

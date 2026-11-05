@@ -137,16 +137,6 @@ final class SyncStateTests: XCTestCase {
         XCTAssertEqual(SyncState.shortReason(for: long), "error X 2")
     }
 
-    // MARK: Sidebar
-
-    func testSidebarFooterStaysQuietWhenSyncIsNormal() {
-        XCTAssertFalse(SyncState.synced(now).showsInSidebar(hasSyncedBefore: true))
-        XCTAssertFalse(SyncState.syncing.showsInSidebar(hasSyncedBefore: true))
-        XCTAssertTrue(SyncState.syncing.showsInSidebar(hasSyncedBefore: false))
-        XCTAssertTrue(SyncState.offline.showsInSidebar(hasSyncedBefore: true))
-        XCTAssertTrue(SyncState.notSignedIn.showsInSidebar(hasSyncedBefore: true))
-    }
-
     // MARK: Launch timing (brief 42, item 5)
 
     func testLaunchMillisecondsCountFromTheProcessStart() {

@@ -206,6 +206,7 @@ private struct MobileTopButton: View {
         Button(action: action) {
             Image(systemName: control.symbol)
         }
+        .hitTip(control == .browse ? HITTip(.browse) : nil)
         .accessibilityLabel(control.title)
         .accessibilityIdentifier(control.identifier)
         .help(control.title)
