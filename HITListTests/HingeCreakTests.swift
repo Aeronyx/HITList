@@ -198,7 +198,9 @@ final class HingeCreakTests: XCTestCase {
     // MARK: When it plays
 
     func testOnByDefaultUnderItsOwnKey() {
-        let defaults = UserDefaults(suiteName: "HingeCreakTests-\(UUID().uuidString)")!
+        let suite = "HingeCreakTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
         XCTAssertEqual(HingeCreak.key, "delight.squeakyHinge")
         XCTAssertTrue(HingeCreak.isEnabled(in: defaults))
         defaults.set(false, forKey: HingeCreak.key)
