@@ -360,6 +360,21 @@ final class SharedTasksTests: XCTestCase {
         XCTAssertEqual(people.first?.avatar, Data([1]))
     }
 
+    func testIWithoutANameAmYouNotSomeone() throws {
+        let store = makeStore(me: me)
+        let list = try store.createList(title: "Chores")
+        let people = SharedPeople.people(in: try XCTUnwrap(store.list(list.id)), me: me)
+        XCTAssertEqual(people.map(\.name), ["You"])
+        XCTAssertEqual(people.first?.isOwner, true)
+    }
+
+    func testAConflictOnTheWayIsNotAnErrorToShow() {
+        XCTAssertTrue(SharedTasksSync.isHandledPerRecord(CKError(.partialFailure)))
+        XCTAssertTrue(SharedTasksSync.isHandledPerRecord(CKError(.serverRecordChanged)))
+        XCTAssertFalse(SharedTasksSync.isHandledPerRecord(CKError(.notAuthenticated)), "signed out is worth a line")
+        XCTAssertFalse(SharedTasksSync.isHandledPerRecord(CKError(.quotaExceeded)))
+    }
+
     func testOpenTasksByPriorityAndDueThenCompletedNewestFirst() {
         func t(_ title: String, p: Int, due: TimeInterval?, done: TimeInterval? = nil, created: TimeInterval = 0) -> SharedTask {
             var x = task(title, completion: done.map { SharedCompletion(at: at($0), by: me, byName: "") })

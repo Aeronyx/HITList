@@ -220,8 +220,13 @@ final class SharedTasksCenter {
         guard let store, let sync, let list = store.list(listID) else { throw SharedTasksStore.StoreError.noSuchList }
         guard SharedTasksPermissions.allows(.invite, in: list) else { throw SharedTasksStore.StoreError.notAllowed }
         let zoneID = SharedTasksRecords.zoneID(of: list)
-        // The zone and the list's records reach the server first: a share of a zone that isn't there fails.
-        try await sync.engine(.owned).sendChanges()
+        // The zone and the list's records reach the server first: a share of a zone that isn't there fails. A record
+        // that conflicts on the way is merged by the engine's events; only a missing zone stops the share (below).
+        do {
+            try await sync.engine(.owned).sendChanges()
+        } catch let error as CKError where SharedTasksSync.isHandledPerRecord(error) {
+            Self.log.notice("Shared Tasks: sending before sharing had per-record results; sharing anyway")
+        }
         let database = sync.container.privateCloudDatabase
         let shareID = SharedTasksRecords.shareRecordID(listID: listID, ownerName: list.ownerName)
         if let existing = try? await database.record(for: shareID) as? CKShare {
