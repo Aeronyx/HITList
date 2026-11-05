@@ -62,16 +62,23 @@ func windowBounds() -> CGRect {
 }
 
 let previous = NSWorkspace.shared.frontmostApplication
-func frontmostIsTarget() -> Bool { NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
+/// Lets AppKit deliver the workspace's activation updates (a script never runs its run loop otherwise, and
+/// `frontmostApplication` goes stale).
+func spin(_ seconds: Double) { RunLoop.current.run(until: Date().addingTimeInterval(seconds)) }
+func frontmostIsTarget() -> Bool { spin(0.01); return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid }
 target.activate()
-for _ in 0..<20 where !frontmostIsTarget() { usleep(50_000) }
-if !frontmostIsTarget(), let bundle = target.bundleURL {
-    // An app launched with `open -g` refuses activate(); LaunchServices can still bring it forward.
-    let config = NSWorkspace.OpenConfiguration()
-    config.activates = true
-    config.createsNewApplicationInstance = false
-    NSWorkspace.shared.openApplication(at: bundle, configuration: config) { _, _ in }
-    for _ in 0..<40 where !frontmostIsTarget() { usleep(50_000) }
+for _ in 0..<20 where !frontmostIsTarget() { spin(0.05) }
+if !frontmostIsTarget() {
+    // An app launched with `open -g` can refuse activate(). Accessibility can raise this exact process
+    // (not LaunchServices by bundle: George's /Applications/HITList.app has the same bundle id).
+    let app = AXUIElementCreateApplication(pid)
+    AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+    var windows: CFTypeRef?
+    if AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows) == .success,
+       let first = (windows as? [AXUIElement])?.first {
+        AXUIElementPerformAction(first, kAXRaiseAction as CFString)
+    }
+    for _ in 0..<40 where !frontmostIsTarget() { spin(0.05) }
 }
 guard frontmostIsTarget() else { fail("could not bring pid \(pid) to the front") }
 usleep(150_000)
