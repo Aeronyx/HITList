@@ -450,6 +450,81 @@ final class HighlightFieldTests: XCTestCase {
         XCTAssertEqual(hosted.field.selectedRangeForTests, NSRange(location: (model.draft.text as NSString).length, length: 0))
     }
 
+    // MARK: The pointer (item 2)
+
+    #if os(macOS)
+    private func mouse(_ type: NSEvent.EventType, at point: CGPoint, in hosted: Hosted) -> NSEvent {
+        NSEvent.mouseEvent(with: type, location: hosted.field.convert(point, to: nil), modifierFlags: [],
+                           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: hosted.window.windowNumber,
+                           context: nil, eventNumber: 0, clickCount: 0, pressure: 0)!
+    }
+
+    /// George (2026-11-05): "The pointing hand is glitchy over highlights on Mac, it rapidly oscillates between
+    /// the cursor and the pointing hand". The text view decides the pointer itself: across a whole box (the
+    /// space inside "[tom 3]" too) every move and every cursor update gives the hand, so nothing sets the I-beam
+    /// in between; off the boxes the text view's own I-beam.
+    func testThePointerIsTheHandAcrossEveryBoxAndTheIBeamElsewhere() throws {
+        let model = FieldModel(text: "Call tom 3 about the parcel p1")
+        let hosted = try host(model)
+        defer { hosted.close() }
+        let field = hosted.field
+        let pieces = field.boxPieces()
+        XCTAssertEqual(pieces.map { field.highlightLayout.runs[$0.run].words }, ["tom 3", "p1"])
+        for piece in pieces {
+            for step in 0...12 {
+                let point = CGPoint(x: piece.rect.minX + 0.5 + (piece.rect.width - 1) * CGFloat(step) / 12, y: piece.rect.midY)
+                NSCursor.iBeam.set()
+                field.mouseMoved(with: mouse(.mouseMoved, at: point, in: hosted))
+                XCTAssertEqual(NSCursor.current, NSCursor.pointingHand, "a move over \(field.highlightLayout.runs[piece.run].words)")
+                NSCursor.arrow.set()
+                field.cursorUpdate(with: mouse(.mouseMoved, at: point, in: hosted))
+                XCTAssertEqual(NSCursor.current, NSCursor.pointingHand, "a cursor update over it")
+            }
+        }
+        let between = CGPoint(x: (pieces[0].rect.maxX + pieces[1].rect.minX) / 2, y: pieces[0].rect.midY)
+        // Off the boxes the text view's own handling decides (its I-beam, which it sets from where the real mouse
+        // is, so the test only checks the hand is never set there).
+        for point in [CGPoint(x: 3, y: pieces[0].rect.midY), between] {
+            XCTAssertNil(field.run(at: point))
+            NSCursor.arrow.set()
+            field.mouseMoved(with: mouse(.mouseMoved, at: point, in: hosted))
+            XCTAssertNotEqual(NSCursor.current, NSCursor.pointingHand, "text: never the hand")
+        }
+    }
+
+    /// The cursor rects split the visible text into the boxes (the hand) and the rest (the I-beam) with no
+    /// overlap, which AppKit leaves undefined.
+    func testTheCursorRectsCoverTheTextWithoutOverlapping() {
+        let area = CGRect(x: 0, y: 0, width: 300, height: 46)
+        let boxes = [CGRect(x: 40, y: 0, width: 50, height: 23), CGRect(x: 200, y: 0, width: 30, height: 23),
+                     CGRect(x: 0, y: 23, width: 20, height: 23)]
+        let rest = HighlightCursor.rects(area, excluding: boxes)
+        let all = rest + boxes
+        for (i, a) in all.enumerated() {
+            for b in all[(i + 1)...] { XCTAssertTrue(a.intersection(b).isEmpty || a.intersection(b).width * a.intersection(b).height == 0, "\(a) and \(b)") }
+        }
+        XCTAssertEqual(all.reduce(0) { $0 + $1.width * $1.height }, area.width * area.height, accuracy: 0.01, "every point has a cursor")
+    }
+    #else
+    /// iPad: the pointer takes the box's own shape over a box and is the I-beam over the rest of the text.
+    func testTheIPadPointerTakesTheBoxShape() throws {
+        let model = FieldModel(text: "Call tom 3 about the parcel p1")
+        let hosted = try host(model)
+        defer { hosted.close() }
+        let field = hosted.field
+        let pieces = field.boxPieces()
+        XCTAssertEqual(pieces.count, 2)
+        for piece in pieces {
+            let region = field.pointerRegion(at: CGPoint(x: piece.rect.midX, y: piece.rect.midY))
+            XCTAssertEqual(region.rect, piece.rect)
+            XCTAssertEqual(region.box, piece)
+        }
+        let text = field.pointerRegion(at: CGPoint(x: 3, y: pieces[0].rect.midY))
+        XCTAssertNil(text.box)
+        XCTAssertEqual(text.rect, field.bounds)
+    }
+    #endif
+
     #if os(macOS)
     /// The Mac's inline "Add task" row, open with "Call Tom p2", in a real window: what a click on a word hits
     /// is the title's text view, which knows "Tom" and "p2" are boxes and "Call" is text. A title longer than the

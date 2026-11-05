@@ -4,7 +4,8 @@ import UIKit
 
 /// The quick-add title on iPhone and iPad (brief 47): a `UITextView` on a TextKit 1 stack whose layout
 /// manager draws the highlight boxes behind the glyphs (`HighlightLayoutManager`). A tap on a box switches
-/// it off (it wins over the text view's own caret tap there).
+/// it off (it wins over the text view's own caret tap there); an iPad pointer takes the box's shape
+/// over it and the I-beam elsewhere.
 ///
 /// Return does nothing (brief 36: the card's Confirm adds) and the key reads "return"; a pasted, dropped or
 /// dictated line break becomes a space.
@@ -120,6 +121,7 @@ final class HighlightUITextView: UITextView {
     private let placeholderLabel = UILabel()
     private lazy var boxTap = UITapGestureRecognizer(target: self, action: #selector(tapBox(_:)))
     private let boxTapDelegate = BoxTapDelegate()
+    private let pointerDelegate = PointerDelegate()
 
     init() {
         stack = HighlightTextStack()
@@ -148,6 +150,8 @@ final class HighlightUITextView: UITextView {
         boxTapDelegate.view = self
         boxTap.delegate = boxTapDelegate
         addGestureRecognizer(boxTap)
+        pointerDelegate.view = self
+        addInteraction(UIPointerInteraction(delegate: pointerDelegate))
 
         highlightLayout.onRunsChange = { [weak self] in self?.runsChanged() }
     }
@@ -247,6 +251,13 @@ final class HighlightUITextView: UITextView {
         HighlightGeometry.run(at: point, in: boxPieces())
     }
 
+    /// iPad pointer at `point`: over a box, that box's piece (the pointer takes its shape); elsewhere the
+    /// whole text (the I-beam).
+    func pointerRegion(at point: CGPoint) -> (rect: CGRect, box: HighlightGeometry.Piece?) {
+        if let piece = boxPieces().first(where: { $0.rect.contains(point) }) { return (piece.rect, piece) }
+        return (bounds, nil)
+    }
+
     /// Switches box `index` off (its tokens' `onDisable`), at once on screen.
     func switchOff(_ index: Int) {
         guard highlightLayout.runs.indices.contains(index) else { return }
@@ -286,6 +297,27 @@ final class HighlightUITextView: UITextView {
                                shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
             guard let view, other !== recognizer, let otherView = other.view else { return false }
             return otherView === view || otherView.isDescendant(of: view)
+        }
+    }
+
+    /// iPad pointer: the box's own rounded shape over a box, the I-beam over the rest of the text.
+    private final class PointerDelegate: NSObject, UIPointerInteractionDelegate {
+        weak var view: HighlightUITextView?
+
+        func pointerInteraction(_ interaction: UIPointerInteraction, regionFor request: UIPointerRegionRequest,
+                                defaultRegion: UIPointerRegion) -> UIPointerRegion? {
+            guard let view else { return nil }
+            let region = view.pointerRegion(at: request.location)
+            guard let piece = region.box else { return UIPointerRegion(rect: region.rect, identifier: "text") }
+            return UIPointerRegion(rect: region.rect, identifier: "box.\(piece.run).\(piece.line)")
+        }
+
+        func pointerInteraction(_ interaction: UIPointerInteraction, styleFor region: UIPointerRegion) -> UIPointerStyle? {
+            guard let view else { return nil }
+            if (region.identifier as? String)?.hasPrefix("box.") == true {
+                return UIPointerStyle(shape: .roundedRect(region.rect, radius: TokenHighlightField.highlightRadius))
+            }
+            return UIPointerStyle(shape: .verticalBeam(length: view.style.lineHeight), constrainedAxes: [])
         }
     }
 }
