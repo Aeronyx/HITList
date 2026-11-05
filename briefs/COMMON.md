@@ -100,6 +100,13 @@ Shared Tasks); the Claude integration is off and hidden by default, its privacy 
 reminder phrases light up only once complete (after a space); `!15m` = 15 minutes from now, `!15mb` = before the due
 time; the Discard question sits inside the card it concerns.
 
+## Round 12 (2026-11-05; briefs 53–56 in parallel, the build friends get)
+Still 0.7.0 (17), unreleased: add to its notes, never a new version. No schema change. Ownership: 53 profile menu
+(`ProfileMenu`, Browse's profile button, new `WhatsNewPopout`/`BetaFeedback`); 54 `SyncStatusViews`/`SyncState`
+(bolt); 55 Claude settings + `ClaudeAccess` default + `HingeCreak*` + the Extras hinge row; 56 `Views/Tips/*`,
+`UpcomingBoard`, `TaskRow` meta line, `HITListUITests/*`. The official Claude logo is not used (Anthropic's trademark
+guidelines require their prior approval).
+
 ## Round 11 record (2026-11-05; sessions 47–52 merged for 0.7.0 (17))
 Six sessions on George's turn: 47 `highlight-engine` (xhigh), 48 `reminder-language` (xhigh, schema V5), 49
 `extras-claude-polish` (High), 50 `duo-hinge` (xhigh), 51 `shared-tasks` (max), 52 `tips-spotlight-cleanup` (High).
