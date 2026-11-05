@@ -102,6 +102,8 @@ struct QuickAddPopout: View {
                                 },
                                 onSubmit: save)
                 .accessibilityIdentifier("quickAddTitle")
+                // First-run tips (brief 52): the syntax, then, once something lights up, how to undo a highlight.
+                .quickAddTips(hasHighlight: parsed.tokens.contains { !$0.isSuperseded })
             if draft.shows(.description) {
                 HITField("Description", text: $draft.notes, systemImage: "text.alignleft", axis: .vertical, lineLimit: 1...5)
                     .focused($notesFocused)
