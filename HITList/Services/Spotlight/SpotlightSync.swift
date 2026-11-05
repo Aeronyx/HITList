@@ -11,8 +11,8 @@ import OSLog
 /// Screen or the Mac's Spotlight finds it, and tapping it runs `OpenTaskIntent`, which opens it in the editor.
 /// The index is the person's own, on their own device, so titles, notes, the Group and labels are all in it.
 ///
-/// - **When:** a refresh runs 2 s after a save (`ModelContext.didSave`) or a CloudKit import settles, and
-///   once at launch. It compares the store with a ledger of what was last indexed (`SpotlightLedger`: each
+/// - **When:** a refresh runs 2 s after the first save (`ModelContext.didSave`) or CloudKit import since
+///   the last one, and once at launch. It compares the store with a ledger of what was last indexed (`SpotlightLedger`: each
 ///   task's id and a fingerprint of what Spotlight shows) and sends only the difference, in batches.
 ///   Completed, deleted and sub-tasks leave the index the same way.
 /// - **Account switch:** `AccountSwitch` calls `clearForAccountChange`, which empties the index and the
@@ -35,11 +35,17 @@ final class SpotlightSync {
     private let batchSize: Int
     let isAllowed: Bool
     private var observers: [NSObjectProtocol] = []
-    private let debounce = Debouncer(delay: .seconds(2))
+    /// The refresh waiting to run. A save while one waits joins it rather than pushing it back, so a
+    /// steady trickle of saves (TipKit keeps its own store in the same process) never starves the index.
+    private var pending: Task<Void, Never>?
     private var running: Task<SpotlightPlan, Never>?
 
-    init(index: SpotlightIndexing, defaults: UserDefaults, batchSize: Int = 100, isAllowed: Bool = true) {
+    private let refreshDelay: Duration
+
+    init(index: SpotlightIndexing, defaults: UserDefaults, batchSize: Int = 100, isAllowed: Bool = true,
+         refreshDelay: Duration = .seconds(2)) {
         self.index = index
+        self.refreshDelay = refreshDelay
         self.defaults = defaults
         self.batchSize = max(1, batchSize)
         self.isAllowed = isAllowed
@@ -78,9 +84,12 @@ final class SpotlightSync {
     }
 
     func scheduleRefresh(in context: ModelContext) {
-        debounce.schedule { [weak self] in
+        guard pending == nil else { return }
+        pending = Task { [weak self, refreshDelay] in
+            try? await Task.sleep(for: refreshDelay)
             guard let self else { return }
-            Task { await self.refresh(in: context) }
+            self.pending = nil
+            await self.refresh(in: context)
         }
     }
 
