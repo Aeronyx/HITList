@@ -14,7 +14,7 @@ enum ClaudeIntegration {
     enum Part: Equatable, CaseIterable {
         /// The one switch, "Claude integration", with its sentence.
         case master
-        /// Which tasks Claude sees: All but @private / Only @claude, the label, Visible now.
+        /// Which tasks Claude sees: Only tasks with @claude / All tasks but @private, the label, Visible now.
         case privacy
         /// Copy for Claude and Share….
         case export
@@ -35,6 +35,12 @@ enum ClaudeIntegration {
 
     static let switchTitle = "Claude integration"
 
+    /// The "Claude sees" choice, left to right (George, 2026-11-05): "Only tasks with @claude" first, the default,
+    /// then "All tasks but @private", each with the label as named in Settings.
+    static func modeChoices(for rule: ClaudeAccessRule) -> [(mode: ClaudeAccessRule.Mode, title: String)] {
+        [(.onlyShared, "Only tasks with @\(rule.sharedLabel)"), (.allExceptHidden, "All tasks but @\(rule.hiddenLabel)")]
+    }
+
     /// The sentence under the switch: what the integration does, on this device.
     static func summary(mac: Bool) -> String {
         mac
@@ -51,8 +57,8 @@ enum ClaudeIntegration {
 
     static func confirmation(rule: ClaudeAccessRule, mac: Bool) -> Confirmation {
         let sees = switch rule.mode {
-        case .allExceptHidden: "every task except those labelled @\(rule.hiddenLabel)"
-        case .onlyShared: "only tasks labelled @\(rule.sharedLabel)"
+        case .allExceptHidden: "all tasks but those with @\(rule.hiddenLabel)"
+        case .onlyShared: "only tasks with @\(rule.sharedLabel)"
         }
         let message = mac
             ? "Claude Desktop and Claude Code on this Mac will be able to read your tasks, add tasks, complete them and change them while HITList is open. Claude never deletes a task. It sees \(sees); you can change that next. What Claude reads goes to Anthropic under your Claude account's terms. Turn this off at any time."

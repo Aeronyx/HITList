@@ -29,10 +29,11 @@ struct ClaudeSettings {
         nonmutating set { defaults.set(newValue, forKey: allowedKey) }
     }
 
-    /// Which tasks Claude (and the export) may see. Defaults: everything except @private.
+    /// Which tasks Claude (and the export) may see. With nothing stored: only tasks with @claude (brief 55;
+    /// until 0.7.0 it was everything but @private). A choice once made is stored and stays.
     var rule: ClaudeAccessRule {
         get {
-            ClaudeAccessRule(mode: defaults.string(forKey: modeKey).flatMap(ClaudeAccessRule.Mode.init(rawValue:)) ?? .allExceptHidden,
+            ClaudeAccessRule(mode: defaults.string(forKey: modeKey).flatMap(ClaudeAccessRule.Mode.init(rawValue:)) ?? .onlyShared,
                              hiddenLabel: defaults.string(forKey: hiddenLabelKey) ?? ClaudeAccessRule.defaultHiddenLabel,
                              sharedLabel: defaults.string(forKey: sharedLabelKey) ?? ClaudeAccessRule.defaultSharedLabel)
         }

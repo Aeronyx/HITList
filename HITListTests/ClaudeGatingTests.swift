@@ -80,15 +80,41 @@ final class ClaudeGatingTests: XCTestCase {
     func testTheQuestionSaysWhatClaudeSeesAndDoes() {
         let mac = ClaudeIntegration.confirmation(rule: ClaudeAccessRule(), mac: true)
         XCTAssertEqual(mac.confirm, "Turn On")
-        for words in ["read", "add", "complete", "change", "never deletes", "@private", "Anthropic", "off at any time"] {
+        for words in ["read", "add", "complete", "change", "never deletes", "only tasks with @claude", "Anthropic", "off at any time"] {
             XCTAssertTrue(mac.message.contains(words), "Mac question says \(words)")
         }
         let shared = ClaudeIntegration.confirmation(rule: ClaudeAccessRule(mode: .onlyShared, sharedLabel: "ai"), mac: true)
-        XCTAssertTrue(shared.message.contains("only tasks labelled @ai"))
+        XCTAssertTrue(shared.message.contains("only tasks with @ai"))
+        let allBut = ClaudeIntegration.confirmation(rule: ClaudeAccessRule(mode: .allExceptHidden, hiddenLabel: "home"), mac: true)
+        XCTAssertTrue(allBut.message.contains("all tasks but those with @home"), allBut.message)
         let phone = ClaudeIntegration.confirmation(rule: ClaudeAccessRule(), mac: false)
         XCTAssertTrue(phone.message.contains("Copy for Claude"))
-        XCTAssertTrue(phone.message.contains("@private"))
+        XCTAssertTrue(phone.message.contains("@claude"))
         XCTAssertTrue(phone.message.contains("sends nothing"))
+    }
+
+    // MARK: Which tasks (brief 55)
+
+    func testTheChoiceReadsAsGeorgeWroteItWithOnlyClaudeFirst() {
+        // George, 2026-11-05: "'All tasks but @private' and 'Only tasks with @claude' ... make 'Only tasks with
+        // @claude' the default/leftmost option".
+        let choices = ClaudeIntegration.modeChoices(for: ClaudeAccessRule())
+        XCTAssertEqual(choices.map(\.mode), [.onlyShared, .allExceptHidden], "Only tasks with @claude is the leftmost")
+        XCTAssertEqual(choices.map(\.title), ["Only tasks with @claude", "All tasks but @private"])
+        let renamed = ClaudeIntegration.modeChoices(for: ClaudeAccessRule(hiddenLabel: "home", sharedLabel: "@ai"))
+        XCTAssertEqual(renamed.map(\.title), ["Only tasks with @ai", "All tasks but @home"], "the editable label names")
+    }
+
+    func testOnlyTasksWithClaudeIsTheDefaultAndAStoredChoiceStays() {
+        let settings = ClaudeSettings(defaults: defaults, storeSuffix: nil)
+        XCTAssertFalse(settings.isAllowed, "the integration itself stays off by default")
+        XCTAssertEqual(settings.rule.mode, .onlyShared, "nothing stored: Only tasks with @claude")
+        defaults.set("allExcept", forKey: settings.modeKey)   // chosen in an earlier build
+        XCTAssertEqual(settings.rule.mode, .allExceptHidden, "a stored choice stays as it is")
+        defaults.set("onlyShared", forKey: settings.modeKey)
+        XCTAssertEqual(settings.rule.mode, .onlyShared)
+        defaults.set("junk", forKey: settings.modeKey)
+        XCTAssertEqual(settings.rule.mode, .onlyShared, "anything unreadable is the default")
     }
 
     // MARK: Off means off

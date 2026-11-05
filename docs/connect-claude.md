@@ -23,9 +23,9 @@ While it is off, nothing on your Mac can reach your tasks through HITList, and C
 
 Once it is on, Settings → Claude shows the rest:
 
-- **All but @private** (the default): Claude sees every task except those labelled `@private`.
-- **Only @claude**: Claude sees only tasks labelled `@claude`. Tasks Claude adds get the label, so it can
-  find them again.
+- **Only tasks with @claude** (the default): Claude sees only tasks labelled `@claude`, so nothing is shared
+  until you label a task. Tasks Claude adds get the label, so it can find them again.
+- **All tasks but @private**: Claude sees every task except those labelled `@private`.
 
 You can rename either label in the row below the choice. A hidden task's subtasks are hidden with it, and a
 Group whose tasks are all hidden is never named to Claude. **Visible now** shows how many open tasks

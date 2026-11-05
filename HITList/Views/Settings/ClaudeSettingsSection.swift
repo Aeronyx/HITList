@@ -100,10 +100,11 @@ struct ClaudeSettingsSection: View {
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 HITMenuRowLabel("Claude sees", systemImage: "eye")
                     .foregroundStyle(HITColor.text)
-                HITSegmented(selection: $mode, segments: [
-                    HITSegment(ClaudeAccessRule.Mode.allExceptHidden, "All but @\(rule.hiddenLabel)"),
-                    HITSegment(ClaudeAccessRule.Mode.onlyShared, "Only @\(rule.sharedLabel)"),
-                ])
+                HITSegmented(selection: $mode, segments: ClaudeIntegration.modeChoices(for: rule).map {
+                    HITSegment($0.mode, $0.title)
+                })
+                // The full wording fits an iPhone's width at a slightly smaller size rather than truncating.
+                .minimumScaleFactor(0.75)
                 .accessibilityIdentifier("claude-mode")
             }
             .hitRowPadding()
