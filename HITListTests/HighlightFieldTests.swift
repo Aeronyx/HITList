@@ -486,29 +486,21 @@ final class HighlightFieldTests: XCTestCase {
             }
         }
         let between = CGPoint(x: (pieces[0].rect.maxX + pieces[1].rect.minX) / 2, y: pieces[0].rect.midY)
-        // Off the boxes the text view's own handling decides (its I-beam, which it sets from where the real mouse
-        // is, so the test only checks the hand is never set there).
+        // Off the boxes, over the words: the I-beam, from a move and from a cursor update. (Driven for real on
+        // 2026-11-05 the plain words showed the arrow: the text view's own handling did not set the I-beam.)
         for point in [CGPoint(x: 3, y: pieces[0].rect.midY), between] {
             XCTAssertNil(field.run(at: point))
             NSCursor.arrow.set()
             field.mouseMoved(with: mouse(.mouseMoved, at: point, in: hosted))
-            XCTAssertNotEqual(NSCursor.current, NSCursor.pointingHand, "text: never the hand")
+            XCTAssertEqual(NSCursor.current, NSCursor.iBeam, "a move over text: the I-beam")
+            NSCursor.pointingHand.set()
+            field.cursorUpdate(with: mouse(.mouseMoved, at: point, in: hosted))
+            XCTAssertEqual(NSCursor.current, NSCursor.iBeam, "a cursor update over text: the I-beam")
         }
+        XCTAssertTrue(field.trackingAreas.contains { $0.owner === field && $0.options.contains(.cursorUpdate) && $0.options.contains(.mouseMoved) },
+                      "the text view gets the cursor updates and moves over itself")
     }
 
-    /// The cursor rects split the visible text into the boxes (the hand) and the rest (the I-beam) with no
-    /// overlap, which AppKit leaves undefined.
-    func testTheCursorRectsCoverTheTextWithoutOverlapping() {
-        let area = CGRect(x: 0, y: 0, width: 300, height: 46)
-        let boxes = [CGRect(x: 40, y: 0, width: 50, height: 23), CGRect(x: 200, y: 0, width: 30, height: 23),
-                     CGRect(x: 0, y: 23, width: 20, height: 23)]
-        let rest = HighlightCursor.rects(area, excluding: boxes)
-        let all = rest + boxes
-        for (i, a) in all.enumerated() {
-            for b in all[(i + 1)...] { XCTAssertTrue(a.intersection(b).isEmpty || a.intersection(b).width * a.intersection(b).height == 0, "\(a) and \(b)") }
-        }
-        XCTAssertEqual(all.reduce(0) { $0 + $1.width * $1.height }, area.width * area.height, accuracy: 0.01, "every point has a cursor")
-    }
     #else
     /// iPad: the pointer takes the box's own shape over a box and is the I-beam over the rest of the text.
     func testTheIPadPointerTakesTheBoxShape() throws {
