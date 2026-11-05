@@ -202,6 +202,82 @@ final class ReminderGrammarTests: XCTestCase {
         XCTAssertEqual(next.timeIntervalSince(at(2026, 10, 31, 18, 0)), 25 * 3600)
     }
 
+    // MARK: While typing (live) and at Confirm (final)
+
+    /// Brief 48 (George: "only checks/adds a highlight after the user presses space instead of while they're
+    /// typing it"): in a live parse a "!" word is plain until whitespace follows it; the final parse, at
+    /// Confirm, takes the end of the text as complete.
+    func testABangWordLightsUpOnlyOnceASpaceFollowsIt() {
+        let typing = parser.parse("Call mom !15m", mode: .live)
+        XCTAssertTrue(typing.tokens.isEmpty)
+        XCTAssertEqual(typing.title, "Call mom !15m")
+        XCTAssertNil(typing.reminderDate)
+        XCTAssertNil(typing.reminderFromNow)
+
+        let spaced = parser.parse("Call mom !15m ", mode: .live)
+        XCTAssertEqual(spaced.tokens.map(\.text), ["!15m"])
+        XCTAssertEqual(spaced.title, "Call mom")
+        XCTAssertEqual(spaced.reminderDate, minutes(15))
+
+        let confirmed = parser.parse("Call mom !15m", mode: .final)
+        XCTAssertEqual(confirmed.tokens.map(\.text), ["!15m"])
+        XCTAssertEqual(confirmed.reminderDate, minutes(15))
+        XCTAssertEqual(parser.parse("Call mom !15m"), confirmed, "final is the default")
+    }
+
+    func testEveryStageOfTypingAReminderStaysPlainUntilTheSpace() {
+        for typed in ["Call 5pm !", "Call 5pm !1", "Call 5pm !15", "Call 5pm !15m", "Call 5pm !15mb"] {
+            let r = parser.parse(typed, mode: .live)
+            XCTAssertEqual(r.tokens.map(\.kind), [.time], typed)
+            XCTAssertNil(r.reminderDate, typed)
+            XCTAssertNil(r.reminderOffsetMinutes, typed)
+            XCTAssertEqual(r.title, "Call " + typed.split(separator: " ").last!, typed)
+        }
+        let before = parser.parse("Call 5pm !15mb ", mode: .live)
+        XCTAssertEqual(before.reminderOffsetMinutes, 15)
+        XCTAssertNil(before.reminderDate, "with the b it counts back from 5 pm")
+        XCTAssertEqual(before.tokens.map(\.kind), [.time, .reminder])
+    }
+
+    func testOnlyTheWordAtTheEndWaits() {
+        // A "!" word with more text after it is complete, wherever the caret is.
+        let middle = parser.parse("Call !15m about the car", mode: .live)
+        XCTAssertEqual(middle.reminderDate, minutes(15))
+        XCTAssertEqual(middle.title, "Call about the car")
+        // Other words light up as they are typed, as before.
+        XCTAssertEqual(parser.parse("Call tomorrow", mode: .live).tokens.map(\.text), ["tomorrow"])
+        XCTAssertEqual(parser.parse("Call p1", mode: .live).priority, .p1)
+        // A later reminder still being typed doesn't override the finished one yet.
+        let two = parser.parse("Call !15m !1h", mode: .live)
+        XCTAssertEqual(two.reminderDate, minutes(15))
+        XCTAssertEqual(two.title, "Call !1h")
+        XCTAssertFalse(two.tokens.contains(where: \.isSuperseded))
+        // Tabs and line breaks finish a word too.
+        XCTAssertEqual(parser.parse("Call !15m\t", mode: .live).reminderDate, minutes(15))
+    }
+
+    /// "!!1" is a "!" command as well: it waits for the space like the reminders.
+    func testABangPriorityWaitsToo() {
+        let typing = parser.parse("Call !!1", mode: .live)
+        XCTAssertEqual(typing.priority, .p4)
+        XCTAssertEqual(typing.title, "Call !!1")
+        XCTAssertEqual(parser.parse("Call !!1 ", mode: .live).priority, .p1)
+        XCTAssertEqual(parser.parse("Call !!1").priority, .p1)
+    }
+
+    func testTheLiveParseHonoursSwitchedOffPhrases() {
+        let off: Set<QuickAddTokenKey> = [QuickAddTokenKey(kind: .reminder, text: "!15m")]
+        let r = parser.parse("Call !15m !1h", disabling: off, mode: .live)
+        XCTAssertNil(r.reminderDate, "the first is switched off and the second not finished")
+        XCTAssertEqual(r.title, "Call !15m !1h")
+        XCTAssertEqual(parser.parse("Call !15m !1h", disabling: off, mode: .final).reminderDate, minutes(60))
+        let text = "Call !15m !1h"
+        let phrase = QuickAddDisabledPhrase(key: off.first!, start: 5, length: 4)
+        XCTAssertNil(parser.parse(text, switchedOff: [phrase], mode: .live).reminderDate)
+        XCTAssertEqual(parser.parse(text, switchedOff: [phrase], mode: .final).reminderDate, minutes(60))
+        XCTAssertEqual(parser.parse(text + " ", switchedOff: [phrase], mode: .live).reminderDate, minutes(60))
+    }
+
     // MARK: Words and tokens
 
     func testSpanWordingAndTokens() {

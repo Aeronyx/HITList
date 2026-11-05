@@ -93,17 +93,17 @@ extension QuickAddParser {
     /// lets the superseded "p2" before it apply again; another copy of a switched-off "tom" stays plain
     /// too). A superseded token whose key is switched off is masked as well, so it never comes back.
     /// Token ranges index `input`. The quick-add card switches off phrases by place instead
-    /// (`parse(_:switchedOff:)`).
-    public func parse(_ input: String, disabling disabled: Set<QuickAddTokenKey>) -> QuickAddResult {
-        guard !disabled.isEmpty else { return parse(input) }
-        return parse(input) { key, _ in disabled.contains(key) }
+    /// (`parse(_:switchedOff:mode:)`). `mode` as in `parse(_:mode:)`.
+    public func parse(_ input: String, disabling disabled: Set<QuickAddTokenKey>, mode: Mode = .final) -> QuickAddResult {
+        guard !disabled.isEmpty else { return parse(input, mode: mode) }
+        return parse(input, mode: mode) { key, _ in disabled.contains(key) }
     }
 
     /// `parse(_:disabling:)` for phrases switched off where they sit (brief 41): only the token with that key
     /// at that place is plain; the same words typed anywhere else are read as usual.
-    public func parse(_ input: String, switchedOff phrases: Set<QuickAddDisabledPhrase>) -> QuickAddResult {
-        guard !phrases.isEmpty else { return parse(input) }
-        return parse(input) { key, span in
+    public func parse(_ input: String, switchedOff phrases: Set<QuickAddDisabledPhrase>, mode: Mode = .final) -> QuickAddResult {
+        guard !phrases.isEmpty else { return parse(input, mode: mode) }
+        return parse(input, mode: mode) { key, span in
             phrases.contains(QuickAddDisabledPhrase(key: key, start: span.lowerBound, length: span.count))
         }
     }
@@ -111,9 +111,9 @@ extension QuickAddParser {
     /// How: each switched-off span is swapped for a one-character placeholder no rule matches and the
     /// text is parsed again, until no switched-off token is left; ranges and the title are then mapped
     /// back to the text as typed. `isOff` gets a token's key and its UTF-8 span in `input`.
-    private func parse(_ input: String, isOff: (QuickAddTokenKey, Range<Int>) -> Bool) -> QuickAddResult {
+    private func parse(_ input: String, mode: Mode, isOff: (QuickAddTokenKey, Range<Int>) -> Bool) -> QuickAddResult {
         var masked = MaskedText(input)
-        var result = parse(input)
+        var result = parse(input, mode: mode)
         // Each round masks at least one more word, so this ends within the word count.
         while true {
             let spans = result.tokens.compactMap { token -> Range<Int>? in
@@ -126,7 +126,7 @@ extension QuickAddParser {
             masked.mask(spans)
             // Nothing new to mask (a span already masked): stop rather than go round again.
             guard masked.spanCount > before else { break }
-            result = parse(masked.text)
+            result = parse(masked.text, mode: mode)
         }
         guard masked.hasMasks else { return result }
         result.tokens = result.tokens.map { token in

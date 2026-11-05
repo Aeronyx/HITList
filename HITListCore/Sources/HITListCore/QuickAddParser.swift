@@ -92,7 +92,17 @@ public struct QuickAddParser: Sendable {
         return result
     }
 
-    public func parse(_ input: String) -> QuickAddResult {
+    /// How finished the text is (brief 48, George: a "!" phrase "only checks/adds a highlight after the user
+    /// presses space instead of while they're typing it").
+    public enum Mode: Sendable {
+        /// Confirm, Siri, Claude: the end of the text ends the last word, so "Call mom !15m" sets the reminder.
+        case final
+        /// The quick-add card while it is typed in: a "!" word (`!15m`, `!15mb`, `!at`, `!!1`) at the very end,
+        /// with no whitespace after it yet, is still being typed and stays plain title text.
+        case live
+    }
+
+    public func parse(_ input: String, mode: Mode = .final) -> QuickAddResult {
         let words = Self.words(in: input)
         let lowers = words.map(\.lower)
         var consumed = [Bool](repeating: false, count: words.count)
@@ -131,6 +141,7 @@ public struct QuickAddParser: Sendable {
         while i < words.count {
             if consumed[i] { i += 1; continue }
             let w = lowers[i]
+            if mode == .live, w.hasPrefix("!"), words[i].range.upperBound == input.endIndex { i += 1; continue }
 
             // Priority: p1..p4, !!1..!!4
             if let p = Self.priority(from: w) {
