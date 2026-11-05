@@ -56,12 +56,15 @@ struct HighlightTextField: NSViewRepresentable {
         textView.highlightLayout.runs = runs
         textView.onSubmit = { [weak coordinator = context.coordinator] in coordinator?.parent.onSubmit() }
 
-        // Focus is edge-triggered: a stale value in an unrelated update never takes the keyboard away.
+        // Focus is edge-triggered: a stale value in an unrelated update never takes the keyboard away, and only
+        // the owner's changes move it (not the field's own reports coming back, `HighlightFocusReport`).
         let coordinator = context.coordinator
         textView.wantsFocus = isFocused
         if isFocused != coordinator.lastFocus {
             coordinator.lastFocus = isFocused
-            if isFocused {
+            if context.transaction[HighlightFocusReport.self] {
+                // The field's own report: the keyboard is already where it says.
+            } else if isFocused {
                 DispatchQueue.main.async {
                     guard textView.wantsFocus, let window = textView.window, window.firstResponder !== textView else { return }
                     window.makeFirstResponder(textView)
