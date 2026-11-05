@@ -103,4 +103,16 @@ final class AppGroupTests: XCTestCase {
         XCTAssertEqual(url.deletingLastPathComponent().standardizedFileURL, group.standardizedFileURL)
         XCTAssertEqual(url.lastPathComponent, "HITList.store")
     }
+
+    // A Debug run on a side store keeps its own settings (supervisor, round 11): before, a session's probe
+    // wrote George's real "last Settings pane" into the app group his TestFlight app reads.
+    func testTheRealAppUsesTheAppGroupSuite() {
+        XCTAssertEqual(AppGroup.suiteName(suffix: nil), AppGroup.id)
+        XCTAssertEqual(AppGroup.suiteName(suffix: ""), AppGroup.id)
+    }
+
+    func testASideStoreRunUsesASuiteOfItsOwn() {
+        XCTAssertEqual(AppGroup.suiteName(suffix: "s52"), AppGroup.id + ".s52")
+        XCTAssertNotEqual(AppGroup.suiteName(suffix: "s52"), AppGroup.suiteName(suffix: nil))
+    }
 }

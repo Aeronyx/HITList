@@ -25,10 +25,20 @@ enum AppGroup {
         FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: id)
     }
 
+    /// The settings suite: the app group itself, or, for a Debug run on a side store
+    /// (`HITLIST_STORE_SUFFIX=<name>`, see `ModelContainerFactory.storeName`), a suite of that run's own, so
+    /// a session's probe never changes George's real settings (the last Settings pane, a sticky card, a
+    /// switched-on preview). Release builds never set the variable.
+    static func suiteName(suffix: String?) -> String {
+        guard let suffix, !suffix.isEmpty else { return id }
+        return "\(id).\(suffix)"
+    }
+
     /// App settings shared with future extensions. Falls back to `.standard` without the entitlement.
     /// The first access copies settings written by builds that predate the app group.
     static let defaults: UserDefaults = {
-        guard containerURL != nil, let shared = UserDefaults(suiteName: id) else {
+        let name = suiteName(suffix: ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"])
+        guard containerURL != nil, let shared = UserDefaults(suiteName: name) else {
             log.error("App group \(id, privacy: .public) unavailable; using standard UserDefaults")
             return .standard
         }
