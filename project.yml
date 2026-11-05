@@ -134,3 +134,27 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/HITList.app/HITList"
         "TEST_HOST[sdk=macosx*]": "$(BUILT_PRODUCTS_DIR)/HITList.app/Contents/MacOS/HITList"
         BUNDLE_LOADER: "$(TEST_HOST)"
+  # UI tests on the iPhone simulator (supervisor, round 11): XCUITest taps and types through the real app, so a
+  # session can check a screen without the simulator panel's permission. Their own scheme, so `scripts/test.sh`
+  # runs them only when asked (`scripts/test.sh ui`) and releases never build them. No version keys here:
+  # release.sh expects exactly one CURRENT_PROJECT_VERSION line.
+  HITListUITests:
+    type: bundle.ui-testing
+    supportedDestinations: [iOS]
+    sources:
+      - path: HITListUITests
+    dependencies:
+      - target: HITList
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.trammells.hitlist.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: HITList
+schemes:
+  HITListUITests:
+    build:
+      targets:
+        HITList: all
+        HITListUITests: [test]
+    test:
+      targets: [HITListUITests]

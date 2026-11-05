@@ -86,6 +86,14 @@ Mac app's window (never the whole screen, which shows George's own windows):
    or the Simulator, acts only while that app is frontmost (George may be at the Mac: it stops if he takes over), and
    hands focus back afterwards. Keep runs short. iPhone/iPad: your own simulator as before; ask George once for tap access and carry on meanwhile.
 
+**Driving the iPhone app without the panel permission (from round 12).** `HITListUITests` (XCUITest, its own
+scheme) taps and types through the real app: `SIMULATOR=HITList-NN scripts/test.sh ui`. Add a test of your own beside
+`testTabsAndQuickAdd` for your screen; launch with a fresh `HITLIST_STORE_SUFFIX` and `-disableCloudKit YES -hideTips`
+(a first-run tip takes the first tap); wait for a closing card to go before the next tap (taps during its slide are
+swallowed); keep screenshots with `XCTAttachment` and export them with `xcrun xcresulttool export attachments --path
+<.xcresult> --output-path <folder>`. Stable identifiers: `quickAddButton`, `quickAddTitle`, `quickAddSave`, `tab-<name>`,
+`browseButton`, `viewOptions`, `syncBolt`.
+
 **Decisions from 2026-11-05 (George):** no login system ever (the Apple account is the identity; profiles serve
 Shared Tasks); the Claude integration is off and hidden by default, its privacy choices shown only once switched on;
 "Delight" is called "Extras"; a quick-add highlight is removed by a click/tap or by Backspace right after it; "!"
