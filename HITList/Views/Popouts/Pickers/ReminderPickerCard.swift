@@ -171,7 +171,8 @@ struct ReminderPickerCard: View {
             }
             .accessibilityIdentifier("reminderLaterTodayTime")
         }
-        if let reminderDate {
+        // A span says when it goes off; a picked moment's time is in its field already.
+        if let reminderDate, !picked {
             HStack(spacing: 4) {
                 Image(systemName: "bell.fill").font(.system(size: 10, weight: .semibold))
                 Text("Goes off " + ReminderChipText.when(reminderDate, now: now))
