@@ -99,6 +99,28 @@ final class CompactQuickAddTests: XCTestCase {
         XCTAssertLessThanOrEqual(laid.size.width, width - 2 * CompactQuickAddCard.padding)
     }
 
+    // MARK: - Discard inside the card (brief 49)
+
+    private func renderedHeight<V: View>(_ view: V, container: ModelContainer) -> CGFloat {
+        let renderer = ImageRenderer(content: view.frame(width: UpcomingBoard.cardWidth)
+            .environment(PopoutController(draftDefaults: UserDefaults(suiteName: "CompactQuickAddRender-\(UUID().uuidString)")!))
+            .modelContainer(container).preferredColorScheme(.dark))
+        renderer.scale = 1
+        return CGFloat(renderer.cgImage?.height ?? 0)
+    }
+
+    /// The question is the card's own foot: the card grows by exactly the row (nothing floats above it).
+    func testTheCardAsksInsideItselfAndGrowsToFit() {
+        let container = ModelContainerFactory.preview()
+        let plain = renderedHeight(CompactQuickAddCard(context: .day(today), onClose: {}), container: container)
+        let asking = renderedHeight(CompactQuickAddCard(context: .day(today), isConfirmingDiscard: true, onClose: {}), container: container)
+        let row = renderedHeight(InlineDiscardRow(padding: CompactQuickAddCard.padding, onKeepEditing: {}, onDiscard: {}), container: container)
+        XCTAssertGreaterThan(plain, 0)
+        XCTAssertGreaterThan(row, 40, "the question over its two buttons in the 270 pt column")
+        XCTAssertEqual(asking, plain + row, accuracy: 1, "the card grows by the row and by nothing else")
+        XCTAssertEqual(InlineDiscardRow.question, "Discard this task?")
+    }
+
     // MARK: - Focus at once (Mac)
 
     #if os(macOS)
@@ -227,6 +249,35 @@ final class CompactQuickAddTests: XCTestCase {
         XCTAssertNil(QuickAddDraftStore.draft(for: card, from: defaults))
 
         popouts.openQuickAdd(.day(today), placement: .inline(key))
+        spin(0.4)
+        escape(window)
+        XCTAssertNil(popouts.state.quickAdd, "an empty card closes at once")
+    }
+
+    /// A list's inline "Add task" card (round 10's open item): × and Escape now ask before losing typing, inside
+    /// the card, and again discard; an empty card still closes at once.
+    func testEscapeAsksDiscardOverTypingInAListsAddRow() throws {
+        let container = ModelContainerFactory.preview()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "CompactQuickAddFocus-\(UUID().uuidString)"))
+        let popouts = PopoutController(draftDefaults: defaults)
+        let key = "list-row-test"
+        popouts.openQuickAdd(.today, placement: .inline(key))
+        let card = try XCTUnwrap(popouts.state.quickAdd?.id)
+        QuickAddDraftStore.save(QuickAddDraft(context: .today, text: "Call Sam"), card: card, to: defaults)
+        let (window, host) = keyWindow(List { InlineAddRow(context: .today, key: key) }
+            .environment(popouts).modelContainer(container).preferredColorScheme(.dark))
+        defer { popouts.closeAll(); tearDown(window) }
+        spin(0.4)
+        XCTAssertEqual(textView(in: host)?.string, "Call Sam")
+
+        escape(window)
+        XCTAssertTrue(popouts.state.isInlineOpen(key), "typing: Escape asks first, the card stays")
+        XCTAssertEqual(QuickAddDraftStore.draft(for: card, from: defaults)?.text, "Call Sam", "and so does the typing")
+        escape(window)
+        XCTAssertNil(popouts.state.quickAdd, "Escape again discards")
+        XCTAssertNil(QuickAddDraftStore.draft(for: card, from: defaults))
+
+        popouts.openQuickAdd(.today, placement: .inline(key))
         spin(0.4)
         escape(window)
         XCTAssertNil(popouts.state.quickAdd, "an empty card closes at once")

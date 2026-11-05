@@ -212,6 +212,9 @@ enum ProfileButtonMetrics {
     #endif
     /// From the top of the sidebar's content area to the button.
     static let top: CGFloat = HITSpacing.xs
+    /// From the button to the first row (Inbox): 8 pt more than 0.6.0's 4 (George, 2026-11-05: "slightly
+    /// more vertical space between the profile in the top left and the first menu tab").
+    static let bottom: CGFloat = HITSpacing.xs + 8
 }
 
 /// The dropdown: two rows, a hairline, the iCloud line. `chrome` draws the card's own background, border

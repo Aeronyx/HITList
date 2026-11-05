@@ -97,10 +97,17 @@ final class PopoutController {
         accountObserver = center.addObserver(forName: .accountDidSwitch, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.accountDidSwitch() }
         }
+        // Claude completed a task through the connector (brief 43): the same Undo toast a completion in the
+        // app shows, so it is one click from undone (brief 49).
+        claudeObserver = center.addObserver(forName: .claudeDidCompleteTask, object: nil, queue: .main) { [weak self] note in
+            guard let record = note.userInfo?[ClaudeConnector.completedTaskKey] as? CompletedTask else { return }
+            MainActor.assumeIsolated { self?.showToast(record) }
+        }
     }
 
-    /// Lives as long as the controller (one per window); the block holds it weakly.
+    /// Live as long as the controller (one per window); the blocks hold it weakly.
     @ObservationIgnored private var accountObserver: NSObjectProtocol?
+    @ObservationIgnored private var claudeObserver: NSObjectProtocol?
 
     /// Closes every popout (the card's stored draft goes with it) and drops the undo toasts without undoing.
     func accountDidSwitch() {
@@ -178,12 +185,31 @@ final class PopoutController {
     @discardableResult
     func reopenStoredQuickAdd() -> Bool {
         for key in Preferences.legacyQuickAddDraftKeys { draftDefaults.removeObject(forKey: key) }
+        #if DEBUG
+        if openDebugInlineCard() { return true }
+        #endif
         guard state.quickAdd == nil, let stored = QuickAddDraftStore.load(from: draftDefaults),
               !Self.liveCards.contains(stored.cardID) else { return false }
         task = nil
         update { $0.openQuickAdd(stored.draft.context, placement: .floating, id: stored.cardID) }
         return true
     }
+
+    #if DEBUG
+    /// Developer aid for window captures without clicks (brief 49), Debug builds only: launched with
+    /// `-debugInlineCard "Call Sam"`, the list's inline "Add task" card (key "list") opens with that typed in;
+    /// `-debugAskDiscard YES` has it ask "Discard this task?" at once (`InlineAddRow`).
+    static var debugInlineCardText: String? { UserDefaults.standard.string(forKey: "debugInlineCard") }
+    static var debugAsksDiscard: Bool { UserDefaults.standard.bool(forKey: "debugAskDiscard") }
+
+    private func openDebugInlineCard() -> Bool {
+        guard state.quickAdd == nil, let text = Self.debugInlineCardText else { return false }
+        let id = UUID()
+        update { $0.openQuickAdd(listContext, placement: .inline("list"), id: id) }
+        QuickAddDraftStore.save(QuickAddDraft(context: listContext, text: text), card: id, to: draftDefaults)
+        return true
+    }
+    #endif
 
     /// The window is going away (Mac): its card is no longer live here, but its draft stays stored, so
     /// the next window, or the next launch, opens it again.
@@ -259,7 +285,13 @@ final class PopoutController {
         TaskActions.toggleCompletion(task, in: context)
         Task { await NotificationScheduler.reschedule(context: context) }
         if self.task?.id == task.id { closeTask() }
-        let generation = withAnimation(HITMotion.enter) { toast.add(CompletedTask(id: task.id, title: task.title, revert: revert)) }
+        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+    }
+
+    /// "Completed ‘Title’ · Undo" for a completion that has already been saved (from a popout, or by Claude),
+    /// gone after `CompletionToastState.lifetime` unless another completion joins it.
+    func showToast(_ record: CompletedTask) {
+        let generation = withAnimation(HITMotion.enter) { toast.add(record) }
         AccessibilityNotification.Announcement(toast.message).post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)

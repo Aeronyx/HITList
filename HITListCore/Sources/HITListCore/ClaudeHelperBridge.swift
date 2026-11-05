@@ -14,7 +14,7 @@ public struct ClaudeHelperBridge {
     public var send: (Data) -> Result<Data, SendFailure>
     /// The token the app wrote, or nil when there is none.
     public var readToken: () -> String?
-    /// The "Allow Claude" setting, read only when the port is missing.
+    /// The "Claude integration" setting, read only when the port is missing.
     public var isAllowed: () -> Bool
 
     public init(send: @escaping (Data) -> Result<Data, SendFailure>, readToken: @escaping () -> String?,

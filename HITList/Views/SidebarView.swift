@@ -142,7 +142,7 @@ struct SidebarView: View {
         ProfileMenu(startsOpen: profileMenuStartsOpen, onAccountSettings: openAccountSettings, onSettings: openSettings)
             .padding(.horizontal, Self.profileInset)
             .padding(.top, ProfileButtonMetrics.top)
-            .padding(.bottom, HITSpacing.xs)
+            .padding(.bottom, ProfileButtonMetrics.bottom)
             .background(Theme.surface)
             .zIndex(1)
     }

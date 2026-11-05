@@ -3,7 +3,7 @@ import HITListCore
 
 /// The app's side of one connector call (brief 43): the bytes the `hitlist-mcp` helper sent through the
 /// message port in, a tool result out. It checks the token the app wrote for this run of the port, then
-/// "Allow Claude" (read per call, so switching it off takes effect at once), and only then runs the tool.
+/// the Claude integration switch (read per call, so switching it off takes effect at once), and only then runs the tool.
 @MainActor
 final class ClaudeEndpoint {
     let token: String

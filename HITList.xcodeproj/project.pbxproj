@@ -155,6 +155,7 @@
 		A1A8673E5F354361A23B5ED8 /* LastSyncChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF22F4F7DDF5D28105EFED56 /* LastSyncChange.swift */; };
 		A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FC29DB1F9289C32B262576 /* SyncLogTests.swift */; };
 		A3EC8F0CC8B0442E99A48CE4 /* HighlightRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14255A51748F8F42EA94CDCF /* HighlightRun.swift */; };
+		A400CBB35842FB32F63D2714 /* ClaudeIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02156329220ED375142192B8 /* ClaudeIntegration.swift */; };
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		A5582DCC236003C9F6C5873A /* SubtaskTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */; };
 		A5CB417B22951B64EABA4A8F /* AccountWatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */; };
@@ -170,6 +171,7 @@
 		B1E563539EBD540721DDA15C /* CompletionMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2B9A3C265599BBA1928813 /* CompletionMotion.swift */; };
 		B38356BFAA87241E786AC857 /* HighlightTextStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEB79A4C3F4721726870E839 /* HighlightTextStyle.swift */; };
 		B45177102F56678B6535528C /* ReminderPickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC15F6A065400DDD7DE9FE /* ReminderPickerCard.swift */; };
+		B489C0EB889A8D0FD6AC644D /* ClaudeGatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */; };
 		B4D499C6FFA7E9ABCEEA7125 /* HITListCore in Frameworks */ = {isa = PBXBuildFile; productRef = 8AFA98252831E3768BA76F9E /* HITListCore */; };
 		B6F538BFE92844B8530ABA1B /* SyncLogFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1054B92FCF463385DF075D13 /* SyncLogFormat.swift */; };
 		B7E484557E8DFB00AFE65C32 /* KeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */; };
@@ -275,6 +277,7 @@
 /* Begin PBXFileReference section */
 		00B7DF926CB02E19ED081AE9 /* HighlightAreaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightAreaTests.swift; sourceTree = "<group>"; };
 		01D500F169967494D4FCCD6B /* QuickAddPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddPopout.swift; sourceTree = "<group>"; };
+		02156329220ED375142192B8 /* ClaudeIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeIntegration.swift; sourceTree = "<group>"; };
 		0222BC93E2AA258E168B8F5C /* DesignSystemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignSystemTests.swift; sourceTree = "<group>"; };
 		02B0D726E6D45191FFDC6A83 /* MacSettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsPage.swift; sourceTree = "<group>"; };
 		03340EB6E38EDAB8BB35B0C4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -389,6 +392,7 @@
 		7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxPicker.swift; sourceTree = "<group>"; };
 		7C1C596DE872D32372F5F68A /* AccountSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsSection.swift; sourceTree = "<group>"; };
 		7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppearanceSection.swift; sourceTree = "<group>"; };
+		7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeGatingTests.swift; sourceTree = "<group>"; };
 		80FC29DB1F9289C32B262576 /* SyncLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLogTests.swift; sourceTree = "<group>"; };
 		81F00D1A134DBD9CE50D06F4 /* AccountSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSwitch.swift; sourceTree = "<group>"; };
 		8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsGroup.swift; sourceTree = "<group>"; };
@@ -817,6 +821,7 @@
 				99F5C84701529B786312B4FD /* AppGroupTests.swift */,
 				D5F4EFFF4EA0167D686BDF26 /* AppInfoTests.swift */,
 				288443055725713733FD3685 /* ClaudeConnectorTests.swift */,
+				7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */,
 				5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */,
 				3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */,
 				38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */,
@@ -871,6 +876,7 @@
 				9BAD8DAF8E3D43C3CEAC20E8 /* ClaudeConnector.swift */,
 				0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */,
 				06FFD587490C5811840277EC /* ClaudeExport.swift */,
+				02156329220ED375142192B8 /* ClaudeIntegration.swift */,
 				71D7AFD21F170C23857C5C17 /* ClaudeSettings.swift */,
 				9E960BA53B8D648FD669C878 /* ClaudeSetup.swift */,
 				E6772ADFF84022F5FB85F7A8 /* ClaudeToolHandler.swift */,
@@ -1227,6 +1233,7 @@
 				AEC25A82D0A695612C5C7305 /* ClaudeConnector.swift in Sources */,
 				75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */,
 				94381EF98D0CB9624B8BE072 /* ClaudeExport.swift in Sources */,
+				A400CBB35842FB32F63D2714 /* ClaudeIntegration.swift in Sources */,
 				7B84A8B88B5301495E5B236A /* ClaudeSettings.swift in Sources */,
 				7C5FD9C594176DD1969C81EB /* ClaudeSettingsSection.swift in Sources */,
 				1A0B5FD5EBC029B36B56A375 /* ClaudeSetup.swift in Sources */,
@@ -1392,6 +1399,7 @@
 				4C5C4412756C5F3A805276E8 /* AppGroupTests.swift in Sources */,
 				BC738007BD16DA260D7433B6 /* AppInfoTests.swift in Sources */,
 				28501DADE2F939236C1A902B /* ClaudeConnectorTests.swift in Sources */,
+				B489C0EB889A8D0FD6AC644D /* ClaudeGatingTests.swift in Sources */,
 				FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */,
 				20CF31C4714CB5F315804F7A /* CompletionAnimatorTests.swift in Sources */,
 				4A5A32F96EDD564B3FC09DE9 /* CompletionFeedbackTests.swift in Sources */,
