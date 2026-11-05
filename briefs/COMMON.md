@@ -92,6 +92,23 @@ Shared Tasks); the Claude integration is off and hidden by default, its privacy 
 reminder phrases light up only once complete (after a space); `!15m` = 15 minutes from now, `!15mb` = before the due
 time; the Discard question sits inside the card it concerns.
 
+## Round 11 record (2026-11-05; sessions 47–52 merged for 0.7.0 (17))
+Six sessions on George's turn: 47 `highlight-engine` (xhigh), 48 `reminder-language` (xhigh, schema V5), 49
+`extras-claude-polish` (High), 50 `duo-hinge` (xhigh), 51 `shared-tasks` (max), 52 `tips-spotlight-cleanup` (High).
+Mid-round the supervisor added `scripts/window-drive.sh` (George granted Accessibility) and sent it by `SendMessage`;
+47, 48, 49 and 52 then drove their Debug Mac apps for real and found bugs the hosted tests missed (pointer flicker
+from SwiftUI's own cursor handling, box geometry). 50 drove the real fold through Device Hub's AX buttons.
+51 chose a second CloudKit container `iCloud.com.trammells.hitlist.shared` (registered by automatic signing,
+permanent), `CKSyncEngine`, a JSON store per task store, push routing in `SyncAppDelegate`, and an iOS scene delegate
+for share acceptance; off by default. Supervisor follow-ups: Claude `reminder_at` and add_task wording, the
+tips' attach lines, README reminder grammar, reminder/summary taps routed through `IntentRouter` (nothing listened for
+`.openTask`), side-store runs keep their own settings suite (`AppGroup.suiteName(suffix:)`), privacy policy sections,
+`release.sh` drift check over both containers. Lessons: launch a Debug Mac app with `open -g -n --env
+HITLIST_STORE_SUFFIX=… <app> --args -disableCloudKit YES` so it never takes George's keystrokes, then `open <app>`
+to bring it forward for window-drive; check nothing covers the window first. Known open: on the Duo's inner display
+on its side the system bar overlaps the board's last column; a friend accepting a Shared Tasks link is untested
+(George tests with friends on TestFlight).
+
 ## Round 11 ownership
 - `47-highlight-engine` (xhigh): `TokenHighlightField`, new `Views/Popouts/HighlightText/*`, the field's call sites in
   `QuickAddPopout`/`CompactQuickAddCard`, `HighlightAreaTests`, new `HighlightFieldTests`.
