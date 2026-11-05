@@ -201,7 +201,21 @@ minutes from now, `!15mb` = before the due time; a Discard question sits inside 
 quick-add phrases stay in the title as plain text; the Mac board always opens on today. Follow Apple's HIG
 (`briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
-## 8. Where things stand (2026-11-04, after round 10)
+## 8. Where things stand (2026-11-05, after round 11)
+
+Round 11 (briefs 47–52) is merged for 0.7.0 (17): highlights on native text views (Backspace removes a highlight
+first; steady Mac pointer), `!15m` = from now with schema V5 `TaskItem.reminderDate` (George deploys it), Extras and a
+switched-off Claude integration, the iPhone Duo's side tab island and squeaky hinge, the Shared Tasks preview on its
+own container `iCloud.com.trammells.hitlist.shared` (George deploys its schema too; `release.sh` now checks both
+containers), TipKit tips, Spotlight, Mac Settings polish, dead-file cleanup. Supervisor follow-ups: reminder taps open
+their task (`IntentRouter`), side-store Debug runs keep their own settings suite, the launch no longer waits on the
+push service (27.7 s black screen after a cold boot → 2.4 s), and `HITListUITests` (`scripts/test.sh ui`).
+Tools now: `scripts/window-shot.sh` and `scripts/window-drive.sh` (George granted screen recording and
+Accessibility on 2026-11-05) let any session see and drive its own Debug Mac app; XCUITest drives the iPhone app with
+no panel permission. Open items: COMMON's Round 11 record, plus a board card's meta line truncating ("5:38…", "S")
+when a reminder bell joins it, and an intermittent iOS focus-release test (`testFocusFollowsTheOwnerBothWays`).
+
+## 8a. Round 10 state (kept for the record)
 
 Round 10 (briefs 39–46) is merged for 0.6.0 (16), no schema change: the Mac board's inline add card, the profile
 top-left (Mac sidebar, iPhone Browse), Flipboard rightmost again, quick-add polish, account-switch hygiene and sync
@@ -211,7 +225,7 @@ display = tabs, inner = sidebar shell with an editor column). Open items are in 
 Tasks was deferred on purpose: SwiftData has no CloudKit shared-database support, so it means Core Data + CKShare,
 a round of its own. George has not yet invited friends (TestFlight external group, Beta App Review).
 
-## 8a. Round 9 state (kept for the record)
+## 8b. Round 9 state (kept for the record)
 
 Round 9 (briefs 34–38) is merged for 0.5.0 (15): Settings → Account with a synced `Profile` (schema V4, in
 CloudKit Development until George deploys it), the privacy policy on GitHub Pages
