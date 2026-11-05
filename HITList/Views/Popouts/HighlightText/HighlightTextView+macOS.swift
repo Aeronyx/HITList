@@ -6,9 +6,10 @@ import AppKit
 /// the highlight boxes behind the glyphs (`HighlightLayoutManager`), in a borderless scroll view that shows
 /// up to `HighlightTextStyle.maxLines` lines.
 ///
-/// The text view decides its own pointer: the pointing hand over a box and the I-beam elsewhere, from its
-/// cursor rects, `cursorUpdate` and `mouseMoved` alike, so nothing above it fights the I-beam it sets on
-/// every move (what made the old overlay's hand flicker). A click on a box switches it off and leaves the
+/// The text view decides its own pointer: the pointing hand over a box and the I-beam elsewhere, from
+/// `cursorUpdate` and `mouseMoved` alike, with one I-beam cursor rect (no edges at the boxes) and SwiftUI told
+/// the field is text (`.pointerStyle(.horizontalText)` in `TokenHighlightField`), so nothing in the window
+/// fights it (what made the old overlay's hand flicker). A click on a box switches it off and leaves the
 /// caret where it was; a click elsewhere places the caret. Backspace with the caret right after a box
 /// switches the box off and deletes nothing; ⌘Z brings it back. Return (and ⌘Return, ⌥Return, Enter)
 /// confirms; a pasted or dropped line break becomes a space.
@@ -328,31 +329,34 @@ final class HighlightNSTextView: NSTextView {
 
     // MARK: Pointer (brief 47: no flicker)
 
-    /// The pointing hand over every box, the I-beam over the rest of what is visible, never overlapping.
+    /// One I-beam rect over the visible text (the text view's own), and a tooltip over each box. No cursor
+    /// rect edges at the boxes: crossing one sent a cursor update that SwiftUI answered (seen driving the
+    /// Debug app, 2026-11-05), so the hand comes from the moves alone (`mouseMoved`).
     override func resetCursorRects() {
+        super.resetCursorRects()
         removeAllToolTips()
-        let boxes = boxPieces().map { $0.rect.intersection(visibleRect) }.filter { !$0.isEmpty }
-        guard !boxes.isEmpty else { return super.resetCursorRects() }
-        for rect in boxes { addToolTip(rect, owner: self, userData: nil) }
-        for rect in HighlightCursor.rects(visibleRect, excluding: boxes) { addCursorRect(rect, cursor: .iBeam) }
-        for rect in boxes { addCursorRect(rect, cursor: .pointingHand) }
+        for piece in boxPieces() {
+            let rect = piece.rect.intersection(visibleRect)
+            if !rect.isEmpty { addToolTip(rect, owner: self, userData: nil) }
+        }
+    }
+
+    /// The pointer for `point` (this view's coordinates): the hand over a box, the I-beam over the text, set
+    /// here on every cursor update and move rather than left to the text view's own handling.
+    func cursor(at point: NSPoint) -> NSCursor {
+        run(at: point) != nil ? .pointingHand : .iBeam
     }
 
     override func cursorUpdate(with event: NSEvent) {
-        if run(at: convert(event.locationInWindow, from: nil)) != nil {
-            NSCursor.pointingHand.set()
-        } else {
-            super.cursorUpdate(with: event)
-        }
+        cursor(at: convert(event.locationInWindow, from: nil)).set()
     }
 
-    /// The text view sets the I-beam on every move; over a box it does not get the chance.
+    /// The text view sets the I-beam on every move; over a box it does not get the chance, and over the words
+    /// the I-beam is set again after it, whatever else answered.
     override func mouseMoved(with event: NSEvent) {
-        if run(at: convert(event.locationInWindow, from: nil)) != nil {
-            NSCursor.pointingHand.set()
-        } else {
-            super.mouseMoved(with: event)
-        }
+        let cursor = cursor(at: convert(event.locationInWindow, from: nil))
+        if cursor != .pointingHand { super.mouseMoved(with: event) }
+        cursor.set()
     }
 
     /// A click (or a tap on a touch Mac) on a box switches it off; anywhere else it is the text view's.
@@ -387,30 +391,6 @@ final class HighlightScrollView: NSScrollView {
             textView.minSize = NSSize(width: 0, height: size.height)
             textView.sizeToFit()
         }
-    }
-}
-
-/// Splitting the visible text into cursor rects that never overlap (AppKit leaves overlapping rects of one
-/// view undefined): the boxes, and the rest of the visible rect around them.
-enum HighlightCursor {
-    static func rects(_ area: CGRect, excluding holes: [CGRect]) -> [CGRect] {
-        var pieces = [area]
-        for hole in holes {
-            pieces = pieces.flatMap { subtract(hole, from: $0) }
-        }
-        return pieces.filter { $0.width > 0 && $0.height > 0 }
-    }
-
-    /// `rect` minus `hole`: up to four rectangles (above, below, left, right).
-    static func subtract(_ hole: CGRect, from rect: CGRect) -> [CGRect] {
-        let cut = rect.intersection(hole)
-        guard !cut.isNull, cut.width > 0, cut.height > 0 else { return [rect] }
-        var out: [CGRect] = []
-        if cut.minY > rect.minY { out.append(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: cut.minY - rect.minY)) }
-        if cut.maxY < rect.maxY { out.append(CGRect(x: rect.minX, y: cut.maxY, width: rect.width, height: rect.maxY - cut.maxY)) }
-        if cut.minX > rect.minX { out.append(CGRect(x: rect.minX, y: cut.minY, width: cut.minX - rect.minX, height: cut.height)) }
-        if cut.maxX < rect.maxX { out.append(CGRect(x: cut.maxX, y: cut.minY, width: rect.maxX - cut.maxX, height: cut.height)) }
-        return out
     }
 }
 #endif

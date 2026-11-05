@@ -46,6 +46,11 @@ struct TokenHighlightField: View {
         HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: .current(),
                            isFocused: focus.wrappedValue, onFocusChange: { focus.wrappedValue = $0 },
                            onSubmit: onSubmit)
+            #if os(macOS)
+            // SwiftUI sets the pointer over its own views; told nothing, it showed the arrow over the title's
+            // words (2026-11-05). The text view puts the hand over the boxes itself, on every move.
+            .pointerStyle(.horizontalText)
+            #endif
             .focused(focus)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: text) { old, new in
