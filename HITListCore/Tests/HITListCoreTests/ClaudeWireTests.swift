@@ -95,7 +95,7 @@ final class ClaudeWireTests: XCTestCase {
         let result = bridge(send: { _ in .failure(.notFound) }, allowed: false).call("list_tasks", [:])
         XCTAssertTrue(result.isError)
         XCTAssertEqual(result.text, ClaudeWire.accessOffMessage)
-        XCTAssertTrue(result.text.contains("HITList's Claude access is off"))
+        XCTAssertTrue(result.text.contains("Claude integration is off in HITList"))
     }
 
     func testBridgeExplainsTimeoutsAndUnreadableReplies() {

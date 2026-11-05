@@ -3,7 +3,8 @@ import AVFoundation
 import UniformTypeIdentifiers
 import HITListCore
 
-/// Settings for completion feedback: a `HITGroup` for SettingsView's page, `DelightSettingsSection()`.
+/// Settings → Extras (George, 2026-11-05: "Delight" is called "Extras"): completion sound, haptics, holiday
+/// touches and rare surprises, a `HITGroup` for SettingsView's page and the Mac page's Extras section.
 /// The sound row opens a compact list of sounds, each with a ▶ that plays it without choosing it.
 struct DelightSettingsSection: View {
     @AppStorage(CompletionFeedback.hapticsKey, store: AppGroup.defaults) private var haptics = true
@@ -33,7 +34,7 @@ struct DelightSettingsSection: View {
     }
 
     var body: some View {
-        HITGroup("Completing Tasks", footer: footer) {
+        HITGroup("Extras", footer: footer) {
             HITMenuRow("Completion sound", systemImage: "speaker.wave.2", value: sound.displayName,
                        accessory: .expand(isExpanded: showingSounds)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showingSounds.toggle() }

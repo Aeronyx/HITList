@@ -5,7 +5,7 @@ import HITListCore
 import AppKit
 #endif
 
-/// The running app's end of the Claude connector (brief 43), on the Mac only: while "Allow Claude" is on it
+/// The running app's end of the Claude connector (brief 43), on the Mac only: while Claude integration is on it
 /// holds the message port the `hitlist-mcp` helper calls (`ClaudeWire`) and a fresh token beside it in the
 /// app group container; while it is off, neither exists. Every call runs on the main context, through
 /// `TaskActions`, exactly as a tap in the app would; the helper never opens the store.
@@ -21,7 +21,7 @@ final class ClaudeConnector {
     enum Status: Equatable {
         case off
         case listening(port: String)
-        /// "Allow Claude" is on but the port couldn't be opened (another copy of HITList holds it).
+        /// Claude integration is on but the port couldn't be opened (another copy of HITList holds it).
         case failed(String)
     }
 
@@ -36,11 +36,11 @@ final class ClaudeConnector {
         self.settings = settings
     }
 
-    /// Called once at launch (`HITListApp.init`). Opens the port if "Allow Claude" is on. Nothing on iOS,
+    /// Called once at launch (`HITListApp.init`). Opens the port if Claude integration is on. Nothing on iOS,
     /// where Claude's apps can't start a local helper.
     static func start(container: ModelContainer) {
         #if os(macOS)
-        shared.container = container
+        shared.attach(container: container)
         shared.refresh()
         let quit = NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil,
                                                          queue: .main) { _ in
@@ -50,7 +50,12 @@ final class ClaudeConnector {
         #endif
     }
 
-    /// Opens or closes the port to match "Allow Claude". Settings → Claude calls it after the switch moves.
+    /// The store the tools run on; the port opens only once there is one.
+    func attach(container: ModelContainer) {
+        self.container = container
+    }
+
+    /// Opens or closes the port to match the Claude integration switch. Settings → Claude calls it after the switch moves.
     func refresh() {
         #if os(macOS)
         if settings.isAllowed, container != nil {
@@ -102,7 +107,7 @@ final class ClaudeConnector {
         }
         guard let server else {
             try? FileManager.default.removeItem(at: tokenURL)
-            status = .failed("Another copy of HITList is already answering Claude on this Mac. Quit it, then turn Allow Claude off and on.")
+            status = .failed("Another copy of HITList is already answering Claude on this Mac. Quit it, then turn Claude integration off and on.")
             CloudSyncMonitor.shared.write(.note, "Claude connector port busy", level: .error, fields: ["via": "claude"])
             return
         }

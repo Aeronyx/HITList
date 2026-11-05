@@ -8,14 +8,20 @@ permalink: /claude/
 HITList on the Mac can let Claude read and update your tasks: Claude Desktop and Claude Code can list
 tasks with HITList's filters ("today | overdue", "#Work & 7 days"), add tasks with quick-add text
 ("Call the dentist tomorrow 9am p2 #Health"), complete them and change them. You choose which tasks Claude
-sees. Nothing is shared until you turn it on, and Claude can never delete a task.
+sees. It is off until you turn it on, and Claude can never delete a task.
 
-It works while HITList is open on your Mac. On the iPhone and iPad, Settings → Claude has the same privacy
+It works while HITList is open on your Mac. On the iPhone and iPad, turning it on gives you the same privacy
 choice and **Copy for Claude**, which copies the tasks Claude may see as JSON to paste into any chat.
 
-## 1. Choose what Claude sees
+## 1. Turn on Claude integration
 
-In HITList, open **Settings → Claude** (on the Mac: Settings, then **Claude** in the list on the left).
+In HITList, open **Settings → Claude** (on the Mac: Settings, then **Claude** in the list on the left) and
+turn on **Claude integration**. HITList says what Claude will be able to see and do; choose **Turn On**.
+While it is off, nothing on your Mac can reach your tasks through HITList, and Copy for Claude is hidden.
+
+## 2. Choose what Claude sees
+
+Once it is on, Settings → Claude shows the rest:
 
 - **All but @private** (the default): Claude sees every task except those labelled `@private`.
 - **Only @claude**: Claude sees only tasks labelled `@claude`. Tasks Claude adds get the label, so it can
@@ -24,10 +30,6 @@ In HITList, open **Settings → Claude** (on the Mac: Settings, then **Claude** 
 You can rename either label in the row below the choice. A hidden task's subtasks are hidden with it, and a
 Group whose tasks are all hidden is never named to Claude. **Visible now** shows how many open tasks
 Claude can see.
-
-## 2. Allow Claude (Mac)
-
-Turn on **Allow Claude**. While it is off, nothing on your Mac can reach your tasks through HITList.
 
 ## 3a. Connect Claude Desktop
 
@@ -66,8 +68,8 @@ claude mcp add --scope user hitlist -- /Applications/HITList.app/Contents/MacOS/
 - In Settings → Claude, click **Test connection**. "Connected" means Claude can reach HITList.
 - Or in Terminal: `/Applications/HITList.app/Contents/MacOS/hitlist-mcp --check`
 
-If Claude says "HITList isn't running on this Mac", open HITList. If it says "HITList's Claude access is
-off", turn on Allow Claude.
+If Claude says "HITList isn't running on this Mac", open HITList. If it says "Claude integration is off
+in HITList", turn on Claude integration in Settings → Claude.
 
 ## What Claude can do
 
@@ -88,5 +90,5 @@ text.
 HITList itself sends nothing anywhere. The connector is a small program inside HITList.app that Claude
 starts on your Mac; it talks only to HITList on the same Mac and never opens your task database itself.
 What Claude reads is sent to Anthropic as part of your conversation, under your Claude account's terms.
-Tasks you hide are never given to Claude. Turn off Allow Claude, or remove the `hitlist` entry from Claude,
+Tasks you hide are never given to Claude. Turn off Claude integration, or remove the `hitlist` entry from Claude,
 to stop.

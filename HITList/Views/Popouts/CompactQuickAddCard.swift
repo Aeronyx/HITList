@@ -7,13 +7,15 @@ import SwiftUI
 /// chips wrapping onto as many lines as they need, then × and the Confirm pill.
 ///
 /// Confirm adds the task on the column's day and leaves the card open and empty for the next one. Escape, ×
-/// or a click elsewhere on the board closes an empty card; with something typed, "Discard" is offered above
-/// the card first (the iPhone card's rule): Escape or × again discards, a click on the card goes back to typing.
+/// or a click elsewhere on the board closes an empty card; with something typed, the card first asks inside
+/// itself, at its foot ("Discard this task?" · Keep editing · Discard; brief 49, George: "contained within
+/// the 'Add task' card ... instead of popping out above it"): Escape or × again discards, a click on the card
+/// goes back to typing.
 /// One inline card at a time: the board's cards are `PopoutState.Placement.inline` cards keyed by day
 /// (`BoardInlineAdd.key`), and the controller holds at most one quick add.
 struct CompactQuickAddCard: View {
     let context: QuickAddContext
-    /// "Discard" is showing above the card (the board asks after a click elsewhere with something typed).
+    /// The card is asking "Discard this task?" at its foot (after ×, Escape or a click elsewhere with typing).
     var isConfirmingDiscard = false
     var onClose: () -> Void
     var onSaved: () -> Void = {}
@@ -28,24 +30,84 @@ struct CompactQuickAddCard: View {
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
-        VStack(spacing: HITSpacing.s) {
-            if isConfirmingDiscard {
-                DiscardBubble(action: onDiscard)
-                    .transition(.scale(scale: 0.9, anchor: .bottom).combined(with: .opacity))
-            }
+        VStack(spacing: 0) {
             QuickAddPopout(context: context, style: .compact, isPaused: isConfirmingDiscard,
                            onClose: onClose, onSaved: onSaved, onDraftChange: onDraftChange)
-                .background(shape.fill(Theme.surface))
-                // A touch stronger than a task card's hairline: this one is being edited.
-                .overlay(shape.strokeBorder(Theme.secondaryText.opacity(0.45), lineWidth: 1).allowsHitTesting(false))
-                .clipShape(shape)
                 .accessibilityIdentifier("boardQuickAdd")
+            if isConfirmingDiscard {
+                InlineDiscardRow(padding: Self.padding, onKeepEditing: onKeepEditing, onDiscard: onDiscard)
+                    .transition(.opacity)
+            }
         }
+        // The card grows to fit the question; the board's column scrolls if it has to.
+        .background(shape.fill(Theme.surface))
+        // A touch stronger than a task card's hairline: this one is being edited.
+        .overlay(shape.strokeBorder(Theme.secondaryText.opacity(0.45), lineWidth: 1).allowsHitTesting(false))
+        .clipShape(shape)
         // A click anywhere on the card is a click on the card, never a click away (the board listens for
         // those above it, and a child's tap comes first; the fields, chips and buttons still take theirs).
-        // While "Discard" shows it means keep editing.
+        // While the card asks, it means keep editing.
         .contentShape(Rectangle())
         .onTapGesture { if isConfirmingDiscard { onKeepEditing() } }
+    }
+}
+
+/// "Discard this task?" with Keep editing and Discard, as the foot of a Mac or iPad quick-add card (the
+/// board's `CompactQuickAddCard`, a list's `InlineAddRow`), under a hairline, so the question sits inside the
+/// card it is about (HIG: a popover is not for warnings). The iPhone's docked card keeps `DiscardBubble`.
+/// Escape or × on the card again also discards; Keep editing or a click on the card goes back to typing.
+struct InlineDiscardRow: View {
+    /// The card's own inner padding, so the row's edges line up with the title's and the footer's.
+    let padding: CGFloat
+    var onKeepEditing: () -> Void
+    var onDiscard: () -> Void
+
+    static let question = "Discard this task?"
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Theme.separator).frame(height: 1)
+            // Side by side when the card is wide enough (a list's card), the question over the buttons in the
+            // board's 270 pt column.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: HITSpacing.s) {
+                    question
+                    Spacer(minLength: HITSpacing.s)
+                    buttons
+                }
+                VStack(alignment: .leading, spacing: HITSpacing.s) {
+                    question
+                    HStack(spacing: HITSpacing.s) {
+                        Spacer(minLength: 0)
+                        buttons
+                    }
+                }
+            }
+            .padding(.horizontal, padding)
+            .padding(.vertical, HITSpacing.m)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Self.question)
+        .accessibilityIdentifier("quickAddDiscardRow")
+    }
+
+    private var question: some View {
+        Text(Self.question)
+            .font(HITType.body)
+            .foregroundStyle(HITColor.text)
+            .lineLimit(1)
+            .fixedSize()
+    }
+
+    @ViewBuilder
+    private var buttons: some View {
+        Button("Keep editing", action: onKeepEditing)
+            .buttonStyle(HITButtonStyle(.secondary, size: .small))
+            .accessibilityIdentifier("quickAddKeepEditing")
+        Button("Discard", role: .destructive, action: onDiscard)
+            .buttonStyle(HITButtonStyle(.destructive, size: .small))
+            .accessibilityLabel("Discard draft")
+            .accessibilityIdentifier("quickAddDiscard")
     }
 }
 
@@ -71,7 +133,7 @@ enum BoardInlineAdd {
     enum ClickAway: Equatable {
         /// Nothing typed: the card closes and the click does what it would have done.
         case close
-        /// Something typed: "Discard" shows above the card and the click does nothing else.
+        /// Something typed: the card asks "Discard this task?" at its foot and the click does nothing else.
         case askDiscard
         /// "Discard" is already showing: the click is taken as "keep editing" (as on iPhone).
         case keepEditing
@@ -86,7 +148,7 @@ enum BoardInlineAdd {
     enum Close: Equatable {
         /// Nothing typed: the card closes.
         case close
-        /// Something typed: "Discard" shows above the card first (the iPhone card's rule).
+        /// Something typed: the card asks "Discard this task?" first (the iPhone card's rule).
         case askDiscard
         /// "Discard" is already showing: × or Escape again throws the typing away.
         case discard
