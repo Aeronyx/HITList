@@ -50,6 +50,10 @@ struct HighlightTextStyle {
                            tint: HighlightPlatformColor(Theme.accent))
     }
 
+    /// How far a box reaches below its line (its room under the descenders): the field leaves this much under
+    /// its last line so that box is never cut off.
+    var boxOutset: CGFloat { (font.pointSize * HighlightGeometry.boxPadding).rounded(.up) }
+
     /// The attributes every character of the title has.
     var attributes: [NSAttributedString.Key: Any] {
         [.font: font, .foregroundColor: textColor]

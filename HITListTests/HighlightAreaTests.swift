@@ -216,6 +216,47 @@ final class HighlightAreaTests: XCTestCase {
         }
     }
 
+    // MARK: Room around the letters
+
+    /// The supervisor's capture of 0.6.0 (2026-11-05): the Mac card's boxes sat slightly high and "p1" looked
+    /// clipped against its glyphs (a box was the line's typographic height, with about a quarter em of air above
+    /// the capitals and none below the descenders, and exactly as wide as the letters). A box now sits evenly on
+    /// its letters: as much room above the capitals as below the descenders, a little either side, and boxes on
+    /// consecutive lines never touch.
+    func testABoxSitsEvenlyOnItsLettersWithRoomOnEverySide() throws {
+        let text = "Call Sam p1 tom 3pm about the parcel from the market stall p2"
+        let font = HighlightTextStyle.current().font
+        let stack = HighlightTextStack()
+        stack.storage.setAttributedString(NSAttributedString(string: text, attributes: HighlightTextStyle.current().attributes))
+        stack.container.size = CGSize(width: 200, height: CGFloat.greatestFiniteMagnitude)
+        stack.layoutManager.ensureLayout(for: stack.container)
+        let layout = stack.layoutManager
+        let ranges = [(text as NSString).range(of: "p1"), (text as NSString).range(of: "tom 3pm"), (text as NSString).range(of: "p2")]
+        let pieces = HighlightGeometry.pieces(for: ranges, layoutManager: layout, container: stack.container)
+        XCTAssertEqual(pieces.count, 3)
+        for piece in pieces {
+            let range = ranges[piece.run]
+            let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let letters = layout.boundingRect(forGlyphRange: glyphs, in: stack.container)
+            let line = layout.lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)
+            let baseline = line.minY + layout.location(forGlyphAt: glyphs.location).y
+            let above = (baseline - font.capHeight) - piece.rect.minY, below = piece.rect.maxY - (baseline - font.descender)
+            XCTAssertGreaterThan(above, 1, "room above the capitals")
+            XCTAssertGreaterThan(below, 1, "room below the descenders (the p of p1)")
+            XCTAssertEqual(above, below, accuracy: 1, "even: the box is not high on its letters")
+            XCTAssertGreaterThan(letters.minX - piece.rect.minX, 0.5, "room before the first letter")
+            XCTAssertGreaterThan(piece.rect.maxX - letters.maxX, 0.5, "room after the last (the 1 of p1)")
+        }
+        // Consecutive lines: the boxes stay apart.
+        let lines = Set(pieces.map(\.line))
+        XCTAssertGreaterThan(lines.count, 1, "the title wraps at 200 pt")
+        for a in pieces { for b in pieces where b.line == a.line + 1 { XCTAssertLessThanOrEqual(a.rect.maxY, b.rect.minY) } }
+        // How far a box reaches below its line: the field leaves that much under the last line.
+        let last = try XCTUnwrap(pieces.last)
+        let lastLine = layout.lineFragmentRect(forGlyphAt: layout.glyphIndexForCharacter(at: ranges[2].location), effectiveRange: nil)
+        XCTAssertLessThanOrEqual(last.rect.maxY - lastLine.maxY, HighlightTextStyle.current().boxOutset)
+    }
+
     // MARK: Layout
 
     /// The title's TextKit layout of `text` in the field's font at `width` (nil: wide enough for one line), and

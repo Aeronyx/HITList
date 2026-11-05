@@ -80,7 +80,7 @@ struct HighlightTextField: NSViewRepresentable {
         let shown = NSAttributedString(string: current.isEmpty ? text : current, attributes: style.attributes)
         let height = HighlightGeometry.height(of: shown, width: width, maxLines: HighlightTextStyle.maxLines,
                                               lineHeight: style.lineHeight)
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: height + style.boxOutset)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
@@ -147,6 +147,9 @@ final class HighlightNSTextView: NSTextView {
             textColor = newStyle.textColor
             insertionPointColor = newStyle.tint
             typingAttributes = newStyle.attributes
+            // Room under the last line for its boxes, which reach a little below their line: the inset adds it
+            // above and below, and `textContainerOrigin` keeps the text at the top.
+            textContainerInset = NSSize(width: 0, height: newStyle.boxOutset / 2)
             needsDisplay = true
         }
         highlightLayout.cornerRadius = TokenHighlightField.highlightRadius
@@ -184,6 +187,9 @@ final class HighlightNSTextView: NSTextView {
     func composingChanged() {
         highlightLayout.composing = hasMarkedText() ? markedRange() : nil
     }
+
+    /// The text starts at the top: the inset is only room under the last line (`apply(style:)`).
+    override var textContainerOrigin: NSPoint { .zero }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)

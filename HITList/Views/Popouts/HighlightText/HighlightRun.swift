@@ -61,6 +61,10 @@ enum HighlightRules {
 /// Where the boxes are, read from the text view's own TextKit layout: the same layout manager that draws
 /// the glyphs, so a box sits on its words at every width, wrap and scroll position.
 enum HighlightGeometry {
+    /// A box's room around its letters, in ems: above the capitals, below the descenders, and (a little less)
+    /// either side.
+    static let boxPadding: CGFloat = 0.1
+
     /// One line's piece of a box, in text container coordinates. A box that wraps has one piece per line;
     /// each stands for the whole box (a click or tap on any piece switches the box off).
     struct Piece: Equatable {
@@ -71,9 +75,9 @@ enum HighlightGeometry {
         var rect: CGRect
     }
 
-    /// The pieces of `ranges` (UTF-16 ranges of the layout manager's text), in order: per line, from the
-    /// first to the last non-space character of the box on that line (a space at a wrap is not boxed), as
-    /// tall as the line.
+    /// The pieces of `ranges` (UTF-16 ranges of the layout manager's text), in order: per line, around the
+    /// first to the last non-space character of the box on that line (a space at a wrap is not boxed), placed
+    /// on the letters themselves (`boxRect`).
     static func pieces(for ranges: [NSRange], layoutManager: NSLayoutManager, container: NSTextContainer) -> [Piece] {
         guard let storage = layoutManager.textStorage, storage.length > 0, !ranges.isEmpty else { return [] }
         let string = storage.string as NSString
@@ -95,12 +99,39 @@ enum HighlightGeometry {
                 lineChars = trimmed(lineChars, in: string)
                 guard lineChars.length > 0 else { continue }
                 let lineGlyphs = layoutManager.glyphRange(forCharacterRange: lineChars, actualCharacterRange: nil)
-                let bounds = layoutManager.boundingRect(forGlyphRange: lineGlyphs, in: container)
-                let rect = CGRect(x: bounds.minX, y: line.used.minY, width: bounds.width, height: line.used.height)
+                let letters = layoutManager.boundingRect(forGlyphRange: lineGlyphs, in: container)
+                var rect = CGRect(x: letters.minX, y: line.used.minY, width: letters.width, height: line.used.height)
+                if let font = storage.attribute(.font, at: lineChars.location, effectiveRange: nil) as? HighlightPlatformFont {
+                    let fragment = layoutManager.lineFragmentRect(forGlyphAt: lineGlyphs.location, effectiveRange: nil)
+                    let baseline = fragment.minY + layoutManager.location(forGlyphAt: lineGlyphs.location).y
+                    rect = boxRect(letters: letters, baseline: baseline, font: font, lineHeight: line.used.height,
+                                   containerWidth: container.size.width)
+                }
                 pieces.append(Piece(run: index, line: lineIndex, rect: rect))
             }
         }
         return pieces
+    }
+
+    /// One line's box around `letters` (their advance box on that line): from a little above the capitals to
+    /// the descenders, with `boxPadding` em of room above and below (as much under a "p" as over a "T"), a
+    /// little less either side, never taller than a line (boxes on consecutive lines stay apart) and never
+    /// past the text's left or right edge. A box as tall as the line sat high: the line keeps about a quarter
+    /// em of air over the capitals and almost none under the descenders (supervisor, 0.6.0 capture).
+    static func boxRect(letters: CGRect, baseline: CGFloat, font: HighlightPlatformFont, lineHeight: CGFloat,
+                        containerWidth: CGFloat) -> CGRect {
+        let em = font.pointSize
+        // Ascenders (l, d, t) reach a little past the capitals.
+        let inkTop = baseline - font.capHeight - 0.03 * em
+        let inkBottom = baseline - font.descender
+        let pad = min(boxPadding * em, max(0, (lineHeight - 0.25 - (inkBottom - inkTop)) / 2))
+        let side = 0.6 * boxPadding * em
+        var minX = letters.minX - side, maxX = letters.maxX + side
+        if containerWidth > 0, containerWidth < 1_000_000 {
+            minX = max(minX, 0)
+            maxX = min(maxX, containerWidth)
+        }
+        return CGRect(x: minX, y: inkTop - pad, width: maxX - minX, height: inkBottom - inkTop + 2 * pad)
     }
 
     /// The box under `point` (text container coordinates), if any.
