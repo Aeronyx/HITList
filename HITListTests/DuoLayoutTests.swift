@@ -253,4 +253,20 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertEqual(leading.leading, HITSpacing.m)
         XCTAssertEqual(leading.trailing, IslandMetrics.sideInset)
     }
+
+    // MARK: The inner display's board (brief 50)
+
+    func testUpcomingShowsTheBoardOnTheInnerDisplay() {
+        XCTAssertTrue(UpcomingView.showsBoard(idiom: .phone, sizeClass: .regular, shell: .duo))
+        XCTAssertTrue(UpcomingView.showsBoard(idiom: .phone, sizeClass: .compact, shell: .duo),
+                      "whatever size class the inner display reports")
+        XCTAssertFalse(UpcomingView.showsBoard(idiom: .phone, sizeClass: .compact, shell: .tabs),
+                       "the outer display and every other iPhone keep the week list")
+        XCTAssertFalse(UpcomingView.showsBoard(idiom: .phone, sizeClass: .regular, shell: .split),
+                       "a Max on its side keeps the list it had")
+        XCTAssertFalse(UpcomingView.showsBoard(idiom: .phone, sizeClass: .regular, shell: nil))
+        XCTAssertTrue(UpcomingView.showsBoard(idiom: .pad, sizeClass: .regular, shell: .split), "iPad as before")
+        XCTAssertFalse(UpcomingView.showsBoard(idiom: .pad, sizeClass: .compact, shell: .tabs))
+        XCTAssertTrue(UpcomingView.showsBoard(idiom: .mac, sizeClass: nil, shell: .split), "the Mac as before")
+    }
 }
