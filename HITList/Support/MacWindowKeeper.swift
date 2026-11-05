@@ -30,8 +30,6 @@ final class MacWindowKeeper {
     /// The window put away by the last close, until it is shown again.
     private weak var hidden: NSWindow?
 
-    var hasHiddenWindow: Bool { hidden != nil }
-
     func adopt(_ window: NSWindow) {
         if let proxy = window.delegate as? DelegateProxy, proxy.keeper === self { return }
         let proxy = DelegateProxy(keeper: self, original: window.delegate)
