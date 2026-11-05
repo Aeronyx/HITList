@@ -7,12 +7,15 @@ import HITListCore
 
 /// "Preview", a small capsule beside the Shared Tasks name.
 struct SharedPreviewBadge: View {
+    /// Smaller, for the Mac and iPad sidebar row.
+    var compact = false
+
     var body: some View {
         Text("Preview")
             .font(HITType.caption2Semibold)
             .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, compact ? 4 : 6)
+            .padding(.vertical, compact ? 1 : 2)
             .background(Capsule().fill(Theme.accent.opacity(0.15)))
             .accessibilityLabel("Preview")
     }

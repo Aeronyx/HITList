@@ -45,6 +45,8 @@ struct SharedPerson: Identifiable, Equatable {
     var isPending: Bool
     /// Their user record name, for removing them; nil for an invitation not accepted yet.
     var memberID: SharedMemberID?
+    /// The address an invitation went to (owner's view), for withdrawing one nobody accepted.
+    var contact: String? = nil
 }
 
 /// Names and faces: a member's HITList profile where they copied one in (`SharedMember`), else the name iCloud
@@ -67,7 +69,8 @@ enum SharedPeople {
             let profileName = member.map(\.name.value).flatMap(nonEmpty)
             let name = profileName ?? participant?.name.flatMap(nonEmpty) ?? participant?.contact.flatMap(nonEmpty) ?? someone
             people.append(SharedPerson(id: key, name: name, avatar: member?.avatar.value, isOwner: isOwner, isMe: isMe,
-                                       isPending: participant?.status == .pending, memberID: resolvedID))
+                                       isPending: participant?.status == .pending, memberID: resolvedID,
+                                       contact: participant?.contact))
         }
 
         let participants = list.share?.participants ?? []
