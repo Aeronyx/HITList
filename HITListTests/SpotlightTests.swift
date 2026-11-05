@@ -225,9 +225,10 @@ final class SpotlightTests: XCTestCase {
         XCTAssertTrue(description.contains("Home"), description)
         XCTAssertTrue(description.contains(due.formatted(date: .abbreviated, time: .shortened)),
                       "a fixed date, never “Tomorrow”, which would go stale in the index: \(description)")
-        XCTAssertTrue(description.contains("Ask about Sunday"))
+        XCTAssertTrue(description.hasSuffix(" — Ask about Sunday"), "the notes follow the date and Group: \(description)")
+        XCTAssertFalse(description.contains("\n"), "Spotlight runs lines together")
         XCTAssertEqual(set.keywords, ["family", "Home"])
-        XCTAssertEqual(set.dueDate, due)
+        XCTAssertNil(set.dueDate, "Spotlight would add “Today, 12:00 AM” under an all-day task; the date is in the description")
     }
 
     func testOpeningAResultAsksTheShellToOpenTheTask() async throws {

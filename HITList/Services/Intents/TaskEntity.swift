@@ -40,14 +40,16 @@ struct TaskEntity: AppEntity {
     }
 
     /// The task as Spotlight shows it (brief 52). The date is fixed ("Nov 6, 2026 at 5:00 PM"), never
-    /// "Tomorrow", which would go stale in the index; the notes follow on the next line.
+    /// "Tomorrow", which would go stale in the index; the notes follow after a dash.
     init(spotlight task: TaskItem) {
         let due = task.dueDate.map { $0.formatted(date: .abbreviated, time: task.hasDueTime ? .shortened : .omitted) }
         let line = [due, task.project?.name].compactMap { $0 }.joined(separator: " · ")
         let notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
                   detail: line.isEmpty ? nil : line)
-        let description = [line, notes].filter { !$0.isEmpty }.joined(separator: "\n")
+        // One line: Spotlight runs lines together ("Home Ask about Sunday").
+        let description = [line, notes.replacingOccurrences(of: "\n", with: " ")].filter { !$0.isEmpty }
+            .joined(separator: " — ")
         spotlightDescription = description.isEmpty ? nil : description
         spotlightKeywords = task.labelList.map(\.name) + [task.project?.name].compactMap { $0 }
     }
@@ -68,7 +70,7 @@ extension TaskEntity: IndexedEntity {
         set.displayName = title
         set.contentDescription = spotlightDescription ?? detail
         set.keywords = spotlightKeywords.isEmpty ? nil : spotlightKeywords
-        set.dueDate = dueDate
+        // No `dueDate`: Spotlight adds it as a line of its own, "Today, 12:00 AM" for an all-day task.
         return set
     }
 }
