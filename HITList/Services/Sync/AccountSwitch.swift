@@ -16,7 +16,7 @@ import OSLog
 /// - The open card and the undo toast on screen: `Notification.Name.accountDidSwitch` is posted for the
 ///   views that hold them.
 ///
-/// There is no Spotlight index, widget or other cache of task data on the device (checked for 0.6.0).
+/// - Spotlight's index of tasks (`SpotlightSync`, 0.7.0): emptied; the next refresh indexes the new account's.
 ///
 /// A sign-out alone clears the reminders and the badge (their tasks were purged with the account); the
 /// draft and the backups wait, since the same person usually signs back in.
@@ -41,6 +41,7 @@ enum AccountSwitch {
                 forgetCaches: {
                     CloudSyncMonitor.shared.forgetLastSync(reason: "iCloud account changed")
                     ProfileAvatarCache.shared.removeAll()
+                    Task { await SpotlightSync.shared.clearForAccountChange() }
                 })
         }
     }

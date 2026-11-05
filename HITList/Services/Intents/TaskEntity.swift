@@ -1,4 +1,5 @@
 import AppIntents
+import CoreSpotlight
 import Foundation
 import SwiftData
 import HITListCore
@@ -21,6 +22,10 @@ struct TaskEntity: AppEntity {
 
     /// "Tomorrow 17:00 · Home", under the title in Shortcuts' pickers.
     let detail: String?
+    /// Spotlight only (`init(spotlight:)`): the line under the title, with a fixed date, and the words
+    /// it also matches (labels, the Group).
+    var spotlightDescription: String?
+    var spotlightKeywords: [String] = []
 
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(title: "\(title)", subtitle: detail.map { "\($0)" })
@@ -34,11 +39,62 @@ struct TaskEntity: AppEntity {
         self.group = group
     }
 
+    /// The task as Spotlight shows it (brief 52). The date is fixed ("Nov 6, 2026 at 5:00 PM"), never
+    /// "Tomorrow", which would go stale in the index; the notes follow after a dash.
+    init(spotlight task: TaskItem) {
+        let due = task.dueDate.map { $0.formatted(date: .abbreviated, time: task.hasDueTime ? .shortened : .omitted) }
+        let line = [due, task.project?.name].compactMap { $0 }.joined(separator: " · ")
+        let notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
+                  detail: line.isEmpty ? nil : line)
+        // One line: Spotlight runs lines together ("Home Ask about Sunday").
+        let description = [line, notes.replacingOccurrences(of: "\n", with: " ")].filter { !$0.isEmpty }
+            .joined(separator: " — ")
+        spotlightDescription = description.isEmpty ? nil : description
+        spotlightKeywords = task.labelList.map(\.name) + [task.project?.name].compactMap { $0 }
+    }
+
     init(_ task: TaskItem, now: Date = Date()) {
         let due = task.dueDate.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) }
         let parts = [due, task.project?.name].compactMap { $0 }
         self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
                   detail: parts.isEmpty ? nil : parts.joined(separator: " · "))
+    }
+}
+
+/// Open tasks in Spotlight (`SpotlightSync` indexes them; tapping one runs `OpenTaskIntent`).
+extension TaskEntity: IndexedEntity {
+    var attributeSet: CSSearchableItemAttributeSet {
+        let set = defaultAttributeSet
+        set.title = title
+        set.displayName = title
+        set.contentDescription = spotlightDescription ?? detail
+        set.keywords = spotlightKeywords.isEmpty ? nil : spotlightKeywords
+        // No `dueDate`: Spotlight adds it as a line of its own, "Today, 12:00 AM" for an all-day task.
+        return set
+    }
+}
+
+/// "Open Task": brings HITList forward with the task in its editor. Spotlight runs it when a task result
+/// is tapped; Shortcuts offers it too.
+struct OpenTaskIntent: OpenIntent {
+    static let title: LocalizedStringResource = "Open Task"
+    static let description: IntentDescription? = IntentDescription("Opens a task in HITList.", categoryName: "Tasks")
+    static let openAppWhenRun = true
+
+    @Parameter(title: "Task")
+    var target: TaskEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Open \(\.$target)")
+    }
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        IntentRouter.shared.open(task: target.id)
+        return .result()
     }
 }
 
@@ -121,7 +177,7 @@ extension IntentActions {
 
     static let suggestionLimit = 100
 
-    private static func openTopLevelTasks(in context: ModelContext) throws -> [TaskItem] {
+    static func openTopLevelTasks(in context: ModelContext) throws -> [TaskItem] {
         try context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted })).filter { !$0.isSubtask }
     }
 }

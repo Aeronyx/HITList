@@ -23,7 +23,4 @@ public enum Priority: Int, Codable, CaseIterable, Sendable, Hashable {
     }
 
     public var shortName: String { "P\(rawValue)" }
-
-    /// True when this priority is more urgent than `other`.
-    public func isMoreUrgent(than other: Priority) -> Bool { rawValue < other.rawValue }
 }

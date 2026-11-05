@@ -62,6 +62,27 @@ final class MacSettingsTests: XCTestCase {
         XCTAssertNil(MacSettingsSectionList.moved(.about, by: 1))
     }
 
+    /// HIG (Settings, macOS): the window title names the visible pane, and Settings reopens on the last one.
+    func testWindowTitleNamesTheVisiblePane() throws {
+        for section in MacSettingsSection.allCases {
+            XCTAssertEqual(MacSettingsPage.windowTitle(for: section), section.title)
+        }
+        let suite = "MacSettingsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = SettingsRouter(defaults: defaults)
+        router.open(at: .reminders)
+        router.close()
+        router.open()
+        XCTAssertEqual(MacSettingsPage.windowTitle(for: MacSettingsSection.load(from: defaults)), "Reminders",
+                       "a plain open (⌘,) comes back to the pane last shown")
+    }
+
+    func testOpenSettingsLaunchArgumentOnlyOpensThePage() {
+        XCTAssertFalse(SettingsRouter.opensAtLaunch(arguments: ["HITList"]))
+        XCTAssertTrue(SettingsRouter.opensAtLaunch(arguments: ["HITList", "-openSettings"]))
+    }
+
     func testRouterCountsEveryOpenRequest() {
         let router = SettingsRouter()
         XCTAssertEqual(router.openRequests, 0)

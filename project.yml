@@ -24,19 +24,11 @@ targets:
         excludes:
           # Markdown under HITList/ (e.g. Support/DesignSystem/README.md) is documentation, not a resource.
           - "**/*.md"
-          # Fonts: only six Inter 18 pt static cuts ship (Light, Regular, Medium, SemiBold, Bold, ExtraBold;
-          # see HITFont in HITTokens.swift). iOS resolves a variable font's named weights only for the default
-          # instance, so the static cuts are what both platforms load by PostScript name. The variable files,
-          # the other cuts, Noto Sans and the READMEs stay in the repo, out of the bundle.
-          - "Resources/Fonts/Noto_Sans/**"
-          - "Resources/Fonts/Inter/*VariableFont*"
-          - "Resources/Fonts/Inter/README.txt"
-          - "Resources/Fonts/Inter/static/Inter_24pt-*"
-          - "Resources/Fonts/Inter/static/Inter_28pt-*"
-          - "Resources/Fonts/Inter/static/Inter_18pt-*Italic*"
-          - "Resources/Fonts/Inter/static/Inter_18pt-Thin.ttf"
-          - "Resources/Fonts/Inter/static/Inter_18pt-ExtraLight.ttf"
-          - "Resources/Fonts/Inter/static/Inter_18pt-Black.ttf"
+          # Fonts: the repo holds only the six Inter 18 pt static cuts that ship (Light, Regular, Medium,
+          # SemiBold, Bold, ExtraBold; see HITFont in HITTokens.swift) and Inter's licence. iOS resolves a
+          # variable font's named weights only for the default instance, so the static cuts are what both
+          # platforms load by PostScript name. The variable files, the other cuts and Noto Sans, never in the
+          # bundle, left the repo in 0.7.0 (git history has them: fonts.google.com/specimen/Inter).
           - "**/.DS_Store"
     scheme:
       testTargets: [HITListTests]
