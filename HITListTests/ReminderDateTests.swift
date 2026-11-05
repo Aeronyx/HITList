@@ -65,6 +65,138 @@ final class ReminderDateTests: XCTestCase {
         XCTAssertEqual(draft.result(p).title, "Call")
     }
 
+    // MARK: The Reminder chip and card (item 5)
+
+    private func clock(_ date: Date) -> String { date.formatted(date: .omitted, time: .shortened) }
+
+    func testTheChipReadsInFifteenMinutesWithItsTime() {
+        let p = parser()
+        let chips = QuickAddDraft(context: .inbox, text: "Call mom !15m ").chips(p)
+        XCTAssertEqual(chips.reminderDate, minutes(15))
+        XCTAssertEqual(chips.reminderFromNow, ReminderSpan(minutes: 15))
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil, reminderDate: chips.reminderDate,
+                                              fromNow: chips.reminderFromNow, now: now, calendar: calendar),
+                       "In 15 min · " + clock(minutes(15)))
+        let typing = QuickAddDraft(context: .inbox, text: "Call mom !15m").chips(p)
+        XCTAssertNil(typing.reminderDate, "nothing on the chip while it is typed")
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil, reminderDate: typing.reminderDate,
+                                              fromNow: typing.reminderFromNow, now: now, calendar: calendar), "Reminder")
+    }
+
+    func testTheChipKeepsTheTaskTimeFirst() {
+        let p = parser()
+        let chips = QuickAddDraft(context: .inbox, text: "Call mom 5pm !1hb !15m ").chips(p)
+        XCTAssertEqual(ReminderChipText.title(time: chips.dueDate, offsetMinutes: chips.reminderOffsetMinutes,
+                                              reminderDate: chips.reminderDate, fromNow: chips.reminderFromNow,
+                                              now: now, calendar: calendar),
+                       clock(at(17)) + " · 1 hour before · in 15 min")
+    }
+
+    /// A moment with no typed span (picked "Later today…", or a saved task in the editor) reads "Remind 4:30 PM";
+    /// one on another day names the day.
+    func testAMomentOfItsOwnReadsRemindAt() {
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil, reminderDate: at(16, 30), now: now, calendar: calendar),
+                       "Remind " + clock(at(16, 30)))
+        XCTAssertEqual(ReminderChipText.title(time: nil, offsetMinutes: nil, reminderDate: at(9, day: 1), now: now, calendar: calendar),
+                       "Remind " + DueFormatter.text(for: at(9, day: 1), hasTime: true, now: now, calendar: calendar))
+        XCTAssertEqual(ReminderChipText.title(time: at(17), offsetMinutes: nil, reminderDate: at(16, 30), now: now, calendar: calendar),
+                       clock(at(17)) + " · remind " + clock(at(16, 30)))
+        XCTAssertEqual(ReminderChipText.title(time: at(17), offsetMinutes: nil), clock(at(17)), "as before without one")
+    }
+
+    func testTheFromNowChoicesWriteTheirTokens() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call mom")
+        draft.setReminderMoment(.span(ReminderSpan(minutes: 15)), p)
+        XCTAssertEqual(draft.text, "Call mom !15m ")
+        XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
+        XCTAssertEqual(draft.result(p).title, "Call mom")
+        draft.setReminderMoment(.span(ReminderSpan(minutes: 60)), p)
+        XCTAssertEqual(draft.text, "Call mom !1h ", "replaces the typed one")
+        XCTAssertEqual(draft.chips(p).reminderDate, minutes(60))
+        draft.setReminderMoment(nil, p)
+        XCTAssertEqual(draft.text, "Call mom ")
+        XCTAssertNil(draft.result(p).reminderDate)
+        XCTAssertEqual(ReminderPickerCard.fromNowPresets, [ReminderSpan(minutes: 15), ReminderSpan(minutes: 60)])
+    }
+
+    /// "Later today…" picks a clock time: no token (it would drift as the minutes pass), the moment waits on the
+    /// card, survives a kill with the card, and a "!" phrase typed afterwards wins over it.
+    func testLaterTodayWaitsOnTheCardWithoutAToken() throws {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call mom")
+        draft.setReminderMoment(.at(at(16, 30)), p)
+        XCTAssertEqual(draft.text, "Call mom", "nothing written")
+        XCTAssertEqual(draft.chips(p).reminderDate, at(16, 30))
+        XCTAssertNil(draft.chips(p).reminderFromNow)
+        XCTAssertEqual(draft.result(p).reminderDate, at(16, 30))
+
+        let suite = "ReminderDateTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let card = UUID()
+        QuickAddDraftStore.save(draft, card: card, to: defaults)
+        XCTAssertEqual(try XCTUnwrap(QuickAddDraftStore.draft(for: card, from: defaults)), draft)
+
+        draft.text = "Call mom !15m "
+        XCTAssertEqual(draft.result(p).reminderDate, minutes(15), "typed wins")
+        draft.setReminderMoment(.at(at(18)), p)
+        XCTAssertEqual(draft.text, "Call mom ", "picking takes the typed one out")
+        XCTAssertEqual(draft.result(p).reminderDate, at(18))
+        draft.setReminderMoment(nil, p)
+        XCTAssertNil(draft.result(p).reminderDate)
+        XCTAssertNil(draft.chips(p).reminderDate)
+    }
+
+    func testABeforeOffsetChipLeavesAFromNowReminderAlone() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call 5pm !15m")
+        draft.setReminderOffset(60, p)
+        XCTAssertEqual(draft.text, "Call 5pm !15m !1hb ")
+        XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
+        draft.setReminderOffset(nil, p)
+        XCTAssertEqual(draft.text, "Call 5pm !15m ")
+        draft.setReminderOffset(30, p)
+        draft.clearTime(p)
+        XCTAssertEqual(draft.text, "Call !15m ", "the time and its offset go; the from-now reminder stays")
+        XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 30, "the offset waits on the chip, as before")
+    }
+
+    func testAFromNowChoiceLeavesABeforeOffsetAlone() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .inbox, text: "Call 5pm !1hb")
+        draft.setReminderMoment(.span(ReminderSpan(minutes: 15)), p)
+        XCTAssertEqual(draft.text, "Call 5pm !1hb !15m ")
+        XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
+        XCTAssertEqual(draft.result(p).reminderDate, minutes(15))
+    }
+
+    func testLaterTodayIsTheNextTimeOfDay() {
+        XCTAssertEqual(ReminderPickerCard.laterToday(PickerTime(hour: 16, minute: 30), now: now, calendar: calendar), at(16, 30))
+        XCTAssertEqual(ReminderPickerCard.laterToday(PickerTime(hour: 9, minute: 0), now: now, calendar: calendar), at(9, day: 1),
+                       "a time already gone today is tomorrow's")
+    }
+
+    // MARK: The task row's bell (item 5)
+
+    func testTheRowShowsABellWithTheTimeOfAComingReminder() {
+        let task = TaskItem(title: "Call mom")
+        XCTAssertNil(TaskRow.reminderText(for: task, now: now))
+        XCTAssertFalse(TaskRow.hasMeta(task, hidesDay: false, showProject: false, now: now))
+        task.reminderDate = minutes(15)
+        XCTAssertEqual(TaskRow.reminderText(for: task, now: now), clock(minutes(15)))
+        XCTAssertTrue(TaskRow.hasMeta(task, hidesDay: false, showProject: false, now: now), "an undated task shows its bell")
+        task.reminderDate = at(9, day: 1)
+        XCTAssertEqual(TaskRow.reminderText(for: task, now: now), DueFormatter.text(for: at(9, day: 1), hasTime: true, now: now, calendar: calendar))
+        task.reminderDate = minutes(-1)
+        XCTAssertNil(TaskRow.reminderText(for: task, now: now), "gone off already")
+        task.reminderDate = minutes(15)
+        task.isCompleted = true
+        XCTAssertNil(TaskRow.reminderText(for: task, now: now), "a done task has nothing coming")
+    }
+
     // MARK: Notifications (item 4)
 
     private func item(_ title: String = "Call mom", id: UUID = UUID(), due: Date? = nil, timed: Bool = false,

@@ -18,6 +18,10 @@ struct QuickAddChips: Equatable {
     var reminderOffsetMinutes: Int?
     var deadline: Date?
     var locationName: String?
+    /// The task's own reminder moment (brief 48): typed ("!15m", then `reminderFromNow` is its span) or picked
+    /// on the card ("Later today…").
+    var reminderDate: Date?
+    var reminderFromNow: ReminderSpan?
 }
 
 /// The quick-add card's text and the choices typed text can't hold, kept in step both ways like
@@ -57,6 +61,10 @@ struct QuickAddDraft: Equatable, Codable {
     /// once a time is typed or picked, never written into the title as "!15mb" (that would be plain text
     /// until a time arrives). Nil when nothing is waiting; a reminder typed beside a time wins over it.
     private(set) var pendingReminderMinutes: Int?
+    /// The Reminder card's "Later today…" moment (brief 48): no text token (a "!2h13m" written for it would
+    /// drift as the minutes pass), kept here until the task is added. A "from now" phrase typed in the text wins
+    /// over it. Optional on disk like the rest: a card stored by 0.6.0 has none.
+    private(set) var pickedReminderDate: Date?
     /// Tokens switched off by tapping their highlight (brief 28), each where it sits in the text (brief 41):
     /// their words stay plain title text; the same words typed elsewhere are read as usual. Kept optional on
     /// disk like the sub-task lines (a card stored by 0.5.0 kept keys only; its switched-off words light up
@@ -181,7 +189,9 @@ struct QuickAddDraft: Equatable, Codable {
             // A reminder picked before a time shows what was picked; it counts once a time is set.
             reminderOffsetMinutes: result.reminderOffsetMinutes ?? pendingReminderMinutes,
             deadline: result.deadline,
-            locationName: result.locationName)
+            locationName: result.locationName,
+            reminderDate: result.reminderDate,
+            reminderFromNow: result.reminderFromNow)
     }
 
     /// The task to create (Confirm): the text read as complete (`.final`), with the list's defaults wherever
@@ -219,6 +229,8 @@ struct QuickAddDraft: Equatable, Codable {
         if result.reminderOffsetMinutes == nil, result.hasDueTime, let pendingReminderMinutes {
             result.reminderOffsetMinutes = pendingReminderMinutes
         }
+        // The card's "Later today…" moment, unless a "from now" phrase is typed.
+        if result.reminderDate == nil, let pickedReminderDate { result.reminderDate = pickedReminderDate }
         result.deadline = deadline
         result.locationName = trimmedLocation
         result.title = result.title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -256,7 +268,8 @@ struct QuickAddDraft: Equatable, Codable {
     /// task has a time nothing is written: the offset waits on the chip (`pendingReminderMinutes`) and counts
     /// once a time is set (brief 41).
     mutating func setReminderOffset(_ minutes: Int?, _ parser: QuickAddParser) {
-        text = removing([.reminder], parser)
+        // Only the "before" phrases: a "from now" one ("!15m") is a reminder of its own (brief 48).
+        text = Self.removing(reminderTokens(beforeDue: true, parser), from: text)
         pendingReminderMinutes = nil
         guard let minutes, minutes > 0 else { return }
         if parsed(parser, .final).hasDueTime {
@@ -269,10 +282,30 @@ struct QuickAddDraft: Equatable, Codable {
     /// The time is going: a reminder written beside it would be left as plain "!15mb" in the title, so it
     /// comes out of the text and its offset waits on the chip instead.
     private mutating func holdReminderForLater(_ parser: QuickAddParser) {
-        let parsed = parsed(parser, .final)
-        guard let offset = parsed.reminderOffsetMinutes else { return }
-        text = Self.removing(parsed.tokens.filter { $0.kind == .reminder }, from: text)
+        guard let offset = parsed(parser, .final).reminderOffsetMinutes else { return }
+        text = Self.removing(reminderTokens(beforeDue: true, parser), from: text)
         pendingReminderMinutes = offset > 0 ? offset : nil
+    }
+
+    /// The Reminder card's "from now" choices (brief 48): a span writes its token ("!15m", "!1h") in place of a
+    /// typed one; a picked moment ("Later today…") writes nothing and waits here; nil removes both. A reminder
+    /// before the due time is left as it is.
+    mutating func setReminderMoment(_ pick: ReminderMomentPick?, _ parser: QuickAddParser) {
+        text = Self.removing(reminderTokens(beforeDue: false, parser), from: text)
+        pickedReminderDate = nil
+        switch pick {
+        case .span(let span)?: append(span.token)
+        case .at(let date)?: pickedReminderDate = date
+        case nil: break
+        }
+    }
+
+    /// The text's reminder phrases of one kind, superseded ones included: "before the due time" (`!15mb`,
+    /// `!at`) or "from now" (`!15m`).
+    private func reminderTokens(beforeDue: Bool, _ parser: QuickAddParser) -> [QuickAddToken] {
+        parsed(parser, .final).tokens.filter {
+            $0.kind == .reminder && ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue
+        }
     }
 
     mutating func setPriority(_ priority: Priority, _ parser: QuickAddParser) {

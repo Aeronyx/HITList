@@ -329,11 +329,16 @@ struct QuickAddPopout: View {
             .accessibilityIdentifier("quickAddPriorityChip")
     }
 
+    /// The task's time and its reminders: "5:00 PM · 15 min before", "In 15 min · 3:47 PM" (brief 48: "!15m",
+    /// a reminder of its own, dated or not).
     private func reminderChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes)
-        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
-                       tint: chips.hasDueTime ? Theme.accent : Theme.secondaryText,
-                       isSelected: chips.hasDueTime, size: .compact, action: { openChip = .reminder })
+        let set = chips.hasDueTime || chips.reminderDate != nil
+        let title = ReminderChipText.title(time: chips.hasDueTime ? chips.dueDate : nil, offsetMinutes: chips.reminderOffsetMinutes,
+                                           reminderDate: chips.reminderDate, fromNow: chips.reminderFromNow,
+                                           now: parser.dateParser.now)
+        return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 || chips.reminderDate != nil ? "bell.badge" : "alarm",
+                       tint: set ? Theme.accent : Theme.secondaryText,
+                       isSelected: set, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: chips.dueDate, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil,
                                    offsetMinutes: chips.reminderOffsetMinutes, now: parser.dateParser.now,
@@ -348,11 +353,17 @@ struct QuickAddPopout: View {
                                    }, onClear: {
                                        draft.clearTime(parser)
                                        draft.setReminderOffset(nil, parser)
+                                       draft.setReminderMoment(nil, parser)
                                        done()
                                    }, onOffset: { minutes in
                                        draft.setReminderOffset(minutes, parser)
+                                   }, reminderDate: chips.reminderDate, fromNow: chips.reminderFromNow,
+                                   onMoment: { pick in
+                                       draft.setReminderMoment(pick, parser)
+                                       if pick != nil { done() }
                                    })
             }
+            .accessibilityLabel("Reminder: \(title)")
             .accessibilityIdentifier("quickAddReminderChip")
     }
 
