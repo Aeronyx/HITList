@@ -7,7 +7,8 @@ import UIKit
 #endif
 
 /// Schedules a local notification for each upcoming timed task, at its due time or its reminder offset
-/// before it ("!15mb": "in 15 min · Haircut"; see `NotificationPlan`), and keeps the pending
+/// before it ("!15mb": "in 15 min · Haircut"; see `NotificationPlan`), and one more at a task's own reminder
+/// moment, dated or not ("!15m", `TaskItem.reminderDate`, brief 48), and keeps the pending
 /// set current when anything is saved here, tasks arrive from another device, the clock or time zone
 /// changes, or the day rolls over (`triggers`).
 enum NotificationScheduler {
@@ -208,6 +209,8 @@ enum NotificationScheduler {
 
     static let fingerprintKey = "fingerprint"
     static let dueKey = "due"
+    /// userInfo key of a "from now" reminder (`NotificationPlan.Request.Kind.reminder`): the moment it was for.
+    static let reminderKey = "remindAt"
     /// `NotificationPlan.ledgerKey`s of reminders this device has scheduled, so a late one never repeats.
     static let ledgerKey = "notifications.scheduledKeys"
     @MainActor private static var loggedDenied = false
@@ -221,19 +224,21 @@ enum NotificationScheduler {
         let badgeOn = Preferences.isBadgeOn
 
         // Every open dated task: the badge and the morning summary count untimed ones too; reminders
-        // need a time. Nothing is fetched when all three are off (as before this setting existed).
-        var dated: [NotificationPlan.Item] = []
+        // need a time, or a reminder moment of their own ("!15m", dated or not). Nothing is fetched when all
+        // three are off (as before this setting existed).
+        var open: [NotificationPlan.Item] = []
         if isEnabled || summaryOn || badgeOn {
             let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-                task.isCompleted == false && task.dueDate != nil
+                task.isCompleted == false && (task.dueDate != nil || task.reminderDate != nil)
             })
             do {
-                dated = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+                open = try context.fetch(descriptor).map(NotificationPlan.Item.init)
             } catch {
                 log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
                 return
             }
         }
+        let dated = open.filter { $0.dueDate != nil }
         await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: dated, now: now, calendar: calendar) : 0)
 
         // Settings' test notification is not the plan's to manage.
@@ -259,6 +264,9 @@ enum NotificationScheduler {
 
         let defaultOffset = Preferences.defaultReminderOffset
         let items = dated.filter(\.hasDueTime).map { $0.withDefaultOffset(defaultOffset) }
+        // What the plan reads: the timed tasks, and every task with a reminder moment of its own.
+        let planned = open.filter { ($0.hasDueTime && $0.dueDate != nil) || $0.reminderDate != nil }
+            .map { $0.withDefaultOffset(defaultOffset) }
         // No ledger yet (first run of this build): count tasks that just became due as announced, so
         // upgrading doesn't re-announce reminders build 1 already delivered.
         var ledger = AppGroup.defaults.stringArray(forKey: ledgerKey).map(Set.init) ?? Set(items.compactMap { item in
@@ -268,7 +276,7 @@ enum NotificationScheduler {
         })
         // `items` already carry the default offset (the ledger seed above needs it too).
         var plan = isEnabled
-            ? NotificationPlan.make(tasks: items, now: now, alreadyScheduled: ledger, calendar: calendar)
+            ? NotificationPlan.make(tasks: planned, now: now, alreadyScheduled: ledger, calendar: calendar)
             : NotificationPlan(requests: [], droppedCount: 0)
         // One more request at most (61 + 1 stays under the system's 64), its text computed now.
         let summary = summaryOn
@@ -298,10 +306,12 @@ enum NotificationScheduler {
         AppGroup.defaults.set(NotificationPlan.prunedLedger(ledger, now: now).sorted(), forKey: ledgerKey)
 
         let delivered = await center.deliveredNotifications().map { note in
-            (identifier: note.request.identifier,
-             dueDate: (note.request.content.userInfo[dueKey] as? Double).map(Date.init(timeIntervalSince1970:)))
+            let info = note.request.content.userInfo
+            return NotificationPlan.Delivered(identifier: note.request.identifier,
+                                              dueDate: (info[dueKey] as? Double).map(Date.init(timeIntervalSince1970:)),
+                                              reminderDate: (info[reminderKey] as? Double).map(Date.init(timeIntervalSince1970:)))
         }
-        let stale = NotificationPlan.staleDelivered(delivered, tasks: items)
+        let stale = NotificationPlan.staleDelivered(delivered, tasks: planned)
         if !stale.isEmpty { center.removeDeliveredNotifications(withIdentifiers: stale) }
 
         let overdue = diff.add.filter { $0.kind == .overdue }.count
@@ -379,6 +389,7 @@ enum NotificationScheduler {
             content.categoryIdentifier = NotificationResponder.summaryCategoryIdentifier
         }
         if let due = request.dueDate { userInfo[dueKey] = due.timeIntervalSince1970 }
+        if request.kind == .reminder, let at = request.reminderDate { userInfo[reminderKey] = at.timeIntervalSince1970 }
         content.userInfo = userInfo
         let trigger = request.triggerDate <= now ? nil : calendarTrigger(for: request.triggerDate, calendar: calendar)
         return UNNotificationRequest(identifier: request.identifier, content: content, trigger: trigger)

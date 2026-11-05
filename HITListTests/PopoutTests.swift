@@ -495,7 +495,9 @@ final class PopoutTests: XCTestCase {
         var cleared = QuickAddDraft(context: .project(name: "Work"), text: "Plan offsite")
         cleared.setProject(nil, p)
         let drafts = [switchedOff, cleared,
-                      QuickAddDraft(context: .day(day(3)), text: "Dentist 9am !15mb"),
+                      // Finished with a space: a "!" phrase still being typed is what the card shows apart from
+                      // what Confirm saves (brief 48, `ReminderDateTests`).
+                      QuickAddDraft(context: .day(day(3)), text: "Dentist 9am !15mb "),
                       QuickAddDraft(context: .label(name: "calls"), text: "Ring the bank tomorrow"),
                       QuickAddDraft(context: .inbox, text: "  ")]
         for draft in drafts {
@@ -590,7 +592,8 @@ final class PopoutTests: XCTestCase {
 
     func testTypedReminderOffsetFillsTheReminderChip() {
         let p = parser()
-        let draft = QuickAddDraft(context: .today, text: "Haircut tom 11am p1 !15mb")
+        // The space after "!15mb" finishes it (brief 48).
+        let draft = QuickAddDraft(context: .today, text: "Haircut tom 11am p1 !15mb ")
         let chips = draft.chips(p)
         let eleven = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: day(1))!
         XCTAssertEqual(draft.result(p).title, "Haircut")
@@ -1247,7 +1250,7 @@ final class PopoutTests: XCTestCase {
         let p = parser()
         var draft = QuickAddDraft(context: .inbox, text: "Call")
         draft.setReminderOffset(15, p)
-        draft.text = "Call 3pm !1hb"
+        draft.text = "Call 3pm !1hb "
         XCTAssertEqual(draft.result(p).reminderOffsetMinutes, 60)
         XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 60)
     }

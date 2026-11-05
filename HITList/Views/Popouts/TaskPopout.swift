@@ -378,15 +378,21 @@ struct TaskPopout: View {
             }
     }
 
+    /// The task's time and its reminders, its own reminder moment included while it is still to come
+    /// ("Remind 3:47 PM", brief 48); the card sets, moves or removes it.
     private var reminderPill: some View {
         let due = task.dueDate
-        return HITChip(ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes),
-                       systemImage: (task.reminderOffsetMinutes ?? 0) > 0 ? "bell.badge" : "alarm",
-                       tint: timeParts == nil ? Theme.secondaryText : Theme.accent,
-                       isSelected: timeParts != nil, size: .compact, action: { openChip = .reminder })
+        let now = Date()
+        let moment = task.reminderDate.flatMap { $0 > now ? $0 : nil }
+        let set = timeParts != nil || moment != nil
+        let title = ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes,
+                                           reminderDate: moment, now: now)
+        return HITChip(title, systemImage: (task.reminderOffsetMinutes ?? 0) > 0 || moment != nil ? "bell.badge" : "alarm",
+                       tint: set ? Theme.accent : Theme.secondaryText,
+                       isSelected: set, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
-                                   offsetMinutes: task.reminderOffsetMinutes, now: Date(), onTime: { time in
+                                   offsetMinutes: task.reminderOffsetMinutes, now: now, onTime: { time in
                     if let time {
                         openChip = nil
                         setTime(hour: time.hour, minute: time.minute)
@@ -396,9 +402,25 @@ struct TaskPopout: View {
                 }, onClear: {
                     openChip = nil
                     clearTime()
-                }, onOffset: setReminderOffset)
+                    setReminderMoment(nil)
+                }, onOffset: setReminderOffset, reminderDate: moment, onMoment: { pick in
+                    if pick != nil { openChip = nil }
+                    setReminderMoment(pick)
+                })
             }
+            .accessibilityLabel("Reminder: \(title)")
             .accessibilityIdentifier("popoutReminderChip")
+    }
+
+    /// The task's own reminder moment: that long from now, a picked time, or none.
+    private func setReminderMoment(_ pick: ReminderMomentPick?) {
+        let date: Date? = switch pick {
+        case .span(let span)?: span.date(from: Date())
+        case .at(let at)?: at
+        case nil: nil
+        }
+        TaskActions.setReminderDate(date, of: task, in: context)
+        rescheduleNotifications()
     }
 
     private var labelsPill: some View {

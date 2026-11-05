@@ -2,19 +2,18 @@ import Foundation
 import SwiftData
 import HITListCore
 
-// The current schema version (V4). V1, V2 and V3 are frozen in SchemaV1Models.swift, SchemaV2Models.swift and
-// SchemaV3Models.swift.
+// The current schema version (V5). V1 to V4 are frozen in SchemaV1Models.swift to SchemaV4Models.swift.
 // CloudKit rules shaped these models: every attribute has a default or is optional,
 // every relationship is optional, and there are no unique constraints. The full rule list is at the
 // top of SchemaVersions.swift; read it before changing anything here.
 
-typealias Project = HITListSchemaV4.Project
-typealias TaskLabel = HITListSchemaV4.TaskLabel
-typealias TaskItem = HITListSchemaV4.TaskItem
-typealias SavedFilter = HITListSchemaV4.SavedFilter
-typealias Profile = HITListSchemaV4.Profile
+typealias Project = HITListSchemaV5.Project
+typealias TaskLabel = HITListSchemaV5.TaskLabel
+typealias TaskItem = HITListSchemaV5.TaskItem
+typealias SavedFilter = HITListSchemaV5.SavedFilter
+typealias Profile = HITListSchemaV5.Profile
 
-extension HITListSchemaV4 {
+extension HITListSchemaV5 {
     @Model
     final class Project {
         var id: UUID = UUID()
@@ -38,7 +37,7 @@ extension HITListSchemaV4 {
     }
 }
 
-extension HITListSchemaV4 {
+extension HITListSchemaV5 {
     @Model
     final class TaskLabel {
         var id: UUID = UUID()
@@ -60,7 +59,7 @@ extension HITListSchemaV4 {
     }
 }
 
-extension HITListSchemaV4 {
+extension HITListSchemaV5 {
     @Model
     final class TaskItem {
         var id: UUID = UUID()
@@ -101,6 +100,11 @@ extension HITListSchemaV4 {
         var parent: TaskItem? = nil
         /// This task's checklist, in no particular order (`orderedSubtasks`). Deleting the task deletes them.
         @Relationship(deleteRule: .cascade, inverse: \TaskItem.parent) var subtasks: [TaskItem]? = []
+
+        // V5 (0.7.0): a reminder at a moment of its own (brief 48: "!15m" in quick add, 15 minutes from when
+        // the task was added), separate from the due time and its `reminderOffsetMinutes`. It goes off once,
+        // a repeating task's too (it doesn't roll on with the due date); nil for none.
+        var reminderDate: Date? = nil
 
         init(title: String, notes: String = "", priority: Int = 4, dueDate: Date? = nil, hasDueTime: Bool = false,
              project: Project? = nil, labels: [TaskLabel] = [], recurrence: RecurrenceRule? = nil) {
@@ -177,7 +181,7 @@ extension TaskItem {
     }
 }
 
-extension HITListSchemaV4 {
+extension HITListSchemaV5 {
     @Model
     final class SavedFilter {
         var id: UUID = UUID()
@@ -202,7 +206,7 @@ extension HITListSchemaV4 {
     }
 }
 
-extension HITListSchemaV4 {
+extension HITListSchemaV5 {
     /// V4 (0.5.0, brief 34): the account's profile, a name and a picture, one per iCloud account. It lives in
     /// the same private store as the tasks and syncs the same way (record type CD_Profile). Two devices that
     /// each made one before they synced end up with two; `Deduplicator` merges them (`ProfileStore.mergeDuplicates`):
@@ -232,7 +236,7 @@ extension HITListSchemaV4 {
 
 enum HITListSchema {
     /// The schema version the app runs on. Bump together with the typealiases at the top of this file.
-    static let current: any VersionedSchema.Type = HITListSchemaV4.self
+    static let current: any VersionedSchema.Type = HITListSchemaV5.self
     static var models: [any PersistentModel.Type] { current.models }
     static var schema: Schema { Schema(versionedSchema: current) }
     static let cloudKitContainerID = "iCloud.com.trammells.hitlist"
