@@ -97,7 +97,10 @@ struct AccountChangeBanner: View {
 /// flicks brighter once when a change lands, and tapping it opens Settings.
 struct SyncBolt: View {
     var action: () -> Void
-    static let size: CGFloat = 11
+    /// The glyph's point size: 15% larger than the original 11 pt (George, brief 54), on every platform.
+    static let size: CGFloat = 11 * 1.15
+    /// Its tap frame, grown by the same 15% (was 14 × 20) so the glyph keeps the same margins.
+    static let frame = CGSize(width: 16, height: 23)
     /// How far right of its toolbar slot the bolt is drawn.
     static let nudge: CGFloat = 12
     /// A sync older than this reads as "hasn't synced in a while".
@@ -117,7 +120,7 @@ struct SyncBolt: View {
                     .foregroundStyle(look.color.opacity(flash ? 1 : look.opacity))
                     .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 14, height: 20)
+                    .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
                     // Drawn a little to the right of its toolbar slot, so it sits nearer the two controls
                     // than the toolbar's own item spacing would put it (George, build 9).
