@@ -18,7 +18,8 @@ struct DuoDetail: View {
 
     private var plan: DuoColumns {
         DuoColumns.plan(width: geometry.width, sidebarWidth: DuoSplit.sidebarWidth,
-                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.fold)
+                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.fold,
+                        crease: geometry.crease)
     }
 
     var body: some View {
@@ -33,12 +34,15 @@ struct DuoDetail: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
             if let task = popouts.task, let width = plan.editorWidth {
-                DuoColumnDivider()
+                DuoColumnDivider(width: plan.gutter)
                 DuoEditorColumn(task: task)
                     .frame(width: width)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
+        // Partly open, the sidebar ends at a top-to-bottom crease; the detail's content starts past it (brief 50).
+        .padding(.leading, plan.detailLeadingInset)
+        .background(Theme.background)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: popouts.state.taskID)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: plan)
         .onChange(of: plan.showsSidebar, initial: true) { _, shows in
@@ -49,13 +53,15 @@ struct DuoDetail: View {
     }
 }
 
-/// The hairline between the Duo's columns.
+/// Between the Duo's columns: a hairline, or partly open, the crease itself, left empty (brief 50).
 private struct DuoColumnDivider: View {
+    var width: CGFloat = 1
+
     var body: some View {
         Rectangle()
-            .fill(Theme.separator)
-            .frame(width: 1)
-            .ignoresSafeArea(.container, edges: .bottom)
+            .fill(width > 1 ? Theme.background : Theme.separator)
+            .frame(width: width)
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
             .accessibilityHidden(true)
     }
 }
@@ -65,9 +71,11 @@ private struct DuoColumnDivider: View {
 /// completing the task) closes the column.
 struct DuoEditorColumn: View {
     let task: TaskItem
+    /// Typing from the outer display's sheet arrives here on unfolding, and leaves with the column on folding.
+    @Environment(\.editorCarryOver) private var carryOver
 
     var body: some View {
-        TaskPopout(task: task)
+        TaskPopout(task: task, carryOver: carryOver)
             .id(task.id)
             .environment(\.horizontalSizeClass, .compact)
             .background(Theme.background)

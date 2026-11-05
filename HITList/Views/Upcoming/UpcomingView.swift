@@ -15,14 +15,26 @@ struct UpcomingView: View {
     @Environment(PopoutController.self) private var popouts
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.appShell) private var shell
     /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
     private var isCompact: Bool { sizeClass == .compact }
-    /// iPad at full width: the board. Never on iPhone, whose landscape Plus/Max sizes are also regular.
-    private var showsBoard: Bool { UIDevice.current.userInterfaceIdiom == .pad && sizeClass == .regular }
+    /// iPad at full width and the iPhone Duo's inner display: the board (`showsBoard(idiom:sizeClass:shell:)`).
+    private var showsBoard: Bool { Self.showsBoard(idiom: AppShell.currentIdiom, sizeClass: sizeClass, shell: shell) }
     #else
     private let isCompact = false
     private let showsBoard = true
     #endif
+
+    /// The board or the week list. The Mac: the board. iPad: the board at full width. iPhone: the list, whose
+    /// landscape Plus/Max sizes are regular too, except on the Duo's inner display (`AppShell.duo`, brief 50),
+    /// which has the room for the board whatever size class it reports.
+    static func showsBoard(idiom: AppShell.Idiom, sizeClass: UserInterfaceSizeClass?, shell: AppShell?) -> Bool {
+        switch idiom {
+        case .mac: true
+        case .pad: sizeClass == .regular
+        case .phone: shell == .duo
+        }
+    }
     @State private var now = Date()
     /// The board's seven days (Mac, iPad).
     @State private var window = UpcomingWindow()

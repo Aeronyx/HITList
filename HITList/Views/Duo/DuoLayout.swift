@@ -38,10 +38,19 @@ enum AppShell: Equatable {
     }
 
     #if os(iOS)
-    static var currentIdiom: Idiom { UIDevice.current.userInterfaceIdiom == .pad ? .pad : .phone }
+    static var currentIdiom: Idiom {
+        if DuoDebug.standIn { return .phone }
+        return UIDevice.current.userInterfaceIdiom == .pad ? .pad : .phone
+    }
     #else
     static let currentIdiom = Idiom.mac
     #endif
+}
+
+extension EnvironmentValues {
+    /// The shell on show (`ContentView`), for the lists that lay out differently on the Duo's inner display
+    /// (Upcoming's board, Flipboard's even columns; brief 50). Nil outside `ContentView` (tests, previews).
+    @Entry var appShell: AppShell? = nil
 }
 
 /// What `ContentView` keeps of the window's geometry: only what the layouts use, so the keyboard coming
@@ -51,33 +60,44 @@ struct WindowGeometry: Equatable {
     var fullSize: CGSize = .zero
     /// The width inside the safe areas, which the Duo's columns divide.
     var width: CGFloat = 0
-    /// The fold's x when the system reports one (iOS 27.1's `division` reserved region).
-    var fold: CGFloat?
+    /// The fold while the device is partly open, when it runs top to bottom (the inner display held like a book,
+    /// on its side, as Device Hub opens it): the active `division` reserved region (iOS 27.1)
+    /// that runs from top to bottom, its frame including the margins the system asks interactive content to
+    /// keep (brief 50). Nil open flat, closed, on its side, and on every other device.
+    var crease: CGRect?
 
-    init(fullSize: CGSize = .zero, width: CGFloat = 0, fold: CGFloat? = nil) {
+    /// The fold's x, for the columns that meet there (brief 45).
+    var fold: CGFloat? { crease?.midX }
+
+    init(fullSize: CGSize = .zero, width: CGFloat = 0, crease: CGRect? = nil) {
         self.fullSize = fullSize
         self.width = width
-        self.fold = fold
+        self.crease = crease
     }
 
     init(_ proxy: GeometryProxy) {
         let insets = proxy.safeAreaInsets
         self.init(fullSize: CGSize(width: proxy.size.width + insets.leading + insets.trailing,
                                    height: proxy.size.height + insets.top + insets.bottom),
-                  width: proxy.size.width, fold: Self.fold(in: proxy))
+                  width: proxy.size.width,
+                  crease: Self.verticalCrease(among: Self.activeDivisions(in: proxy), in: proxy.size))
     }
 
-    /// Where the window divides in two, if it does: the middle of the first active `division` region
-    /// that runs top to bottom (the inner display's crease, upright).
-    private static func fold(in proxy: GeometryProxy) -> CGFloat? {
+    /// The first of `frames` that divides the window into a left and a right part: at least half its height,
+    /// under a quarter of its width. A crease across the window (the inner display upright and partly open, checked
+    /// on HITList-50) is not one: columns run top to bottom and cross it, as the system's own split view's do.
+    static func verticalCrease(among frames: [CGRect], in size: CGSize) -> CGRect? {
+        frames.first { $0.height >= size.height / 2 && $0.width < size.width / 4 }
+    }
+
+    /// The active `division` regions in the proxy's space (none before iOS 27.1 or with an older SDK).
+    private static func activeDivisions(in proxy: GeometryProxy) -> [CGRect] {
         #if compiler(>=6.4) && os(iOS)
         if #available(iOS 27.1, *) {
-            let region = proxy.reservedRegions(kind: .division)
-                .first { $0.isActive && $0.frame.height >= proxy.size.height / 2 && $0.frame.width < proxy.size.width / 4 }
-            return region.map { $0.frame.midX }
+            return proxy.reservedRegions(kind: .division).filter(\.isActive).map(\.frame)
         }
         #endif
-        return nil
+        return DuoDebug.crease(in: proxy.size).map { [$0] } ?? []
     }
 }
 
@@ -174,37 +194,81 @@ struct ShellPlace: Equatable {
 /// over it; where both and the sidebar don't fit (the inner display upright), the sidebar steps aside
 /// while the editor is open and the two meet at the fold. Today shows the next days beside it where
 /// there is room for both (the inner display on its side).
+///
+/// Partly open with the crease top to bottom (brief 50; Apple: "split views adapt their columns' width and margins to match the
+/// symmetry of the inner display"), the columns meet at the crease and nothing sits in it: the sidebar ends
+/// where the crease starts and the detail's content starts past it, so a list, the board or the Flipboard
+/// grid stays whole on one side; with the editor open, the list ends and the editor starts either side of it.
 struct DuoColumns: Equatable {
     var showsSidebar: Bool
     var editorWidth: CGFloat?
     var nextDaysWidth: CGFloat?
+    /// Between the list and the editor: a hairline, or the crease itself while partly open.
+    var gutter: CGFloat = 1
+    /// The sidebar column while it shows.
+    var sidebarWidth: CGFloat = DuoSplit.sidebarWidth
+    /// How far the detail's content keeps in from its leading edge: the crease, when the sidebar ends at it.
+    var detailLeadingInset: CGFloat = 0
 
     static let minListWidth: CGFloat = 300
     static let editorWidths: ClosedRange<CGFloat> = 320...420
     static let nextDaysWidths: ClosedRange<CGFloat> = 280...360
+    /// A crease with less than this on its leading side, or less than a list on its trailing side, is left to
+    /// the system (no such Duo pose; a guard against an odd report).
+    static let minSidebarWidth: CGFloat = 200
+
+    /// The crease the columns follow: one with room for a sidebar before it and a list after it.
+    static func usableCrease(_ crease: CGRect?, width: CGFloat) -> CGRect? {
+        guard let crease, crease.minX >= minSidebarWidth, width - crease.maxX >= minListWidth else { return nil }
+        return crease
+    }
+
+    /// The sidebar column's width: up to a top-to-bottom crease while partly open, else `DuoSplit.sidebarWidth`.
+    static func sidebarWidth(width: CGFloat, crease: CGRect?) -> CGFloat {
+        usableCrease(crease, width: width)?.minX.rounded() ?? DuoSplit.sidebarWidth
+    }
 
     /// - Parameters:
     ///   - width: the whole window.
-    ///   - sidebarWidth: the sidebar column while it shows.
+    ///   - sidebarWidth: the sidebar column while it shows, open flat.
     ///   - fold: the hinge's x in the window, when the system reports one (a `division` reserved
     ///     region); else the middle.
+    ///   - crease: the whole top-to-bottom `division` region while partly open (`WindowGeometry.crease`), which
+    ///     the columns keep out of.
     static func plan(width: CGFloat, sidebarWidth: CGFloat, editorOpen: Bool, showsToday: Bool,
-                     fold: CGFloat? = nil) -> DuoColumns {
+                     fold: CGFloat? = nil, crease: CGRect? = nil) -> DuoColumns {
+        if let crease = usableCrease(crease, width: width) {
+            let sidebar = crease.minX.rounded()
+            if editorOpen {
+                // The list on one side, the editor on the other, the crease between them.
+                return DuoColumns(showsSidebar: false, editorWidth: (width - crease.maxX).rounded(), nextDaysWidth: nil,
+                                  gutter: crease.width, sidebarWidth: sidebar, detailLeadingInset: 0)
+            }
+            let inset = crease.width
+            let detail = width - sidebar - inset
+            let nextDays = showsToday && detail >= minListWidth + nextDaysWidths.lowerBound + 40
+                ? clamp((detail * 0.42).rounded(), to: nextDaysWidths) : nil
+            return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nextDays,
+                              sidebarWidth: sidebar, detailLeadingInset: inset)
+        }
+        let fold = fold ?? crease?.midX
         let detail = width - sidebarWidth
         if editorOpen {
             if detail >= minListWidth + editorWidths.lowerBound + 40 {
-                return DuoColumns(showsSidebar: true, editorWidth: clamp(detail / 2, to: editorWidths), nextDaysWidth: nil)
+                return DuoColumns(showsSidebar: true, editorWidth: clamp(detail / 2, to: editorWidths), nextDaysWidth: nil,
+                                  sidebarWidth: sidebarWidth)
             }
             // No room for three: list and editor share the window, split at the fold.
             let split = fold.map { min(max($0, minListWidth), width - editorWidths.lowerBound) } ?? width / 2
             let editor = max(editorWidths.lowerBound, (width - split).rounded())
-            return DuoColumns(showsSidebar: false, editorWidth: min(editor, width - minListWidth), nextDaysWidth: nil)
+            return DuoColumns(showsSidebar: false, editorWidth: min(editor, width - minListWidth), nextDaysWidth: nil,
+                              sidebarWidth: sidebarWidth)
         }
         if showsToday, detail >= minListWidth + nextDaysWidths.lowerBound + 40 {
             return DuoColumns(showsSidebar: true, editorWidth: nil,
-                              nextDaysWidth: clamp((detail * 0.42).rounded(), to: nextDaysWidths))
+                              nextDaysWidth: clamp((detail * 0.42).rounded(), to: nextDaysWidths), sidebarWidth: sidebarWidth)
         }
-        return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nil)
+        return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nil, sidebarWidth: sidebarWidth)
     }
 
     private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {
