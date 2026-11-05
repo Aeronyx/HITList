@@ -325,4 +325,65 @@ final class DuoLayoutTests: XCTestCase {
         carry.editorShows(nil)
         XCTAssertNil(carry.kept(for: task.id), "closed (Confirm, ×, Discard, swipe): dropped, so it opens fresh next time")
     }
+
+    // MARK: Reserved regions: the fold (brief 50)
+
+    /// The inner display upright and partly open: the system reports a `division` region down the middle.
+    private var crease: CGRect { CGRect(x: 322, y: 0, width: 25, height: inner.height) }
+
+    func testPartlyOpenTheSidebarEndsAtTheFold() {
+        XCTAssertEqual(DuoColumns.sidebarWidth(width: inner.width, crease: nil), DuoSplit.sidebarWidth, "open flat: as before")
+        XCTAssertEqual(DuoColumns.sidebarWidth(width: inner.width, crease: crease), crease.minX)
+
+        let plan = DuoColumns.plan(width: inner.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: false,
+                                   showsToday: true, crease: crease)
+        XCTAssertTrue(plan.showsSidebar)
+        XCTAssertEqual(plan.sidebarWidth, crease.minX)
+        XCTAssertEqual(plan.detailLeadingInset, crease.width, "the list, the board or the grid start past the crease")
+        XCTAssertNil(plan.nextDaysWidth, "no room beside Today on half the display")
+    }
+
+    func testPartlyOpenTheListAndTheEditorMeetEitherSideOfTheFold() {
+        let plan = DuoColumns.plan(width: inner.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: true,
+                                   showsToday: false, crease: crease)
+        XCTAssertFalse(plan.showsSidebar)
+        XCTAssertEqual(plan.editorWidth, inner.width - crease.maxX)
+        XCTAssertEqual(plan.gutter, crease.width, "nothing of the list or the editor in the crease")
+        XCTAssertEqual(plan.detailLeadingInset, 0)
+    }
+
+    func testOpenFlatTheColumnsAreAsBefore() {
+        let flat = DuoColumns.plan(width: inner.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: true, showsToday: false)
+        XCTAssertEqual(flat.gutter, 1, "a hairline")
+        XCTAssertEqual(flat.sidebarWidth, DuoSplit.sidebarWidth)
+        XCTAssertEqual(flat.detailLeadingInset, 0)
+    }
+
+    func testACreaseTooCloseToAnEdgeIsLeftToTheSystem() {
+        let odd = CGRect(x: 80, y: 0, width: 25, height: inner.height)
+        XCTAssertEqual(DuoColumns.sidebarWidth(width: inner.width, crease: odd), DuoSplit.sidebarWidth)
+        let plan = DuoColumns.plan(width: inner.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: true,
+                                   showsToday: false, crease: odd)
+        XCTAssertEqual(plan.gutter, 1)
+    }
+
+    func testOnlyACreaseFromTopToBottomCountsAsTheFold() {
+        let size = CGSize(width: 669, height: 900)
+        XCTAssertEqual(WindowGeometry.verticalCrease(among: [CGRect(x: 322, y: 0, width: 25, height: 900)], in: size),
+                       CGRect(x: 322, y: 0, width: 25, height: 900))
+        XCTAssertNil(WindowGeometry.verticalCrease(among: [CGRect(x: 0, y: 440, width: 669, height: 25)], in: size),
+                     "on its side and partly open the crease runs across: the columns cross it as they must")
+        XCTAssertNil(WindowGeometry.verticalCrease(among: [], in: size), "open flat: no active division")
+    }
+
+    func testFlipboardUsesAnEvenColumnCountOnTheInnerDisplay() {
+        let spacing: CGFloat = 14
+        XCTAssertEqual(FlipboardLayout.columnCount(width: 397, compact: false, spacing: spacing, even: true), 2,
+                       "upright beside the sidebar: 3 fit, 2 divide cleanly")
+        XCTAssertEqual(FlipboardLayout.columnCount(width: 679, compact: false, spacing: spacing, even: true), 4, "on its side")
+        XCTAssertEqual(FlipboardLayout.columnCount(width: 2000, compact: false, spacing: spacing, even: true), 4, "never 5")
+        XCTAssertEqual(FlipboardLayout.columnCount(width: 290, compact: false, spacing: spacing, even: true), 2,
+                       "half the display while partly open")
+        XCTAssertEqual(FlipboardLayout.columnCount(width: 397, compact: false, spacing: spacing), 3, "iPad and Mac as before")
+    }
 }

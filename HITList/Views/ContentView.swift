@@ -32,6 +32,8 @@ struct ContentView: View {
     @State private var place = ShellPlace(tab: AppShell.currentIdiom == .phone ? Preferences.startTabValue() : .today)
     /// Phones: the window's size and fold (`.zero` until the first layout pass).
     @State private var geometry = WindowGeometry()
+    /// The iPhone Duo's hinge (nil on every other device).
+    @State private var hingeStatus: HingeStatus?
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -68,10 +70,17 @@ struct ContentView: View {
         .focusedSceneValue(\.popouts, popouts)
         .background(Theme.background)
         #if os(iOS)
-        // Phones only: the shell of an iPad or a Mac never depends on the window's size.
-        .onGeometryChange(for: WindowGeometry.self) { WindowGeometry($0) } action: { new in
-            if AppShell.currentIdiom == .phone { geometry = new }
+        // Phones only: the shell of an iPad or a Mac never depends on the window's size. Read again whenever the
+        // hinge's status changes, as the fold's reserved region comes and goes with it (brief 50).
+        .background {
+            GeometryReader { proxy in
+                Color.clear.onChange(of: WindowGeometry(proxy), initial: true) { _, new in
+                    if AppShell.currentIdiom == .phone { geometry = new }
+                }
+            }
+            .id(hingeStatus)
         }
+        .onHingeStatusChange { hingeStatus = $0 }
         #endif
         #if os(macOS)
         .containerBackground(Theme.background, for: .window)
@@ -112,7 +121,8 @@ private struct SplitContent: View {
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
             if duo {
-                sidebar.navigationSplitViewColumnWidth(DuoSplit.sidebarWidth)
+                // Partly open upright, the sidebar ends where the crease starts (brief 50).
+                sidebar.navigationSplitViewColumnWidth(DuoColumns.sidebarWidth(width: geometry.width, crease: geometry.crease))
             } else {
                 sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
             }
