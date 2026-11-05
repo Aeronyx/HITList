@@ -294,8 +294,9 @@ final class QuickAddParserTests: XCTestCase {
 
     func testReminderOffsetForms() {
         let cases: [(String, Int)] = [
-            ("!15mb", 15), ("!15m", 15), ("!5M", 5), ("!1hb", 60), ("!1h", 60), ("!2hb", 120),
-            ("!1db", 1440), ("!1d", 1440), ("!3d", 4320), ("!0", 0), ("!at", 0), ("!AT", 0), ("!90m,", 90),
+            // Brief 48: without the "b", "!15m" is 15 minutes from now (`ReminderGrammarTests`).
+            ("!15mb", 15), ("!5Mb", 5), ("!1hb", 60), ("!2hb", 120),
+            ("!1db", 1440), ("!3db", 4320), ("!0", 0), ("!at", 0), ("!AT", 0), ("!90mb,", 90),
         ]
         for (token, minutes) in cases {
             let r = parser.parse("Call 5pm \(token)")
@@ -318,10 +319,10 @@ final class QuickAddParserTests: XCTestCase {
 
     /// Brief 37: the later reminder overrides the earlier one (it used to be the first that counted).
     func testTheLastReminderTokenCounts() {
-        let r = parser.parse("Pills 9pm !10m !1h")
+        let r = parser.parse("Pills 9pm !10mb !1hb")
         XCTAssertEqual(r.reminderOffsetMinutes, 60)
-        XCTAssertEqual(r.title, "Pills !10m")
-        XCTAssertEqual(r.tokens.filter(\.isSuperseded).map(\.text), ["!10m"])
+        XCTAssertEqual(r.title, "Pills !10mb")
+        XCTAssertEqual(r.tokens.filter(\.isSuperseded).map(\.text), ["!10mb"])
     }
 
     /// A reminder is relative to the due time; without one it is plain title text and sets nothing (George's
@@ -337,7 +338,7 @@ final class QuickAddParserTests: XCTestCase {
         }
         XCTAssertEqual(parser.parse("Call !15mb").title, "Call !15mb")
         // A time anywhere in the text, or a phrase that sets one, lights it up and makes it count.
-        for text in ["Pack !1hb tomorrow 9am", "Pack tomorrow at 9 !1hb", "Call mum in 2 hours !15mb", "Pills every day 9pm !10m"] {
+        for text in ["Pack !1hb tomorrow 9am", "Pack tomorrow at 9 !1hb", "Call mum in 2 hours !15mb", "Pills every day 9pm !10mb"] {
             let r = parser.parse(text)
             XCTAssertNotNil(r.reminderOffsetMinutes, text)
             XCTAssertTrue(r.tokens.contains { $0.kind == .reminder }, text)
@@ -365,7 +366,7 @@ final class QuickAddParserTests: XCTestCase {
 
     func testOnlyTheDocumentedReminderFormsCount() {
         let valid: [(String, Int)] = [
-            ("!1m", 1), ("!1mb", 1), ("!2h", 120), ("!2hb", 120), ("!3d", 4320), ("!3db", 4320), ("!0", 0), ("!at", 0),
+            ("!1mb", 1), ("!2hb", 120), ("!3db", 4320), ("!0", 0), ("!at", 0),
         ]
         for (token, minutes) in valid {
             XCTAssertEqual(ReminderOffset.minutes(fromToken: token), minutes, token)
