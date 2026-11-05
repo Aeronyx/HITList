@@ -24,9 +24,19 @@ final class ClaudeAccessTests: XCTestCase {
     private lazy var sharedChild = Node("shared child", ["private"], parent: shared)
     private lazy var all = [plain, secret, shared, both, secretChild, sharedChild]
 
-    func testDefaultsHideOnlyPrivateTasks() {
+    /// "All tasks but @private": every task except those labelled @private.
+    private let allBut = ClaudeAccessRule(mode: .allExceptHidden)
+
+    func testTheDefaultIsOnlyTasksWithClaude() {
+        // George, 2026-11-05: "make 'Only tasks with @claude' the default/leftmost option".
         let rule = ClaudeAccessRule()
-        XCTAssertEqual(rule.mode, .allExceptHidden)
+        XCTAssertEqual(rule.mode, .onlyShared)
+        XCTAssertEqual(rule.ruleLabel, "claude")
+        XCTAssertEqual(visibleNames(rule, all), ["shared", "both", "shared child"])
+    }
+
+    func testAllButPrivateHidesOnlyPrivateTasks() {
+        let rule = allBut
         XCTAssertEqual(rule.ruleLabel, "private")
         XCTAssertEqual(visibleNames(rule, all), ["plain", "shared", "shared child"],
                        "@private hides case-insensitively; a subtask follows its parent, never its own labels")
@@ -50,7 +60,7 @@ final class ClaudeAccessTests: XCTestCase {
 
     func testHiddenTasksAreUnreachableById() {
         // The app resolves an id only among the visible tasks; a hidden id looks exactly like a missing one.
-        let rule = ClaudeAccessRule()
+        let rule = allBut
         let byName = Dictionary(uniqueKeysWithValues: rule.visible(all, labelNames: \.labels, parent: \.parent).map { ($0.name, $0) })
         XCTAssertNil(byName["secret"])
         XCTAssertNil(byName["secret child"])
@@ -58,7 +68,7 @@ final class ClaudeAccessTests: XCTestCase {
     }
 
     func testContainersAreNamedOnlyWithAVisibleTaskOrNone() {
-        let rule = ClaudeAccessRule()
+        let rule = allBut
         XCTAssertTrue(rule.showsContainer(holding: [Node]() , labelNames: \.labels, parent: \.parent), "an empty Group hides nothing")
         XCTAssertFalse(rule.showsContainer(holding: [secret, secretChild], labelNames: \.labels, parent: \.parent),
                        "a Group of hidden tasks must not leak its name")
@@ -69,7 +79,7 @@ final class ClaudeAccessTests: XCTestCase {
         let shared = ClaudeAccessRule(mode: .onlyShared)
         XCTAssertEqual(shared.labelsKeepingAccess(["home"]), ["home", "claude"])
         XCTAssertEqual(shared.labelsKeepingAccess(["Claude"]), ["Claude"], "already there, any case")
-        XCTAssertEqual(ClaudeAccessRule().labelsKeepingAccess(["home"]), ["home"], "nothing to keep in the other mode")
+        XCTAssertEqual(allBut.labelsKeepingAccess(["home"]), ["home"], "nothing to keep in the other mode")
     }
 
     func testModeRawValuesAreStable() {

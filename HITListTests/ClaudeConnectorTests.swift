@@ -23,10 +23,10 @@ final class ClaudeConnectorTests: XCTestCase {
 
     // MARK: Settings
 
-    func testSettingsDefaultToOffAndEverythingExceptPrivate() {
+    func testSettingsDefaultToOffAndOnlyTasksWithClaude() {
         let settings = ClaudeSettings(defaults: defaults, storeSuffix: nil)
         XCTAssertFalse(settings.isAllowed, "off until George turns it on")
-        XCTAssertEqual(settings.rule, ClaudeAccessRule(mode: .allExceptHidden, hiddenLabel: "private", sharedLabel: "claude"))
+        XCTAssertEqual(settings.rule, ClaudeAccessRule(mode: .onlyShared, hiddenLabel: "private", sharedLabel: "claude"))
     }
 
     func testSettingsAreKeptPerStore() {
@@ -35,10 +35,10 @@ final class ClaudeConnectorTests: XCTestCase {
         XCTAssertEqual(main.allowedKey, "claude.allowed", "the helper reads this name")
         XCTAssertEqual(debug.allowedKey, "claude.allowed.Development")
         debug.isAllowed = true
-        debug.rule = ClaudeAccessRule(mode: .onlyShared, sharedLabel: "@ai")
+        debug.rule = ClaudeAccessRule(mode: .allExceptHidden, hiddenLabel: "@home")
         XCTAssertFalse(main.isAllowed, "a Debug build's switch never opens the TestFlight app's tasks")
-        XCTAssertEqual(main.rule.mode, .allExceptHidden)
-        XCTAssertEqual(debug.rule, ClaudeAccessRule(mode: .onlyShared, sharedLabel: "ai"))
+        XCTAssertEqual(main.rule.mode, .onlyShared)
+        XCTAssertEqual(debug.rule, ClaudeAccessRule(mode: .allExceptHidden, hiddenLabel: "home"))
     }
 
     // MARK: The endpoint's gate
@@ -198,14 +198,17 @@ final class ClaudeToolTests: XCTestCase {
 
     private let hiddenTitles = ["Session notes", "Gift for G", "Wrap it", "Therapy", "private"]
 
-    private func handler(_ rule: ClaudeAccessRule = ClaudeAccessRule()) -> ClaudeToolHandler {
+    /// The tool tests are about hiding @private tasks: they use "All tasks but @private" unless they say otherwise.
+    private static let allBut = ClaudeAccessRule(mode: .allExceptHidden)
+
+    private func handler(_ rule: ClaudeAccessRule = allBut) -> ClaudeToolHandler {
         ClaudeToolHandler(context: context, rule: rule, now: Self.now, calendar: Self.calendar, weekStart: 2,
                           log: { [unowned self] in logged.append(($0, $1)) },
                           didWrite: { [unowned self] in writes += 1 },
                           didComplete: { [unowned self] in completed.append($0) })
     }
 
-    private func call(_ tool: String, _ arguments: [String: JSONValue] = [:], rule: ClaudeAccessRule = ClaudeAccessRule()) throws -> (MCPToolResult, JSONValue) {
+    private func call(_ tool: String, _ arguments: [String: JSONValue] = [:], rule: ClaudeAccessRule = allBut) throws -> (MCPToolResult, JSONValue) {
         let result = handler(rule).call(tool, arguments)
         return (result, (try? JSONValue.decode(Data(result.text.utf8))) ?? .null)
     }
@@ -459,7 +462,7 @@ final class ClaudeExportTests: XCTestCase {
         let visibleSub = try TaskActions.addSubtask("Tag release", to: open, in: context)
         _ = try TaskActions.addSubtask("Hidden step", to: hidden, in: context)
 
-        let snapshot = try ClaudeExport.snapshot(from: context, rule: ClaudeAccessRule())
+        let snapshot = try ClaudeExport.snapshot(from: context, rule: ClaudeAccessRule(mode: .allExceptHidden))
         XCTAssertEqual(Set(snapshot.tasks.map(\.title)), ["Ship it", "Tag release"])
         XCTAssertEqual(snapshot.tasks.first { $0.id == visibleSub.id }?.parentID, open.id)
         XCTAssertEqual(snapshot.projects.map(\.name), ["Work"])

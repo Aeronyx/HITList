@@ -1,8 +1,8 @@
 import Foundation
 
 /// Which tasks Claude may see (brief 43). Labels carry the rule, so it needs no schema change:
-/// either every task except those labelled `hiddenLabel` ("@private"), or only the tasks labelled
-/// `sharedLabel` ("@claude").
+/// either only the tasks labelled `sharedLabel` ("Only tasks with @claude", the default since brief 55),
+/// or every task except those labelled `hiddenLabel` ("All tasks but @private").
 ///
 /// A subtask has no labels of its own; it follows its parent. A hidden task is invisible to every
 /// connector tool and to the export: not listed, not counted, not reachable by id, not searchable.
@@ -23,7 +23,8 @@ public struct ClaudeAccessRule: Equatable, Sendable {
     public var hiddenLabel: String
     public var sharedLabel: String
 
-    public init(mode: Mode = .allExceptHidden, hiddenLabel: String = defaultHiddenLabel,
+    /// The default shares nothing until a task is labelled @claude (George, 2026-11-05).
+    public init(mode: Mode = .onlyShared, hiddenLabel: String = defaultHiddenLabel,
                 sharedLabel: String = defaultSharedLabel) {
         self.mode = mode
         self.hiddenLabel = Self.normalized(hiddenLabel, fallback: Self.defaultHiddenLabel)
