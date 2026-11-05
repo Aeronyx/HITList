@@ -101,8 +101,7 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         guard !SyncAppDelegateSupport.isTesting else { return true }
         let monitor = CloudSyncMonitor.shared
-        monitor.pushLaunchState(registered: application.isRegisteredForRemoteNotifications,
-                                launchedByPush: launchOptions?[.remoteNotification] != nil)
+        monitor.pushLaunchState(launchedByPush: launchOptions?[.remoteNotification] != nil)
         // On the Mac the container registers for pushes by itself once its setup succeeds (seen in the
         // sync log). On the iPhone that couldn't be checked (the simulator has no iCloud account), so the
         // app asks too: registering is idempotent, shows no prompt (silent pushes need no permission), and
@@ -162,8 +161,7 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
 final class SyncAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !SyncAppDelegateSupport.isTesting else { return }
-        CloudSyncMonitor.shared.pushLaunchState(registered: NSApplication.shared.isRegisteredForRemoteNotifications,
-                                                launchedByPush: false)
+        CloudSyncMonitor.shared.pushLaunchState(launchedByPush: false)
     }
 
     func application(_ application: NSApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

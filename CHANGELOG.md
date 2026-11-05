@@ -32,6 +32,9 @@ squeaky hinge, a Shared Tasks preview, and first-run tips with Spotlight.
 - First-run tips for new people (the quick-add syntax, how to undo a highlight, Browse, Flipboard, the board's
   Add task); Settings → About → Show tips again. Open tasks show up in Spotlight and open in the editor.
 - Mac Settings: the window title names the pane, and Settings reopens on the last pane.
+- Launch: the app no longer waits on the push service before its first frame. On a freshly booted iPhone that
+  wait reached 25 seconds of black screen (iOS kills an app stuck at about 20); the first screen now comes in
+  about 2 seconds either way.
 - Housekeeping: unused code and 66 MB of unused font files removed; test runs on a side store keep their own
   settings, so they never change the real app's.
 - Privacy policy: sections for Shared Tasks and the switched-off Claude integration.
