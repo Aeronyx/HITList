@@ -185,12 +185,31 @@ final class PopoutController {
     @discardableResult
     func reopenStoredQuickAdd() -> Bool {
         for key in Preferences.legacyQuickAddDraftKeys { draftDefaults.removeObject(forKey: key) }
+        #if DEBUG
+        if openDebugInlineCard() { return true }
+        #endif
         guard state.quickAdd == nil, let stored = QuickAddDraftStore.load(from: draftDefaults),
               !Self.liveCards.contains(stored.cardID) else { return false }
         task = nil
         update { $0.openQuickAdd(stored.draft.context, placement: .floating, id: stored.cardID) }
         return true
     }
+
+    #if DEBUG
+    /// Developer aid for window captures without clicks (brief 49), Debug builds only: launched with
+    /// `-debugInlineCard "Call Sam"`, the list's inline "Add task" card (key "list") opens with that typed in;
+    /// `-debugAskDiscard YES` has it ask "Discard this task?" at once (`InlineAddRow`).
+    static var debugInlineCardText: String? { UserDefaults.standard.string(forKey: "debugInlineCard") }
+    static var debugAsksDiscard: Bool { UserDefaults.standard.bool(forKey: "debugAskDiscard") }
+
+    private func openDebugInlineCard() -> Bool {
+        guard state.quickAdd == nil, let text = Self.debugInlineCardText else { return false }
+        let id = UUID()
+        update { $0.openQuickAdd(listContext, placement: .inline("list"), id: id) }
+        QuickAddDraftStore.save(QuickAddDraft(context: listContext, text: text), card: id, to: draftDefaults)
+        return true
+    }
+    #endif
 
     /// The window is going away (Mac): its card is no longer live here, but its draft stays stored, so
     /// the next window, or the next launch, opens it again.
