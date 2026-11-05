@@ -506,13 +506,13 @@ final class SharedTasksStore {
         commit([.saveRecord(ref(state.lists[i], SharedTasksSchema.taskRecordName(for: taskID)))])
     }
 
-    static func clean(_ title: String) -> String {
+    nonisolated static func clean(_ title: String) -> String {
         String(title.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
     }
 
-    static func clampPriority(_ p: Int) -> Int { min(4, max(1, p)) }
+    nonisolated static func clampPriority(_ p: Int) -> Int { min(4, max(1, p)) }
 
-    static func normalized(_ due: SharedDue) -> SharedDue { SharedDue(date: SharedClock.stamp(due.date), hasTime: due.hasTime) }
+    nonisolated static func normalized(_ due: SharedDue) -> SharedDue { SharedDue(date: SharedClock.stamp(due.date), hasTime: due.hasTime) }
 
     private func queue(_ change: Change) { commit([change]) }
 

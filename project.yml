@@ -53,7 +53,8 @@ targets:
     entitlements:
       path: HITList/HITList.entitlements
       properties:
-        com.apple.developer.icloud-container-identifiers: [iCloud.com.trammells.hitlist]
+        # The second container holds Shared Tasks (brief 51), apart from the task store's. Keep the task store's first.
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.trammells.hitlist, iCloud.com.trammells.hitlist.shared]
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
         com.apple.developer.icloud-container-environment: Development
@@ -80,6 +81,8 @@ targets:
         # Shows Documents (the daily JSON backups, see LocalBackup.swift) in the iOS Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        # Shared Tasks (brief 51): lets a CloudKit share link open in HITList and reach the share-acceptance callbacks.
+        CKSharingSupported: true
         # Inter is the app typeface; resources are flattened into the bundle root. Keep in step with `includes`.
         UIAppFonts: [Inter_18pt-Light.ttf, Inter_18pt-Regular.ttf, Inter_18pt-Medium.ttf, Inter_18pt-SemiBold.ttf, Inter_18pt-Bold.ttf, Inter_18pt-ExtraBold.ttf]
         ATSApplicationFontsPath: "."

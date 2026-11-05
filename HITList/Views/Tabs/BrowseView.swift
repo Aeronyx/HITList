@@ -101,6 +101,9 @@ struct BrowseView: View {
     private var sections: some View {
         let open = openTasks
         return List {
+            // Shared Tasks (brief 51): the preview's switch and, once on, the shared lists.
+            Section { SharedTasksBrowseRow() }
+
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,

@@ -21,11 +21,11 @@ import Foundation
 //
 // Record types (this container only; additive forever once deployed to Production, like the task store's):
 // - `SharedList` (record name `list`): title, colour, each with its own change time; createdAt.
-// - `SharedTask` (record name `task-<UUID>`): title, notes, priority, due (date + has-time), each with a change
-//   time; the completion as one unit (isCompleted, completedAt, completedBy, completedByName,
-//   completionChangedAt); who created it.
-// - `SharedMember` (record name `member-<userRecordName>`): a person's HITList profile name and picture, copied in
-//   by that person; joinedAt.
+// - `SharedTask` (record name `task-<UUID>`): title, notes, priority, due (hasDueDate, dueDate, hasDueTime), each
+//   with a change time; the completion as one unit (isCompleted, completedAt, completedBy, completedByName,
+//   completionChangedAt); who created it. Every field is written on every save (placeholders for an empty one).
+// - `SharedMember` (record name `member-<userRecordName>`): a person's HITList profile name and picture (hasAvatar,
+//   avatar as a CKAsset), copied in by that person, each with a change time; joinedAt.
 // - `cloudkit.share` (CloudKit's own): the list's title, participants and permissions.
 //
 // Rules: last writer wins per field (`SharedTasksMerge`); the completion moves as one unit and, when both sides
@@ -94,6 +94,9 @@ enum SharedTasksSchema {
         static let notesChangedAt = "notesChangedAt"
         static let priority = "priority"
         static let priorityChangedAt = "priorityChangedAt"
+        /// 0 or 1. Flags like this one and `isCompleted` are always written, so a cleared value never depends on a
+        /// field's removal reaching the server; the optional values beside them are written as placeholders then.
+        static let hasDueDate = "hasDueDate"
         static let dueDate = "dueDate"
         static let hasDueTime = "hasDueTime"
         static let dueChangedAt = "dueChangedAt"
@@ -111,6 +114,7 @@ enum SharedTasksSchema {
         static let userID = "userID"
         static let name = "name"
         static let nameChangedAt = "nameChangedAt"
+        static let hasAvatar = "hasAvatar"
         static let avatar = "avatar"
         static let avatarChangedAt = "avatarChangedAt"
         static let joinedAt = "joinedAt"

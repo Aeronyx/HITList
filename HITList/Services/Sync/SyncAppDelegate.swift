@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 #if os(macOS)
 import AppKit
 #else
@@ -8,7 +9,9 @@ import UIKit
 /// The push path (brief 25, item 2): the app delegate HITListApp installs with
 /// `UIApplicationDelegateAdaptor` / `NSApplicationDelegateAdaptor`. It logs remote-notification
 /// registration and every push to the sync log, through `CloudSyncMonitor`. SwiftUI keeps its own
-/// delegate and forwards these calls; nothing else lives here.
+/// delegate and forwards these calls. Shared Tasks (brief 51) adds two things: pushes for its own container go to
+/// `SharedTasksCenter`, never to the task store's monitor and watchdog, and CloudKit share acceptance (the iOS
+/// scene delegate class, `SharingSceneDelegate`; the Mac callback here).
 enum SyncAppDelegateSupport {
     /// Hosted unit tests launch the app too; they must not register or log.
     static let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -108,6 +111,15 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    /// Every window scene gets `SharingSceneDelegate`, only so that a CloudKit invitation link reaches the app
+    /// (Shared Tasks, brief 51); SwiftUI still makes and manages the window.
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        if connectingSceneSession.role == .windowApplication { configuration.delegateClass = SharingSceneDelegate.self }
+        return configuration
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         guard !SyncAppDelegateSupport.isTesting else { return }
         CloudSyncMonitor.shared.pushRegistered(tokenBytes: deviceToken.count)
@@ -124,6 +136,11 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any],
                      fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
         guard !SyncAppDelegateSupport.isTesting else { completionHandler(.noData); return }
+        // Shared Tasks' own container (brief 51): its engines fetch; the task store's monitor never sees it.
+        if SharedTasksPush.isForSharedTasks(userInfo) {
+            Task { @MainActor in completionHandler(await SharedTasksCenter.shared.handlePush() ? .newData : .noData) }
+            return
+        }
         let receivedAt = Date()
         let monitor = CloudSyncMonitor.shared
         let state = application.applicationState == .active ? "active" : application.applicationState == .background ? "background" : "inactive"
@@ -161,7 +178,18 @@ final class SyncAppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, didReceiveRemoteNotification userInfo: [String: Any]) {
         guard !SyncAppDelegateSupport.isTesting else { return }
+        // Shared Tasks' own container (brief 51): its engines fetch; the task store's monitor never sees it.
+        if SharedTasksPush.isForSharedTasks(userInfo) {
+            Task { @MainActor in _ = await SharedTasksCenter.shared.handlePush() }
+            return
+        }
         CloudSyncMonitor.shared.pushReceived(userInfo, appState: application.isActive ? "active" : "inactive")
+    }
+
+    /// A CloudKit invitation link opened on the Mac (Shared Tasks, brief 51).
+    func application(_ application: NSApplication, userDidAcceptCloudKitShareWith metadata: CKShare.Metadata) {
+        guard !SyncAppDelegateSupport.isTesting else { return }
+        SharedTasksCenter.shared.userAccepted(metadata)
     }
 
     /// A Dock click with no window on screen: the window closed earlier comes back as it was
