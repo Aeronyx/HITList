@@ -65,9 +65,11 @@ private struct DuoColumnDivider: View {
 /// completing the task) closes the column.
 struct DuoEditorColumn: View {
     let task: TaskItem
+    /// Typing from the outer display's sheet arrives here on unfolding, and leaves with the column on folding.
+    @Environment(\.editorCarryOver) private var carryOver
 
     var body: some View {
-        TaskPopout(task: task)
+        TaskPopout(task: task, carryOver: carryOver)
             .id(task.id)
             .environment(\.horizontalSizeClass, .compact)
             .background(Theme.background)
