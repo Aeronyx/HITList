@@ -5,6 +5,7 @@
 # Usage:
 #   scripts/test.sh                    # core, macos, ios
 #   scripts/test.sh core macos         # any subset, in the order given
+#   scripts/test.sh ui                 # the iPhone UI tests (XCUITest, scheme HITListUITests); never by default
 #   scripts/test.sh --unsigned macos   # build without signing, the way CI does
 #
 # Environment overrides: DEVELOPER_DIR, SIMULATOR (default "iPhone 17").
@@ -23,8 +24,8 @@ for arg in "$@"; do
     # xcodebuild forwards TEST_RUNNER_* from its own environment (not from build settings) to the test
     # process as HITLIST_UNSIGNED=1; tests that need an entitlement skip on it.
     --unsigned) signing=(CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO); export TEST_RUNNER_HITLIST_UNSIGNED=1 ;;
-    core|macos|ios) suites+=("$arg") ;;
-    *) print -u2 "unknown argument: $arg (expected core, macos, ios, --unsigned)"; exit 2 ;;
+    core|macos|ios|ui) suites+=("$arg") ;;
+    *) print -u2 "unknown argument: $arg (expected core, macos, ios, ui, --unsigned)"; exit 2 ;;
   esac
 done
 (( ${#suites} )) || suites=(core macos ios)
@@ -69,6 +70,8 @@ for suite in "${suites[@]}"; do
     macos) run_suite macos xcodebuild test -project HITList.xcodeproj -scheme HITList \
              -destination 'platform=macOS' "${signing[@]}" ;;
     ios)   run_suite ios xcodebuild test -project HITList.xcodeproj -scheme HITList \
+             -destination "platform=iOS Simulator,name=$SIMULATOR" "${signing[@]}" ;;
+    ui)    run_suite ui xcodebuild test -project HITList.xcodeproj -scheme HITListUITests \
              -destination "platform=iOS Simulator,name=$SIMULATOR" "${signing[@]}" ;;
   esac
 done
