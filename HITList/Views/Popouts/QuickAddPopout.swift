@@ -55,7 +55,9 @@ struct QuickAddPopout: View {
     @State private var hasSavedForClose = false
     /// This card's id while it is on screen; its draft is stored under it (`QuickAddDraftStore`).
     @State private var cardID: UUID?
-    @FocusState private var titleFocused: Bool
+    /// Not `@FocusState`: the title is a native text view whose own bridge is the one thing that moves its
+    /// keyboard (`TokenHighlightField.focus`).
+    @State private var titleFocused = false
     @FocusState private var notesFocused: Bool
     @FocusState private var locationFocused: Bool
     /// The sub-task line with the cursor (`SubtaskLineField` keeps its own focus; this asks for it).

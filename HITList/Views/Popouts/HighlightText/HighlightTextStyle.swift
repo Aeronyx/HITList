@@ -64,6 +64,13 @@ struct HighlightTextStyle {
     }
 }
 
+/// Marks an update caused by the title reporting where the keyboard went (a tap, another field), as opposed to
+/// the owner asking for it or letting it go. Only the owner's changes move the keyboard: a report that comes back
+/// late (the keyboard has moved again since) would otherwise be taken for a request and undo the newer move.
+struct HighlightFocusReport: TransactionKey {
+    static let defaultValue = false
+}
+
 /// The TextKit 1 stack the title uses on both platforms: storage → `HighlightLayoutManager` → one container
 /// that tracks the view's width, with no line-fragment padding (the words start at the field's edge).
 struct HighlightTextStack {
