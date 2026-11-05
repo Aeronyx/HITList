@@ -61,7 +61,8 @@ public enum ClaudeTools {
             description: """
                 Adds a task from quick-add text, parsed exactly as HITList's own quick add does: dates and \
                 times ("tomorrow 3pm", "next fri", "in 2 hours"), repeats ("every monday"), priority (p1…p4), \
-                #Group, @label and a reminder offset ("!15mb", needs a time). Words that aren't \
+                #Group, @label and a reminder ("!15m" = 15 minutes from now; "!15mb" = 15 minutes before the \
+                due time, needs a time). Words that aren't \
                 syntax stay in the title. Example: "Call the dentist tomorrow 9am p2 #Health @phone".
                 """,
             inputSchema: schema([

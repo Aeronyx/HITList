@@ -197,11 +197,12 @@ popouts.open(task)
   hours", "in an hour", "in half an hour" set the due time that far from now, to the minute; "in 3 days",
   "in a week", "in 2 weeks", "in a month" set the day (number words one to twelve, or digits), keeping a
   time typed beside them. One `.date` token. Minutes and hours need "in": "Run 10 minutes" is a title.
-- **Reminder grammar** (`ReminderOffset` in HITListCore): `!15mb` or `!15m` = 15 minutes before the due
-  time, `!1hb`/`!1h` = 1 hour, `!1db`/`!1d` = 1 day (N ≥ 1, up to 4 weeks); `!0` or `!at` = at the time
-  (no offset). Nothing else is one (`!`, `!0mb`, `!m`, `!15` stay title text). It only counts, and only
-  lights up, when the text gives the task a time ("tom 11am", "in 2 hours"); "Pack !1hb" is a title. Only
-  the first one counts; it tints like a time. The Reminder card's offsets (At time, 5, 10,
+- **Reminder grammar** (HITListCore `ReminderPhrase`, `ReminderOffset`; brief 48, 0.7.0): `!15m`, `!2h`,
+  `!1d`, `!1h30m` = a reminder that long **from now**, with or without a due date (`TaskItem.reminderDate`);
+  `!15mb`, `!1hb`, `!1db` = that long **before** the due time, which needs a time ("tom 11am", "in 2 hours");
+  `!0` or `!at` = at the due time. Nothing else is one (`!`, `!0mb`, `!m`, `!15` stay title text). A "!" phrase
+  lights up and counts only once it is complete: followed by a space, or at Confirm. One from-now and one
+  before-due reminder may stand together; a later one of the same kind overrides. It tints like a time. The Reminder card's offsets (At time, 5, 10,
   15, 30 min, 1 hour, 1 day before, two per row, and a custom "N min before" field) write the token and
   stay open so a time can follow; a time (typed or 9 AM / Noon / 5 PM / 8 PM) closes it. The card says
   when it fires ("Fires 10:45 AM"). Stored as `TaskItem.reminderOffsetMinutes` (nil = at the time);

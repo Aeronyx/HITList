@@ -267,6 +267,7 @@ struct ClaudeToolHandler {
         if let rule = task.recurrenceRule { out["repeats"] = .string(rule.displayText) }
         if let deadline = task.deadline { out["deadline"] = .string(dayString(deadline)) }
         if let minutes = task.reminderOffsetMinutes, task.hasDueTime { out["reminder_minutes_before"] = .int(minutes) }
+        if let at = task.reminderDate, !task.isCompleted, at > now { out["reminder_at"] = .string(timeString(at)) }
         if let location = task.locationName { out["location"] = .string(location) }
         if let completedAt = task.completedAt, task.isCompleted { out["completed_at"] = .string(timeString(completedAt)) }
         if let parent = task.parent {

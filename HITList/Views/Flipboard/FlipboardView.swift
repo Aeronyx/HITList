@@ -67,6 +67,7 @@ struct FlipboardView: View {
                         ForEach(switches) { task in
                             FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
                                            onOpen: { open(task) })
+                                .hitTip(task.id == switches.first?.id ? HITTip(.flipboard) : nil)
                         }
                         // The last cell adds a switch: a dashed outline of one, with a big +.
                         AddSwitchTile { adding = true }
