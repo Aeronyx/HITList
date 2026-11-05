@@ -192,6 +192,14 @@ one does not complete the parent. "next mon" on a Sunday means tomorrow. Complet
 back on Dock click or ⌘Tab. iPhone list titles 16 pt with −0.3 tracking, card title 19 pt, Mac rows 15 pt
 (14 was too small). The iPhone keeps a four-tab shell with the "+" oval above the tab bar; the Mac keeps
 the sidebar; settings open in-window on the Mac (`MacSettingsPage`), as a sheet on iPhone.
+From 2026-11-04/05: tabs Inbox · Today · Upcoming · Flipboard, Browse behind the top-right magnifying glass and
+Settings behind Browse's gear; the profile sits top-left (Mac sidebar, iPhone Browse); no login system ever (the
+Apple account is the identity, profiles serve Shared Tasks); the Claude integration is off and hidden by default,
+its privacy choices shown only once switched on; "Delight" is called "Extras"; a quick-add highlight goes away by a
+click/tap or by Backspace right after it; "!" reminders light up only once complete (after a space); `!15m` = 15
+minutes from now, `!15mb` = before the due time; a Discard question sits inside the card it concerns; overridden
+quick-add phrases stay in the title as plain text; the Mac board always opens on today. Follow Apple's HIG
+(`briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
 ## 8. Where things stand (2026-11-04, after round 10)
 

@@ -66,6 +66,48 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 11 (2026-11-05; briefs 47–52 run in parallel, all six at once)
+Next version 0.7.0 (17). Session 48 adds schema V5 (`TaskItem.reminderDate`); George deploys it before 0.7.0.
+Read `briefs/HIG-NOTES.md` (Apple's guidelines as they apply here) before designing anything visible.
+
+**Seeing the Mac app (new, 2026-11-05).** George granted screen recording, so a session can capture its own Debug
+Mac app's window (never the whole screen, which shows George's own windows):
+1. Build: `xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug -destination
+   'platform=macOS' -derivedDataPath build.noindex/mac-NN -allowProvisioningUpdates -quiet`.
+2. Run it on its own store with sync off for that process only:
+   `HITLIST_STORE_SUFFIX=sNN build.noindex/mac-NN/Build/Products/Debug/HITList.app/Contents/MacOS/HITList -disableCloudKit YES -seedSampleData &`
+   (`-disableCloudKit YES` is a launch argument: never write `disableCloudKit` into the app-group defaults, which
+   George's real app reads; only a schema push run keeps CloudKit on, still with its own suffix.)
+3. `scripts/window-shot.sh <pid> build.noindex/shot-NN.png`, then Read the PNG (shrink it first with
+   `sips -Z 1400`). Quit the Debug app with `kill <pid>` when done; never touch `/Applications/HITList.app`.
+Clicking is still not possible (no Accessibility access): drive state with Debug-only launch arguments or hosted-window
+tests. iPhone/iPad: your own simulator as before; ask George once for tap access and carry on meanwhile.
+
+**Decisions from 2026-11-05 (George):** no login system ever (the Apple account is the identity; profiles serve
+Shared Tasks); the Claude integration is off and hidden by default, its privacy choices shown only once switched on;
+"Delight" is called "Extras"; a quick-add highlight is removed by a click/tap or by Backspace right after it; "!"
+reminder phrases light up only once complete (after a space); `!15m` = 15 minutes from now, `!15mb` = before the due
+time; the Discard question sits inside the card it concerns.
+
+## Round 11 ownership
+- `47-highlight-engine` (xhigh): `TokenHighlightField`, new `Views/Popouts/HighlightText/*`, the field's call sites in
+  `QuickAddPopout`/`CompactQuickAddCard`, `HighlightAreaTests`, new `HighlightFieldTests`.
+- `48-reminder-language` (xhigh, merged last): parser (+Disabled), `DateExpression`, `Snapshot*`, `QuickAddDraft`,
+  `Models.swift`, `SchemaVersions.swift`, new `SchemaV4Models.swift`, notifications, `TaskActions` reminder paths,
+  `SnapshotBuilder`, `Deduplicator` (field), `QuickAddPopout` Reminder chip region, reminder picker, `TaskPopout`/`Editor/*`
+  Reminder pill region, `TaskRow` meta bell, `SchemaTests`, new `ReminderDateTests`.
+- `49-extras-claude-polish` (High): `ClaudeSettingsSection`, `Services/Claude/*`, helper messages, `docs/connect-claude.md`,
+  `PopoutController`, "Delight" strings (`DelightSettingsSection`, `MacSettingsSection`), `SidebarView`/`ProfileMenu`
+  spacing, `CompactQuickAddCard` + `QuickAddPopout` compact Discard, `InlineAddRow` in `QuickAddEntry`.
+- `50-duo-hinge` (xhigh): `Views/Duo/*`, `MobileShell`, `MobileTabBar`, `ContentView`, `PopoutHost`, `UpcomingView.showsBoard`,
+  `TaskPopout` fold continuity, `Views/Flipboard/*` column count, new `HingeCreak*`, one row line in `DelightSettingsSection`.
+- `51-shared-tasks` (max): new `Services/Sharing/*`, `Views/Shared/*`, its own model/schema, `SyncAppDelegate` share
+  acceptance, `BrowseView` (preview row + entry), one line in `SidebarView`, entitlements/`project.yml` only if a
+  second container is needed.
+- `52-tips-spotlight-cleanup` (High): new `Views/Tips/*`, `Services/Spotlight/*`, `Services/Intents/*`, one line each in
+  `HITListApp` and `AccountSwitch`, About sections, `MacSettingsPage`, `SettingsRouter`, dead files nobody owns.
+- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin.
+
 ## Round 10 record (2026-11-04; sessions 39–46 merged for 0.6.0 (16))
 Eight desktop-app sessions, all started on George's own turns: 39 `board-inline-add` (High), 40 `profile-chrome`
 (High), 41 `quick-add-polish` (High), 42 `sync-profile-hardening` (xhigh), 43 `claude-connector` (xhigh), 44
