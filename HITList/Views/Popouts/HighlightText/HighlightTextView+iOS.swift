@@ -60,7 +60,7 @@ struct HighlightTextField: UIViewRepresentable {
         let shown = NSAttributedString(string: view.text.isEmpty ? text : view.text, attributes: style.attributes)
         let height = HighlightGeometry.height(of: shown, width: width, maxLines: HighlightTextStyle.maxLines,
                                               lineHeight: style.lineHeight)
-        return CGSize(width: width, height: height)
+        return CGSize(width: width, height: height + style.boxOutset)
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -170,6 +170,8 @@ final class HighlightUITextView: UITextView {
             typingAttributes = newStyle.attributes
             placeholderLabel.font = newStyle.font
             placeholderLabel.textColor = newStyle.placeholderColor
+            // Room under the last line for its boxes, which reach a little below their line.
+            textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: newStyle.boxOutset, right: 0)
         }
         highlightLayout.cornerRadius = TokenHighlightField.highlightRadius
         if placeholderLabel.text != placeholder {

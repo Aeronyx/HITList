@@ -284,9 +284,10 @@ final class HighlightFieldTests: XCTestCase {
         for (piece, word) in zip(pieces, [today, p1]) {
             let glyphs = field.highlightLayout.glyphRange(forCharacterRange: word, actualCharacterRange: nil)
             let bounds = field.highlightLayout.boundingRect(forGlyphRange: glyphs, in: field.highlightLayout.textContainers[0])
-            XCTAssertEqual(piece.rect.minX, bounds.minX + field.containerOriginForTests.x, accuracy: 0.01, "on its word")
-            XCTAssertEqual(piece.rect.width, bounds.width, accuracy: 0.01)
-            XCTAssertTrue(field.bounds.insetBy(dx: -0.5, dy: -0.5).contains(piece.rect), "inside the field")
+            let letters = bounds.offsetBy(dx: field.containerOriginForTests.x, dy: field.containerOriginForTests.y)
+            XCTAssertEqual(piece.rect.midX, letters.midX, accuracy: 0.01, "on its word")
+            XCTAssertGreaterThan(piece.rect.width, letters.width, "with room either side")
+            XCTAssertTrue(field.shownRectForTests.contains(piece.rect), "inside what the field shows: never clipped")
         }
         XCTAssertEqual(field.highlightLayout.runs[0].color,
                        HighlightPlatformColor(PopoutTint.today.opacity(TokenHighlightField.highlightOpacity)).cgColor)
@@ -310,15 +311,17 @@ final class HighlightFieldTests: XCTestCase {
         spin(0.3)
         let style = HighlightTextStyle.current()
         XCTAssertEqual(boxWords(field), ["Tom", "p2", "#Work"])
-        XCTAssertEqual(field.visibleHeightForTests, CGFloat(HighlightTextStyle.maxLines) * style.lineHeight, accuracy: 1,
-                       "the field stops at its maximum lines")
+        XCTAssertEqual(field.visibleHeightForTests, CGFloat(HighlightTextStyle.maxLines) * style.lineHeight + style.boxOutset,
+                       accuracy: 1, "the field stops at its maximum lines (and the room under the last line's boxes)")
         XCTAssertGreaterThan(field.contentHeightForTests, field.visibleHeightForTests + style.lineHeight, "the rest scrolls")
         let pieces = field.boxPieces()
         let work = (long as NSString).range(of: "#Work")
         let glyphs = field.highlightLayout.glyphRange(forCharacterRange: work, actualCharacterRange: nil)
         let bounds = field.highlightLayout.boundingRect(forGlyphRange: glyphs, in: field.highlightLayout.textContainers[0])
         let last = try XCTUnwrap(pieces.last)
-        XCTAssertEqual(last.rect.minY, bounds.minY + field.containerOriginForTests.y, accuracy: 0.5, "on \"#Work\", lines down")
+        XCTAssertEqual(last.rect.midX, bounds.midX + field.containerOriginForTests.x, accuracy: 0.5, "on \"#Work\"")
+        XCTAssertTrue(last.rect.insetBy(dx: 0, dy: 2).intersects(bounds.offsetBy(dx: 0, dy: field.containerOriginForTests.y)),
+                      "on its line, lines down")
         XCTAssertGreaterThan(last.rect.minY, field.visibleHeightForTests, "below the first lines: reached by scrolling")
     }
 
@@ -774,6 +777,7 @@ extension HighlightUITextView {
     var showsPlaceholderForTests: Bool { subviews.contains { ($0 as? UILabel)?.isHidden == false } }
     var visibleHeightForTests: CGFloat { bounds.height }
     var contentHeightForTests: CGFloat { contentSize.height }
+    var shownRectForTests: CGRect { bounds }
     var selectedRangeForTests: NSRange { selectedRange }
 }
 #else
@@ -785,5 +789,6 @@ extension HighlightNSTextView {
     var visibleHeightForTests: CGFloat { enclosingScrollView?.contentSize.height ?? bounds.height }
     var contentHeightForTests: CGFloat { bounds.height }
     var selectedRangeForTests: NSRange { selectedRange() }
+    var shownRectForTests: CGRect { visibleRect }
 }
 #endif
