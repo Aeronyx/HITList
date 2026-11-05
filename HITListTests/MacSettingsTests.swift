@@ -78,11 +78,9 @@ final class MacSettingsTests: XCTestCase {
                        "a plain open (⌘,) comes back to the pane last shown")
     }
 
-    func testOpenSettingsLaunchArgumentNamesASection() {
-        XCTAssertNil(SettingsRouter.launchSection(arguments: ["HITList"]) as MacSettingsSection??)
-        XCTAssertEqual(SettingsRouter.launchSection(arguments: ["HITList", "-openSettings", "about"]), .some(.about))
-        XCTAssertEqual(SettingsRouter.launchSection(arguments: ["HITList", "-openSettings"]), .some(nil))
-        XCTAssertEqual(SettingsRouter.launchSection(arguments: ["HITList", "-openSettings", "-disableCloudKit"]), .some(nil))
+    func testOpenSettingsLaunchArgumentOnlyOpensThePage() {
+        XCTAssertFalse(SettingsRouter.opensAtLaunch(arguments: ["HITList"]))
+        XCTAssertTrue(SettingsRouter.opensAtLaunch(arguments: ["HITList", "-openSettings"]))
     }
 
     func testRouterCountsEveryOpenRequest() {
