@@ -91,17 +91,15 @@ final class HighlightFieldTests: XCTestCase {
     @Observable @MainActor
     final class FieldModel {
         var draft: QuickAddDraft
-        /// What the owner asks for (the card's `titleFocused`).
-        var focusRequest: Bool
-        /// What the field reported back.
-        var reportedFocus = false
+        /// The owner's focus state (the card's `titleFocused`): the test writes it to ask, the field to report.
+        var focused: Bool
         var submits = 0
         /// Changed to make the owner update without touching the field.
         var unrelated = 0
 
         init(text: String, focused: Bool = false) {
             draft = QuickAddDraft(context: .inbox, text: text)
-            focusRequest = focused
+            self.focused = focused
         }
     }
 
@@ -109,13 +107,12 @@ final class HighlightFieldTests: XCTestCase {
         @Bindable var model: FieldModel
         let parser: QuickAddParser
         var width: CGFloat = 320
-        @FocusState private var focused: Bool
 
         var body: some View {
             let parsed = model.draft.parsed(parser)
             VStack(alignment: .leading) {
                 TokenHighlightField(placeholder: "Task Name", text: $model.draft.text, tokens: parsed.tokens,
-                                    priority: parsed.priority, focus: $focused, bordered: false,
+                                    priority: parsed.priority, focus: $model.focused, bordered: false,
                                     onDisable: { model.draft.disable($0) }, onEnable: { model.draft.switchBackOn($0) },
                                     onSubmit: { model.submits += 1 })
                 Text("\(model.unrelated)")
@@ -123,19 +120,6 @@ final class HighlightFieldTests: XCTestCase {
             }
             .frame(width: width)
             .padding(20)
-            .onAppear { focused = model.focusRequest }
-            .onChange(of: model.focusRequest) { _, wants in focused = wants }
-            .onChange(of: focused) { _, now in model.reportedFocus = now }
-            #if os(macOS)
-            // As the card does (`QuickAddPopout.claimTitleFocus`): the Mac drops a focus asked for as the view
-            // first appears, so it is asked again until it holds.
-            .task {
-                for delay in [0, 30, 80, 150, 250] {
-                    try? await Task.sleep(for: .milliseconds(delay))
-                    if model.focusRequest, !focused { focused = true }
-                }
-            }
-            #endif
         }
     }
 
@@ -185,6 +169,7 @@ final class HighlightFieldTests: XCTestCase {
 
     private func isFirstResponder(_ hosted: Hosted) -> Bool { hosted.field.isFirstResponder }
     private func resignFromOutside(_ hosted: Hosted) { hosted.field.resignFirstResponder() }
+    private func takeFromOutside(_ hosted: Hosted) { hosted.field.becomeFirstResponder() }
     private func caret(_ hosted: Hosted, at location: Int) { hosted.field.selectedRange = NSRange(location: location, length: 0) }
     private func type(_ hosted: Hosted, _ text: String) { hosted.field.insertText(text) }
     private func compose(_ hosted: Hosted, _ text: String) { hosted.field.setMarkedText(text, selectedRange: NSRange(location: (text as NSString).length, length: 0)) }
@@ -241,6 +226,7 @@ final class HighlightFieldTests: XCTestCase {
 
     private func isFirstResponder(_ hosted: Hosted) -> Bool { hosted.window.firstResponder === hosted.field }
     private func resignFromOutside(_ hosted: Hosted) { hosted.window.makeFirstResponder(nil) }
+    private func takeFromOutside(_ hosted: Hosted) { hosted.window.makeFirstResponder(hosted.field) }
     private func caret(_ hosted: Hosted, at location: Int) { hosted.field.setSelectedRange(NSRange(location: location, length: 0)) }
     private func type(_ hosted: Hosted, _ text: String) { hosted.field.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0)) }
     private func compose(_ hosted: Hosted, _ text: String) {
@@ -359,25 +345,59 @@ final class HighlightFieldTests: XCTestCase {
         let model = FieldModel(text: "Buy milk", focused: true)
         let hosted = try host(model)
         defer { hosted.close() }
-        spin(1) { isFirstResponder(hosted) && model.reportedFocus }
+        spin(1) { isFirstResponder(hosted) && model.focused }
         XCTAssertTrue(isFirstResponder(hosted), "asked for at once: the title has the keyboard")
-        XCTAssertTrue(model.reportedFocus)
+        XCTAssertTrue(model.focused)
 
         for _ in 0..<3 { model.unrelated += 1; spin(0.1) }
         XCTAssertTrue(isFirstResponder(hosted), "an unrelated update leaves the keyboard where it is")
 
         resignFromOutside(hosted)
-        spin(0.5) { !model.reportedFocus }
-        XCTAssertFalse(model.reportedFocus, "the keyboard leaving is reported")
-        model.focusRequest = false
+        spin(0.5) { !model.focused }
+        XCTAssertFalse(model.focused, "the keyboard leaving is reported")
+        model.focused = false
         spin(0.2)
 
-        model.focusRequest = true
+        model.focused = true
         spin(1) { isFirstResponder(hosted) }
         XCTAssertTrue(isFirstResponder(hosted), "asked again: back")
-        model.focusRequest = false
+        model.focused = false
         spin(1) { !isFirstResponder(hosted) }
         XCTAssertFalse(isFirstResponder(hosted), "let go when the owner says so (the card closing)")
+        spin(0.5) { !model.focused }
+        XCTAssertFalse(model.focused)
+
+        // The keyboard arriving by itself (a tap in the title) is reported too.
+        takeFromOutside(hosted)
+        spin(1) { model.focused }
+        XCTAssertTrue(model.focused, "the keyboard arriving is reported")
+        resignFromOutside(hosted)
+        spin(1) { !model.focused }
+        spin(0.3)
+        XCTAssertFalse(model.focused, "and its leaving")
+        XCTAssertFalse(isFirstResponder(hosted), "the report coming back does not take the keyboard again")
+    }
+
+    /// The owner asking for the keyboard and letting it go again straight away (a chip's popover closing as the
+    /// next one opens): the keyboard ends up gone and stays gone. Supervisor, 2026-11-05: on the iPhone about 1
+    /// run in 4 kept it, because SwiftUI's focus state dropped a "let go" that came after the title had taken the
+    /// keyboard but before SwiftUI said so.
+    func testTheKeyboardGoesWhenTheOwnerLetsGoRightAfterAsking() throws {
+        let model = FieldModel(text: "Buy milk")
+        let hosted = try host(model)
+        defer { hosted.close() }
+        for round in 0..<12 {
+            model.focused = true
+            spin(1) { isFirstResponder(hosted) }
+            XCTAssertTrue(isFirstResponder(hosted), "round \(round): asked for")
+            // The let-go lands at a slightly different moment each round.
+            if round % 3 > 0 { spin(Double(round % 3) * 0.004) }
+            model.focused = false
+            spin(1) { !isFirstResponder(hosted) && !model.focused }
+            spin(0.3)
+            XCTAssertFalse(isFirstResponder(hosted), "round \(round): let go, and it stays gone")
+            XCTAssertFalse(model.focused, "round \(round): the owner's state agrees")
+        }
     }
 
     /// An input method's composition (Japanese, Chinese) is never thrown away by an update, the boxes outside

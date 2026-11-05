@@ -21,7 +21,12 @@ struct TokenHighlightField: View {
     @Binding var text: String
     var tokens: [QuickAddToken]
     var priority: Priority
-    var focus: FocusState<Bool>.Binding
+    /// Whether the title has the keyboard: the owner sets it to ask, the field sets it when a tap (or another
+    /// field) moves the keyboard. A plain binding, not `@FocusState`: SwiftUI's focus system drove the text
+    /// view too, and on the iPhone it dropped a "let go" that came after the title took the keyboard but
+    /// before SwiftUI's state said so (about 1 run in 4 of the focus test; a chip's popover opening right after
+    /// another closed would have kept the keyboard up). The text views are now the only thing that moves it.
+    var focus: Binding<Bool>
     var bordered = true
     /// A highlight was tapped, clicked or backspaced; nil leaves the highlights as decoration.
     var onDisable: ((QuickAddToken) -> Void)? = nil
@@ -44,14 +49,13 @@ struct TokenHighlightField: View {
 
     private var field: some View {
         HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: .current(),
-                           isFocused: focus.wrappedValue, onFocusChange: { focus.wrappedValue = $0 },
+                           isFocused: focus.wrappedValue, onFocusChange: { report($0) },
                            onSubmit: onSubmit)
             #if os(macOS)
             // SwiftUI sets the pointer over its own views; told nothing, it showed the arrow over the title's
             // words (2026-11-05). The text view puts the hand over the boxes itself, on every move.
             .pointerStyle(.horizontalText)
             #endif
-            .focused(focus)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onChange(of: text) { old, new in
                 // The text views turn Return and pasted line breaks into what they should be before they land;
@@ -60,6 +64,14 @@ struct TokenHighlightField: View {
                 text = outcome.text
                 if outcome.submits { onSubmit() }
             }
+    }
+
+    /// The field telling the owner where the keyboard went (a tap, another field): marked, so the update it
+    /// causes is not taken for the owner asking (`HighlightFocusReport`).
+    private func report(_ focused: Bool) {
+        var transaction = Transaction()
+        transaction[HighlightFocusReport.self] = true
+        withTransaction(transaction) { focus.wrappedValue = focused }
     }
 
     /// The boxes as the text view keeps them: place, colour, words, and switching off and back on.
