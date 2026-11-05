@@ -131,6 +131,9 @@ private struct FloatingAddPressStyle: ButtonStyle {
 
 /// The "+ Add task" row at the end of a list. On the Mac it expands in place into the quick-add card
 /// (Todoist's inline add); on iPhone it opens the docked card with this row's defaults.
+///
+/// × and Escape follow the board card's rule (`BoardInlineAdd.close`, brief 49): an empty card closes; with
+/// typing the card asks "Discard this task?" at its foot (`InlineDiscardRow`), and × or Escape again discards.
 struct InlineAddRow: View {
     let context: QuickAddContext
     /// Tells this row's card from other rows' (one per Upcoming day).
@@ -139,17 +142,35 @@ struct InlineAddRow: View {
     var note: String?
 
     @Environment(PopoutController.self) private var popouts
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hasContent = false
+    #if DEBUG
+    @State private var confirmingDiscard = PopoutController.debugAsksDiscard
+    #else
+    @State private var confirmingDiscard = false
+    #endif
 
     var body: some View {
         SwiftUI.Group {
             if popouts.state.isInlineOpen(key) {
-                QuickAddPopout(context: context, style: .inline,
-                               onClose: { popouts.closeInline(key) },
-                               onSaved: { popouts.didSave() })
-                    .background(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous).fill(Theme.surface))
-                    .overlay(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
-                        .strokeBorder(Theme.separator, lineWidth: 1))
-                    .padding(.vertical, HITSpacing.xs)
+                let shape = RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
+                VStack(spacing: 0) {
+                    QuickAddPopout(context: context, style: .inline, isPaused: confirmingDiscard,
+                                   onClose: requestClose,
+                                   onSaved: { popouts.didSave() },
+                                   onDraftChange: { hasContent = $0 })
+                    if confirmingDiscard {
+                        InlineDiscardRow(padding: QuickAddPopout.padding, onKeepEditing: keepEditing, onDiscard: discard)
+                            .transition(.opacity)
+                    }
+                }
+                .background(shape.fill(Theme.surface))
+                .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1).allowsHitTesting(false))
+                .clipShape(shape)
+                // While the card asks, a click anywhere on it means keep editing (its buttons take their own).
+                .contentShape(Rectangle())
+                .onTapGesture { if confirmingDiscard { keepEditing() } }
+                .padding(.vertical, HITSpacing.xs)
             } else {
                 Button(action: open) {
                     HStack(spacing: HITSpacing.s) {
@@ -177,6 +198,30 @@ struct InlineAddRow: View {
         .listRowInsets(ListMetrics.rowInsets(compact: false))
         // Without this the row takes the system grey, which stands out in the darker themes.
         .slateRow()
+        .onChange(of: popouts.state.isInlineOpen(key)) { _, open in
+            if !open { confirmingDiscard = false; hasContent = false }
+        }
+    }
+
+    /// × or Escape on the card.
+    private func requestClose() {
+        switch BoardInlineAdd.close(hasContent: hasContent, confirmingDiscard: confirmingDiscard) {
+        case .close:
+            popouts.closeInline(key)
+        case .askDiscard:
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .discard:
+            discard()
+        }
+    }
+
+    private func keepEditing() {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+    }
+
+    private func discard() {
+        popouts.discardQuickAddDraft()
+        popouts.closeInline(key)
     }
 
     private func open() {
