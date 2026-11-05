@@ -5,7 +5,7 @@ permalink: /privacy/
 
 # HITList Privacy Policy
 
-Effective 2026-11-04.
+Effective 2026-11-05.
 
 ## Who we are
 
@@ -17,7 +17,8 @@ distributed through Apple's TestFlight. In this policy "we" means George, the de
 Nothing. HITList has no account system of its own, no servers, no analytics, no advertising and no
 crash-reporting service. The app does not send your tasks, your profile or anything about how you use it
 to us or to anyone else. There is no server of ours for it to contact. The only way tasks leave your iCloud
-is the optional Claude connection described below, which you switch on and connect yourself.
+is the optional Claude connection described below, which you switch on and connect yourself, and the optional
+Shared Tasks lists, which you share with people you invite.
 
 ## Where your data lives
 
@@ -35,13 +36,22 @@ pixels at most) before it is saved.
 
 ## Claude (optional, off unless you turn it on)
 
-HITList can let Claude, Anthropic's assistant, work with your tasks. It is off until you switch on Settings →
-Claude → Allow Claude on your Mac and connect Claude Desktop or Claude Code yourself. While it is on and HITList
+HITList can let Claude, Anthropic's assistant, work with your tasks. It is off and hidden until you switch on
+Settings → Claude → Claude integration and, on a Mac, connect Claude Desktop or Claude Code yourself. While it is on and HITList
 is open, the Claude app on your Mac can list, add, complete and edit the tasks your privacy setting allows
 (everything except tasks labelled `@private`, or only tasks labelled `@claude`); hidden tasks are never shown
 to it. What Claude does with what it reads is covered by Anthropic's terms and privacy policy, between you and
-Anthropic: HITList sends nothing to us or to Anthropic on its own. "Copy for Claude" only puts the allowed tasks
-on your clipboard for you to paste wherever you choose.
+Anthropic: HITList sends nothing to us or to Anthropic on its own. With the integration on, "Copy for Claude" only
+puts the allowed tasks on your clipboard for you to paste wherever you choose.
+
+## Shared Tasks (optional preview, off unless you turn it on)
+
+If you switch on Shared Tasks (Browse → Shared Tasks) and create or join a shared list, that list's tasks are
+stored in the list owner's iCloud account using Apple's CloudKit sharing, and everyone the owner invites can see
+and change them. Each member's HITList profile name and picture, and who added or completed each task, are visible
+to the other members of that list. HITList has no server of its own here either: the lists move only between the
+members' devices through Apple's iCloud. Leaving a list removes your access; the owner can remove members or stop
+sharing at any time. Switching Shared Tasks off keeps your lists in iCloud.
 
 ## Siri and Shortcuts
 
