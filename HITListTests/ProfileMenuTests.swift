@@ -64,6 +64,39 @@ final class ProfileMenuTests: XCTestCase {
         XCTAssertEqual(ProfileMenuModel.accessibilityLabel(forName: nil), "Account: Add your name")
     }
 
+    // MARK: What's New
+
+    private let sampleEntries = [
+        WhatsNew.Entry(version: "0.7.0", items: ["New one", "New two"]),
+        WhatsNew.Entry(version: "0.6.0", items: ["Older"]),
+        WhatsNew.Entry(version: "0.5.0", items: ["Oldest"]),
+    ]
+
+    func testWhatsNewShowsTheNewestThenEarlierVersions() {
+        XCTAssertEqual(WhatsNewPopoutModel.current(sampleEntries)?.version, "0.7.0")
+        XCTAssertEqual(WhatsNewPopoutModel.earlier(sampleEntries).map(\.version), ["0.6.0", "0.5.0"])
+        XCTAssertNil(WhatsNewPopoutModel.current([]))
+        XCTAssertEqual(WhatsNewPopoutModel.earlier([]), [])
+        XCTAssertEqual(WhatsNewPopoutModel.versionTitle(sampleEntries[0]), "Version 0.7.0")
+        XCTAssertEqual(WhatsNewPopoutModel.title, "What's New")
+        XCTAssertEqual(WhatsNewPopoutModel.earlierTitle, "Earlier versions")
+    }
+
+    /// The popout reads the supervisor's list as it is: the newest entry is the one Settings → About shows.
+    func testWhatsNewReadsTheRealList() {
+        XCTAssertEqual(WhatsNewPopoutModel.current(WhatsNew.entries), WhatsNew.current)
+        XCTAssertEqual(WhatsNewPopoutModel.earlier(WhatsNew.entries).count, WhatsNew.entries.count - 1)
+    }
+
+    func testWhatsNewRendersCollapsedAndExpanded() {
+        for expanded in [false, true] {
+            let view = WhatsNewPopout(showsEarlier: expanded, onDone: {})
+                .frame(width: WhatsNewPopoutModel.width, height: WhatsNewPopoutModel.maxHeight)
+                .preferredColorScheme(.dark)
+            XCTAssertNotNil(ImageRenderer(content: view).cgImage, expanded ? "expanded" : "collapsed")
+        }
+    }
+
     // MARK: SettingsRouter
 
     func testOpeningAtASectionRemembersItThenOpens() {
