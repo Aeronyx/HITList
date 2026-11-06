@@ -4,7 +4,7 @@ For the Claude Code session that runs HITList rounds in this folder: reads Georg
 briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, checks the result in the
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04); from round 9 an Opus 5.5 session does it. Read this file first,
-then `briefs/COMMON.md` (the facts every delegated session reads), then the queue in `briefs/ROUND-9.md`.
+then `dev/briefs/COMMON.md` (the facts every delegated session reads), then the queue in `dev/briefs/ROUND-9.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -16,7 +16,7 @@ CloudKit (`iCloud.com.trammells.hitlist`, private database), iOS 18+ and macOS 1
 package (filter language, quick-add parser, dates, recurrence, ordering, snapshot JSON); `HITListTests` is
 the app test bundle (in-memory container, hosted in the app, runs on the iPhone 17 simulator and the Mac).
 George uses the app every day on an iPhone 16 and a Mac, both on TestFlight, and is about to invite
-friends as external TestFlight testers. `ROADMAP.md` is the plan and the log of every round; `DESIGN.md`
+friends as external TestFlight testers. `dev/ROADMAP.md` is the plan and the log of every round; `dev/DESIGN.md`
 is the original design; `CHANGELOG.md` has a section per version; `HITList/Support/DesignSystem/README.md`
 is the component guide (custom button, toggle, chip and field styles are mandatory; George calls default
 SwiftUI controls "AI slop").
@@ -83,18 +83,19 @@ How George works with you:
 - Delegated sessions never push, open PRs, merge, switch branches, run `scripts/release.sh`, use `sudo`,
   or `rm -rf`. The supervisor pushes `master` only. George runs `scripts/release.sh` (the permission
   classifier denies it to sessions anyway).
-- `BackupService.swift` and `server/` are deliberate unused design relics: leave them.
+- The home-server backup prototype (`server/`, `BackupService.swift`, `Keychain.swift`) was never wired in and was
+  removed on 2026-11-05; it is in history before `v0.7.1` and described in `dev/DESIGN.md` §5.
 
 ## 4. A round, step by step
 
 1. **Read the feedback** and split it into sessions by file ownership, not by topic size: two sessions
    must never edit the same region of a file. Three parallel sessions is the sweet spot; the fourth
    waits. A session gets one coherent area (a parser, a screen, a data-model change plus its UI).
-2. **Write one brief per session** in `briefs/NN-slug.md` (next number after the highest; 33 was the
+2. **Write one brief per session** in `dev/briefs/NN-slug.md` (next number after the highest; 33 was the
    last of round 8). Each brief has: George's words quoted verbatim; numbered items ("one commit each,
    failing test first where there is logic"); an **Ownership** list of files; a **Done** section (what
    must be visible in the simulator and which suites must be green); which files it must not touch
-   because a sibling owns them. Update `briefs/COMMON.md`'s "Round N ownership" block and "How sessions
+   because a sibling owns them. Update `dev/briefs/COMMON.md`'s "Round N ownership" block and "How sessions
    run" paragraph (build numbers, pending schema deploy). Commit the briefs to master first: worktrees
    are cut from master and must contain them.
 3. **Start the sessions** with the app's session tool (`mcp__ccd_session__start_session`): `initiation`
@@ -112,7 +113,7 @@ How George works with you:
    A session that asks for the simulator panel and gets no answer works from screenshots only; its report
    says what it could not tap, and that is your simulator checklist.
 5. **Merge** into master in order: core/parser branches first, then UI, then the data-model branch last
-   (`git merge --no-edit <branch>`). Conflicts are usually `ROADMAP.md` (keep both rows), a doc comment
+   (`git merge --no-edit <branch>`). Conflicts are usually `dev/ROADMAP.md` (keep both rows), a doc comment
    (keep both paragraphs), and a shared view file where one side removed code the other kept. Read every
    conflict region before resolving. Then `xcodegen generate`.
 6. **Apply the cross-session follow-ups** the reports name ("session 32 should call session 31's
@@ -121,7 +122,7 @@ How George works with you:
 8. **Check in the simulator** what no session could tap: the flows George will use first. Fix what you
    find, commit, rebuild, re-check. Keep this to the real risks; it is the expensive step.
 9. **Write the notes** (§6): CHANGELOG section, What's New entry, `SettingsTests` pin. Record the round in
-   `briefs/COMMON.md`. Add a memory line if a rule changed.
+   `dev/briefs/COMMON.md`. Add a memory line if a rule changed.
 10. **Push master** (`git push origin master`) and send George the hand-over message: whether a CloudKit
     schema deploy is needed, the release commands, what to check on real devices (haptics, the Mac), the
     decisions sessions made that George might reverse, and session effort levels.
@@ -149,7 +150,7 @@ files" is obeyed; one that does not produces merge conflicts.
 - Design system: `Support/DesignSystem/*` (`HITTokens.swift` = fonts/spacing/colours; README).
 - Delight: `Support/Delight/*` (sounds, haptics `TapHaptic`), `Views/Delight/*` (completion motion, toast).
 - Notifications: `Services/NotificationScheduler.swift`, `Services/Notifications/*`.
-- Nobody but the supervisor: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`
+- Nobody but the supervisor: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`
   (sessions may add files to it), this file.
 
 ## 6. Releases and notes
@@ -206,9 +207,21 @@ minutes from now, `!15mb` = before the due time; a Discard question sits inside 
 quick-add phrases stay in the title as plain text; the Mac board always opens on today. From 0.7.1: no Mac button
 hands you off to Mail (copy the address and say so); the bolt's lightning strike is a rare "you're good to go" (launch,
 back after a minute away, recovered after a minute of trouble), never a per-sync animation. Follow Apple's HIG
-(`briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
+(`dev/briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
 ## 8. Where things stand (2026-11-05, after round 12)
+
+**2026-11-05, repository tidied for public view (Fable).** The repo is public and read by people who do not
+know the project. Process docs moved under `dev/` (this file, `ROADMAP.md`, `DESIGN.md`, `briefs/`); `CLAUDE.md`
+points here. `README.md` is for readers: what the app is, how it is put together, how to build, test and release.
+Keep it short and current when a round changes any of that, and keep round history out of it. Removed (all in
+history before `v0.7.1`): `TESTFLIGHT.md`, `scripts/session.sh`, `scripts/sdk_session.py`, `server/`,
+`BackupService.swift`, `Keychain.swift`. CI: `TaskActions.toggleCompletion` takes `now:`, so the Claude tool test
+no longer depends on the wall clock (it failed on the UTC runner the moment UTC passed the date the test
+hard-coded, and would have failed locally a day later, stopping `release.sh`'s preflight). Never compare a
+hard-coded date with code that reads `Date()`: inject the clock. A red run on master is a real failure until the
+log says "not acquired by Runner". Actions are on current majors and every master commit gets its own run.
+Commit subjects on this repo say what changed and why in one line; no session or round narrative.
 
 Round 12 (briefs 53–56) finished the Friends build, released as **0.7.1 (17)**: 0.7.0's release stopped at the Shared
 Tasks container's schema check (only the task container had been deployed), so nothing shipped and its notes ship as

@@ -6,7 +6,7 @@ pure-Swift package `HITListCore` (filter query language, quick-add parser, autoc
 snapshot JSON; 43 XCTest tests) and app test bundle `HITListTests` (in-memory container, hosted in the
 app, runs on iOS simulator and macOS; 21 tests). Build 1 (0.1.0) is on TestFlight on George's iPhone 16
 and Mac. George uses it daily as their primary task app and will later share it with friends.
-`ROADMAP.md` is the plan. Dark slate theme only, never light mode (`HITList/Support/Theme.swift`:
+`dev/ROADMAP.md` is the plan. Dark slate theme only, never light mode (`HITList/Support/Theme.swift`:
 `Theme.background/surface/elevated/separator/accent/secondaryText`, `slateList()`, `slateRow()`,
 `slateSheet()`; `HITList/Support/Formatting.swift` has priority colours and `DueFormatter`).
 
@@ -40,19 +40,19 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
   Copy it before any destructive test. Never call `ModelContainer.deleteAllData()`; never delete
   objects as a "reset": deletions mirror to CloudKit and wipe every device.
 - `scripts/release.sh` uploads to App Store Connect: never run it, never edit it.
-- `BackupService.swift` and `server/` are deliberate unused design relics; leave them alone.
+- The home-server backup prototype (`server/`, `BackupService.swift`) was removed on 2026-11-05; do not rebuild it.
 - Work in the git worktree you were started in, on its branch. Commit per sub-item with clear
   messages ending in `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Do not push, do not
   open a PR, do not merge, do not switch branches. Touch only the files your brief lists; another
   session is editing the rest of the app at the same time.
 - George reads instructions only in chat. Anything they must do goes in your final message with exact
-  commands or click paths. Write no documents except the ROADMAP.md status row your brief names.
+  commands or click paths. Write no documents except the dev/ROADMAP.md status row your brief names.
 - Final message always includes: what changed per commit, test counts before/after, how you verified
   it running (simulator and/or Mac), the branch name, and anything George must do.
 
 ## How sessions run (from 2026-11-04, round 9)
 Sessions are Claude Code sessions the desktop app starts from the supervisor's session (an Opus 5.5 session
-following `SUPERVISOR.md`) on George's subscription: each in its own git worktree on a branch named after its
+following `dev/SUPERVISOR.md`) on George's subscription: each in its own git worktree on a branch named after its
 brief, cut from master. The supervisor reads each final report, merges, tests and prepares the release; George
 runs `scripts/release.sh`. TestFlight build 14 (0.4.1) is live on George's devices and about to go to friends as
 external testers; the next upload is 0.5.0 (15). Production's CloudKit schema is V3 (deployed 2026-11-03);
@@ -68,7 +68,7 @@ session's simulator, never quit George's `/Applications/HITList.app`, and quit a
 
 ## Round 11 (2026-11-05; briefs 47–52 run in parallel, all six at once)
 Next version 0.7.0 (17). Session 48 adds schema V5 (`TaskItem.reminderDate`); George deploys it before 0.7.0.
-Read `briefs/HIG-NOTES.md` (Apple's guidelines as they apply here) before designing anything visible.
+Read `dev/briefs/HIG-NOTES.md` (Apple's guidelines as they apply here) before designing anything visible.
 
 **Seeing the Mac app (new, 2026-11-05).** George granted screen recording, so a session can capture its own Debug
 Mac app's window (never the whole screen, which shows George's own windows):
@@ -154,7 +154,7 @@ on its side the system bar overlaps the board's last column; a friend accepting 
   second container is needed.
 - `52-tips-spotlight-cleanup` (High): new `Views/Tips/*`, `Services/Spotlight/*`, `Services/Intents/*`, one line each in
   `HITListApp` and `AccountSwitch`, About sections, `MacSettingsPage`, `SettingsRouter`, dead files nobody owns.
-- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin.
+- Nobody: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin.
 
 ## Round 10 record (2026-11-04; sessions 39–46 merged for 0.6.0 (16))
 Eight desktop-app sessions, all started on George's own turns: 39 `board-inline-add` (High), 40 `profile-chrome`
@@ -186,7 +186,7 @@ own simulator (`HITList-NN`; 45 an iPhone Duo, 39 an iPad) and deletes it at the
 - `44-holiday-delight` (High): new HITListCore `Holidays.swift`, `Views/Delight/*`, `Support/Delight/*`,
   `DelightSettingsSection`, `TaskRow` overlay hook only.
 - `45-iphone-duo` (xhigh): `ContentView`, `MobileShell`, `PopoutHost`, new `Views/Duo/*`, new `DuoLayoutTests`.
-- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything else.
+- Nobody: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything else.
   ROADMAP: only your row. `project.yml`: add files only (43 also adds its target).
 
 ## Round 9 record (2026-11-04; sessions 34–38 merged for 0.5.0 (15))
@@ -216,7 +216,7 @@ panel; 35 never got it, so the supervisor tapped its menus.
 - `38-mac-upcoming-board` (xhigh): `Views/Upcoming/*` (iPhone branch unchanged), new `UpcomingBoard`,
   `UpcomingSchedule`, `TaskRescheduling`, `QuickAddContext` day context, `UpcomingScheduleTests`, new
   `UpcomingBoardTests`.
-- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything
+- Nobody: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` version pin, everything
   else. ROADMAP: only your row. `project.yml`: add files only.
 
 ## Round 8 record (2026-11-03; sessions 31–33 merged for 0.4.1 (14))
@@ -240,7 +240,7 @@ is in CloudKit Development; George deploys it to Production before 0.4.1 uploads
   window lines, new Mac window helper; `QuickAddEntry.swift`; `CompletionFeedback.swift`, new `TapHaptic.swift`;
   `CompletionToast.swift`, `CompletionMotion.swift`; `PopoutHost` toast placement; list toast call sites;
   one haptic call in `QuickAddPopout`; `HITTokens.swift`, `IslandMetrics`; `TaskRow` line height.
-- Nobody: `scripts/`, `briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, everything else. ROADMAP: only your row.
+- Nobody: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, everything else. ROADMAP: only your row.
 
 ## Where things stand (2026-10-31, after round 3 and Fable's follow-ups)
 On master and in TestFlight build 5: design system (`HITList/Support/DesignSystem/`, README = component
@@ -341,4 +341,4 @@ start preference reaches Upcoming, quick add and rescheduling, and the toast/col
   `Services/Notifications/*`, `TaskActions.create`, `DesignSystem/HITChip.swift` (compact size only).
 - `19-flipboard-charge` (branch `flipboard-charge`): `Views/Flipboard/*` and its tests.
 - Nobody: `Models.swift`, `SchemaVersions.swift`, `SchemaV1Models.swift`, `HITTokens.swift`, `project.yml`,
-  `HITListApp.swift`, `SettingsView.swift`, `scripts/`, `briefs/`. ROADMAP: add only the row your brief names.
+  `HITListApp.swift`, `SettingsView.swift`, `scripts/`, `dev/briefs/`. ROADMAP: add only the row your brief names.

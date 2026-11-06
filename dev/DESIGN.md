@@ -1,5 +1,10 @@
 # HITList (Human-in-the-List) — Design
 
+> The original design, written 2026-10-26 before the first build and kept as written. The app has since
+> grown past it (accounts, sub-tasks, Shared Tasks, the Claude connector), and the home-server backup in
+> section 5 was prototyped but never wired in; the prototype was removed from the tree on 2026-11-05 and is
+> in history before `v0.7.1`. The current picture is in the top-level README and `CHANGELOG.md`.
+
 A personal, Todoist-flavored task manager for Apple devices with three priorities:
 
 1. **Robust priority and date filtering** via a small, composable query language.
