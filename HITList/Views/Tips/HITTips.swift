@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import TipKit
 import OSLog
+import SwiftData
 
 /// The first-run tips (brief 52): one short tip at the moment it helps, each shown once, instead of a tour
 /// (HIG, Onboarding: "teach by doing"). TipKit keeps what was shown; Settings → About → Show tips again
@@ -13,6 +14,13 @@ import OSLog
 /// - `browse`: the iPhone's magnifying glass at the top right of a tab's first screen (`ScreenMenu`).
 /// - `flipboard`: the Flipboard's grid.
 /// - `boardAddTask`: today's "Add task" on the Upcoming board (Mac, full-width iPad).
+///
+/// A tip never takes a friend's first tap (brief 56): on iPhone a popover tip closes on the first tap
+/// outside it and that tap goes nowhere, so the "+" of someone's very first moment would only close a
+/// tip. `browse` and `boardAddTask` sit on screens a person reaches without doing anything, so they wait
+/// until the person has settled in (`HITTip.settled`: their first task added, or any later launch). The
+/// others already wait for an action of the person's own: the quick-add tips for the card they opened,
+/// the Flipboard tip for a switch to exist.
 enum HITTipKind: String, CaseIterable, Identifiable {
     case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask
 
@@ -68,9 +76,18 @@ struct HITTip: Tip {
     /// A highlight appeared in a quick-add card (`quickAddTips(hasHighlight:)` donates it).
     static let highlightShown = Tips.Event(id: "highlightShown")
 
+    /// The person has settled in: their first task added, or a later launch (`HITTips.configure` donates it).
+    /// Never renamed: TipKit keeps its donations under this id.
+    static let settled = Tips.Event(id: "settled")
+
+    /// Shows only once the person has settled in, so it never sits on their very first screen.
+    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask }
+
     var rules: [Rule] {
         if kind == .keepAsText {
             #Rule(Self.highlightShown) { $0.donations.count > 0 }
+        } else if waitsUntilSettled {
+            #Rule(Self.settled) { $0.donations.count > 0 }
         } else {
             [Rule]()
         }
@@ -105,7 +122,50 @@ enum HITTips {
             try Tips.configure(options)
         } catch {
             log.error("TipKit not configured: \(error.localizedDescription, privacy: .public)")
+            return
         }
+        settleWhenReady(storeName: storeName)
+    }
+
+    // MARK: Settled in (brief 56)
+
+    private static var taskObserver: NSObjectProtocol?
+
+    /// A later launch settles the tips at once; the first launch settles them with the first save that
+    /// adds a task (quick add, the board, Siri, a Shortcut: every one saves through a `ModelContext`).
+    private static func settleWhenReady(storeName: String) {
+        if recordLaunch(storeName: storeName) {
+            Task { await HITTip.settled.donate() }
+            return
+        }
+        taskObserver = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { note in
+            guard insertsTask(note) else { return }
+            MainActor.assumeIsolated {
+                if let observer = taskObserver { NotificationCenter.default.removeObserver(observer) }
+                taskObserver = nil
+            }
+            Task { await HITTip.settled.donate() }
+        }
+    }
+
+    nonisolated static func launchKey(storeName: String) -> String {
+        storeName == ModelContainerFactory.mainStoreName ? "tips.launched" : "tips.launched.\(storeName)"
+    }
+
+    /// Notes this launch; true if an earlier launch on the same store was noted (a later launch).
+    @discardableResult
+    nonisolated static func recordLaunch(in defaults: UserDefaults = AppGroup.defaults,
+                                         storeName: String = ModelContainerFactory.storeName) -> Bool {
+        let key = launchKey(storeName: storeName)
+        let earlier = defaults.bool(forKey: key)
+        if !earlier { defaults.set(true, forKey: key) }
+        return earlier
+    }
+
+    /// Whether a `ModelContext.didSave` inserted a task (not only a Group, label or filter, nor an edit).
+    nonisolated static func insertsTask(_ note: Notification) -> Bool {
+        let inserted = note.userInfo?[ModelContext.NotificationKey.insertedIdentifiers.rawValue] as? [PersistentIdentifier] ?? []
+        return inserted.contains { $0.entityName == String(describing: TaskItem.self) }
     }
 
     nonisolated static func shouldConfigure(environment: [String: String] = ProcessInfo.processInfo.environment,
