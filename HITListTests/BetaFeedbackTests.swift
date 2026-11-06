@@ -103,4 +103,15 @@ final class BetaFeedbackTests: XCTestCase {
         let view = BetaFeedbackCard(onDone: {}).frame(width: 320).preferredColorScheme(.dark)
         XCTAssertNotNil(ImageRenderer(content: view).cgImage)
     }
+
+    // George, 2026-11-05: "I hate when clicking a button sends you to mail; maybe just copy my email to their
+    // clipboard on Mac."
+    func testTheMacCopiesTheAddressInsteadOfOpeningMail() {
+        #if os(macOS)
+        XCTAssertTrue(BetaFeedback.copiesInsteadOfMail)
+        XCTAssertTrue(BetaFeedback.cardMessage.contains("clipboard"))
+        #else
+        XCTAssertFalse(BetaFeedback.copiesInsteadOfMail, "iPhone and iPad still open a new mail")
+        #endif
+    }
 }

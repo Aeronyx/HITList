@@ -78,16 +78,31 @@ enum BetaFeedback {
     #endif
 
     static let cardTitle = "Send Beta Feedback"
+    #if os(macOS)
+    /// The Mac never opens Mail for this (George, 2026-11-05: "I hate when clicking a button sends you to mail"):
+    /// the address goes to the clipboard and this card says so.
+    static let cardMessage = "George's address is on your clipboard. Paste it into a new email:"
+    /// Whether choosing Send Beta Feedback copies the address and shows the card instead of opening Mail.
+    static let copiesInsteadOfMail = true
+    #else
     static let cardMessage = "No mail app could open a new message. Write to George at:"
+    static let copiesInsteadOfMail = false
+    #endif
 }
 
-/// Opens the feedback mail; `onNoMailApp` runs when nothing could open it (show `BetaFeedbackCard`).
+/// iPhone and iPad: opens the feedback mail; `onNoMailApp` runs when nothing could open it (show
+/// `BetaFeedbackCard`). Mac: copies George's address and shows the card at once, never opening Mail.
 struct SendBetaFeedbackAction {
     let openURL: OpenURLAction
     let onNoMailApp: () -> Void
 
     @MainActor
     func callAsFunction() {
+        if BetaFeedback.copiesInsteadOfMail {
+            Diagnostics.copy(BetaFeedback.address)
+            onNoMailApp()
+            return
+        }
         openURL(BetaFeedback.mailURL(.current)) { accepted in
             if !accepted { onNoMailApp() }
         }
@@ -98,7 +113,8 @@ struct SendBetaFeedbackAction {
 /// and iPad, a small sheet on iPhone (`betaFeedbackCard(isPresented:)`).
 struct BetaFeedbackCard: View {
     var onDone: () -> Void
-    @State private var copied = false
+    /// On the Mac the address was copied as the card opened.
+    @State private var copied = BetaFeedback.copiesInsteadOfMail
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.m) {

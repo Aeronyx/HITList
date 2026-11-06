@@ -82,9 +82,10 @@ Neither is ever sent by the app: they reach us only if you copy, share or save t
 
 ## Beta feedback
 
-Profile → Send Beta Feedback… opens a new email to the developer in your mail app, with the app's version and
-build, your device model (such as "iPhone17,3", never its name) and system version filled in at the bottom. Nothing
-is sent unless you send that email yourself, and it contains nothing from your tasks or profile unless you type it.
+On iPhone and iPad, Profile → Send Beta Feedback… opens a new email to the developer in your mail app, with the
+app's version and build, your device model (such as "iPhone17,3", never its name) and system version filled in at the
+bottom. On a Mac it only copies the developer's email address to your clipboard. Nothing is sent unless you send an
+email yourself, and it contains nothing from your tasks or profile unless you type it.
 
 ## TestFlight
 
