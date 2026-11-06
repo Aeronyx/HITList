@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.7.1
+## 0.7.1 — build 17, 2026-11-05
 
 0.7.0 was built and tested but never uploaded (its release stopped at the Shared Tasks container's schema check), so
 its notes ship here, with George's last fixes. George's notes on build 16 and a read of Apple's design guidelines,
