@@ -158,54 +158,80 @@ enum SyncConfirmation {
     }
 }
 
-/// When the toolbar bolt plays its lightning strike (brief 54): once per good sync, quietly. Fed every
-/// advance of `CloudSyncMonitor.lastChangeAt` (a CloudKit import or export finished), it answers what
-/// the bolt plays for it. Pure, so the rules are testable; one gate is shared by every bolt on screen.
-///
-/// - Launch: the session's first sync and every one that follows it within `launchQuiet` of the one
-///   before are the launch's import storm: nothing plays. A store reset (`old == nil`) starts a new storm.
-/// - Bursts: a sync within `burstGap` of the previous one belongs to the burst under way and plays
-///   nothing, so a burst strikes once, at its start.
-/// - Strikes are at least `cooldown` apart.
-/// - Nothing in the background; a sync there still counts toward its burst, so coming back doesn't
-///   strike late for it.
-/// - Reduce Motion: a blink instead of the strike, under the same rules.
+/// When the toolbar bolt plays its lightning strike: a "you're connected, synced, and good to go" moment,
+/// not a sync indicator (George, 2026-11-05: "not an animation to spam every few seconds"). It strikes once,
+/// on the first good sync (a `CloudSyncMonitor.lastChangeAt` advance) after:
+/// - the app opens (the gate starts armed);
+/// - the app comes back to the front after at least `awayLong` away (a quick app switch doesn't count);
+/// - sync was in trouble (offline, an error or stuck, signed out) for at least `troubleLong`.
+/// Ordinary syncs never strike: CloudKit syncs whenever something changes, so a quiet minute without edits
+/// is normal, not a gap worth marking. Nothing plays while the app isn't in front; the arming waits for the
+/// next good sync there. Reduce Motion: a short blink instead. Pure, so the rules are testable; one gate is
+/// shared by every bolt on screen, and every call is idempotent so each bolt may report the same event.
 struct BoltStrikeGate {
     enum Strike: Equatable { case none, strike, blink }
 
-    static let launchQuiet: TimeInterval = 10
-    static let burstGap: TimeInterval = 3
-    static let cooldown: TimeInterval = 5
+    /// Away from the front at least this long and the next good sync strikes ("reopened").
+    static let awayLong: TimeInterval = 60
+    /// Sync in trouble at least this long and the next good sync strikes ("hasn't synced in a while").
+    static let troubleLong: TimeInterval = 60
 
     /// The `new` value of the last advance this gate was asked about.
     private(set) var lastSeenChange: Date?
     /// What it answered for `lastSeenChange`, so every bolt on screen plays the same for one advance.
     private var lastAnswer: Strike = .none
-    /// When the last advance arrived, struck or not.
-    private var lastAdvanceAt: Date?
-    private var lastStrikeAt: Date?
-    private var inLaunchStorm = true
+    /// The next good sync in front strikes. Set at launch, on coming back after `awayLong`, after a long trouble.
+    private(set) var armed = true
+    private var wentAwayAt: Date?
+    private var troubleSince: Date?
+
+    /// The app left the front (`isActive` false) or came back (true).
+    mutating func appActive(_ isActive: Bool, now: Date) {
+        guard isActive else {
+            if wentAwayAt == nil { wentAwayAt = now }
+            return
+        }
+        if let away = wentAwayAt, now.timeIntervalSince(away) >= Self.awayLong { armed = true }
+        wentAwayAt = nil
+    }
+
+    #if DEBUG
+    /// `-boltStrikeDemo YES`: every fake sync strikes, to record the motion.
+    mutating func armForDemo() { armed = true }
+    #endif
+
+    /// Every sync state change: `healthy` for synced or syncing, false for offline, errors, signed out.
+    mutating func syncState(healthy: Bool, now: Date) {
+        if healthy {
+            if let since = troubleSince, now.timeIntervalSince(since) >= Self.troubleLong { armed = true }
+            troubleSince = nil
+        } else if troubleSince == nil {
+            troubleSince = now
+        }
+    }
 
     mutating func advance(from old: Date?, to new: Date?, now: Date, isActive: Bool, reduceMotion: Bool) -> Strike {
         guard SyncConfirmation.didAdvance(from: old, to: new), let new else { return .none }
         if new == lastSeenChange { return lastAnswer }
-        let gap = lastAdvanceAt.map { now.timeIntervalSince($0) }
         lastSeenChange = new
-        lastAdvanceAt = now
-        lastAnswer = decide(old: old, gap: gap, now: now, isActive: isActive, reduceMotion: reduceMotion)
-        if lastAnswer != .none { lastStrikeAt = now }
+        // A good sync ends any trouble, even if the state change reaches the gate after this advance.
+        syncState(healthy: true, now: now)
+        guard armed, isActive else {
+            lastAnswer = .none
+            return .none
+        }
+        armed = false
+        lastAnswer = reduceMotion ? .blink : .strike
         return lastAnswer
     }
+}
 
-    private mutating func decide(old: Date?, gap: TimeInterval?, now: Date, isActive: Bool, reduceMotion: Bool) -> Strike {
-        if old == nil { inLaunchStorm = true }
-        if inLaunchStorm {
-            guard let gap, gap >= Self.launchQuiet, old != nil else { return .none }
-            inLaunchStorm = false
+extension SyncState {
+    /// For the strike gate: syncing or synced is healthy; anything that stops sync is trouble.
+    var isHealthyForStrike: Bool {
+        switch self {
+        case .synced, .syncing: true
+        case .offline, .error, .notSignedIn, .restricted, .localOnly: false
         }
-        if let gap, gap < Self.burstGap { return .none }
-        if let lastStrikeAt, now.timeIntervalSince(lastStrikeAt) < Self.cooldown { return .none }
-        guard isActive else { return .none }
-        return reduceMotion ? .blink : .strike
     }
 }

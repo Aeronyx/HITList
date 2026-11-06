@@ -203,7 +203,7 @@ final class SyncStateTests: XCTestCase {
         }
     }
 
-    // MARK: Bolt strike (brief 54)
+    // MARK: Bolt strike (brief 54; rules George, 2026-11-05: once when the app opens, reopens, or after trouble)
 
     /// Feeds the gate a sequence of `lastChangeAt` advances, `at` seconds from `now`, and returns what each one played.
     private func strikes(_ advances: [TimeInterval], active: Bool = true, reduceMotion: Bool = false,
@@ -216,64 +216,72 @@ final class SyncStateTests: XCTestCase {
         }
     }
 
-    func testNothingStrikesDuringTheLaunchStorm() {
+    func testOpeningStrikesOnceOnTheFirstGoodSync() {
         var gate = BoltStrikeGate()
-        // The session's first import, then the export and imports that follow it within the quiet gap.
-        XCTAssertEqual(strikes([0, 2, 5, 11, 19], gate: &gate), [.none, .none, .none, .none, .none])
-        // Once things have been quiet for the launch gap, the next good sync strikes.
-        XCTAssertEqual(strikes([19 + BoltStrikeGate.launchQuiet], gate: &gate), [.strike])
+        // The launch's import and everything after it while the app is in use: one strike, at the start.
+        XCTAssertEqual(strikes([0, 2, 5, 11, 19, 90, 400], gate: &gate), [.strike, .none, .none, .none, .none, .none, .none],
+                       "a quiet minute without edits is normal: later syncs pass without a strike")
     }
 
-    func testAStoreResetStartsANewStorm() {
-        var gate = BoltStrikeGate()
-        _ = strikes([0, 30], gate: &gate)
-        // lastChangeAt went back to nil (a store reset) and a full import follows: quiet again.
-        let at = now.addingTimeInterval(100)
-        XCTAssertEqual(gate.advance(from: nil, to: at, now: at, isActive: true, reduceMotion: false), .none)
-    }
-
-    func testABurstStrikesOnceAtItsStart() {
-        var gate = BoltStrikeGate()
-        _ = strikes([0], gate: &gate)  // launch
-        // An export and the import it sets off, each under the burst gap after the one before.
-        XCTAssertEqual(strikes([60, 61, 62.5, 64], gate: &gate), [.strike, .none, .none, .none])
-    }
-
-    func testStrikesAreAtLeastTheCooldownApart() {
+    func testComingBackAfterAMinuteStrikesOnceButAQuickSwitchDoesNot() {
         var gate = BoltStrikeGate()
         _ = strikes([0], gate: &gate)
-        let gap = BoltStrikeGate.burstGap + 0.5  // separate bursts, but closer than the cooldown
-        XCTAssertLessThan(gap, BoltStrikeGate.cooldown)
-        let third = max(60 + BoltStrikeGate.cooldown, 60 + gap + BoltStrikeGate.burstGap) + 0.1  // a burst of its own, past the cooldown
-        XCTAssertEqual(strikes([60, 60 + gap, third], gate: &gate), [.strike, .none, .strike])
-        XCTAssertGreaterThanOrEqual(BoltStrikeGate.cooldown, 3, "no more than one strike every few seconds")
+        // A quick app switch: away 10 s.
+        gate.appActive(false, now: now.addingTimeInterval(20))
+        gate.appActive(true, now: now.addingTimeInterval(30))
+        XCTAssertEqual(strikes([31], gate: &gate), [.none])
+        // Away for two minutes, then back: the next good sync strikes, once.
+        gate.appActive(false, now: now.addingTimeInterval(40))
+        gate.appActive(true, now: now.addingTimeInterval(40 + BoltStrikeGate.awayLong + 60))
+        XCTAssertEqual(strikes([170, 172], gate: &gate), [.strike, .none])
     }
 
-    func testNoStrikeInTheBackgroundAndNoLateOneOnReturn() {
+    func testSyncBackAfterAMinuteOfTroubleStrikes() {
         var gate = BoltStrikeGate()
         _ = strikes([0], gate: &gate)
-        XCTAssertEqual(strikes([60], active: false, gate: &gate), [.none])
-        // The background sync still counts toward its burst, so coming back mid-burst doesn't strike for it.
-        XCTAssertEqual(strikes([61], gate: &gate), [.none])
-        XCTAssertEqual(strikes([90], gate: &gate), [.strike])
+        // Offline for 20 s, then synced: a blip, no strike.
+        gate.syncState(healthy: false, now: now.addingTimeInterval(10))
+        gate.syncState(healthy: true, now: now.addingTimeInterval(30))
+        XCTAssertEqual(strikes([31], gate: &gate), [.none])
+        // Offline for two minutes: the sync that ends it strikes, even before the state reports healthy.
+        gate.syncState(healthy: false, now: now.addingTimeInterval(40))
+        XCTAssertEqual(strikes([40 + BoltStrikeGate.troubleLong + 60, 165], gate: &gate), [.strike, .none])
+    }
+
+    func testNoStrikeInTheBackgroundButTheNextOneInFrontDoes() {
+        var gate = BoltStrikeGate()
+        // The app opened in the background (a push woke it): nothing there, the first good sync in front strikes.
+        XCTAssertEqual(strikes([0], active: false, gate: &gate), [.none])
+        XCTAssertEqual(strikes([5, 6], gate: &gate), [.strike, .none])
     }
 
     func testReduceMotionBlinksInstead() {
         var gate = BoltStrikeGate()
-        _ = strikes([0], gate: &gate)
-        XCTAssertEqual(strikes([60], reduceMotion: true, gate: &gate), [.blink])
-        XCTAssertEqual(strikes([61, 70], reduceMotion: true, gate: &gate), [.none, .blink], "same merge and cooldown")
+        XCTAssertEqual(strikes([0, 1], reduceMotion: true, gate: &gate), [.blink, .none])
     }
 
     func testEveryBoltOnScreenGetsTheSameAnswerForOneAdvance() {
-        // Two windows (or a split view) each draw a bolt; both ask about the same advance.
+        // Two windows (or a split view) each draw a bolt; both ask about the same advance, and both report the
+        // same scene changes.
         var gate = BoltStrikeGate()
-        _ = strikes([0], gate: &gate)
-        let old = now, new = now.addingTimeInterval(60)
-        XCTAssertEqual(gate.advance(from: old, to: new, now: new, isActive: true, reduceMotion: false), .strike)
-        XCTAssertEqual(gate.advance(from: old, to: new, now: new.addingTimeInterval(0.01), isActive: true, reduceMotion: false),
-                       .strike, "the second bolt strikes with the first, not blocked by the cooldown")
+        let new = now.addingTimeInterval(1)
+        XCTAssertEqual(gate.advance(from: nil, to: new, now: new, isActive: true, reduceMotion: false), .strike)
+        XCTAssertEqual(gate.advance(from: nil, to: new, now: new.addingTimeInterval(0.01), isActive: true, reduceMotion: false),
+                       .strike, "the second bolt strikes with the first")
         XCTAssertEqual(gate.advance(from: new, to: new, now: new, isActive: true, reduceMotion: false), .none, "no advance")
+        gate.appActive(false, now: now.addingTimeInterval(10))
+        gate.appActive(false, now: now.addingTimeInterval(11))  // the second bolt's report keeps the first time away
+        gate.appActive(true, now: now.addingTimeInterval(10 + BoltStrikeGate.awayLong))
+        gate.appActive(true, now: now.addingTimeInterval(11 + BoltStrikeGate.awayLong))
+        XCTAssertEqual(strikes([200], gate: &gate), [.strike])
+    }
+
+    func testHealthForTheGate() {
+        XCTAssertTrue(SyncState.synced(now).isHealthyForStrike)
+        XCTAssertTrue(SyncState.syncing.isHealthyForStrike)
+        XCTAssertFalse(SyncState.offline.isHealthyForStrike)
+        XCTAssertFalse(SyncState.error("x", now).isHealthyForStrike)
+        XCTAssertFalse(SyncState.notSignedIn.isHealthyForStrike)
     }
 
     func testTheStrikeIsShortAndSmall() {
