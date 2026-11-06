@@ -4,6 +4,8 @@ import SwiftData
 @testable import HITList
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 /// The account button at the top of the Mac and iPad sidebar (brief 40): its words, the dropdown's rows,
@@ -44,24 +46,45 @@ final class ProfileMenuTests: XCTestCase {
     }
 
     func testMenuRowsInOrder() {
-        XCTAssertEqual(ProfileMenuModel.items, [.accountSettings, .settings, .divider, .iCloud])
+        XCTAssertEqual(ProfileMenuModel.items(for: .sidebar),
+                       [.accountSettings, .settings, .divider, .whatsNew, .feedback, .divider, .iCloud, .version])
         XCTAssertEqual(ProfileMenuModel.accountSettingsTitle, "Account settings…")
         XCTAssertEqual(ProfileMenuModel.settingsTitle, "Settings…")
+        XCTAssertEqual(ProfileMenuModel.whatsNewTitle, "What's New")
+        XCTAssertEqual(ProfileMenuModel.feedbackTitle, "Send Beta Feedback…")
     }
 
-    func testICloudLineUsesTheAccountScreensWords() {
-        let states: [AccountState] = [.checking, .signedIn, .switched, .signedOut, .neverSignedIn, .restricted,
-                                      .needsSignInAgain, .couldNotDetermine, .localOnly("test")]
-        for state in states {
-            XCTAssertEqual(ProfileMenuModel.iCloudLine(state), state.title, "same words as Settings → Account")
+    /// iPhone Browse's menu leaves out Settings…: Browse's own gear sits beside the button.
+    func testBrowseMenuHasNoSettingsRow() {
+        XCTAssertEqual(ProfileMenuModel.items(for: .browse),
+                       [.accountSettings, .divider, .whatsNew, .feedback, .divider, .iCloud, .version])
+    }
+
+    func testMenuPlacementPerPlatform() {
+        #if os(macOS)
+        XCTAssertEqual(ProfileMenuModel.Placement.current, .sidebar)
+        #else
+        let expected: ProfileMenuModel.Placement = UIDevice.current.userInterfaceIdiom == .phone ? .browse : .sidebar
+        XCTAssertEqual(ProfileMenuModel.Placement.current, expected)
+        #endif
+    }
+
+    func testEveryMenuEndsWithTheVersion() {
+        for placement in [ProfileMenuModel.Placement.sidebar, .browse] {
+            let items = ProfileMenuModel.items(for: placement)
+            XCTAssertEqual(items.last, .version, "the quiet version line at the foot")
+            XCTAssertEqual(items.first, .accountSettings)
+            XCTAssertEqual(items.filter { $0 == .whatsNew }.count, 1)
+            XCTAssertEqual(items.filter { $0 == .feedback }.count, 1)
+            XCTAssertEqual(items[items.count - 2], .iCloud, "the iCloud line just above it")
         }
-        XCTAssertEqual(ProfileMenuModel.iCloudLine(.signedIn), "iCloud: Signed in")
-        XCTAssertEqual(ProfileMenuModel.iCloudLine(.neverSignedIn), "iCloud: Not signed in")
     }
 
-    func testAccessibilityLabelNamesTheAccount() {
-        XCTAssertEqual(ProfileMenuModel.accessibilityLabel(forName: "George"), "Account: George")
-        XCTAssertEqual(ProfileMenuModel.accessibilityLabel(forName: nil), "Account: Add your name")
+    func testVersionLine() {
+        XCTAssertEqual(ProfileMenuModel.versionLine("0.7.0 (17)"), "HITList 0.7.0 (17)")
+        XCTAssertEqual(ProfileMenuModel.versionLine(), "HITList \(AppInfo.versionLabel)")
+        XCTAssertEqual(ProfileMenuModel.versionAccessibilityLabel(version: "0.7.0", build: "17"),
+                       "HITList version 0.7.0, build 17")
     }
 
     // MARK: What's New
@@ -97,6 +120,21 @@ final class ProfileMenuTests: XCTestCase {
         }
     }
 
+    func testICloudLineUsesTheAccountScreensWords() {
+        let states: [AccountState] = [.checking, .signedIn, .switched, .signedOut, .neverSignedIn, .restricted,
+                                      .needsSignInAgain, .couldNotDetermine, .localOnly("test")]
+        for state in states {
+            XCTAssertEqual(ProfileMenuModel.iCloudLine(state), state.title, "same words as Settings → Account")
+        }
+        XCTAssertEqual(ProfileMenuModel.iCloudLine(.signedIn), "iCloud: Signed in")
+        XCTAssertEqual(ProfileMenuModel.iCloudLine(.neverSignedIn), "iCloud: Not signed in")
+    }
+
+    func testAccessibilityLabelNamesTheAccount() {
+        XCTAssertEqual(ProfileMenuModel.accessibilityLabel(forName: "George"), "Account: George")
+        XCTAssertEqual(ProfileMenuModel.accessibilityLabel(forName: nil), "Account: Add your name")
+    }
+
     // MARK: SettingsRouter
 
     func testOpeningAtASectionRemembersItThenOpens() {
@@ -120,8 +158,10 @@ final class ProfileMenuTests: XCTestCase {
     func testCardRendersForEveryState() {
         let states: [AccountState] = [.checking, .signedIn, .signedOut, .neverSignedIn, .localOnly("test")]
         for state in states {
-            let view = ProfileMenuCard(state: state).frame(width: 240).preferredColorScheme(.dark)
-            XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(state.title) didn't render")
+            for placement in [ProfileMenuModel.Placement.sidebar, .browse] {
+                let view = ProfileMenuCard(state: state, placement: placement).frame(width: 240).preferredColorScheme(.dark)
+                XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(state.title) didn't render")
+            }
         }
     }
 
@@ -212,10 +252,20 @@ final class ProfileMenuTests: XCTestCase {
         XCTAssertNotEqual(card, corner, "the open card drew over the sidebar")
     }
 
-    /// A point inside the open card's row `row` (0 = Account settings…), in the host's top-left coordinates.
+    /// A point inside the open card's row `row` (0 = Account settings…, 1 = Settings…), in the host's
+    /// top-left coordinates.
     static func cardPoint(row: Int) -> CGPoint {
-        let top = ProfileButtonMetrics.top + ProfileButtonMetrics.height + ProfileMenuModel.cardGap + HITSpacing.xs
-        return CGPoint(x: SidebarView.profileInset + 60, y: top + 14 + CGFloat(row) * 28)
+        CGPoint(x: SidebarView.profileInset + 60, y: cardContentTop + 14 + CGFloat(row) * 28)
+    }
+
+    /// The top of the card's first row.
+    static var cardContentTop: CGFloat {
+        ProfileButtonMetrics.top + ProfileButtonMetrics.height + ProfileMenuModel.cardGap + HITSpacing.xs
+    }
+
+    /// The quiet version line at the card's foot: five 28 pt rows, the iCloud line and two 9 pt hairlines above it.
+    static var versionPoint: CGPoint {
+        CGPoint(x: SidebarView.profileInset + 60, y: cardContentTop + 5 * 28 + 2 * 9 + 8)
     }
 
     /// The click goes to SwiftUI's hosting view, not to the sidebar list drawn under the card.
@@ -267,8 +317,8 @@ final class ProfileMenuTests: XCTestCase {
         defer { window.close() }
         settle()
         XCTAssertTrue(try cardIsShowing(host), "starts open")
-        try mouseDown(at: CGPoint(x: Self.cardPoint(row: 0).x, y: Self.cardPoint(row: 2).y + 10), in: window, host: host)
-        XCTAssertTrue(try cardIsShowing(host), "a click on the card's iCloud line keeps it open")
+        try mouseDown(at: Self.versionPoint, in: window, host: host)
+        XCTAssertTrue(try cardIsShowing(host), "a click on the card's version line keeps it open")
         try mouseDown(at: CGPoint(x: sidebarSize.width - 10, y: sidebarSize.height - 60), in: window, host: host)
         XCTAssertFalse(try cardIsShowing(host), "a click outside closed the card")
     }
