@@ -71,6 +71,7 @@ struct WhatsNewPopout: View {
             .scrollBounceBehavior(.basedOnSize)
         }
         .background(Theme.elevated)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("whatsNewPopout")
     }
 

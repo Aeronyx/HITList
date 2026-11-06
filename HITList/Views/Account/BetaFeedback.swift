@@ -150,6 +150,7 @@ struct BetaFeedbackCard: View {
         .padding(HITSpacing.l)
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Theme.elevated)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("betaFeedbackCard")
     }
 }
