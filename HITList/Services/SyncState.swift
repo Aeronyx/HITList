@@ -157,3 +157,55 @@ enum SyncConfirmation {
         return now.timeIntervalSince(lastPulse) >= minimumGap
     }
 }
+
+/// When the toolbar bolt plays its lightning strike (brief 54): once per good sync, quietly. Fed every
+/// advance of `CloudSyncMonitor.lastChangeAt` (a CloudKit import or export finished), it answers what
+/// the bolt plays for it. Pure, so the rules are testable; one gate is shared by every bolt on screen.
+///
+/// - Launch: the session's first sync and every one that follows it within `launchQuiet` of the one
+///   before are the launch's import storm: nothing plays. A store reset (`old == nil`) starts a new storm.
+/// - Bursts: a sync within `burstGap` of the previous one belongs to the burst under way and plays
+///   nothing, so a burst strikes once, at its start.
+/// - Strikes are at least `cooldown` apart.
+/// - Nothing in the background; a sync there still counts toward its burst, so coming back doesn't
+///   strike late for it.
+/// - Reduce Motion: a blink instead of the strike, under the same rules.
+struct BoltStrikeGate {
+    enum Strike: Equatable { case none, strike, blink }
+
+    static let launchQuiet: TimeInterval = 10
+    static let burstGap: TimeInterval = 3
+    static let cooldown: TimeInterval = 5
+
+    /// The `new` value of the last advance this gate was asked about.
+    private(set) var lastSeenChange: Date?
+    /// What it answered for `lastSeenChange`, so every bolt on screen plays the same for one advance.
+    private var lastAnswer: Strike = .none
+    /// When the last advance arrived, struck or not.
+    private var lastAdvanceAt: Date?
+    private var lastStrikeAt: Date?
+    private var inLaunchStorm = true
+
+    mutating func advance(from old: Date?, to new: Date?, now: Date, isActive: Bool, reduceMotion: Bool) -> Strike {
+        guard SyncConfirmation.didAdvance(from: old, to: new), let new else { return .none }
+        if new == lastSeenChange { return lastAnswer }
+        let gap = lastAdvanceAt.map { now.timeIntervalSince($0) }
+        lastSeenChange = new
+        lastAdvanceAt = now
+        lastAnswer = decide(old: old, gap: gap, now: now, isActive: isActive, reduceMotion: reduceMotion)
+        if lastAnswer != .none { lastStrikeAt = now }
+        return lastAnswer
+    }
+
+    private mutating func decide(old: Date?, gap: TimeInterval?, now: Date, isActive: Bool, reduceMotion: Bool) -> Strike {
+        if old == nil { inLaunchStorm = true }
+        if inLaunchStorm {
+            guard let gap, gap >= Self.launchQuiet, old != nil else { return .none }
+            inLaunchStorm = false
+        }
+        if let gap, gap < Self.burstGap { return .none }
+        if let lastStrikeAt, now.timeIntervalSince(lastStrikeAt) < Self.cooldown { return .none }
+        guard isActive else { return .none }
+        return reduceMotion ? .blink : .strike
+    }
+}
