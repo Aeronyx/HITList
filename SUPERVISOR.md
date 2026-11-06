@@ -171,6 +171,11 @@ files" is obeyed; one that does not produces merge conflicts.
   first open the CloudKit Console → iCloud.com.trammells.hitlist → Development → Deploy Schema Changes… →
   Deploy to Production. Say so in bold in the hand-over message. The script refuses to upload while the
   environments differ.
+  **Two containers since 0.7.1:** `iCloud.com.trammells.hitlist` (tasks) and `iCloud.com.trammells.hitlist.shared`
+  (Shared Tasks, its record types reach Development through `-sharedTasksSchemaPush YES` runs). Each is deployed on its
+  own in the console: pick the container in the menu at the top first. `release.sh` checks both; 0.7.0's release
+  stopped because only the first had been deployed. Check either yourself, read-only:
+  `xcrun cktool export-schema --team-id UC8N98H3RT --container-id <container> --environment production --output-file x.ckdb`.
 - TestFlight: George's own devices get builds at once. Friends are external testers: the first build
   for them goes through Beta App Review (up to a day), needs App Store Connect's Test Information filled
   in (description, feedback email, a privacy policy URL), and "Sign-in required" stays unchecked while the
@@ -201,9 +206,18 @@ minutes from now, `!15mb` = before the due time; a Discard question sits inside 
 quick-add phrases stay in the title as plain text; the Mac board always opens on today. Follow Apple's HIG
 (`briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
-## 8. Where things stand (2026-11-05, after round 11)
+## 8. Where things stand (2026-11-05, after round 12)
 
-Round 11 (briefs 47–52) is merged for 0.7.0 (17): highlights on native text views (Backspace removes a highlight
+Round 12 (briefs 53–56) finished the Friends build, released as **0.7.1 (17)**: 0.7.0's release stopped at the Shared
+Tasks container's schema check (only the task container had been deployed), so nothing shipped and its notes ship as
+0.7.1 with George's last fixes. The Mac's Send Beta Feedback copies george@trammells.com and shows the card, never
+Mail (iPhone and iPad still start a mail). The bolt strikes only as a "you're good to go": the first good sync after
+launch, after a minute or more away, or after a minute or more of sync trouble (`BoltStrikeGate`; on the Mac an import
+follows activation within about a second, so the strike on return is prompt). The 26 merged session worktrees were
+removed (17 GB). Details in COMMON's Round 12 record; round 11's open items below were fixed in round 12. Next:
+the friends' TestFlight feedback.
+
+Round 11 (briefs 47–52) is merged for 0.7.0 (17), which shipped as 0.7.1: highlights on native text views (Backspace removes a highlight
 first; steady Mac pointer), `!15m` = from now with schema V5 `TaskItem.reminderDate` (George deploys it), Extras and a
 switched-off Claude integration, the iPhone Duo's side tab island and creaky hinge, the Shared Tasks preview on its
 own container `iCloud.com.trammells.hitlist.shared` (George deploys its schema too; `release.sh` now checks both

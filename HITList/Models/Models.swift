@@ -101,7 +101,7 @@ extension HITListSchemaV5 {
         /// This task's checklist, in no particular order (`orderedSubtasks`). Deleting the task deletes them.
         @Relationship(deleteRule: .cascade, inverse: \TaskItem.parent) var subtasks: [TaskItem]? = []
 
-        // V5 (0.7.0): a reminder at a moment of its own (brief 48: "!15m" in quick add, 15 minutes from when
+        // V5 (0.7.1): a reminder at a moment of its own (brief 48: "!15m" in quick add, 15 minutes from when
         // the task was added), separate from the due time and its `reminderOffsetMinutes`. It goes off once,
         // a repeating task's too (it doesn't roll on with the due date); nil for none.
         var reminderDate: Date? = nil

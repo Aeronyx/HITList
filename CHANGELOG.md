@@ -4,20 +4,23 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.7.0
+## 0.7.1
 
-George's notes on build 16 and a read of Apple's design guidelines, in ten sessions over two rounds: highlights
-rebuilt on native text views, reminders "from now", Extras and a quieter Claude, the iPhone Duo done Apple's way
-with a creaky hinge, a Shared Tasks preview, first-run tips with Spotlight, then the polish for friends: the
-profile menu's What's New and beta feedback, a lightning strike on the sync bolt, and a smoother first run. The
-first build for the TestFlight group "Friends".
+0.7.0 was built and tested but never uploaded (its release stopped at the Shared Tasks container's schema check), so
+its notes ship here, with George's last fixes. George's notes on build 16 and a read of Apple's design guidelines,
+in ten sessions over two rounds: highlights rebuilt on native text views, reminders "from now", Extras and a quieter
+Claude, the iPhone Duo done Apple's way with a creaky hinge, a Shared Tasks preview, first-run tips with Spotlight,
+then the polish for friends: the profile menu's What's New and beta feedback, a lightning strike on the sync bolt,
+and a smoother first run. The first build for the TestFlight group "Friends".
 
 - Profile menu (Mac sidebar, iPad, and Browse's top left on iPhone): What's New (this version, earlier ones on
-  request), Send Beta Feedback… (an email to George with the version and device filled in, never your tasks; the
-  address to copy where there is no Mail), and the version at the foot.
-- The sync bolt is 15% larger, and a good sync lands with one quick lightning strike (under a third of a second,
-  never more than once every few seconds, none at launch or with Reduce Motion). Animations may run at 120 Hz on
-  ProMotion iPhones.
+  request), Send Beta Feedback…, and the version at the foot. On iPhone and iPad, Send Beta Feedback starts an
+  email to George with the version and device filled in (never your tasks); on the Mac it never opens Mail: it
+  copies George's address and says so.
+- The sync bolt is 15% larger, and says "you're good to go" with one quick lightning strike (under a third of a
+  second): on the first good sync after you open HITList, after you come back from a minute or more away, or after
+  sync was in trouble (offline, an error) for a minute or more. Never for ordinary syncs; a short blink with Reduce
+  Motion. Animations may run at 120 Hz on ProMotion iPhones.
 - Settings → Claude: "Only tasks with @claude" (the default, on the left) or "All tasks but @private"; the
   integration itself stays off until you turn it on.
 - The iPhone Duo's hinge creaks like an old wooden door now, quietly (Settings → Extras → Creaky hinge, on by
@@ -58,7 +61,8 @@ first build for the TestFlight group "Friends".
   settings, so they never change the real app's.
 - Privacy policy: sections for Shared Tasks and the switched-off Claude integration.
 - Schema V5 adds `TaskItem.reminderDate`, and Shared Tasks uses its own container
-  (`iCloud.com.trammells.hitlist.shared`); both deployed to CloudKit Production before this build.
+  (`iCloud.com.trammells.hitlist.shared`); both deployed to CloudKit Production before this build, and
+  `release.sh` checks both containers.
 
 ## 0.6.0 — build 16, 2026-11-05
 
