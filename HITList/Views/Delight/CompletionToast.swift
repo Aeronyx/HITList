@@ -30,7 +30,9 @@ struct CompletionToast: View {
                     .foregroundStyle(HITColor.text)
                     .contentTransition(.numericText())
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    // The end of a long title goes, never the "Completed" in front: middle truncation read
+                    // "Complete…r the plants'" beside the iPhone "+" (brief 56).
+                    .truncationMode(.tail)
                 Text("·").foregroundStyle(Theme.secondaryText)
                 Text("Undo")
                     .fontWeight(.semibold)
