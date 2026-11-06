@@ -126,8 +126,16 @@ struct SyncBolt: View {
     /// the session's, not each screen's.
     @MainActor static var strikeGate = BoltStrikeGate()
 
+    /// The monitor's state; in the Debug strike demo, the filled bolt a real sync leaves behind.
+    private var displayState: SyncState {
+        #if DEBUG
+        if BoltStrikeDemo.isRequested { return .synced(.now) }
+        #endif
+        return monitor.state
+    }
+
     var body: some View {
-        let state = monitor.state
+        let state = displayState
         TimelineView(.periodic(from: .now, by: 60)) { tick in
             let look = Self.look(for: state, now: tick.date)
             Button(action: action) {
@@ -171,6 +179,10 @@ struct SyncBolt: View {
             }
         }
         .onChange(of: monitor.lastChangeAt) { old, new in strikeIfDue(from: old, to: new) }
+        #if DEBUG
+        .onAppear { BoltStrikeDemo.shared.startIfRequested() }
+        .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
+        #endif
     }
 
     /// In front and visible: on the Mac also the active app, so a sync that lands while George works in
@@ -342,3 +354,35 @@ enum BoltStrikeMotion {
     }
 }
 
+#if DEBUG
+/// A Debug-only stand-in for real syncs, so the strike can be recorded on a simulator with sync off:
+/// launch with `-boltStrikeDemo YES` and, from the first bolt's appearance, `change` advances the way
+/// `CloudSyncMonitor.lastChangeAt` does: a launch storm (nothing plays), a burst (one strike), a sync
+/// inside the cooldown (nothing), then a sync every 4 s (a strike each). Every bolt watches it.
+@MainActor
+@Observable
+final class BoltStrikeDemo {
+    static let shared = BoltStrikeDemo()
+    static var isRequested: Bool { UserDefaults.standard.bool(forKey: "boltStrikeDemo") }
+
+    /// Seconds after the first bolt appears for each fake sync.
+    static let schedule: [TimeInterval] = [0, 1.5, 4, 16, 17, 22, 24] + (0..<30).map { 28 + Double($0) * 4 }
+
+    private(set) var change: Date?
+    @ObservationIgnored private var task: Task<Void, Never>?
+
+    /// Starts the schedule once per process; later calls do nothing.
+    func startIfRequested() {
+        guard Self.isRequested, task == nil else { return }
+        let start = Date()
+        task = Task { @MainActor in
+            for offset in Self.schedule {
+                let wait = start.addingTimeInterval(offset).timeIntervalSinceNow
+                if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                SyncConfirmation.log.info("Bolt strike demo: fake sync at +\(offset, format: .fixed(precision: 1), privacy: .public) s")
+                change = Date()
+            }
+        }
+    }
+}
+#endif
