@@ -99,10 +99,10 @@ struct AccountChangeBanner: View {
 /// pastel that sits apart from the accent; struck-through states go grey, errors and sign-out red. It
 /// flicks brighter once when a change lands, and tapping it opens Settings.
 ///
-/// When a sync lands it also plays one lightning strike (brief 54, `BoltStrikeMotion`): a quick double
-/// flash with a twirl of a few degrees, gone in 280 ms. `BoltStrikeGate` keeps it rare: never during the
-/// launch's import storm, once per burst, at least 5 s apart, never in the background, and a short blink
-/// instead under Reduce Motion.
+/// It plays one lightning strike (brief 54, `BoltStrikeMotion`: a quick double flash with a twirl of a few
+/// degrees, gone in 280 ms) as a "you're good to go": on the first good sync after the app opens, after it
+/// comes back from a minute or more away, or after sync was in trouble for a minute or more
+/// (`BoltStrikeGate`). Never for ordinary syncs, never in the background; a short blink under Reduce Motion.
 struct SyncBolt: View {
     var action: () -> Void
     /// The glyph's point size: 15% larger than the original 11 pt (George, brief 54), on every platform.
@@ -122,8 +122,8 @@ struct SyncBolt: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
-    /// The one gate every bolt on screen asks, so two windows strike together and the launch storm is
-    /// the session's, not each screen's.
+    /// The one gate every bolt on screen asks, so two windows strike together and "the app opened" is the
+    /// session's, not each screen's.
     @MainActor static var strikeGate = BoltStrikeGate()
 
     /// The monitor's state; in the Debug strike demo, the filled bolt a real sync leaves behind.
@@ -179,6 +179,19 @@ struct SyncBolt: View {
             }
         }
         .onChange(of: monitor.lastChangeAt) { old, new in strikeIfDue(from: old, to: new) }
+        // What arms the next strike: coming back to the front after a while, and sync trouble that lasted.
+        .onChange(of: scenePhase) { _, _ in Self.strikeGate.appActive(isActive, now: Date()) }
+        #if os(macOS)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+            Self.strikeGate.appActive(false, now: Date())
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Self.strikeGate.appActive(isActive, now: Date())
+        }
+        #endif
+        .onChange(of: monitor.state.isHealthyForStrike, initial: true) { _, healthy in
+            Self.strikeGate.syncState(healthy: healthy, now: Date())
+        }
         #if DEBUG
         .onAppear { BoltStrikeDemo.shared.startIfRequested() }
         .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
@@ -356,9 +369,9 @@ enum BoltStrikeMotion {
 
 #if DEBUG
 /// A Debug-only stand-in for real syncs, so the strike can be recorded on a simulator with sync off:
-/// launch with `-boltStrikeDemo YES` and, from the first bolt's appearance, `change` advances the way
-/// `CloudSyncMonitor.lastChangeAt` does: a launch storm (nothing plays), a burst (one strike), a sync
-/// inside the cooldown (nothing), then a sync every 4 s (a strike each). Every bolt watches it.
+/// launch with `-boltStrikeDemo YES` and, from the first bolt's appearance, `change` advances on a schedule
+/// and the gate is re-armed before each, so every fake sync strikes (the real rules strike far less often;
+/// see `BoltStrikeGate`). Every bolt watches it.
 @MainActor
 @Observable
 final class BoltStrikeDemo {
@@ -380,6 +393,7 @@ final class BoltStrikeDemo {
                 let wait = start.addingTimeInterval(offset).timeIntervalSinceNow
                 if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
                 SyncConfirmation.log.info("Bolt strike demo: fake sync at +\(offset, format: .fixed(precision: 1), privacy: .public) s")
+                SyncBolt.strikeGate.armForDemo()  // each fake sync plays, so the motion can be recorded
                 change = Date()
             }
         }
