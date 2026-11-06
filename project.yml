@@ -75,6 +75,9 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         # Shared Tasks (brief 51): lets a CloudKit share link open in HITList and reach the share-acceptance callbacks.
         CKSharingSupported: true
+        # ProMotion iPhones may run animations above 60 Hz (the sync bolt's strike, brief 54); without this key
+        # Core Animation caps them at 60 on iPhone.
+        CADisableMinimumFrameDurationOnPhone: true
         # Inter is the app typeface; resources are flattened into the bundle root. Keep in step with `includes`.
         UIAppFonts: [Inter_18pt-Light.ttf, Inter_18pt-Regular.ttf, Inter_18pt-Medium.ttf, Inter_18pt-SemiBold.ttf, Inter_18pt-Bold.ttf, Inter_18pt-ExtraBold.ttf]
         ATSApplicationFontsPath: "."

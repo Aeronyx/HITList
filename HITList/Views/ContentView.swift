@@ -77,7 +77,7 @@ struct ContentView: View {
         .popoutHost(popouts, style: PopoutHost.Style(shell))
         // The Duo's outer display: the island follows the system's vertical bar (brief 50).
         .placesIsland()
-        // Extras → Squeaky hinge (brief 50).
+        // Extras → Creaky hinge (brief 50).
         .hingeCreak()
         .environment(popouts)
         .focusedSceneValue(\.popouts, popouts)
