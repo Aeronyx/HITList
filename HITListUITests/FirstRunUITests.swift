@@ -47,7 +47,7 @@ final class FirstRunUITests: XCTestCase {
         snapshot("04 Added")
 
         // A task for today to complete: the first one is tomorrow's.
-        // One tap is enough (the swallowed first tap after an Add was fixed in 0.7.0; see
+        // One tap is enough (the swallowed first tap after an Add was fixed in 0.7.1; see
         // `HITListUITests.testPlusOpensTheNextCardRightAfterAnAdd`).
         let plus = app.buttons["quickAddButton"].firstMatch
         XCTAssertTrue(plus.wait(for: \.isHittable, toEqual: true, timeout: 3), "the + is back")

@@ -81,10 +81,10 @@ enum HITListSchemaV4: VersionedSchema {
     }
 }
 
-/// 0.7.0 schema: the live models in Models.swift. TaskItem gains `reminderDate` (brief 48: "!15m", a reminder
+/// 0.7.1 schema: the live models in Models.swift. TaskItem gains `reminderDate` (brief 48: "!15m", a reminder
 /// at a moment of its own, 15 minutes from when the task was added), optional, so the CloudKit change is
 /// additive (a CD_reminderDate field on CD_TaskItem) and the store migrates lightweight. Deploy the schema
-/// to Production in the CloudKit dashboard before 0.7.0 ships.
+/// to Production in the CloudKit dashboard before 0.7.1 ships (0.7.0 was never uploaded).
 enum HITListSchemaV5: VersionedSchema {
     static let versionIdentifier = Schema.Version(5, 0, 0)
     static var models: [any PersistentModel.Type] {

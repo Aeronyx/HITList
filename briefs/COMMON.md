@@ -116,7 +116,9 @@ flow layout, Duo board safe area, `FirstRunUITests`). All High. Supervisor: merg
 that interactive Liquid Glass on the iPhone "+" ignored its first tap after `allowsHitTesting` came back (the button is
 now removed and re-inserted; `testPlusOpensTheNextCardRightAfterAnAdd`); toast tail truncation;
 `CADisableMinimumFrameDurationOnPhone`; the official Claude logo NOT used (Anthropic's trademark guidelines require
-their prior approval).
+their prior approval). 0.7.0's release stopped at the Shared Tasks container's schema check, so it ships as 0.7.1 (17)
+with George's last fixes: the Mac's Send Beta Feedback copies the address instead of opening Mail, and the bolt
+strikes only on the first good sync after launch, after ≥ 1 min away, or after ≥ 1 min of sync trouble.
 
 ## Round 11 record (2026-11-05; sessions 47–52 merged for 0.7.0 (17))
 Six sessions on George's turn: 47 `highlight-engine` (xhigh), 48 `reminder-language` (xhigh, schema V5), 49

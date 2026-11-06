@@ -112,7 +112,7 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(hashes, v5Hashes)
     }
 
-    /// Entity version hashes of schema V5, the live models (0.7.0). When V6 moves them, these must keep
+    /// Entity version hashes of schema V5, the live models (0.7.1). When V6 moves them, these must keep
     /// matching the frozen copy.
     private let v5Hashes: [String: String] = [
         "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
