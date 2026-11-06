@@ -202,4 +202,111 @@ final class SyncStateTests: XCTestCase {
             XCTAssertEqual(SyncLog.countLines(in: data), SyncLog.lines(in: data).count, text.debugDescription)
         }
     }
+
+    // MARK: Bolt strike (brief 54)
+
+    /// Feeds the gate a sequence of `lastChangeAt` advances, `at` seconds from `now`, and returns what each one played.
+    private func strikes(_ advances: [TimeInterval], active: Bool = true, reduceMotion: Bool = false,
+                         gate: inout BoltStrikeGate) -> [BoltStrikeGate.Strike] {
+        var previous = gate.lastSeenChange
+        return advances.map { offset in
+            let at = now.addingTimeInterval(offset)
+            defer { previous = at }
+            return gate.advance(from: previous, to: at, now: at, isActive: active, reduceMotion: reduceMotion)
+        }
+    }
+
+    func testNothingStrikesDuringTheLaunchStorm() {
+        var gate = BoltStrikeGate()
+        // The session's first import, then the export and imports that follow it within the quiet gap.
+        XCTAssertEqual(strikes([0, 2, 5, 11, 19], gate: &gate), [.none, .none, .none, .none, .none])
+        // Once things have been quiet for the launch gap, the next good sync strikes.
+        XCTAssertEqual(strikes([19 + BoltStrikeGate.launchQuiet], gate: &gate), [.strike])
+    }
+
+    func testAStoreResetStartsANewStorm() {
+        var gate = BoltStrikeGate()
+        _ = strikes([0, 30], gate: &gate)
+        // lastChangeAt went back to nil (a store reset) and a full import follows: quiet again.
+        let at = now.addingTimeInterval(100)
+        XCTAssertEqual(gate.advance(from: nil, to: at, now: at, isActive: true, reduceMotion: false), .none)
+    }
+
+    func testABurstStrikesOnceAtItsStart() {
+        var gate = BoltStrikeGate()
+        _ = strikes([0], gate: &gate)  // launch
+        // An export and the import it sets off, each under the burst gap after the one before.
+        XCTAssertEqual(strikes([60, 61, 62.5, 64], gate: &gate), [.strike, .none, .none, .none])
+    }
+
+    func testStrikesAreAtLeastTheCooldownApart() {
+        var gate = BoltStrikeGate()
+        _ = strikes([0], gate: &gate)
+        let gap = BoltStrikeGate.burstGap + 0.5  // separate bursts, but closer than the cooldown
+        XCTAssertLessThan(gap, BoltStrikeGate.cooldown)
+        let third = max(60 + BoltStrikeGate.cooldown, 60 + gap + BoltStrikeGate.burstGap) + 0.1  // a burst of its own, past the cooldown
+        XCTAssertEqual(strikes([60, 60 + gap, third], gate: &gate), [.strike, .none, .strike])
+        XCTAssertGreaterThanOrEqual(BoltStrikeGate.cooldown, 3, "no more than one strike every few seconds")
+    }
+
+    func testNoStrikeInTheBackgroundAndNoLateOneOnReturn() {
+        var gate = BoltStrikeGate()
+        _ = strikes([0], gate: &gate)
+        XCTAssertEqual(strikes([60], active: false, gate: &gate), [.none])
+        // The background sync still counts toward its burst, so coming back mid-burst doesn't strike for it.
+        XCTAssertEqual(strikes([61], gate: &gate), [.none])
+        XCTAssertEqual(strikes([90], gate: &gate), [.strike])
+    }
+
+    func testReduceMotionBlinksInstead() {
+        var gate = BoltStrikeGate()
+        _ = strikes([0], gate: &gate)
+        XCTAssertEqual(strikes([60], reduceMotion: true, gate: &gate), [.blink])
+        XCTAssertEqual(strikes([61, 70], reduceMotion: true, gate: &gate), [.none, .blink], "same merge and cooldown")
+    }
+
+    func testEveryBoltOnScreenGetsTheSameAnswerForOneAdvance() {
+        // Two windows (or a split view) each draw a bolt; both ask about the same advance.
+        var gate = BoltStrikeGate()
+        _ = strikes([0], gate: &gate)
+        let old = now, new = now.addingTimeInterval(60)
+        XCTAssertEqual(gate.advance(from: old, to: new, now: new, isActive: true, reduceMotion: false), .strike)
+        XCTAssertEqual(gate.advance(from: old, to: new, now: new.addingTimeInterval(0.01), isActive: true, reduceMotion: false),
+                       .strike, "the second bolt strikes with the first, not blocked by the cooldown")
+        XCTAssertEqual(gate.advance(from: new, to: new, now: new, isActive: true, reduceMotion: false), .none, "no advance")
+    }
+
+    func testTheStrikeIsShortAndSmall() {
+        let strike = BoltStrikeMotion.timeline(for: .strike)
+        XCTAssertLessThanOrEqual(strike.duration, 0.3)
+        var peakScale: CGFloat = 1, peakTwirl: Double = 0, peakGlow: Double = 0
+        for step in 0...300 {
+            let fx = strike.value(time: Double(step) / 1000)
+            peakScale = max(peakScale, fx.scale)
+            peakTwirl = max(peakTwirl, abs(fx.twirl))
+            peakGlow = max(peakGlow, fx.glow)
+            XCTAssertEqual(fx.opacity, 1, "a strike never dims the bolt")
+        }
+        XCTAssertGreaterThan(peakScale, 1)
+        XCTAssertLessThanOrEqual(peakScale, 1.12)
+        XCTAssertGreaterThan(peakTwirl, 2)
+        XCTAssertLessThanOrEqual(peakTwirl, 10, "a few degrees")
+        XCTAssertEqual(peakGlow, 1, accuracy: 0.05, "it flashes")
+        XCTAssertEqual(strike.value(time: strike.duration), BoltStrikeMotion.Frame(), "and comes back to rest")
+    }
+
+    func testTheReduceMotionBlinkOnlyFadesAndIsShorter() {
+        let blink = BoltStrikeMotion.timeline(for: .blink)
+        XCTAssertLessThanOrEqual(blink.duration, 0.15)
+        var lowest: Double = 1
+        for step in 0...150 {
+            let fx = blink.value(time: Double(step) / 1000)
+            XCTAssertEqual(fx.scale, 1)
+            XCTAssertEqual(fx.twirl, 0)
+            XCTAssertEqual(fx.glow, 0)
+            lowest = min(lowest, fx.opacity)
+        }
+        XCTAssertLessThan(lowest, 0.7, "a visible blink")
+        XCTAssertEqual(blink.value(time: blink.duration), BoltStrikeMotion.Frame())
+    }
 }
