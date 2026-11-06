@@ -2,16 +2,22 @@ import SwiftUI
 import SwiftData
 #if os(macOS)
 import AppKit
+#else
+import UIKit
 #endif
 
 // The account button at the top of the Mac and iPad sidebar (brief 40), modelled on Todoist's: the profile's
 // avatar (24 pt), the name in the sidebar's type and a small chevron. It opens a small dropdown card drawn
-// in the design system's own style: Account settings…, Settings…, a hairline, and the iCloud state line
-// (read-only, the words Settings → Account uses). Before a name is set it shows the empty avatar and
-// "Add your name". The iPhone puts the same profile at the top left of Browse (`BrowseProfileButton`).
+// in the design system's own style: Account settings…, Settings…, a hairline, What's New and Send Beta
+// Feedback… (brief 53), a hairline, the iCloud state line (read-only, the words Settings → Account uses) and
+// a quiet version line at the foot. Before a name is set it shows the empty avatar and "Add your name".
+// The iPhone puts the same profile at the top left of Browse (`BrowseProfileMenu`), whose card leaves out
+// Settings… (the gear beside it opens Settings).
 //
 // Mac: the card is drawn in the sidebar itself, under the button, never as an `NSPopover`; a click anywhere
-// outside it or Escape closes it. iPad: the same card in a SwiftUI popover.
+// outside it or Escape closes it. iPad and iPhone: the same card in a SwiftUI popover. What's New
+// (`WhatsNewPopout`) and the no-mail-app card (`BetaFeedbackCard`) open from the button once the menu has
+// gone: popovers on the Mac and iPad, sheets on iPhone.
 
 /// What the profile button and its menu say. Pure, so tests pin the words and the order.
 enum ProfileMenuModel {
@@ -20,17 +26,46 @@ enum ProfileMenuModel {
     static let addNamePrompt = "Add your name"
     static let accountSettingsTitle = "Account settings…"
     static let settingsTitle = "Settings…"
+    static let whatsNewTitle = "What's New"
+    static let feedbackTitle = "Send Beta Feedback…"
     /// The card's widest; narrower in a narrow sidebar.
     static let cardMaxWidth: CGFloat = 260
     /// Between the bottom of the button and the top of the card.
     static let cardGap: CGFloat = 4
 
     enum Item: Hashable {
-        case accountSettings, settings, divider, iCloud
+        case accountSettings, settings, divider, whatsNew, feedback, iCloud, version
     }
 
-    /// The card's rows, top to bottom.
-    static let items: [Item] = [.accountSettings, .settings, .divider, .iCloud]
+    /// Where the menu opens: the Mac and iPad sidebar, or iPhone Browse's top left.
+    enum Placement {
+        case sidebar, browse
+
+        /// The sidebar on the Mac and iPad, Browse on iPhone.
+        @MainActor static var current: Placement {
+            #if os(iOS)
+            UIDevice.current.userInterfaceIdiom == .phone ? .browse : .sidebar
+            #else
+            .sidebar
+            #endif
+        }
+    }
+
+    /// The card's rows, top to bottom. Browse leaves out Settings…: its own gear sits beside the button.
+    static func items(for placement: Placement) -> [Item] {
+        switch placement {
+        case .sidebar: [.accountSettings, .settings, .divider, .whatsNew, .feedback, .divider, .iCloud, .version]
+        case .browse: [.accountSettings, .divider, .whatsNew, .feedback, .divider, .iCloud, .version]
+        }
+    }
+
+    /// The quiet line at the foot: "HITList 0.7.0 (17)".
+    static func versionLine(_ label: String = AppInfo.versionLabel) -> String { "HITList \(label)" }
+
+    /// VoiceOver's words for the version line: "HITList version 0.7.0, build 17".
+    static func versionAccessibilityLabel(version: String = AppInfo.version, build: String = AppInfo.build) -> String {
+        "HITList version \(version), build \(build)"
+    }
 
     /// The name to show, trimmed; nil before one is set.
     static func displayName(_ raw: String?) -> String? {
@@ -60,7 +95,11 @@ struct ProfileMenu: View {
 
     @Query private var profiles: [Profile]
     @State private var isOpen: Bool
+    @State private var destination: ProfileMenuDestination?
+    /// A row picked while the iPad popover was up; it runs once the popover has gone.
+    @State private var pending: (() -> Void)?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     #if os(macOS)
     @State private var clickRegions = ClickRegions()
     #endif
@@ -78,6 +117,7 @@ struct ProfileMenu: View {
     var body: some View {
         HStack(spacing: 0) {
             button
+                .profileMenuDestinations($destination)
             Spacer(minLength: 0)
         }
         #if os(macOS)
@@ -111,31 +151,47 @@ struct ProfileMenu: View {
         .help("Account and settings")
         #else
         .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
-            ProfileMenuCard(state: AccountState.current, chrome: false, onAccountSettings: pick(onAccountSettings),
-                            onSettings: pick(onSettings))
+            menuCard(chrome: false)
                 .frame(width: ProfileMenuModel.cardMaxWidth)
                 .presentationCompactAdaptation(.popover)
                 .presentationBackground(Theme.elevated)
+                .onDisappear(perform: runPending)
         }
         #endif
         .accessibilityLabel(ProfileMenuModel.accessibilityLabel(forName: profile?.displayName))
-        .accessibilityHint("Shows account settings, settings and iCloud")
+        .accessibilityHint("Shows account settings, settings, What's New and beta feedback")
         .accessibilityIdentifier("profile-menu")
     }
 
     #if os(macOS)
-    private var card: some View {
-        ProfileMenuCard(state: AccountState.current, chrome: true, onAccountSettings: pick(onAccountSettings),
-                        onSettings: pick(onSettings))
-    }
+    private var card: some View { menuCard(chrome: true) }
     #endif
 
-    /// A row's action: close the card first, then go.
+    private func menuCard(chrome: Bool) -> some View {
+        ProfileMenuCard(state: AccountState.current, placement: .sidebar, chrome: chrome,
+                        onAccountSettings: pick(onAccountSettings), onSettings: pick(onSettings),
+                        onWhatsNew: pick { destination = .whatsNew },
+                        onFeedback: pick { SendBetaFeedbackAction(openURL: openURL) { destination = .feedbackCard }() })
+    }
+
+    /// A row's action: close the card first, then go. On the Mac the card is part of the sidebar, so it goes
+    /// at once; the iPad's popover must have gone before another presentation can start.
     private func pick(_ action: @escaping () -> Void) -> () -> Void {
         {
+            #if os(macOS)
             close()
             action()
+            #else
+            pending = action
+            close()
+            #endif
         }
+    }
+
+    private func runPending() {
+        guard let action = pending else { return }
+        pending = nil
+        action()
     }
 
     private func close() {
@@ -217,17 +273,22 @@ enum ProfileButtonMetrics {
     static let bottom: CGFloat = HITSpacing.xs + 8
 }
 
-/// The dropdown: two rows, a hairline, the iCloud line. `chrome` draws the card's own background, border
-/// and shadow (the Mac); a popover brings its own (iPad).
+/// The dropdown: the account and settings rows, a hairline, What's New and Send Beta Feedback…, a hairline,
+/// the iCloud line and the version. `chrome` draws the card's own background, border and shadow (the Mac);
+/// a popover brings its own (iPad, iPhone).
 struct ProfileMenuCard: View {
     let state: AccountState
+    var placement: ProfileMenuModel.Placement = .sidebar
     var chrome = true
+    var versionLabel = AppInfo.versionLabel
     var onAccountSettings: () -> Void = {}
     var onSettings: () -> Void = {}
+    var onWhatsNew: () -> Void = {}
+    var onFeedback: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(ProfileMenuModel.items, id: \.self) { item in
+            ForEach(Array(ProfileMenuModel.items(for: placement).enumerated()), id: \.offset) { _, item in
                 switch item {
                 case .accountSettings:
                     ProfileMenuRow(title: ProfileMenuModel.accountSettingsTitle, systemImage: "person.crop.circle",
@@ -237,6 +298,12 @@ struct ProfileMenuCard: View {
                     ProfileMenuRow(title: ProfileMenuModel.settingsTitle, systemImage: "gearshape",
                                    shortcut: Self.settingsShortcut, action: onSettings)
                         .accessibilityIdentifier("profile-menu-settings")
+                case .whatsNew:
+                    ProfileMenuRow(title: ProfileMenuModel.whatsNewTitle, systemImage: "sparkles", action: onWhatsNew)
+                        .accessibilityIdentifier("profile-menu-whatsnew")
+                case .feedback:
+                    ProfileMenuRow(title: ProfileMenuModel.feedbackTitle, systemImage: "envelope", action: onFeedback)
+                        .accessibilityIdentifier("profile-menu-feedback")
                 case .divider:
                     Rectangle()
                         .fill(Theme.separator)
@@ -245,11 +312,28 @@ struct ProfileMenuCard: View {
                         .padding(.vertical, HITSpacing.xs)
                 case .iCloud:
                     iCloudLine
+                case .version:
+                    versionLine
                 }
             }
         }
         .padding(HITSpacing.xs)
         .modifier(ProfileCardChrome(enabled: chrome))
+    }
+
+    /// Quiet, under the iCloud line, lined up with the rows' words.
+    private var versionLine: some View {
+        Text(ProfileMenuModel.versionLine(versionLabel))
+            .font(HITType.caption)
+            .monospacedDigit()
+            .foregroundStyle(Theme.secondaryText.opacity(0.75))
+            .lineLimit(1)
+            .padding(.leading, HITSpacing.s + ProfileMenuRow.iconWidth + HITSpacing.s)
+            .padding(.trailing, HITSpacing.s)
+            .padding(.bottom, HITSpacing.xs)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(ProfileMenuModel.versionAccessibilityLabel())
+            .accessibilityIdentifier("profile-menu-version")
     }
 
     private var iCloudLine: some View {
@@ -436,6 +520,84 @@ private struct ClickRegionView: NSViewRepresentable {
     /// Never takes a click itself.
     private final class PassthroughView: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+#endif
+
+/// What the menu opens from its button once the card has gone.
+enum ProfileMenuDestination: Hashable {
+    /// `WhatsNewPopout`.
+    case whatsNew
+    /// `BetaFeedbackCard`: no mail app could open the feedback mail.
+    case feedbackCard
+}
+
+extension View {
+    /// What's New and the feedback card, anchored to the profile button: popovers on the Mac and iPad,
+    /// sheets on iPhone.
+    func profileMenuDestinations(_ destination: Binding<ProfileMenuDestination?>) -> some View {
+        self
+            .background {
+                Color.clear.whatsNewPopout(isPresented: destination.is(.whatsNew))
+            }
+            .background {
+                Color.clear.betaFeedbackCard(isPresented: destination.is(.feedbackCard))
+            }
+    }
+}
+
+private extension Binding where Value == ProfileMenuDestination? {
+    /// True while `self` is `value`; setting false clears it.
+    func `is`(_ value: ProfileMenuDestination) -> Binding<Bool> {
+        Binding<Bool>(
+            get: { wrappedValue == value },
+            set: { isOn in
+                if isOn { wrappedValue = value } else if wrappedValue == value { wrappedValue = nil }
+            })
+    }
+}
+
+#if os(iOS)
+/// iPhone Browse's top left (brief 53): the profile button opens the same card as the sidebar's, in a
+/// popover, without Settings… (Browse's gear is beside it). Account settings… opens the Settings sheet,
+/// whose first group is Account.
+struct BrowseProfileMenu: View {
+    var onAccountSettings: () -> Void
+
+    @State private var isOpen = false
+    @State private var destination: ProfileMenuDestination?
+    @State private var pending: (() -> Void)?
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        Button { isOpen = true } label: { BrowseProfileButton() }
+            .buttonStyle(.plain)
+            .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
+                ProfileMenuCard(state: AccountState.current, placement: .browse, chrome: false,
+                                onAccountSettings: pick(onAccountSettings),
+                                onWhatsNew: pick { destination = .whatsNew },
+                                onFeedback: pick { SendBetaFeedbackAction(openURL: openURL) { destination = .feedbackCard }() })
+                    .frame(width: ProfileMenuModel.cardMaxWidth)
+                    .presentationCompactAdaptation(.popover)
+                    .presentationBackground(Theme.elevated)
+                    .onDisappear(perform: runPending)
+            }
+            .profileMenuDestinations($destination)
+            .accessibilityHint("Shows account settings, What's New and beta feedback")
+    }
+
+    /// The popover must have gone before a sheet or Settings can open: the row's action waits for it.
+    private func pick(_ action: @escaping () -> Void) -> () -> Void {
+        {
+            pending = action
+            isOpen = false
+        }
+    }
+
+    private func runPending() {
+        guard let action = pending else { return }
+        pending = nil
+        action()
     }
 }
 #endif
