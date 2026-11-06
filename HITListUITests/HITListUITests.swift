@@ -48,6 +48,25 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Upcoming")
     }
 
+    /// One tap on "+" right after an Add opens the next card. Brief 56 found the first tap swallowed (a friend
+    /// adding a second task had to tap twice).
+    func testPlusOpensTheNextCardRightAfterAnAdd() throws {
+        app.launch()
+        let plus = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(plus.waitForExistence(timeout: 15))
+        plus.tap()
+        let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        app.typeText("First task ")
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "the card closes after Add")
+        XCTAssertTrue(plus.wait(for: \.isHittable, toEqual: true, timeout: 3), "the + is back")
+
+        plus.tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 3), "one tap opens the next card")
+        snapshot("Second card")
+    }
+
     /// Keeps a screenshot in the test result.
     private func snapshot(_ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())

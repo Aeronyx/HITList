@@ -261,25 +261,29 @@ struct IslandAddButton: View {
     private var shown: Bool { popouts.state.showsAddButton }
 
     var body: some View {
-        Button {
-            TapHaptic.play()
-            action()
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: FloatingAddButton.glyphSize, weight: .semibold))
-                .foregroundStyle(HITColor.onAccent)
-                .frame(width: IslandMetrics.sideAddButtonSize.width, height: IslandMetrics.sideAddButtonSize.height)
-                .holidayAccent(size: 9, outside: false)
-                .hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
-                .contentShape(Capsule())
+        // Put back new rather than re-enabled, as `FloatingAddButton` is: interactive glass ignored the first tap
+        // after `allowsHitTesting` came back.
+        ZStack {
+            if shown {
+                Button {
+                    TapHaptic.play()
+                    action()
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: FloatingAddButton.glyphSize, weight: .semibold))
+                        .foregroundStyle(HITColor.onAccent)
+                        .frame(width: IslandMetrics.sideAddButtonSize.width, height: IslandMetrics.sideAddButtonSize.height)
+                        .holidayAccent(size: 9, outside: false)
+                        .hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(TabItemPressStyle())
+                .accessibilityLabel("Add task")
+                .accessibilityIdentifier("quickAddButton")
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
+            }
         }
-        .buttonStyle(TabItemPressStyle())
-        .accessibilityLabel("Add task")
-        .accessibilityIdentifier("quickAddButton")
-        .opacity(shown ? 1 : 0)
-        .scaleEffect(shown ? 1 : 0.6)
-        .allowsHitTesting(shown)
-        .accessibilityHidden(!shown)
+        .frame(width: IslandMetrics.sideAddButtonSize.width, height: IslandMetrics.sideAddButtonSize.height)
         .animation(HITMotion.enter(reduceMotion: reduceMotion), value: shown)
         .onAppear { TapHaptic.prepare() }
     }

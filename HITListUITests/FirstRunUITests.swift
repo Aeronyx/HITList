@@ -47,17 +47,11 @@ final class FirstRunUITests: XCTestCase {
         snapshot("04 Added")
 
         // A task for today to complete: the first one is tomorrow's.
-        app.buttons["quickAddButton"].firstMatch.tap()
-        if !title.waitForExistence(timeout: 5) {
-            // Known (brief 56 report; the popouts are not this brief's files): after a card retires through
-            // Add, the iPhone's "+" ignores its next tap. Noted in the result, then the second tap.
-            XCTContext.runActivity(named: "Known bug: the first \"+\" after an Add opened nothing; tapping again") { activity in
-                let note = XCTAttachment(string: "The first tap on \"+\" after an Add was swallowed.")
-                note.lifetime = .keepAlways
-                activity.add(note)
-            }
-            app.buttons["quickAddButton"].firstMatch.tap()
-        }
+        // One tap is enough (the swallowed first tap after an Add was fixed in 0.7.0; see
+        // `HITListUITests.testPlusOpensTheNextCardRightAfterAnAdd`).
+        let plus = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(plus.wait(for: \.isHittable, toEqual: true, timeout: 3), "the + is back")
+        plus.tap()
         XCTAssertTrue(title.waitForExistence(timeout: 5), "the card again")
         app.typeText("Water the plants today ")
         save.tap()
