@@ -6,8 +6,9 @@ on:
   pull_request:
     branches: [master]
 
+# Every commit on master gets its own run; a pull request's superseded runs are cancelled.
 concurrency:
-  group: tests-${{ github.ref }}
+  group: tests-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -16,7 +17,7 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select newest Xcode
         run: |
@@ -28,7 +29,7 @@ jobs:
           swift --version
 
       - name: Cache SwiftPM
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             HITListCore/.build
@@ -48,7 +49,7 @@ jobs:
 
       - name: Upload test logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-logs
           path: ${{ runner.temp }}/hitlist-tests
