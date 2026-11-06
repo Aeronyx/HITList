@@ -2,7 +2,7 @@
 
 George asked every round to follow Apple's Human Interface Guidelines (https://developer.apple.com/design/human-interface-guidelines/).
 These are the supervisor's own summaries of the pages that touch HITList, read on 2026-11-05; open the page itself
-when your brief touches its area. George's explicit decisions (SUPERVISOR.md §7, the briefs) win over a guideline;
+when your brief touches its area. George's explicit decisions (dev/SUPERVISOR.md §7, the briefs) win over a guideline;
 say so in your report when one does.
 
 ## iPhone Duo (`designing-for-iphone-duo`, new 2026-09-09)
