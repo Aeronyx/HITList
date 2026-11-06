@@ -26,16 +26,14 @@ final class ReleasePolishTests: XCTestCase {
 
     /// A popover tip on iPhone takes the first tap outside it to close itself. The tips that would show
     /// on a screen the person reaches without doing anything (Browse's magnifying glass on every tab, the
-    /// board's Add task) wait until the person has added a task or comes back on a later launch.
+    /// board's Add task) or right as their first switch lands (the Flipboard) wait until they have settled in.
     func testTipsOnTheFirstScreensWaitUntilThePersonHasSettledIn() {
         let waiting = HITTipKind.allCases.filter { HITTip($0, generation: 0).waitsUntilSettled }
-        XCTAssertEqual(Set(waiting), [.browse, .boardAddTask])
-        XCTAssertFalse(HITTip(.browse, generation: 0).rules.isEmpty)
-        XCTAssertFalse(HITTip(.boardAddTask, generation: 0).rules.isEmpty)
-        // The quick-add tip shows when the person opens the card (its own moment); the Flipboard tip only
-        // once a switch exists; the highlight tip once a highlight has appeared.
+        XCTAssertEqual(Set(waiting), [.browse, .boardAddTask, .flipboard])
+        for kind in waiting { XCTAssertFalse(HITTip(kind, generation: 0).rules.isEmpty, "\(kind)") }
+        // The quick-add tips sit inside the card the person opened (inline, nothing to swallow a tap); the
+        // highlight tip waits for a highlight.
         XCTAssertTrue(HITTip(.quickAddSyntax, generation: 0).rules.isEmpty)
-        XCTAssertTrue(HITTip(.flipboard, generation: 0).rules.isEmpty)
         XCTAssertEqual(HITTip.settled.id, "settled", "stored in TipKit's datastore: never rename")
     }
 

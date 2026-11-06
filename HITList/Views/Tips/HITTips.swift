@@ -16,12 +16,10 @@ import SwiftData
 /// - `boardAddTask`: today's "Add task" on the Upcoming board (Mac, full-width iPad).
 ///
 /// A tip never takes a friend's first tap (brief 56): on iPhone a popover tip closes on the first tap
-/// outside it and that tap goes nowhere, so the "+" of someone's very first moment would only close a
-/// tip. `browse` and `boardAddTask` sit on screens a person reaches without doing anything, so they wait
-/// until the person has settled in (`HITTip.settled`, `TipSettling`: back in the app after their first
-/// task, or any later launch). The
-/// others already wait for an action of the person's own: the quick-add tips for the card they opened,
-/// the Flipboard tip for a switch to exist.
+/// outside it and that tap goes nowhere. So the quick-add tips sit inside the card, inline (`quickAddTips`),
+/// and the popover tips (`browse`, `boardAddTask`, `flipboard`) wait until the person has settled in
+/// (`HITTip.settled`, `TipSettling`: back in the app after their first task, or any later launch), never
+/// popping up on a first screen or the moment something lands.
 enum HITTipKind: String, CaseIterable, Identifiable {
     case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask
 
@@ -82,7 +80,7 @@ struct HITTip: Tip {
     static let settled = Tips.Event(id: "settled")
 
     /// Shows only once the person has settled in, so it never sits on their very first screen.
-    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask }
+    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask || kind == .flipboard }
 
     var rules: [Rule] {
         if kind == .keepAsText {
