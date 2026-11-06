@@ -7,8 +7,9 @@ import HITListCore
 /// glass at the top right (brief 35; the gear there opens Settings): a search field on top, then Groups
 /// (Inbox first, the default grey Group, then each Group in its colour with its open count), Labels and
 /// Filters, each header with its "+", then Completed and Settings (`lastRows`; the Flipboard is a tab).
-/// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens
-/// Settings, whose first group is Account.
+/// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens the
+/// profile menu (`BrowseProfileMenu`, brief 53): Account settings… (the Settings sheet, whose first group is
+/// Account), What's New, Send Beta Feedback… and the version.
 /// A row pushes its list on the same stack, where the tab bar and the "+" stay. Typing in the search field swaps the sections for
 /// matching tasks (titles and notes, completed ones too); a result opens the task popout.
 struct BrowseView: View {
@@ -87,10 +88,9 @@ struct BrowseView: View {
         }
     }
 
+    /// The profile menu (brief 53): Account settings…, What's New, Send Beta Feedback… and the version.
     private var profileButton: some View {
-        Button { showSettings = true } label: { BrowseProfileButton() }
-            .buttonStyle(.plain)
-            .accessibilityHint("Opens Settings")
+        BrowseProfileMenu { showSettings = true }
             .accessibilityIdentifier("browse-profile")
     }
 
