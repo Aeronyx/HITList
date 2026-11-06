@@ -6,3 +6,4 @@ xcuserdata/
 .build/
 *.ipa
 *.pkg
+.claude/worktrees/
