@@ -203,7 +203,9 @@ Apple account is the identity, profiles serve Shared Tasks); the Claude integrat
 its privacy choices shown only once switched on; "Delight" is called "Extras"; a quick-add highlight goes away by a
 click/tap or by Backspace right after it; "!" reminders light up only once complete (after a space); `!15m` = 15
 minutes from now, `!15mb` = before the due time; a Discard question sits inside the card it concerns; overridden
-quick-add phrases stay in the title as plain text; the Mac board always opens on today. Follow Apple's HIG
+quick-add phrases stay in the title as plain text; the Mac board always opens on today. From 0.7.1: no Mac button
+hands you off to Mail (copy the address and say so); the bolt's lightning strike is a rare "you're good to go" (launch,
+back after a minute away, recovered after a minute of trouble), never a per-sync animation. Follow Apple's HIG
 (`briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
 ## 8. Where things stand (2026-11-05, after round 12)
