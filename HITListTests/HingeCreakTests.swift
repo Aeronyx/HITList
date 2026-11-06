@@ -258,6 +258,70 @@ final class HingeCreakTests: XCTestCase {
         XCTAssertTrue(HingeCreakSettingsRow.isShown(hasHinge: true))
     }
 
+    // MARK: Every sound HITList makes (brief 55, George: "Include no random audio effects; themes and holiday
+    // events should be visual only (besides the iPhone Duo hinge noise)")
+
+    /// The audio APIs anything would need to make a sound.
+    private static let audioAPIs = ["AVAudioPlayer", "AVAudioEngine", "AVAudioSourceNode", "AVAudioPlayerNode", "AVPlayer",
+                                    "AVQueuePlayer", "AudioServicesPlay", "SystemSoundID", "NSSound", "AVSpeechSynthesizer",
+                                    "UNNotificationSound", "content.sound"]
+
+    /// The app's and the helper's Swift sources by path ("HITList/Views/…"), read from the checkout the tests were
+    /// built from. Skipped where the test host can't read it (the Mac app's sandbox); the iOS simulator can.
+    private func sources() throws -> [String: String] {
+        let checkout = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        var found: [String: String] = [:]
+        for folder in ["HITList", "HITListMCP"] {
+            let root = checkout.appendingPathComponent(folder)
+            guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { continue }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+                found[folder + url.path.dropFirst(root.path.count)] = text
+            }
+        }
+        guard found.count > 50 else { throw XCTSkip("this test host can't read the sources (\(found.count) files)") }
+        return found
+    }
+
+    private func files(_ sources: [String: String], mentioning words: [String]) -> Set<String> {
+        Set(sources.filter { _, text in words.contains { text.contains($0) } }.keys)
+    }
+
+    func testEverySoundHITListCanMakeIsKnownAndHasItsSwitch() throws {
+        let sources = try sources()
+        XCTAssertEqual(files(sources, mentioning: Self.audioAPIs), [
+            // The completion sound: Extras → Completion sound (None turns it off), via `CompletionSoundPlayer`.
+            "HITList/Support/Delight/CompletionFeedback.swift",
+            // The ▶ beside each sound in Extras: only when tapped.
+            "HITList/Views/Delight/DelightSettingsSection.swift",
+            // The creaky hinge: Extras → Creaky hinge, iPhone Duo only.
+            "HITList/Support/Delight/HingeCreak.swift",
+            // Reminders: the system's notification sound (iOS Settings → Notifications → HITList → Sounds).
+            "HITList/Services/NotificationScheduler.swift",
+        ], "a new sound: add it here, with its switch, only if George asked for it")
+        XCTAssertEqual(files(sources, mentioning: ["CompletionSoundPlayer {", "CompletionSoundPlayer("]), [
+            "HITList/Support/Delight/CompletionFeedback.swift",
+            // The Flipboard's flip click and the charged bubble: the board's … → Flip Sound.
+            "HITList/Views/Flipboard/FlipSound.swift",
+        ])
+        XCTAssertEqual(files(sources, mentioning: ["FlipSound.play"]),
+                       ["HITList/Views/Flipboard/FlipSwitchTile.swift", "HITList/Views/Flipboard/FlipboardView.swift"],
+                       "only a flip someone made plays the flip")
+    }
+
+    func testHolidaysTheRareVisitorAndThemesAreSilent() throws {
+        let sources = try sources()
+        let sounding = Self.audioAPIs + ["CompletionSoundPlayer", "CompletionFeedback", "FlipSound", "SoundPreview", "HingeCreak"]
+        let quiet = sources.keys.filter {
+            ["Holiday", "RareVisitor", "DelightStage", "CompletionMotion", "CompletionRowBackground", "CompletionToast",
+             "Theme", "HITTokens", "HITMaterial", "WhatsNew"].contains(where: $0.contains)
+        }
+        XCTAssertGreaterThanOrEqual(quiet.count, 8, "found the holiday, visitor and theme files: \(quiet.sorted())")
+        for file in quiet {
+            XCTAssertTrue(files([file: sources[file]!], mentioning: sounding).isEmpty, "\(file) plays nothing")
+        }
+    }
+
     func testLatencyIsMeasuredFromTheHingeEventToTheBufferThatStartsTheCreak() {
         let latency = HingeCreakLatency(eventSeconds: 10, callbackSeconds: 10.004, bufferStartSeconds: 10.009,
                                         outputLatency: 0.006, ioBuffer: 0.005)
