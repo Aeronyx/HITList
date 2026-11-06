@@ -80,6 +80,12 @@ profile exists and has synced (never its name or picture). Settings → iCloud �
 activity on the device (counts, record types, times and error codes; never task titles or other content).
 Neither is ever sent by the app: they reach us only if you copy, share or save them and send them yourself.
 
+## Beta feedback
+
+Profile → Send Beta Feedback… opens a new email to the developer in your mail app, with the app's version and
+build, your device model (such as "iPhone17,3", never its name) and system version filled in at the bottom. Nothing
+is sent unless you send that email yourself, and it contains nothing from your tasks or profile unless you type it.
+
 ## TestFlight
 
 While HITList is in beta, Apple's TestFlight shares with us the crash reports, screenshots and feedback you

@@ -107,6 +107,17 @@ Still 0.7.0 (17), unreleased: add to its notes, never a new version. No schema c
 `UpcomingBoard`, `TaskRow` meta line, `HITListUITests/*`. The official Claude logo is not used (Anthropic's trademark
 guidelines require their prior approval).
 
+## Round 12 record (2026-11-05; sessions 53–56 merged into 0.7.0 (17), the Friends build)
+53 `profile-feedback` (profile menu: What's New popout, Send Beta Feedback mail to george@trammells.com with a
+version/device footer, version line), 54 `bolt-strike` (bolt 12.65 pt, `BoltStrikeGate` + strike motion, Debug
+`-boltStrikeDemo YES`), 55 `claude-hinge-polish` ("Only tasks with @claude" default/left, audio audit test, wooden creak
+at ≤ −18 dBFS, "Creaky hinge"), 56 `release-polish` (tips wait for `HITTip.settled`, inline quick-add tips, board meta
+flow layout, Duo board safe area, `FirstRunUITests`). All High. Supervisor: merged 47's single-writer focus fix; found
+that interactive Liquid Glass on the iPhone "+" ignored its first tap after `allowsHitTesting` came back (the button is
+now removed and re-inserted; `testPlusOpensTheNextCardRightAfterAnAdd`); toast tail truncation;
+`CADisableMinimumFrameDurationOnPhone`; the official Claude logo NOT used (Anthropic's trademark guidelines require
+their prior approval).
+
 ## Round 11 record (2026-11-05; sessions 47–52 merged for 0.7.0 (17))
 Six sessions on George's turn: 47 `highlight-engine` (xhigh), 48 `reminder-language` (xhigh, schema V5), 49
 `extras-claude-polish` (High), 50 `duo-hinge` (xhigh), 51 `shared-tasks` (max), 52 `tips-spotlight-cleanup` (High).
