@@ -6,9 +6,28 @@ TestFlight iterations; the heading lists the last build that shipped it.
 
 ## 0.7.0
 
-George's notes on build 16 and a read of Apple's design guidelines, in six sessions: highlights rebuilt on
-native text views, reminders "from now", Extras and a quieter Claude, the iPhone Duo done Apple's way with a
-squeaky hinge, a Shared Tasks preview, and first-run tips with Spotlight.
+George's notes on build 16 and a read of Apple's design guidelines, in ten sessions over two rounds: highlights
+rebuilt on native text views, reminders "from now", Extras and a quieter Claude, the iPhone Duo done Apple's way
+with a creaky hinge, a Shared Tasks preview, first-run tips with Spotlight, then the polish for friends: the
+profile menu's What's New and beta feedback, a lightning strike on the sync bolt, and a smoother first run. The
+first build for the TestFlight group "Friends".
+
+- Profile menu (Mac sidebar, iPad, and Browse's top left on iPhone): What's New (this version, earlier ones on
+  request), Send Beta Feedback… (an email to George with the version and device filled in, never your tasks; the
+  address to copy where there is no Mail), and the version at the foot.
+- The sync bolt is 15% larger, and a good sync lands with one quick lightning strike (under a third of a second,
+  never more than once every few seconds, none at launch or with Reduce Motion). Animations may run at 120 Hz on
+  ProMotion iPhones.
+- Settings → Claude: "Only tasks with @claude" (the default, on the left) or "All tasks but @private"; the
+  integration itself stays off until you turn it on.
+- The iPhone Duo's hinge creaks like an old wooden door now, quietly (Settings → Extras → Creaky hinge, on by
+  default only on the Duo). Holidays, themes and the rare visitor are silent; the only sounds are the completion
+  sound, Flipboard's flip and the hinge, each with its switch.
+- A friend's first minutes: tips wait until you've added a task (none on the very first screen), the quick-add
+  tips sit inside the card, and no tip ever swallows a tap. On iPhone one tap on "+" right after adding a task opens
+  the next card (it used to take two). The Undo toast keeps "Completed" and shortens the title instead.
+- Board cards on the Mac and iPad wrap their bottom line rather than cutting the time and Group to "5:38…" and
+  "S"; on the Duo's inner display the board stops short of the side bar.
 
 - Quick-add highlights are drawn by the text view itself: boxes sit evenly on the words at any width, and on the
   Mac the pointer is a steady pointing hand over a highlight and the text cursor elsewhere (no more flicker).
@@ -25,7 +44,7 @@ squeaky hinge, a Shared Tasks preview, and first-run tips with Spotlight.
   row) instead of floating above it; × or Esc there now asks too.
 - iPhone Duo: on the outer display the tab island stands on the side where Apple puts bars; the inner display
   shows Upcoming's board; typing in the editor survives a fold; the crease is kept clear when it's half open.
-  With HITList open, the hinge creaks as it moves (Settings → Extras → Squeaky hinge; silent switch respected).
+  With HITList open, the hinge creaks as it moves (Settings → Extras → Creaky hinge; silent switch respected).
 - Shared Tasks (preview, off until you switch it on in Browse → Shared Tasks): make a list, invite friends with
   Messages, Mail or a link, and everyone can add, complete and edit; each task says who completed it. No sign-up:
   it uses your Apple Account and shows people by their HITList name and picture.

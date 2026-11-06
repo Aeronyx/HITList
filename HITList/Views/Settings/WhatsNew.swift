@@ -12,11 +12,11 @@ enum WhatsNew {
 
     static let entries: [Entry] = [
         Entry(version: "0.7.0", items: [
+            "Your profile menu has What's New and Send Beta Feedback. Tell George what you think!",
             "Backspace right after a highlight removes the highlight first; the Mac pointer no longer flickers over it.",
             "\"!15m\" reminds you in 15 minutes; \"!15mb\" is 15 minutes before the due time. Tapping a reminder opens its task.",
             "Shared Tasks (preview): share a list with friends from Browse → Shared Tasks.",
-            "Settings → Extras; Claude stays off and hidden until you turn it on; first-run tips; tasks in Spotlight.",
-            "iPhone Duo: the tab bar stands on the side, and the hinge creaks when you open it.",
+            "A good sync lands with a little lightning strike on the bolt; Settings → Extras; tasks show up in Spotlight.",
         ]),
         Entry(version: "0.6.0", items: [
             "Claude: on the Mac, Settings → Claude lets Claude Desktop and Claude Code work with the tasks you allow.",

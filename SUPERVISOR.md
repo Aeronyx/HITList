@@ -205,7 +205,7 @@ quick-add phrases stay in the title as plain text; the Mac board always opens on
 
 Round 11 (briefs 47–52) is merged for 0.7.0 (17): highlights on native text views (Backspace removes a highlight
 first; steady Mac pointer), `!15m` = from now with schema V5 `TaskItem.reminderDate` (George deploys it), Extras and a
-switched-off Claude integration, the iPhone Duo's side tab island and squeaky hinge, the Shared Tasks preview on its
+switched-off Claude integration, the iPhone Duo's side tab island and creaky hinge, the Shared Tasks preview on its
 own container `iCloud.com.trammells.hitlist.shared` (George deploys its schema too; `release.sh` now checks both
 containers), TipKit tips, Spotlight, Mac Settings polish, dead-file cleanup. Supervisor follow-ups: reminder taps open
 their task (`IntentRouter`), side-store Debug runs keep their own settings suite, the launch no longer waits on the
