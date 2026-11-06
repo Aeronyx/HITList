@@ -12,7 +12,7 @@ import Foundation
 /// `kick`s: the synth starts a grain with its next buffer instead of waiting for the grain clock.
 struct HingeCreakMotion {
     struct Drive: Equatable {
-        /// 0...1, from the angular speed: the squeak's pitch and the creak's loudness follow it.
+        /// 0...1, from the angular speed: the groan's pitch and the creak's loudness follow it.
         var intensity: Double
         /// Grains per second.
         var grainRate: Double
@@ -20,7 +20,7 @@ struct HingeCreakMotion {
         var sustain: TimeInterval
         /// Start a grain at once.
         var kick: Bool
-        /// The angle is growing (the phone opening); closing squeaks a little lower.
+        /// The angle is growing (the phone opening); closing groans a little lower.
         var opening: Bool
     }
 
@@ -140,7 +140,7 @@ extension HingeCreakMotion.Drive {
 
     /// The drive as the audio thread should play it when it picks it up `age` seconds after the hinge update:
     /// as sent within a couple of buffers; later, only the rest of its sustain and no kick (that movement's
-    /// moment has passed); nil once the sustain has run out, so a stalled audio route never squeaks late.
+    /// moment has passed); nil once the sustain has run out, so a stalled audio route never creaks late.
     func picked(upAfter age: TimeInterval) -> Self? {
         guard age > Self.freshAge else { return self }
         guard age < sustain else { return nil }
