@@ -1,7 +1,8 @@
 import XCTest
+import Accelerate
 @testable import HITList
 
-/// The squeaky hinge (brief 50): how hinge updates become grains of sound (`HingeCreakMotion`), the sound
+/// The creaky hinge (briefs 50, 55): how hinge updates become grains of sound (`HingeCreakMotion`), the sound
 /// itself (`HingeCreakSynth`), and when it may play at all (`HingeCreak`).
 @MainActor
 final class HingeCreakTests: XCTestCase {
@@ -193,15 +194,81 @@ final class HingeCreakTests: XCTestCase {
         XCTAssertLessThan(Double(onset) / sampleRate, 0.002, "the creak starts at the top of the first buffer")
     }
 
-    func testNeverLouderThanTheGentleLimit() {
+    private func dBFS(_ amplitude: Float) -> Double { 20 * log10(Double(max(amplitude, 1e-9))) }
+
+    /// A steady creak at `intensity` for `seconds`.
+    private func steady(_ intensity: Double, seconds: Double = 0.6, opening: Bool = true) -> [Float] {
         var synth = HingeCreakSynth(sampleRate: sampleRate)
-        synth.apply(drive(1, sustain: 1))
-        let samples = render(&synth, seconds: 1)
-        let peak = samples.map(abs).max() ?? 0
-        XCTAssertLessThanOrEqual(peak, HingeCreakSynth.ceiling + 1e-6)
-        XCTAssertLessThan(HingeCreakSynth.ceiling, 0.36, "below -9 dBFS: a delight, never a fright")
-        XCTAssertGreaterThan(rms(samples[...]), 0.02, "but clearly audible")
-        XCTAssertFalse(samples.contains { !$0.isFinite })
+        var moving = drive(intensity, sustain: seconds)
+        moving.opening = opening
+        synth.apply(moving)
+        return render(&synth, seconds: seconds + 0.3)
+    }
+
+    func testQuietEvenFlungOpenAndSofterWhenSlow() {
+        // George, 2026-11-05: "ensure it is rather quiet so it's funny and not annoying".
+        XCTAssertLessThanOrEqual(dBFS(HingeCreakSynth.ceiling), -18, "the limiter's ceiling: -18 dBFS (was -12)")
+        let fast = steady(1, seconds: 1)
+        let fastPeak = fast.map(abs).max() ?? 0
+        XCTAssertLessThanOrEqual(fastPeak, HingeCreakSynth.ceiling + 1e-6)
+        XCTAssertGreaterThan(dBFS(fastPeak), -22, "flung open it peaks around -18 dBFS: still heard")
+        let slowPeak = steady(0.05).map(abs).max() ?? 0
+        XCTAssertLessThan(dBFS(slowPeak), dBFS(fastPeak) - 6, "a crawl is softer")
+        XCTAssertGreaterThan(dBFS(slowPeak), -40, "but not gone")
+        XCTAssertFalse(fast.contains { !$0.isFinite })
+    }
+
+    /// Power in a band as a share of the total, and the strongest bin above 1.5 kHz against the strongest bin
+    /// overall (dB), from 4096-point Hann frames wherever it sounds.
+    private func spectrum(_ samples: [Float]) throws -> (share: (Double, Double) -> Double, brightPeak: Double) {
+        let n = 4096
+        let dft = try vDSP.DiscreteFourierTransform(previous: nil, count: n, direction: .forward,
+                                                    transformType: .complexComplex, ofType: Float.self)
+        let window = vDSP.window(ofType: Float.self, usingSequence: .hanningDenormalized, count: n, isHalfWindow: false)
+        let zeros = [Float](repeating: 0, count: n)
+        var power = [Double](repeating: 0, count: n / 2)
+        var start = 0
+        while start + n <= samples.count {
+            let frame = Array(samples[start ..< start + n])
+            if vDSP.sumOfSquares(frame) > 1e-6 {
+                let (re, im) = dft.transform(real: vDSP.multiply(frame, window), imaginary: zeros)
+                for k in 0 ..< n / 2 { power[k] += Double(re[k] * re[k] + im[k] * im[k]) }
+            }
+            start += n / 2
+        }
+        let bin = sampleRate / Double(n)
+        let total = max(power.reduce(0, +), 1e-30)
+        let share = { (low: Double, high: Double) in
+            power[Int(low / bin) ..< min(power.count, Int(high / bin))].reduce(0, +) / total
+        }
+        let top = power.max() ?? 1e-30
+        let bright = power[Int(1_500 / bin)...].max() ?? 0
+        return (share, 10 * log10(max(bright, 1e-30) / top))
+    }
+
+    func testAWoodenCreakNotASqueakyMetalPin() throws {
+        // George: "more like a door/cabinet/chest creaking open and not like squeaky metal". Brief 50's squeak put
+        // 84% of its power at 1.5–3 kHz in one ringing tone; wood lives in the low mids.
+        for intensity in [0.1, 0.5, 1.0] {
+            for opening in [true, false] {
+                let (share, brightPeak) = try spectrum(steady(intensity, opening: opening))
+                let what = "intensity \(intensity), \(opening ? "opening" : "closing")"
+                XCTAssertGreaterThan(share(80, 900), 0.85, "body and groan in the low mids: \(what)")
+                XCTAssertLessThan(share(1_500, 24_000), 0.01, "nothing bright: \(what)")
+                XCTAssertLessThan(brightPeak, -30, "no tone above 1.5 kHz stands out: \(what)")
+            }
+        }
+    }
+
+    func testTheGroanFollowsTheHingeSpeedFrom80To350Hz() {
+        XCTAssertEqual(HingeCreakSynth.fundamental(intensity: 0, opening: true), 80, accuracy: 1e-9)
+        XCTAssertEqual(HingeCreakSynth.fundamental(intensity: 1, opening: true), 350, accuracy: 1e-9)
+        XCTAssertEqual(HingeCreakSynth.fundamental(intensity: 2, opening: true), 350, accuracy: 1e-9, "clamped")
+        XCTAssertLessThan(HingeCreakSynth.fundamental(intensity: 0.5, opening: false),
+                          HingeCreakSynth.fundamental(intensity: 0.5, opening: true), "closing groans a little lower")
+        let steps = stride(from: 0.0, through: 1, by: 0.1).map { HingeCreakSynth.fundamental(intensity: $0, opening: true) }
+        XCTAssertEqual(steps, steps.sorted(), "faster is higher")
+        XCTAssertLessThan(HingeCreakSynth.brightnessCutoff, 1_500)
     }
 
     func testFasterIsHigherAndLouder() {
@@ -212,7 +279,7 @@ final class HingeCreakTests: XCTestCase {
         }
         let slow = sound(0.15), fast = sound(0.95)
         XCTAssertGreaterThan(rms(fast), rms(slow) * 1.3)
-        XCTAssertGreaterThan(zeroCrossings(fast), zeroCrossings(slow), "a higher squeal")
+        XCTAssertGreaterThan(zeroCrossings(fast), zeroCrossings(slow), "a higher groan")
     }
 
     func testGoesQuietSoonAfterTheHingeStops() {
@@ -248,7 +315,7 @@ final class HingeCreakTests: XCTestCase {
 
     func testPlaysOnlyWithAHingeSwitchedOnAndInTheForeground() {
         XCTAssertTrue(HingeCreak.shouldRun(enabled: true, hasHinge: true, inForeground: true))
-        XCTAssertFalse(HingeCreak.shouldRun(enabled: false, hasHinge: true, inForeground: true), "Extras → Squeaky hinge off")
+        XCTAssertFalse(HingeCreak.shouldRun(enabled: false, hasHinge: true, inForeground: true), "Extras → Creaky hinge off")
         XCTAssertFalse(HingeCreak.shouldRun(enabled: true, hasHinge: false, inForeground: true), "every phone without a hinge")
         XCTAssertFalse(HingeCreak.shouldRun(enabled: true, hasHinge: true, inForeground: false), "no sound in the background")
     }
@@ -256,6 +323,7 @@ final class HingeCreakTests: XCTestCase {
     func testTheSettingsRowShowsOnlyWithAHinge() {
         XCTAssertFalse(HingeCreakSettingsRow.isShown(hasHinge: false))
         XCTAssertTrue(HingeCreakSettingsRow.isShown(hasHinge: true))
+        XCTAssertEqual(HingeCreakSettingsRow.title, "Creaky hinge", "brief 55: a wooden creak, so not \"Squeaky\"")
     }
 
     // MARK: Every sound HITList makes (brief 55, George: "Include no random audio effects; themes and holiday

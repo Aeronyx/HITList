@@ -5,7 +5,7 @@ import AVFoundation
 import Synchronization
 #endif
 
-/// Extras → Squeaky hinge (brief 50, George: "every time my friend opens or closes his Duo with HITList open, the
+/// Extras → Creaky hinge (briefs 50, 55; George: "every time my friend opens or closes his Duo with HITList open, the
 /// hinges squeak/creak, which of course will only be funny if it can happen instantaneously").
 ///
 /// The hinge reports itself through a `UIHingeInteraction` on a zero-size view in the window (`hingeCreak()`,
@@ -17,7 +17,8 @@ import Synchronization
 ///
 /// The audio session is Ambient, as for every HITList sound: the silent switch mutes it and it never pauses
 /// music. Nothing plays in the background (the engine stops there), with the switch off, or on a device
-/// without a hinge (the engine never starts). The synth's soft limiter keeps it at -12 dBFS or below.
+/// without a hinge (the engine never starts). The synth's limiter keeps it at -18 dBFS or below (brief 55: "rather
+/// quiet so it's funny and not annoying"), and it sounds like an old wooden door, not a metal pin.
 @MainActor
 @Observable
 final class HingeCreak {
@@ -73,7 +74,7 @@ final class HingeCreak {
         let degrees = angle * 180 / .pi
         if !hasHinge {
             hasHinge = true
-            Self.log.info("Hinge reported at \(degrees, format: .fixed(precision: 1))°: squeaky hinge \(self.enabled ? "on" : "off", privacy: .public)")
+            Self.log.info("Hinge reported at \(degrees, format: .fixed(precision: 1))°: creaky hinge \(self.enabled ? "on" : "off", privacy: .public)")
             refresh()
         }
         // Every update, for reading a real fold's rate back (`log stream --level debug`; not kept otherwise), with
@@ -158,7 +159,7 @@ enum HostClock {
 }
 
 extension View {
-    /// Listens to the hinge (iPhone Duo, iOS 27.1) and keeps the squeaky hinge in step with Extras → Squeaky
+    /// Listens to the hinge (iPhone Duo, iOS 27.1) and keeps the creaky hinge in step with Extras → Creaky
     /// hinge and the scene's phase. Applied once, by `ContentView`.
     func hingeCreak() -> some View {
         modifier(HingeCreakHost())
@@ -307,7 +308,7 @@ final class HingeCreakEngine {
             try session.setCategory(.ambient)
             try session.setPreferredIOBufferDuration(Self.ioBuffer)
         } catch {
-            Self.log.error("Squeaky hinge: audio session: \(error.localizedDescription, privacy: .public)")
+            Self.log.error("Creaky hinge: audio session: \(error.localizedDescription, privacy: .public)")
         }
         let engine = AVAudioEngine()
         let outputRate = engine.outputNode.outputFormat(forBus: 0).sampleRate
@@ -325,12 +326,12 @@ final class HingeCreakEngine {
             self.engine = engine
             observe(engine)
             Self.log.info("""
-                Squeaky hinge ready: \(format.sampleRate, format: .fixed(precision: 0)) Hz, IO buffer \
+                Creaky hinge ready: \(format.sampleRate, format: .fixed(precision: 0)) Hz, IO buffer \
                 \(session.ioBufferDuration * 1000, format: .fixed(precision: 1)) ms, output latency \
                 \(session.outputLatency * 1000, format: .fixed(precision: 1)) ms
                 """)
         } catch {
-            Self.log.error("Squeaky hinge: engine didn't start: \(error.localizedDescription, privacy: .public)")
+            Self.log.error("Creaky hinge: engine didn't start: \(error.localizedDescription, privacy: .public)")
         }
     }
 

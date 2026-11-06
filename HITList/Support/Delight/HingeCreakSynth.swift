@@ -1,23 +1,35 @@
 import Foundation
 
-/// The squeaky hinge's sound, made from nothing (brief 50: no recordings, no third-party audio). A value type
+/// The creaky hinge's sound, made from nothing (briefs 50, 55: no recordings, no third-party audio). A value type
 /// that only the audio thread touches (`HingeCreakEngine`): no allocation (its few arrays are made once and
 /// written in place), no locks, no Objective-C while rendering, so it can run inside the render callback.
 ///
-/// Two layers, both driven by grains (one per few degrees of travel, `HingeCreakMotion`):
-/// - **The squeak**: friction's stick-slip as a pulse train with a little timing jitter, at a pitch that rises
-///   with the hinge's speed (380 → 820 Hz; closing a touch lower) and wanders slowly, through a body resonance
-///   at the pitch and a pair of narrow resonances near its third harmonic tuned 2% apart, so they beat like a
-///   hinge pin that isn't quite round. Each grain swells and fades its loudness: slow travel chirps
-///   "ee-ee-ee", fast travel runs together into one squeal.
-/// - **The creak**: each grain also drops two to four short noise clicks, 6–14 ms apart, into low wooden
-///   resonances (165, 270, 440 Hz and a 1.25 kHz crack): the ratchet of a door's wood. Strongest when slow.
+/// An old wooden door, cabinet or chest lid, not a squeaky metal pin (George, 2026-11-05: "more like a
+/// door/cabinet/chest creaking open and not like squeaky metal"; "rather quiet so it's funny and not annoying"):
+/// - **Stick-slip**: the wood catches and lets go in a train of soft, irregular pulses. Their rate is the creak's
+///   fundamental, 80 Hz at a crawl to 350 Hz when flung (`fundamental`; closing a little lower), drifting slowly,
+///   each grain a little off the last; each period is up to 15% early or late, some slips are missed and some
+///   come twice. Grains (one per few degrees of travel, `HingeCreakMotion`) swell and fade the pulses: a crawl
+///   goes "errk… errk", a fast swing runs together into one long groan.
+/// - **The wood**: the pulses ring a few broad, low body resonances (120–900 Hz, Q 3–5), plus one at twice the
+///   fundamental that carries the groan's pitch, and between grains a few dry knocks of the same wood.
+/// - **Nothing bright**: the excitation is smoothed and the mix goes through a fourth-order low-pass at 1.2 kHz,
+///   so nothing above ~1.5 kHz rings as a pure tone (that is what reads as squeaky metal).
 ///
-/// Then a DC blocker and a soft limiter (`ceiling`): however hard the phone is flung open, the peak never passes
-/// -12 dBFS. A kick starts a grain on the first sample of the next buffer, and its first impulse rings at once.
+/// Then a DC blocker and a soft-knee limiter (`ceiling`): however hard the phone is flung open, the peak never
+/// passes -18 dBFS, and a crawl peaks around 10 dB under that. A kick starts a grain on the first sample of the
+/// next buffer, and its first slip sounds at once.
 struct HingeCreakSynth {
-    /// The soft limiter's ceiling: -12 dBFS.
-    static let ceiling: Float = 0.25
+    /// The limiter's ceiling: -18 dBFS.
+    static let ceiling: Float = 0.125
+
+    /// The stick-slip rate (Hz) for an intensity 0...1: 80 Hz at a crawl, 350 Hz flung; closing 12% lower.
+    static func fundamental(intensity: Double, opening: Bool) -> Double {
+        (80 + 270 * min(max(intensity, 0), 1)) * (opening ? 1 : 0.88)
+    }
+
+    /// The low-pass every sample goes through last (Hz).
+    static let brightnessCutoff = 1_200.0
 
     let sampleRate: Double
     private var random: UInt64
@@ -29,39 +41,53 @@ struct HingeCreakSynth {
     private var sustainFrames = 0
     private var grainPhase = 0.0
 
-    // The squeak: one voice, its loudness the sum of the grains' envelopes.
+    // Stick-slip: one voice, its loudness the sum of the grains' envelopes.
     private var pitch = 0.0
     private var wander = 0.0
+    private var grainDetune = 1.0
     private var pulsePhase = 0.0
     private var pulseIncrement = 0.0
-    private var body = Resonator()
-    private var upper = Resonator()
-    private var lower = Resonator()
+    private var doubleSlipIn = -1
+    private var slipLeft = 0
+    private var slipAmplitude: Float = 0
+    private var smooth0: Float = 0
+    private var smooth1: Float = 0
+    private var groan = Resonator()
     private var retuneCountdown = 0
     private var grains = GrainEnvelopes()
 
-    // The creak: clicks waiting to fire, and the click sounding now.
-    private var clicks = PendingClicks()
-    private var clickLeft = 0
-    private var clickAmplitude: Float = 0
-    private var wood0 = Resonator()
-    private var wood1 = Resonator()
-    private var wood2 = Resonator()
-    private var crack = Resonator()
+    // The wood: fixed body modes, and knocks waiting to fire.
+    private var body0 = Resonator()
+    private var body1 = Resonator()
+    private var body2 = Resonator()
+    private var body3 = Resonator()
+    private var body4 = Resonator()
+    private var knocks = PendingClicks()
+    private var knockLeft = 0
+    private var knockAmplitude: Float = 0
 
     // Output.
+    private var lowpass0 = Biquad()
+    private var lowpass1 = Biquad()
     private var dcIn: Float = 0
     private var dcOut: Float = 0
+    private let smoothing: Float
     /// Samples since the output last moved; past `quietAfter` the synth is silent.
     private var quietFrames = HingeCreakSynth.quietAfter + 1
 
     init(sampleRate: Double, seed: UInt64 = 0x4849_4E47_4543_5245) {
         self.sampleRate = sampleRate
         random = seed == 0 ? 0x9E37_79B9_7F4A_7C15 : seed
-        wood0 = Resonator(frequency: 165, q: 7, sampleRate: sampleRate)
-        wood1 = Resonator(frequency: 270, q: 6, sampleRate: sampleRate)
-        wood2 = Resonator(frequency: 440, q: 5, sampleRate: sampleRate)
-        crack = Resonator(frequency: 1250, q: 3, sampleRate: sampleRate)
+        body0 = Resonator(frequency: 118, q: 4, sampleRate: sampleRate)
+        body1 = Resonator(frequency: 205, q: 5, sampleRate: sampleRate)
+        body2 = Resonator(frequency: 335, q: 5, sampleRate: sampleRate)
+        body3 = Resonator(frequency: 540, q: 4, sampleRate: sampleRate)
+        body4 = Resonator(frequency: 880, q: 3, sampleRate: sampleRate)
+        // Butterworth sections of a fourth-order low-pass.
+        lowpass0 = Biquad(lowpass: Self.brightnessCutoff, q: 0.541, sampleRate: sampleRate)
+        lowpass1 = Biquad(lowpass: Self.brightnessCutoff, q: 1.307, sampleRate: sampleRate)
+        // The slip's own edge: a one-pole smoother at ~900 Hz, twice.
+        smoothing = Float(1 - exp(-2 * Double.pi * 900 / sampleRate))
     }
 
     /// Nothing sounding and nothing due: the engine marks its buffers silent.
@@ -82,11 +108,12 @@ struct HingeCreakSynth {
 
     /// Renders `count` mono samples into `out`. Returns false (and writes zeros) when silent.
     mutating func render(into out: UnsafeMutablePointer<Float>, count: Int) -> Bool {
-        if isSilent && grains.isEmpty && clicks.isEmpty {
+        if isSilent && grains.isEmpty && knocks.isEmpty {
             out.update(repeating: 0, count: count)
             return false
         }
         let grainStep = grainRate / sampleRate
+        let level = Float(0.3 + 0.7 * intensity)
         for index in 0..<count {
             // New grains while the hinge is moving.
             if sustainFrames > 0 {
@@ -99,38 +126,54 @@ struct HingeCreakSynth {
             }
             if retuneCountdown <= 0 { retune() } else { retuneCountdown -= 1 }
 
-            // The squeak: stick-slip pulses through the pin's resonances, as loud as the grains say.
-            var excitation: Float = 0
+            // Stick-slip: the wood lets go, a little early or late each time, now and then not at all or twice.
             pulsePhase += pulseIncrement
             if pulsePhase >= 1 {
                 pulsePhase -= 1
-                excitation = 0.8 + 0.2 * nextUnit()
-                // The next slip comes a little early or late.
-                pulseIncrement = pitch * (1 + 0.03 * (Double(nextUnit()) - 0.5)) / sampleRate
+                let roll = nextUnit()
+                if roll >= 0.08 { startSlip(amplitude: 0.55 + 0.45 * nextUnit()) }
+                if roll > 0.94 { doubleSlipIn = Int(Double(0.18 + 0.2 * nextUnit()) * sampleRate / max(pitch, 1)) }
+                pulseIncrement = pitch * grainDetune * (1 + 0.3 * (Double(nextUnit()) - 0.5)) / sampleRate
             }
+            if doubleSlipIn >= 0 {
+                if doubleSlipIn == 0 { startSlip(amplitude: 0.35 + 0.3 * nextUnit()) }
+                doubleSlipIn -= 1
+            }
+            var slip: Float = 0
+            if slipLeft > 0 {
+                slipLeft -= 1
+                slipAmplitude *= Self.slipDecay
+                slip = slipAmplitude * (0.65 + 0.35 * (2 * nextUnit() - 1))
+            }
+            // Soften the slip's edge, so it thumps rather than clicks.
+            smooth0 += smoothing * (slip - smooth0)
+            smooth1 += smoothing * (smooth0 - smooth1)
             let loudness = min(1, grains.advance())
-            let pin = 0.55 * body.process(excitation) + upper.process(excitation) + lower.process(excitation)
-            let squeak = pin * loudness * squeakLevel
+            let excitation = smooth1 * loudness
 
-            // The creak: clicks of noise into the wood.
-            var click: Float = 0
-            if clicks.advance() { startClick() }
-            if clickLeft > 0 {
-                clickLeft -= 1
-                clickAmplitude *= Self.clickDecay
-                click = clickAmplitude * (2 * nextUnit() - 1)
+            // Dry knocks of the same wood, between and after the grains.
+            var knock: Float = 0
+            if knocks.advance() { startKnock() }
+            if knockLeft > 0 {
+                knockLeft -= 1
+                knockAmplitude *= Self.knockDecay
+                knock = knockAmplitude * (2 * nextUnit() - 1)
             }
-            let wood = wood0.process(click) + 0.8 * wood1.process(click) + 0.6 * wood2.process(click)
-                + 0.25 * crack.process(click)
 
-            // Mix, block DC, limit softly.
-            let mixed = Self.squeakGain * squeak + Self.woodGain * wood
+            let drive = excitation + knock
+            let wood = body0.process(drive) + 0.9 * body1.process(drive) + 0.75 * body2.process(drive)
+                + 0.5 * body3.process(drive) + 0.25 * body4.process(drive)
+            let voiced = 0.8 * groan.process(excitation) + 0.35 * excitation
+
+            // Mix, darken, block DC, limit softly.
+            let mixed = level * Self.gain * lowpass1.process(lowpass0.process(wood + voiced))
             let blocked = mixed - dcIn + 0.995 * dcOut
             dcIn = mixed
             dcOut = blocked
-            let sample = Self.ceiling * tanhf(blocked / Self.ceiling)
+            let sample = Self.limit(blocked)
             out[index] = sample
-            if abs(sample) < 1e-6 && grains.isEmpty && clickLeft == 0 {
+            // Slips are only heard through a grain, so the slip clock ticking on alone is quiet.
+            if abs(sample) < 1e-6 && grains.isEmpty && knockLeft == 0 {
                 if quietFrames <= Self.quietAfter { quietFrames += 1 }
             } else {
                 quietFrames = 0
@@ -138,56 +181,69 @@ struct HingeCreakSynth {
         }
         if isSilent {
             // Rung out: clear the filters' last traces so the next creak starts clean.
-            body.reset(); upper.reset(); lower.reset()
-            wood0.reset(); wood1.reset(); wood2.reset(); crack.reset()
-            dcIn = 0; dcOut = 0
+            body0.reset(); body1.reset(); body2.reset(); body3.reset(); body4.reset(); groan.reset()
+            lowpass0.reset(); lowpass1.reset()
+            smooth0 = 0; smooth1 = 0; dcIn = 0; dcOut = 0
         }
         return true
+    }
+
+    /// Soft knee from 60% of the ceiling; never past it.
+    static func limit(_ x: Float) -> Float {
+        let knee = 0.6 * ceiling
+        let magnitude = abs(x)
+        guard magnitude > knee else { return x }
+        let over = knee + (ceiling - knee) * tanhf((magnitude - knee) / (ceiling - knee))
+        return x < 0 ? -over : over
     }
 
     // MARK: Grains
 
     private static let quietAfter = 2_048
-    private static let squeakGain: Float = 2.0
-    private static let woodGain: Float = 3.2
-    private static let clickDecay: Float = 0.965
+    private static let gain: Float = 1.4
+    private static let slipDecay: Float = 0.82
+    private static let knockDecay: Float = 0.9
 
-    private var targetPitch: Double { (380 + 440 * intensity) * (opening ? 1 : 0.88) }
-    private var squeakLevel: Float { Float(0.35 + 0.65 * intensity) }
-    private var creakLevel: Float { Float(1 - 0.4 * intensity) }
+    private var targetPitch: Double { Self.fundamental(intensity: intensity, opening: opening) }
+    private var knockLevel: Float { Float(0.5 - 0.3 * intensity) }
 
     private mutating func startGrain() {
-        // Shorter, brighter grains as the hinge speeds up; each a little different.
-        let seconds = (0.09 - 0.035 * intensity) * (0.85 + 0.3 * Double(nextUnit()))
-        grains.start(length: Int(seconds * sampleRate), attack: Int(0.0015 * sampleRate),
-                     amplitude: 0.75 + 0.25 * nextUnit())
+        // Long groans at a crawl, shorter ones that run together when fast; each a little different, and a little
+        // off the last one's pitch.
+        let seconds = (0.16 - 0.08 * intensity) * (0.7 + 0.6 * Double(nextUnit()))
+        grains.start(length: Int(seconds * sampleRate), attack: Int(0.004 * sampleRate),
+                     amplitude: 0.6 + 0.4 * nextUnit())
+        grainDetune = 0.9 + 0.2 * Double(nextUnit())
         if pulseIncrement == 0 || quietFrames > 0 {
             // From quiet, the first slip is now: the creak is heard from the first sample.
             pulsePhase = 1
             pulseIncrement = pitch / sampleRate
         }
-        let count = 2 + Int(nextUnit() * 2.99)
-        var at = 0
+        // A dry knock or two of the wood, somewhere in or just after the grain.
+        let count = 1 + Int(nextUnit() * 1.99)
         for _ in 0..<count {
-            clicks.schedule(in: at, amplitude: creakLevel * (0.6 + 0.4 * nextUnit()))
-            at += Int((0.006 + 0.008 * Double(nextUnit())) * sampleRate)
+            knocks.schedule(in: Int(seconds * Double(0.3 + 0.9 * nextUnit()) * sampleRate),
+                            amplitude: knockLevel * (0.5 + 0.5 * nextUnit()))
         }
         quietFrames = 0
     }
 
-    private mutating func startClick() {
-        clickAmplitude = clicks.firedAmplitude
-        clickLeft = Int(0.004 * sampleRate)
+    private mutating func startSlip(amplitude: Float) {
+        slipAmplitude = amplitude
+        slipLeft = Int(0.0015 * sampleRate)
     }
 
-    /// Every 32 samples: the pitch glides toward the speed's and wanders a little; the resonances follow.
+    private mutating func startKnock() {
+        knockAmplitude = knocks.firedAmplitude
+        knockLeft = Int(0.003 * sampleRate)
+    }
+
+    /// Every 32 samples: the pitch glides toward the speed's and wanders; the groan's resonance follows.
     private mutating func retune() {
         retuneCountdown = 32
-        wander = min(0.03, max(-0.03, wander + 0.004 * (Double(nextUnit()) - 0.5)))
-        pitch += (targetPitch * (1 + wander) - pitch) * 0.05
-        body.tune(frequency: pitch, q: 5, sampleRate: sampleRate)
-        upper.tune(frequency: pitch * 3.03, q: 20, sampleRate: sampleRate)
-        lower.tune(frequency: pitch * 2.97, q: 20, sampleRate: sampleRate)
+        wander = min(0.12, max(-0.12, wander + 0.01 * (Double(nextUnit()) - 0.5)))
+        pitch += (targetPitch * (1 + wander) - pitch) * 0.03
+        groan.tune(frequency: 2 * pitch * grainDetune, q: 3, sampleRate: sampleRate)
     }
 
     /// 0..<1 from a xorshift64* generator: deterministic per seed.
@@ -228,6 +284,43 @@ private struct Resonator {
         let y = b0 * x + z1
         z1 = -a1 * y + z2
         z2 = -b0 * x - a2 * y
+        return y
+    }
+
+    mutating func reset() {
+        z1 = 0
+        z2 = 0
+    }
+}
+
+/// A two-pole low-pass (RBJ), transposed direct form II.
+private struct Biquad {
+    private var b0: Float = 1
+    private var b1: Float = 0
+    private var b2: Float = 0
+    private var a1: Float = 0
+    private var a2: Float = 0
+    private var z1: Float = 0
+    private var z2: Float = 0
+
+    init() {}
+
+    init(lowpass frequency: Double, q: Double, sampleRate: Double) {
+        let w0 = 2 * Double.pi * min(frequency, sampleRate * 0.45) / sampleRate
+        let alpha = sin(w0) / (2 * q)
+        let a0 = 1 + alpha
+        let cosw = cos(w0)
+        b0 = Float((1 - cosw) / 2 / a0)
+        b1 = Float((1 - cosw) / a0)
+        b2 = b0
+        a1 = Float(-2 * cosw / a0)
+        a2 = Float((1 - alpha) / a0)
+    }
+
+    mutating func process(_ x: Float) -> Float {
+        let y = b0 * x + z1
+        z1 = b1 * x - a1 * y + z2
+        z2 = b2 * x - a2 * y
         return y
     }
 
@@ -281,7 +374,7 @@ private struct GrainEnvelopes {
     }
 }
 
-/// Clicks waiting to fire, in samples from now (made once, written in place, as above).
+/// Knocks waiting to fire, in samples from now (made once, written in place, as above).
 private struct PendingClicks {
     private struct Click {
         var wait = -1
@@ -299,7 +392,7 @@ private struct PendingClicks {
         }
     }
 
-    /// True when a click fires on this sample (its loudness in `firedAmplitude`).
+    /// True when a knock fires on this sample (its loudness in `firedAmplitude`).
     mutating func advance() -> Bool {
         var fired = false
         for index in clicks.indices where clicks[index].wait >= 0 {
