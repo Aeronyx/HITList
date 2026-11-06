@@ -71,28 +71,33 @@ struct FloatingAddButton: View {
     private var shown: Bool { popouts.state.showsAddButton }
 
     var body: some View {
-        Button {
-            TapHaptic.play()
-            action()
-        } label: {
-            SwiftUI.Group {
-                if glass {
-                    plus.hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
-                } else {
-                    plus
-                        .background(Capsule().fill(Theme.accent))
-                        .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+        // Taken out while a popout is up and put back new, rather than hidden with hit testing off: interactive
+        // Liquid Glass did not take touches again after `allowsHitTesting` came back, so the first tap on "+"
+        // after an Add did nothing (brief 56; `testPlusOpensTheNextCardRightAfterAnAdd`). The frame keeps its place.
+        ZStack {
+            if shown {
+                Button {
+                    TapHaptic.play()
+                    action()
+                } label: {
+                    SwiftUI.Group {
+                        if glass {
+                            plus.hitGlass(in: Capsule(), tint: Theme.accent, interactive: true, fallbackShadow: .addButton)
+                        } else {
+                            plus
+                                .background(Capsule().fill(Theme.accent))
+                                .shadow(color: .black.opacity(0.4), radius: 10, y: 4)
+                        }
+                    }
+                    .contentShape(Capsule())
                 }
+                .buttonStyle(FloatingAddPressStyle())
+                .accessibilityLabel("Add task")
+                .accessibilityIdentifier("quickAddButton")
+                .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
-            .contentShape(Capsule())
         }
-        .buttonStyle(FloatingAddPressStyle())
-        .accessibilityLabel("Add task")
-        .accessibilityIdentifier("quickAddButton")
-        .opacity(shown ? 1 : 0)
-        .scaleEffect(shown ? 1 : 0.6)
-        .allowsHitTesting(shown)
-        .accessibilityHidden(!shown)
+        .frame(width: Self.size.width, height: Self.size.height)
         .animation(HITMotion.enter(reduceMotion: reduceMotion), value: shown)
         .onAppear { TapHaptic.prepare() }
     }
