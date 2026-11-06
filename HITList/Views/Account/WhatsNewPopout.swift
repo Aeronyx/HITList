@@ -41,6 +41,7 @@ struct WhatsNewPopout: View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Rectangle().fill(Theme.separator).frame(height: 1)
+            ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: HITSpacing.s) {
                     if let current = WhatsNewPopoutModel.current(entries) {
@@ -50,6 +51,7 @@ struct WhatsNewPopout: View {
                     if !earlier.isEmpty {
                         earlierButton
                             .padding(.top, HITSpacing.s)
+                            .id(Self.earlierAnchor)
                         if showsEarlier {
                             ForEach(earlier) { entry in
                                 VStack(alignment: .leading, spacing: HITSpacing.xs) {
@@ -69,6 +71,18 @@ struct WhatsNewPopout: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // A popover keeps the height it opened at, so the expanded versions would sit below the fold:
+            // bring "Earlier versions" to the top once they are there.
+            .onChange(of: showsEarlier) { _, expanded in
+                guard expanded else { return }
+                // Next turn of the run loop, once the expanded rows are laid out and there is room to scroll.
+                DispatchQueue.main.async {
+                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) {
+                        scroller.scrollTo(Self.earlierAnchor, anchor: .top)
+                    }
+                }
+            }
+            }
         }
         .background(Theme.elevated)
         .accessibilityElement(children: .contain)
@@ -100,9 +114,16 @@ struct WhatsNewPopout: View {
         .padding(.bottom, HITSpacing.s)
     }
 
+    private static let earlierAnchor = "earlier"
+
     private var earlierButton: some View {
         Button {
-            withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { showsEarlier.toggle() }
+            // Expanding lays the rows out at once (the scroll to them then has room to move); collapsing fades.
+            if showsEarlier {
+                withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { showsEarlier = false }
+            } else {
+                showsEarlier = true
+            }
         } label: {
             HStack(spacing: HITSpacing.xs) {
                 Text(WhatsNewPopoutModel.earlierTitle)
