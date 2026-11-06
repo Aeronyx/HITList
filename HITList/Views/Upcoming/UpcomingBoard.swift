@@ -316,6 +316,8 @@ struct UpcomingBoard: View {
         return BoardCard(flashing: phase == .pending) {
             TaskRow(task: task, now: now, hidesDay: !inOverdue, completionPhase: phase,
                     onToggleCompletion: { onToggleCompletion(task) })
+                // A crowded card's meta line takes a second line rather than truncating (brief 56).
+                .environment(\.taskMetaWraps, true)
         }
         .opacity(phase == .animating ? 0 : 1)
         // With a card open, a click on a task is a click away first.
