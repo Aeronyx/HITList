@@ -170,4 +170,57 @@ final class ReleasePolishTests: XCTestCase {
         XCTAssertGreaterThan(height(wraps: true), height(wraps: false) + 8, "the meta line wrapped")
     }
     #endif
+
+    // MARK: 3. The board's last column clears the system's vertical bar
+
+    #if os(iOS)
+    /// On the iPhone Duo's inner display on its side the system's vertical bar sits on the trailing edge,
+    /// as a trailing safe area. Scrolled all the way, the board's last column ends before the bar.
+    func testTheLastColumnEndsBeforeTheTrailingSafeArea() throws {
+        let bar: CGFloat = 84
+        let size = CGSize(width: 951, height: 669)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(origin: .zero, size: size)
+        let host = UIHostingController(rootView: BoardHost())
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: bar)
+        window.rootViewController = host
+        window.isHidden = false
+        defer { window.isHidden = true }
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        host.view.layoutIfNeeded()
+
+        let scroll = try XCTUnwrap(Self.scrollViews(in: host.view).first { $0.contentSize.width > $0.bounds.width + 1 },
+                                   "the board's sideways scroll")
+        // Scrolled to the end, the content's trailing edge sits here in the window.
+        let frame = scroll.convert(scroll.bounds, to: window)
+        let contentEnd = frame.minX + scroll.bounds.width - scroll.adjustedContentInset.right
+        XCTAssertLessThanOrEqual(contentEnd, size.width - bar + 0.5,
+                                 "the last column ends at the bar's edge, not under it")
+        // At rest, nothing of the board draws under the bar either.
+        XCTAssertLessThanOrEqual(frame.maxX, size.width - bar + 0.5, "the columns stop at the bar")
+    }
+
+    private static func scrollViews(in view: UIView) -> [UIScrollView] {
+        (view as? UIScrollView).map { [$0] } ?? [] + view.subviews.flatMap { scrollViews(in: $0) }
+    }
+    #endif
 }
+
+#if os(iOS)
+/// The board with empty days, the size of the Duo's inner display, in the popouts' environment.
+private struct BoardHost: View {
+    @State private var window = UpcomingWindow()
+    @State private var popouts = PopoutController(draftDefaults: UserDefaults(suiteName: "ReleasePolishTests.board")!)
+
+    var body: some View {
+        let now = Date()
+        let board = UpcomingBoardModel<UpcomingView.Entry>(items: [], window: window, now: now, showOverdue: false)
+        UpcomingBoard(board: board, window: $window, now: now)
+            .environment(popouts)
+            .modelContainer(ModelContainerFactory.preview())
+    }
+}
+#endif
