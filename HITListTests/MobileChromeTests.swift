@@ -112,7 +112,10 @@ final class MobileChromeTests: XCTestCase {
 
     func testSyncBoltShapesSayTheState() {
         let now = Date()
-        XCTAssertEqual(SyncBolt.size, 11)
+        // 15% larger than the original 11 pt (George, brief 54), its tap frame grown with it.
+        XCTAssertEqual(SyncBolt.size, 12.65, accuracy: 0.001)
+        XCTAssertEqual(SyncBolt.frame.width, 16)
+        XCTAssertEqual(SyncBolt.frame.height, 23)
         XCTAssertEqual(SyncBolt.look(for: .synced(now), now: now).symbol, "bolt.fill", "synced: filled")
         XCTAssertEqual(SyncBolt.look(for: .syncing).symbol, "bolt", "syncing: hollow")
         XCTAssertEqual(SyncBolt.look(for: .offline).symbol, "bolt.slash.fill", "offline: struck through")
