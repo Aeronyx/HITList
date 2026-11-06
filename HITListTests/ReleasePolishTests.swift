@@ -103,4 +103,71 @@ final class ReleasePolishTests: XCTestCase {
         try context.save()
         return try XCTUnwrap(received, "ModelContext.didSave is posted synchronously")
     }
+
+    // MARK: 2. The board's meta line wraps
+
+    /// Everything that fits stays on one line, in order.
+    func testMetaItemsThatFitStayOnOneLine() {
+        XCTAssertEqual(MetaFlowLayout.lines(widths: [50, 40, 30], spacing: 10, maxWidth: 200), [[0, 1, 2]])
+        XCTAssertEqual(MetaFlowLayout.lines(widths: [], spacing: 10, maxWidth: 200), [])
+    }
+
+    /// A crowded card (time, bell, checklist, label, Group) breaks between items, never inside one.
+    func testACrowdedMetaLineBreaksBetweenItems() {
+        // 5:38 PM, bell Tomorrow 9:00 AM, 2/5, @errands, Home ●
+        let widths: [CGFloat] = [62, 120, 36, 60, 48]
+        let lines = MetaFlowLayout.lines(widths: widths, spacing: 10, maxWidth: 206)
+        XCTAssertEqual(lines, [[0, 1], [2, 3, 4]])
+        XCTAssertEqual(lines.flatMap { $0 }, Array(widths.indices), "every item, once, in order")
+        for line in lines {
+            let width = line.map { widths[$0] }.reduce(0, +) + CGFloat(line.count - 1) * 10
+            XCTAssertLessThanOrEqual(width, 206)
+        }
+    }
+
+    /// An item wider than the whole line gets a line of its own (and truncates there).
+    func testAnItemWiderThanTheLineGetsItsOwnLine() {
+        XCTAssertEqual(MetaFlowLayout.lines(widths: [40, 300, 40], spacing: 10, maxWidth: 200), [[0], [1], [2]])
+    }
+
+    /// The board turns wrapping on for its cards; every list keeps its one line (equal row heights).
+    func testOnlyTheBoardWrapsTheMetaLine() {
+        XCTAssertFalse(EnvironmentValues().taskMetaWraps, "lists: one line")
+    }
+
+    #if os(macOS)
+    /// A crowded card on the board is taller than a plain one: its meta line took a second line instead of
+    /// truncating the time and the Group.
+    func testACrowdedBoardCardTakesASecondLine() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let project = Project(name: "Sunday chores")
+        let label = TaskLabel(name: "errands")
+        context.insert(project)
+        context.insert(label)
+        let now = Date()
+        let due = Calendar.current.date(byAdding: .hour, value: 30, to: now)!
+        let crowded = TaskItem(title: "Groceries", dueDate: due, hasDueTime: true)
+        crowded.project = project
+        crowded.labels = [label]
+        crowded.reminderDate = Calendar.current.date(byAdding: .hour, value: 29, to: now)
+        context.insert(crowded)
+        for i in 0..<5 {
+            let sub = TaskItem(title: "item \(i)")
+            sub.parent = crowded
+            context.insert(sub)
+        }
+        try context.save()
+
+        func height(wraps: Bool) -> CGFloat {
+            let row = TaskRow(task: crowded, now: now, hidesDay: true, onToggleCompletion: {})
+                .environment(\.taskMetaWraps, wraps)
+                .frame(width: UpcomingBoard.cardWidth - 2 * HITSpacing.m)
+                .modelContainer(container)
+            let host = NSHostingView(rootView: row)
+            return host.fittingSize.height
+        }
+        XCTAssertGreaterThan(height(wraps: true), height(wraps: false) + 8, "the meta line wrapped")
+    }
+    #endif
 }
