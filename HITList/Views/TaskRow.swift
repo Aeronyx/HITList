@@ -19,6 +19,8 @@ struct TaskRow: View {
     /// Settings → Appearance → Compact rows: less air above and below each row (`ListMetrics`).
     @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The board's cards let the meta line wrap (brief 56); every list keeps it to one line.
+    @Environment(\.taskMetaWraps) private var metaWraps
     @HITEffectsSetting private var effects
     @State private var pops = 0
 
@@ -89,50 +91,7 @@ struct TaskRow: View {
                         .truncationMode(.tail)
                         .accessibilityLabel("Description: \(TaskLimits.firstLine(of: task.notes))")
                 }
-                // The second line is always laid out, so rows with and without dates are the same height
-                // and line up; the Group sits at its trailing end, Todoist style.
-                HStack(spacing: HITSpacing.s + 2) {
-                    // The date, labels and note icon keep their full width; a long Group name truncates.
-                    HStack(spacing: HITSpacing.s + 2) {
-                        if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
-                            if let due = task.dueDate {
-                                let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
-                                if !hidesDay {
-                                    MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
-                                             systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
-                                } else if task.hasDueTime {
-                                    MetaItem(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat", tint: tint)
-                                } else if task.recurrence != nil {
-                                    MetaItem(nil, systemImage: "repeat", tint: tint)
-                                        .accessibilityLabel("Repeats")
-                                }
-                            }
-                            // Its own reminder still to come (brief 48, "!15m"): a small bell and the time.
-                            if let reminder = Self.reminderText(for: task, now: now) {
-                                MetaItem(reminder, systemImage: "bell", tint: Theme.secondaryText)
-                                    .accessibilityLabel("Reminder \(reminder)")
-                            }
-                            // Its checklist (brief 32): "2/5" by a checklist glyph, nothing without one.
-                            if let checklist = Self.checklistText(for: task) {
-                                MetaItem(checklist, systemImage: "checklist", tint: Theme.secondaryText)
-                                    .accessibilityLabel("\(checklist.replacingOccurrences(of: "/", with: " of ")) sub-tasks done")
-                            }
-                            ForEach(task.labelList) { label in
-                                MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
-                            }
-                        }
-                    }
-                    .layoutPriority(1)
-                    Spacer(minLength: HITSpacing.s)
-                    if showProject, let project = task.project {
-                        MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex),
-                                 iconSize: 8, iconTrailing: true)
-                    } else {
-                        // Keeps the line's height when there is nothing to show.
-                        Text(" ").font(HITType.caption).hidden()
-                    }
-                }
-                .lineLimit(1)
+                metaLine
             }
             // Priority shows as the checkbox's colour alone; no "P1" badge.
             Spacer(minLength: 0)
@@ -167,6 +126,79 @@ struct TaskRow: View {
                 let delete = { TaskActions.delete(task, in: context) }
                 if let popouts { popouts.requestDelete(task, perform: delete) } else { delete() }
             } label: { Label("Delete", systemImage: "trash") }
+        }
+    }
+
+    // MARK: The meta line
+
+    /// The second line. In a list it is always one line, laid out even when empty, so rows with and
+    /// without dates are the same height and line up; the Group sits at its trailing end, Todoist style.
+    /// On the board (`taskMetaWraps`, brief 56) its items flow onto a second line instead, so a crowded
+    /// 270 pt card keeps its time, bell and Group readable.
+    @ViewBuilder
+    private var metaLine: some View {
+        if metaWraps {
+            MetaFlowLayout(spacing: HITSpacing.s + 2, lineSpacing: ListMetrics.rowLineGap) {
+                metaItems
+                if showProject, task.project != nil {
+                    groupItem.layoutValue(key: MetaTrailingKey.self, value: true)
+                } else if !Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
+                    groupItem // the hidden space: an empty line keeps its height
+                }
+            }
+            .lineLimit(1)
+        } else {
+            HStack(spacing: HITSpacing.s + 2) {
+                // The date, labels and note icon keep their full width; a long Group name truncates.
+                HStack(spacing: HITSpacing.s + 2) { metaItems }
+                    .layoutPriority(1)
+                Spacer(minLength: HITSpacing.s)
+                groupItem
+            }
+            .lineLimit(1)
+        }
+    }
+
+    /// The date (or time), the reminder bell, the checklist count and the labels, in that order.
+    @ViewBuilder
+    private var metaItems: some View {
+        if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
+            if let due = task.dueDate {
+                let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
+                if !hidesDay {
+                    MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
+                             systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
+                } else if task.hasDueTime {
+                    MetaItem(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat", tint: tint)
+                } else if task.recurrence != nil {
+                    MetaItem(nil, systemImage: "repeat", tint: tint)
+                        .accessibilityLabel("Repeats")
+                }
+            }
+            // Its own reminder still to come (brief 48, "!15m"): a small bell and the time.
+            if let reminder = Self.reminderText(for: task, now: now) {
+                MetaItem(reminder, systemImage: "bell", tint: Theme.secondaryText)
+                    .accessibilityLabel("Reminder \(reminder)")
+            }
+            // Its checklist (brief 32): "2/5" by a checklist glyph, nothing without one.
+            if let checklist = Self.checklistText(for: task) {
+                MetaItem(checklist, systemImage: "checklist", tint: Theme.secondaryText)
+                    .accessibilityLabel("\(checklist.replacingOccurrences(of: "/", with: " of ")) sub-tasks done")
+            }
+            ForEach(task.labelList) { label in
+                MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
+            }
+        }
+    }
+
+    /// The Group with its dot at the line's trailing end; a hidden space keeps the line's height without one.
+    @ViewBuilder
+    private var groupItem: some View {
+        if showProject, let project = task.project {
+            MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex),
+                     iconSize: 8, iconTrailing: true)
+        } else {
+            Text(" ").font(HITType.caption).hidden()
         }
     }
 
@@ -244,6 +276,95 @@ struct MetaItem: View {
             Image(systemName: systemImage)
                 .font(.system(size: iconSize, weight: .semibold))
                 .frame(width: 12)
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// The board's cards (brief 56): a row's meta line flows onto a second line instead of truncating.
+    /// Off everywhere else: list rows keep one line and equal heights.
+    @Entry var taskMetaWraps: Bool = false
+}
+
+/// The meta item that sits at the trailing end of its line (the Group).
+struct MetaTrailingKey: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// The board's meta line (brief 56): items left to right, breaking onto a new line between items, never
+/// inside one; the Group (`MetaTrailingKey`) at the trailing end of whichever line it lands on. An item
+/// wider than the whole line gets a line of its own and truncates there.
+struct MetaFlowLayout: Layout {
+    var spacing: CGFloat
+    var lineSpacing: CGFloat
+
+    /// The items' indices per line, in order, for items of these widths.
+    static func lines(widths: [CGFloat], spacing: CGFloat, maxWidth: CGFloat) -> [[Int]] {
+        var lines: [[Int]] = []
+        var current: [Int] = []
+        var x: CGFloat = 0
+        for (i, width) in widths.enumerated() {
+            let end = current.isEmpty ? width : x + spacing + width
+            if !current.isEmpty, end > maxWidth {
+                lines.append(current)
+                current = [i]
+                x = width
+            } else {
+                current.append(i)
+                x = end
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines
+    }
+
+    private struct Arrangement {
+        var lines: [[Int]]
+        var sizes: [CGSize]
+        var lineHeights: [CGFloat]
+        var height: CGFloat
+    }
+
+    private func arrange(_ subviews: Subviews, maxWidth: CGFloat) -> Arrangement {
+        let sizes = subviews.map { view -> CGSize in
+            let ideal = view.sizeThatFits(.unspecified)
+            guard ideal.width > maxWidth else { return ideal }
+            return view.sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+        }
+        let lines = Self.lines(widths: sizes.map(\.width), spacing: spacing, maxWidth: maxWidth)
+        let heights: [CGFloat] = lines.map { line in line.reduce(0) { max($0, sizes[$1].height) } }
+        let gaps: CGFloat = lineSpacing * CGFloat(max(0, lines.count - 1))
+        let height: CGFloat = heights.reduce(0, +) + gaps
+        return Arrangement(lines: lines, sizes: sizes, lineHeights: heights, height: height)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? .infinity
+        let arrangement = arrange(subviews, maxWidth: maxWidth)
+        var widest: CGFloat = 0
+        for line in arrangement.lines {
+            let items: CGFloat = line.reduce(0) { $0 + arrangement.sizes[$1].width }
+            let gaps: CGFloat = spacing * CGFloat(max(0, line.count - 1))
+            widest = max(widest, items + gaps)
+        }
+        return CGSize(width: proposal.width ?? widest, height: arrangement.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let arrangement = arrange(subviews, maxWidth: bounds.width)
+        var y = bounds.minY
+        for (lineIndex, line) in arrangement.lines.enumerated() {
+            let lineHeight = arrangement.lineHeights[lineIndex]
+            var x = bounds.minX
+            for index in line {
+                let size = arrangement.sizes[index]
+                let trailing = subviews[index][MetaTrailingKey.self]
+                let origin = CGPoint(x: trailing ? max(x, bounds.maxX - size.width) : x,
+                                     y: y + (lineHeight - size.height) / 2)
+                subviews[index].place(at: origin, proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += lineHeight + lineSpacing
         }
     }
 }

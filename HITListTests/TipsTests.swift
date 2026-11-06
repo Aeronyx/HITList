@@ -54,7 +54,8 @@ final class TipsTests: XCTestCase {
     }
 
     func testOnlyTheHighlightTipWaitsForAHighlight() {
-        for kind in HITTipKind.allCases {
+        // Browse and the board's tip wait for the person to settle in instead (brief 56, ReleasePolishTests).
+        for kind in HITTipKind.allCases where !HITTip(kind, generation: 0).waitsUntilSettled {
             XCTAssertEqual(HITTip(kind, generation: 0).rules.isEmpty, kind != .keepAsText, "\(kind)")
         }
         XCTAssertEqual(HITTip.highlightShown.id, "highlightShown")

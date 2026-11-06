@@ -12,8 +12,8 @@ extension View {
             .tipBackground(Theme.elevated)
     }
 
-    /// The quick-add card's two tips on its title field, one at a time: the one-line syntax first, then,
-    /// once a highlight has appeared (`hasHighlight`), how to keep the words as text.
+    /// The quick-add card's two tips above its title field, one at a time and inside the card: the one-line
+    /// syntax first, then, once a highlight has appeared (`hasHighlight`), how to keep the words as text.
     ///
     ///     TokenHighlightField(…).quickAddTips(hasHighlight: !parsed.tokens.isEmpty)
     func quickAddTips(hasHighlight: Bool) -> some View {
@@ -29,12 +29,21 @@ private struct QuickAddTips: ViewModifier {
         HITTip(.keepAsText)
     }
 
+    /// Inline, inside the card above the title (brief 56), never a popover: a popover on iPhone takes the
+    /// first tap outside it to close itself, and that tap was the friend's first Add.
     func body(content: Content) -> some View {
-        content
-            .hitTip(group.currentTip as? HITTip, arrowEdge: .bottom)
-            .onChange(of: hasHighlight, initial: true) { _, shown in
-                if shown { Task { await HITTip.highlightShown.donate() } }
+        VStack(alignment: .leading, spacing: HITSpacing.s) {
+            if let tip = group.currentTip as? HITTip {
+                TipView(tip)
+                    .tipViewStyle(HITTipStyle())
+                    .tipBackground(Theme.elevated)
+                    .transition(.opacity)
             }
+            content
+        }
+        .onChange(of: hasHighlight, initial: true) { _, shown in
+            if shown { Task { await HITTip.highlightShown.donate() } }
+        }
     }
 }
 

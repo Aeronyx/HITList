@@ -36,6 +36,9 @@ struct UpcomingBoard: View {
     @State private var confirmingDiscard = false
     @State private var pickingMonth = false
     @State private var reschedulingOverdue = false
+    /// The board's trailing safe area: the system's vertical bar on the iPhone Duo's inner display on its
+    /// side (brief 56); 0 on the Mac and iPad.
+    @State private var trailingBar: CGFloat = 0
 
     static let columnWidth: CGFloat = 270
     static let columnSpacing: CGFloat = 14
@@ -49,7 +52,12 @@ struct UpcomingBoard: View {
         VStack(spacing: 0) {
             header
             columns
+                // A sideways scroll view runs under a trailing safe area (it only adds it as a content
+                // inset), so the Duo's vertical bar floated over the last column on screen. The columns stop
+                // at the bar instead; the background still runs under it.
+                .padding(.trailing, trailingBar)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingBar = $0 }
         .background(Theme.background)
         .onChange(of: openInlineKey) { _, _ in
             inlineHasContent = false
@@ -316,6 +324,8 @@ struct UpcomingBoard: View {
         return BoardCard(flashing: phase == .pending) {
             TaskRow(task: task, now: now, hidesDay: !inOverdue, completionPhase: phase,
                     onToggleCompletion: { onToggleCompletion(task) })
+                // A crowded card's meta line takes a second line rather than truncating (brief 56).
+                .environment(\.taskMetaWraps, true)
         }
         .opacity(phase == .animating ? 0 : 1)
         // With a card open, a click on a task is a click away first.
