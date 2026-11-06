@@ -18,7 +18,8 @@ import SwiftData
 /// A tip never takes a friend's first tap (brief 56): on iPhone a popover tip closes on the first tap
 /// outside it and that tap goes nowhere, so the "+" of someone's very first moment would only close a
 /// tip. `browse` and `boardAddTask` sit on screens a person reaches without doing anything, so they wait
-/// until the person has settled in (`HITTip.settled`: their first task added, or any later launch). The
+/// until the person has settled in (`HITTip.settled`, `TipSettling`: back in the app after their first
+/// task, or any later launch). The
 /// others already wait for an action of the person's own: the quick-add tips for the card they opened,
 /// the Flipboard tip for a switch to exist.
 enum HITTipKind: String, CaseIterable, Identifiable {
@@ -76,7 +77,7 @@ struct HITTip: Tip {
     /// A highlight appeared in a quick-add card (`quickAddTips(hasHighlight:)` donates it).
     static let highlightShown = Tips.Event(id: "highlightShown")
 
-    /// The person has settled in: their first task added, or a later launch (`HITTips.configure` donates it).
+    /// The person has settled in (`TipSettling`; `HITTips.configure` watches for it and donates it).
     /// Never renamed: TipKit keeps its donations under this id.
     static let settled = Tips.Event(id: "settled")
 
@@ -129,23 +130,43 @@ enum HITTips {
 
     // MARK: Settled in (brief 56)
 
-    private static var taskObserver: NSObjectProtocol?
+    private static var settling = TipSettling()
+    private static var observers: [NSObjectProtocol] = []
 
-    /// A later launch settles the tips at once; the first launch settles them with the first save that
-    /// adds a task (quick add, the board, Siri, a Shortcut: every one saves through a `ModelContext`).
+    /// Watches for the moments `TipSettling` counts: a save that adds a task (quick add, the board, Siri, a
+    /// Shortcut: every one saves through a `ModelContext`) and the app coming back to the foreground.
     private static func settleWhenReady(storeName: String) {
-        if recordLaunch(storeName: storeName) {
-            Task { await HITTip.settled.donate() }
-            return
-        }
-        taskObserver = NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { note in
-            guard insertsTask(note) else { return }
-            MainActor.assumeIsolated {
-                if let observer = taskObserver { NotificationCenter.default.removeObserver(observer) }
-                taskObserver = nil
-            }
-            Task { await HITTip.settled.donate() }
-        }
+        handle(.launched(later: recordLaunch(storeName: storeName)))
+        guard !settling.isSettled else { return }
+        let center = NotificationCenter.default
+        observers = [
+            center.addObserver(forName: ModelContext.didSave, object: nil, queue: .main) { note in
+                guard insertsTask(note) else { return }
+                MainActor.assumeIsolated { handle(.addedTask) }
+            },
+            center.addObserver(forName: returnNotification, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { handle(.cameBack) }
+            },
+        ]
+    }
+
+    private static func handle(_ event: TipSettling.Event) {
+        let settles = settling.handle(event)
+        log.info("tips: \(String(describing: event), privacy: .public) → \(settles ? "settled" : "not yet", privacy: .public)")
+        guard settles else { return }
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+        Task { await HITTip.settled.donate() }
+    }
+
+    /// The app comes back from the background (iPhone, iPad) or from another app (Mac). Not the iPhone's
+    /// `didBecomeActive`, which also follows a system alert such as the notification permission.
+    nonisolated static var returnNotification: Notification.Name {
+        #if os(macOS)
+        NSApplication.didBecomeActiveNotification
+        #else
+        UIApplication.willEnterForegroundNotification
+        #endif
     }
 
     nonisolated static func launchKey(storeName: String) -> String {
@@ -204,5 +225,26 @@ enum HITTips {
                                       storeName: String = ModelContainerFactory.storeName) {
         let key = generationKey(storeName: storeName)
         defaults.set(defaults.integer(forKey: key) + 1, forKey: key)
+    }
+}
+
+/// When the person has settled in (brief 56), so Browse's and the board's tips may show: at once on a later
+/// launch; on the first launch, once they have added a task and then come back to the app. Not the moment
+/// the task is saved: a popover tip then would take the very next tap (the "+" again, or the new task).
+struct TipSettling: Equatable {
+    enum Event: Equatable { case launched(later: Bool), addedTask, cameBack }
+
+    private(set) var hasTask = false
+    private(set) var isSettled = false
+
+    /// True once, for the event that settles it (the moment to donate `HITTip.settled`).
+    mutating func handle(_ event: Event) -> Bool {
+        guard !isSettled else { return false }
+        switch event {
+        case .launched(let later): isSettled = later
+        case .addedTask: hasTask = true
+        case .cameBack: isSettled = hasTask
+        }
+        return isSettled
     }
 }

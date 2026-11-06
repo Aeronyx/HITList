@@ -39,6 +39,34 @@ final class ReleasePolishTests: XCTestCase {
         XCTAssertEqual(HITTip.settled.id, "settled", "stored in TipKit's datastore: never rename")
     }
 
+    /// On the first launch the tips settle once the person has added a task and then come back to the app,
+    /// never at the moment of the save (a popover then would take their very next tap). A later launch
+    /// settles them at once. It says so once.
+    func testTheTipsSettleWhenThePersonComesBackAfterTheirFirstTask() {
+        var first = TipSettling()
+        XCTAssertFalse(first.handle(.launched(later: false)))
+        XCTAssertFalse(first.handle(.cameBack), "back in the app, but no task yet")
+        XCTAssertFalse(first.handle(.addedTask), "not at the save: the next tap would go to the tip")
+        XCTAssertFalse(first.handle(.addedTask))
+        XCTAssertTrue(first.handle(.cameBack), "back after the first task")
+        XCTAssertTrue(first.isSettled)
+        XCTAssertFalse(first.handle(.cameBack), "once")
+
+        var later = TipSettling()
+        XCTAssertTrue(later.handle(.launched(later: true)), "a later launch settles at once")
+        XCTAssertFalse(later.handle(.addedTask))
+    }
+
+    /// "Coming back" is the return from the background, not any activation (a system alert, such as the
+    /// notification permission, also ends with the app active again).
+    func testComingBackMeansReturningFromTheBackground() {
+        #if os(macOS)
+        XCTAssertEqual(HITTips.returnNotification, NSApplication.didBecomeActiveNotification)
+        #else
+        XCTAssertEqual(HITTips.returnNotification, UIApplication.willEnterForegroundNotification)
+        #endif
+    }
+
     /// The first launch on a store is not settled; every later one is. Each store counts on its own, so a
     /// Debug side-store run never settles the real store's tips.
     func testALaterLaunchSettlesTheTips() {
