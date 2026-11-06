@@ -174,6 +174,7 @@
 		A05ECF15203077DA25B22EDF /* DuoLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B628E6843BB58819E0920AB /* DuoLayout.swift */; };
 		A11E01F132BD9E7D649C8BD7 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 899E17FD4EC8DCCC11FD290D /* ContentView.swift */; };
 		A1A8673E5F354361A23B5ED8 /* LastSyncChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF22F4F7DDF5D28105EFED56 /* LastSyncChange.swift */; };
+		A20591E19F9667344A905D92 /* ProfileMenuUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */; };
 		A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FC29DB1F9289C32B262576 /* SyncLogTests.swift */; };
 		A3EC8F0CC8B0442E99A48CE4 /* HighlightRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14255A51748F8F42EA94CDCF /* HighlightRun.swift */; };
 		A400CBB35842FB32F63D2714 /* ClaudeIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02156329220ED375142192B8 /* ClaudeIntegration.swift */; };
@@ -354,6 +355,7 @@
 		27EA650F8935B9B18A9DF5F4 /* SharedPeopleSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPeopleSheet.swift; sourceTree = "<group>"; };
 		288443055725713733FD3685 /* ClaudeConnectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnectorTests.swift; sourceTree = "<group>"; };
 		29800AE3317F5D97333D1CDF /* HITMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMaterial.swift; sourceTree = "<group>"; };
+		298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenuUITests.swift; sourceTree = "<group>"; };
 		2B58B86B080E75A9F4828B71 /* SharedTasksRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksRules.swift; sourceTree = "<group>"; };
 		2B628E6843BB58819E0920AB /* DuoLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoLayout.swift; sourceTree = "<group>"; };
 		2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
@@ -883,6 +885,7 @@
 			isa = PBXGroup;
 			children = (
 				779C8E0132E607E31B370A6E /* HITListUITests.swift */,
+				298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */,
 			);
 			path = HITListUITests;
 			sourceTree = "<group>";
@@ -1366,6 +1369,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4DA0D7A920592A3351482879 /* HITListUITests.swift in Sources */,
+				A20591E19F9667344A905D92 /* ProfileMenuUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
