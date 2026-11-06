@@ -61,7 +61,9 @@ enum TaskActions {
     /// un-completing it (the toast's Undo, the Completed list) reopens exactly those, by that shared
     /// `completedAt`; ones ticked by hand earlier stay ticked. A repeating task's next occurrence starts
     /// with its checklist open. Completing the last subtask leaves the parent alone (Todoist's rule).
-    static func toggleCompletion(_ task: TaskItem, in context: ModelContext) {
+    ///
+    /// `now` is the moment of the tap; callers with their own clock (the Claude tools, tests) pass it.
+    static func toggleCompletion(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
         let wasCompleted = task.isCompleted
         let closedAt = task.completedAt
         if task.isCompleted {
@@ -70,13 +72,13 @@ enum TaskActions {
         } else if let rule = task.recurrenceRule, let due = task.dueDate {
             var next = rule.anchored(to: due)
             if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime) }
-            task.dueDate = next.nextDueDate(from: due, now: Date())
+            task.dueDate = next.nextDueDate(from: due, now: now)
             if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
             // A "from now" reminder goes off once (brief 48): it belonged to the occurrence just done.
             task.reminderDate = nil
         } else {
             task.isCompleted = true
-            task.completedAt = Date()
+            task.completedAt = now
         }
         task.touch()
         followParent(task, wasCompleted: wasCompleted, closedAt: closedAt)
