@@ -28,6 +28,15 @@ struct TaskRow: View {
     /// while its completion animates.
     private var isChecked: Bool { task.isCompleted || completionPhase != nil }
 
+    /// A red Flipboard switch (brief 59): Today's every day until it is flipped, so its row shows the
+    /// switch glyph and no date. While its flip animates out it is already green; it keeps the glyph.
+    private var isSwitch: Bool { Self.showsSwitch(task, now: now, completing: completionPhase != nil) }
+
+    static func showsSwitch(_ task: TaskItem, now: Date, completing: Bool) -> Bool {
+        guard Flipboard.isMember(task) else { return false }
+        return completing || Flipboard.side(of: task, now: now) == .red
+    }
+
     private var checkColor: Color {
         if completionPhase != nil { return task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color }
         return task.isCompleted ? Theme.secondaryText : task.priorityValue.color
@@ -69,7 +78,7 @@ struct TaskRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isChecked ? "Mark incomplete" : "Complete task")
+            .accessibilityLabel(isChecked ? "Mark incomplete" : isSwitch ? "Flip switch" : "Complete task")
 
             VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
                 // A long title wraps in full (titles are capped at `TaskLimits.titleCharacters`); the
@@ -163,7 +172,11 @@ struct TaskRow: View {
     @ViewBuilder
     private var metaItems: some View {
         if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
-            if let due = task.dueDate {
+            if isSwitch {
+                // Due today, every day: the glyph says so; the Flipboard keeps the days overdue.
+                MetaItem(nil, systemImage: "switch.2", tint: isChecked ? Theme.secondaryText : HITColor.dueToday)
+                    .accessibilityLabel("Flipboard switch")
+            } else if let due = task.dueDate {
                 let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
                 if !hidesDay {
                     MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
@@ -204,6 +217,7 @@ struct TaskRow: View {
 
     /// Whether the second line has anything to show (an all-day task under Today's header may not).
     static func hasMeta(_ task: TaskItem, hidesDay: Bool, showProject: Bool, now: Date = Date()) -> Bool {
+        if showsSwitch(task, now: now, completing: false) { return true }
         if let _ = task.dueDate, !hidesDay || task.hasDueTime || task.recurrence != nil { return true }
         if showProject, task.project != nil { return true }
         if reminderText(for: task, now: now) != nil { return true }
