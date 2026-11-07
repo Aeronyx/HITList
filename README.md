@@ -11,6 +11,11 @@ HITList is in beta on TestFlight.
 [Using it with Claude](https://aeronyx.github.io/HITList/claude/) ·
 [Changelog](CHANGELOG.md)
 
+<p align="center">
+  <img src="docs/images/mac-today.png" width="720" alt="Today on the Mac: a sidebar with Inbox, Today, Upcoming, Flipboard, Groups and labels beside the day's tasks">
+  <img src="docs/images/iphone-today.png" width="200" alt="Today on the iPhone, with the floating tab island and the add button">
+</p>
+
 ## What it does
 
 - **Quick add.** `Pay rent tomorrow 5pm p1 #Finance @bills every month !1hb` becomes a dated, repeating,
@@ -78,6 +83,9 @@ The Xcode project is generated from `project.yml`; edit that, not the project fi
 identifier and the two CloudKit containers are the author's. To run your own copy, change
 `DEVELOPMENT_TEAM` and `bundleIdPrefix` in `project.yml` and the container identifiers in the
 entitlements files. Xcode 26 or later.
+
+A Debug build launched on a side store with `-seedDemoData` fills it with the week in the screenshots above
+(`HITLIST_STORE_SUFFIX=demo`, `-disableCloudKit YES -seedDemoData`); it never touches the real store.
 
 ## Testing
 

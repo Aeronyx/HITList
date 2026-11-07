@@ -11,6 +11,11 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.7.2", items: [
+            "Sync fix: flipping a switch, or giving a task a deadline or location, no longer stops that device syncing.",
+            "On a Mac, TestFlight now offers only the Mac app; the iPad version no longer installs there.",
+            "The sync log's watchdog no longer reports overdue exports for saves that were never yours to sync.",
+        ]),
         Entry(version: "0.7.1", items: [
             "Your profile menu has What's New and Send Beta Feedback. Tell George what you think!",
             "Backspace right after a highlight removes the highlight first; the Mac pointer no longer flickers over it.",
