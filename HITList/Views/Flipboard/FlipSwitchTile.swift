@@ -13,9 +13,12 @@ import HITListCore
 /// it spring back while the next lamp pops on; the last one lights the row, snaps the rocker to green and
 /// runs a bloom along the lamps, with the bubble after the click. Tapping a charged switch only bounces.
 ///
-/// Long press anywhere on the tile, the rocker included (iPhone), or right-click (Mac) opens the switch's
-/// menu; on the Mac a long press opens the same actions in a popover. The rocker is not a `Button`, so
-/// the long press reaches the menu instead of being swallowed by the button.
+/// Long press anywhere on the tile, the rocker included (iPhone: the system's context menu, with its own
+/// haptic and a lifted preview of the tile), or right-click (Mac) opens the switch's menu; on the Mac a
+/// long press opens the same actions in a popover. The rocker is not a `Button`, so the long press reaches
+/// the menu instead of being swallowed by the button. On iPhone nothing else may listen for the long
+/// press: a `LongPressGesture` on the tile (the Mac's popover trigger) won over the context menu's own,
+/// so the menu never opened there (brief 59).
 struct FlipSwitchTile: View {
     let task: TaskItem
     let now: Date
@@ -66,12 +69,13 @@ struct FlipSwitchTile: View {
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         #if os(iOS)
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
-        #endif
-        // A haptic as the hold registers, then the menu (iPhone) or the popover (Mac). Simultaneous, so
-        // the rocker's tap and the scroll view keep working.
+        #else
+        // Mac: a haptic as the hold registers, then the popover. Simultaneous, so the rocker's click and
+        // the scroll view keep working.
         .simultaneousGesture(
             LongPressGesture(minimumDuration: Self.longPressDuration).onEnded { _ in longPressed() }
         )
+        #endif
         .contextMenu { menuButtons }
         #if os(macOS)
         .popover(isPresented: $showMenuPanel, arrowEdge: .trailing) {
@@ -280,26 +284,41 @@ struct FlipSwitchTile: View {
 
     // MARK: The menu
 
+    /// Brief 59's order: Flip (or Mark done), Flip back to red, Edit task…, the interval and flips, then
+    /// Remove from Flipboard and Delete.
     private var menuItems: [FlipMenuItem] {
         let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now)
         let chargedCharger = target > 1 && side == .green
-        return [
+        var items: [FlipMenuItem] = []
+        if side == .red {
+            // A charger's flip counts one; "Mark done" charges it at once.
+            items.append(FlipMenuItem(id: "flip", title: "Flip", systemImage: "switch.2", isDisabled: flipping) { flip() })
+            if target > 1 {
+                items.append(FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle",
+                                          isDisabled: flipping) { markDone() })
+            }
+        } else {
+            // Green: a plain switch can be done early (chosen from a menu, so no question first).
+            items.append(FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle",
+                                      isDisabled: flipping || chargedCharger) { markDone() })
+        }
+        items += [
             FlipMenuItem(id: "back", title: "Flip back to red", systemImage: "arrow.uturn.backward",
                          isDisabled: !canFlipBack || flipping) { flipBack() },
+            FlipMenuItem(id: "open", title: "Edit task…", systemImage: "square.and.pencil") { onOpen() },
             FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit(.interval) },
             FlipMenuItem(id: "flips", title: "Flips per interval…", systemImage: "repeat") { onEdit(.flips) },
-            FlipMenuItem(id: "open", title: "Open task", systemImage: "arrow.up.forward.square") { onOpen() },
-            FlipMenuItem(id: "done", title: "Mark done", systemImage: "checkmark.circle",
-                         isDisabled: flipping || chargedCharger) { markDone() },
             FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
                 withAnimation(.snappy) { Flipboard.remove(task, in: context) }
             },
         ]
+        return items
     }
 
     @ViewBuilder private var menuButtons: some View {
-        ForEach(menuItems) { item in
-            if item.role == .destructive { Divider() }
+        ForEach(Array(menuItems.enumerated()), id: \.element.id) { index, item in
+            // One divider before the destructive group.
+            if item.role == .destructive, index > 0, menuItems[index - 1].role != .destructive { Divider() }
             Button(role: item.role, action: item.action) { Label(item.title, systemImage: item.systemImage) }
                 .disabled(item.isDisabled)
         }
@@ -391,8 +410,8 @@ struct FlipSwitchMenuPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ForEach(items) { item in
-                if item.role == .destructive {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if item.role == .destructive, index > 0, items[index - 1].role != .destructive {
                     Rectangle().fill(Theme.separator).frame(height: 1)
                 }
                 HITMenuRow(item.title, systemImage: item.systemImage, role: item.role, accessory: .none) {
