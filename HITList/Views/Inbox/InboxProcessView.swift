@@ -288,8 +288,7 @@ struct InboxProcessView: View {
                 open(.project)
             }
             .popover(isPresented: isOpen(.project)) {
-                InboxPicker(title: "Move to a Group", noun: "Group", symbol: "circle.fill",
-                            options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
+                InboxPicker(options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
                     popover = nil
                     move(task, to: choice)
                 }
@@ -456,20 +455,6 @@ struct InboxProcessView: View {
         }
         guard let project else { return }
         task.project = project
-        task.touch()
-        try? context.save()
-        advance()
-    }
-
-    private func addLabel(to task: TaskItem, _ choice: InboxPicker.Choice) {
-        let label: TaskLabel? = switch choice {
-        case .existing(let id): labels.first { $0.id == id }
-        case .new(let name): try? TaskActions.findOrCreateLabel(named: name, in: context)
-        }
-        guard let label else { return }
-        if !(task.labels ?? []).contains(where: { $0.id == label.id }) {
-            task.labels = (task.labels ?? []) + [label]
-        }
         task.touch()
         try? context.save()
         advance()
