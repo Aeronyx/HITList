@@ -116,6 +116,22 @@ final class GroupedOrderingTests: XCTestCase {
         XCTAssertFalse(today.isEmpty)
     }
 
+    func testTodayTakesTheListsOwnSectionRuleAndOrder() {
+        // The list decides which half a row is in (brief 59: a switch due again is a today task whatever its
+        // date) and how each section sorts; grouping only lays them out.
+        let tasks = [
+            PlainTask(title: "switch", dueDate: Fixed.date(2026, 10, 1), projectName: "Home"),
+            PlainTask(title: "b late", dueDate: Fixed.date(2026, 10, 19), projectName: "Home"),
+            PlainTask(title: "a late", dueDate: Fixed.date(2026, 10, 18), projectName: "Home"),
+        ]
+        let today = GroupedOrdering.today(tasks, by: .group, groupOrder: ["Home"], now: now, calendar: cal,
+                                          sectionOf: { $0.filterTitle == "switch" ? .today : .overdue },
+                                          order: { $0.sorted { $0.filterTitle > $1.filterTitle } },
+                                          groupOf: \.filterProjectName)
+        XCTAssertEqual(today.overdue.map { titles($0.tasks) }, [["b late", "a late"]])
+        XCTAssertEqual(today.today.map { titles($0.tasks) }, [["switch"]])
+    }
+
     func testTodayWithNothingDueIsEmpty() {
         let today = GroupedOrdering.today([PlainTask(title: "undated")], by: .group, groupOrder: [String](),
                                           now: now, calendar: cal)
