@@ -37,7 +37,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
 
     var message: String {
         switch self {
-        case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm p1 #Home’: the date, priority and Group fill themselves in."
+        case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm p1 #Home’: date and priority fill in. # picks its one Group; @ adds any labels."
         case .keepAsText: "Tap a highlight, or press Backspace right after it, to keep the words as text."
         case .browse: "The magnifying glass opens Browse: search every task, and find your Groups, labels and filters."
         case .flipboard: "Each switch is a repeating chore. Flip it when it’s done; it turns red again when it’s due."

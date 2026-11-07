@@ -103,6 +103,15 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(GroupsTitleMenuCounts.title("Errands", count: 0), "Errands")
     }
 
+    // MARK: - Group or label
+
+    func testTheGuidanceSaysWhatAGroupAndALabelAre() {
+        XCTAssertEqual(GroupGuidance.group, "A task lives in one Group: Work, Home, a project.")
+        XCTAssertEqual(GroupGuidance.label, "A label is a tag any task can carry: @waiting, @errands.")
+        let tip = HITTipKind.quickAddSyntax.message
+        XCTAssertTrue(tip.contains("# picks its one Group") && tip.contains("@ adds any labels"), tip)
+    }
+
     // MARK: - Remembered per list
 
     func testGroupByDefaultsAndStoredValues() {
