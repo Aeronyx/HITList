@@ -81,6 +81,13 @@ are UUIDs generated on the device. `updatedAt` is maintained on every edit; that
 field plus soft-deletion semantics in the snapshot format are what make a future
 home-server sync protocol possible without a migration.
 
+**Flipboard switches.** A switch is an open recurring task without a time of day that carries the
+`flipboard` label (HITListCore `FlipboardSwitch`): green while due after today, red when due today,
+overdue or never flipped. It is a visual aid for chores that repeat within an interval, not on a
+date, so it stays off every list until it is due: green, it is on the Flipboard only; red, it is a
+task for today in Today and the Inbox (never "overdue"; the board keeps the days late) until it is
+flipped (brief 59, George 2026-11-07; `FlipboardSwitch.listing`, used by every list).
+
 ---
 
 ## 3. Filter query language
@@ -116,6 +123,9 @@ Terms:
 | `completed`, `!completed` | completion state (default views hide completed) |
 | `recurring` | has a recurrence rule |
 | `all` | matches everything |
+
+Every query leaves green Flipboard switches out and sees red ones as due today, unless it names
+`@flipboard` (then switches match by their own dates).
 
 Examples that work out of the box:
 

@@ -40,7 +40,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm p1 #Home’: the date, priority and Group fill themselves in."
         case .keepAsText: "Tap a highlight, or press Backspace right after it, to keep the words as text."
         case .browse: "The magnifying glass opens Browse: search every task, and find your Groups, labels and filters."
-        case .flipboard: "Each switch is a repeating chore. Flip it when it’s done; it turns red again when it’s due."
+        case .flipboard: "A switch stays off your lists until it’s due, then waits in Today until you flip it."
         case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
         }
     }
