@@ -81,7 +81,8 @@ struct ClaudeToolHandler {
             throw ToolError("The filter didn't parse: \(error.message). Example: \"(today | overdue) & p1\" or \"#Work & 7 days\".")
         }
         // `apply` leaves out subtasks (they come inside their task) and completed tasks unless asked.
-        let matched = query.apply(to: try visibleTasks(), now: now, calendar: calendar)
+        // Claude sees every Flipboard switch, green ones too, as the task it is (brief 59).
+        let matched = query.apply(to: try visibleTasks(), now: now, calendar: calendar, flipboardRule: false)
         let limit = min(max(arguments["limit"]?.intValue ?? ClaudeTools.defaultLimit, 1), ClaudeTools.maxLimit)
         let shown = matched.prefix(limit)
         return .json([
@@ -265,6 +266,10 @@ struct ClaudeToolHandler {
         }
         if let due = dueJSON(task) { out["due"] = due }
         if let rule = task.recurrenceRule { out["repeats"] = .string(rule.displayText) }
+        // A Flipboard switch: "green" (done for its interval; off the lists) or "red" (due; in Today).
+        if let side = Flipboard.side(of: task, now: now, calendar: calendar) {
+            out["flipboard_switch"] = .string(side == .green ? "green" : "red")
+        }
         if let deadline = task.deadline { out["deadline"] = .string(dayString(deadline)) }
         if let minutes = task.reminderOffsetMinutes, task.hasDueTime { out["reminder_minutes_before"] = .int(minutes) }
         if let at = task.reminderDate, !task.isCompleted, at > now { out["reminder_at"] = .string(timeString(at)) }

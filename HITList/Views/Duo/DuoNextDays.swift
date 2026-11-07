@@ -32,8 +32,14 @@ struct DuoNextDays: View {
         return byDay.keys.sorted().map { (day: $0, items: byDay[$0] ?? []) }
     }
 
+    /// The tasks it lists: top-level ones, without green Flipboard switches (brief 59: those are on the
+    /// Flipboard only; a red one is due today, so never in the next days anyway).
+    static func listed<Item: FilterableTask>(_ items: [Item], now: Date, calendar: Calendar = .current) -> [Item] {
+        items.filter { !$0.filterIsSubtask && FlipboardSwitch.listing(for: $0, now: now, calendar: calendar) != .hidden }
+    }
+
     var body: some View {
-        let open = dated.filter { !$0.isSubtask }
+        let open = Self.listed(dated, now: now)
         let days = Self.group(open, due: \.dueDate, now: now)
         VStack(alignment: .leading, spacing: 0) {
             Text("Next days")

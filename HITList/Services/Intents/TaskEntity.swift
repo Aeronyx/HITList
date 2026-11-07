@@ -42,7 +42,9 @@ struct TaskEntity: AppEntity {
     /// The task as Spotlight shows it (brief 52). The date is fixed ("Nov 6, 2026 at 5:00 PM"), never
     /// "Tomorrow", which would go stale in the index; the notes follow after a dash.
     init(spotlight task: TaskItem) {
-        let due = task.dueDate.map { $0.formatted(date: .abbreviated, time: task.hasDueTime ? .shortened : .omitted) }
+        // A Flipboard switch has no date to show (brief 59): Spotlight holds only red ones, Today's every day.
+        let due = Flipboard.isMember(task) ? Self.switchLine(task)
+            : task.dueDate.map { $0.formatted(date: .abbreviated, time: task.hasDueTime ? .shortened : .omitted) }
         let line = [due, task.project?.name].compactMap { $0 }.joined(separator: " · ")
         let notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
@@ -54,8 +56,14 @@ struct TaskEntity: AppEntity {
         spotlightKeywords = task.labelList.map(\.name) + [task.project?.name].compactMap { $0 }
     }
 
+    /// "Flipboard switch · every 3 days".
+    static func switchLine(_ task: TaskItem) -> String {
+        ["Flipboard switch", task.recurrenceRule?.displayText.lowercased()].compactMap { $0 }.joined(separator: " · ")
+    }
+
     init(_ task: TaskItem, now: Date = Date()) {
-        let due = task.dueDate.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) }
+        let due = Flipboard.side(of: task, now: now) == .red ? "Today"
+            : task.dueDate.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) }
         let parts = [due, task.project?.name].compactMap { $0 }
         self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
                   detail: parts.isEmpty ? nil : parts.joined(separator: " · "))
@@ -143,6 +151,16 @@ extension IntentActions {
     static func complete(_ id: UUID, in context: ModelContext, now: Date = Date()) throws -> String {
         guard let task = task(id: id, in: context) else { throw IntentFailure.taskNotFound }
         guard !task.isCompleted else { return "‘\(task.title)’ is already done." }
+        if Flipboard.isMember(task) {
+            // A switch flips (brief 59): the interval restarts from today, a charger counts one flip.
+            switch Flipboard.flip(task, in: context, now: now) {
+            case .counted(let n): return "Flipped ‘\(task.title)’: \(n) of \(Flipboard.clampedTarget(task.flipTarget))."
+            case .ignored: return "‘\(task.title)’ is already charged for now."
+            case .charged:
+                let next = task.dueDate.map { " It’s next due \(spokenDue($0, hasTime: false, now: now))." } ?? ""
+                return "Flipped ‘\(task.title)’." + next
+            }
+        }
         TaskActions.toggleCompletion(task, in: context)
         if !task.isCompleted, let next = task.dueDate {
             return "Done. ‘\(task.title)’ is next due \(spokenDue(next, hasTime: task.hasDueTime, now: now))."
@@ -171,7 +189,9 @@ extension IntentActions {
         let today = TaskOrdering.today(open, now: now)
         let first = today.overdue + today.today
         let shown = Set(first.map(\.id))
-        let rest = TaskOrdering.sorted(open.filter { !shown.contains($0.id) })
+        let rest = TaskOrdering.sorted(open.filter {
+            !shown.contains($0.id) && FlipboardSwitch.listing(for: $0, now: now) != .hidden
+        }, now: now)
         return Array((first + rest).prefix(suggestionLimit))
     }
 

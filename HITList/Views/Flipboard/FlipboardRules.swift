@@ -32,6 +32,11 @@ enum Flipboard {
 
     static func hasLabel(_ task: TaskItem) -> Bool { FlipboardSwitch.hasLabel(task.filterLabelNames) }
 
+    /// The switch's side, or nil when the task isn't a switch.
+    static func side(of task: TaskItem, now: Date = Date(), calendar: Calendar = .current) -> Side? {
+        isMember(task) ? side(due: task.dueDate, now: now, calendar: calendar) : nil
+    }
+
     // MARK: Sides and the light bar
 
     /// A switch with no due date has never been flipped; it shows red until it is.

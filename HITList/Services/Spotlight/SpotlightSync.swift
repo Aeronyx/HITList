@@ -4,6 +4,7 @@ import CryptoKit
 import SwiftData
 import AppIntents
 import OSLog
+import HITListCore
 
 /// Open, top-level tasks in Spotlight (brief 52; HIG: iCloud and Siri, "include content in search").
 ///
@@ -109,7 +110,7 @@ final class SpotlightSync {
     private func apply(in context: ModelContext) async -> SpotlightPlan {
         let tasks: [TaskItem]
         do {
-            tasks = try IntentActions.openTopLevelTasks(in: context)
+            tasks = Self.indexable(try IntentActions.openTopLevelTasks(in: context), now: Date())
         } catch {
             Self.log.error("Spotlight: couldn't read tasks: \(error.localizedDescription, privacy: .public)")
             return SpotlightPlan()
@@ -158,6 +159,12 @@ final class SpotlightSync {
         SpotlightLedger.forget(in: defaults)
     }
 
+    /// The open tasks Spotlight holds: every one but green Flipboard switches, which are on the Flipboard
+    /// only (brief 59). A switch that turns red comes back with the next refresh (a save, an import, a launch).
+    static func indexable(_ tasks: [TaskItem], now: Date, calendar: Calendar = .current) -> [TaskItem] {
+        tasks.filter { FlipboardSwitch.listing(for: $0, now: now, calendar: calendar) != .hidden }
+    }
+
     /// The task a classic Spotlight activity names (its item's unique identifier is the task's id).
     nonisolated static func taskID(from activity: NSUserActivity) -> UUID? {
         (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).flatMap(UUID.init(uuidString:))
@@ -165,14 +172,15 @@ final class SpotlightSync {
 }
 
 /// What a task shows in Spotlight, reduced to a fingerprint: the title, notes, due date (and whether it
-/// has a time), Group and labels. Priority, order and the like don't show, so they don't count.
+/// has a time), Group and labels, and for a Flipboard switch its repeat (its line names that instead of
+/// a date). Priority, order and the like don't show, so they don't count.
 struct SpotlightRecord {
     let id: UUID
     let fingerprint: String
 
     init(_ task: TaskItem) {
         id = task.id
-        let fields = [
+        var fields = [
             task.title,
             task.notes,
             task.dueDate.map { String($0.timeIntervalSince1970) } ?? "",
@@ -180,6 +188,8 @@ struct SpotlightRecord {
             task.project?.name ?? "",
             task.labelList.map(\.name).joined(separator: ","),
         ]
+        // Only for switches, so every other task keeps the fingerprint it was indexed with.
+        if Flipboard.isMember(task) { fields.append("switch:" + (task.recurrence ?? "")) }
         let digest = SHA256.hash(data: Data(fields.joined(separator: "\u{1F}").utf8))
         fingerprint = digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
