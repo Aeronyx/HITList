@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import HITListCore
+import TipKit
 
 /// Review Inbox (brief 60): the unsorted tasks (no date, no Group; `InboxReview`) one card at a time, oldest
 /// first. On iPhone, swipe the card right for Today or left to delete (Undo in the toast); under it, Pick a
@@ -113,20 +114,31 @@ struct InboxProcessView: View {
 
     // MARK: - Layout
 
+    /// "Review Inbox", what it goes through, and a dot per task.
     private var topBar: some View {
-        VStack(spacing: 10) {
-            HStack {
-                if !queue.isFinished {
-                    Text(queue.progressText)
-                        .font(HITType.subheadlineSemibold.monospacedDigit())
-                        .contentTransition(.numericText())
-                        .accessibilityLabel("Task \(queue.position) of \(queue.total)")
+        VStack(alignment: .leading, spacing: HITSpacing.m) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Review Inbox")
+                        .font(HITType.title2Bold)
+                        .accessibilityAddTraits(.isHeader)
+                    if !queue.isFinished {
+                        Text(InboxText.reviewSubtitle(count: queue.total))
+                            .font(HITType.subheadline)
+                            .foregroundStyle(Theme.secondaryText)
+                            .contentTransition(.numericText())
+                    }
                 }
                 Spacer()
                 Button("Done") { dismiss() }
                     .buttonStyle(HITButtonStyle(.secondary, size: .small))
                     .keyboardShortcut(editingTitle ? nil : .cancelAction)
                     .help("Close (Esc)")
+            }
+            if !queue.isFinished {
+                ReviewDots(done: queue.finished, total: queue.total)
+                    .accessibilityElement()
+                    .accessibilityLabel("Task \(queue.position) of \(queue.total)")
             }
         }
         .padding(.horizontal, 20)
@@ -167,6 +179,13 @@ struct InboxProcessView: View {
                     .padding(.top, HITSpacing.xs)
             }
             Spacer(minLength: HITSpacing.l)
+            #if os(iOS)
+            if !editingTitle {
+                TipView(HITTip(.reviewSwipe))
+                    .tipViewStyle(HITTipStyle())
+                    .tipBackground(Theme.elevated)
+            }
+            #endif
             HStack(alignment: .bottom) {
                 #if os(macOS)
                 keyHints(task)
@@ -335,20 +354,18 @@ struct InboxProcessView: View {
         #endif
     }
 
+    /// "Inbox reviewed" with the checkmark; tasks put off with Later are counted under it.
     private var finished: some View {
         let left = unsortedTasks.filter { $0.id != pendingDelete?.id }.count
         return VStack(spacing: 0) {
-            if left == 0 {
-                InboxZeroView()
-            } else {
-                InboxZeroView(title: "All done",
-                              message: "You've been through the inbox. \(left) \(left == 1 ? "task stays" : "tasks stay") there for later.")
-            }
+            InboxZeroView(title: InboxText.reviewedTitle, message: InboxText.reviewedMessage(left: left))
             Button("Done") { dismiss() }
                 .buttonStyle(.hitPrimary)
                 .keyboardShortcut(.defaultAction)
-                .padding(.bottom, 40)
+                .accessibilityIdentifier("reviewDone")
         }
+        // Clear of the undo toast.
+        .padding(.bottom, 96)
     }
 
     // MARK: - Editor
@@ -417,6 +434,8 @@ struct InboxProcessView: View {
     /// A swipe (or T / ⌫) on `task`, the card on screen.
     private func act(_ direction: InboxReviewSwipe.Direction, on task: TaskItem) {
         guard task.id == queue.current else { return }
+        // They know the swipe (or the key) now.
+        HITTip(.reviewSwipe).invalidate(reason: .actionPerformed)
         switch direction {
         case .today: schedule(task, to: TaskRescheduling.QuickDate.today.date(now: now))
         case .delete: delete(task)
@@ -657,6 +676,36 @@ private struct ReviewSwipeCard<Content: View>: View {
     }
 }
 
+/// A dot per task in the review: reviewed ones filled, the current one wider, the rest hollow. A long
+/// review (more dots than fit) is a bar instead.
+private struct ReviewDots: View {
+    let done: Int
+    let total: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private static let maxDots = 16
+
+    var body: some View {
+        SwiftUI.Group {
+            if total <= Self.maxDots {
+                HStack(spacing: 6) {
+                    ForEach(0..<total, id: \.self) { index in
+                        Capsule()
+                            .fill(index < done ? Theme.accent : index == done ? Theme.accent : Theme.separator)
+                            .opacity(index < done ? 0.55 : 1)
+                            .frame(width: index == done ? 18 : 7, height: 7)
+                    }
+                }
+            } else {
+                ProgressView(value: Double(done), total: Double(max(total, 1)))
+                    .progressViewStyle(.linear)
+                    .tint(Theme.accent)
+            }
+        }
+        .animation(HITMotion.emphasis(reduceMotion: reduceMotion), value: done)
+    }
+}
+
 /// Big slate tiles for the review's buttons.
 private struct ReviewButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -738,7 +787,7 @@ private struct DeletedToast: View {
         .frame(maxWidth: 480)
         .padding(.horizontal, 16)
         .padding(.bottom, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityAction(named: "Undo", onUndo)
+        // The text and a real Undo button, each reachable (a merged element took taps on its middle).
+        .accessibilityElement(children: .contain)
     }
 }
