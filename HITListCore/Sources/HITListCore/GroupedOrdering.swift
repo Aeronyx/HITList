@@ -135,3 +135,123 @@ public enum GroupedOrdering {
                      groupOf: \.filterProjectName)
     }
 }
+
+// MARK: - Filtering a list (brief 57)
+
+/// The Inbox's filter control as a value: the Groups, labels and priorities picked, and "No date" /
+/// "No Group". It writes a filter-language query (`query`) that the list evaluates with `FilterQuery`, so
+/// it means exactly what the same words typed into a saved filter mean, and "Save as filter…" is the same
+/// query inside the Inbox rule (`savedQuery`).
+///
+/// Choices of one kind widen (Work or Home), kinds narrow (Work and no date): `(#"Work" | #"Home") & no date`.
+/// "No Group" is one of the Group choices.
+public struct ListFilter: Equatable, Codable, Sendable {
+    /// Group names, in the order picked.
+    public private(set) var groups: [String] = []
+    public private(set) var includesNoGroup = false
+    /// Label names, in the order picked.
+    public private(set) var labels: [String] = []
+    /// 1...4, ascending.
+    public private(set) var priorities: [Int] = []
+    public private(set) var noDate = false
+
+    public init() {}
+
+    /// One active choice, shown as a chip under the header with its ×.
+    public enum Chip: Hashable, Sendable {
+        case group(String)
+        case noGroup
+        case label(String)
+        case priority(Int)
+        case noDate
+
+        public var title: String {
+            switch self {
+            case .group(let name): name
+            case .noGroup: "No Group"
+            case .label(let name): "@" + name
+            case .priority(let level): "P\(level)"
+            case .noDate: "No date"
+            }
+        }
+    }
+
+    public var isEmpty: Bool { chips.isEmpty }
+
+    /// The active choices in the order the query names them: Groups, labels, priorities, No date.
+    public var chips: [Chip] {
+        groups.map(Chip.group) + (includesNoGroup ? [.noGroup] : []) + labels.map(Chip.label)
+            + priorities.map(Chip.priority) + (noDate ? [.noDate] : [])
+    }
+
+    public func contains(_ chip: Chip) -> Bool {
+        switch chip {
+        case .group(let name): groups.contains(name)
+        case .noGroup: includesNoGroup
+        case .label(let name): labels.contains(name)
+        case .priority(let level): priorities.contains(level)
+        case .noDate: noDate
+        }
+    }
+
+    /// Adds `chip`, or takes it away when it is already on.
+    public mutating func toggle(_ chip: Chip) {
+        if contains(chip) { remove(chip); return }
+        switch chip {
+        case .group(let name): groups.append(name)
+        case .noGroup: includesNoGroup = true
+        case .label(let name): labels.append(name)
+        case .priority(let level): priorities = (priorities + [min(max(level, 1), 4)]).sorted()
+        case .noDate: noDate = true
+        }
+    }
+
+    public mutating func remove(_ chip: Chip) {
+        switch chip {
+        case .group(let name): groups.removeAll { $0 == name }
+        case .noGroup: includesNoGroup = false
+        case .label(let name): labels.removeAll { $0 == name }
+        case .priority(let level): priorities.removeAll { $0 == level }
+        case .noDate: noDate = false
+        }
+    }
+
+    /// Drops choices that name a Group or label no longer there (renamed or deleted elsewhere).
+    public mutating func keep(groups existingGroups: Set<String>, labels existingLabels: Set<String>) {
+        groups.removeAll { !existingGroups.contains($0) }
+        labels.removeAll { !existingLabels.contains($0) }
+    }
+
+    /// The filter as a query, or nil when nothing is picked.
+    public var query: String? {
+        var facets: [[String]] = []
+        let groupTerms = groups.map { "#" + Self.quoted($0) } + (includesNoGroup ? ["no project"] : [])
+        if !groupTerms.isEmpty { facets.append(groupTerms) }
+        if !labels.isEmpty { facets.append(labels.map { "@" + Self.quoted($0) }) }
+        if !priorities.isEmpty { facets.append(priorities.map { "p\($0)" }) }
+        if noDate { facets.append(["no date"]) }
+        guard !facets.isEmpty else { return nil }
+        let parts = facets.map { terms in terms.count == 1 ? terms[0] : "(" + terms.joined(separator: " | ") + ")" }
+        // One facet of several terms keeps its parentheses, so `savedQuery` can wrap it as it is.
+        return parts.joined(separator: " & ")
+    }
+
+    /// The Inbox rule (`TaskOrdering.isInInbox`) in the filter language: dated tasks in any Group, and undated
+    /// ones in none.
+    public static let inboxQuery = "has date | no project"
+
+    /// "Save as filter…": this filter inside `base` (`inboxQuery`), or nil when nothing is picked.
+    public func savedQuery(within base: String) -> String? {
+        query.map { "(\(base)) & \($0)" }
+    }
+
+    /// The new saved filter's name: "Inbox: Work, No date".
+    public var suggestedName: String {
+        "Inbox: " + chips.map(\.title).joined(separator: ", ")
+    }
+
+    /// `"name"` with `"` and `\` escaped, which the filter tokenizer reads back as the name itself.
+    static func quoted(_ name: String) -> String {
+        "\"" + name.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") + "\""
+    }
+}
