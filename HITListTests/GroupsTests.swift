@@ -85,6 +85,24 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(GroupSectionHeading.make(for: .priority(4), count: 2, projects: []).titleColor, Theme.secondaryText)
     }
 
+    // MARK: - Title menu (iPhone)
+
+    func testTitleMenuCountsOpenTopLevelTasksPerGroupAndLabel() throws {
+        let work = project("Work", order: 0)
+        let waiting = TaskLabel(name: "waiting")
+        context.insert(waiting)
+        let a = task("a", in: work), b = task("b", in: work)
+        a.labels = [waiting]
+        _ = b
+        try context.save()
+        let open = try context.fetch(FetchDescriptor<TaskItem>()).filter { !$0.isCompleted }
+        let counts = GroupsTitleMenuCounts(open)
+        XCTAssertEqual(counts.byProject[work.id], 2)
+        XCTAssertEqual(counts.byLabel[waiting.id], 1)
+        XCTAssertEqual(GroupsTitleMenuCounts.title("Work", count: 2), "Work · 2")
+        XCTAssertEqual(GroupsTitleMenuCounts.title("Errands", count: 0), "Errands")
+    }
+
     // MARK: - Remembered per list
 
     func testGroupByDefaultsAndStoredValues() {

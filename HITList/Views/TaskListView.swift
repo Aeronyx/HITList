@@ -31,6 +31,14 @@ struct TaskListView: View {
     private let isCompact = false
     #endif
 
+    #if os(iOS)
+    @Environment(\.mobileChrome) private var mobileChrome
+    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
+    private var pushesGroups: Bool { mobileChrome != nil }
+    #else
+    private let pushesGroups = false
+    #endif
+
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var currentProject: Project? {
@@ -276,7 +284,7 @@ struct TaskListView: View {
                                             if let banner = group.banner {
                                                 Text(banner).taskSectionHeader(color: group.color)
                                             }
-                                            GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
+                                            GroupSectionHeader(heading: heading, pushes: pushesGroups, belowBanner: group.banner != nil)
                                         }
                                         .listRowInsets(EdgeInsets())
                                     } else if !group.title.isEmpty {
@@ -317,7 +325,9 @@ struct TaskListView: View {
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.large)
+        // Today's title is a menu on iPhone (brief 57), which the system draws only on an inline title.
+        .navigationBarTitleDisplayMode(selection == .today && mobileChrome != nil ? .inline : .large)
+        .modifier(TodayTitleMenu(isOn: selection == .today))
         #endif
         // The filter-lines icon holds the view options; the "…" beside it (iPhone, iPad) holds this
         // screen's actions, and on iPhone Settings and the sync dot too (`screenChrome`).
@@ -478,3 +488,14 @@ struct TaskListView: View {
         }
     }
 }
+
+#if os(iOS)
+/// Today's title opens a Group, a label or Browse on iPhone (brief 57); other lists keep a plain title.
+private struct TodayTitleMenu: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn { content.groupsTitleMenu() } else { content }
+    }
+}
+#endif

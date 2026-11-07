@@ -37,6 +37,14 @@ struct InboxView: View {
     private let isCompact = false
     #endif
 
+    #if os(iOS)
+    @Environment(\.mobileChrome) private var mobileChrome
+    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
+    private var pushesGroups: Bool { mobileChrome != nil }
+    #else
+    private let pushesGroups = false
+    #endif
+
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     /// A row's task and the due date it is listed under: its own, or while its completion animates,
@@ -158,6 +166,8 @@ struct InboxView: View {
         .navigationTitle("Inbox")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        // The title opens a Group, a label or Browse (brief 57).
+        .groupsTitleMenu()
         #endif
         // The filter control, then Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
@@ -204,7 +214,8 @@ struct InboxView: View {
                     ForEach(section.tasks, id: \.task.id) { row($0.task) }
                 } header: {
                     if section.key != .all {
-                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects))
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects),
+                                           pushes: pushesGroups)
                     }
                 }
             }
