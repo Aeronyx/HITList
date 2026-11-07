@@ -1,8 +1,9 @@
 import XCTest
 import SwiftData
+import HITListCore
 @testable import HITList
 
-/// Process mode's queue (order, advancing, skipping, tasks leaving the inbox) and the inbox's texts.
+/// Review Inbox's queue (order, advancing, Later, tasks leaving the review) and the inbox's texts.
 final class InboxProcessQueueTests: XCTestCase {
     private let base = Date(timeIntervalSince1970: 1_800_000_000)
     private let ids = (0..<5).map { _ in UUID() }
@@ -40,35 +41,23 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(queue.finished, 3, "advancing past the end does nothing")
     }
 
-    func testSkipSendsATaskToTheEndOnceThenDropsIt() {
+    func testLaterKeepsTheTaskInTheInboxAndMovesOn() {
         var queue = makeQueue(3)
-        queue.skip()
-        XCTAssertEqual(queue.remaining, [ids[1], ids[2], ids[0]])
+        queue.later()
+        XCTAssertEqual(queue.remaining, [ids[1], ids[2]], "no second look: Later is done with it for this review")
+        XCTAssertEqual(queue.progressText, "2 of 3")
+        queue.later()
         queue.advance()
-        queue.advance()
-        XCTAssertEqual(queue.current, ids[0], "the skipped task comes back last")
-        queue.skip()
-        XCTAssertTrue(queue.isFinished, "a second skip drops it")
+        XCTAssertTrue(queue.isFinished)
         XCTAssertEqual(queue.finished, 3)
     }
 
-    func testSkippingTheOnlyTaskShowsItAgainThenFinishes() {
+    func testLaterOnTheOnlyTaskFinishes() {
         var queue = makeQueue(1)
-        queue.skip()
-        XCTAssertEqual(queue.current, ids[0])
-        queue.skip()
+        queue.later()
         XCTAssertTrue(queue.isFinished)
-    }
-
-    func testProgressCountsSkippedTasksAsPassedAndNeverGoesBack() {
-        var queue = makeQueue(3)
-        queue.skip()
-        XCTAssertEqual(queue.progressText, "2 of 3")
-        queue.advance()
-        XCTAssertEqual(queue.progressText, "3 of 3")
-        queue.advance()
-        XCTAssertEqual(queue.current, ids[0])
-        XCTAssertEqual(queue.progressText, "3 of 3", "the skipped task's second look is still the last")
+        queue.later()
+        XCTAssertEqual(queue.finished, 1, "nothing left to put off")
     }
 
     func testTasksThatLeaveTheInboxDropOut() {
@@ -80,18 +69,19 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(queue.progressText, "1 of 3")
     }
 
-    func testTheCurrentTaskLeavingTheInboxShowsTheNextOne() {
+    func testTheCurrentTaskSortedOnItsCardCountsAsReviewed() {
+        // Given a date or a Group in the editor (Edit…): the next card shows and the dots keep their count.
         var queue = makeQueue(3)
         queue.retain(Set([ids[1], ids[2]]))
         XCTAssertEqual(queue.current, ids[1])
+        XCTAssertEqual(queue.progressText, "2 of 3")
     }
 
-    func testRetainDropsASkippedTaskWaitingAtTheEnd() {
+    func testATaskThatLeavesAfterBeingPassedStillCountsAsPassed() {
         var queue = makeQueue(3)
-        queue.skip()
+        queue.advance()
         queue.retain(Set([ids[1], ids[2]]))
-        XCTAssertEqual(queue.remaining, [ids[1], ids[2]])
-        XCTAssertEqual(queue.progressText, "1 of 2")
+        XCTAssertEqual(queue.progressText, "2 of 3", "the scheduled task stays counted")
     }
 
     func testRestoreUndoesAnAdvance() {
@@ -112,10 +102,24 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(InboxText.header(count: 7), "Inbox · 7")
         XCTAssertEqual(InboxText.header(count: 0), "Inbox · 0")
         XCTAssertEqual(InboxText.progress(3, of: 7), "3 of 7")
+        XCTAssertEqual(InboxText.reviewMenuItem(count: 3), "Review 3 unsorted…")
+        XCTAssertEqual(InboxText.reviewMenuItem(count: 1), "Review 1 unsorted…")
+        XCTAssertNil(InboxText.reviewMenuItem(count: 0), "no item when nothing needs review")
+        XCTAssertEqual(InboxText.reviewSubtitle(count: 3), "3 tasks with no date or Group")
+        XCTAssertEqual(InboxText.reviewSubtitle(count: 1), "1 task with no date or Group")
+        XCTAssertEqual(InboxText.reviewedTitle, "Inbox reviewed")
+        XCTAssertEqual(InboxText.reviewedMessage(left: 0), "Every task has a date or a Group.")
+        XCTAssertEqual(InboxText.reviewedMessage(left: 1), "1 task waits in the Inbox for later.")
+        XCTAssertEqual(InboxText.reviewedMessage(left: 2), "2 tasks wait in the Inbox for later.")
+        let en = Locale(identifier: "en_US")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(-3 * 86_400), now: base, locale: en), "Added 3 days ago")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(-86_400), now: base, locale: en), "Added yesterday")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(30), now: base, locale: en), "Added now",
+                       "a clock a little ahead on another device never says \"in 30 seconds\"")
     }
 }
 
-/// The queue against real tasks: what counts as the inbox, and tasks leaving it through `TaskActions`.
+/// The queue against real tasks: only the unsorted (no date, no Group), and tasks leaving it through `TaskActions`.
 @MainActor
 final class InboxProcessStoreTests: XCTestCase {
     private var container: ModelContainer!
@@ -131,8 +135,10 @@ final class InboxProcessStoreTests: XCTestCase {
         context = nil
     }
 
-    private func task(_ title: String, minutesAgo: Double, project: Project? = nil) -> TaskItem {
+    @discardableResult
+    private func task(_ title: String, minutesAgo: Double, project: Project? = nil, due: Date? = nil) -> TaskItem {
         let t = TaskItem(title: title, project: project)
+        t.dueDate = due
         t.createdAt = Date().addingTimeInterval(-minutesAgo * 60)
         context.insert(t)
         return t
@@ -140,46 +146,53 @@ final class InboxProcessStoreTests: XCTestCase {
 
     private func allTasks() throws -> [TaskItem] { try context.fetch(FetchDescriptor<TaskItem>()) }
 
-    func testQueueHoldsOpenInboxTasksOldestFirst() throws {
+    func testQueueHoldsOnlyUnsortedTasksOldestFirst() throws {
         let work = Project(name: "Work")
         context.insert(work)
         let newer = task("newer", minutesAgo: 1)
         let older = task("older", minutesAgo: 10)
-        _ = task("in a project", minutesAgo: 20, project: work)
+        task("in a Group", minutesAgo: 20, project: work)
+        task("dated, in the Inbox", minutesAgo: 25, due: Date())
+        task("dated in a Group", minutesAgo: 26, project: work, due: Date())
         let done = task("done", minutesAgo: 30)
         done.isCompleted = true
+        let parent = task("parent", minutesAgo: 40, project: work)
+        let step = task("step", minutesAgo: 35)
+        step.parent = parent
         try context.save()
 
-        let queue = InboxProcessQueue(inboxOf: try allTasks())
+        let queue = InboxProcessQueue(reviewOf: try allTasks())
         XCTAssertEqual(queue.remaining, [older.id, newer.id])
+        XCTAssertEqual(InboxReview.count(try allTasks()), 2, "the menu item's count")
     }
 
-    func testMovingTheCurrentTaskToAProjectRemovesItFromTheQueue() throws {
+    func testMovingTheCurrentTaskToAGroupRemovesItFromTheQueue() throws {
         let first = task("first", minutesAgo: 10)
         let second = task("second", minutesAgo: 5)
         try context.save()
-        var queue = InboxProcessQueue(inboxOf: try allTasks())
+        var queue = InboxProcessQueue(reviewOf: try allTasks())
 
         first.project = try TaskActions.findOrCreateProject(named: "Garden", in: context)
         try context.save()
-        queue.retainInbox(of: try allTasks())
+        queue.retainReview(of: try allTasks())
 
         XCTAssertEqual(queue.remaining, [second.id])
-        XCTAssertEqual(queue.progressText, "1 of 1")
+        XCTAssertEqual(queue.progressText, "2 of 2", "the moved task counts as reviewed")
     }
 
-    func testDeletedAndCompletedTasksLeaveTheQueueButScheduledOnesStay() throws {
+    func testDeletedCompletedAndScheduledTasksLeaveTheQueue() throws {
         let a = task("a", minutesAgo: 30)
         let b = task("b", minutesAgo: 20)
         let c = task("c", minutesAgo: 10)
+        let d = task("d", minutesAgo: 5)
         try context.save()
-        var queue = InboxProcessQueue(inboxOf: try allTasks())
+        var queue = InboxProcessQueue(reviewOf: try allTasks())
 
         TaskActions.delete(a, in: context)
         TaskActions.toggleCompletion(b, in: context)
         TaskActions.reschedule(c, to: Date(), in: context)
-        queue.retainInbox(of: try allTasks())
+        queue.retainReview(of: try allTasks())
 
-        XCTAssertEqual(queue.remaining, [c.id], "a dated task is still in the inbox")
+        XCTAssertEqual(queue.remaining, [d.id], "a dated task has its place: it leaves the review")
     }
 }
