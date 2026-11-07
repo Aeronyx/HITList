@@ -117,3 +117,34 @@ struct GroupByPicker: View {
         .accessibilityIdentifier("groupByPicker")
     }
 }
+
+/// A Group's own screen, at the top (brief 57): its colour dot, name and open count, "● Work · 3", in the
+/// Inbox header's type and place, so a Group reads as a place of its own. On iPhone the navigation title
+/// goes inline above it, as the Inbox's does.
+struct GroupScreenHeader: View {
+    let name: String
+    let colorHex: String
+    let openCount: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: HITSpacing.s) {
+            Circle()
+                .fill(Color(hex: colorHex))
+                .frame(width: 12, height: 12)
+            Text(openCount > 0 ? "\(name) · \(openCount)" : name)
+                .font(HITType.title2Bold)
+                .lineLimit(1)
+                .contentTransition(.numericText(value: Double(openCount)))
+                .animation(reduceMotion ? nil : .snappy, value: openCount)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isHeader)
+        .accessibilityLabel("\(name), \(openCount) \(openCount == 1 ? "task" : "tasks")")
+        .accessibilityIdentifier("groupScreenHeader")
+    }
+}

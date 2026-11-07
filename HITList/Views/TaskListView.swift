@@ -226,8 +226,16 @@ struct TaskListView: View {
         return groups
     }
 
+    /// A Group's open tasks (sub-tasks live inside their parent), for its screen's header.
+    private func openCount(in project: Project) -> Int {
+        allTasks.filter { $0.project?.id == project.id && !$0.isCompleted && !$0.isSubtask }.count
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            if let project = currentProject {
+                GroupScreenHeader(name: project.name, colorHex: project.colorHex, openCount: openCount(in: project))
+            }
             SwiftUI.Group {
                 switch result {
                 case .success(let groups):
@@ -325,8 +333,9 @@ struct TaskListView: View {
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
-        // Today's title is a menu on iPhone (brief 57), which the system draws only on an inline title.
-        .navigationBarTitleDisplayMode(selection == .today && mobileChrome != nil ? .inline : .large)
+        // Today's title is a menu on iPhone (brief 57), which the system draws only on an inline title; a
+        // Group's screen has its own header under an inline title, as the Inbox has.
+        .navigationBarTitleDisplayMode((selection == .today && mobileChrome != nil) || currentProject != nil ? .inline : .large)
         .modifier(TodayTitleMenu(isOn: selection == .today))
         #endif
         // The filter-lines icon holds the view options; the "…" beside it (iPhone, iPad) holds this
