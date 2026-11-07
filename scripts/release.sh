@@ -21,7 +21,10 @@
 # Schema drift check: if a CloudKit management token is saved (`xcrun cktool save-token`), the script
 # exports the Development and Production schemas and refuses to upload while they differ, because
 # a build whose models need undeployed schema changes would fail to sync in Production. Without a
-# token it prints a warning and continues.
+# token it prints a warning and continues. The Production export is also handed to the preflight
+# (`CloudKitSchemaTests`, through TEST_RUNNER_HITLIST_CLOUDKIT_SCHEMA), which fails when Production lacks a
+# field the models have: the diff alone is blind to a field missing from both environments, which is how
+# three TaskItem fields went undeployed for a week and stopped a tester's sync (2026-11-06).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -85,6 +88,11 @@ if (( SCHEMA_CHECK && UPLOAD )); then
         fail "$CID: Development schema differs from Production (see the lines above: '<' is Development, '>' Production). Or pass --skip-schema-check."
       fi
       echo "$CID: Development and Production schemas match."
+      if [[ "$CID" == "$CONTAINER_ID" ]]; then
+        # xcodebuild forwards TEST_RUNNER_* to the test process: the preflight's CloudKitSchemaTests reads the
+        # export and fails if a field the models have is missing from Production (see the header).
+        export TEST_RUNNER_HITLIST_CLOUDKIT_SCHEMA="$TMP/$CID-prod.ckdb"
+      fi
     else
       print -P "%F{yellow}$CID: could not export its schemas (no cktool management token saved?); skipping its drift check. Run: xcrun cktool save-token --type management%f"
     fi

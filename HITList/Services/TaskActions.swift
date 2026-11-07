@@ -298,7 +298,23 @@ enum TaskActions {
             // Schema V5's `reminderDate` (brief 48) reaches CloudKit only on a record that has one. A side store
             // never schedules notifications (`NotificationScheduler.bootstrap`), so this one never goes off.
             task.reminderDate = Date().addingTimeInterval(15 * 60)
+            // Every other optional field too, for the same reason: Development learns a field only from a record
+            // that carries it, and Production rejects a record with a field it lacks, after which that device
+            // exports nothing. V2's `deadline`, `locationName` and `flipPeriodStart` were left out of this seed,
+            // so neither environment had them, and the first flip of a switch on a friend's Mac stopped his sync
+            // (2026-11-06). `CloudKitSchemaTests` fails when a field is left out here or is missing from Production.
+            task.deadline = Calendar.current.startOfDay(for: Date().addingTimeInterval(7 * 86_400))
+            task.locationName = "Sample location"
+            task.reminderOffsetMinutes = 30
+            task.flipPeriodStart = Date()
+            task.recurrence = RecurrenceRule.weekly.encoded
             context.insert(task)
+            // A completed task, so `completedAt` is carried too.
+            let done = TaskItem(title: "Sample completed task (safe to delete)", notes: "Created by -seedSampleData",
+                                project: project, labels: [label])
+            done.isCompleted = true
+            done.completedAt = Date()
+            context.insert(done)
             try context.save()
             // Schema V3's `parent` reaches CloudKit only on a record that has one.
             try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
@@ -306,6 +322,43 @@ enum TaskActions {
             try ProfileStore(context: context).seedSampleProfiles()
         } catch {
             print("seedSampleData failed: \(error)")
+        }
+    }
+
+    /// Developer aid for screenshots and sessions: `HITList -seedDemoData` fills an empty side store with a
+    /// believable week, each line typed the way quick add reads it (so the data is exactly what a person would
+    /// have), with Groups, labels, repeats, two brain-dump tasks for the Inbox and two Flipboard switches.
+    /// Only a side store, like `-seedSampleData`, and only an empty one, so a relaunch doesn't double it.
+    static let demoLines = [
+        "Call the dentist tomorrow 9am p2 #Home",
+        "Buy groceries today 6pm #Home @errands",
+        "Reply to Sam about the lease today p2 #Work @waiting",
+        "Finish the quarterly report fri p1 #Work",
+        "Pay rent fri 5pm p1 #Finance @bills every month",
+        "Book flights for the trip next week #Personal",
+        "Gym today 7am #Health every weekday",
+        "Renew passport p3 #Personal",
+        "Read the article Alex sent",
+        "Birthday present ideas for Mum",
+        "Water the plants every 3 days @flipboard",
+        "Take out the recycling every week @flipboard",
+    ]
+
+    static func seedDemoDataIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
+                                        storeName: String = ModelContainerFactory.storeName, now: Date = Date()) {
+        guard arguments.contains("-seedDemoData") else { return }
+        guard storeName != ModelContainerFactory.mainStoreName else {
+            print("-seedDemoData ignored: it seeds only a side store (HITLIST_STORE_SUFFIX=demo), never \(storeName)")
+            return
+        }
+        guard (try? context.fetchCount(FetchDescriptor<TaskItem>())) == 0 else { return }
+        let parser = QuickAddParser(now: now, weekStart: Preferences.weekStartWeekday())
+        do {
+            for line in demoLines {
+                _ = try create(from: parser.parse(line), defaultProject: nil, defaultLabel: nil, in: context)
+            }
+        } catch {
+            print("seedDemoData failed: \(error)")
         }
     }
 
