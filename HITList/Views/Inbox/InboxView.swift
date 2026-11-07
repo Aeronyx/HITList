@@ -64,7 +64,7 @@ struct InboxView: View {
     }
 
     private func matchedTasks() -> [TaskItem] {
-        let inbox = TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        let inbox = TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
         guard let source = filter.query, let query = try? FilterQuery(source, now: now) else { return inbox }
         return inbox.filter { query.matches($0, now: now) }
     }
@@ -124,7 +124,7 @@ struct InboxView: View {
         let anchors = completions.anchors
         let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
         let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
-        return TaskOrdering.sorted(shown + animating)
+        return TaskOrdering.sorted(shown + animating, now: now)
     }
 
     /// The rows in the chosen grouping's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
@@ -275,16 +275,13 @@ struct InboxView: View {
             break
         }
 
-        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
-            .restoreDueDate(due)
-        } else {
-            .uncomplete
-        }
+        // A Flipboard switch's row flips instead of completing (brief 59); its toast says "Flipped".
+        let completed = Flipboard.completion(for: task)
         let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
-        TaskActions.toggleCompletion(task, in: context)
+        Flipboard.completeRow(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task.id, token: token) }
-        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+        showToast(completed)
     }
 
     private func showToast(_ completed: CompletedTask) {
@@ -306,6 +303,7 @@ struct InboxView: View {
             for record in records {
                 completions.cancel(record.id)
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
                 case .uncomplete:
                     if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }

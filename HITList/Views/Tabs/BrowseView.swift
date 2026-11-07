@@ -46,7 +46,7 @@ struct BrowseView: View {
             if searchText.isEmpty {
                 sections
             } else {
-                SearchResults(results: TaskOrdering.search(allTasks, text: searchText), now: now)
+                SearchResults(results: TaskOrdering.search(allTasks, text: searchText, now: now), now: now)
             }
         }
         .background(Theme.background)
@@ -376,7 +376,7 @@ private struct SearchResults: View {
                 Section {
                     ForEach(results) { task in
                         TaskRow(task: task, now: now) {
-                            TaskActions.toggleCompletion(task, in: context)
+                            Flipboard.completeRow(task, in: context)
                             Task { await NotificationScheduler.reschedule(context: context) }
                         }
                         .tag(task)

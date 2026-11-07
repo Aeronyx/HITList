@@ -30,6 +30,8 @@ Six roles; pick by what is happening. Nothing outside `celebrate` bounces or tak
 | `exit` | 150 ms ease-in | something leaving: a completed row sliding away, a toast expiring |
 | `emphasis` | spring, response 0.28, damping 0.8 (arrives in ~233 ms, 1.5% overshoot) | moving parts: toggle thumb, segment highlight |
 | `celebrate` | scale to 1.2 in 90 ms, spring settle (0.3 / 0.62) | the completion check, nothing else |
+| `tabPill` | spring, response 0.28, damping 0.86 (no visible bounce; the pill stretches 10% mid-way) | the island's pill sliding to the tapped tab, and the tab's icon and label with it |
+| `tabSwitch` | 200 ms ease-in-out (150 ms plain fade with Reduce Motion) | the crossfade between tab screens, the new one rising 6 pt |
 
 Each has a `(reduceMotion:)` variant (`HITMotion.emphasis(reduceMotion:)`): `quick`/`standard` become instant,
 `enter`/`exit`/`emphasis` a 100 ms ease, `celebrate` nil. Pass `@Environment(\.accessibilityReduceMotion)`, or

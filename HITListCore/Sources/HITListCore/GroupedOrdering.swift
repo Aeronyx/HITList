@@ -58,7 +58,7 @@ public enum GroupedOrdering {
     ///
     /// `order` sorts each section; the lists pass `TaskOrdering`'s order (the default) or a variant of it.
     public static func sections<T: FilterableTask, ID: Hashable>(
-        _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], order: ([T]) -> [T] = TaskOrdering.sorted,
+        _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], order: ([T]) -> [T] = { TaskOrdering.sorted($0) },
         groupOf: (T) -> ID?
     ) -> [ListSection<ID, T>] {
         guard !tasks.isEmpty else { return [] }
@@ -114,10 +114,11 @@ public enum GroupedOrdering {
     /// Today splits its rows the same way, so the two must be given the same rule.
     public static func today<T: FilterableTask, ID: Hashable>(
         _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], now: Date, calendar: Calendar = .current,
-        sectionOf: ((T) -> TaskOrdering.TodaySection?)? = nil, order: ([T]) -> [T] = TaskOrdering.sorted,
+        sectionOf: ((T) -> TaskOrdering.TodaySection?)? = nil, order: ([T]) -> [T] = { TaskOrdering.sorted($0) },
         groupOf: (T) -> ID?
     ) -> TodaySections<ID, T> {
-        let sectionOf = sectionOf ?? { TaskOrdering.todaySection(for: $0.filterDueDate, now: now, calendar: calendar) }
+        // The same rule as the ungrouped Today (brief 59: a red Flipboard switch files under today).
+        let sectionOf = sectionOf ?? { TaskOrdering.todaySection(of: $0, now: now, calendar: calendar) }
         var overdue: [T] = [], today: [T] = []
         for task in tasks {
             switch sectionOf(task) {

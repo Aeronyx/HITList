@@ -11,10 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.7.2", items: [
+        Entry(version: "0.8.0", items: [
+            "Group the Inbox and Today by Group, filter the Inbox, and on iPhone tap the Inbox or Today title to jump to a Group.",
+            "The tab bar's highlight slides to the tab you tap, with a tick; screens crossfade.",
+            "Flipboard switches stay off your lists until they're due; a red one is in Today until you flip it. Long-press a switch for its menu.",
+            "Review Inbox is one card at a time, only for tasks with no date or Group: swipe right for Today, left to delete.",
             "Sync fix: flipping a switch, or giving a task a deadline or location, no longer stops that device syncing.",
-            "On a Mac, TestFlight now offers only the Mac app; the iPad version no longer installs there.",
-            "The sync log's watchdog no longer reports overdue exports for saves that were never yours to sync.",
         ]),
         Entry(version: "0.7.1", items: [
             "Your profile menu has What's New and Send Beta Feedback. Tell George what you think!",

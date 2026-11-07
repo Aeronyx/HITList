@@ -121,7 +121,7 @@ struct TaskListView: View {
         case .today:
             return allTasks.filter { TaskOrdering.isInToday($0, now: now, includeCompleted: showCompleted) }
         case .inbox:
-            return TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+            return TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
         default: break
         }
         var source = queryString
@@ -150,18 +150,20 @@ struct TaskListView: View {
             switch selection {
             case .today: return .success(todayGroups(rows))
             case .inbox:
-                let tasks = TaskOrdering.sorted(rows).map(\.task)
+                let tasks = TaskOrdering.sorted(rows, now: now).map(\.task)
                 return .success(tasks.isEmpty ? [] : [Group(id: "inbox", title: "", tasks: tasks)])
             default: break
             }
             var groups: [Group] = []
             for row in rows {
-                let key = DueFormatter.sectionTitle(for: row.filterDueDate, now: now)
+                // A red switch files under today whatever its date (brief 59).
+                let due = FlipboardSwitch.listedDueDate(for: row, now: now)
+                let key = DueFormatter.sectionTitle(for: due, now: now)
                 if let i = groups.firstIndex(where: { $0.id == key }) {
                     groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task], color: groups[i].color)
                 } else {
                     groups.append(Group(id: key, title: key, tasks: [row.task],
-                                        color: DueFormatter.sectionColor(for: row.filterDueDate, now: now)))
+                                        color: DueFormatter.sectionColor(for: due, now: now)))
                 }
             }
             return .success(groups)
@@ -180,7 +182,7 @@ struct TaskListView: View {
         if todayGrouping != .none { return groupedTodayGroups(rows) }
         var overdue: [Placed] = [], today: [Placed] = []
         for row in rows {
-            switch TaskOrdering.todaySection(for: row.filterDueDate, now: now) {
+            switch TaskOrdering.todaySection(of: row, now: now) {
             case .overdue?: overdue.append(row)
             case .today?: today.append(row)
             case nil: break
@@ -189,11 +191,11 @@ struct TaskListView: View {
         guard !(overdue.isEmpty && today.isEmpty) else { return [] }
         var groups: [Group] = []
         if !overdue.isEmpty {
-            groups.append(Group(id: "Overdue", title: "Overdue", tasks: TaskOrdering.sorted(overdue).map(\.task),
+            groups.append(Group(id: "Overdue", title: "Overdue", tasks: TaskOrdering.sorted(overdue, now: now).map(\.task),
                                 color: HITColor.dueOverdue))
         }
         groups.append(Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated),
-                            tasks: TaskOrdering.sorted(today).map(\.task), color: HITColor.dueToday, hidesDay: true))
+                            tasks: TaskOrdering.sorted(today, now: now).map(\.task), color: HITColor.dueToday, hidesDay: true))
         return groups
     }
 
@@ -205,7 +207,7 @@ struct TaskListView: View {
     private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
         // The same section rule as the ungrouped Today (`todayGroups`), so the two never disagree.
         let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now,
-                                          sectionOf: { TaskOrdering.todaySection(for: $0.filterDueDate, now: now) }) {
+                                          sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) {
             $0.task.project?.id
         }
         guard !split.isEmpty else { return [] }
@@ -410,16 +412,13 @@ struct TaskListView: View {
             break
         }
 
-        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
-            .restoreDueDate(due)
-        } else {
-            .uncomplete
-        }
+        // A Flipboard switch's row flips instead of completing (brief 59); its toast says "Flipped".
+        let completed = Flipboard.completion(for: task)
         let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
-        TaskActions.toggleCompletion(task, in: context)
+        Flipboard.completeRow(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task.id, token: token) }
-        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+        showToast(completed)
     }
 
     private func showToast(_ completed: CompletedTask) {
@@ -443,6 +442,7 @@ struct TaskListView: View {
             for record in records {
                 completions.cancel(record.id)
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
                 case .uncomplete:
                     if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }

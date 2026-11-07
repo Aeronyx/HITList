@@ -118,6 +118,20 @@ no longer runs on a Mac (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO`): a Mac che
 iPad app in a Mac window. In a test, keep the `ModelContainer` in a `let` for the whole test (a `ModelContext` does not
 retain its container; `ModelContainerFactory.preview().mainContext` alone traps on the next fetch).
 
+## Round 13 record (2026-11-07; sessions 57–60 merged for 0.8.0)
+Four sessions at once on George's turn, all Opus 5.5: 57 `groups` (xhigh, 9 commits), 58 `tab-motion` (high, 4),
+59 `flipboard-intervals` (xhigh, 6), 60 `review-inbox` (high, 5). Merged 59, 57, 58, 60; the only conflicts were the
+shared `HITListUITests.swift` (both sides kept, twice). Supervisor follow-ups: 59's list-view lines applied by hand to
+57's reworked `TaskListView`, `InboxView` and `BrowseView` (`todaySection(of:)` in both Today layouts,
+`Flipboard.completion`/`completeRow`/`undo` in the completion paths, `now:` passed to `inbox`, `sorted` and `search`);
+`GroupedOrdering`'s default `order` became a closure once `TaskOrdering.sorted` gained `now:`, and its default
+`sectionOf` is `todaySection(of:)` so a grouped and an ungrouped Today agree about switches; the motion table in the
+design-system README gained `tabPill` and `tabSwitch`; the 0.7.2 notes were renamed 0.8.0 with the round's lines.
+Sessions' notes, patches and screenshots live in `~/Library/Application Support/Claude/side-session-notes/<id>/`.
+Left for later: the task editor's Group row shows a coloured "#" rather than the Group's dot (`TaskPopout`); the
+morning summary and the app badge still count an overdue red switch as overdue; two side stores `HITList-s59a.store`
+and `HITList-s59b.store` sit in the Mac app group folder (listing it from a shell hangs; delete by hand).
+
 ## Round 12 (2026-11-05; briefs 53–56 in parallel, the build friends get)
 Still 0.7.0 (17), unreleased: add to its notes, never a new version. No schema change. Ownership: 53 profile menu
 (`ProfileMenu`, Browse's profile button, new `WhatsNewPopout`/`BetaFeedback`); 54 `SyncStatusViews`/`SyncState`
