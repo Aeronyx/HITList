@@ -26,6 +26,8 @@ struct BrowseView: View {
     @State private var creatingFilter = false
     @State private var editingProject: Project?
     @State private var creatingProject = false
+    /// The question before deleting a Group with tasks (brief 57).
+    @State private var deletingProject: GroupDeletion?
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var showSettings = false
@@ -116,8 +118,9 @@ struct BrowseView: View {
                     }
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
-                        Button("Delete", role: .destructive) { delete(project) }
+                        Button("Delete", role: .destructive) { askToDelete(project) }
                     }
+                    .groupDeletionDialog($deletingProject, for: project) { delete($0) }
                 }
                 // Long-press and drag a Group to a new place (brief 57), as in the Mac sidebar.
                 .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
@@ -229,6 +232,11 @@ struct BrowseView: View {
     }
 
     // MARK: - Deleting
+
+    /// A Group with tasks asks first; an empty one goes at once.
+    private func askToDelete(_ project: Project) {
+        if let question = GroupDeletion(project: project) { deletingProject = question } else { delete(project) }
+    }
 
     private func delete(_ project: Project) {
         context.delete(project); try? context.save()
