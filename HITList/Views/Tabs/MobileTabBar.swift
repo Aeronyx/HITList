@@ -52,6 +52,12 @@ enum IslandMetrics {
     /// The selected tab's pill sits this far inside the island, so the two curves are concentric.
     static let pillInset: CGFloat = 6
     static var pillRadius: CGFloat { cornerRadius - pillInset }
+    /// The pill's height in the bottom island: the island less its inset above and below.
+    static var pillHeight: CGFloat { height - 2 * pillInset }
+    /// The pill's width upright (`sideWidth` less its inset on both sides): concentric with that island too.
+    static var sidePillWidth: CGFloat { sideWidth - 2 * pillInset }
+    /// How strongly the accent tints the pill: present on the glass without competing with the icon.
+    static let pillOpacity: Double = 0.18
     /// Between the top of the island and the bottom of the "+".
     static let addButtonGap: CGFloat = HITSpacing.m
     /// From the home indicator to the bottom of the "+"; the undo toast (`PopoutHost`) sits to its left,
@@ -139,7 +145,9 @@ enum IslandPlacement: Equatable {
 
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
 /// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
-/// with Inter labels, the selected one in accent on a faint pill. Tapping the selected tab again calls
+/// with Inter labels, the selected one in accent on a faint pill. The pill is one view that slides to the
+/// tapped tab (`HITMotion.tabPill`, along whichever axis the island runs; it jumps under Reduce Motion), as
+/// in George's Todoist recording (brief 58). Tapping the selected tab again calls
 /// `onReselect` (the shell pops that tab to its root). The island is Liquid Glass tinted slate on iOS 26
 /// (`hitGlass`), plain `Theme.surface` before that and under Reduce Transparency / Reduce Effects.
 struct MobileTabBar: View {
@@ -151,10 +159,15 @@ struct MobileTabBar: View {
     var axis: Axis = .horizontal
     var onReselect: (MobileTab) -> Void = { _ in }
 
+    /// The pill's namespace: each tab's cell is a source, the one pill follows the selected cell.
+    @Namespace private var pillSpace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let capsule = Capsule(style: .continuous)
         if axis == .vertical {
             VStack(spacing: 0) { buttons }
+                .background { pill }
                 .padding(.vertical, IslandMetrics.pillInset)
                 .frame(width: IslandMetrics.sideWidth, height: IslandMetrics.sideHeight)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
@@ -162,6 +175,7 @@ struct MobileTabBar: View {
                 .contentShape(capsule)
         } else {
             HStack(spacing: 0) { buttons }
+                .background { pill }
                 .padding(.horizontal, IslandMetrics.pillInset)
                 .frame(height: IslandMetrics.height)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
@@ -182,10 +196,29 @@ struct MobileTabBar: View {
             }
             .buttonStyle(TabItemPressStyle())
             .frame(height: axis == .vertical ? IslandMetrics.sideItemHeight : nil)
+            .matchedGeometryEffect(id: tab, in: pillSpace)
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(selection == tab ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("tab-\(tab.rawValue)")
         }
+    }
+
+    /// The selected tab's pill: one capsule, inset `pillInset` across the island so its curve is concentric
+    /// with the island's, taking the selected cell's frame. A new selection moves it on `HITMotion.tabPill`
+    /// and stretches it a little along its travel mid-way (`HITMotion.TabPill`).
+    private var pill: some View {
+        Capsule(style: .continuous)
+            .fill(Theme.accent.opacity(IslandMetrics.pillOpacity))
+            .padding(axis == .vertical ? .horizontal : .vertical, IslandMetrics.pillInset)
+            .matchedGeometryEffect(id: selection, in: pillSpace, properties: .frame, isSource: false)
+            .keyframeAnimator(initialValue: CGFloat(1), trigger: selection) { content, stretch in
+                let s = reduceMotion ? 1 : stretch
+                content.scaleEffect(x: axis == .horizontal ? s : 1, y: axis == .vertical ? s : 1)
+            } keyframes: { _ in
+                HITMotion.tabPillStretchKeyframes()
+            }
+            .animation(HITMotion.tabPill(reduceMotion: reduceMotion), value: selection)
+            .accessibilityHidden(true)
     }
 
     private func item(_ tab: MobileTab, selected: Bool) -> some View {
