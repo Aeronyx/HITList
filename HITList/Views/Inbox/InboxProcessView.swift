@@ -331,8 +331,13 @@ struct InboxProcessView: View {
     /// The Mac card's keys line: Today and Delete have no swipe on the Mac, so they are here, clickable.
     private func keyHints(_ task: TaskItem) -> some View {
         HStack(spacing: HITSpacing.m) {
-            KeyHint(key: "T", title: "Today") { act(.today, on: task) }
-            KeyHint(key: "⌫", title: "Delete", tint: HITColor.danger) { act(.delete, on: task) }
+            KeyHint(key: "T", title: "Today", shortcut: shortcutsEnabled ? KeyboardShortcut("t", modifiers: []) : nil) {
+                act(.today, on: task)
+            }
+            KeyHint(key: "⌫", title: "Delete", tint: HITColor.danger,
+                    shortcut: shortcutsEnabled ? KeyboardShortcut(.delete, modifiers: []) : nil) {
+                act(.delete, on: task)
+            }
         }
     }
     #endif
@@ -722,6 +727,7 @@ private struct KeyHint: View {
     let key: String
     let title: String
     var tint: Color = HITColor.dueToday
+    let shortcut: KeyboardShortcut?
     let perform: () -> Void
 
     var body: some View {
@@ -735,6 +741,7 @@ private struct KeyHint: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(shortcut)
         .help("\(title) (\(key))")
     }
 }
