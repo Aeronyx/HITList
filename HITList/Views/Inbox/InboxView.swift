@@ -93,7 +93,7 @@ struct InboxView: View {
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         } menu: {
-            InboxReviewMenuItem(tasks: allTasks) { processing = true }
+            if let title = InboxText.reviewMenuItem(count: InboxReview.count(allTasks)) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
         }
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
