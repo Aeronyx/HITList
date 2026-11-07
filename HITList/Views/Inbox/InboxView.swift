@@ -180,8 +180,7 @@ struct InboxView: View {
                 GroupByPicker(selection: $grouping)
             }
         } menu: {
-            Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
-                .disabled(openCount == 0)
+            if let title = InboxText.reviewMenuItem(count: InboxReview.count(allTasks)) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
         }
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
