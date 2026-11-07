@@ -79,7 +79,7 @@ final class HITListUITests: XCTestCase {
         XCTAssertTrue(inbox.wait(for: \.isSelected, toEqual: true, timeout: 5))
         snapshot("1 Inbox")
 
-        let title = app.navigationBars.buttons["Inbox"].firstMatch
+        let title = titleMenu("Inbox")
         XCTAssertTrue(title.waitForExistence(timeout: 5), "the Inbox title is a menu button: \(app.navigationBars.debugDescription)")
         title.tap()
         // Menu items don't keep accessibility identifiers: find them by label.
@@ -96,7 +96,7 @@ final class HITListUITests: XCTestCase {
         let today = app.buttons["tab-today"]
         today.tap()
         XCTAssertTrue(today.wait(for: \.isSelected, toEqual: true, timeout: 5))
-        let todayTitle = app.navigationBars.buttons["Today"].firstMatch
+        let todayTitle = titleMenu("Today")
         XCTAssertTrue(todayTitle.waitForExistence(timeout: 5), "the Today title is a menu button")
         todayTitle.tap()
         XCTAssertTrue(app.buttons["Browse…"].waitForExistence(timeout: 5), "Browse… in the title menu")
@@ -134,6 +134,32 @@ final class HITListUITests: XCTestCase {
         snapshot("8 Browse")
     }
 
+    /// Brief 57: a Group's screen shows its colour and open count, and its "+" adds the task to that Group.
+    func testPlusOnAGroupAddsToIt() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        let title = titleMenu("Today")
+        XCTAssertTrue(title.waitForExistence(timeout: 15))
+        title.tap()
+        app.buttons["Work · 2"].firstMatch.tap()
+        let header = app.descendants(matching: .any)["groupScreenHeader"].firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        XCTAssertEqual(header.label, "Work, 2 tasks")
+        snapshot("1 Work")
+
+        let plus = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(plus.wait(for: \.isHittable, toEqual: true, timeout: 5))
+        plus.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["quickAddTitle"].firstMatch.waitForExistence(timeout: 5))
+        app.typeText("Draft the agenda ")
+        snapshot("2 Card on Work")
+        app.buttons["quickAddSave"].tap()
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Draft the agenda")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the new task is in Work (undated: a note in its Group)")
+        XCTAssertTrue(header.wait(for: \.label, toEqual: "Work, 3 tasks", timeout: 5), "the header counts it")
+        snapshot("3 Work after the add")
+    }
+
     /// Brief 57: a Group dragged to a new place in Browse stays there (long-press, then drag).
     func testReorderGroupsInBrowse() throws {
         app.launchArguments += ["-seedDemoData", "YES"]
@@ -150,13 +176,18 @@ final class HITListUITests: XCTestCase {
         snapshot("2 Browse after")
         // The new order is every list's: Home is now below Health in the title menu too.
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        let title = app.navigationBars.buttons["Today"].firstMatch
+        let title = titleMenu("Today")
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         title.tap()
         let menuHealth = app.buttons["Health · 1"].firstMatch, menuHome = app.buttons["Home · 2"].firstMatch
         XCTAssertTrue(menuHealth.waitForExistence(timeout: 5))
         XCTAssertLessThan(menuHealth.frame.minY, menuHome.frame.minY, "the title menu follows the new order")
         snapshot("3 Title menu after")
+    }
+
+    /// A screen's title menu button (VoiceOver calls it "Today, Actions Menu").
+    private func titleMenu(_ title: String) -> XCUIElement {
+        app.navigationBars.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
     /// Keeps a screenshot in the test result.
