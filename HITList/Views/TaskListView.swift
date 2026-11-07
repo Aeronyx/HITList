@@ -203,7 +203,9 @@ struct TaskListView: View {
     }
 
     private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
-        let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now) {
+        // The same section rule as the ungrouped Today (`todayGroups`), so the two never disagree.
+        let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now,
+                                          sectionOf: { TaskOrdering.todaySection(for: $0.filterDueDate, now: now) }) {
             $0.task.project?.id
         }
         guard !split.isEmpty else { return [] }

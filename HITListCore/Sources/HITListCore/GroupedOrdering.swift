@@ -55,17 +55,20 @@ public enum GroupedOrdering {
     /// - `.group`: one per Group in `groupOrder` (the sidebar's order), then any Group the order doesn't
     ///   know yet (one that just arrived by sync) in the order first met, then `.noGroup`.
     /// - `.priority`: P1 to P4.
+    ///
+    /// `order` sorts each section; the lists pass `TaskOrdering`'s order (the default) or a variant of it.
     public static func sections<T: FilterableTask, ID: Hashable>(
-        _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], groupOf: (T) -> ID?
+        _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], order: ([T]) -> [T] = TaskOrdering.sorted,
+        groupOf: (T) -> ID?
     ) -> [ListSection<ID, T>] {
         guard !tasks.isEmpty else { return [] }
         switch grouping {
         case .none:
-            return [ListSection(key: .all, tasks: TaskOrdering.sorted(tasks))]
+            return [ListSection(key: .all, tasks: order(tasks))]
         case .priority:
             return (1...4).compactMap { level in
                 let matching = tasks.filter { min(max($0.filterPriority, 1), 4) == level }
-                return matching.isEmpty ? nil : ListSection(key: .priority(level), tasks: TaskOrdering.sorted(matching))
+                return matching.isEmpty ? nil : ListSection(key: .priority(level), tasks: order(matching))
             }
         case .group:
             var byGroup: [ID: [T]] = [:]
@@ -78,9 +81,9 @@ public enum GroupedOrdering {
                 byGroup[id, default: []].append(task)
             }
             var sections = (groupOrder + unknown).compactMap { id in
-                byGroup[id].map { ListSection(key: .group(id), tasks: TaskOrdering.sorted($0)) }
+                byGroup[id].map { ListSection(key: .group(id), tasks: order($0)) }
             }
-            if !loose.isEmpty { sections.append(ListSection(key: .noGroup, tasks: TaskOrdering.sorted(loose))) }
+            if !loose.isEmpty { sections.append(ListSection(key: .noGroup, tasks: order(loose))) }
             return sections
         }
     }
@@ -105,23 +108,27 @@ public enum GroupedOrdering {
         public var isEmpty: Bool { overdue.isEmpty && today.isEmpty }
     }
 
-    /// Today's tasks (the caller decides which: `TaskOrdering.isInToday`) split by
-    /// `TaskOrdering.todaySection` of their due date, then each half in `sections`. Undated and future
-    /// tasks are dropped.
+    /// Today's tasks (the caller decides which: `TaskOrdering.isInToday`) split into Overdue and today, then
+    /// each half in `sections`. `sectionOf` says which half a task is in (nil drops it); by default
+    /// `TaskOrdering.todaySection` of its due date, so undated and future tasks are dropped. The ungrouped
+    /// Today splits its rows the same way, so the two must be given the same rule.
     public static func today<T: FilterableTask, ID: Hashable>(
         _ tasks: [T], by grouping: ListGrouping, groupOrder: [ID], now: Date, calendar: Calendar = .current,
+        sectionOf: ((T) -> TaskOrdering.TodaySection?)? = nil, order: ([T]) -> [T] = TaskOrdering.sorted,
         groupOf: (T) -> ID?
     ) -> TodaySections<ID, T> {
+        let sectionOf = sectionOf ?? { TaskOrdering.todaySection(for: $0.filterDueDate, now: now, calendar: calendar) }
         var overdue: [T] = [], today: [T] = []
         for task in tasks {
-            switch TaskOrdering.todaySection(for: task.filterDueDate, now: now, calendar: calendar) {
+            switch sectionOf(task) {
             case .overdue?: overdue.append(task)
             case .today?: today.append(task)
             case nil: break
             }
         }
-        return TodaySections(overdue: sections(overdue, by: grouping, groupOrder: groupOrder, groupOf: groupOf),
-                             today: sections(today, by: grouping, groupOrder: groupOrder, groupOf: groupOf))
+        return TodaySections(
+            overdue: sections(overdue, by: grouping, groupOrder: groupOrder, order: order, groupOf: groupOf),
+            today: sections(today, by: grouping, groupOrder: groupOrder, order: order, groupOf: groupOf))
     }
 
     /// `today` with Groups named by `filterProjectName`.
