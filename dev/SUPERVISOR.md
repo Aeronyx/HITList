@@ -219,7 +219,16 @@ hands you off to Mail (copy the address and say so); the bolt's lightning strike
 back after a minute away, recovered after a minute of trouble), never a per-sync animation. Follow Apple's HIG
 (`dev/briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
-## 8. Where things stand (2026-11-07, after the friends' first week)
+## 8. Where things stand (2026-11-07, after round 13)
+
+**2026-11-07, round 13 merged (Fable).** Briefs 57–60 (Groups, tab motion, Flipboard intervals, Review Inbox) ran as
+four Opus sessions at once and are merged on master as **0.8.0**, together with the day's fixes (the iPad-on-Mac opt-out,
+the schema seed and preflight check, the watchdog). George deployed the three fields and switched the Friends group's
+iPad-on-Mac setting off before the round. Flipboard rule now: a green switch is on the board only; a red one is in Today
+and the Inbox as today's task until flipped; Upcoming shows none; `@flipboard` in a query opts out. The Inbox and Today
+group by Group or priority (`GroupedOrdering`), the Inbox has a filter (a query built by chips), iPhone titles are
+menus of Groups and labels. Review Inbox takes only undated, ungrouped tasks as a swipe card (`InboxReview`,
+`InboxReviewSwipe`). Details and the leftovers in COMMON's Round 13 record. Next: George's own feedback on 0.8.0.
 
 **2026-11-07, the friends' first week (Fable).** The first friend on a Mac installed the iPad build from TestFlight
 (the Friends group allowed iPhone and iPad apps on Apple silicon Macs; the iOS build now opts out and the group

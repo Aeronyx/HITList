@@ -4,9 +4,11 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.7.2
+## 0.8.0
 
-The first friend to test on a Mac had a bad first hour (2026-11-06), for three unrelated reasons, each fixed here.
+Round 13, from the friends' first week: Groups you can group and filter by, a tab bar that moves, the Flipboard as
+George meant it, and a Review Inbox that is one card and two swipes. First, the three things that went wrong on the
+first Mac tester's first day (2026-11-06), each with its own cause and fix.
 
 - The iPad build no longer runs on a Mac. TestFlight offers "iPhone and iPad apps" to Apple silicon Macs unless the
   build opts out, and he installed that one: the iPad layout in a plain Mac window (grey title bar, cramped sidebar,
@@ -23,6 +25,38 @@ The first friend to test on a Mac had a bad first hour (2026-11-06), for three u
 - The sidebar's "Preview" badge beside Shared Tasks gives way in a narrow sidebar instead of wrapping one letter per
   line.
 - Developer: `-seedDemoData` on a side store fills it with a believable week for screenshots; the README shows the app.
+
+Groups (brief 57)
+- Group the Inbox and Today by Group, or by priority, from the view options; each list remembers its choice, and
+  rows under a Group's header stop repeating its name.
+- Filter the Inbox by Group, label, priority or "No date"; the active choices show as chips, and "Save as filter…"
+  keeps the query as a saved filter.
+- On iPhone, tap the Inbox or Today title to jump to any Group or label; a Group's section header opens it too.
+- Drag Groups to reorder them in the Mac sidebar and in Browse; a Group's screen shows its colour and open count;
+  deleting a Group that still has tasks asks first and says where they go.
+- The Group and label editors, and Browse, say the difference: a task lives in one Group; a label is a tag any task
+  can carry.
+
+The island (brief 58)
+- The tab bar's highlight is one pill that slides to the tab you tap, with a light haptic tick; the icon fills and
+  takes the accent as it arrives.
+- Switching tabs crossfades the screens instead of cutting. Reduce Motion keeps both plain.
+
+Flipboard (brief 59)
+- Switches stay off your lists until they are due: a green switch lives only on the Flipboard; a red one is in Today
+  (and the Inbox) as today's task until you flip it. Upcoming shows no switch. A filter that names `@flipboard`
+  sees them as they are.
+- Completing a switch from its Today row flips it ("Flipped", with Undo).
+- Long-press a switch on iPhone for its menu: Flip or Mark done, Flip back to red, Edit task…, Edit interval…,
+  Flips per interval…, Remove from Flipboard, Delete (with Undo).
+- Spotlight and Siri list red switches only; Siri's Complete Task flips one.
+
+Review Inbox (brief 60)
+- Review Inbox goes through only the tasks with no date and no Group, oldest first; the Inbox menu says how many
+  ("Review 3 unsorted…") and hides the item at zero.
+- One card at a time: swipe right for Today, left to delete (with Undo); under it Pick a date, Move to a Group and
+  Later, and Edit… opens the full editor. The sheet says what it is for, and ends on "Inbox reviewed".
+- On the Mac: T Today, D date, P Group, ⌫ delete, → later, Esc close.
 
 ## 0.7.1 — build 17, 2026-11-05
 
