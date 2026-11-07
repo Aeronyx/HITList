@@ -9,6 +9,8 @@ struct FlipboardView: View {
     @Binding var selectedTask: TaskItem?
 
     @Environment(\.modelContext) private var context
+    /// Optional: a board drawn outside the app shell (previews) deletes without asking.
+    @Environment(PopoutController.self) private var popouts: PopoutController?
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// The iPhone Duo's inner display: an even number of columns (brief 50).
@@ -19,6 +21,9 @@ struct FlipboardView: View {
     @State private var width: CGFloat = 0
     @State private var adding = false
     @State private var editing: EditRequest?
+    /// The switch just deleted, while its "Deleted · Undo" toast shows.
+    @State private var deleted: Flipboard.DeletedSwitch?
+    @State private var deleteGeneration = 0
     @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -66,7 +71,7 @@ struct FlipboardView: View {
                     LazyVGrid(columns: columns, spacing: Self.spacing) {
                         ForEach(switches) { task in
                             FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
-                                           onOpen: { open(task) })
+                                           onOpen: { open(task) }, onDelete: { delete(task) })
                                 .hitTip(task.id == switches.first?.id ? HITTip(.flipboard) : nil)
                         }
                         // The last cell adds a switch: a dashed outline of one, with a big +.
@@ -100,6 +105,8 @@ struct FlipboardView: View {
             now = Date()
             FlipSound.prepare()
         }
+        .completionToast(deleted.map { "Deleted ‘\($0.title)’" }, onUndo: undoDelete,
+                         onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
         .sheet(isPresented: $adding) {
             FlipSwitchEditor(task: nil).slateSheet()
         }
@@ -110,6 +117,32 @@ struct FlipboardView: View {
 
     /// Opens the task popout (`selectedTask` is `PopoutController.selection`).
     private func open(_ task: TaskItem) { selectedTask = task }
+
+    /// "Delete" from a switch's menu (brief 59): gone from the store at once, sub-tasks too, so the delete
+    /// syncs now and Today, Spotlight and the other devices drop it; the toast offers Undo for its lifetime.
+    private func delete(_ task: TaskItem) {
+        let perform = {
+            if selectedTask?.id == task.id { selectedTask = nil }
+            let gone = withAnimation(.snappy) { Flipboard.delete(task, in: context) }
+            deleteGeneration += 1
+            let generation = deleteGeneration
+            withAnimation(HITMotion.enter) { deleted = gone }
+            AccessibilityNotification.Announcement("Deleted \(gone.title)").post()
+            Task {
+                await NotificationScheduler.reschedule(context: context)
+                try? await Task.sleep(for: CompletionToastState.lifetime)
+                if deleteGeneration == generation { withAnimation(HITMotion.exit) { deleted = nil } }
+            }
+        }
+        if let popouts { popouts.requestDelete(task, perform: perform) } else { perform() }
+    }
+
+    private func undoDelete() {
+        guard let gone = deleted else { return }
+        withAnimation(HITMotion.exit) { deleted = nil }
+        withAnimation(.snappy) { _ = Flipboard.restore(gone, in: context) }
+        Task { await NotificationScheduler.reschedule(context: context) }
+    }
 
     /// "Edit interval…" or "Flips per interval…" from a switch's menu.
     struct EditRequest: Identifiable {

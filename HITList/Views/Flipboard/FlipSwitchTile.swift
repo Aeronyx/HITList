@@ -24,6 +24,8 @@ struct FlipSwitchTile: View {
     let now: Date
     var onEdit: (FlipSwitchEditor.Focus) -> Void
     var onOpen: () -> Void
+    /// Deletes the switch; the board asks first (if that setting is on) and offers Undo.
+    var onDelete: () -> Void = {}
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -311,6 +313,7 @@ struct FlipSwitchTile: View {
             FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
                 withAnimation(.snappy) { Flipboard.remove(task, in: context) }
             },
+            FlipMenuItem(id: "delete", title: "Delete", systemImage: "trash", role: .destructive) { onDelete() },
         ]
         return items
     }

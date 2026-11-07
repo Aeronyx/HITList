@@ -517,6 +517,106 @@ enum Flipboard {
         try? context.save()
     }
 
+    // MARK: Deleting (brief 59)
+
+    /// A deleted switch, kept by the Flipboard's toast so Undo can bring it back as it was: its fields,
+    /// its Group and labels (by id; they outlive it) and its sub-tasks.
+    struct DeletedSwitch: Equatable {
+        struct Subtask: Equatable {
+            let id: UUID
+            let title: String
+            let isCompleted: Bool
+            let completedAt: Date?
+            let sortOrder: Int
+            let createdAt: Date
+        }
+
+        let id: UUID
+        let title: String
+        let notes: String
+        let priority: Int
+        let dueDate: Date?
+        let hasDueTime: Bool
+        let recurrence: String?
+        let sortOrder: Int
+        let createdAt: Date
+        let reminderOffsetMinutes: Int?
+        let reminderDate: Date?
+        let deadline: Date?
+        let locationName: String?
+        let flipTarget: Int
+        let flipCount: Int
+        let flipPeriodStart: Date?
+        let projectID: UUID?
+        let labelIDs: [UUID]
+        let subtasks: [Subtask]
+
+        init(_ task: TaskItem) {
+            id = task.id; title = task.title; notes = task.notes; priority = task.priority
+            dueDate = task.dueDate; hasDueTime = task.hasDueTime; recurrence = task.recurrence
+            sortOrder = task.sortOrder; createdAt = task.createdAt
+            reminderOffsetMinutes = task.reminderOffsetMinutes; reminderDate = task.reminderDate
+            deadline = task.deadline; locationName = task.locationName
+            flipTarget = task.flipTarget; flipCount = task.flipCount; flipPeriodStart = task.flipPeriodStart
+            projectID = task.project?.id
+            labelIDs = (task.labels ?? []).map(\.id)
+            subtasks = task.orderedSubtasks.map {
+                Subtask(id: $0.id, title: $0.title, isCompleted: $0.isCompleted, completedAt: $0.completedAt,
+                        sortOrder: $0.sortOrder, createdAt: $0.createdAt)
+            }
+        }
+    }
+
+    /// Deletes a switch and its sub-tasks from the store at once (`TaskActions.delete`, saved now, so the
+    /// delete is on its way to iCloud before the toast has gone). Returns what Undo needs.
+    @MainActor
+    @discardableResult
+    static func delete(_ task: TaskItem, in context: ModelContext) -> DeletedSwitch {
+        let deleted = DeletedSwitch(task)
+        TaskActions.delete(task, in: context)
+        return deleted
+    }
+
+    /// Undo: the switch again, with its id, dates, flips, Group, labels and sub-tasks.
+    @MainActor
+    @discardableResult
+    static func restore(_ deleted: DeletedSwitch, in context: ModelContext) -> TaskItem? {
+        let projectID = deleted.projectID
+        let project = projectID.flatMap { id in try? context.fetch(FetchDescriptor<Project>(predicate: #Predicate { $0.id == id })).first }
+        let labelIDs = Set(deleted.labelIDs)
+        let labels = ((try? context.fetch(FetchDescriptor<TaskLabel>())) ?? []).filter { labelIDs.contains($0.id) }
+        let task = TaskItem(title: deleted.title, notes: deleted.notes, priority: deleted.priority, dueDate: deleted.dueDate,
+                            hasDueTime: deleted.hasDueTime, project: project, labels: labels)
+        task.id = deleted.id
+        task.recurrence = deleted.recurrence
+        task.sortOrder = deleted.sortOrder
+        task.createdAt = deleted.createdAt
+        task.reminderOffsetMinutes = deleted.reminderOffsetMinutes
+        task.reminderDate = deleted.reminderDate
+        task.deadline = deleted.deadline
+        task.locationName = deleted.locationName
+        task.flipTarget = deleted.flipTarget
+        task.flipCount = deleted.flipCount
+        task.flipPeriodStart = deleted.flipPeriodStart
+        context.insert(task)
+        for sub in deleted.subtasks {
+            let item = TaskItem(title: sub.title, project: project)
+            item.id = sub.id
+            item.isCompleted = sub.isCompleted
+            item.completedAt = sub.completedAt
+            item.sortOrder = sub.sortOrder
+            item.createdAt = sub.createdAt
+            context.insert(item)
+            item.parent = task
+        }
+        do {
+            try context.save()
+        } catch {
+            return nil
+        }
+        return task
+    }
+
     /// A new switch, due today: it starts red ("Flip to start") until the chore is first done and flipped.
     /// George's call, 2026-10-31: a green switch reads as "already done".
     /// `flipTarget` above 1 makes it a charger.
