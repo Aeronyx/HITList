@@ -39,8 +39,8 @@ struct InboxProcessView: View {
         let generation: Int
     }
 
-    private var inboxTasks: [TaskItem] { allTasks.filter(\.isInInbox) }
-    private var inboxIDs: Set<UUID> { Set(inboxTasks.map(\.id)) }
+    private var unsortedTasks: [TaskItem] { allTasks.filter(\.needsReview) }
+    private var unsortedIDs: Set<UUID> { Set(unsortedTasks.map(\.id)) }
 
     private var current: TaskItem? {
         guard let id = queue.current else { return nil }
@@ -89,7 +89,7 @@ struct InboxProcessView: View {
         #endif
         .slateSheet()
         .onAppear(perform: start)
-        .onChange(of: inboxIDs) { _, _ in withAnimation(stepAnimation) { queue.retainInbox(of: allTasks) } }
+        .onChange(of: unsortedIDs) { _, _ in withAnimation(stepAnimation) { queue.retainReview(of: allTasks) } }
         .onChange(of: queue.current) { _, _ in endEditing(save: false) }
         .onChange(of: titleFocused) { _, focused in
             // Clicking away from the title keeps the edit.
@@ -329,7 +329,7 @@ struct InboxProcessView: View {
     }
 
     private var finished: some View {
-        let left = inboxTasks.filter { $0.id != pendingDelete?.id }.count
+        let left = unsortedTasks.filter { $0.id != pendingDelete?.id }.count
         return VStack(spacing: 0) {
             if left == 0 {
                 InboxZeroView()
@@ -349,7 +349,7 @@ struct InboxProcessView: View {
 
     private func start() {
         guard !started else { return }
-        queue = InboxProcessQueue(inboxOf: allTasks)
+        queue = InboxProcessQueue(reviewOf: allTasks)
         started = true
         CompletionFeedback.shared.prepare()
     }
@@ -487,6 +487,18 @@ struct InboxProcessView: View {
 
     private func rescheduleNotifications() {
         Task { await NotificationScheduler.reschedule(context: context) }
+    }
+}
+
+/// The Inbox menu's "Review 3 unsorted…", hidden when nothing needs review (`InboxReview`).
+struct InboxReviewMenuItem: View {
+    let tasks: [TaskItem]
+    let open: () -> Void
+
+    var body: some View {
+        if let title = InboxText.reviewMenuItem(count: InboxReview.count(tasks)) {
+            Button(action: open) { Label(title, systemImage: "tray.and.arrow.down") }
+        }
     }
 }
 

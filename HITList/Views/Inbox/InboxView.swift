@@ -93,8 +93,7 @@ struct InboxView: View {
                     .keyboardShortcut("c", modifiers: [.command, .shift])
             }
         } menu: {
-            Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
-                .disabled(openCount == 0)
+            InboxReviewMenuItem(tasks: allTasks) { processing = true }
         }
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)

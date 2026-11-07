@@ -69,7 +69,7 @@ final class ListRulesTests: XCTestCase {
 
         let tasks = try allTasks()
         XCTAssertEqual(tasks.filter(\.isInInbox).count, 2, "the Inbox count")
-        XCTAssertEqual(InboxProcessQueue(inboxOf: tasks).remaining, [loose.id, datedInWork.id], "Process queue")
+        XCTAssertEqual(InboxProcessQueue(reviewOf: tasks).remaining, [loose.id], "Review Inbox: only the unsorted")
         XCTAssertEqual(TaskOrdering.inbox(tasks).map(\.title), ["dated in Work", "loose"], "undated last")
     }
 
@@ -78,12 +78,11 @@ final class ListRulesTests: XCTestCase {
         context.insert(work)
         let t = task("call", due: date(2026, 11, 1), project: work)
         try context.save()
-        var queue = InboxProcessQueue(inboxOf: try allTasks())
-        XCTAssertEqual(queue.remaining, [t.id])
+        XCTAssertTrue(t.isInInbox)
 
         TaskActions.reschedule(t, to: nil, in: context)
-        queue.retainInbox(of: try allTasks())
-        XCTAssertTrue(queue.isFinished)
+        XCTAssertFalse(t.isInInbox)
+        XCTAssertFalse(t.needsReview, "a Group note is never reviewed")
     }
 
     // MARK: - Today
