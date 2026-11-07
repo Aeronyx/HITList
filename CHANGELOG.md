@@ -4,6 +4,26 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.7.2
+
+The first friend to test on a Mac had a bad first hour (2026-11-06), for three unrelated reasons, each fixed here.
+
+- The iPad build no longer runs on a Mac. TestFlight offers "iPhone and iPad apps" to Apple silicon Macs unless the
+  build opts out, and he installed that one: the iPad layout in a plain Mac window (grey title bar, cramped sidebar,
+  a tip cut off), not the Mac app uploaded beside it. The iOS build now declares that it runs on neither a Mac nor a
+  Vision Pro; the Mac app is the macOS build.
+- Sync: three task fields (deadline, location, and the Flipboard's period start) had never reached CloudKit's schema,
+  so the first flip of a switch, or the first deadline, stopped that device exporting: CloudKit Production rejects a
+  record with a field it lacks, and the export is retried with the same record for good. The sample-data run that
+  teaches Development every field now carries them all, a test fails if a model field is ever left out of it, and
+  `release.sh` refuses to upload while Production lacks a field the models have (its old check compared Development
+  with Production only, and both lacked the three). The fields themselves ship by deploying the schema, not by a build.
+- The sync watchdog no longer counts TipKit's own saves (its tip, event and rule records share the process) as task
+  saves that must export; they made it report "Export overdue" errors that were never due.
+- The sidebar's "Preview" badge beside Shared Tasks gives way in a narrow sidebar instead of wrapping one letter per
+  line.
+- Developer: `-seedDemoData` on a side store fills it with a believable week for screenshots; the README shows the app.
+
 ## 0.7.1 — build 17, 2026-11-05
 
 0.7.0 was built and tested but never uploaded (its release stopped at the Shared Tasks container's schema check), so
