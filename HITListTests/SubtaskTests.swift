@@ -235,7 +235,7 @@ final class SubtaskTests: XCTestCase {
     func testTheSchemaSampleIncludesASubtask() throws {
         TaskActions.seedSampleDataIfRequested(in: context, arguments: ["HITList", "-seedSampleData"], storeName: "HITList-schema.store")
         let tasks = try context.fetch(FetchDescriptor<TaskItem>())
-        let sample = try XCTUnwrap(tasks.first { $0.parent == nil })
+        let sample = try XCTUnwrap(tasks.first { $0.title == "Sample task (safe to delete)" })
         XCTAssertEqual(sample.orderedSubtasks.map(\.title), ["Sample sub-task (safe to delete)"])
     }
 }

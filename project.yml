@@ -91,6 +91,12 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
         SUPPORTS_MACCATALYST: NO
+        # The iPad build must not run on a Mac. TestFlight and the App Store offer "iPhone and iPad apps" to Apple
+        # silicon Macs unless the build opts out, and the first friend to test on a Mac installed that one: the iPad
+        # layout in a plain Mac window (grey title bar, cramped sidebar), not the Mac app uploaded beside it
+        # (2026-11-06). This target's macOS destination is the Mac app. The same for Vision Pro.
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         CURRENT_PROJECT_VERSION: 17
         MARKETING_VERSION: "0.7.1"
