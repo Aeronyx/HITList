@@ -253,6 +253,9 @@ enum HITMotion {
         static let emphasis = SpringSpec(response: 0.28, damping: 0.8)
         /// The check's settle after its pop: a little life, still under 15% overshoot.
         static let celebrate = SpringSpec(response: 0.3, damping: 0.62)
+        /// The iPhone island's pill (`tabPill`): emphasis's response, damped harder so it settles without a
+        /// visible bounce (0.5% overshoot, under half a point on a tab's 80 pt move).
+        static let tabPill = SpringSpec(response: 0.28, damping: 0.86)
 
         /// Time to the first peak of an underdamped spring: π / ω_d, with ω_0 = 2π / response.
         var timeToPeak: TimeInterval {
@@ -287,6 +290,45 @@ enum HITMotion {
     static func exit(reduceMotion: Bool) -> Animation? { Role.exit.animation(reduceMotion: reduceMotion) }
     static func emphasis(reduceMotion: Bool) -> Animation? { Role.emphasis.animation(reduceMotion: reduceMotion) }
     static func celebrate(reduceMotion: Bool) -> Animation? { Role.celebrate.animation(reduceMotion: reduceMotion) }
+
+    // MARK: The iPhone island (brief 58, after George's Todoist recording)
+
+    /// The selected tab's pill sliding to the tapped tab (`MobileTabBar`): within 2% of its place in 200 ms,
+    /// settled without a bounce. The icon and label of the new tab take the accent on the same spring.
+    static let tabPill = Animation.spring(response: SpringSpec.tabPill.response, dampingFraction: SpringSpec.tabPill.damping)
+    /// Under Reduce Motion the pill jumps (nil: no animation).
+    static func tabPill(reduceMotion: Bool) -> Animation? { reduceMotion ? nil : tabPill }
+
+    /// The pill's stretch along its travel: a little longer mid-way, back to its size as it arrives.
+    enum TabPill {
+        static let stretch: CGFloat = 1.1
+        static let stretchDuration: TimeInterval = 0.09
+        static let settleDuration: TimeInterval = 0.16
+    }
+
+    /// The pill's stretch keyframes (`TabPill`), played on each change of tab.
+    @KeyframesBuilder<CGFloat>
+    static func tabPillStretchKeyframes() -> some Keyframes<CGFloat> {
+        CubicKeyframe(TabPill.stretch, duration: TabPill.stretchDuration)
+        CubicKeyframe(1.0, duration: TabPill.settleDuration)
+    }
+
+    /// The iPhone screens on a change of tab (`MobileShell`): the outgoing screen fades out while the incoming
+    /// one fades in and rises `rise` points into place, over `duration`; no slide, no scale (the Todoist frames
+    /// show none). Reduce Motion: a plain crossfade over `reducedDuration`.
+    enum TabSwitch {
+        static let duration: TimeInterval = 0.2
+        static let reducedDuration: TimeInterval = 0.15
+        static let rise: CGFloat = 6
+    }
+
+    static func tabSwitch(reduceMotion: Bool) -> Animation {
+        .easeInOut(duration: reduceMotion ? TabSwitch.reducedDuration : TabSwitch.duration)
+    }
+
+    static func tabSwitchTransition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: TabSwitch.rise)), removal: .opacity)
+    }
 
     /// The celebrate keyframes: a fast pop to `Celebrate.peakScale`, then a spring settle back to 1.
     @KeyframesBuilder<CGFloat>

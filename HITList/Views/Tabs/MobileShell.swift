@@ -18,6 +18,7 @@ import SwiftUI
 struct MobileShell: View {
     @Environment(PopoutController.self) private var popouts
     @Environment(\.islandPlacement) private var placement
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The system's bar column, measured: on the Duo's outer display it is the trailing safe area.
     @State private var bar = BarColumn()
     @Binding var place: ShellPlace
@@ -46,13 +47,21 @@ struct MobileShell: View {
         // `popouts.listContext` for the "+" (its onAppear runs on every switch and every pop).
         let placement = placement
         ZStack(alignment: placement.alignment) {
-            stack(for: tab)
-                // Lists scroll under the chrome and show through the gaps around the island; the margin
-                // keeps their last row reachable. (A safeAreaInset on the stack did not reach the lists
-                // inside it on iOS 26: Browse's last row ended behind the island.)
-                .contentMargins(.bottom, placement.listBottomMargin, for: .automatic)
-                .modifier(SideMargin(edge: placement == .side(.leading) ? .leading : .trailing,
-                                     length: placement.listSideMargin(columnWidth: barColumnWidth(placement))))
+            // A change of tab crossfades the screens (`HITMotion.tabSwitch`, brief 58): the stack is identified
+            // by its tab, so the old one leaves and the new one arrives through the transition. Only this layer
+            // animates: the island has its own motion and popouts are drawn outside the shell. The incoming
+            // list's onAppear sets `popouts.listContext` as it is inserted; the outgoing one, fading, sets nothing.
+            ZStack {
+                stack(for: tab)
+                    .transition(HITMotion.tabSwitchTransition(reduceMotion: reduceMotion))
+            }
+            .animation(HITMotion.tabSwitch(reduceMotion: reduceMotion), value: tab)
+            // Lists scroll under the chrome and show through the gaps around the island; the margin
+            // keeps their last row reachable. (A safeAreaInset on the stack did not reach the lists
+            // inside it on iOS 26: Browse's last row ended behind the island.)
+            .contentMargins(.bottom, placement.listBottomMargin, for: .automatic)
+            .modifier(SideMargin(edge: placement == .side(.leading) ? .leading : .trailing,
+                                 length: placement.listSideMargin(columnWidth: barColumnWidth(placement))))
             chrome(placement)
         }
         // The quick-add card docks above the keyboard; the island stays put underneath it.

@@ -48,6 +48,40 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Upcoming")
     }
 
+    /// The island's motion (brief 58): every tab change leaves exactly one tab selected, and after the screens
+    /// crossfade the "+" adds to the list on show (the incoming list's onAppear sets the card's context while
+    /// the outgoing one is still fading). Inbox then Today: a stale Inbox context would add an undated task,
+    /// which Today does not show.
+    ///
+    /// A believable week (`-seedDemoData`) so the crossfade has lists to fade, and a second between taps so a
+    /// screen recording of this test (`xcrun simctl io <udid> recordVideo`) shows each change on its own.
+    func testTabSwitchCrossfadesAndThePlusFollowsTheScreen() throws {
+        app.launchArguments.append("-seedDemoData")
+        app.launch()
+        let tabs = ["inbox", "today", "upcoming", "flipboard"].map { app.buttons["tab-\($0)"] }
+        XCTAssertTrue(tabs[1].waitForExistence(timeout: 15))
+        for index in [0, 1, 2, 3, 1, 0, 1] {
+            let tab = tabs[index]
+            tab.tap()
+            XCTAssertTrue(tab.wait(for: \.isSelected, toEqual: true, timeout: 3), "tab \(index) selected")
+            XCTAssertEqual(tabs.filter(\.isSelected).count, 1, "never two tabs selected")
+            Thread.sleep(forTimeInterval: 1)
+        }
+        snapshot("Today after switching")
+
+        let plus = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(plus.wait(for: \.isHittable, toEqual: true, timeout: 3))
+        plus.tap()
+        let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        app.typeText("Crossfade context check")
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "the card closes after Add")
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Crossfade context check")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "added to Today, the list on show, not to the Inbox it left")
+        snapshot("Added on Today")
+    }
+
     /// One tap on "+" right after an Add opens the next card. Brief 56 found the first tap swallowed (a friend
     /// adding a second task had to tap twice).
     func testPlusOpensTheNextCardRightAfterAnAdd() throws {

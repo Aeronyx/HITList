@@ -52,6 +52,12 @@ enum IslandMetrics {
     /// The selected tab's pill sits this far inside the island, so the two curves are concentric.
     static let pillInset: CGFloat = 6
     static var pillRadius: CGFloat { cornerRadius - pillInset }
+    /// The pill's height in the bottom island: the island less its inset above and below.
+    static var pillHeight: CGFloat { height - 2 * pillInset }
+    /// The pill's width upright (`sideWidth` less its inset on both sides): concentric with that island too.
+    static var sidePillWidth: CGFloat { sideWidth - 2 * pillInset }
+    /// How strongly the accent tints the pill: present on the glass without competing with the icon.
+    static let pillOpacity: Double = 0.18
     /// Between the top of the island and the bottom of the "+".
     static let addButtonGap: CGFloat = HITSpacing.m
     /// From the home indicator to the bottom of the "+"; the undo toast (`PopoutHost`) sits to its left,
@@ -139,7 +145,9 @@ enum IslandPlacement: Equatable {
 
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
 /// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
-/// with Inter labels, the selected one in accent on a faint pill. Tapping the selected tab again calls
+/// with Inter labels, the selected one in accent on a faint pill. The pill is one view that slides to the
+/// tapped tab (`HITMotion.tabPill`, along whichever axis the island runs; it jumps under Reduce Motion), as
+/// in George's Todoist recording (brief 58). Tapping the selected tab again calls
 /// `onReselect` (the shell pops that tab to its root). The island is Liquid Glass tinted slate on iOS 26
 /// (`hitGlass`), plain `Theme.surface` before that and under Reduce Transparency / Reduce Effects.
 struct MobileTabBar: View {
@@ -151,22 +159,30 @@ struct MobileTabBar: View {
     var axis: Axis = .horizontal
     var onReselect: (MobileTab) -> Void = { _ in }
 
+    /// The pill's namespace: each tab's cell is a source, the one pill follows the selected cell.
+    @Namespace private var pillSpace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         let capsule = Capsule(style: .continuous)
         if axis == .vertical {
             VStack(spacing: 0) { buttons }
+                .background { pill }
                 .padding(.vertical, IslandMetrics.pillInset)
                 .frame(width: IslandMetrics.sideWidth, height: IslandMetrics.sideHeight)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
+                .onAppear { TapHaptic.prepareSelection() }
         } else {
             HStack(spacing: 0) { buttons }
+                .background { pill }
                 .padding(.horizontal, IslandMetrics.pillInset)
                 .frame(height: IslandMetrics.height)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
+                .onAppear { TapHaptic.prepareSelection() }
                 .padding(.horizontal, IslandMetrics.sideInset)
                 .padding(.bottom, IslandMetrics.bottomGap)
         }
@@ -176,16 +192,43 @@ struct MobileTabBar: View {
     private var buttons: some View {
         ForEach(MobileTab.allCases) { tab in
             Button {
-                if selection == tab { onReselect(tab) } else { selection = tab }
+                switch TabTap(tapped: tab, selected: selection) {
+                case .reselect:
+                    onReselect(tab)
+                case .change:
+                    TapHaptic.selectionChanged()
+                    selection = tab
+                }
             } label: {
                 item(tab, selected: selection == tab)
             }
-            .buttonStyle(TabItemPressStyle())
+            .buttonStyle(TabItemPressStyle(preparesSelectionHaptic: true))
             .frame(height: axis == .vertical ? IslandMetrics.sideItemHeight : nil)
+            .matchedGeometryEffect(id: tab, in: pillSpace)
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(selection == tab ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("tab-\(tab.rawValue)")
         }
+    }
+
+    /// The selected tab's pill: one capsule, inset `pillInset` across the island so its curve is concentric
+    /// with the island's, taking the selected cell's frame. A new selection moves it on `HITMotion.tabPill`
+    /// and stretches it a little along its travel mid-way (`HITMotion.TabPill`).
+    private var pill: some View {
+        // Plain values for the animator's Sendable closure.
+        let still = reduceMotion, horizontal = axis == .horizontal
+        return Capsule(style: .continuous)
+            .fill(Theme.accent.opacity(IslandMetrics.pillOpacity))
+            .padding(axis == .vertical ? .horizontal : .vertical, IslandMetrics.pillInset)
+            .matchedGeometryEffect(id: selection, in: pillSpace, properties: .frame, isSource: false)
+            .keyframeAnimator(initialValue: CGFloat(1), trigger: selection) { content, stretch in
+                let s = still ? 1 : stretch
+                content.scaleEffect(x: horizontal ? s : 1, y: horizontal ? 1 : s)
+            } keyframes: { _ in
+                HITMotion.tabPillStretchKeyframes()
+            }
+            .animation(HITMotion.tabPill(reduceMotion: reduceMotion), value: selection)
+            .accessibilityHidden(true)
     }
 
     private func item(_ tab: MobileTab, selected: Bool) -> some View {
@@ -197,6 +240,9 @@ struct MobileTabBar: View {
                     Image(systemName: tab.symbol)
                         .font(.system(size: 19, weight: selected ? .semibold : .regular))
                         .symbolVariant(selected ? .fill : .none)
+                        // The outline fills in place (Magic Replace where the symbols allow) rather than
+                        // swapping glyphs.
+                        .contentTransition(.symbolEffect(.replace))
                 }
             }
             .frame(height: 24)
@@ -210,6 +256,13 @@ struct MobileTabBar: View {
         .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+        .animation(Self.itemAnimation(selected: selected, reduceMotion: reduceMotion), value: selected)
+    }
+
+    /// The tab gaining the selection takes the accent and its filled icon on the pill's spring, so they arrive
+    /// together; the tab losing it lets go in `quick` (100 ms), so no frame shows two tabs selected.
+    static func itemAnimation(selected: Bool, reduceMotion: Bool) -> Animation? {
+        selected ? HITMotion.tabPill(reduceMotion: reduceMotion) : HITMotion.quick(reduceMotion: reduceMotion)
     }
 }
 
@@ -241,13 +294,31 @@ struct TodayTabIcon: View {
     }
 }
 
-/// A soft dip while a tab is pressed; no system highlight.
+/// What a tap on a tab does: a different tab changes the selection (with the selection tick); the current one
+/// goes back to its first screen, silently (nothing moves, so nothing to feel).
+enum TabTap: Equatable {
+    case change, reselect
+
+    init(tapped: MobileTab, selected: MobileTab) {
+        self = tapped == selected ? .reselect : .change
+    }
+
+    var playsHaptic: Bool { self == .change }
+}
+
+/// A soft dip while a tab is pressed; no system highlight. A tab readies the selection tick as the finger
+/// lands, so it plays on time when the finger lifts.
 private struct TabItemPressStyle: ButtonStyle {
+    var preparesSelectionHaptic = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(HITMotion.quick, value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed && preparesSelectionHaptic { TapHaptic.prepareSelection() }
+            }
     }
 }
 
