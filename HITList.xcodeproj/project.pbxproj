@@ -116,6 +116,7 @@
 		5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */; };
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
 		608C4039A4C1816B43354830 /* SettingsRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184C37C143DA7F89F0707031 /* SettingsRouter.swift */; };
+		61010CF79682849CCDD460E9 /* GroupReorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090C52CC3478D18601777A88 /* GroupReorder.swift */; };
 		63DFDD00010B0BD42F7E29E6 /* HolidayEffectsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E560EB0588544BDE7C47FAB /* HolidayEffectsTests.swift */; };
 		640EED72AFC56C6A4E158F26 /* HITSegmented.swift in Sources */ = {isa = PBXBuildFile; fileRef = 165FA6D62560AF712E0AB48D /* HITSegmented.swift */; };
 		65D66FB54909539D94557EC7 /* HingeCreakMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF39FE4A72106A76BE1927B5 /* HingeCreakMotion.swift */; };
@@ -334,6 +335,7 @@
 		08307D13E7B5E46A5D8DB81E /* SpotlightSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightSync.swift; sourceTree = "<group>"; };
 		0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtaskTests.swift; sourceTree = "<group>"; };
 		08BB24F8F65457496F557A04 /* Deduplicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Deduplicator.swift; sourceTree = "<group>"; };
+		090C52CC3478D18601777A88 /* GroupReorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupReorder.swift; sourceTree = "<group>"; };
 		0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlanTests.swift; sourceTree = "<group>"; };
 		0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTests.swift; sourceTree = "<group>"; };
 		0F69C7AD0F70F6C933CC821D /* FlipSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipSound.swift; sourceTree = "<group>"; };
@@ -933,6 +935,7 @@
 		8627308C9A2A7755BD542F35 /* Groups */ = {
 			isa = PBXGroup;
 			children = (
+				090C52CC3478D18601777A88 /* GroupReorder.swift */,
 				F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */,
 				13DECF5A7D8E56B1BF171E0F /* GroupsTitleMenu.swift */,
 				2FC5CCE15703DAC08113E05D /* ListFilterControls.swift */,
@@ -1467,6 +1470,7 @@
 				9BDB10C54213061AD4DEBDF7 /* FlipboardView.swift in Sources */,
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
 				66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */,
+				61010CF79682849CCDD460E9 /* GroupReorder.swift in Sources */,
 				5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */,
 				26ACF98FA5607D0023A315E9 /* GroupsTitleMenu.swift in Sources */,
 				D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */,

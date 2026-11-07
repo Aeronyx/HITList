@@ -119,6 +119,8 @@ struct BrowseView: View {
                         Button("Delete", role: .destructive) { delete(project) }
                     }
                 }
+                // Long-press and drag a Group to a new place (brief 57), as in the Mac sidebar.
+                .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
             } header: {
                 SidebarSectionHeader(title: "Groups") { creatingProject = true }
             } footer: {

@@ -112,6 +112,26 @@ final class GroupsTests: XCTestCase {
         XCTAssertTrue(tip.contains("# picks its one Group") && tip.contains("@ adds any labels"), tip)
     }
 
+    // MARK: - Reordering Groups
+
+    func testMovingAGroupRenumbersEveryGroupInTheNewOrder() throws {
+        let a = project("A", order: 0), b = project("B", order: 1), c = project("C", order: 2)
+        try context.save()
+        GroupReorder.move([a, b, c], from: IndexSet(integer: 2), to: 0)
+        XCTAssertEqual([a, b, c].map(\.sortOrder), [1, 2, 0])
+        let sorted = try context.fetch(FetchDescriptor<Project>(sortBy: [SortDescriptor(\.sortOrder)]))
+        XCTAssertEqual(sorted.map(\.name), ["C", "A", "B"])
+    }
+
+    func testMovingRepairsDuplicateOrdersLeftByEarlierDeletesAndSyncs() {
+        // Two Groups made on two devices before they synced share a sortOrder.
+        let a = project("A", order: 3), b = project("B", order: 3), c = project("C", order: 7)
+        let before = b.updatedAt
+        GroupReorder.move([a, b, c], from: IndexSet(integer: 0), to: 3)
+        XCTAssertEqual([b, c, a].map(\.sortOrder), [0, 1, 2])
+        XCTAssertGreaterThanOrEqual(b.updatedAt, before, "a changed Group is touched so the change syncs")
+    }
+
     // MARK: - Remembered per list
 
     func testGroupByDefaultsAndStoredValues() {

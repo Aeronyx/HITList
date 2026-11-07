@@ -134,6 +134,31 @@ final class HITListUITests: XCTestCase {
         snapshot("8 Browse")
     }
 
+    /// Brief 57: a Group dragged to a new place in Browse stays there (long-press, then drag).
+    func testReorderGroupsInBrowse() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        let browse = app.buttons["browseButton"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 15))
+        browse.tap()
+        let health = app.buttons["Health, 1"].firstMatch, home = app.buttons["Home, 2"].firstMatch
+        XCTAssertTrue(health.waitForExistence(timeout: 5) && home.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(health.frame.minY, home.frame.minY, "Health starts below Home")
+        snapshot("1 Browse before")
+        health.press(forDuration: 1.0, thenDragTo: home, withVelocity: .slow, thenHoldForDuration: 0.5)
+        XCTAssertLessThan(health.frame.minY, home.frame.minY, "Health moved above Home")
+        snapshot("2 Browse after")
+        // The new order is every list's: Home is now below Health in the title menu too.
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let title = app.navigationBars.buttons["Today"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        let menuHealth = app.buttons["Health · 1"].firstMatch, menuHome = app.buttons["Home · 2"].firstMatch
+        XCTAssertTrue(menuHealth.waitForExistence(timeout: 5))
+        XCTAssertLessThan(menuHealth.frame.minY, menuHome.frame.minY, "the title menu follows the new order")
+        snapshot("3 Title menu after")
+    }
+
     /// Keeps a screenshot in the test result.
     private func snapshot(_ name: String) {
         let shot = XCTAttachment(screenshot: app.screenshot())

@@ -83,6 +83,8 @@ struct SidebarView: View {
                         Button("Delete", role: .destructive) { delete(project) }
                     }
                 }
+                // Drag a Group to a new place (brief 57); the order is every list's Group order.
+                .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
             } header: {
                 sectionHeader("Groups") { creatingProject = true }
             }
