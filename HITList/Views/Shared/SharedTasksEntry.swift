@@ -35,8 +35,16 @@ struct SharedTasksSidebarRow: View {
             // Drawn like the sidebar's other rows (`SidebarView.row`): icon in the accent, title, count.
             Label {
                 HStack(spacing: 6) {
-                    Text("Shared Tasks").lineLimit(1).layoutPriority(1)
-                    SharedPreviewBadge(compact: true)
+                    // The badge goes before the title does: in a narrow sidebar it showed "Preview" one letter
+                    // per line (the iPad build in a Mac window, 2026-11-06; a Mac sidebar dragged narrow does the same).
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 6) {
+                            Text("Shared Tasks").lineLimit(1)
+                            SharedPreviewBadge(compact: true).fixedSize()
+                        }
+                        Text("Shared Tasks").lineLimit(1)
+                    }
+                    .layoutPriority(1)
                     Spacer(minLength: 4)
                     if center.pendingInvitation != nil {
                         Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityLabel("Invitation waiting")
