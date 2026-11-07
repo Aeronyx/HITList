@@ -204,6 +204,62 @@ enum Flipboard {
         try? context.save()
     }
 
+    // MARK: Completing a switch's row (brief 59)
+
+    /// A red switch is a task in Today (and the Inbox); completing its row is a flip. The lists call
+    /// these three around their completion: `completion(for:)` before, `completeRow` instead of
+    /// `TaskActions.toggleCompletion`, and `undo` first in their Undo.
+
+    /// What a switch's row flip changes, so Undo can put it back exactly (a counted flip moves no date).
+    struct RowFlip: Equatable {
+        let charge: Charge
+        let recurrence: String?
+        let reminderDate: Date?
+    }
+
+    /// The toast's record for a row about to be completed. A switch's says "Flipped" and carries its
+    /// state; its `revert` (the due date) still undoes the flip in a list that doesn't call `undo`.
+    static func completion(for task: TaskItem) -> CompletedTask {
+        if isMember(task) {
+            let flip = RowFlip(charge: Charge(task), recurrence: task.recurrence, reminderDate: task.reminderDate)
+            return CompletedTask(id: task.id, title: task.title,
+                                 revert: .restoreDueDate(task.dueDate ?? Calendar.current.startOfDay(for: Date())), flip: flip)
+        }
+        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
+            .restoreDueDate(due)
+        } else {
+            .uncomplete
+        }
+        return CompletedTask(id: task.id, title: task.title, revert: revert)
+    }
+
+    /// Completes a row: a switch flips (the interval restarts from today; a charger counts one flip),
+    /// anything else goes through `TaskActions.toggleCompletion`.
+    @MainActor
+    static func completeRow(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        if isMember(task) {
+            flip(task, in: context, now: now)
+        } else {
+            TaskActions.toggleCompletion(task, in: context, now: now)
+        }
+    }
+
+    /// Undo for a flipped row: puts the switch back as `record` found it. False when the record is not
+    /// a flip (the list undoes it as before).
+    @MainActor
+    @discardableResult
+    static func undo(_ record: CompletedTask, on task: TaskItem, in context: ModelContext) -> Bool {
+        guard let flip = record.flip else { return false }
+        task.dueDate = flip.charge.due
+        task.flipCount = flip.charge.count
+        task.flipPeriodStart = flip.charge.periodStart
+        task.recurrence = flip.recurrence
+        task.reminderDate = flip.reminderDate
+        task.touch()
+        try? context.save()
+        return true
+    }
+
     /// Undoes the last flip (see `afterFlipBack`).
     @MainActor
     static func flipBack(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {

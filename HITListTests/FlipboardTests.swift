@@ -779,3 +779,100 @@ final class FlipboardListingAppTests: XCTestCase {
     }
 }
 
+
+/// Brief 59: a red switch's row in Today. Completing it is a flip; the toast says "Flipped"; Undo puts the
+/// switch back exactly as it was. The row shows the switch glyph and no date.
+@MainActor
+final class FlipboardRowTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private let cal = Calendar.current
+    private var today: Date { cal.startOfDay(for: Date()) }
+    private func daysFromToday(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: today)! }
+
+    override func setUp() async throws { container = ModelContainerFactory.preview() }
+    override func tearDown() async throws { container = nil }
+
+    private func redSwitch(_ title: String = "Water plants", target: Int = 1) throws -> TaskItem {
+        let task = try Flipboard.createSwitch(title: title, rule: RecurrenceRule(frequency: .daily, interval: 3),
+                                              flipTarget: target, in: context)
+        task.dueDate = daysFromToday(-3)
+        try context.save()
+        return task
+    }
+
+    func testCompletingARedSwitchsRowFlipsItGreenAndItLeavesToday() throws {
+        let task = try redSwitch()
+        XCTAssertTrue(TaskOrdering.isInToday(task, now: Date()))
+        let record = Flipboard.completion(for: task)
+        Flipboard.completeRow(task, in: context)
+        XCTAssertFalse(task.isCompleted)
+        XCTAssertEqual(task.dueDate, daysFromToday(3), "the interval restarts from today, not from the old due date")
+        XCTAssertEqual(Flipboard.side(of: task), .green)
+        XCTAssertFalse(TaskOrdering.isInToday(task, now: Date()))
+        XCTAssertEqual(CompletionToastState.message(for: [record]), "Flipped ‘Water plants’")
+    }
+
+    func testUndoPutsTheSwitchBackExactly() throws {
+        let task = try redSwitch()
+        task.reminderDate = Date().addingTimeInterval(3600)
+        let before = (task.dueDate, task.flipCount, task.flipPeriodStart, task.reminderDate, task.recurrence)
+        let record = Flipboard.completion(for: task)
+        Flipboard.completeRow(task, in: context)
+        XCTAssertTrue(Flipboard.undo(record, on: task, in: context))
+        XCTAssertEqual(task.dueDate, before.0)
+        XCTAssertEqual(task.flipCount, before.1)
+        XCTAssertEqual(task.flipPeriodStart, before.2)
+        XCTAssertEqual(task.reminderDate, before.3)
+        XCTAssertEqual(task.recurrence, before.4)
+        XCTAssertEqual(Flipboard.side(of: task), .red)
+    }
+
+    func testACounterCountsOneFlipAndUndoTakesItBack() throws {
+        let gym = try redSwitch("Gym", target: 3)
+        let record = Flipboard.completion(for: gym)
+        Flipboard.completeRow(gym, in: context)
+        XCTAssertEqual(Flipboard.effectiveCount(gym), 1)
+        XCTAssertEqual(Flipboard.side(of: gym), .red, "still Today's until it is charged")
+        XCTAssertTrue(Flipboard.undo(record, on: gym, in: context))
+        XCTAssertEqual(Flipboard.effectiveCount(gym), 0)
+    }
+
+    func testAnOrdinaryTaskStillCompletes() throws {
+        let task = TaskItem(title: "Groceries", dueDate: today)
+        context.insert(task)
+        let record = Flipboard.completion(for: task)
+        XCTAssertEqual(record.revert, .uncomplete)
+        XCTAssertNil(record.flip)
+        Flipboard.completeRow(task, in: context)
+        XCTAssertTrue(task.isCompleted)
+        XCTAssertFalse(Flipboard.undo(record, on: task, in: context), "not a flip: the list undoes it as before")
+        let rent = TaskItem(title: "Rent", dueDate: daysFromToday(-1), recurrence: .monthly)
+        context.insert(rent)
+        XCTAssertEqual(Flipboard.completion(for: rent).revert, .restoreDueDate(daysFromToday(-1)))
+    }
+
+    func testTheToastSaysFlippedForFlipsAndCompletedOtherwise() throws {
+        let flip = Flipboard.completion(for: try redSwitch("Shave"))
+        let other = CompletedTask(id: UUID(), title: "Groceries", revert: .uncomplete)
+        XCTAssertEqual(CompletionToastState.message(for: [flip]), "Flipped ‘Shave’")
+        XCTAssertEqual(CompletionToastState.message(for: [flip, Flipboard.completion(for: try redSwitch("Floss"))]), "2 flipped")
+        XCTAssertEqual(CompletionToastState.message(for: [flip, other]), "2 completed")
+        XCTAssertEqual(CompletionToastState.message(for: [other]), "Completed ‘Groceries’")
+        var state = CompletionToastState()
+        _ = state.add(flip)
+        XCTAssertEqual(state.message, "Flipped ‘Shave’")
+    }
+
+    func testTheRowShowsTheSwitchGlyphForARedSwitchOnly() throws {
+        let red = try redSwitch()
+        XCTAssertTrue(TaskRow.showsSwitch(red, now: Date(), completing: false))
+        XCTAssertTrue(TaskRow.hasMeta(red, hidesDay: true, showProject: false), "Today's all-day rows keep the glyph")
+        Flipboard.flip(red, in: context)
+        XCTAssertFalse(TaskRow.showsSwitch(red, now: Date(), completing: false), "green: an ordinary repeating row")
+        XCTAssertTrue(TaskRow.showsSwitch(red, now: Date(), completing: true), "while its flip animates out it keeps the glyph")
+        let rent = TaskItem(title: "Rent", dueDate: daysFromToday(-1), recurrence: .monthly)
+        context.insert(rent)
+        XCTAssertFalse(TaskRow.showsSwitch(rent, now: Date(), completing: false))
+    }
+}
