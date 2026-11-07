@@ -57,6 +57,15 @@ final class MobileChromeTests: XCTestCase {
         }
     }
 
+    func testScreensCrossfadeWithASmallRiseAndNoSlide() {
+        XCTAssertEqual(HITMotion.TabSwitch.duration, 0.2)
+        XCTAssertEqual(HITMotion.TabSwitch.rise, 6)
+        XCTAssertEqual(HITMotion.TabSwitch.reducedDuration, 0.15, "Reduce Motion: opacity only, a little quicker")
+        XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: false), .easeInOut(duration: 0.2))
+        XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: true), .easeInOut(duration: 0.15))
+        XCTAssertLessThanOrEqual(HITMotion.TabSwitch.duration, 0.25, "within the motion system's 250 ms")
+    }
+
     func testIslandRendersOnBothAxes() {
         for axis in [Axis.horizontal, .vertical] {
             let bar = MobileTabBar(selection: .constant(.upcoming), day: 7, axis: axis)

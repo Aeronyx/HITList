@@ -313,6 +313,23 @@ enum HITMotion {
         CubicKeyframe(1.0, duration: TabPill.settleDuration)
     }
 
+    /// The iPhone screens on a change of tab (`MobileShell`): the outgoing screen fades out while the incoming
+    /// one fades in and rises `rise` points into place, over `duration`; no slide, no scale (the Todoist frames
+    /// show none). Reduce Motion: a plain crossfade over `reducedDuration`.
+    enum TabSwitch {
+        static let duration: TimeInterval = 0.2
+        static let reducedDuration: TimeInterval = 0.15
+        static let rise: CGFloat = 6
+    }
+
+    static func tabSwitch(reduceMotion: Bool) -> Animation {
+        .easeInOut(duration: reduceMotion ? TabSwitch.reducedDuration : TabSwitch.duration)
+    }
+
+    static func tabSwitchTransition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(insertion: .opacity.combined(with: .offset(y: TabSwitch.rise)), removal: .opacity)
+    }
+
     /// The celebrate keyframes: a fast pop to `Celebrate.peakScale`, then a spring settle back to 1.
     @KeyframesBuilder<CGFloat>
     static func celebrateKeyframes() -> some Keyframes<CGFloat> {
