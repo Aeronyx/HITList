@@ -121,6 +121,8 @@ struct BrowseView: View {
                 }
             } header: {
                 SidebarSectionHeader(title: "Groups") { creatingProject = true }
+            } footer: {
+                guidance(GroupGuidance.group)
             }
 
             Section {
@@ -137,6 +139,8 @@ struct BrowseView: View {
                 }
             } header: {
                 SidebarSectionHeader(title: "Labels") { creatingLabel = true }
+            } footer: {
+                guidance(GroupGuidance.label)
             }
 
             Section {
@@ -206,6 +210,13 @@ struct BrowseView: View {
     private func link<Label: View>(_ item: SidebarItem, @ViewBuilder label: () -> Label) -> some View {
         NavigationLink(value: item) { label() }
             .slateRow()
+    }
+
+    /// What a Group or a label is, under its section (brief 57).
+    private func guidance(_ text: String) -> some View {
+        Text(text)
+            .font(HITType.caption)
+            .foregroundStyle(Theme.secondaryText)
     }
 
     private func emptyRow(_ text: String) -> some View {

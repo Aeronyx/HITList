@@ -121,6 +121,17 @@ final class HITListUITests: XCTestCase {
         header.tap()
         XCTAssertTrue(app.navigationBars["Work"].waitForExistence(timeout: 5), "the header opens Work")
         snapshot("7 Work from its header")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+
+        // Browse… from the title menu; Groups and Labels each say what they are.
+        XCTAssertTrue(todayTitle.waitForExistence(timeout: 5), "back on Today")
+        todayTitle.tap()
+        app.buttons["Browse…"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5), "Browse pushed")
+        XCTAssertTrue(app.staticTexts["A task lives in one Group: Work, Home, a project."].waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["A label is a tag any task can carry: @waiting, @errands."].waitForExistence(timeout: 5))
+        snapshot("8 Browse")
     }
 
     /// Keeps a screenshot in the test result.
