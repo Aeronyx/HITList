@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The inbox: every dated task (in any Group) plus undated tasks with no Group, as one list by priority
-/// then due date (`TaskOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
+/// The inbox: every dated task (in any Group) plus undated tasks with no Group, by priority then due date
+/// (`TaskOrdering`) in sections by priority, by Group or none (view options → Group by, brief 57;
+/// `GroupedOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
 /// empty and a Process button that steps through it one task at a time. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
@@ -13,6 +14,15 @@ struct InboxView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    @Query(sort: \Project.sortOrder) private var projects: [Project]
+    @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
+    /// The filter control's choices (brief 57), kept while the window is open (a tab switch rebuilds this
+    /// view) as `ListFilter` JSON.
+    @SceneStorage("inboxFilter") private var storedFilter = ""
+    @State private var savedFilter: SavedFilter?
+    /// View options → Group by, remembered for the Inbox (brief 57).
+    @AppStorage(Preferences.inboxGrouping, store: AppGroup.defaults)
+    private var grouping: ListGrouping = Preferences.inboxGroupingDefault
     @State private var showCompleted = false
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
@@ -25,6 +35,14 @@ struct InboxView: View {
     private var isCompact: Bool { sizeClass == .compact }
     #else
     private let isCompact = false
+    #endif
+
+    #if os(iOS)
+    @Environment(\.mobileChrome) private var mobileChrome
+    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
+    private var pushesGroups: Bool { mobileChrome != nil }
+    #else
+    private let pushesGroups = false
     #endif
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -46,29 +64,94 @@ struct InboxView: View {
     }
 
     private func matchedTasks() -> [TaskItem] {
-        TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        let inbox = TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        guard let source = filter.query, let query = try? FilterQuery(source, now: now) else { return inbox }
+        return inbox.filter { query.matches($0, now: now) }
+    }
+
+    /// The filter control's choices: the list shows the Inbox's tasks that match `filter.query`.
+    private var filter: ListFilter {
+        get { storedFilter.data(using: .utf8).flatMap { try? JSONDecoder().decode(ListFilter.self, from: $0) } ?? ListFilter() }
+        nonmutating set {
+            storedFilter = newValue.isEmpty ? "" : (try? JSONEncoder().encode(newValue)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+    }
+
+    private var filterBinding: Binding<ListFilter> {
+        Binding(get: { filter }, set: { filter = $0 })
+    }
+
+    /// Why a filter shows nothing. A Group with No date is always empty here: undated tasks in a Group are
+    /// notes that live in the Group, never in the Inbox (the Inbox rule, `TaskOrdering.isInInbox`).
+    private var noMatchExplanation: String {
+        let names = filter.chips.compactMap { chip -> String? in if case .group(let name) = chip { name } else { nil } }
+        if filter.contains(.noDate), let name = names.first, names.count == 1 {
+            return "Undated tasks in \(name) are notes: they stay in \(name), not the Inbox."
+        }
+        if filter.contains(.noDate), !names.isEmpty {
+            return "Undated tasks in a Group are notes: they stay in their Group, not the Inbox."
+        }
+        return "Nothing in the Inbox matches this filter."
+    }
+
+    /// "Save as filter…": a saved filter with the Inbox rule and these choices, opened in its editor to name it.
+    private func saveFilter() {
+        guard let query = filter.savedQuery(within: ListFilter.inboxQuery) else { return }
+        let count = (try? context.fetchCount(FetchDescriptor<SavedFilter>())) ?? 0
+        let saved = SavedFilter(name: filter.suggestedName, query: query, sortOrder: count)
+        context.insert(saved)
+        try? context.save()
+        savedFilter = saved
+    }
+
+    /// Drops choices naming a Group or label that was renamed or deleted (here or on another device). Not
+    /// while there are none at all: on a first launch they may not have synced yet.
+    private func pruneFilter() {
+        var pruned = filter
+        pruned.keep(groups: projects.isEmpty ? Set(pruned.groups) : Set(projects.map(\.name)),
+                    labels: labels.isEmpty ? Set(pruned.labels) : Set(labels.map(\.name)))
+        if pruned != filter { filter = pruned }
     }
 
     /// Open inbox tasks, for the header.
     private var openCount: Int { allTasks.filter(\.isInInbox).count }
 
     /// The matched tasks plus the recently completed ones, by priority then due date.
-    private var rows: [TaskItem] {
+    private var rows: [Placed] {
         let matched = matchedTasks()
-        guard !completions.isEmpty else { return matched }
+        guard !completions.isEmpty else { return matched.map { Placed(task: $0, filterDueDate: $0.dueDate) } }
         let held = completions.heldIDs
         let anchors = completions.anchors
         let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
         let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
-        return TaskOrdering.sorted(shown + animating).map(\.task)
+        return TaskOrdering.sorted(shown + animating)
+    }
+
+    /// The rows in the chosen grouping's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
+    private func sections(_ rows: [Placed]) -> [ListSection<UUID, Placed>] {
+        GroupedOrdering.sections(rows, by: grouping, groupOrder: projects.map(\.id)) { $0.task.project?.id }
     }
 
     var body: some View {
         let rows = rows
         VStack(spacing: 0) {
             header
+            if !filter.isEmpty {
+                ListFilterChips(filter: filterBinding, projects: projects, labels: labels)
+                    .transition(.opacity)
+            }
             SwiftUI.Group {
-                if rows.isEmpty {
+                if rows.isEmpty, !filter.isEmpty {
+                    ContentUnavailableView {
+                        Label("No matching tasks", systemImage: "line.3.horizontal.decrease.circle")
+                    } description: {
+                        Text(noMatchExplanation)
+                    } actions: {
+                        Button("Clear Filter") { withAnimation(HITMotion.quick) { filter = ListFilter() } }
+                            .buttonStyle(.hitPrimary)
+                    }
+                    .transition(.opacity)
+                } else if rows.isEmpty {
                     InboxZeroView()
                         .transition(.opacity)
                 } else {
@@ -85,12 +168,16 @@ struct InboxView: View {
         .navigationTitle("Inbox")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
+        // The title opens a Group, a label or Browse (brief 57).
+        .groupsTitleMenu()
         #endif
-        // Show completed behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
+        // The filter control, then Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
+            ListFilterMenu(filter: filterBinding, projects: projects, labels: labels, onSave: saveFilter)
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
+                GroupByPicker(selection: $grouping)
             }
         } menu: {
             Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
@@ -99,8 +186,14 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
+        .sheet(item: $savedFilter) { FilterEditorView(filter: $0).slateSheet() }
         .onReceive(clock) { now = $0 }
-        .onAppear { CompletionFeedback.shared.prepare() }
+        .onAppear {
+            CompletionFeedback.shared.prepare()
+            pruneFilter()
+        }
+        .onChange(of: projects.map(\.name)) { _, _ in pruneFilter() }
+        .onChange(of: labels.map(\.name)) { _, _ in pruneFilter() }
     }
 
     private var header: some View {
@@ -116,22 +209,16 @@ struct InboxView: View {
             .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
     }
 
-    /// Rows grouped by priority, in priority order; each group keeps `TaskOrdering.inbox`'s due order.
-    private func prioritySections(_ rows: [TaskItem]) -> [(priority: Priority, tasks: [TaskItem])] {
-        Priority.allCases.compactMap { p in
-            let tasks = rows.filter { $0.priorityValue == p }
-            return tasks.isEmpty ? nil : (p, tasks)
-        }
-    }
-
-    private func list(_ rows: [TaskItem]) -> some View {
+    private func list(_ rows: [Placed]) -> some View {
         List(selection: $selectedTask) {
-            ForEach(prioritySections(rows), id: \.priority) { group in
+            ForEach(sections(rows), id: \.key) { section in
                 Section {
-                    ForEach(group.tasks) { row($0) }
+                    ForEach(section.tasks, id: \.task.id) { row($0.task) }
                 } header: {
-                    Text("Priority \(group.priority.rawValue)")
-                        .taskSectionHeader(color: group.priority == .p4 ? Theme.secondaryText : group.priority.color)
+                    if section.key != .all {
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects),
+                                           pushes: pushesGroups)
+                    }
                 }
             }
             if !isCompact {
@@ -150,7 +237,7 @@ struct InboxView: View {
 
     private func row(_ task: TaskItem) -> some View {
         let phase = completions.phase(of: task.id)
-        return TaskRow(task: task, now: now, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+        return TaskRow(task: task, now: now, showProject: grouping != .group, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(task)
             .completionRowBackground(flashing: phase == .pending)
