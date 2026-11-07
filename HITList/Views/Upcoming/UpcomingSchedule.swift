@@ -54,8 +54,9 @@ struct UpcomingDay<Item>: Identifiable {
 /// Open dated tasks grouped the way the Upcoming view lists them: everything due before today in
 /// `overdue`, then one entry per day from `start` (today unless given; never before today) for
 /// `dayCount` days, empty days included. Undated, completed, sub-tasks and tasks outside the days are
-/// left out. Each group is in `TaskOrdering` order, the same as Today: priority first (P1 on top), then
-/// all-day before timed and timed in time order, then title.
+/// left out, and so are Flipboard switches (brief 59): a green one is on the Flipboard only and a red one
+/// is Today's, every day, not a dated task. Each group is in `TaskOrdering` order, the same as Today:
+/// priority first (P1 on top), then all-day before timed and timed in time order, then title.
 struct UpcomingSchedule<Item: FilterableTask> {
     let overdue: [Item]
     let days: [UpcomingDay<Item>]
@@ -65,7 +66,7 @@ struct UpcomingSchedule<Item: FilterableTask> {
         let first = max(today, calendar.startOfDay(for: start ?? today))
         var overdue: [Item] = []
         var buckets: [Int: [Item]] = [:]
-        for item in items where !item.filterIsCompleted && !item.filterIsSubtask {
+        for item in items where Self.isScheduled(item, now: now, calendar: calendar) {
             guard let due = item.filterDueDate else { continue }
             let day = calendar.startOfDay(for: due)
             if day < today {
@@ -82,10 +83,16 @@ struct UpcomingSchedule<Item: FilterableTask> {
         }
     }
 
+    /// An open top-level task that isn't a Flipboard switch.
+    static func isScheduled(_ item: Item, now: Date, calendar: Calendar = .current) -> Bool {
+        !item.filterIsCompleted && !item.filterIsSubtask
+            && FlipboardSwitch.listing(for: item, now: now, calendar: calendar) == .unchanged
+    }
+
     /// Open tasks per day (start of day), for the dots under the week strip. Not limited to the list's days.
-    static func counts(of items: [Item], calendar: Calendar = .current) -> [Date: Int] {
+    static func counts(of items: [Item], now: Date = Date(), calendar: Calendar = .current) -> [Date: Int] {
         var counts: [Date: Int] = [:]
-        for item in items where !item.filterIsCompleted && !item.filterIsSubtask {
+        for item in items where isScheduled(item, now: now, calendar: calendar) {
             guard let due = item.filterDueDate else { continue }
             counts[calendar.startOfDay(for: due), default: 0] += 1
         }

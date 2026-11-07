@@ -668,26 +668,65 @@ public struct FilterQuery: Sendable, Equatable {
         }
     }
 
-    public func matches(_ task: FilterableTask, now: Date = Date(), calendar: Calendar = .current) -> Bool {
+    /// Whether the query names the `flipboard` label (`@flipboard`, `!@flipboard`, `@flip*`). Such a query
+    /// opts out of the Flipboard's listing rule and sees switches as the tasks they are (brief 59).
+    public var namesFlipboard: Bool { Self.namesFlipboard(root) }
+
+    private static func namesFlipboard(_ node: FilterNode) -> Bool {
+        switch node {
+        case .label(let name?): return Glob.matches(name, FlipboardSwitch.labelName)
+        case .and(let a, let b), .or(let a, let b): return namesFlipboard(a) || namesFlipboard(b)
+        case .not(let a): return namesFlipboard(a)
+        default: return false
+        }
+    }
+
+    /// Whether `task` matches. Unless the query names `@flipboard`, a green switch never does and a red one
+    /// is judged as due today (`FlipboardSwitch.listing`); `flipboardRule: false` judges every task as it is.
+    public func matches(_ task: FilterableTask, now: Date = Date(), calendar: Calendar = .current,
+                        flipboardRule: Bool = true) -> Bool {
         let ctx = EvalContext(parser: DateExpressionParser(calendar: calendar, now: now))
-        return Self.eval(root, task, ctx)
+        return Self.evalListed(root, task, ctx, flipboardRule: flipboardRule && !namesFlipboard)
     }
 
     /// Filters and sorts `tasks`. Completed tasks are excluded unless the query mentions completion;
-    /// subtasks always are (they live inside their parent, `TaskOrdering.topLevel`).
-    public func apply<T: FilterableTask>(to tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
+    /// subtasks always are (they live inside their parent, `TaskOrdering.topLevel`). The Flipboard's
+    /// listing rule applies as in `matches`; Claude's `list_tasks` passes `flipboardRule: false`.
+    public func apply<T: FilterableTask>(to tasks: [T], now: Date = Date(), calendar: Calendar = .current,
+                                         flipboardRule: Bool = true) -> [T] {
         let ctx = EvalContext(parser: DateExpressionParser(calendar: calendar, now: now))
         let hideCompleted = !mentionsCompleted
+        let rule = flipboardRule && !namesFlipboard
         let matched = tasks.filter { task in
             if task.filterIsSubtask { return false }
             if hideCompleted && task.filterIsCompleted { return false }
-            return Self.eval(root, task, ctx)
+            return Self.evalListed(root, task, ctx, flipboardRule: rule)
         }
-        return Self.defaultSort(matched)
+        return Self.defaultSort(matched, now: now, calendar: calendar, flipboardRule: rule)
     }
 
-    /// Due date ascending (undated last), then priority, then creation order (`TaskOrdering.createdThenTitle`).
-    public static func defaultSort<T: FilterableTask>(_ tasks: [T]) -> [T] {
+    /// `eval` with the Flipboard's listing rule: green switches are left out, red ones are due today.
+    private static func evalListed(_ node: FilterNode, _ task: FilterableTask, _ ctx: EvalContext, flipboardRule: Bool) -> Bool {
+        guard flipboardRule else { return eval(node, task, ctx) }
+        func listed<T: FilterableTask>(_ task: T) -> Bool {
+            switch FlipboardSwitch.listing(for: task, now: ctx.parser.now, calendar: ctx.parser.calendar) {
+            case .hidden: return false
+            case .today: return eval(node, FlipboardSwitch.listed(task, now: ctx.parser.now, calendar: ctx.parser.calendar), ctx)
+            case .unchanged: return eval(node, task, ctx)
+            }
+        }
+        return listed(task)
+    }
+
+    /// Due date ascending (undated last), then priority, then creation order (`TaskOrdering.createdThenTitle`),
+    /// each task by the date it is listed under (a red switch: today) unless `flipboardRule` is false.
+    public static func defaultSort<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current,
+                                                      flipboardRule: Bool = true) -> [T] {
+        guard flipboardRule else { return dueThenPriority(tasks) }
+        return dueThenPriority(tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }).map(\.base)
+    }
+
+    private static func dueThenPriority<T: FilterableTask>(_ tasks: [T]) -> [T] {
         tasks.sorted { a, b in
             switch (a.filterDueDate, b.filterDueDate) {
             case let (da?, db?) where da != db: return da < db

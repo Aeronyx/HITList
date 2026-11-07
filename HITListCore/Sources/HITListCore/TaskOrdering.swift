@@ -10,6 +10,8 @@ import Foundation
 /// - Today is two sections, overdue and today, and never shows undated or future tasks.
 /// - Browse search looks through titles and notes of every task, completed ones too.
 /// - Subtasks (brief 32) are never rows of their own anywhere: they live inside their parent.
+/// - Flipboard switches (brief 59, `FlipboardSwitch.listing`): a green one is in no list; a red one is
+///   listed and sorted as due today, never as overdue. Hence the `now` on the rules below.
 public enum TaskOrdering {
 
     // MARK: - Subtasks
@@ -42,23 +44,31 @@ public enum TaskOrdering {
         return a.filterTitle.localizedCaseInsensitiveCompare(b.filterTitle) == .orderedAscending
     }
 
-    /// `tasks` in `priorityThenDue` order.
-    public static func sorted<T: FilterableTask>(_ tasks: [T]) -> [T] {
-        tasks.sorted(by: priorityThenDue)
+    /// `tasks` in `priorityThenDue` order, each by the date it is listed under (a red switch: today).
+    public static func sorted<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
+        tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }
+            .sorted(by: priorityThenDue)
+            .map(\.base)
     }
 
     // MARK: - Inbox
 
     /// Whether a task belongs in the Inbox, whatever its completion: it has a date (in any Group), or
-    /// it has no Group.
-    public static func isInInbox<T: FilterableTask>(_ task: T) -> Bool {
+    /// it has no Group. A green switch never does; a red one is dated today.
+    public static func isInInbox<T: FilterableTask>(_ task: T, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard !task.filterIsSubtask else { return false }
-        return task.filterDueDate != nil || task.filterProjectName == nil
+        switch FlipboardSwitch.listing(for: task, now: now, calendar: calendar) {
+        case .hidden: return false
+        case .today: return true
+        case .unchanged: return task.filterDueDate != nil || task.filterProjectName == nil
+        }
     }
 
     /// The Inbox's tasks in list order: open ones, plus completed ones when `includeCompleted`.
-    public static func inbox<T: FilterableTask>(_ tasks: [T], includeCompleted: Bool = false) -> [T] {
-        sorted(tasks.filter { isInInbox($0) && (includeCompleted || !$0.filterIsCompleted) })
+    public static func inbox<T: FilterableTask>(_ tasks: [T], includeCompleted: Bool = false, now: Date = Date(),
+                                                calendar: Calendar = .current) -> [T] {
+        sorted(tasks.filter { isInInbox($0, now: now, calendar: calendar) && (includeCompleted || !$0.filterIsCompleted) },
+               now: now, calendar: calendar)
     }
 
     // MARK: - Today
@@ -78,6 +88,16 @@ public enum TaskOrdering {
         return day == today ? .today : nil
     }
 
+    /// The Today section a task is listed in: a red switch is today's, a green one in neither, anything
+    /// else by its due date (`todaySection(for:now:)`).
+    public static func todaySection<T: FilterableTask>(of task: T, now: Date, calendar: Calendar = .current) -> TodaySection? {
+        switch FlipboardSwitch.listing(for: task, now: now, calendar: calendar) {
+        case .hidden: return nil
+        case .today: return .today
+        case .unchanged: return todaySection(for: task.filterDueDate, now: now, calendar: calendar)
+        }
+    }
+
     /// Today's screen: open tasks due before today in `overdue`, open tasks due today in `today`, both
     /// in `priorityThenDue` order. With `includeCompleted`, completed tasks due today join `today`
     /// (completed overdue ones would be every old task, so they stay out).
@@ -91,20 +111,20 @@ public enum TaskOrdering {
                                                 includeCompleted: Bool = false) -> TodayList<T> {
         var overdue: [T] = [], today: [T] = []
         for task in topLevel(tasks) {
-            switch todaySection(for: task.filterDueDate, now: now, calendar: calendar) {
+            switch todaySection(of: task, now: now, calendar: calendar) {
             case .overdue? where !task.filterIsCompleted: overdue.append(task)
             case .today? where includeCompleted || !task.filterIsCompleted: today.append(task)
             default: break
             }
         }
-        return TodayList(overdue: sorted(overdue), today: sorted(today))
+        return TodayList(overdue: sorted(overdue, now: now, calendar: calendar), today: sorted(today, now: now, calendar: calendar))
     }
 
     /// Whether a task is on the Today screen (the membership half of `today(_:now:)`).
     public static func isInToday<T: FilterableTask>(_ task: T, now: Date, calendar: Calendar = .current,
                                                     includeCompleted: Bool = false) -> Bool {
         guard !task.filterIsSubtask else { return false }
-        switch todaySection(for: task.filterDueDate, now: now, calendar: calendar) {
+        switch todaySection(of: task, now: now, calendar: calendar) {
         case .overdue?: return !task.filterIsCompleted
         case .today?: return includeCompleted || !task.filterIsCompleted
         case nil: return false
@@ -115,16 +135,18 @@ public enum TaskOrdering {
 
     /// Browse search: every task whose title or notes contain each word of `text` (case and accent
     /// insensitive), completed ones included. Open tasks first in `priorityThenDue` order, then
-    /// completed ones. Blank text matches nothing.
-    public static func search<T: FilterableTask>(_ tasks: [T], text: String) -> [T] {
+    /// completed ones. Blank text matches nothing. Green switches are on the Flipboard only.
+    public static func search<T: FilterableTask>(_ tasks: [T], text: String, now: Date = Date(),
+                                                 calendar: Calendar = .current) -> [T] {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)
         guard !words.isEmpty else { return [] }
         let matches = topLevel(tasks).filter { task in
-            words.allSatisfy { word in
+            FlipboardSwitch.listing(for: task, now: now, calendar: calendar) != .hidden && words.allSatisfy { word in
                 task.filterTitle.range(of: word, options: [.caseInsensitive, .diacriticInsensitive]) != nil
                     || task.filterNotes.range(of: word, options: [.caseInsensitive, .diacriticInsensitive]) != nil
             }
         }
-        return sorted(matches.filter { !$0.filterIsCompleted }) + sorted(matches.filter(\.filterIsCompleted))
+        return sorted(matches.filter { !$0.filterIsCompleted }, now: now, calendar: calendar)
+            + sorted(matches.filter(\.filterIsCompleted), now: now, calendar: calendar)
     }
 }

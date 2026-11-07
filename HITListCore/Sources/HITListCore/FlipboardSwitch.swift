@@ -48,3 +48,56 @@ public enum FlipboardSwitch {
         return side(due: task.filterDueDate, now: now, calendar: calendar)
     }
 }
+
+// MARK: - Listing (brief 59)
+
+/// George, 2026-11-07: the Flipboard is a visual aid for chores that repeat within an interval, not on a
+/// date. A switch stays off the lists until it is due: green, it is on the Flipboard only; red, it is a
+/// task for today, every day, until it is flipped. Every list (Inbox, Today, Upcoming, filters, search,
+/// Siri) asks `listing(for:now:)`, so they all agree. A query that names `@flipboard` opts out
+/// (`FilterQuery.namesFlipboard`): it sees switches as the tasks they are, so "switches" filters work.
+extension FlipboardSwitch {
+    public enum Listing: Sendable, Equatable {
+        /// A green switch: on the Flipboard only.
+        case hidden
+        /// A red switch (due today, overdue or never flipped): listed as due today, never as overdue.
+        case today
+        /// Not a switch: listed by its own date.
+        case unchanged
+    }
+
+    public static func listing<T: FilterableTask>(for task: T, now: Date, calendar: Calendar = .current) -> Listing {
+        switch side(of: task, now: now, calendar: calendar) {
+        case .green?: return .hidden
+        case .red?: return .today
+        case nil: return .unchanged
+        }
+    }
+
+    /// The date a list files the task under: the start of today for a red switch, its own otherwise.
+    public static func listedDueDate<T: FilterableTask>(for task: T, now: Date, calendar: Calendar = .current) -> Date? {
+        listing(for: task, now: now, calendar: calendar) == .today ? calendar.startOfDay(for: now) : task.filterDueDate
+    }
+
+    /// The task as lists see it: a red switch due at the start of today, anything else as it is.
+    public static func listed<T: FilterableTask>(_ task: T, now: Date, calendar: Calendar = .current) -> Listed<T> {
+        Listed(base: task, filterDueDate: listedDueDate(for: task, now: now, calendar: calendar))
+    }
+
+    /// A task with the due date a list files it under (`listed(_:now:)`).
+    public struct Listed<Base: FilterableTask>: FilterableTask {
+        public let base: Base
+        public let filterDueDate: Date?
+
+        public var filterTitle: String { base.filterTitle }
+        public var filterNotes: String { base.filterNotes }
+        public var filterPriority: Int { base.filterPriority }
+        public var filterHasDueTime: Bool { base.filterHasDueTime }
+        public var filterIsCompleted: Bool { base.filterIsCompleted }
+        public var filterProjectName: String? { base.filterProjectName }
+        public var filterLabelNames: [String] { base.filterLabelNames }
+        public var filterIsRecurring: Bool { base.filterIsRecurring }
+        public var filterCreatedDate: Date? { base.filterCreatedDate }
+        public var filterIsSubtask: Bool { base.filterIsSubtask }
+    }
+}

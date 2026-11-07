@@ -667,3 +667,115 @@ final class FlipboardRulesTests: XCTestCase {
         XCTAssertEqual(task.dueDate, daysFromToday(7))
     }
 }
+
+/// Brief 59: the lists the app builds itself (Upcoming, the board, the Duo, Spotlight, Siri, Claude) follow
+/// `FlipboardSwitch.listing`: a green switch is on the Flipboard only, a red one is a task for today.
+@MainActor
+final class FlipboardListingAppTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private let cal = Calendar.current
+    private var today: Date { cal.startOfDay(for: Date()) }
+    private func daysFromToday(_ n: Int) -> Date { cal.date(byAdding: .day, value: n, to: today)! }
+
+    override func setUp() async throws { container = ModelContainerFactory.preview() }
+    override func tearDown() async throws { container = nil }
+
+    private func plain(_ title: String, due: Date?, switch isSwitch: Bool = false) -> PlainTask {
+        PlainTask(title: title, dueDate: due, labelNames: isSwitch ? ["flipboard"] : [], isRecurring: isSwitch)
+    }
+
+    /// A green switch (flipped today, due in two weeks) and a red one (three days overdue).
+    private func switches() throws -> (green: TaskItem, red: TaskItem) {
+        let green = try Flipboard.createSwitch(title: "Shave", rule: RecurrenceRule(frequency: .weekly, interval: 2), in: context)
+        Flipboard.flip(green, in: context)
+        let red = try Flipboard.createSwitch(title: "Water plants", rule: RecurrenceRule(frequency: .daily, interval: 3), in: context)
+        red.dueDate = daysFromToday(-3)
+        try context.save()
+        XCTAssertEqual(Flipboard.side(due: green.dueDate, now: Date()), .green)
+        XCTAssertEqual(Flipboard.side(due: red.dueDate, now: Date()), .red)
+        return (green, red)
+    }
+
+    // MARK: Upcoming, the board, the Duo
+
+    func testUpcomingShowsNoSwitchEitherSide() {
+        let items = [plain("Shave", due: daysFromToday(2), switch: true), plain("Water", due: daysFromToday(-3), switch: true),
+                     plain("Fresh", due: nil, switch: true), plain("Dentist", due: daysFromToday(2)),
+                     plain("Call Sam", due: daysFromToday(-1)), plain("Groceries", due: today)]
+        let schedule = UpcomingSchedule(items: items, now: Date(), dayCount: 7)
+        XCTAssertEqual(schedule.overdue.map(\.filterTitle), ["Call Sam"])
+        XCTAssertEqual(schedule.days.flatMap(\.items).map(\.filterTitle), ["Groceries", "Dentist"])
+        let counts = UpcomingSchedule<PlainTask>.counts(of: items, now: Date())
+        XCTAssertEqual(counts[daysFromToday(2)], 1, "the week strip's dots leave switches out too")
+        XCTAssertNil(counts[daysFromToday(-3)])
+    }
+
+    func testTheBoardShowsNoSwitchEitherSide() {
+        let items = [plain("Shave", due: daysFromToday(2), switch: true), plain("Water", due: daysFromToday(-3), switch: true),
+                     plain("Dentist", due: daysFromToday(2)), plain("Call Sam", due: daysFromToday(-1))]
+        let board = UpcomingBoardModel(items: items, window: UpcomingWindow(), now: Date(), showOverdue: true)
+        XCTAssertEqual(board.columns.flatMap(\.items).map(\.filterTitle).sorted(), ["Call Sam", "Dentist"])
+    }
+
+    func testTheDuosNextDaysLeaveGreenSwitchesOut() {
+        let items = [plain("Shave", due: daysFromToday(2), switch: true), plain("Dentist", due: daysFromToday(2))]
+        let shown = DuoNextDays.listed(items, now: Date())
+        XCTAssertEqual(DuoNextDays.group(shown, due: \.filterDueDate, now: Date()).flatMap(\.items).map(\.filterTitle),
+                       ["Dentist"])
+    }
+
+    // MARK: Spotlight
+
+    func testSpotlightLeavesGreenSwitchesOutAndDescribesRedOnesWithoutADate() throws {
+        let (green, red) = try switches()
+        let plainTask = TaskItem(title: "Dentist", dueDate: daysFromToday(2))
+        context.insert(plainTask)
+        let indexed = SpotlightSync.indexable([green, red, plainTask], now: Date()).map(\.title)
+        XCTAssertEqual(indexed, ["Water plants", "Dentist"])
+        let line = try XCTUnwrap(TaskEntity(spotlight: red).attributeSet.contentDescription)
+        XCTAssertEqual(line, "Flipboard switch · every 3 days", "no date: a red switch is today's every day")
+        XCTAssertNotEqual(SpotlightRecord(red).fingerprint, SpotlightRecord(TaskItem(title: "Water plants")).fingerprint)
+    }
+
+    // MARK: Siri and Shortcuts
+
+    func testSiriListsARedSwitchAsTodaysNotOverdue() throws {
+        _ = try switches()
+        let summary = try IntentActions.today(in: context)
+        XCTAssertEqual(summary.lines.map(\.title), ["Water plants"])
+        XCTAssertEqual(summary.lines.map(\.isOverdue), [false])
+        XCTAssertEqual(summary.lines.map(\.when), [nil])
+        XCTAssertEqual(summary.headline, "1 task today.")
+    }
+
+    func testShortcutsLeaveGreenSwitchesOut() throws {
+        _ = try switches()
+        XCTAssertEqual(try IntentActions.suggestedTasks(in: context).map(\.title), ["Water plants"])
+        XCTAssertEqual(try IntentActions.openTasks(matching: "shave", in: context).map(\.title), [])
+    }
+
+    func testCompletingASwitchFromSiriFlipsIt() throws {
+        let (_, red) = try switches()
+        let dialog = try IntentActions.complete(red.id, in: context)
+        XCTAssertEqual(red.dueDate, daysFromToday(3), "a flip restarts the interval from today")
+        XCTAssertEqual(Flipboard.side(due: red.dueDate, now: Date()), .green)
+        XCTAssertTrue(dialog.hasPrefix("Flipped ‘Water plants’."), dialog)
+    }
+
+    // MARK: Claude
+
+    func testClaudeListsEverySwitchAndSaysWhichSide() throws {
+        _ = try switches()
+        let handler = ClaudeToolHandler(context: context, rule: ClaudeAccessRule(mode: .allExceptHidden))
+        let result = handler.call(ClaudeTools.listTasks, [:])
+        let json = try JSONValue.decode(Data(result.text.utf8))
+        let tasks = try XCTUnwrap(json["tasks"]?.arrayValue)
+        XCTAssertEqual(Set(tasks.compactMap { $0["title"]?.stringValue }), ["Shave", "Water plants"])
+        let shave = try XCTUnwrap(tasks.first { $0["title"] == "Shave" })
+        XCTAssertEqual(shave["flipboard_switch"], "green")
+        let water = try XCTUnwrap(tasks.first { $0["title"] == "Water plants" })
+        XCTAssertEqual(water["flipboard_switch"], "red")
+    }
+}
+
