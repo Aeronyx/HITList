@@ -964,3 +964,15 @@ private final class RecordingIndex: SpotlightIndexing {
     func remove(_ ids: [UUID]) async throws { removed += ids }
     func removeAll() async throws {}
 }
+
+/// Brief 59: the tip and the empty board say the rule in one sentence each.
+final class FlipboardWordsTests: XCTestCase {
+    func testTheTipAndTheEmptyBoardSayASwitchStaysOffTheListsUntilDue() {
+        let rule = "stays off your lists until it’s due"
+        XCTAssertTrue(HITTipKind.flipboard.message.contains(rule), HITTipKind.flipboard.message)
+        XCTAssertTrue(FlipboardView.emptyMessage.contains(rule), FlipboardView.emptyMessage)
+        for text in [HITTipKind.flipboard.message, FlipboardView.emptyRule] {
+            XCTAssertEqual(text.filter { $0 == "." }.count, 1, "one sentence: \(text)")
+        }
+    }
+}

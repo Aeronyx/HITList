@@ -60,7 +60,7 @@ struct FlipboardView: View {
                 ContentUnavailableView {
                     Label("No Switches Yet", systemImage: "switch.2")
                 } description: {
-                    Text("Each switch is a recurring chore. It starts red; flip it when the chore is done and it stays green for its interval, then turns red again.\n\nTap + to add one, or open any task and choose Add to Flipboard.")
+                    Text(Self.emptyMessage)
                 } actions: {
                     Button("Add a Switch") { adding = true }
                         .buttonStyle(.hitPrimary)
@@ -114,6 +114,10 @@ struct FlipboardView: View {
             FlipSwitchEditor(task: request.task, focus: request.focus).slateSheet()
         }
     }
+
+    /// The empty board's rule, in one sentence (brief 59), then how to add a switch.
+    static let emptyRule = "A switch is a chore that repeats within an interval: it stays off your lists until it’s due, then waits in Today, red, until you flip it."
+    static let emptyMessage = emptyRule + "\n\nTap + to add one, or open any task and choose Add to Flipboard."
 
     /// Opens the task popout (`selectedTask` is `PopoutController.selection`).
     private func open(_ task: TaskItem) { selectedTask = task }
