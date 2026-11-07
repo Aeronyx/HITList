@@ -104,10 +104,12 @@ struct InboxView: View {
         savedFilter = saved
     }
 
-    /// Drops choices naming a Group or label that was renamed or deleted (here or on another device).
+    /// Drops choices naming a Group or label that was renamed or deleted (here or on another device). Not
+    /// while there are none at all: on a first launch they may not have synced yet.
     private func pruneFilter() {
         var pruned = filter
-        pruned.keep(groups: Set(projects.map(\.name)), labels: Set(labels.map(\.name)))
+        pruned.keep(groups: projects.isEmpty ? Set(pruned.groups) : Set(projects.map(\.name)),
+                    labels: labels.isEmpty ? Set(pruned.labels) : Set(labels.map(\.name)))
         if pruned != filter { filter = pruned }
     }
 
