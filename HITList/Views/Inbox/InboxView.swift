@@ -15,6 +15,11 @@ struct InboxView: View {
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
+    @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
+    /// The filter control's choices (brief 57), kept while the window is open (a tab switch rebuilds this
+    /// view) as `ListFilter` JSON.
+    @SceneStorage("inboxFilter") private var storedFilter = ""
+    @State private var savedFilter: SavedFilter?
     /// View options → Group by, remembered for the Inbox (brief 57).
     @AppStorage(Preferences.inboxGrouping, store: AppGroup.defaults)
     private var grouping: ListGrouping = Preferences.inboxGroupingDefault
@@ -51,7 +56,51 @@ struct InboxView: View {
     }
 
     private func matchedTasks() -> [TaskItem] {
-        TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        let inbox = TaskOrdering.inbox(allTasks, includeCompleted: showCompleted)
+        guard let source = filter.query, let query = try? FilterQuery(source, now: now) else { return inbox }
+        return inbox.filter { query.matches($0, now: now) }
+    }
+
+    /// The filter control's choices: the list shows the Inbox's tasks that match `filter.query`.
+    private var filter: ListFilter {
+        get { storedFilter.data(using: .utf8).flatMap { try? JSONDecoder().decode(ListFilter.self, from: $0) } ?? ListFilter() }
+        nonmutating set {
+            storedFilter = newValue.isEmpty ? "" : (try? JSONEncoder().encode(newValue)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
+        }
+    }
+
+    private var filterBinding: Binding<ListFilter> {
+        Binding(get: { filter }, set: { filter = $0 })
+    }
+
+    /// Why a filter shows nothing. A Group with No date is always empty here: undated tasks in a Group are
+    /// notes that live in the Group, never in the Inbox (the Inbox rule, `TaskOrdering.isInInbox`).
+    private var noMatchExplanation: String {
+        let names = filter.chips.compactMap { chip -> String? in if case .group(let name) = chip { name } else { nil } }
+        if filter.contains(.noDate), let name = names.first, names.count == 1 {
+            return "Undated tasks in \(name) are notes: they stay in \(name), not the Inbox."
+        }
+        if filter.contains(.noDate), !names.isEmpty {
+            return "Undated tasks in a Group are notes: they stay in their Group, not the Inbox."
+        }
+        return "Nothing in the Inbox matches this filter."
+    }
+
+    /// "Save as filter…": a saved filter with the Inbox rule and these choices, opened in its editor to name it.
+    private func saveFilter() {
+        guard let query = filter.savedQuery(within: ListFilter.inboxQuery) else { return }
+        let count = (try? context.fetchCount(FetchDescriptor<SavedFilter>())) ?? 0
+        let saved = SavedFilter(name: filter.suggestedName, query: query, sortOrder: count)
+        context.insert(saved)
+        try? context.save()
+        savedFilter = saved
+    }
+
+    /// Drops choices naming a Group or label that was renamed or deleted (here or on another device).
+    private func pruneFilter() {
+        var pruned = filter
+        pruned.keep(groups: Set(projects.map(\.name)), labels: Set(labels.map(\.name)))
+        if pruned != filter { filter = pruned }
     }
 
     /// Open inbox tasks, for the header.
@@ -77,8 +126,22 @@ struct InboxView: View {
         let rows = rows
         VStack(spacing: 0) {
             header
+            if !filter.isEmpty {
+                ListFilterChips(filter: filterBinding, projects: projects, labels: labels)
+                    .transition(.opacity)
+            }
             SwiftUI.Group {
-                if rows.isEmpty {
+                if rows.isEmpty, !filter.isEmpty {
+                    ContentUnavailableView {
+                        Label("No matching tasks", systemImage: "line.3.horizontal.decrease.circle")
+                    } description: {
+                        Text(noMatchExplanation)
+                    } actions: {
+                        Button("Clear Filter") { withAnimation(HITMotion.quick) { filter = ListFilter() } }
+                            .buttonStyle(.hitPrimary)
+                    }
+                    .transition(.opacity)
+                } else if rows.isEmpty {
                     InboxZeroView()
                         .transition(.opacity)
                 } else {
@@ -96,8 +159,9 @@ struct InboxView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        // Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
+        // The filter control, then Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
+            ListFilterMenu(filter: filterBinding, projects: projects, labels: labels, onSave: saveFilter)
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
@@ -110,8 +174,14 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
+        .sheet(item: $savedFilter) { FilterEditorView(filter: $0).slateSheet() }
         .onReceive(clock) { now = $0 }
-        .onAppear { CompletionFeedback.shared.prepare() }
+        .onAppear {
+            CompletionFeedback.shared.prepare()
+            pruneFilter()
+        }
+        .onChange(of: projects.map(\.name)) { _, _ in pruneFilter() }
+        .onChange(of: labels.map(\.name)) { _, _ in pruneFilter() }
     }
 
     private var header: some View {
