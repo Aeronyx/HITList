@@ -876,3 +876,91 @@ final class FlipboardRowTests: XCTestCase {
         XCTAssertFalse(TaskRow.showsSwitch(rent, now: Date(), completing: false))
     }
 }
+
+/// Brief 59: Delete removes a switch (and its sub-tasks) from the store at once; Undo brings it back as it
+/// was; the Flipboard's query and Spotlight drop it with no relaunch.
+@MainActor
+final class FlipboardDeleteTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private var today: Date { Calendar.current.startOfDay(for: Date()) }
+
+    override func setUp() async throws { container = ModelContainerFactory.preview() }
+    override func tearDown() async throws { container = nil }
+
+    /// The Flipboard's own query (`FlipboardView`): open recurring tasks that are members.
+    private func board() throws -> [TaskItem] {
+        try context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted && $0.recurrence != nil }))
+            .filter(Flipboard.isMember)
+    }
+
+    private func gym() throws -> TaskItem {
+        let home = Project(name: "Home")
+        context.insert(home)
+        let task = try Flipboard.createSwitch(title: "Gym", rule: RecurrenceRule(frequency: .weekly, interval: 1),
+                                              flipTarget: 3, in: context)
+        task.project = home
+        task.notes = "Legs, then core"
+        task.priority = 2
+        Flipboard.flip(task, in: context)
+        _ = try TaskActions.addSubtasks(["Shoes", "Towel"], to: task, in: context)
+        task.orderedSubtasks.first?.isCompleted = true
+        try context.save()
+        return task
+    }
+
+    func testDeleteRemovesTheSwitchAndItsSubtasksAtOnce() throws {
+        let task = try gym()
+        XCTAssertEqual(try board().map(\.title), ["Gym"])
+        _ = Flipboard.delete(task, in: context)
+        XCTAssertEqual(try board(), [], "the board's query drops it")
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 0, "the switch and both sub-tasks are gone")
+        XCTAssertFalse(context.hasChanges, "saved at once, so the delete goes to iCloud now")
+    }
+
+    func testUndoBringsTheSwitchBackAsItWas() throws {
+        let task = try gym()
+        let id = task.id, due = task.dueDate, created = task.createdAt
+        let deleted = Flipboard.delete(task, in: context)
+        let back = try XCTUnwrap(Flipboard.restore(deleted, in: context))
+        XCTAssertEqual(back.id, id)
+        XCTAssertEqual(back.title, "Gym")
+        XCTAssertEqual(back.notes, "Legs, then core")
+        XCTAssertEqual(back.priority, 2)
+        XCTAssertEqual(back.dueDate, due)
+        XCTAssertEqual(back.createdAt, created)
+        XCTAssertEqual(back.recurrenceRule, RecurrenceRule(frequency: .weekly, interval: 1))
+        XCTAssertEqual(back.flipTarget, 3)
+        XCTAssertEqual(back.flipCount, 1)
+        XCTAssertNotNil(back.flipPeriodStart)
+        XCTAssertEqual(back.project?.name, "Home")
+        XCTAssertEqual(back.labelList.map(\.name), ["flipboard"])
+        XCTAssertEqual(back.orderedSubtasks.map(\.title), ["Shoes", "Towel"])
+        XCTAssertEqual(back.orderedSubtasks.map(\.isCompleted), [true, false])
+        XCTAssertEqual(try board().map(\.id), [id])
+        XCTAssertFalse(context.hasChanges)
+    }
+
+    func testSpotlightDropsADeletedSwitch() async throws {
+        let task = try Flipboard.createSwitch(title: "Water plants", rule: .daily, in: context)  // red: indexed
+        let index = RecordingIndex()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "flipboard-delete-\(UUID().uuidString)"))
+        let sync = SpotlightSync(index: index, defaults: defaults, isAllowed: true, refreshDelay: .zero)
+        await sync.refresh(in: context)
+        XCTAssertEqual(index.indexed, [task.id])
+        let id = task.id
+        _ = Flipboard.delete(task, in: context)
+        let plan = await sync.refresh(in: context)
+        XCTAssertEqual(plan.remove, [id])
+        XCTAssertEqual(index.removed, [id])
+    }
+}
+
+@MainActor
+private final class RecordingIndex: SpotlightIndexing {
+    var indexed: [UUID] = []
+    var removed: [UUID] = []
+    func index(_ entities: [TaskEntity]) async throws { indexed += entities.map(\.id) }
+    func remove(_ ids: [UUID]) async throws { removed += ids }
+    func removeAll() async throws {}
+}
