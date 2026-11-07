@@ -2,12 +2,14 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// Process mode: the inbox one task at a time, oldest first. Each action (a date, a Group, a label,
-/// delete, skip) moves on to the next task; the last one gives way to the empty state.
+/// Review Inbox (brief 60): the unsorted tasks (no date, no Group; `InboxReview`) one card at a time, oldest
+/// first. On iPhone, swipe the card right for Today or left to delete (Undo in the toast); under it, Pick a
+/// date, Move to a Group and Later (it stays in the Inbox as it is). Edit… opens the task editor for
+/// everything else (labels, priority, tomorrow, notes). The last card gives way to the empty state.
 ///
-/// Keys on macOS (and iPad with a keyboard): T today, M tomorrow, D pick date, P Group, L label,
-/// ⌫ delete (undo with ⌘Z), → skip, Return edit the title, Esc close. They are off while the title is
-/// being edited or a picker is open, so typing never triggers them.
+/// Keys on macOS (and iPad with a keyboard): T today, D pick a date, P Group, ⌫ delete (undo with ⌘Z),
+/// → later, Return edit the title, Esc close. They are off while the title is being edited or a picker is
+/// open, so typing never triggers them. The Mac has no swipes: its card lists the keys and each is clickable.
 struct InboxProcessView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -25,13 +27,16 @@ struct InboxProcessView: View {
     @State private var titleDraft = ""
     @FocusState private var titleFocused: Bool
     @State private var popover: Popover?
+    /// The task editor, opened by Edit… in a sheet over the review (its own presenter, so closing it comes
+    /// back here rather than to the list underneath).
+    @State private var editor: PopoutController?
     /// A deleted task stays in the store until its undo toast expires, the next delete, or closing.
     @State private var pendingDelete: PendingDelete?
     @State private var deleteGeneration = 0
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    private enum Popover { case date, project, label }
+    private enum Popover { case date, project }
 
     private struct PendingDelete {
         let id: UUID
@@ -47,40 +52,46 @@ struct InboxProcessView: View {
         return allTasks.first { $0.id == id }
     }
 
-    private var shortcutsEnabled: Bool { !editingTitle && popover == nil && current != nil }
+    private var shortcutsEnabled: Bool { !editingTitle && popover == nil && editor == nil && current != nil }
+
+    private var swipes: Bool {
+        #if os(iOS)
+        !editingTitle && popover == nil
+        #else
+        false
+        #endif
+    }
 
     private var parser: QuickAddParser {
         QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name),
                        weekStart: Preferences.weekStartWeekday())
     }
 
-    private var stepAnimation: Animation { reduceMotion ? .easeInOut(duration: 0.15) : .snappy(duration: 0.3) }
+    private var stepAnimation: Animation? { HITMotion.enter(reduceMotion: reduceMotion) }
 
+    /// The next card rises from behind the one that left; a card sent on by a button fades back as it goes.
+    /// (A swiped card has already flown off or faded by then.)
     private var cardTransition: AnyTransition {
-        reduceMotion ? .opacity : .asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                              removal: .move(edge: .leading).combined(with: .opacity))
+        reduceMotion ? .opacity : .asymmetric(insertion: .scale(scale: 0.94).combined(with: .opacity),
+                                              removal: .scale(scale: 0.96).combined(with: .opacity))
     }
 
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            ZStack {
-                if let task = current {
-                    card(task)
-                        .id(task.id)
-                        .transition(cardTransition)
-                } else if started {
-                    finished
-                        .transition(.opacity)
-                }
+            if let task = current {
+                review(task)
+            } else if started {
+                finished
+                    .transition(.opacity)
+            } else {
+                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
         }
         .background(Theme.background)
         .overlay(alignment: .bottom) {
             if let pendingDelete {
-                DeletedToast(title: pendingDelete.title, undoShortcut: !editingTitle, onUndo: undoDelete)
+                DeletedToast(title: pendingDelete.title, undoShortcut: !editingTitle && editor == nil, onUndo: undoDelete)
                     .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -88,6 +99,7 @@ struct InboxProcessView: View {
         .frame(minWidth: 520, idealWidth: 560, minHeight: 600, idealHeight: 660)
         #endif
         .slateSheet()
+        .sheet(isPresented: editorShown) { editorSheet }
         .onAppear(perform: start)
         .onChange(of: unsortedIDs) { _, _ in withAnimation(stepAnimation) { queue.retainReview(of: allTasks) } }
         .onChange(of: queue.current) { _, _ in endEditing(save: false) }
@@ -116,52 +128,69 @@ struct InboxProcessView: View {
                     .keyboardShortcut(editingTitle ? nil : .cancelAction)
                     .help("Close (Esc)")
             }
-            ProgressView(value: Double(queue.finished), total: Double(max(queue.total, 1)))
-                .progressViewStyle(.linear)
-                .tint(Theme.accent)
-                .opacity(queue.isFinished ? 0 : 1)
-                .accessibilityHidden(true)
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 4)
     }
 
-    private func card(_ task: TaskItem) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 12) {
-                    title(task)
-                    meta(task)
-                    if !task.notes.isEmpty {
-                        Text(task.notes)
-                            .font(HITType.callout)
-                            .foregroundStyle(Theme.secondaryText)
-                            .lineLimit(12)
-                            .textSelection(.enabled)
-                    }
+    private func review(_ task: TaskItem) -> some View {
+        VStack(spacing: HITSpacing.l) {
+            ZStack {
+                ReviewSwipeCard(enabled: swipes, onCommit: { act($0, on: task) }) {
+                    cardContent(task)
                 }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.separator))
-
-                actions(task)
+                .frame(maxHeight: 460)
+                .id(task.id)
+                .transition(cardTransition)
             }
-            .padding(20)
-            // Room for the undo toast.
-            .padding(.bottom, 48)
+            .frame(maxHeight: .infinity)
+            actions(task)
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(20)
+        // Room for the undo toast.
+        .padding(.bottom, 40)
+        .background(keyOnlyShortcuts(task))
+    }
+
+    private func cardContent(_ task: TaskItem) -> some View {
+        VStack(alignment: .leading, spacing: HITSpacing.m) {
+            title(task)
+            Text(InboxText.added(task.createdAt, now: now))
+                .font(HITType.caption)
+                .foregroundStyle(Theme.secondaryText)
+            if !task.notes.isEmpty, !editingTitle {
+                Text(task.notes)
+                    .font(HITType.callout)
+                    .foregroundStyle(Theme.secondaryText)
+                    .lineLimit(8)
+                    .padding(.top, HITSpacing.xs)
+            }
+            Spacer(minLength: HITSpacing.l)
+            HStack(alignment: .bottom) {
+                #if os(macOS)
+                keyHints(task)
+                #endif
+                Spacer(minLength: 0)
+                Button("Edit…") { edit(task) }
+                    .buttonStyle(.plain)
+                    .font(HITType.subheadlineMedium)
+                    .foregroundStyle(Theme.accent)
+                    .accessibilityIdentifier("reviewEdit")
+                    .help("Labels, priority, notes and more")
+            }
+        }
+        .padding(HITSpacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
     private func title(_ task: TaskItem) -> some View {
         if editingTitle {
             VStack(alignment: .leading, spacing: 8) {
-                TextField("Task name", text: $titleDraft)
+                TextField("Task name", text: $titleDraft, axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(HITType.title2)
+                    .font(HITType.title1)
                     .focused($titleFocused)
                     .onSubmit { submitTitle(task) }
                     .onAppear { titleFocused = true }
@@ -181,47 +210,20 @@ struct InboxProcessView: View {
                 titleDraft = task.title
                 editingTitle = true
             } label: {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(task.title)
-                        .font(HITType.title2)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-                    Image(systemName: "pencil")
-                        .font(HITType.callout)
-                        .foregroundStyle(Theme.secondaryText)
-                }
-                .contentShape(Rectangle())
+                Text(task.title)
+                    .font(HITType.title1)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .keyboardShortcut(shortcutsEnabled ? .defaultAction : nil)
             .help("Edit the title (Return)")
             .accessibilityHint("Edits the title")
+            .accessibilityIdentifier("reviewTitle")
         }
-    }
-
-    /// Due date, priority, labels and age, so the decision has its context.
-    private func meta(_ task: TaskItem) -> some View {
-        HStack(spacing: 10) {
-            if let due = task.dueDate {
-                let overdue = DueFormatter.isOverdue(due, hasTime: task.hasDueTime, isCompleted: false, now: now)
-                Label(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
-                      systemImage: task.recurrence == nil ? "calendar" : "repeat")
-                    .foregroundStyle(overdue ? .red : Theme.secondaryText)
-            } else {
-                Label("No date", systemImage: "calendar").foregroundStyle(Theme.secondaryText)
-            }
-            if task.priorityValue != .p4 {
-                Label(task.priorityValue.shortName, systemImage: "flag.fill").foregroundStyle(task.priorityValue.color)
-            }
-            ForEach(task.labelList) { label in
-                Text("@" + label.name).foregroundStyle(Color(hex: label.colorHex))
-            }
-            Spacer(minLength: 0)
-            Text("Added \(task.createdAt.formatted(.relative(presentation: .named)))")
-                .foregroundStyle(Theme.secondaryText.opacity(0.8))
-        }
-        .font(HITType.caption)
-        .lineLimit(1)
     }
 
     /// What Return will apply, like quick add's chips.
@@ -249,58 +251,40 @@ struct InboxProcessView: View {
             .lineLimit(1)
     }
 
+    /// The three big buttons under the card.
     private func actions(_ task: TaskItem) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140), spacing: 10)], spacing: 10) {
-            action("Today", "star", key: "T", shortcut: KeyboardShortcut("t", modifiers: [])) {
-                schedule(task, to: TaskRescheduling.QuickDate.today.date(now: now))
-            }
-            action("Tomorrow", "sunrise", key: "M", tint: .orange, shortcut: KeyboardShortcut("m", modifiers: [])) {
-                schedule(task, to: TaskRescheduling.QuickDate.tomorrow.date(now: now))
-            }
-            action("Pick date…", "calendar", key: "D", shortcut: KeyboardShortcut("d", modifiers: [])) {
+        HStack(spacing: HITSpacing.m) {
+            action("Pick a date", "calendar", key: "D", tint: HITColor.dueTomorrow,
+                   shortcut: KeyboardShortcut("d", modifiers: []), id: "reviewPickDate") {
                 open(.date)
             }
             .popover(isPresented: isOpen(.date)) {
-                PickDatePopover(initial: task.dueDate ?? TaskRescheduling.QuickDate.tomorrow.date(now: now)) { day in
+                PickDatePopover(initial: TaskRescheduling.QuickDate.tomorrow.date(now: now)) { day in
                     popover = nil
                     schedule(task, to: day)
                 }
             }
-            action("Move to Group", "number", key: "P", tint: .purple, shortcut: KeyboardShortcut("p", modifiers: [])) {
+            action("Move to a Group", "number", key: "P", tint: HITColor.dueLater,
+                   shortcut: KeyboardShortcut("p", modifiers: []), id: "reviewMoveToGroup") {
                 open(.project)
             }
             .popover(isPresented: isOpen(.project)) {
-                InboxPicker(title: "Move to Group", noun: "Group", symbol: "circle.fill",
+                InboxPicker(title: "Move to a Group", noun: "Group", symbol: "circle.fill",
                             options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
                     popover = nil
                     move(task, to: choice)
                 }
             }
-            action("Add label", "tag", key: "L", tint: .teal, shortcut: KeyboardShortcut("l", modifiers: [])) {
-                open(.label)
-            }
-            .popover(isPresented: isOpen(.label)) {
-                let applied = Set((task.labels ?? []).map(\.id))
-                InboxPicker(title: "Add label", noun: "label", symbol: "tag.fill",
-                            options: labels.filter { !applied.contains($0.id) }
-                                .map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
-                    popover = nil
-                    addLabel(to: task, choice)
-                }
-            }
-            action("Skip", "arrow.right", key: "→", tint: Theme.secondaryText,
-                   shortcut: KeyboardShortcut(.rightArrow, modifiers: [])) {
+            action("Later", "clock", key: "→", tint: Theme.secondaryText,
+                   shortcut: KeyboardShortcut(.rightArrow, modifiers: []), id: "reviewLater") {
                 endEditing(save: true)
-                withAnimation(stepAnimation) { queue.skip() }
-            }
-            action("Delete", "trash", key: "⌫", tint: .red, shortcut: KeyboardShortcut(.delete, modifiers: [])) {
-                delete(task)
+                withAnimation(stepAnimation) { queue.later() }
             }
         }
     }
 
-    private func action(_ title: String, _ symbol: String, key: String, tint: Color = Theme.accent,
-                        shortcut: KeyboardShortcut, perform: @escaping () -> Void) -> some View {
+    private func action(_ title: String, _ symbol: String, key: String, tint: Color,
+                        shortcut: KeyboardShortcut, id: String, perform: @escaping () -> Void) -> some View {
         Button(action: perform) {
             VStack(spacing: 6) {
                 Image(systemName: symbol)
@@ -310,22 +294,45 @@ struct InboxProcessView: View {
                     .font(HITType.subheadlineMedium)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.75)
                 #if os(macOS)
-                Text(key)
-                    .font(.caption2.weight(.semibold).monospaced())
-                    .foregroundStyle(Theme.secondaryText)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 1)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                KeyCap(key)
                 #endif
             }
-            .frame(maxWidth: .infinity, minHeight: 80)
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, HITSpacing.xs)
+            .frame(maxWidth: .infinity, minHeight: 84)
+            .contentShape(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous))
         }
-        .buttonStyle(ProcessButtonStyle())
+        .buttonStyle(ReviewButtonStyle())
         .keyboardShortcut(shortcutsEnabled ? shortcut : nil)
         .help("\(title) (\(key))")
+        .accessibilityIdentifier(id)
+    }
+
+    #if os(macOS)
+    /// The Mac card's keys line: Today and Delete have no swipe on the Mac, so they are here, clickable.
+    private func keyHints(_ task: TaskItem) -> some View {
+        HStack(spacing: HITSpacing.m) {
+            KeyHint(key: "T", title: "Today") { act(.today, on: task) }
+            KeyHint(key: "⌫", title: "Delete", tint: HITColor.danger) { act(.delete, on: task) }
+        }
+    }
+    #endif
+
+    /// T and ⌫ for a keyboard on iPad (on the Mac the keys line carries them); invisible.
+    @ViewBuilder
+    private func keyOnlyShortcuts(_ task: TaskItem) -> some View {
+        #if os(iOS)
+        ZStack {
+            Button("Today") { act(.today, on: task) }
+                .keyboardShortcut(shortcutsEnabled ? KeyboardShortcut("t", modifiers: []) : nil)
+            Button("Delete") { act(.delete, on: task) }
+                .keyboardShortcut(shortcutsEnabled ? KeyboardShortcut(.delete, modifiers: []) : nil)
+        }
+        .opacity(0)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        #endif
     }
 
     private var finished: some View {
@@ -335,14 +342,54 @@ struct InboxProcessView: View {
                 InboxZeroView()
             } else {
                 InboxZeroView(title: "All done",
-                              message: "You've been through the inbox. \(left) \(left == 1 ? "task stays" : "tasks stay") there with \(left == 1 ? "its" : "their") new dates and labels.")
+                              message: "You've been through the inbox. \(left) \(left == 1 ? "task stays" : "tasks stay") there for later.")
             }
             Button("Done") { dismiss() }
                 .buttonStyle(.hitPrimary)
-            .buttonStyle(.plain)
-            .keyboardShortcut(.defaultAction)
-            .padding(.bottom, 40)
+                .keyboardShortcut(.defaultAction)
+                .padding(.bottom, 40)
         }
+    }
+
+    // MARK: - Editor
+
+    private var editorShown: Binding<Bool> {
+        Binding(get: { editor?.task != nil },
+                set: { if !$0 { editor?.closeTask(); editor = nil } })
+    }
+
+    @ViewBuilder
+    private var editorSheet: some View {
+        if let editor, let task = editor.task {
+            TaskPopout(task: task)
+                .environment(editor)
+                .presentationDetents(PopoutHost.editorDetents)
+                .presentationDragIndicator(.visible)
+                .presentationBackground(Theme.background)
+                .presentationCornerRadius(HITRadius.card + 10)
+                .preferredColorScheme(.dark)
+                .tint(Theme.accent)
+                #if os(macOS)
+                .frame(minWidth: 460, idealWidth: 500, minHeight: 520)
+                #endif
+                .confirmationDialog(editor.pendingDelete.map { "Delete “\($0.title)”?" } ?? "Delete?",
+                                    isPresented: Binding(get: { editor.pendingDelete != nil },
+                                                         set: { if !$0 { editor.cancelPendingDelete() } }),
+                                    titleVisibility: .visible) {
+                    Button("Delete", role: .destructive) { editor.confirmPendingDelete() }
+                    Button("Cancel", role: .cancel) { editor.cancelPendingDelete() }
+                } message: {
+                    Text("This can't be undone.")
+                }
+                .onDisappear { self.editor = nil }
+        }
+    }
+
+    private func edit(_ task: TaskItem) {
+        endEditing(save: true)
+        let controller = PopoutController()
+        controller.open(task)
+        editor = controller
     }
 
     // MARK: - Actions
@@ -365,6 +412,15 @@ struct InboxProcessView: View {
 
     private func advance() {
         withAnimation(stepAnimation) { queue.advance() }
+    }
+
+    /// A swipe (or T / ⌫) on `task`, the card on screen.
+    private func act(_ direction: InboxReviewSwipe.Direction, on task: TaskItem) {
+        guard task.id == queue.current else { return }
+        switch direction {
+        case .today: schedule(task, to: TaskRescheduling.QuickDate.today.date(now: now))
+        case .delete: delete(task)
+        }
     }
 
     private func schedule(_ task: TaskItem, to day: Date) {
@@ -408,13 +464,13 @@ struct InboxProcessView: View {
         if selectedTask?.id == task.id { selectedTask = nil }
         deleteGeneration += 1
         let pending = PendingDelete(id: task.id, title: task.title, generation: deleteGeneration)
-        withAnimation(.snappy) { pendingDelete = pending }
+        withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { pendingDelete = pending }
         advance()
         AccessibilityNotification.Announcement("Deleted \(task.title)").post()
         Task {
             try? await Task.sleep(for: CompletionToastState.lifetime)
             guard pendingDelete?.generation == pending.generation else { return }
-            withAnimation(.easeOut(duration: 0.25)) { commitDelete() }
+            withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) { commitDelete() }
         }
     }
 
@@ -452,7 +508,7 @@ struct InboxProcessView: View {
 
     /// Applies the edited title the way quick add reads text: a date, priority, #project and @labels
     /// are taken out and set on the task, the rest is the title. Returns whether that scheduled the
-    /// task or moved it out of the inbox, which counts as handling it.
+    /// task or moved it to a Group, which counts as handling it.
     @discardableResult
     private func applyTitleEdit(to task: TaskItem) -> Bool {
         editingTitle = false
@@ -490,27 +546,165 @@ struct InboxProcessView: View {
     }
 }
 
-/// The Inbox menu's "Review 3 unsorted…", hidden when nothing needs review (`InboxReview`).
-struct InboxReviewMenuItem: View {
-    let tasks: [TaskItem]
-    let open: () -> Void
+/// The card's moving shell: it follows a horizontal drag (`InboxReviewSwipe`), glows green towards Today or
+/// red towards Delete, shows its stamp past the threshold, and on a commit flies off that side (under
+/// Reduce Motion it fades where it is) before `onCommit` runs. Its state is its own, so a card that left
+/// stays gone while the next one arrives.
+private struct ReviewSwipeCard<Content: View>: View {
+    let enabled: Bool
+    let onCommit: (InboxReviewSwipe.Direction) -> Void
+    @ViewBuilder let content: Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var swipe = InboxReviewSwipe()
+    /// Decided by the first movement: a mostly vertical drag is left to the sheet.
+    @State private var horizontal: Bool?
+    @State private var gone = false
+    @State private var width: CGFloat = 400
+
+    private var armed: InboxReviewSwipe.Direction? {
+        if case .armed(let d) = swipe.phase { return d }
+        if case .committed(let d) = swipe.phase { return d }
+        return nil
+    }
+
+    private var glow: Color {
+        swipe.direction == .delete ? HITColor.danger : HITColor.dueToday
+    }
+
+    private var offset: CGFloat {
+        guard gone, !reduceMotion, let direction = swipe.direction else { return swipe.offset }
+        return (direction == .today ? 1 : -1) * (width + 160)
+    }
 
     var body: some View {
-        if let title = InboxText.reviewMenuItem(count: InboxReview.count(tasks)) {
-            Button(action: open) { Label(title, systemImage: "tray.and.arrow.down") }
+        content
+            .background(Theme.surface, in: shape)
+            .overlay(shape.strokeBorder(Theme.separator))
+            .overlay(shape.strokeBorder(glow.opacity(swipe.progress), lineWidth: 2))
+            // In the card's middle, clear of the title.
+            .overlay { stamp("Today", color: HITColor.dueToday, angle: -12, shown: armed == .today) }
+            .overlay { stamp("Delete", color: HITColor.danger, angle: 12, shown: armed == .delete) }
+            .shadow(color: glow.opacity(0.45 * swipe.progress), radius: 24 * swipe.progress)
+            .offset(x: offset)
+            .rotationEffect(.degrees(reduceMotion ? 0 : Double(offset) / 24), anchor: .bottom)
+            .opacity(gone && reduceMotion ? 0 : 1)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .gesture(drag, including: enabled ? .all : .subviews)
+            #if os(iOS)
+            .sensoryFeedback(.impact(weight: .light), trigger: armed) { _, new in new != nil }
+            #endif
+            .accessibilityElement(children: .contain)
+            .accessibilityAction(named: "Today") { commit(.today) }
+            .accessibilityAction(named: "Delete") { commit(.delete) }
+            .accessibilityIdentifier("reviewCard")
+    }
+
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: HITRadius.card + 6, style: .continuous) }
+
+    private func stamp(_ text: String, color: Color, angle: Double, shown: Bool) -> some View {
+        Text(text)
+            .font(HITType.largeTitle)
+            .textCase(.uppercase)
+            .foregroundStyle(color)
+            .padding(.horizontal, HITSpacing.l)
+            .padding(.vertical, HITSpacing.s)
+            .background(Theme.surface.opacity(0.85), in: RoundedRectangle(cornerRadius: HITRadius.field, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: HITRadius.field, style: .continuous).strokeBorder(color, lineWidth: 4))
+            .rotationEffect(.degrees(angle))
+            .opacity(shown ? 1 : 0)
+            .animation(HITMotion.standard(reduceMotion: reduceMotion) ?? .linear(duration: 0), value: shown)
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard !swipe.isCommitted else { return }
+                if horizontal == nil { horizontal = abs(value.translation.width) > abs(value.translation.height) }
+                guard horizontal == true else { return }
+                swipe.drag(to: value.translation.width)
+            }
+            .onEnded { value in
+                defer { horizontal = nil }
+                guard horizontal == true, !swipe.isCommitted else { return }
+                var next = swipe
+                if case .committed(let direction) = next.release(velocity: value.velocity.width) {
+                    swipe = next
+                    leave(direction)
+                } else {
+                    withAnimation(HITMotion.emphasis(reduceMotion: reduceMotion)) { swipe = next }
+                }
+            }
+    }
+
+    /// VoiceOver's actions: arm the card fully that way, then leave as a swipe would.
+    private func commit(_ direction: InboxReviewSwipe.Direction) {
+        guard !swipe.isCommitted else { return }
+        swipe.drag(to: (direction == .today ? 1 : -1) * InboxReviewSwipe.threshold)
+        swipe.release(velocity: 0)
+        leave(direction)
+    }
+
+    private func leave(_ direction: InboxReviewSwipe.Direction) {
+        withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) { gone = true }
+        let delay = reduceMotion ? 0.1 : HITMotion.Role.exit.arrival
+        Task {
+            try? await Task.sleep(for: .seconds(delay))
+            onCommit(direction)
         }
     }
 }
 
-/// Big slate tiles for Process mode's actions.
-private struct ProcessButtonStyle: ButtonStyle {
+/// Big slate tiles for the review's buttons.
+private struct ReviewButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(configuration.isPressed ? Theme.separator : Theme.elevated,
-                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.separator))
+                        in: RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous).strokeBorder(Theme.separator))
     }
 }
+
+#if os(macOS)
+/// "T", "⌫": a key as the Mac shows it.
+private struct KeyCap: View {
+    let key: String
+    init(_ key: String) { self.key = key }
+
+    var body: some View {
+        Text(key)
+            .font(.caption2.weight(.semibold).monospaced())
+            .foregroundStyle(Theme.secondaryText)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Theme.background, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+}
+
+/// "T Today" on the Mac card: the key and what it does, clickable.
+private struct KeyHint: View {
+    let key: String
+    let title: String
+    var tint: Color = HITColor.dueToday
+    let perform: () -> Void
+
+    var body: some View {
+        Button(action: perform) {
+            HStack(spacing: 5) {
+                KeyCap(key)
+                Text(title)
+                    .font(HITType.subheadlineMedium)
+                    .foregroundStyle(tint)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(title) (\(key))")
+    }
+}
+#endif
 
 /// "Deleted ‘Title’ · Undo", styled like the completion toast.
 private struct DeletedToast: View {
@@ -530,6 +724,7 @@ private struct DeletedToast: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Theme.accent)
                 .keyboardShortcut(undoShortcut ? KeyboardShortcut("z", modifiers: .command) : nil)
+                .accessibilityIdentifier("reviewUndo")
                 #if os(macOS)
                 .help("Undo (⌘Z)")
                 #endif

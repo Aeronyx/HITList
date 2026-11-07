@@ -3,7 +3,7 @@ import SwiftData
 import HITListCore
 @testable import HITList
 
-/// Process mode's queue (order, advancing, skipping, tasks leaving the inbox) and the inbox's texts.
+/// Review Inbox's queue (order, advancing, Later, tasks leaving the review) and the inbox's texts.
 final class InboxProcessQueueTests: XCTestCase {
     private let base = Date(timeIntervalSince1970: 1_800_000_000)
     private let ids = (0..<5).map { _ in UUID() }
@@ -41,35 +41,23 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(queue.finished, 3, "advancing past the end does nothing")
     }
 
-    func testSkipSendsATaskToTheEndOnceThenDropsIt() {
+    func testLaterKeepsTheTaskInTheInboxAndMovesOn() {
         var queue = makeQueue(3)
-        queue.skip()
-        XCTAssertEqual(queue.remaining, [ids[1], ids[2], ids[0]])
+        queue.later()
+        XCTAssertEqual(queue.remaining, [ids[1], ids[2]], "no second look: Later is done with it for this review")
+        XCTAssertEqual(queue.progressText, "2 of 3")
+        queue.later()
         queue.advance()
-        queue.advance()
-        XCTAssertEqual(queue.current, ids[0], "the skipped task comes back last")
-        queue.skip()
-        XCTAssertTrue(queue.isFinished, "a second skip drops it")
+        XCTAssertTrue(queue.isFinished)
         XCTAssertEqual(queue.finished, 3)
     }
 
-    func testSkippingTheOnlyTaskShowsItAgainThenFinishes() {
+    func testLaterOnTheOnlyTaskFinishes() {
         var queue = makeQueue(1)
-        queue.skip()
-        XCTAssertEqual(queue.current, ids[0])
-        queue.skip()
+        queue.later()
         XCTAssertTrue(queue.isFinished)
-    }
-
-    func testProgressCountsSkippedTasksAsPassedAndNeverGoesBack() {
-        var queue = makeQueue(3)
-        queue.skip()
-        XCTAssertEqual(queue.progressText, "2 of 3")
-        queue.advance()
-        XCTAssertEqual(queue.progressText, "3 of 3")
-        queue.advance()
-        XCTAssertEqual(queue.current, ids[0])
-        XCTAssertEqual(queue.progressText, "3 of 3", "the skipped task's second look is still the last")
+        queue.later()
+        XCTAssertEqual(queue.finished, 1, "nothing left to put off")
     }
 
     func testTasksThatLeaveTheInboxDropOut() {
@@ -81,18 +69,19 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(queue.progressText, "1 of 3")
     }
 
-    func testTheCurrentTaskLeavingTheInboxShowsTheNextOne() {
+    func testTheCurrentTaskSortedOnItsCardCountsAsReviewed() {
+        // Given a date or a Group in the editor (Edit…): the next card shows and the dots keep their count.
         var queue = makeQueue(3)
         queue.retain(Set([ids[1], ids[2]]))
         XCTAssertEqual(queue.current, ids[1])
+        XCTAssertEqual(queue.progressText, "2 of 3")
     }
 
-    func testRetainDropsASkippedTaskWaitingAtTheEnd() {
+    func testATaskThatLeavesAfterBeingPassedStillCountsAsPassed() {
         var queue = makeQueue(3)
-        queue.skip()
+        queue.advance()
         queue.retain(Set([ids[1], ids[2]]))
-        XCTAssertEqual(queue.remaining, [ids[1], ids[2]])
-        XCTAssertEqual(queue.progressText, "1 of 2")
+        XCTAssertEqual(queue.progressText, "2 of 3", "the scheduled task stays counted")
     }
 
     func testRestoreUndoesAnAdvance() {
@@ -116,6 +105,11 @@ final class InboxProcessQueueTests: XCTestCase {
         XCTAssertEqual(InboxText.reviewMenuItem(count: 3), "Review 3 unsorted…")
         XCTAssertEqual(InboxText.reviewMenuItem(count: 1), "Review 1 unsorted…")
         XCTAssertNil(InboxText.reviewMenuItem(count: 0), "no item when nothing needs review")
+        let en = Locale(identifier: "en_US")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(-3 * 86_400), now: base, locale: en), "Added 3 days ago")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(-86_400), now: base, locale: en), "Added yesterday")
+        XCTAssertEqual(InboxText.added(base.addingTimeInterval(30), now: base, locale: en), "Added now",
+                       "a clock a little ahead on another device never says \"in 30 seconds\"")
     }
 }
 
@@ -177,7 +171,7 @@ final class InboxProcessStoreTests: XCTestCase {
         queue.retainReview(of: try allTasks())
 
         XCTAssertEqual(queue.remaining, [second.id])
-        XCTAssertEqual(queue.progressText, "1 of 1")
+        XCTAssertEqual(queue.progressText, "2 of 2", "the moved task counts as reviewed")
     }
 
     func testDeletedCompletedAndScheduledTasksLeaveTheQueue() throws {
