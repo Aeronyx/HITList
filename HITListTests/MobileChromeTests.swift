@@ -36,6 +36,15 @@ final class MobileChromeTests: XCTestCase {
                                  "the stretch is over by the time the pill arrives")
     }
 
+    func testTheNewTabArrivesWithThePillAndTheOldOneLetsGoFirst() {
+        XCTAssertEqual(MobileTabBar.itemAnimation(selected: true, reduceMotion: false), HITMotion.tabPill)
+        XCTAssertEqual(MobileTabBar.itemAnimation(selected: false, reduceMotion: false), HITMotion.quick,
+                       "the outgoing tab is grey within 100 ms: never two tabs selected")
+        XCTAssertLessThan(HITMotion.Role.quick.arrival, 0.2)
+        XCTAssertNil(MobileTabBar.itemAnimation(selected: true, reduceMotion: true))
+        XCTAssertNil(MobileTabBar.itemAnimation(selected: false, reduceMotion: true))
+    }
+
     func testIslandRendersOnBothAxes() {
         for axis in [Axis.horizontal, .vertical] {
             let bar = MobileTabBar(selection: .constant(.upcoming), day: 7, axis: axis)

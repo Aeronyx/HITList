@@ -230,6 +230,9 @@ struct MobileTabBar: View {
                     Image(systemName: tab.symbol)
                         .font(.system(size: 19, weight: selected ? .semibold : .regular))
                         .symbolVariant(selected ? .fill : .none)
+                        // The outline fills in place (Magic Replace where the symbols allow) rather than
+                        // swapping glyphs.
+                        .contentTransition(.symbolEffect(.replace))
                 }
             }
             .frame(height: 24)
@@ -243,6 +246,13 @@ struct MobileTabBar: View {
         .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+        .animation(Self.itemAnimation(selected: selected, reduceMotion: reduceMotion), value: selected)
+    }
+
+    /// The tab gaining the selection takes the accent and its filled icon on the pill's spring, so they arrive
+    /// together; the tab losing it lets go in `quick` (100 ms), so no frame shows two tabs selected.
+    static func itemAnimation(selected: Bool, reduceMotion: Bool) -> Animation? {
+        selected ? HITMotion.tabPill(reduceMotion: reduceMotion) : HITMotion.quick(reduceMotion: reduceMotion)
     }
 }
 
