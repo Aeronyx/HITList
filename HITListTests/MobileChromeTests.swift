@@ -14,6 +14,67 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(IslandMetrics.pillRadius, IslandMetrics.cornerRadius - IslandMetrics.pillInset, "concentric pill")
     }
 
+    // MARK: The island's motion (brief 58)
+
+    func testPillIsConcentricWithTheIslandOnBothAxes() {
+        XCTAssertEqual(IslandMetrics.pillInset, 6)
+        XCTAssertEqual(IslandMetrics.pillHeight, 52, "the bottom island less its inset above and below")
+        XCTAssertEqual(IslandMetrics.pillRadius, IslandMetrics.pillHeight / 2, "a capsule, concentric with the island")
+        XCTAssertEqual(IslandMetrics.sidePillWidth, 48, "upright: the island's 60 pt less its inset on both sides")
+        XCTAssertEqual(IslandMetrics.pillOpacity, 0.18)
+    }
+
+    func testPillSlidesOnAFirmSpringAndJumpsUnderReduceMotion() {
+        let spring = HITMotion.SpringSpec.tabPill
+        XCTAssertEqual(spring.response, 0.28)
+        XCTAssertEqual(spring.damping, 0.86)
+        XCTAssertLessThan(spring.overshoot, 0.01, "no visible bounce: under a point on a tab's 80 pt move")
+        XCTAssertNotNil(HITMotion.tabPill(reduceMotion: false))
+        XCTAssertNil(HITMotion.tabPill(reduceMotion: true), "Reduce Motion: the pill jumps")
+        XCTAssertEqual(HITMotion.TabPill.stretch, 1.1)
+        XCTAssertLessThanOrEqual(HITMotion.TabPill.stretchDuration + HITMotion.TabPill.settleDuration, 0.25,
+                                 "the stretch is over by the time the pill arrives")
+    }
+
+    func testTheNewTabArrivesWithThePillAndTheOldOneLetsGoFirst() {
+        XCTAssertEqual(MobileTabBar.itemAnimation(selected: true, reduceMotion: false), HITMotion.tabPill)
+        XCTAssertEqual(MobileTabBar.itemAnimation(selected: false, reduceMotion: false), HITMotion.quick,
+                       "the outgoing tab is grey within 100 ms: never two tabs selected")
+        XCTAssertLessThan(HITMotion.Role.quick.arrival, 0.2)
+        XCTAssertNil(MobileTabBar.itemAnimation(selected: true, reduceMotion: true))
+        XCTAssertNil(MobileTabBar.itemAnimation(selected: false, reduceMotion: true))
+    }
+
+    func testOnlyAChangeOfTabTicks() {
+        XCTAssertEqual(TabTap(tapped: .inbox, selected: .today), .change)
+        XCTAssertTrue(TabTap(tapped: .inbox, selected: .today).playsHaptic)
+        XCTAssertEqual(TabTap(tapped: .today, selected: .today), .reselect, "a re-tap pops to the root")
+        XCTAssertFalse(TabTap(tapped: .today, selected: .today).playsHaptic, "no haptic on a re-tap")
+        for tapped in MobileTab.allCases {
+            for selected in MobileTab.allCases {
+                XCTAssertEqual(TabTap(tapped: tapped, selected: selected).playsHaptic, tapped != selected)
+            }
+        }
+    }
+
+    func testScreensCrossfadeWithASmallRiseAndNoSlide() {
+        XCTAssertEqual(HITMotion.TabSwitch.duration, 0.2)
+        XCTAssertEqual(HITMotion.TabSwitch.rise, 6)
+        XCTAssertEqual(HITMotion.TabSwitch.reducedDuration, 0.15, "Reduce Motion: opacity only, a little quicker")
+        XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: false), .easeInOut(duration: 0.2))
+        XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: true), .easeInOut(duration: 0.15))
+        XCTAssertLessThanOrEqual(HITMotion.TabSwitch.duration, 0.25, "within the motion system's 250 ms")
+    }
+
+    func testIslandRendersOnBothAxes() {
+        for axis in [Axis.horizontal, .vertical] {
+            let bar = MobileTabBar(selection: .constant(.upcoming), day: 7, axis: axis)
+                .frame(width: 393, height: 300)
+                .preferredColorScheme(.dark)
+            XCTAssertNotNil(ImageRenderer(content: bar).cgImage, "\(axis)")
+        }
+    }
+
     func testChromeHeightIsTheIslandPlusThePlus() {
         XCTAssertEqual(IslandMetrics.chromeHeight,
                        IslandMetrics.bottomGap + IslandMetrics.height + IslandMetrics.addButtonGap + FloatingAddButton.size.height)
