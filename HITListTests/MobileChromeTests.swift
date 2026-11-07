@@ -45,6 +45,18 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertNil(MobileTabBar.itemAnimation(selected: false, reduceMotion: true))
     }
 
+    func testOnlyAChangeOfTabTicks() {
+        XCTAssertEqual(TabTap(tapped: .inbox, selected: .today), .change)
+        XCTAssertTrue(TabTap(tapped: .inbox, selected: .today).playsHaptic)
+        XCTAssertEqual(TabTap(tapped: .today, selected: .today), .reselect, "a re-tap pops to the root")
+        XCTAssertFalse(TabTap(tapped: .today, selected: .today).playsHaptic, "no haptic on a re-tap")
+        for tapped in MobileTab.allCases {
+            for selected in MobileTab.allCases {
+                XCTAssertEqual(TabTap(tapped: tapped, selected: selected).playsHaptic, tapped != selected)
+            }
+        }
+    }
+
     func testIslandRendersOnBothAxes() {
         for axis in [Axis.horizontal, .vertical] {
             let bar = MobileTabBar(selection: .constant(.upcoming), day: 7, axis: axis)
