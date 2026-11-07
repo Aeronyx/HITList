@@ -1,9 +1,9 @@
 import Foundation
 import HITListCore
 
-/// The order Process mode steps through the inbox: oldest first, one task at a time. Skipping sends a
-/// task to the back once; skipping it again drops it. Tasks that leave the inbox (an undated one moved to a Group,
-/// deleted, completed, here or on another device) drop out.
+/// The order Review Inbox steps through the unsorted tasks (`InboxReview.needsReview`): oldest first, one
+/// task at a time. Skipping sends a task to the back once; skipping it again drops it. Tasks that stop needing
+/// review (given a date or a Group, deleted, completed, here or on another device) drop out.
 struct InboxProcessQueue: Equatable {
     /// Still to show, the current task first.
     private(set) var remaining: [UUID]
@@ -66,14 +66,15 @@ struct InboxProcessQueue: Equatable {
 }
 
 extension InboxProcessQueue {
-    /// A queue over the open inbox tasks among `tasks`.
-    init(inboxOf tasks: [TaskItem]) {
-        self.init(tasks: tasks.filter(\.isInInbox).map { (id: $0.id, createdAt: $0.createdAt) })
+    /// A queue over the tasks among `tasks` that need review (`InboxReview.needsReview`: no date, no Group).
+    init(reviewOf tasks: [TaskItem]) {
+        self.init(tasks: tasks.filter(\.needsReview).map { (id: $0.id, createdAt: $0.createdAt) })
     }
 
-    /// Drops every task among `tasks` that is no longer an open inbox task, and any that is gone.
-    mutating func retainInbox(of tasks: [TaskItem]) {
-        retain(Set(tasks.filter(\.isInInbox).map(\.id)))
+    /// Drops every task among `tasks` that no longer needs review (it got a date or a Group, was completed),
+    /// and any that is gone.
+    mutating func retainReview(of tasks: [TaskItem]) {
+        retain(Set(tasks.filter(\.needsReview).map(\.id)))
     }
 }
 
@@ -81,4 +82,7 @@ extension TaskItem {
     /// An open task the Inbox shows (`TaskOrdering.isInInbox`): it has a date, in any Group, or it has
     /// no Group. An undated task in a Group is a note and only shows in that Group.
     var isInInbox: Bool { !isCompleted && TaskOrdering.isInInbox(self) }
+
+    /// An open task with no date and no Group, which Review Inbox goes through (`InboxReview`).
+    var needsReview: Bool { InboxReview.needsReview(self) }
 }
