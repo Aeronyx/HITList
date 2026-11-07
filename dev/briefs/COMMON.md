@@ -100,6 +100,24 @@ Shared Tasks); the Claude integration is off and hidden by default, its privacy 
 reminder phrases light up only once complete (after a space); `!15m` = 15 minutes from now, `!15mb` = before the due
 time; the Discard question sits inside the card it concerns.
 
+## Round 13 (2026-11-07; briefs 57–60 in parallel; `ROUND-13.md` says why)
+Next version 0.7.2, or 0.8.0 if 0.7.2 shipped first (`ROUND-13.md`). No schema change; George deploys three
+`TaskItem` fields that were missing from Production (`deadline`, `locationName`, `flipPeriodStart`). Ownership: 57
+`TaskListView`, `InboxView` (not its "Review Inbox…" line), `ListChrome`, `ScreenMenu`, `BrowseView`, `SidebarView`,
+`ProjectEditorView`, `SettingsPreferences`, new `Views/Groups/*`, new core `GroupedOrdering`; 58 `MobileTabBar`,
+`MobileShell`, `TapHaptic`, `HITMotion`, `MobileChromeTests`; 59 `Views/Flipboard/*`, `TaskRow`, core `TaskOrdering`,
+`FilterQuery`, `FilterableTask`, new core `FlipboardSwitch`, `UpcomingSchedule`, the board model, `DuoNextDays`,
+`SpotlightSync`; 60 `Views/Inbox/InboxProcess*`, `InboxZeroView`, `InboxText`, `InboxPicker`, the "Review Inbox…" line
+of `InboxView`, new core `InboxReview`. `HITTips.swift`: one tip each (57 `#`/`@`, 59 Flipboard, 60 review).
+
+**New since round 12.** `-seedDemoData` on a side store fills it with a believable week (`TaskActions.demoLines`; the
+README's screenshots came from it). `-seedSampleData` must set every optional field (`CloudKitSchemaTests` fails
+otherwise) and `release.sh` fails its preflight while Production lacks a field the models have. The sync watchdog
+counts only the task store's entities: TipKit's `Core*Record` saves post `ModelContext.didSave` too. The iOS build
+no longer runs on a Mac (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO`): a Mac check means the macOS build, never the
+iPad app in a Mac window. In a test, keep the `ModelContainer` in a `let` for the whole test (a `ModelContext` does not
+retain its container; `ModelContainerFactory.preview().mainContext` alone traps on the next fetch).
+
 ## Round 12 (2026-11-05; briefs 53–56 in parallel, the build friends get)
 Still 0.7.0 (17), unreleased: add to its notes, never a new version. No schema change. Ownership: 53 profile menu
 (`ProfileMenu`, Browse's profile button, new `WhatsNewPopout`/`BetaFeedback`); 54 `SyncStatusViews`/`SyncState`

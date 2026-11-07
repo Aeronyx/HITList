@@ -73,6 +73,13 @@ How George works with you:
   header; V3 added `TaskItem.parent`/`subtasks` for 0.4.1), pins hashes in `SchemaTests`, reaches CloudKit
   Development through a Debug run (`-seedSampleData`), and must be deployed to Production in the CloudKit
   dashboard before the release that needs it (§6).
+- Every optional model field goes into `-seedSampleData` the day it is added
+  (`CloudKitSchemaTests.testSampleDataCarriesEveryOptionalField` fails otherwise), and the schema push run
+  (`HITLIST_STORE_SUFFIX=schema`, sync on) happens before the release that needs it. Development learns a field only
+  from a record that carries it, sessions run with sync off, and `release.sh`'s Development/Production diff cannot
+  see a field missing from both: three `TaskItem` fields from 0.4.0 went undeployed for a week that way, and the
+  first flip of a switch on a friend's Mac stopped his sync for good (2026-11-06). `release.sh` now also fails its
+  preflight while Production lacks a field the models have (`CloudKitSchemaCheck`).
 - Never add `com.apple.developer.icloud-container-development-container-identifiers` to any entitlements.
   Never open the real store under the Development environment. Never call `ModelContainer.deleteAllData()`
   or delete objects as a "reset": deletions mirror to CloudKit and wipe every device.
@@ -180,7 +187,10 @@ files" is obeyed; one that does not produces merge conflicts.
 - TestFlight: George's own devices get builds at once. Friends are external testers: the first build
   for them goes through Beta App Review (up to a day), needs App Store Connect's Test Information filled
   in (description, feedback email, a privacy policy URL), and "Sign-in required" stays unchecked while the
-  app has no login of its own.
+  app has no login of its own. The group's "Test iPhone and iPad apps on Macs with Apple silicon" setting stays
+  off: with it on, TestFlight on a Mac offers the iPad build beside the Mac app, and the first friend on a Mac
+  installed that one (2026-11-06). The iOS build opts out of Macs since 0.7.2 (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD:
+  NO`); a "check on the Mac" always means the macOS build.
 
 ## 7. Decisions George has made (do not re-ask)
 
@@ -209,7 +219,18 @@ hands you off to Mail (copy the address and say so); the bolt's lightning strike
 back after a minute away, recovered after a minute of trouble), never a per-sync animation. Follow Apple's HIG
 (`dev/briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
 
-## 8. Where things stand (2026-11-05, after round 12)
+## 8. Where things stand (2026-11-07, after the friends' first week)
+
+**2026-11-07, the friends' first week (Fable).** The first friend on a Mac installed the iPad build from TestFlight
+(the Friends group allowed iPhone and iPad apps on Apple silicon Macs; the iOS build now opts out and the group
+setting goes off), and his sync stopped at the first flip of a switch: `TaskItem.deadline`, `locationName` and
+`flipPeriodStart` had never reached either CloudKit environment (`-seedSampleData` did not set them; the drift check
+is blind to a field missing from both). Fixed on master: the seed carries every optional field, `CloudKitSchemaTests`
+pins that and checks Production during `release.sh`'s preflight, the watchdog ignores TipKit's saves (its
+`Core*Record` entities post `ModelContext.didSave` too), the sidebar's "Preview" badge yields, `-seedDemoData` fills a
+side store for screenshots (the README has them). George deploys the three fields. Round 13
+(`dev/briefs/ROUND-13.md`; briefs 57–60: Groups, tab motion, Flipboard intervals, Review Inbox) is written and waits
+for George's word on who runs it. The notes for the next version are under `## 0.7.2`.
 
 **2026-11-05, repository tidied for public view (Fable).** The repo is public and read by people who do not
 know the project. Process docs moved under `dev/` (this file, `ROADMAP.md`, `DESIGN.md`, `briefs/`); `CLAUDE.md`
