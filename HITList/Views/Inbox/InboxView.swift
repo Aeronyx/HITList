@@ -2,8 +2,9 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The inbox: every dated task (in any Group) plus undated tasks with no Group, as one list by priority
-/// then due date (`TaskOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
+/// The inbox: every dated task (in any Group) plus undated tasks with no Group, by priority then due date
+/// (`TaskOrdering`) in sections by priority, by Group or none (view options → Group by, brief 57;
+/// `GroupedOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
 /// empty and a Process button that steps through it one task at a time. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
@@ -13,6 +14,10 @@ struct InboxView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    @Query(sort: \Project.sortOrder) private var projects: [Project]
+    /// View options → Group by, remembered for the Inbox (brief 57).
+    @AppStorage(Preferences.inboxGrouping, store: AppGroup.defaults)
+    private var grouping: ListGrouping = Preferences.inboxGroupingDefault
     @State private var showCompleted = false
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
@@ -53,14 +58,19 @@ struct InboxView: View {
     private var openCount: Int { allTasks.filter(\.isInInbox).count }
 
     /// The matched tasks plus the recently completed ones, by priority then due date.
-    private var rows: [TaskItem] {
+    private var rows: [Placed] {
         let matched = matchedTasks()
-        guard !completions.isEmpty else { return matched }
+        guard !completions.isEmpty else { return matched.map { Placed(task: $0, filterDueDate: $0.dueDate) } }
         let held = completions.heldIDs
         let anchors = completions.anchors
         let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
         let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
-        return TaskOrdering.sorted(shown + animating).map(\.task)
+        return TaskOrdering.sorted(shown + animating)
+    }
+
+    /// The rows in the chosen grouping's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
+    private func sections(_ rows: [Placed]) -> [ListSection<UUID, Placed>] {
+        GroupedOrdering.sections(rows, by: grouping, groupOrder: projects.map(\.id)) { $0.task.project?.id }
     }
 
     var body: some View {
@@ -86,11 +96,12 @@ struct InboxView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         #endif
-        // Show completed behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
+        // Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
+                GroupByPicker(selection: $grouping)
             }
         } menu: {
             Button { processing = true } label: { Label("Review Inbox…", systemImage: "tray.and.arrow.down") }
@@ -116,22 +127,15 @@ struct InboxView: View {
             .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
     }
 
-    /// Rows grouped by priority, in priority order; each group keeps `TaskOrdering.inbox`'s due order.
-    private func prioritySections(_ rows: [TaskItem]) -> [(priority: Priority, tasks: [TaskItem])] {
-        Priority.allCases.compactMap { p in
-            let tasks = rows.filter { $0.priorityValue == p }
-            return tasks.isEmpty ? nil : (p, tasks)
-        }
-    }
-
-    private func list(_ rows: [TaskItem]) -> some View {
+    private func list(_ rows: [Placed]) -> some View {
         List(selection: $selectedTask) {
-            ForEach(prioritySections(rows), id: \.priority) { group in
+            ForEach(sections(rows), id: \.key) { section in
                 Section {
-                    ForEach(group.tasks) { row($0) }
+                    ForEach(section.tasks, id: \.task.id) { row($0.task) }
                 } header: {
-                    Text("Priority \(group.priority.rawValue)")
-                        .taskSectionHeader(color: group.priority == .p4 ? Theme.secondaryText : group.priority.color)
+                    if section.key != .all {
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects))
+                    }
                 }
             }
             if !isCompact {
@@ -150,7 +154,7 @@ struct InboxView: View {
 
     private func row(_ task: TaskItem) -> some View {
         let phase = completions.phase(of: task.id)
-        return TaskRow(task: task, now: now, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+        return TaskRow(task: task, now: now, showProject: grouping != .group, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(task)
             .completionRowBackground(flashing: phase == .pending)

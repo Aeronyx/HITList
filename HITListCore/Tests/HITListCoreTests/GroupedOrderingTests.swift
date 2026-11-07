@@ -1,0 +1,134 @@
+import XCTest
+@testable import HITListCore
+
+/// Brief 57: Inbox and Today grouped by Group or by priority, each section keeping `TaskOrdering`'s order.
+final class GroupedOrderingTests: XCTestCase {
+    private let cal = Fixed.calendar
+    /// Wednesday 2026-10-21 14:30 UTC.
+    private let now = Fixed.now
+
+    private func titles(_ tasks: [PlainTask]) -> [String] { tasks.map(\.filterTitle) }
+    private func keys(_ sections: [ListSection<String, PlainTask>]) -> [ListSectionKey<String>] { sections.map(\.key) }
+
+    // MARK: - None
+
+    func testNoGroupingIsOneSectionInTaskOrder() {
+        let tasks = [
+            PlainTask(title: "p4", priority: 4, projectName: "Work"),
+            PlainTask(title: "p1", priority: 1),
+        ]
+        let sections = GroupedOrdering.sections(tasks, by: .none, groupOrder: ["Work"])
+        XCTAssertEqual(keys(sections), [.all])
+        XCTAssertEqual(titles(sections[0].tasks), ["p1", "p4"])
+    }
+
+    func testNoTasksIsNoSections() {
+        for grouping in ListGrouping.allCases {
+            XCTAssertTrue(GroupedOrdering.sections([PlainTask](), by: grouping, groupOrder: ["Work"]).isEmpty, "\(grouping)")
+        }
+    }
+
+    // MARK: - By Group
+
+    func testGroupsFollowTheSidebarOrderWithNoGroupLast() {
+        let tasks = [
+            PlainTask(title: "loose", priority: 1),
+            PlainTask(title: "home", projectName: "Home"),
+            PlainTask(title: "work", projectName: "Work"),
+        ]
+        let sections = GroupedOrdering.sections(tasks, by: .group, groupOrder: ["Work", "Errands", "Home"])
+        XCTAssertEqual(keys(sections), [.group("Work"), .group("Home"), .noGroup], "empty Groups are left out")
+    }
+
+    func testEachGroupKeepsPriorityThenDueOrder() {
+        let tasks = [
+            PlainTask(title: "w undated p1", priority: 1, projectName: "Work"),
+            PlainTask(title: "w tomorrow p4", priority: 4, dueDate: Fixed.date(2026, 10, 22), projectName: "Work"),
+            PlainTask(title: "w today p1", priority: 1, dueDate: Fixed.date(2026, 10, 21), projectName: "Work"),
+            PlainTask(title: "w today p2", priority: 2, dueDate: Fixed.date(2026, 10, 21), projectName: "Work"),
+        ]
+        let sections = GroupedOrdering.sections(tasks, by: .group, groupOrder: ["Work"])
+        XCTAssertEqual(titles(sections[0].tasks), ["w today p1", "w undated p1", "w today p2", "w tomorrow p4"])
+    }
+
+    func testAGroupMissingFromTheOrderComesAfterTheKnownOnesBeforeNoGroup() {
+        // A Group that arrived by sync a moment before the view's own list of Groups did.
+        let tasks = [
+            PlainTask(title: "new", projectName: "Zeta"),
+            PlainTask(title: "loose"),
+            PlainTask(title: "known", projectName: "Work"),
+            PlainTask(title: "also new", projectName: "Alpha"),
+        ]
+        let sections = GroupedOrdering.sections(tasks, by: .group, groupOrder: ["Work"])
+        XCTAssertEqual(keys(sections), [.group("Work"), .group("Alpha"), .group("Zeta"), .noGroup])
+    }
+
+    func testGroupingByIDKeepsTwoGroupsWithTheSameNameApart() {
+        let a = UUID(), b = UUID()
+        let tasks = [(PlainTask(title: "one", projectName: "Home"), a), (PlainTask(title: "two", projectName: "Home"), b)]
+        let sections = GroupedOrdering.sections(tasks.map(\.0), by: .group, groupOrder: [b, a]) { task in
+            tasks.first { $0.0.filterTitle == task.filterTitle }?.1
+        }
+        XCTAssertEqual(sections.map(\.key), [.group(b), .group(a)])
+        XCTAssertEqual(sections.map { $0.tasks.map(\.filterTitle) }, [["two"], ["one"]])
+    }
+
+    func testOpenCountLeavesCompletedTasksOut() {
+        let tasks = [
+            PlainTask(title: "open", projectName: "Work"),
+            PlainTask(title: "done", isCompleted: true, projectName: "Work"),
+        ]
+        let section = GroupedOrdering.sections(tasks, by: .group, groupOrder: ["Work"])[0]
+        XCTAssertEqual(section.tasks.count, 2)
+        XCTAssertEqual(section.openCount, 1)
+    }
+
+    // MARK: - By priority
+
+    func testPrioritySectionsRunP1ToP4AndSkipEmptyOnes() {
+        let tasks = [
+            PlainTask(title: "none", priority: 4),
+            PlainTask(title: "urgent", priority: 1),
+            PlainTask(title: "urgent later", priority: 1, dueDate: Fixed.date(2026, 10, 25)),
+            PlainTask(title: "urgent sooner", priority: 1, dueDate: Fixed.date(2026, 10, 22)),
+        ]
+        let sections = GroupedOrdering.sections(tasks, by: .priority, groupOrder: [String]())
+        XCTAssertEqual(keys(sections), [.priority(1), .priority(4)])
+        XCTAssertEqual(titles(sections[0].tasks), ["urgent sooner", "urgent later", "urgent"])
+    }
+
+    // MARK: - Today
+
+    func testTodayKeepsOverdueOnTopAndGroupsWithinItAndBelow() {
+        let tasks = [
+            PlainTask(title: "late work", dueDate: Fixed.date(2026, 10, 19), projectName: "Work"),
+            PlainTask(title: "late loose", priority: 1, dueDate: Fixed.date(2026, 10, 20)),
+            PlainTask(title: "today home", dueDate: Fixed.date(2026, 10, 21), projectName: "Home"),
+            PlainTask(title: "today work", dueDate: Fixed.date(2026, 10, 21, 9), hasDueTime: true, projectName: "Work"),
+            PlainTask(title: "tomorrow", dueDate: Fixed.date(2026, 10, 22), projectName: "Work"),
+            PlainTask(title: "undated", projectName: "Work"),
+        ]
+        let today = GroupedOrdering.today(tasks, by: .group, groupOrder: ["Work", "Home"], now: now, calendar: cal)
+        XCTAssertEqual(keys(today.overdue), [.group("Work"), .noGroup])
+        XCTAssertEqual(today.overdue.map { titles($0.tasks) }, [["late work"], ["late loose"]])
+        XCTAssertEqual(keys(today.today), [.group("Work"), .group("Home")])
+        XCTAssertEqual(today.today.map { titles($0.tasks) }, [["today work"], ["today home"]])
+        XCTAssertFalse(today.isEmpty)
+    }
+
+    func testTodayWithNothingDueIsEmpty() {
+        let today = GroupedOrdering.today([PlainTask(title: "undated")], by: .group, groupOrder: [String](),
+                                          now: now, calendar: cal)
+        XCTAssertTrue(today.isEmpty)
+        XCTAssertTrue(today.overdue.isEmpty)
+        XCTAssertTrue(today.today.isEmpty)
+    }
+
+    // MARK: - Names
+
+    func testGroupingTitlesForTheViewOptions() {
+        XCTAssertEqual(ListGrouping.allCases, [.none, .group, .priority])
+        XCTAssertEqual(ListGrouping.allCases.map(\.title), ["None", "Group", "Priority"])
+        XCTAssertEqual(ListGrouping(rawValue: "group"), .group, "stored by raw value: never rename")
+    }
+}

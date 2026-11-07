@@ -1,4 +1,5 @@
 import Foundation
+import HITListCore
 
 /// Preference keys that Settings v2 added (brief 21). `Preferences.swift` holds the shared ones
 /// (`startTab`, `defaultReminderOffsetMinutes`, …); these follow the same rules: stored in
@@ -53,6 +54,20 @@ extension Preferences {
     /// Ask before deleting a task. Stored here; the delete paths (task popout, swipe actions) read it.
     static let confirmDelete = "pref.confirmDelete"
     static let confirmDeleteDefault = false
+
+    // MARK: Lists (brief 57)
+
+    /// The Inbox's and Today's "Group by" (`ListGrouping`, stored by raw value), each remembered on its own.
+    /// The Inbox has grouped by priority since build 8, so that stays its default; Today starts ungrouped.
+    static let inboxGrouping = "pref.grouping.inbox"
+    static let inboxGroupingDefault = ListGrouping.priority
+    static let todayGrouping = "pref.grouping.today"
+    static let todayGroupingDefault = ListGrouping.none
+
+    /// A stored grouping, or `fallback` for nothing or a value this build doesn't know.
+    static func grouping(_ stored: String?, default fallback: ListGrouping) -> ListGrouping {
+        stored.flatMap(ListGrouping.init(rawValue:)) ?? fallback
+    }
 
     // MARK: Readers
 

@@ -8,8 +8,11 @@ struct TaskListView: View {
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
-    @Query private var projects: [Project]
+    @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query private var labels: [TaskLabel]
+    /// Today's view options → Group by (brief 57); remembered for Today alone.
+    @AppStorage(Preferences.todayGrouping, store: AppGroup.defaults)
+    private var todayGrouping: ListGrouping = Preferences.todayGroupingDefault
     @Query private var filters: [SavedFilter]
     @State private var showCompleted = false
     @State private var editingProject: Project?
@@ -76,6 +79,12 @@ struct TaskListView: View {
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
         var hidesDay = false
+        /// A Group or priority section of a grouped Today (brief 57): drawn by `GroupSectionHeader`
+        /// instead of `title`.
+        var heading: GroupSectionHeading?
+        /// Grouped Today: "Overdue" or the day, above the first section of its half (in its header, not a
+        /// section of its own, which left an empty gap on the Mac).
+        var banner: String?
     }
 
     /// A row's task and the due date it is listed under: its own, or while its completion animates,
@@ -157,7 +166,10 @@ struct TaskListView: View {
 
     /// Today: "Overdue" (red), then the day, "Oct 31, Saturday" (green), each by priority then due time.
     /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
+    /// Grouped (brief 57), the Overdue block stays on top: its header, then its tasks in Group (or
+    /// priority) sections, then the day's header and the day's tasks in sections the same way.
     private func todayGroups(_ rows: [Placed]) -> [Group] {
+        if todayGrouping != .none { return groupedTodayGroups(rows) }
         var overdue: [Placed] = [], today: [Placed] = []
         for row in rows {
             switch TaskOrdering.todaySection(for: row.filterDueDate, now: now) {
@@ -174,6 +186,35 @@ struct TaskListView: View {
         }
         groups.append(Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated),
                             tasks: TaskOrdering.sorted(today).map(\.task), color: HITColor.dueToday, hidesDay: true))
+        return groups
+    }
+
+    /// Rows name their Group, except in that Group's own list and under its header in a Today grouped by Group.
+    private var showsProjectOnRows: Bool {
+        currentProject == nil && !(selection == .today && todayGrouping == .group)
+    }
+
+    private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
+        let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now) {
+            $0.task.project?.id
+        }
+        guard !split.isEmpty else { return [] }
+        func sections(_ sections: [ListSection<UUID, Placed>], half: String, banner: String, color: Color,
+                      hidesDay: Bool) -> [Group] {
+            sections.enumerated().map { index, section in
+                Group(id: "\(half)-\(section.key)", title: "", tasks: section.tasks.map(\.task), color: color,
+                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects),
+                      banner: index == 0 ? banner : nil)
+            }
+        }
+        let day = DueFormatter.sectionTitle(for: now, now: now, style: .dated)
+        var groups = sections(split.overdue, half: "overdue", banner: "Overdue", color: HITColor.dueOverdue, hidesDay: false)
+        if split.today.isEmpty {
+            // The day's header still shows, so its "Add task" row sits under it (as ungrouped).
+            groups.append(Group(id: "today", title: day, tasks: [], color: HITColor.dueToday, hidesDay: true))
+        } else {
+            groups += sections(split.today, half: "today", banner: day, color: HITColor.dueToday, hidesDay: true)
+        }
         return groups
     }
 
@@ -209,7 +250,7 @@ struct TaskListView: View {
                                 Section {
                                     ForEach(group.tasks) { task in
                                         let phase = completions.phase(of: task.id)
-                                        TaskRow(task: task, now: now, showProject: currentProject == nil,
+                                        TaskRow(task: task, now: now, showProject: showsProjectOnRows,
                                                 hidesDay: group.hidesDay, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
                                             .opacity(phase == .animating ? 0 : 1)
                                             .tag(task)
@@ -230,7 +271,15 @@ struct TaskListView: View {
                                             }
                                     }
                                 } header: {
-                                    if !group.title.isEmpty {
+                                    if let heading = group.heading {
+                                        VStack(spacing: 0) {
+                                            if let banner = group.banner {
+                                                Text(banner).taskSectionHeader(color: group.color)
+                                            }
+                                            GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
+                                        }
+                                        .listRowInsets(EdgeInsets())
+                                    } else if !group.title.isEmpty {
                                         Text(group.title).taskSectionHeader(color: group.color)
                                     }
                                 }
@@ -277,6 +326,9 @@ struct TaskListView: View {
                 if selection != .completed {
                     Toggle("Show completed", isOn: $showCompleted)
                         .keyboardShortcut("c", modifiers: [.command, .shift])
+                }
+                if selection == .today {
+                    GroupByPicker(selection: $todayGrouping)
                 }
                 Section("Sort") {
                     Button("By due date") {}.disabled(true)
