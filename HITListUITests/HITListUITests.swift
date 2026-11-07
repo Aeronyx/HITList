@@ -185,6 +185,29 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Title menu after")
     }
 
+    /// Brief 57: deleting a Group with tasks asks first and says where its tasks go; Cancel keeps it.
+    func testDeletingAGroupWithTasksAsks() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        let browse = app.buttons["browseButton"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 15))
+        browse.tap()
+        let work = app.buttons["Work, 2"].firstMatch
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        work.press(forDuration: 1.2)
+        let delete = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "the Group's menu")
+        delete.tap()
+        let message = app.staticTexts["Its 2 open tasks move to the Inbox."]
+        XCTAssertTrue(message.waitForExistence(timeout: 5), "the question says where the tasks go")
+        snapshot("1 Delete Work?")
+        // A popover on iPhone: tapping outside it is its Cancel.
+        let outside = app.otherElements["PopoverDismissRegion"].firstMatch
+        if outside.exists { outside.tap() } else { app.buttons["Cancel"].firstMatch.tap() }
+        XCTAssertTrue(message.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(work.exists, "Cancel keeps the Group")
+    }
+
     /// A screen's title menu button (VoiceOver calls it "Today, Actions Menu").
     private func titleMenu(_ title: String) -> XCUIElement {
         app.navigationBars.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch

@@ -132,6 +132,22 @@ final class GroupsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(b.updatedAt, before, "a changed Group is touched so the change syncs")
     }
 
+    // MARK: - Deleting a Group
+
+    func testDeletingAGroupAsksOnlyWhenItHasTasksAndSaysWhereTheyGo() throws {
+        let work = project("Work", order: 0), empty = project("Empty", order: 1)
+        _ = task("a", in: work)
+        _ = task("b", in: work, completed: true)
+        _ = task("c", in: work)
+        try context.save()
+        XCTAssertNil(GroupDeletion(project: empty), "an empty Group goes without a question")
+        let question = try XCTUnwrap(GroupDeletion(project: work))
+        XCTAssertEqual(question.title, "Delete “Work”?")
+        XCTAssertEqual(question.message, "Its 2 open tasks move to the Inbox. Completed ones stay completed.")
+        _ = task("d", in: empty)
+        XCTAssertEqual(GroupDeletion(project: empty)?.message, "Its 1 open task moves to the Inbox.")
+    }
+
     // MARK: - Remembered per list
 
     func testGroupByDefaultsAndStoredValues() {

@@ -19,6 +19,8 @@ struct SidebarView: View {
     @State private var creatingFilter = false
     @State private var editingProject: Project?
     @State private var creatingProject = false
+    /// The question before deleting a Group with tasks (brief 57).
+    @State private var deletingProject: GroupDeletion?
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var showSettings = false
@@ -80,8 +82,9 @@ struct SidebarView: View {
                     .slateRow()
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
-                        Button("Delete", role: .destructive) { delete(project) }
+                        Button("Delete", role: .destructive) { askToDelete(project) }
                     }
+                    .groupDeletionDialog($deletingProject, for: project) { delete($0) }
                 }
                 // Drag a Group to a new place (brief 57); the order is every list's Group order.
                 .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
@@ -210,6 +213,11 @@ struct SidebarView: View {
         if selection == .filter(filter.id) { selection = .today }
         context.delete(filter); try? context.save()
     }
+    /// A Group with tasks asks first; an empty one goes at once.
+    private func askToDelete(_ project: Project) {
+        if let question = GroupDeletion(project: project) { deletingProject = question } else { delete(project) }
+    }
+
     private func delete(_ project: Project) {
         if selection == .project(project.id) { selection = .inbox }
         context.delete(project); try? context.save()
