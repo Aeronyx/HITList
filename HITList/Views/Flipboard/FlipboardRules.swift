@@ -6,19 +6,23 @@ import HITListCore
 /// day that carries the `flipboard` label. Green side = due in the future; red side = due today or
 /// overdue; flipping it back completes the task, which rolls the due date forward by its recurrence.
 enum Flipboard {
-    static let labelName = "flipboard"
+    static let labelName = FlipboardSwitch.labelName
     /// Every device creates the label with this id, so copies made before a CloudKit import collapse.
     static let labelID = SeedIdentity.uuid(for: "TaskLabel/flipboard")
     /// The rule a task gets when it joins the board without one.
     static let defaultRule = RecurrenceRule.weekly
 
-    enum Side: Equatable { case green, red }
+    typealias Side = FlipboardSwitch.Side
 
     // MARK: Membership
 
+    // The pure rules (membership, sides, overdue) live in HITListCore's `FlipboardSwitch`, so every list
+    // judges a task the way the board does (brief 59).
+
+    /// A repeat that doesn't decode is no repeat: the board can't step it.
     static func isMember(recurrence: String?, hasDueTime: Bool, isCompleted: Bool, labelNames: [String]) -> Bool {
-        guard let recurrence, RecurrenceRule(encoded: recurrence) != nil, !hasDueTime, !isCompleted else { return false }
-        return labelNames.contains { $0.caseInsensitiveCompare(labelName) == .orderedSame }
+        FlipboardSwitch.isMember(isRecurring: recurrence.flatMap(RecurrenceRule.init(encoded:)) != nil,
+                                 hasDueTime: hasDueTime, isCompleted: isCompleted, labelNames: labelNames)
     }
 
     static func isMember(_ task: TaskItem) -> Bool {
@@ -26,16 +30,13 @@ enum Flipboard {
                  labelNames: task.filterLabelNames)
     }
 
-    static func hasLabel(_ task: TaskItem) -> Bool {
-        task.filterLabelNames.contains { $0.caseInsensitiveCompare(labelName) == .orderedSame }
-    }
+    static func hasLabel(_ task: TaskItem) -> Bool { FlipboardSwitch.hasLabel(task.filterLabelNames) }
 
     // MARK: Sides and the light bar
 
     /// A switch with no due date has never been flipped; it shows red until it is.
     static func side(due: Date?, now: Date, calendar: Calendar = .current) -> Side {
-        guard let due else { return .red }
-        return calendar.startOfDay(for: due) > calendar.startOfDay(for: now) ? .green : .red
+        FlipboardSwitch.side(due: due, now: now, calendar: calendar)
     }
 
     /// True once the switch has been flipped. A new switch is due the day it was created and shows red
@@ -67,8 +68,7 @@ enum Flipboard {
 
     /// Red and past its due day (not merely due today). Overdue LEDs pulse.
     static func isOverdue(due: Date?, now: Date, calendar: Calendar = .current) -> Bool {
-        guard let due else { return false }
-        return calendar.startOfDay(for: due) < calendar.startOfDay(for: now)
+        FlipboardSwitch.isOverdue(due: due, now: now, calendar: calendar)
     }
 
     /// Whole days `due` is past, 0 when it isn't.
