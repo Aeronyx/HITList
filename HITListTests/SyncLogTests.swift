@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 import CloudKit
 @testable import HITList
 
@@ -230,6 +231,29 @@ final class SyncLogTests: XCTestCase {
     }
 
     @MainActor
+    /// TipKit's own SwiftData store posts `ModelContext.didSave` in this process too; its entities must not count
+    /// as task saves, or the watchdog waits for an export that is never due.
+    func testSaveSummaryCountsOnlyTheTaskStoresEntities() throws {
+        let foreign = try ModelContainer(for: ForeignTipRecord.self,
+                                         configurations: ModelConfiguration(isStoredInMemoryOnly: true, cloudKitDatabase: .none))
+        let record = ForeignTipRecord()
+        foreign.mainContext.insert(record)
+        try foreign.mainContext.save()
+        let ours = ModelContainerFactory.preview()
+        let task = TaskItem(title: "Ours")
+        ours.mainContext.insert(task)
+        try ours.mainContext.save()
+        let userInfo: [AnyHashable: Any] = [
+            ModelContext.NotificationKey.insertedIdentifiers.rawValue: [record.persistentModelID, task.persistentModelID],
+        ]
+        let all = CloudSyncMonitor.SaveSummary(userInfo: userInfo)
+        XCTAssertEqual(all.entities, ["ForeignTipRecord": 1, "TaskItem": 1])
+        let synced = CloudSyncMonitor.SaveSummary(userInfo: userInfo, only: CloudSyncMonitor.syncedEntityNames)
+        XCTAssertEqual(synced.entities, ["TaskItem": 1])
+        XCTAssertEqual(synced.inserted, 1)
+        XCTAssertEqual(CloudSyncMonitor.syncedEntityNames, ["TaskItem", "Project", "TaskLabel", "SavedFilter", "Profile"])
+    }
+
     func testSaveSummaryWording() {
         var summary = CloudSyncMonitor.SaveSummary(inserted: 1, updated: 2, entities: ["TaskItem": 2, "Project": 1])
         XCTAssertEqual(summary.text, "1 inserted, 2 updated")
@@ -627,4 +651,11 @@ private final class Counter: @unchecked Sendable {
         value += 1
         return value
     }
+}
+
+/// Stands in for a TipKit record: an entity the task store has never heard of.
+@Model
+final class ForeignTipRecord {
+    var name: String = ""
+    init() {}
 }

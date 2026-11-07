@@ -151,9 +151,14 @@ final class CloudSyncMonitor {
             MainActor.assumeIsolated { self?.accountChangeNotified() }
         })
         // Local saves: the time is taken on the saving thread, before the export it triggers can start.
+        // Only the task store's entities count. TipKit keeps its tips, events and rules in a SwiftData store of
+        // its own in this process and posts the same notification for them (CoreTipRecord, CoreEventRecord,
+        // CoreRuleRecord); they never reach CloudKit, and counting them had the watchdog report an export
+        // overdue that was never due (a friend's first Mac session, 2026-11-06).
+        let synced = Self.syncedEntityNames
         observers.append(center.addObserver(forName: ModelContext.didSave, object: nil, queue: nil) { [weak self] note in
             let at = Date()
-            let summary = SaveSummary(userInfo: note.userInfo)
+            let summary = SaveSummary(userInfo: note.userInfo, only: synced)
             guard summary.total > 0 else { return }
             Task { @MainActor in self?.localSaved(summary, at: at) }
         })
@@ -549,6 +554,9 @@ final class CloudSyncMonitor {
 
     // MARK: - Saves
 
+    /// The task store's entity names ("TaskItem", "Project", …): the only saves CloudKit mirrors.
+    nonisolated static let syncedEntityNames: Set<String> = Set(HITListSchema.schema.entities.map(\.name))
+
     /// What one local save changed: counts by kind of change and by entity. Pure over the
     /// `ModelContext.didSave` userInfo.
     struct SaveSummary: Equatable, Sendable {
@@ -565,9 +573,12 @@ final class CloudSyncMonitor {
             self.entities = entities
         }
 
-        init(userInfo: [AnyHashable: Any]?) {
+        /// `only`: count just these entities (`syncedEntityNames`); nil counts every entity in the notification.
+        init(userInfo: [AnyHashable: Any]?, only entityNames: Set<String>? = nil) {
             func ids(_ key: ModelContext.NotificationKey) -> [PersistentIdentifier] {
-                userInfo?[key.rawValue] as? [PersistentIdentifier] ?? []
+                let all = userInfo?[key.rawValue] as? [PersistentIdentifier] ?? []
+                guard let entityNames else { return all }
+                return all.filter { entityNames.contains($0.entityName) }
             }
             let inserted = ids(.insertedIdentifiers), updated = ids(.updatedIdentifiers), deleted = ids(.deletedIdentifiers)
             self.inserted = inserted.count
