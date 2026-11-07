@@ -173,6 +173,7 @@ struct MobileTabBar: View {
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
+                .onAppear { TapHaptic.prepareSelection() }
         } else {
             HStack(spacing: 0) { buttons }
                 .background { pill }
@@ -181,6 +182,7 @@ struct MobileTabBar: View {
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
+                .onAppear { TapHaptic.prepareSelection() }
                 .padding(.horizontal, IslandMetrics.sideInset)
                 .padding(.bottom, IslandMetrics.bottomGap)
         }
@@ -190,11 +192,17 @@ struct MobileTabBar: View {
     private var buttons: some View {
         ForEach(MobileTab.allCases) { tab in
             Button {
-                if selection == tab { onReselect(tab) } else { selection = tab }
+                switch TabTap(tapped: tab, selected: selection) {
+                case .reselect:
+                    onReselect(tab)
+                case .change:
+                    TapHaptic.selectionChanged()
+                    selection = tab
+                }
             } label: {
                 item(tab, selected: selection == tab)
             }
-            .buttonStyle(TabItemPressStyle())
+            .buttonStyle(TabItemPressStyle(preparesSelectionHaptic: true))
             .frame(height: axis == .vertical ? IslandMetrics.sideItemHeight : nil)
             .matchedGeometryEffect(id: tab, in: pillSpace)
             .accessibilityLabel(tab.title)
@@ -207,13 +215,15 @@ struct MobileTabBar: View {
     /// with the island's, taking the selected cell's frame. A new selection moves it on `HITMotion.tabPill`
     /// and stretches it a little along its travel mid-way (`HITMotion.TabPill`).
     private var pill: some View {
-        Capsule(style: .continuous)
+        // Plain values for the animator's Sendable closure.
+        let still = reduceMotion, horizontal = axis == .horizontal
+        return Capsule(style: .continuous)
             .fill(Theme.accent.opacity(IslandMetrics.pillOpacity))
             .padding(axis == .vertical ? .horizontal : .vertical, IslandMetrics.pillInset)
             .matchedGeometryEffect(id: selection, in: pillSpace, properties: .frame, isSource: false)
             .keyframeAnimator(initialValue: CGFloat(1), trigger: selection) { content, stretch in
-                let s = reduceMotion ? 1 : stretch
-                content.scaleEffect(x: axis == .horizontal ? s : 1, y: axis == .vertical ? s : 1)
+                let s = still ? 1 : stretch
+                content.scaleEffect(x: horizontal ? s : 1, y: horizontal ? 1 : s)
             } keyframes: { _ in
                 HITMotion.tabPillStretchKeyframes()
             }
@@ -284,13 +294,31 @@ struct TodayTabIcon: View {
     }
 }
 
-/// A soft dip while a tab is pressed; no system highlight.
+/// What a tap on a tab does: a different tab changes the selection (with the selection tick); the current one
+/// goes back to its first screen, silently (nothing moves, so nothing to feel).
+enum TabTap: Equatable {
+    case change, reselect
+
+    init(tapped: MobileTab, selected: MobileTab) {
+        self = tapped == selected ? .reselect : .change
+    }
+
+    var playsHaptic: Bool { self == .change }
+}
+
+/// A soft dip while a tab is pressed; no system highlight. A tab readies the selection tick as the finger
+/// lands, so it plays on time when the finger lifts.
 private struct TabItemPressStyle: ButtonStyle {
+    var preparesSelectionHaptic = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1)
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(HITMotion.quick, value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                if pressed && preparesSelectionHaptic { TapHaptic.prepareSelection() }
+            }
     }
 }
 
