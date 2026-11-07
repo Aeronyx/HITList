@@ -20,6 +20,7 @@
 		0F9EB6A121578D72E6DCBDFB /* StoreResetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */; };
 		109F1063E4CA1A1EC234AE79 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 659074BDF3973B67D923222D /* Models.swift */; };
 		11834305F8792A025BA77206 /* HingeCreak.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A8FD3E80D2B70455F4FF69 /* HingeCreak.swift */; };
+		11ACEC665C24375E2CCF97EC /* GroupsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82A0C7F15C10E980AB8102DB /* GroupsTests.swift */; };
 		11EC1BA80A760B16BB6B4595 /* AccountSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C1C596DE872D32372F5F68A /* AccountSettingsSection.swift */; };
 		12C2AEC0C6C88E1E64EC78BB /* ICloudSettingsGroups.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68E88EA4F6FA56F39D594F41 /* ICloudSettingsGroups.swift */; };
 		1319FFA3FBE71478A4F3121F /* MacWindowKeeper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 485CD1616ADB1D0401DDE925 /* MacWindowKeeper.swift */; };
@@ -110,6 +111,7 @@
 		5CC1AC245B8CA2B32193696E /* BetaFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC000467DCC8519E2A74CB68 /* BetaFeedback.swift */; };
 		5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4D93807A35FCE5D6C76B9A /* WeekStripView.swift */; };
 		5D712F189C629EFE086A2FDA /* TaskEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */; };
+		5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */; };
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
 		608C4039A4C1816B43354830 /* SettingsRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184C37C143DA7F89F0707031 /* SettingsRouter.swift */; };
 		63DFDD00010B0BD42F7E29E6 /* HolidayEffectsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E560EB0588544BDE7C47FAB /* HolidayEffectsTests.swift */; };
@@ -457,6 +459,7 @@
 		81F00D1A134DBD9CE50D06F4 /* AccountSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSwitch.swift; sourceTree = "<group>"; };
 		8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsGroup.swift; sourceTree = "<group>"; };
 		825B734C651EF77EF1FA1410 /* FontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontTests.swift; sourceTree = "<group>"; };
+		82A0C7F15C10E980AB8102DB /* GroupsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupsTests.swift; sourceTree = "<group>"; };
 		83ED57A0F53865C13BDA236D /* PopoutPickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutPickers.swift; sourceTree = "<group>"; };
 		8467A7278905944FAF43F971 /* HITListCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HITListCore; path = HITListCore; sourceTree = SOURCE_ROOT; };
 		847A246D1F1C5F42FAA5105A /* PopoutHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutHost.swift; sourceTree = "<group>"; };
@@ -584,6 +587,7 @@
 		F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITCalendar.swift; sourceTree = "<group>"; };
 		F2383CCF0E885DBE6A113EF3 /* CloudKitSchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSchemaTests.swift; sourceTree = "<group>"; };
 		F32A742F83D1AB9E93A17857 /* SubtaskChecklist.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtaskChecklist.swift; sourceTree = "<group>"; };
+		F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupSections.swift; sourceTree = "<group>"; };
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
 		FC9891D99B55E4B2BC8FF51B /* SchemaV4Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV4Models.swift; sourceTree = "<group>"; };
@@ -712,6 +716,7 @@
 				2A16B98C62BFC8852A57D812 /* Duo */,
 				A43A98B92AE329603535CE8D /* Filters */,
 				7C434BB7372CC0AAE65EDBDE /* Flipboard */,
+				8627308C9A2A7755BD542F35 /* Groups */,
 				AA043ED05F7A6CA7A1D00831 /* Inbox */,
 				00AEE90E0FD17817958FFD1A /* Popouts */,
 				A0F5BE6EE4460460A4EED4D0 /* Settings */,
@@ -921,6 +926,14 @@
 			path = Delight;
 			sourceTree = "<group>";
 		};
+		8627308C9A2A7755BD542F35 /* Groups */ = {
+			isa = PBXGroup;
+			children = (
+				F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */,
+			);
+			path = Groups;
+			sourceTree = "<group>";
+		};
 		918610DA8EA112EAD8EE39BC /* static */ = {
 			isa = PBXGroup;
 			children = (
@@ -966,6 +979,7 @@
 				DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */,
 				BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */,
 				825B734C651EF77EF1FA1410 /* FontTests.swift */,
+				82A0C7F15C10E980AB8102DB /* GroupsTests.swift */,
 				00B7DF926CB02E19ED081AE9 /* HighlightAreaTests.swift */,
 				AC239AF8EABC5DF86F91E11C /* HighlightFieldTests.swift */,
 				DD26146BF575D41B26881463 /* HingeCreakTests.swift */,
@@ -1447,6 +1461,7 @@
 				9BDB10C54213061AD4DEBDF7 /* FlipboardView.swift in Sources */,
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
 				66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */,
+				5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */,
 				D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */,
 				2B4928700AAE525B3F71005E /* HITCalendar.swift in Sources */,
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
@@ -1611,6 +1626,7 @@
 				C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */,
 				2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */,
 				F8458ACDEBB20AD4013AD07B /* FontTests.swift in Sources */,
+				11ACEC665C24375E2CCF97EC /* GroupsTests.swift in Sources */,
 				BED55740E9111D347C0906FE /* HighlightAreaTests.swift in Sources */,
 				6C90B46E2BC8DCEEF913B6D3 /* HighlightFieldTests.swift in Sources */,
 				5337069D6AEDE324310DF7B7 /* HingeCreakTests.swift in Sources */,
