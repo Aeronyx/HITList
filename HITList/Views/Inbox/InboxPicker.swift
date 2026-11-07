@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Process mode's Move to Group and Add label menu: a searchable list. Typing filters it, Return picks
-/// the top match, and a name that matches nothing can be created ("New Group “Garden”").
+/// Review Inbox's Move to a Group: a searchable list of Groups. Typing filters it, Return picks the top
+/// match, and a name that matches nothing can be created ("New Group “Garden”").
 struct InboxPicker: View {
     struct Option: Identifiable {
         let id: UUID
@@ -14,10 +14,6 @@ struct InboxPicker: View {
         case new(String)
     }
 
-    let title: String
-    /// "Group" or "label", for the create rows.
-    let noun: String
-    let symbol: String
     let options: [Option]
     var onPick: (Choice) -> Void
 
@@ -43,14 +39,14 @@ struct InboxPicker: View {
         let matches = matches
         let rows = matches.count + 1
         VStack(alignment: .leading, spacing: 0) {
-            Text(title)
+            Text("Move to a Group")
                 .font(HITType.headline)
                 .padding(.horizontal, 14)
                 .padding(.top, 14)
                 .padding(.bottom, 8)
             HStack(spacing: 6) {
                 Image(systemName: creating ? "plus" : "magnifyingglass").foregroundStyle(Theme.secondaryText)
-                TextField(creating ? "New \(noun) name" : "Search or create", text: $search)
+                TextField(creating ? "New Group name" : "Search or create", text: $search)
                     .textFieldStyle(.plain)
                     .focused($focused)
                     .onSubmit(submit)
@@ -66,18 +62,18 @@ struct InboxPicker: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(Array(matches.enumerated()), id: \.element.id) { index, option in
-                        row(option.name, symbol: symbol, color: Color(hex: option.colorHex),
+                        row(option.name, symbol: "circle.fill", color: Color(hex: option.colorHex),
                             highlighted: index == 0 && !trimmed.isEmpty) {
                             onPick(.existing(option.id))
                         }
                     }
                     if !trimmed.isEmpty, !exactMatch {
-                        row("New \(noun) “\(trimmed)”", symbol: "plus.circle", color: Theme.accent,
+                        row("New Group “\(trimmed)”", symbol: "plus.circle", color: Theme.accent,
                             highlighted: matches.isEmpty) {
                             onPick(.new(trimmed))
                         }
                     } else if trimmed.isEmpty, !creating {
-                        row("New \(noun)…", symbol: "plus.circle", color: Theme.accent, highlighted: false) {
+                        row("New Group…", symbol: "plus.circle", color: Theme.accent, highlighted: false) {
                             creating = true
                             focused = true
                         }
