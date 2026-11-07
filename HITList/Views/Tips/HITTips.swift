@@ -14,6 +14,7 @@ import SwiftData
 /// - `browse`: the iPhone's magnifying glass at the top right of a tab's first screen (`ScreenMenu`).
 /// - `flipboard`: the Flipboard's grid.
 /// - `boardAddTask`: today's "Add task" on the Upcoming board (Mac, full-width iPad).
+/// - `reviewSwipe`: inline on Review Inbox's card on iPhone (brief 60); gone after the first swipe.
 ///
 /// A tip never takes a friend's first tap (brief 56): on iPhone a popover tip closes on the first tap
 /// outside it and that tap goes nowhere. So the quick-add tips sit inside the card, inline (`quickAddTips`),
@@ -21,7 +22,7 @@ import SwiftData
 /// (`HITTip.settled`, `TipSettling`: back in the app after their first task, or any later launch), never
 /// popping up on a first screen or the moment something lands.
 enum HITTipKind: String, CaseIterable, Identifiable {
-    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask
+    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask, reviewSwipe
 
     var id: String { rawValue }
 
@@ -32,6 +33,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .browse: "Find anything"
         case .flipboard: "Flip a switch when it’s done"
         case .boardAddTask: "Add straight to a day"
+        case .reviewSwipe: "Swipe to sort"
         }
     }
 
@@ -42,6 +44,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .browse: "The magnifying glass opens Browse: search every task, and find your Groups, labels and filters."
         case .flipboard: "Each switch is a repeating chore. Flip it when it’s done; it turns red again when it’s due."
         case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
+        case .reviewSwipe: "Swipe right for Today, left to delete."
         }
     }
 
@@ -52,6 +55,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .browse: "magnifyingglass"
         case .flipboard: "switch.2"
         case .boardAddTask: "calendar.badge.plus"
+        case .reviewSwipe: "hand.draw"
         }
     }
 }
