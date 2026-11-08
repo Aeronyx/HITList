@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.9.0
+## 0.9.0 — build 20, 2026-11-08
 
 George's notes on 0.8.1, in six sessions at once and the day's fixes: shared tasks as one Group that looks like your
 own, the editor's title reading quick add, the Mac's toolbar, sidebar search and type, a second bolt style, and a small
