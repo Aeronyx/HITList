@@ -22,7 +22,8 @@ import HITListCore
 struct FlipSwitchTile: View {
     let task: TaskItem
     let now: Date
-    var onEdit: (FlipSwitchEditor.Focus) -> Void
+    /// "Edit switch…": the switch card on this tile, filled in (brief 69).
+    var onEdit: () -> Void
     var onOpen: () -> Void
     /// Deletes the switch; the board asks first (if that setting is on) and offers Undo.
     var onDelete: () -> Void = {}
@@ -286,8 +287,8 @@ struct FlipSwitchTile: View {
 
     // MARK: The menu
 
-    /// Brief 59's order: Flip (or Mark done), Flip back to red, Edit task…, the interval and flips, then
-    /// Remove from Flipboard and Delete.
+    /// Brief 59's order: Flip (or Mark done), Flip back to red, Edit task…, Edit switch… (the interval, flips
+    /// and name, brief 69), then Remove from Flipboard and Delete.
     private var menuItems: [FlipMenuItem] {
         let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now)
         let chargedCharger = target > 1 && side == .green
@@ -308,8 +309,9 @@ struct FlipSwitchTile: View {
             FlipMenuItem(id: "back", title: "Flip back to red", systemImage: "arrow.uturn.backward",
                          isDisabled: !canFlipBack || flipping) { flipBack() },
             FlipMenuItem(id: "open", title: "Edit task…", systemImage: "square.and.pencil") { onOpen() },
-            FlipMenuItem(id: "interval", title: "Edit interval…", systemImage: "timer") { onEdit(.interval) },
-            FlipMenuItem(id: "flips", title: "Flips per interval…", systemImage: "repeat") { onEdit(.flips) },
+            // Name, interval and flips in the switch card (brief 69; it replaced "Edit interval…" and "Flips per
+            // interval…", which opened a sheet).
+            FlipMenuItem(id: "edit", title: "Edit switch…", systemImage: "slider.horizontal.3") { onEdit() },
             FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
                 withAnimation(.snappy) { Flipboard.remove(task, in: context) }
             },

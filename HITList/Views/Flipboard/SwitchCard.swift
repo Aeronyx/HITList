@@ -143,7 +143,8 @@ struct SwitchCard: View {
     // MARK: Parts
 
     private func nameField(_ read: SwitchDraft.Reading) -> some View {
-        TokenHighlightField(placeholder: "Switch name", text: Binding(get: { draft.text }, set: { draft.setText($0) }),
+        // The draft's own binding, as quick add's: typing fast lost a letter through a hand-made Binding.
+        TokenHighlightField(placeholder: "Switch name", text: $draft.text,
                             tokens: read.tokens, priority: .p4, focus: $nameFocused, bordered: false,
                             onDisable: { token in
                                 withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchOff(token) }

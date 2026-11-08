@@ -19,12 +19,12 @@ struct FlipboardView: View {
     @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.recurrence != nil }) private var recurring: [TaskItem]
     @State private var now = Date()
     @State private var width: CGFloat = 0
-    @State private var editing: EditRequest?
     /// The switch card open in the grid (Mac and iPad, brief 69): adding, or editing a switch.
     @State private var inlineCard: SwitchCardRequest?
     /// The switch card over the board (iPhone).
     @State private var floatingCard: SwitchCardRequest?
-    @State private var cardHasContent = false
+    /// The inline card's "something to lose", read on a click away (a box: typing redraws nothing here).
+    @State private var cardContent = SwitchCardContent()
     @State private var confirmingDiscard = false
     /// When the inline card offered "Discard": one Esc can reach both × and the exit command, and must not
     /// ask and discard in the same press.
@@ -144,6 +144,12 @@ struct FlipboardView: View {
         } menu: {
             Button { openCard(.add) } label: { Label("Add Switch…", systemImage: "plus") }
         }
+        // A switch deleted or taken off the board elsewhere (another device, Siri) while its card is open: the
+        // card goes with it.
+        .onChange(of: switches.map(\.id)) { _, ids in
+            if let task = inlineCard?.task, !ids.contains(task.id) { closeCard() }
+            if let task = floatingCard?.task, !ids.contains(task.id) { withoutAnimation { floatingCard = nil } }
+        }
         .onReceive(clock) { now = $0 }
         .onAppear {
             now = Date()
@@ -159,9 +165,6 @@ struct FlipboardView: View {
             .presentationBackground(.clear)
         }
         #endif
-        .sheet(item: $editing) { request in
-            FlipSwitchEditor(task: request.task, focus: request.focus).slateSheet()
-        }
     }
 
     /// A switch's tile, or the card editing it.
@@ -170,7 +173,7 @@ struct FlipboardView: View {
         if inlineCard == .edit(task) {
             inlineCardView(.edit(task))
         } else {
-            FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
+            FlipSwitchTile(task: task, now: now, onEdit: { openCard(.edit(task)) },
                            onOpen: { open(task) }, onDelete: { delete(task) })
                 .hitTip(first ? HITTip(.flipboard) : nil)
                 .allowsHitTesting(inlineCard == nil)
@@ -185,7 +188,7 @@ struct FlipboardView: View {
         SwitchCard(editing: request.task, style: .inline, isConfirmingDiscard: confirmingDiscard,
                    onClose: requestClose,
                    onSaved: { _ in if request != .add { closeCard() } },
-                   onDraftChange: { cardHasContent = $0 },
+                   onDraftChange: { cardContent.hasContent = $0 },
                    onDiscard: closeCard,
                    onKeepEditing: keepEditing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.boardSpace)) } action: { cardFrame = $0 }
@@ -206,7 +209,7 @@ struct FlipboardView: View {
         clickAway {
             withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) {
                 confirmingDiscard = false
-                cardHasContent = false
+                cardContent.hasContent = false
                 inlineCard = request
             }
         }
@@ -216,7 +219,7 @@ struct FlipboardView: View {
     /// "Discard" shows and nothing else happens; with "Discard" showing, back to typing.
     private func clickAway(then action: (() -> Void)? = nil) {
         guard inlineCard != nil else { action?(); return }
-        switch BoardInlineAdd.clickAway(hasContent: cardHasContent, confirmingDiscard: confirmingDiscard) {
+        switch BoardInlineAdd.clickAway(hasContent: cardContent.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close:
             closeCard()
             action?()
@@ -235,7 +238,7 @@ struct FlipboardView: View {
     /// × or Escape on the card: an empty card closes; with something to lose "Discard" shows first, and a
     /// second × or Escape discards.
     private func requestClose() {
-        switch BoardInlineAdd.close(hasContent: cardHasContent, confirmingDiscard: confirmingDiscard) {
+        switch BoardInlineAdd.close(hasContent: cardContent.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close:
             closeCard()
         case .askDiscard:
@@ -252,7 +255,7 @@ struct FlipboardView: View {
         withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) {
             inlineCard = nil
             confirmingDiscard = false
-            cardHasContent = false
+            cardContent.hasContent = false
         }
     }
 
@@ -294,13 +297,6 @@ struct FlipboardView: View {
         withAnimation(.snappy) { _ = Flipboard.restore(gone, in: context) }
         Task { await NotificationScheduler.reschedule(context: context) }
     }
-
-    /// "Edit interval…" or "Flips per interval…" from a switch's menu.
-    struct EditRequest: Identifiable {
-        let task: TaskItem
-        let focus: FlipSwitchEditor.Focus
-        var id: String { "\(task.id)-\(focus)" }
-    }
 }
 
 extension SidebarItem {
@@ -324,239 +320,9 @@ enum FlipboardLayout {
     }
 }
 
-/// Adds a switch (title, "every N days/weeks", flips per interval), or edits an existing switch's
-/// interval and flips. A live preview tile shows the switch as it will look; tap its rocker to try the
-/// lamps (nothing is saved).
-struct FlipSwitchEditor: View {
-    /// Which part of an existing switch the menu asked to edit.
-    enum Focus { case interval, flips }
-
-    /// Nil to create a new switch.
-    let task: TaskItem?
-    var focus: Focus = .interval
-
-    @Environment(\.modelContext) private var context
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var interval = FlipInterval.default
-    @State private var flipTarget = 1
-    @State private var error: String?
-
-    private var currentRule: RecurrenceRule? { task?.recurrenceRule }
-    private var showsInterval: Bool { task == nil || focus == .interval }
-    private var trimmedTitle: String { title.trimmingCharacters(in: .whitespacesAndNewlines) }
-    /// The rule the preview and Save use: a current rule the steppers can't show (monthly, chosen
-    /// weekdays) is kept until the steppers are changed.
-    private var rule: RecurrenceRule {
-        if let currentRule, FlipInterval(currentRule) == nil, interval == .default { return currentRule }
-        return interval.rule
-    }
-
-    private var sheetTitle: String {
-        guard let task else { return "New Switch" }
-        return focus == .flips ? "Flips per Interval" : task.title
-    }
-
-    var body: some View {
-        HITSheetChrome(sheetTitle, primaryTitle: task == nil ? "Add" : "Save",
-                       isPrimaryEnabled: task != nil || !trimmedTitle.isEmpty, onPrimary: save) {
-            if task == nil {
-                HITSection("Name") {
-                    HITField("Shave", text: $title, autofocus: true).onSubmit(save)
-                }
-            }
-
-            if showsInterval {
-                HITSection("Turns red", footer: intervalFooter) {
-                    FlipStepper(value: $interval.count, range: 1...99) {
-                        Text("Every \(interval.count) \(unitWord(interval.unit, interval.count))")
-                    }
-                    HITSegmented(selection: $interval.unit, segments: FlipInterval.Unit.allCases.map {
-                        HITSegment($0, $0.rawValue.capitalized)
-                    })
-                }
-            }
-
-            HITSection("Flips per interval", footer: flipsFooter) {
-                FlipStepper(value: $flipTarget, range: 1...Flipboard.maxFlipTarget) {
-                    Text(flipTarget == 1 ? "1 flip" : "\(flipTarget) flips")
-                }
-            }
-
-            HITSection("Preview") {
-                FlipSwitchPreview(title: trimmedTitle.isEmpty ? (task?.title ?? "Shave") : trimmedTitle,
-                                  rule: rule, target: flipTarget)
-                    .frame(maxWidth: .infinity)
-            }
-
-            if let error {
-                Text(error).foregroundStyle(HITColor.danger).font(HITType.callout)
-            }
-        }
-        #if os(macOS)
-        .frame(minWidth: 380, minHeight: 520)
-        #endif
-        .onAppear {
-            if let rule = currentRule, let shown = FlipInterval(rule) { interval = shown }
-            if let task { flipTarget = Flipboard.clampedTarget(task.flipTarget) }
-        }
-    }
-
-    private var intervalFooter: String? {
-        if let rule = currentRule, FlipInterval(rule) == nil {
-            return "Currently “\(rule.displayText)”. Changing it here replaces it."
-        }
-        return task == nil ? "Starts red. Flip it when it’s done; it turns red again after the interval." : nil
-    }
-
-    private var flipsFooter: String {
-        guard flipTarget > 1 else { return "One flip turns it green. More make it charge up: flip it each time, and it turns green when every lamp is lit." }
-        return "Flip it \(flipTarget) times and it turns green; the count starts again \(Self.restartPhrase(rule))."
-    }
-
-    /// "each week", "each day", "every 3 days".
-    private static func restartPhrase(_ rule: RecurrenceRule) -> String {
-        if let weekdays = rule.weekdays, !weekdays.isEmpty { return "each time it turns red" }
-        let n = rule.interval
-        switch rule.frequency {
-        case .daily: return n == 1 ? "each day" : "every \(n) days"
-        case .weekly: return n == 1 ? "each week" : "every \(n) weeks"
-        case .monthly: return n == 1 ? "each month" : "every \(n) months"
-        case .yearly: return n == 1 ? "each year" : "every \(n) years"
-        }
-    }
-
-    private func unitWord(_ unit: FlipInterval.Unit, _ count: Int) -> String { unit.word(count) }
-
-    private func save() {
-        do {
-            if let task {
-                if showsInterval, task.recurrenceRule != rule { Flipboard.setRule(rule, for: task, in: context) }
-                if task.flipTarget != flipTarget { Flipboard.setTarget(flipTarget, for: task, in: context) }
-            } else {
-                guard !trimmedTitle.isEmpty else { return }
-                try Flipboard.createSwitch(title: trimmedTitle, rule: rule, flipTarget: flipTarget, in: context)
-            }
-            Task { await NotificationScheduler.reschedule(context: context) }
-            dismiss()
-        } catch {
-            self.error = error.localizedDescription
-        }
-    }
-}
-
-/// A number with − and + buttons in the design system's small circular style; the board's editors use
-/// it for "every N" and "flips per interval".
-struct FlipStepper<Label: View>: View {
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-    @ViewBuilder var label: Label
-
-    var body: some View {
-        HStack(spacing: HITSpacing.m) {
-            label
-                .font(HITType.body.monospacedDigit())
-                .contentTransition(.numericText(value: Double(value)))
-                .animation(.snappy(duration: 0.2), value: value)
-            Spacer(minLength: HITSpacing.s)
-            Button { value = max(range.lowerBound, value - 1) } label: {
-                Image(systemName: "minus").font(.system(size: 12, weight: .bold))
-            }
-            .buttonStyle(HITButtonStyle(.secondary, size: .small, shape: .circle))
-            .disabled(value <= range.lowerBound)
-            .accessibilityLabel("Fewer")
-            Button { value = min(range.upperBound, value + 1) } label: {
-                Image(systemName: "plus").font(.system(size: 12, weight: .bold))
-            }
-            .buttonStyle(HITButtonStyle(.secondary, size: .small, shape: .circle))
-            .disabled(value >= range.upperBound)
-            .accessibilityLabel("More")
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: value = min(range.upperBound, value + 1)
-            case .decrement: value = max(range.lowerBound, value - 1)
-            @unknown default: break
-            }
-        }
-    }
-}
-
-/// The editor's live preview: a fresh switch with the chosen interval and lamps. Tapping the rocker
-/// plays the real flips (sound, haptic, lamps, bloom) on a local count; once green, a tap drains it
-/// and starts over. Nothing is saved.
-struct FlipSwitchPreview: View {
-    let title: String
-    let rule: RecurrenceRule
-    let target: Int
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var flips = 0
-    @State private var dip: Double?
-
-    private var isGreen: Bool { flips >= target }
-    private var side: Flipboard.Side { isGreen ? .green : .red }
-    private var caption: String {
-        if target <= 1 { return isGreen ? "0 of \(Flipboard.intervalDays(due: Date(), rule: rule)) days" : "Flip to start" }
-        if isGreen { return "Done \(Flipboard.periodPhrase(rule))" }
-        return flips == 0 ? "Flip to start" : "\(flips) of \(target) \(Flipboard.periodPhrase(rule))"
-    }
-
-    var body: some View {
-        FlipSwitchFace(title: title, ruleText: rule.displayText.lowercased(), target: target,
-                       lamps: isGreen ? target : flips, side: side, isOverdue: false, fraction: 0,
-                       caption: caption, reduceMotion: reduceMotion) {
-            RockerSwitch(tilt: dip ?? (isGreen ? 1 : -1))
-                .contentShape(Rectangle())
-                .onTapGesture(perform: tap)
-                .accessibilityElement(children: .ignore)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Preview switch")
-                .accessibilityValue(caption)
-                .accessibilityAction { tap() }
-        }
-        .frame(width: 176)
-        .onChange(of: target) { flips = min(flips, target) }
-    }
-
-    private func tap() {
-        FlipHaptic.play()
-        FlipSound.play()
-        if isGreen {
-            withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)) { flips = 0 }
-            return
-        }
-        let charging = flips + 1 >= target
-        if charging, target > 1 {
-            Task {
-                try? await Task.sleep(for: .milliseconds(170))
-                FlipHaptic.charged()
-                FlipSound.playCharged()
-            }
-        }
-        guard !reduceMotion else {
-            withAnimation(.easeInOut(duration: 0.2)) { flips += 1 }
-            return
-        }
-        if charging {
-            withAnimation(target > 1 ? .spring(response: 0.3, dampingFraction: 0.42) : .spring(response: 0.35, dampingFraction: 0.52)) {
-                flips += 1
-            }
-        } else {
-            withAnimation(.easeIn(duration: 0.09)) { dip = -0.2 }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) { flips += 1 }
-            Task {
-                try? await Task.sleep(for: .milliseconds(90))
-                withAnimation(.spring(response: 0.32, dampingFraction: 0.5)) { dip = nil }
-            }
-        }
-    }
-}
-
-
 /// The grid's last tile: the outline of a switch drawn with a dashed hairline (the plate, a smaller dashed
-/// rocker in it) and a large accent "+", in the tiles' 18 pt shape. Tapping it opens the switch editor.
+/// rocker in it) and a large accent "+", in the tiles' 18 pt shape. Tapping it opens the switch card in its place
+/// (brief 69).
 struct AddSwitchTile: View {
     var action: () -> Void
     @State private var hovered = false

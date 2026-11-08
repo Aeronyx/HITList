@@ -12,7 +12,11 @@ import HITListCore
 /// disagree: with a phrase in the name, a chip or the dial rewrites the phrase where it sits ("every 3 days"
 /// becomes "every week"); without one, they set the interval and leave the name alone.
 struct SwitchDraft: Equatable {
-    var text: String
+    /// The name as typed. Switched-off phrases move with their words as it changes (or are forgotten when their
+    /// words are typed over), as in quick add's draft.
+    var text: String {
+        didSet { switchedOff = QuickAddDisabledPhrase.carried(switchedOff, from: oldValue, to: text) }
+    }
     /// The interval when the name has no repeat phrase.
     private(set) var interval: FlipInterval
     private(set) var flips: Int
@@ -97,9 +101,7 @@ struct SwitchDraft: Equatable {
         keptRule = nil
         interval = chosen
         guard let phrase = reading(parser).phrase else { return }
-        let old = text
         text.replaceSubrange(phrase.range, with: chosen.phrase)
-        switchedOff = QuickAddDisabledPhrase.carried(switchedOff, from: old, to: text)
     }
 
     /// The dial, `delta` detents along. A repeat it can't show starts from one week.
@@ -131,13 +133,6 @@ struct SwitchDraft: Equatable {
     mutating func switchOn(_ token: QuickAddToken) {
         guard let phrase = QuickAddDisabledPhrase(token, in: text) else { return }
         switchedOff.remove(phrase)
-    }
-
-    /// Keeps switched-off phrases with their words as the name is typed in (`QuickAddDisabledPhrase.carried`).
-    mutating func setText(_ new: String) {
-        guard new != text else { return }
-        switchedOff = QuickAddDisabledPhrase.carried(switchedOff, from: text, to: new)
-        text = new
     }
 
     // MARK: Saving
