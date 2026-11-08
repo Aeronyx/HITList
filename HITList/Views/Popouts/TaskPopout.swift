@@ -56,6 +56,11 @@ struct TaskPopout: View {
     /// (`TokenHighlightField.focus`).
     @State private var titleFocused = false
     @FocusState private var notesFocused: Bool
+    #if os(iOS)
+    /// Where the keyboard was when a card opened, to give it back when the card closes.
+    @State private var keyboardBeforeCard: KeyboardPlace?
+    enum KeyboardPlace { case title, notes }
+    #endif
 
     enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
 
@@ -129,6 +134,11 @@ struct TaskPopout: View {
             keepTyping()
         }
         .onChange(of: showsNotes) { _, _ in keepTyping() }
+        #if os(iOS)
+        // iPhone and iPad: the keyboard steps aside while a card is open, as in the quick-add card; with it up, the
+        // date card was squeezed between its row and the keyboard, its presets and time cut off (brief 65).
+        .onChange(of: openChip) { _, chip in keyboardMoves(forCard: chip != nil) }
+        #endif
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -147,6 +157,24 @@ struct TaskPopout: View {
         .onExitCommand(perform: requestClose)
         #endif
     }
+
+    #if os(iOS)
+    /// A card opening takes the keyboard from the title or the description; closing gives it back there.
+    private func keyboardMoves(forCard isOpen: Bool) {
+        if isOpen {
+            if keyboardBeforeCard == nil { keyboardBeforeCard = titleFocused ? .title : notesFocused ? .notes : nil }
+            titleFocused = false
+            notesFocused = false
+        } else if let place = keyboardBeforeCard {
+            keyboardBeforeCard = nil
+            guard !isClosing else { return }
+            switch place {
+            case .title: titleFocused = true
+            case .notes: notesFocused = true
+            }
+        }
+    }
+    #endif
 
     // MARK: Top bar
 
