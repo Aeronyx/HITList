@@ -63,7 +63,7 @@ struct HighlightTextField: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: HighlightUITextView, context: Context) -> CGSize? {
         let width = proposal.width.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? max(view.bounds.width, 320)
         let shown = NSAttributedString(string: view.text.isEmpty ? text : view.text, attributes: style.attributes)
-        let height = HighlightGeometry.height(of: shown, width: width, maxLines: HighlightTextStyle.maxLines,
+        let height = HighlightGeometry.height(of: shown, width: width, maxLines: style.maxLineCount,
                                               lineHeight: style.lineHeight)
         return CGSize(width: width, height: height + style.boxOutset)
     }
@@ -206,6 +206,7 @@ final class HighlightUITextView: UITextView {
             placeholderLabel.textColor = newStyle.placeholderColor
             // Room under the last line for its boxes, which reach a little below their line.
             textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: newStyle.boxOutset, right: 0)
+            restyleText()
         }
         highlightLayout.cornerRadius = TokenHighlightField.highlightRadius
         if placeholderLabel.text != placeholder {
@@ -219,9 +220,16 @@ final class HighlightUITextView: UITextView {
     func setTextFromOwner(_ newText: String) {
         text = newText
         typingAttributes = style.attributes
+        restyleText()
         selectedRange = NSRange(location: (newText as NSString).length, length: 0)
         if let undo = undoManager, undo !== window?.undoManager { undo.removeAllActions() }
         updatePlaceholder()
+    }
+
+    /// Every character in the style's attributes (a strikethrough comes and goes with the task's completion).
+    private func restyleText() {
+        guard textStorage.length > 0, markedTextRange == nil else { return }
+        textStorage.setAttributes(style.attributes, range: NSRange(location: 0, length: textStorage.length))
     }
 
     func updatePlaceholder() {
