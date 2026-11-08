@@ -8,6 +8,8 @@ struct SidebarView: View {
     @Environment(\.modelContext) private var context
     #if os(macOS)
     @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
+    /// The search field under the profile (brief 66); nil in offscreen renders.
+    @Environment(\.sidebarSearch) private var search
     #endif
     /// Optional: the offscreen renders in `ProfileMenuTests` have none.
     @Environment(PopoutController.self) private var popouts: PopoutController?
@@ -195,13 +197,26 @@ struct SidebarView: View {
     static let profileInset: CGFloat = HITSpacing.s + 2
 
     private var profileHeader: some View {
-        ProfileMenu(startsOpen: profileMenuStartsOpen, onAccountSettings: openAccountSettings, onSettings: openSettings)
-            .padding(.horizontal, Self.profileInset)
-            .padding(.top, ProfileButtonMetrics.top)
-            .padding(.bottom, ProfileButtonMetrics.bottom)
-            .background(Theme.surface)
-            .zIndex(1)
+        VStack(alignment: .leading, spacing: 0) {
+            ProfileMenu(startsOpen: profileMenuStartsOpen, onAccountSettings: openAccountSettings, onSettings: openSettings)
+                .padding(.horizontal, Self.profileInset)
+                .padding(.top, ProfileButtonMetrics.top)
+                .padding(.bottom, ProfileButtonMetrics.bottom)
+            #if os(macOS)
+            // Search, above Inbox (brief 66).
+            if let search {
+                SidebarSearchField(search: search)
+                    .padding(.horizontal, Self.profileInset)
+                    .padding(.bottom, Self.searchBottom)
+            }
+            #endif
+        }
+        .background(Theme.surface)
+        .zIndex(1)
     }
+
+    /// From the search field to the first row (Inbox).
+    static let searchBottom: CGFloat = HITSpacing.s
 
     /// Mac: the Settings page straight at Account. iPad: the Settings sheet, whose first group is Account.
     private func openAccountSettings() {
