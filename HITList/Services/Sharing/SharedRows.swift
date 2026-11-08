@@ -25,7 +25,7 @@ final class SharedRows {
     private var store: SharedTasksStore? { source() }
 
     /// Every task of every list, open and completed.
-    var rows: [SharedRow] { Self.rows(in: store?.lists ?? []) }
+    var rows: [SharedRow] { Self.rows(in: store?.lists ?? [], me: store?.me) }
 
     /// The open ones.
     var open: [SharedRow] { rows.filter { !$0.task.isCompleted } }
@@ -35,7 +35,7 @@ final class SharedRows {
 
     func row(_ id: UUID) -> SharedRow? {
         for list in store?.lists ?? [] {
-            if let task = list.task(id) { return SharedRow(task: task, list: list) }
+            if let task = list.task(id) { return SharedRow(task: task, list: list, me: store?.me) }
         }
         return nil
     }
@@ -45,8 +45,12 @@ final class SharedRows {
     /// Whether `id` names a shared list (the Mac sidebar's rows select one).
     func isList(_ id: UUID) -> Bool { list(id) != nil }
 
-    static func rows(in lists: [SharedList]) -> [SharedRow] {
-        lists.flatMap { list in list.tasks.map { SharedRow(task: $0, list: list) } }
+    /// Each list's people are worked out once for all its rows.
+    static func rows(in lists: [SharedList], me: SharedMemberID? = nil) -> [SharedRow] {
+        lists.flatMap { list in
+            let people = SharedPeople.others(in: list, me: me)
+            return list.tasks.map { SharedRow(task: $0, list: list, people: people) }
+        }
     }
 
     /// Starts Shared Tasks when its switch is on (the lists call it as they appear, so a launch straight into Today

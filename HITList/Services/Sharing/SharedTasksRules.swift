@@ -106,6 +106,12 @@ enum SharedPeople {
         return people
     }
 
+    /// Everyone in the list but me (brief 64: the people a shared task is shared with, where its labels would be). A list
+    /// I own has me as its owner, so its owner is left out too, whether or not `me` is known yet.
+    static func others(in list: SharedList, me: SharedMemberID?) -> [SharedPerson] {
+        people(in: list, me: me).filter { !$0.isMe && !(list.isOwned && $0.isOwner) }
+    }
+
     /// "you", "Sam", or the name kept with the completion.
     static func name(of memberID: SharedMemberID, in list: SharedList, me: SharedMemberID?, fallback: String?) -> String {
         if memberID == me { return "you" }

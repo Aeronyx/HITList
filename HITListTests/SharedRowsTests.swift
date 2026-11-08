@@ -85,6 +85,25 @@ final class SharedRowsTests: XCTestCase {
         XCTAssertFalse(SharedRow(task: shared.tasks[0], list: shared).canWrite)
     }
 
+    // MARK: - The people where labels go (brief 64)
+
+    func testARowCarriesThePeopleItIsSharedWithNotMe() throws {
+        let store = makeStore()
+        let groceries = joinedList("Groceries", in: store)
+        samsTask("Milk", in: groceries, store: store, due: due(0))
+        let row = try XCTUnwrap(SharedRows(store: { store }).rows.first)
+        XCTAssertEqual(row.people.map(\.name), ["Sam"], "the owner who shared it; never me")
+        XCTAssertFalse(row.people.contains(where: \.isMe))
+    }
+
+    func testAListNobodyJoinedYetHasNoPeopleOnItsRows() throws {
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        try store.addTask(to: trip.id, title: "Book the cabin")
+        let row = try XCTUnwrap(SharedRows(store: { store }).rows.first)
+        XCTAssertTrue(row.people.isEmpty, "only me so far: nothing where the labels go")
+    }
+
     // MARK: - The source (item 2)
 
     /// A task Sam added to `list`, as fetched.
