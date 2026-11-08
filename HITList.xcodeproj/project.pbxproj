@@ -69,6 +69,7 @@
 		3AC80CE57BD7C51458E81210 /* InboxPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */; };
 		3B3D35BD35C09D053F10CBF6 /* UpcomingBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5A392B0DEB0C542676DBCF /* UpcomingBoard.swift */; };
 		3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */; };
+		3D38AF17DF56F1EDB2A3F958 /* MacChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95337ADE991268904AA7383E /* MacChromeTests.swift */; };
 		3F58DD5F0B30EBAAC935ECAD /* HITToggleStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */; };
 		3FAF9663D7052B94C5C1C2BF /* Inter_18pt-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4232FDAE8D59CD8804FC62FC /* Inter_18pt-Regular.ttf */; };
 		429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */; };
@@ -496,6 +497,7 @@
 		92811CBB96DCB3B993F65CEF /* PickerTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTime.swift; sourceTree = "<group>"; };
 		9388258DD5F4BF21418975C1 /* HighlightTextView+macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+macOS.swift"; sourceTree = "<group>"; };
 		949018764012BBE12E6F0ED2 /* SyncEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEnvironment.swift; sourceTree = "<group>"; };
+		95337ADE991268904AA7383E /* MacChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChromeTests.swift; sourceTree = "<group>"; };
 		966FF672CF1AE97484CD00CE /* TaskActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActions.swift; sourceTree = "<group>"; };
 		99F5C84701529B786312B4FD /* AppGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupTests.swift; sourceTree = "<group>"; };
 		9BAD8DAF8E3D43C3CEAC20E8 /* ClaudeConnector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnector.swift; sourceTree = "<group>"; };
@@ -1010,6 +1012,7 @@
 				534E4471994C0817E19A2419 /* IntentsTests.swift */,
 				BCEA3CCC681372C04E433275 /* ListRulesTests.swift */,
 				C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */,
+				95337ADE991268904AA7383E /* MacChromeTests.swift */,
 				6F47544BF23E1A61CD9357EA /* MacSettingsTests.swift */,
 				5144DA93AF367608CA17BD2E /* MobileChromeTests.swift */,
 				4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */,
@@ -1665,6 +1668,7 @@
 				9F1C9E2110E9E76ADDC960EA /* IntentsTests.swift in Sources */,
 				21A306D0DC2302061DC2205C /* ListRulesTests.swift in Sources */,
 				E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */,
+				3D38AF17DF56F1EDB2A3F958 /* MacChromeTests.swift in Sources */,
 				D99264CADBBCB47980A5D5A4 /* MacSettingsTests.swift in Sources */,
 				48B5F9A8831978AD2FD46F36 /* MobileChromeTests.swift in Sources */,
 				891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */,

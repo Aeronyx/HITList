@@ -78,8 +78,9 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                         ScreenMenu(onSettings: openAppSettings, items: menu)
                     }
                     #else
-                    viewOptions()
-                    ScreenMenu(onSettings: openAppSettings, items: menu)
+                    // Each in the same frame, so the pill keeps its width (brief 66).
+                    viewOptions().screenControlFrame()
+                    ScreenMenu(onSettings: openAppSettings, items: menu).screenControlFrame()
                     #endif
                 }
             }
@@ -147,6 +148,27 @@ struct ScreenOptionButton<Label: View>: View {
         } else {
             Button(action: action) { label }
         }
+    }
+}
+
+/// The trailing pill's controls on the Mac (brief 66): each takes the same frame whatever its glyph, so the pill
+/// keeps its width from screen to screen (the Flipboard's speaker is wider than the filter lines and pushed the pill
+/// out to the left). 34 pt holds the widest glyph, `speaker.wave.2`, with room either side, and makes the pill
+/// 67.5 pt on every screen (it was 71 on a list and 74 on the Flipboard). The height stays within the toolbar's own:
+/// a taller item is scaled down to fit, and its width with it.
+enum ScreenControlMetrics {
+    static let width: CGFloat = 34
+    static let height: CGFloat = 24
+}
+
+extension View {
+    /// `ScreenControlMetrics`' frame on the Mac; as it was on iPhone and iPad.
+    func screenControlFrame() -> some View {
+        #if os(macOS)
+        frame(width: ScreenControlMetrics.width, height: ScreenControlMetrics.height)
+        #else
+        self
+        #endif
     }
 }
 
