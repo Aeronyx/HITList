@@ -314,6 +314,10 @@ struct UpcomingView: View {
                         .tint(Theme.accent)
                 }
             }
+            // iPhone: a long press is the context menu, so rows don't drag there (swipe → Pick Date instead).
+            #if os(macOS)
+            .draggable(TaskRescheduling.dragPayload(for: row.id)) { DragPreview(title: row.filterTitle) }
+            #endif
             .popover(isPresented: Binding(get: { pickingDateFor == row.id },
                                           set: { if !$0, pickingDateFor == row.id { pickingDateFor = nil } })) {
                 PickDatePopover(initial: row.filterDueDate ?? today) { day in
@@ -508,16 +512,20 @@ struct UpcomingView: View {
 
     // MARK: - Actions
 
-    /// Reschedules dropped tasks onto `day`, keeping their times (`TaskRescheduling.drop`). Days before
-    /// today don't take drops.
+    /// Reschedules dropped tasks onto `day`, keeping their times (`TaskRescheduling.drop`); a dropped shared task
+    /// changes its date in the shared store, or stays put with a word when its list is view-only for you
+    /// (`SharedRows.drop`, brief 62). Days before today don't take drops.
     private func drop(_ payload: [String], on day: Date) -> Bool {
         dropTarget = nil
         let moved = withAnimation(reduceMotion ? nil : .snappy) {
             TaskRescheduling.drop(payload, on: day, among: allTasks, now: now, calendar: calendar, in: context)
         }
-        guard !moved.isEmpty else { return false }
-        rescheduleNotifications()
-        return true
+        let shared = withAnimation(reduceMotion ? nil : .snappy) {
+            sharedRows.drop(payload, on: day, now: now, calendar: calendar)
+        }
+        if let refused = shared.refusal { showRefusal(refused) }
+        if !moved.isEmpty { rescheduleNotifications() }
+        return !moved.isEmpty || !shared.moved.isEmpty
     }
 
     private func open(_ entry: Entry) {
