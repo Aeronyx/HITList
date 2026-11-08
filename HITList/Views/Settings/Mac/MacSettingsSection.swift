@@ -29,7 +29,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .general: "Week, badge, shortcuts"
         case .iCloud: "Sync status and checks"
         case .reminders: "Alerts and summary"
-        case .completing: "Sound, haptics, the sync bolt, holidays"
+        case .completing: "Sound, haptics, holidays"
         case .appearance: "Themes and effects"
         case .data: "Counts, export, backups"
         case .claude: "Connector and privacy"
