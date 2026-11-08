@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.8.1
+## 0.8.1 — build 19, 2026-11-08
 
 0.8.0's Inbox shipped with a small title that was a button, two filter-looking controls, its name twice and two
 fonts in one header. This build puts that right and does what 0.8.0 should have: the Inbox and Today cleaned up,
