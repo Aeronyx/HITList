@@ -25,8 +25,6 @@ struct InboxView: View {
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
     @State private var processing = false
-    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
-    @State private var editorOwner = UUID()
     private var sharedRows: SharedRows { SharedRows.shared }
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -114,8 +112,6 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
-        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
-        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -124,7 +120,7 @@ struct InboxView: View {
     }
 
     private func list(_ rows: [TaskListRow]) -> some View {
-        List(selection: popouts.listSelection(owner: editorOwner)) {
+        List(selection: popouts.listSelection) {
             ForEach(sections(rows), id: \.key) { section in
                 Section {
                     ForEach(section.tasks) { item in

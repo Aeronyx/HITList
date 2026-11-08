@@ -41,6 +41,8 @@ struct PopoutHost: ViewModifier {
     @State private var discardOfferedAt = Date.distantPast
     /// The editor panel's say on a click on its backdrop (`panelDismissGuard`).
     @State private var editorGuard = PanelDismissGuard()
+    /// The same for a shared task's editor panel (brief 64).
+    @State private var sharedGuard = PanelDismissGuard()
     /// The style as of the latest body, for the editor sheet's setter (`sheetTask`).
     @State private var latestStyle = StyleBox()
     /// The editor's typing, kept while the iPhone Duo's fold swaps its sheet for its column and back (brief 50).
@@ -152,6 +154,19 @@ struct PopoutHost: ViewModifier {
                     .transition(.opacity)
                 }
             }
+            .overlay {
+                // A shared task opens where yours does, in the same panel over the dimmed window (brief 64).
+                if style.editor == .panel, let ref = popouts.state.sharedTask {
+                    PanelBackdrop(onDismiss: { if !sharedGuard.attempt() { popouts.closeSharedTask() } }) {
+                        SharedTaskPopout(ref: ref)
+                            .id(ref.taskID)
+                            .environment(\.panelDismissGuard, sharedGuard)
+                            .panelChrome()
+                    }
+                    .transition(.opacity)
+                }
+            }
+            .animation(HITMotion.enter(reduceMotion: reduceMotion), value: style.editor == .panel && popouts.state.isSharedTaskOpen)
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: popouts.state.isFloatingQuickAddOpen)
             .onChange(of: popouts.state.isFloatingQuickAddOpen) { _, open in
                 if !open { confirmingDiscard = false; quickAddHasContent = false }
@@ -195,6 +210,20 @@ struct PopoutHost: ViewModifier {
                 return .handled
             }
             #endif
+            // A shared task's editor in the same sheet (brief 64); on the Duo's inner display too, which has no column
+            // for it. On a view of its own: two sheets on one view present only one of them.
+            .background {
+                Color.clear.sheet(item: sharedSheetRef) { ref in
+                    SharedTaskPopout(ref: ref)
+                        .environment(popouts)
+                        .presentationDetents(Self.editorDetents)
+                        .presentationDragIndicator(.visible)
+                        .presentationBackground(Theme.background)
+                        .presentationCornerRadius(HITRadius.card + 10)
+                        .preferredColorScheme(.dark)
+                        .tint(Theme.accent)
+                }
+            }
             .sheet(item: sheetTask) { task in
                 // The editor scrolls its own middle and pins its Confirm footer (brief 32).
                 TaskPopout(task: task, carryOver: carryOver)
@@ -236,6 +265,13 @@ struct PopoutHost: ViewModifier {
         let latest = latestStyle
         return Binding<TaskItem?>(get: { (latest.style ?? style).editor == .sheet ? popouts.task : nil },
                                   set: { if $0 == nil, (latest.style ?? style).editor == .sheet { popouts.closeTask() } })
+    }
+
+    /// iPhone (and the Duo's inner display): the shared task on show as the sheet's item; nil where the panel draws it.
+    private var sharedSheetRef: Binding<SharedTaskRef?> {
+        let latest = latestStyle
+        return Binding<SharedTaskRef?>(get: { (latest.style ?? style).editor != .panel ? popouts.state.sharedTask : nil },
+                                       set: { if $0 == nil, (latest.style ?? style).editor != .panel { popouts.closeSharedTask() } })
     }
 
     // MARK: Quick add

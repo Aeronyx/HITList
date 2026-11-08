@@ -21,8 +21,6 @@ struct TaskListView: View {
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
-    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
-    @State private var editorOwner = UUID()
     /// The shared tasks Today shows among yours (brief 62), and the Shared Tasks Group's (brief 64); nothing while
     /// Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
@@ -307,7 +305,7 @@ struct TaskListView: View {
                         }
                         .frame(maxHeight: .infinity)
                     } else {
-                        List(selection: popouts.listSelection(owner: editorOwner)) {
+                        List(selection: popouts.listSelection) {
                             ForEach(groups) { group in
                                 Section {
                                     ForEach(group.rows) { row in
@@ -410,8 +408,6 @@ struct TaskListView: View {
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sharingSheet(isPresented: $showSharing)
-        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
-        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
         .onAppear {
             CompletionFeedback.shared.prepare()

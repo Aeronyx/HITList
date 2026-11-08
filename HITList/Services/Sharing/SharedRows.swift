@@ -89,6 +89,51 @@ final class SharedRows {
         try edit(row) { try $0.setPriority(priority, task: row.id, in: row.listID) }
     }
 
+    /// The editor's Confirm (brief 64): the title as typed (`SharedTaskDraft` cleans it first).
+    func setTitle(_ title: String, _ row: SharedRow) throws {
+        try edit(row) { try $0.setTitle(title, task: row.id, in: row.listID) }
+    }
+
+    func setNotes(_ notes: String, _ row: SharedRow) throws {
+        try edit(row) { try $0.setNotes(notes, task: row.id, in: row.listID) }
+    }
+
+    /// The date card's time: on the task's day (today for an undated one).
+    func setTime(_ row: SharedRow, hour: Int, minute: Int, now: Date = Date(), calendar: Calendar = .current) throws {
+        let day = calendar.startOfDay(for: row.task.due.value?.date ?? now)
+        let at = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
+        try edit(row) { try $0.setDue(SharedDue(date: at, hasTime: true), task: row.id, in: row.listID) }
+    }
+
+    /// The date card's "No time": all day, on the same day.
+    func clearTime(_ row: SharedRow, calendar: Calendar = .current) throws {
+        guard let due = row.task.due.value, due.hasTime else { return }
+        try edit(row) { try $0.setDue(SharedDue(date: calendar.startOfDay(for: due.date), hasTime: false), task: row.id, in: row.listID) }
+    }
+
+    /// The editor's people row (brief 64): the task goes to another set of people, with its fields; it is a new task
+    /// there (another shared list is another CloudKit zone) and goes from the first. Nothing moves when it is there
+    /// already.
+    @discardableResult
+    func move(_ row: SharedRow, to listID: UUID) throws -> SharedRow {
+        guard row.listID != listID else { return row }
+        guard let store, let target = store.list(listID) else { throw Refusal.gone }
+        guard SharedTasksPermissions.allows(.addTask, in: target) else {
+            throw Refusal.cannotChange(list: target.title.isEmpty ? SharedRow.untitled : target.title)
+        }
+        var copy: SharedTask?
+        try edit(row) { store in
+            let task = row.task
+            let added = try store.addTask(to: listID, title: task.title.value, notes: task.notes.value,
+                                          priority: task.priority.value, due: task.due.value)
+            if task.isCompleted { try store.setCompleted(true, task: added.id, in: listID) }
+            try store.deleteTask(row.id, in: row.listID)
+            copy = added
+        }
+        guard let copy, let list = store.list(listID) else { throw Refusal.gone }
+        return SharedRow(task: list.task(copy.id) ?? copy, list: list, me: store.me)
+    }
+
     func delete(_ row: SharedRow) throws {
         try edit(row) { try $0.deleteTask(row.id, in: row.listID) }
     }

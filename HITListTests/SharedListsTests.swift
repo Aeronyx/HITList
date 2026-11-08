@@ -4,9 +4,9 @@ import SwiftData
 import HITListCore
 @testable import HITList
 
-/// Brief 62, item 3: shared tasks in your lists. A shared row opens its editor through the popouts (one task at a
-/// time, drawn by the list that opened it), its list's section header carries the two-person marker, and its row is
-/// the height of a row of yours. In-memory stores only.
+/// Briefs 62 and 64: shared tasks in your lists. A shared row opens its editor through the popouts (one task at a time,
+/// drawn by the popout host as yours is), Shared Tasks' section header is a Group's, and its row is the height of a
+/// row of yours. In-memory stores only.
 @MainActor
 final class SharedListsTests: XCTestCase {
     private let ref = SharedTaskRef(taskID: UUID(), listID: UUID())
@@ -38,45 +38,21 @@ final class SharedListsTests: XCTestCase {
         XCTAssertTrue(state.showsAddButton)
     }
 
-    func testOnlyTheListThatOpenedItDrawsTheEditor() {
-        let popouts = controller()
-        let today = UUID(), group = UUID()
-        popouts.openShared(ref, owner: today)
-        XCTAssertEqual(popouts.sharedTask(for: today), ref)
-        XCTAssertNil(popouts.sharedTask(for: group), "a list under it on the stack never presents it too")
-        popouts.closeSharedTask()
-        XCTAssertNil(popouts.sharedTask(for: today))
-        XCTAssertNil(popouts.state.sharedTask)
-    }
-
-    func testSelectingASharedRowOpensItsEditorAndKeepsTheRowSelected() {
-        let popouts = controller()
-        let owner = UUID()
-        let selection = popouts.listSelection(owner: owner)
-        selection.wrappedValue = .shared(ref)
-        XCTAssertEqual(popouts.sharedTask(for: owner), ref)
-        XCTAssertEqual(selection.wrappedValue, .shared(ref), "highlighted while open")
-        XCTAssertNil(popouts.listSelection(owner: UUID()).wrappedValue, "another list's rows stay plain")
-        selection.wrappedValue = nil
-        XCTAssertNil(popouts.state.sharedTask)
-    }
-
     func testSelectingATaskOfYoursClosesASharedEditorAndAnAccountSwitchClosesBoth() throws {
         let container = ModelContainerFactory.preview()
         let task = TaskItem(title: "Call Sam")
         container.mainContext.insert(task)
         let popouts = controller()
-        let owner = UUID()
-        popouts.openShared(ref, owner: owner)
-        popouts.listSelection(owner: owner).wrappedValue = .task(task)
-        XCTAssertNil(popouts.sharedTask(for: owner))
+        popouts.openShared(ref)
+        popouts.listSelection.wrappedValue = .task(task)
+        XCTAssertNil(popouts.state.sharedTask)
         XCTAssertEqual(popouts.task?.id, task.id)
-        XCTAssertEqual(popouts.listSelection(owner: owner).wrappedValue, .task(task))
+        XCTAssertEqual(popouts.listSelection.wrappedValue, .task(task))
 
-        popouts.openShared(ref, owner: owner)
+        popouts.openShared(ref)
         XCTAssertNil(popouts.task, "a shared task replaces the open task of yours")
         popouts.accountDidSwitch()
-        XCTAssertNil(popouts.sharedTask(for: owner), "another Apple account sees nothing the previous one opened")
+        XCTAssertNil(popouts.state.sharedTask, "another Apple account sees nothing the previous one opened")
     }
 
     func testDeletingASharedTaskAsksFirstWhenTheSettingSaysSo() {

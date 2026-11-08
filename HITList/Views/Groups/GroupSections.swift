@@ -1,6 +1,12 @@
 import SwiftUI
 import HITListCore
 
+/// A Group's dot where a control draws an SF Symbol in an icon column (the editor's Group row, the Group card, the
+/// quick-add chip, brief 64): the small filled circle, so every Group reads as a dot and never as "#".
+enum GroupDot {
+    static let symbol = "circlebadge.fill"
+}
+
 /// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count;
 /// "Ungrouped" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No
 /// date") in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
