@@ -4,7 +4,7 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.8.0
+## 0.8.0 — build 18, 2026-11-07
 
 Round 13, from the friends' first week: Groups you can group and filter by, a tab bar that moves, the Flipboard as
 George meant it, and a Review Inbox that is one card and two swipes. First, the three things that went wrong on the
