@@ -48,6 +48,107 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Upcoming")
     }
 
+    /// Brief 65 (George, 0.8.1: clicking "No date" in the editor did nothing, and the title did not "respect
+    /// quickadd"). The date row is the editor's way to a date: an undated task's "No date" opens the date card at
+    /// once, Tomorrow closes it and the row reads Tomorrow. The title reads quick-add phrases: "Call mom" with
+    /// " tomorrow 5pm p1" typed at its end shows tomorrow 5 PM and P1 in the rows below, and Confirm saves them
+    /// with "Call mom" as the title.
+    func testTheEditorsDateRowAndQuickAddTitle() throws {
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-inbox"].waitForExistence(timeout: 15))
+        tab("inbox")
+        addFromTheCard("Pay rent")
+        addFromTheCard("Call mom")
+
+        // The date row: "No date" → the date card → Tomorrow.
+        openEditor("Pay rent")
+        let dateRow = app.buttons["popoutDateRow"].firstMatch
+        XCTAssertTrue(dateRow.waitForExistence(timeout: 5), "the editor's date row")
+        XCTAssertTrue(dateRow.label.contains("No date"), dateRow.label)
+        snapshot("1 Editor with no date")
+        dateRow.tap()
+        let tomorrow = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Tomorrow, ")).firstMatch
+        XCTAssertTrue(tomorrow.waitForExistence(timeout: 3), "the date card, at once")
+        snapshot("2 The date card")
+        tomorrow.tap()
+        XCTAssertTrue(tomorrow.waitForNonExistence(timeout: 5), "picking a day closes the card")
+        XCTAssertTrue(dateRow.label.hasPrefix("Tomorrow"), "the row shows the day: \(dateRow.label)")
+        snapshot("3 The row reads Tomorrow")
+        closeEditor()
+
+        // The title: phrases typed at its end light up and fill the rows; Confirm saves them.
+        openEditor("Call mom")
+        let title = app.descendants(matching: .any)["editorTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard in the title")
+        app.typeText(" tomorrow 5pm p1 ")
+        XCTAssertTrue(dateRow.label.hasPrefix("Tomorrow"), "the date row reads the typed day: \(dateRow.label)")
+        XCTAssertTrue(dateRow.label.contains("5"), "and the typed time: \(dateRow.label)")
+        let priority = app.buttons["popoutPriorityChip"].firstMatch
+        XCTAssertTrue(priority.label.contains("P1"), "the priority pill fills: \(priority.label)")
+        snapshot("4 Typed tomorrow 5pm p1")
+        app.buttons["editorConfirm"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "Confirm closes the editor")
+        snapshot("5 Saved")
+
+        openEditor("Call mom")
+        XCTAssertEqual(title.value as? String, "Call mom", "the phrases left the title")
+        XCTAssertTrue(dateRow.label.hasPrefix("Tomorrow"), dateRow.label)
+        XCTAssertTrue(app.buttons["popoutPriorityChip"].firstMatch.label.contains("P1"))
+        snapshot("6 Reopened")
+        closeEditor()
+
+        // With the keyboard in the title, the date row still opens its card at once, and a day picked there
+        // replaces the day typed in the title.
+        openEditor("Pay rent")
+        title.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.typeText(" in 3 days p2 ")
+        XCTAssertFalse(dateRow.label.hasPrefix("Tomorrow"), "the typed day shows: \(dateRow.label)")
+        snapshot("7 Typed in 3 days p2")
+        dateRow.tap()
+        let today = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Today, ")).firstMatch
+        XCTAssertTrue(today.waitForExistence(timeout: 3), "the date card, with the keyboard up")
+        snapshot("8 The date card over the keyboard")
+        today.tap()
+        XCTAssertTrue(today.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(dateRow.label.hasPrefix("Today"), "the picked day: \(dateRow.label)")
+        XCTAssertFalse((title.value as? String ?? "").contains("in 3 days"), "the typed day left the title: \(title.value ?? "")")
+        snapshot("9 Picked Today")
+        app.buttons["editorConfirm"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
+        openEditor("Pay rent")
+        XCTAssertEqual(title.value as? String, "Pay rent")
+        XCTAssertTrue(dateRow.label.hasPrefix("Today"), dateRow.label)
+        XCTAssertTrue(app.buttons["popoutPriorityChip"].firstMatch.label.contains("P2"))
+        closeEditor()
+    }
+
+    /// Adds an undated task from the current list's card and waits for the card to go.
+    private func addFromTheCard(_ title: String) {
+        app.buttons["quickAddButton"].firstMatch.tap()
+        let field = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the card's title field")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.typeText(title)
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "the card closes after Add")
+    }
+
+    private func openEditor(_ title: String) {
+        let row = app.staticTexts.matching(NSPredicate(format: "label == %@", title)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5), title)
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForExistence(timeout: 5), "the editor")
+        XCTAssertTrue(app.buttons["popoutDateRow"].firstMatch.waitForExistence(timeout: 5))
+    }
+
+    private func closeEditor() {
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForNonExistence(timeout: 5), "the editor closes")
+    }
+
     /// Brief 62: shared tasks are rows of your lists, not a screen of their own. With the sample shared lists
     /// (`-seedSharedTasksSample`: in memory, no CloudKit), "Oat milk" (Groceries, due today, P2) is a row in Today
     /// with its list's name and the people marker; completing it from the row shows the Undo toast and Undo brings it
