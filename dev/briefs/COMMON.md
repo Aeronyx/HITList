@@ -151,7 +151,12 @@ typed-Group row, the Mac Extras subtitle; George's tweaks (the "+" in the Confir
 quick-add card, the Flipboard lights). Left for later: the Priority and Repeat cards' buttons take keyboard focus only
 with Full Keyboard Access (`PopoutPickers`); `TokenHighlightField`'s `apply` can overwrite a letter just typed when its
 owner is rebuilt mid-keystroke inside a keyboard-height `GeometryReader` (69's finding, worked around in the Flipboard
-card; a guard in `apply` would fix it everywhere); the quick-add tips show in the floating Mac card and the iPhone card
+card; a guard in `apply` would fix it everywhere); on iPhone the toolbar pill is still about 4 pt wider on the
+Flipboard than on a list: iOS 26 sizes a toolbar menu by its glyph and ignores a frame on the menu, on its label and on a
+container label (tried all three; only a plain Button took a width), so the fix is a narrower glyph or a different
+control there; on a simulator that behaves as if a hardware keyboard is attached (the long-lived "iPhone 17"), the
+editor's date card does not open while the title has focus, so run UI tests on a fresh simulator, and an iPad with a
+hardware keyboard may show the same; the quick-add tips show in the floating Mac card and the iPhone card
 but not in the Mac's inline and board cards; two Apple accounts sharing still untested; side stores `HITList-s64*`,
 `HITList-s65`, `HITList-s66`, `HITList-s68*`, `HITList-s69*`, `HITList-s15*` and `SharedTasks-s64a/b.json` in the Mac app
 group folder (delete by hand in Finder).
