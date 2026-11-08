@@ -4,6 +4,8 @@ import HITListCore
 
 struct FilterEditorView: View {
     let filter: SavedFilter?
+    /// A new filter's query to start from: Browse's "Save as filter…" (brief 61) opens the editor to name it.
+    var initialQuery: String? = nil
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @Query private var allTasks: [TaskItem]
@@ -60,7 +62,7 @@ struct FilterEditorView: View {
             }
         }
         .onAppear {
-            if let f = filter { name = f.name; query = f.query; colorHex = f.colorHex }
+            if let f = filter { name = f.name; query = f.query; colorHex = f.colorHex } else if let initialQuery { query = initialQuery }
         }
         #if os(macOS)
         .frame(minWidth: 540, minHeight: 640)
