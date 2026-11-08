@@ -54,25 +54,6 @@ struct SidebarView: View {
             }
 
             Section {
-                ForEach(filters) { filter in
-                    Label {
-                        Text(filter.name)
-                    } icon: {
-                        Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(Color(hex: filter.colorHex))
-                    }
-                    .tag(SidebarItem.filter(filter.id))
-                    .slateRow()
-                    .contextMenu {
-                        Button("Edit Filter…") { editingFilter = filter }
-                        Button("Delete", role: .destructive) { delete(filter) }
-                    }
-                }
-                .onMove { from, to in move(&filtersSnapshot, from, to) }
-            } header: {
-                sectionHeader("Filters") { creatingFilter = true }
-            }
-
-            Section {
                 ForEach(projects) { project in
                     Label {
                         HStack {
@@ -98,7 +79,27 @@ struct SidebarView: View {
                 sectionHeader("Groups") { creatingProject = true }
             }
 
-            // Each shared list under "Shared", after the Groups (brief 62), opening its own screen in the detail column;
+            // Filters below the Groups (George, 2026-11-08: "definitely put it below Groups").
+            Section {
+                ForEach(filters) { filter in
+                    Label {
+                        Text(filter.name)
+                    } icon: {
+                        Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(Color(hex: filter.colorHex))
+                    }
+                    .tag(SidebarItem.filter(filter.id))
+                    .slateRow()
+                    .contextMenu {
+                        Button("Edit Filter…") { editingFilter = filter }
+                        Button("Delete", role: .destructive) { delete(filter) }
+                    }
+                }
+                .onMove { from, to in move(&filtersSnapshot, from, to) }
+            } header: {
+                sectionHeader("Filters") { creatingFilter = true }
+            }
+
+            // Each shared list under "Shared", after the Groups and Filters (brief 62), opening its own screen in the detail column;
             // the Shared Tasks row above stays for managing them. Only while there are any.
             let sharedLists = sharedRows.lists
             if !sharedLists.isEmpty {
