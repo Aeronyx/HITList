@@ -27,12 +27,28 @@ final class FontTests: XCTestCase {
         XCTAssertEqual(HITFont.postScriptName(.bold), "Inter18pt-Bold")
     }
 
-    /// Build 13: the iPhone's row titles a pixel tighter ("by like a pixel"); the Mac's untouched.
+    /// Build 13: the iPhone's row titles a pixel tighter ("by like a pixel"); the Mac's need none (round 15: Inter
+    /// 14 with no tracking spans George's target line to the pixel).
     func testTaskTitleTracking() {
         #if os(macOS)
         XCTAssertEqual(HITType.taskTitleTracking, 0)
         #else
         XCTAssertEqual(HITType.taskTitleTracking, -0.3)
+        #endif
+    }
+
+    /// Round 15 (brief 67): the Mac draws text without font smoothing, as George's target row is drawn; with it,
+    /// Inter read 20–25% heavier than the target. Registered for the app's process only (the lowest-priority
+    /// domain, nothing written to disk) by `installPlatformAppearance`, which the app runs at launch, hosted
+    /// tests included.
+    func testTheMacDrawsTextWithoutFontSmoothing() {
+        XCTAssertFalse(HITFont.smoothsMacText)
+        XCTAssertEqual(HITFont.macTextSmoothingDefaults as? [String: Int], ["AppleFontSmoothing": 0])
+        #if os(macOS)
+        let registered = UserDefaults.standard.volatileDomain(forName: UserDefaults.registrationDomain)
+        XCTAssertEqual(registered["AppleFontSmoothing"] as? Int, 0)
+        XCTAssertNil(UserDefaults.standard.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "")?["AppleFontSmoothing"],
+                     "never written to the app's own preferences")
         #endif
     }
 }
