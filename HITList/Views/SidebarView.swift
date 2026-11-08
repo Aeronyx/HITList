@@ -141,20 +141,6 @@ struct SidebarView: View {
             SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
         }
         #endif
-        #if os(macOS)
-        // A shared task's panel is drawn over the list's column (`sharedTaskEditor`); the sidebar dims with it, as it
-        // does under a task of yours, and a click on it closes the panel.
-        .overlay {
-            if let popouts, popouts.state.isSharedTaskOpen {
-                Color.black.opacity(0.45)
-                    .ignoresSafeArea()
-                    .contentShape(Rectangle())
-                    .onTapGesture { popouts.closeSharedTask() }
-                    .transition(.opacity)
-            }
-        }
-        .animation(HITMotion.enter, value: popouts?.state.isSharedTaskOpen == true)
-        #endif
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sheet(isPresented: $creatingProject) { ProjectEditorView(project: nil).slateSheet() }

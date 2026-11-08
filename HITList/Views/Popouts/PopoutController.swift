@@ -109,8 +109,8 @@ struct SharedTaskRef: Hashable, Identifiable {
     }
 }
 
-/// What a list's selection holds (brief 62): a task of yours, whose popout the popout host draws, or a shared task,
-/// whose editor the list that opened it draws (`sharedTaskEditor(owner:)`).
+/// What a list's selection holds (briefs 62, 64): a task of yours or a shared task; the popout host draws the editor
+/// of either.
 enum ListSelection: Hashable {
     case task(TaskItem)
     case shared(SharedTaskRef)
@@ -129,8 +129,12 @@ final class PopoutController {
     /// the same stored card again.
     private static var liveCards: Set<UUID> = []
 
-    init(draftDefaults: UserDefaults = AppGroup.defaults, center: NotificationCenter = .default) {
+    /// The shared tasks (brief 64): completing and undoing one from its editor; tests pass their own.
+    @ObservationIgnored let sharedRows: SharedRows
+
+    init(draftDefaults: UserDefaults = AppGroup.defaults, center: NotificationCenter = .default, sharedRows: SharedRows = .shared) {
         self.draftDefaults = draftDefaults
+        self.sharedRows = sharedRows
         // Another Apple account took over this device (`AccountSwitch`): nothing the previous person typed
         // or completed stays on screen for the next one.
         accountObserver = center.addObserver(forName: .accountDidSwitch, object: nil, queue: .main) { [weak self] _ in
@@ -209,7 +213,6 @@ final class PopoutController {
     /// A fresh card: it starts empty, whatever is stored (only the card that was open gets that back).
     func openQuickAdd(_ context: QuickAddContext? = nil, placement: PopoutState.Placement = .floating) {
         task = nil
-        sharedOwner = nil
         update { $0.openQuickAdd(context ?? listContext, placement: placement) }
     }
 
@@ -280,7 +283,6 @@ final class PopoutController {
 
     func open(_ task: TaskItem) {
         self.task = task
-        sharedOwner = nil
         update { $0.openTask(task.id) }
     }
 
@@ -291,31 +293,28 @@ final class PopoutController {
 
     func closeAll() {
         task = nil
-        sharedOwner = nil
         update { $0.closeAll() }
     }
 
-    // MARK: Shared task (brief 62)
+    // MARK: Shared task (briefs 62, 64)
 
-    /// The list that opened the shared task's editor and draws it: a sheet on the iPhone and iPad, the panel on the
-    /// Mac. Kept so a list under another on the iPhone's stack never presents it as well.
-    private(set) var sharedOwner: UUID?
-
-    /// Opens a shared task's editor (the one `SharedListScreen` uses), drawn by the list `owner`.
-    func openShared(_ ref: SharedTaskRef, owner: UUID) {
+    /// Opens a shared task's editor (`SharedTaskPopout`), which `PopoutHost` draws as it draws yours: the panel on the
+    /// Mac and iPad, the sheet on the iPhone.
+    func openShared(_ ref: SharedTaskRef) {
         task = nil
-        sharedOwner = owner
         update { $0.openSharedTask(ref) }
     }
 
     func closeSharedTask() {
-        sharedOwner = nil
         update { $0.closeSharedTask() }
     }
 
-    /// The shared task `owner` should draw an editor for, if any.
-    func sharedTask(for owner: UUID) -> SharedTaskRef? {
-        sharedOwner == owner ? state.sharedTask : nil
+    /// Completes a shared task from its editor (who: me, when: now), closes it and shows the toast, whose Undo reopens
+    /// it for everyone (`undoCompletions`).
+    func completeShared(_ row: SharedRow) throws {
+        try sharedRows.setCompleted(true, row)
+        if state.sharedTask?.taskID == row.id { closeSharedTask() }
+        showToast(CompletedTask(id: row.id, title: row.filterTitle, revert: .uncomplete))
     }
 
     /// Closes the popout if its task no longer exists: deleted on another device (arriving with a sync
@@ -394,6 +393,11 @@ final class PopoutController {
     func undoCompletions(in context: ModelContext) {
         let records = withAnimation(HITMotion.exit) { toast.takeAll() }
         for record in records {
+            if let shared = sharedRows.row(record.id) {
+                // A shared task completed from its editor: reopened in the shared store, so the others see it back.
+                if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
+                continue
+            }
             let id = record.id
             guard let task = try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first else { continue }
             switch record.revert {
@@ -418,18 +422,18 @@ final class PopoutController {
         )
     }
 
-    /// The same for lists that show shared tasks among yours (brief 62): selecting a shared row opens its editor,
-    /// drawn by the list `owner`, and the row stays highlighted while it is open.
-    func listSelection(owner: UUID) -> Binding<ListSelection?> {
+    /// The same for lists that show shared tasks among yours (briefs 62, 64): selecting a shared row opens its editor,
+    /// and the row stays highlighted while it is open.
+    var listSelection: Binding<ListSelection?> {
         Binding(
             get: {
                 if let task = self.task { return .task(task) }
-                return self.sharedTask(for: owner).map(ListSelection.shared)
+                return self.state.sharedTask.map(ListSelection.shared)
             },
             set: { picked in
                 switch picked {
                 case .task(let task)?: self.open(task)
-                case .shared(let ref)?: self.openShared(ref, owner: owner)
+                case .shared(let ref)?: self.openShared(ref)
                 case nil:
                     self.closeTask()
                     self.closeSharedTask()
