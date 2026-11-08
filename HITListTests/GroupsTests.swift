@@ -62,16 +62,33 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(heading.accessibilityLabel, "Work, 3 tasks")
     }
 
-    func testNoGroupIsHollow() {
-        let heading = GroupSectionHeading.make(for: .ungrouped, count: 1, projects: [])
-        XCTAssertEqual(heading.title, "No Group")
-        XCTAssertEqual(heading.dot, .hollow)
-        XCTAssertEqual(heading.accessibilityLabel, "No Group, 1 task")
+    func testTheTitleAndCountAreOneRunOfTextWithTheCountInGrey() {
+        // George, 0.8.0: "Priority 4 1 in different fonts". One Text, one font; only the count's colour differs.
+        let work = project("Work", order: 0)
+        let label = GroupSectionHeading.make(for: .group(work.id), count: 3, projects: [work]).label
+        XCTAssertEqual(String(label.characters), "Work · 3")
+        let runs = Array(label.runs)
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(String(label[runs[0].range].characters), "Work")
+        XCTAssertNil(runs[0].swiftUI.foregroundColor, "the title takes the header's colour")
+        XCTAssertEqual(runs[1].swiftUI.foregroundColor, Theme.secondaryText)
+        XCTAssertNil(runs[0].swiftUI.font, "the font is the header's, for both")
+        XCTAssertNil(runs[1].swiftUI.font)
+        let empty = GroupSectionHeading.make(for: .group(work.id), count: 0, projects: [work]).label
+        XCTAssertEqual(String(empty.characters), "Work", "no count when nothing is open")
     }
 
-    func testAGroupDeletedAMomentAgoReadsAsNoGroup() {
+    func testUngroupedIsHollow() {
+        let heading = GroupSectionHeading.make(for: .ungrouped, count: 2, projects: [])
+        XCTAssertEqual(heading.title, "Ungrouped")
+        XCTAssertEqual(heading.dot, .hollow)
+        XCTAssertEqual(String(heading.label.characters), "Ungrouped · 2")
+        XCTAssertEqual(heading.accessibilityLabel, "Ungrouped, 2 tasks")
+    }
+
+    func testAGroupDeletedAMomentAgoReadsAsUngrouped() {
         let heading = GroupSectionHeading.make(for: .group(UUID()), count: 2, projects: [])
-        XCTAssertEqual(heading.title, "No Group")
+        XCTAssertEqual(heading.title, "Ungrouped")
     }
 
     func testDateHeadingsUseTheDueColoursAndNoDot() {
