@@ -659,33 +659,79 @@ extension Flipboard.Charge {
     }
 }
 
-/// "Every N days / weeks", the two shapes the board's editors offer.
-struct FlipInterval: Equatable {
+/// "Every N days / weeks / months", the shapes the switch card's dial offers (brief 69 added months, for
+/// the Monthly quick choice).
+struct FlipInterval: Hashable {
     enum Unit: String, CaseIterable, Identifiable {
-        case days, weeks
+        case days, weeks, months
         var id: Self { self }
+
+        /// "day" / "days", for the dial's unit and the phrase.
+        func word(_ count: Int) -> String {
+            switch self {
+            case .days: count == 1 ? "day" : "days"
+            case .weeks: count == 1 ? "week" : "weeks"
+            case .months: count == 1 ? "month" : "months"
+            }
+        }
     }
 
     var count: Int
     var unit: Unit
 
     static let `default` = FlipInterval(count: 3, unit: .days)
+    /// The dial's numbers.
+    static let range = 1...99
 
-    /// Nil for rules the editors can't show as N days/weeks (monthly, chosen weekdays, ...).
+    /// Nil for rules the card can't show as N days, weeks or months (chosen weekdays, yearly).
     init?(_ rule: RecurrenceRule) {
         switch rule.frequency {
         case .daily: self.init(count: rule.interval, unit: .days)
         case .weekly where rule.weekdays == nil: self.init(count: rule.interval, unit: .weeks)
+        case .monthly: self.init(count: rule.interval, unit: .months)
         default: return nil
         }
     }
 
     init(count: Int, unit: Unit) {
-        self.count = max(1, count)
+        self.count = min(Self.range.upperBound, max(Self.range.lowerBound, count))
         self.unit = unit
     }
 
     var rule: RecurrenceRule {
-        RecurrenceRule(frequency: unit == .days ? .daily : .weekly, interval: count)
+        let frequency: RecurrenceRule.Frequency = switch unit {
+        case .days: .daily
+        case .weeks: .weekly
+        case .months: .monthly
+        }
+        return RecurrenceRule(frequency: frequency, interval: count)
+    }
+
+    /// The words the switch card writes into a name that already has a repeat phrase: "every 3 days",
+    /// "every week". The quick-add grammar reads each one back as `rule`.
+    var phrase: String { count == 1 ? "every \(unit.word(1))" : "every \(count) \(unit.word(count))" }
+
+    /// One dial detent along, within `range`.
+    func stepped(by delta: Int) -> FlipInterval { FlipInterval(count: count + delta, unit: unit) }
+
+    /// One of the card's quick choices.
+    struct Choice: Identifiable, Hashable {
+        let title: String
+        let interval: FlipInterval
+        var id: String { title }
+    }
+
+    /// The row of quick choices under a switch's name (brief 69): the intervals most chores have.
+    static let quickChoices: [Choice] = [
+        Choice(title: "Daily", interval: FlipInterval(count: 1, unit: .days)),
+        Choice(title: "3 days", interval: FlipInterval(count: 3, unit: .days)),
+        Choice(title: "Weekly", interval: FlipInterval(count: 1, unit: .weeks)),
+        Choice(title: "2 weeks", interval: FlipInterval(count: 2, unit: .weeks)),
+        Choice(title: "Monthly", interval: FlipInterval(count: 1, unit: .months)),
+    ]
+
+    /// The quick choice that is `rule`, if one is.
+    static func choice(for rule: RecurrenceRule) -> Choice? {
+        quickChoices.first { $0.interval.rule == rule }
     }
 }

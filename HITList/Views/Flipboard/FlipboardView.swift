@@ -19,12 +19,24 @@ struct FlipboardView: View {
     @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.recurrence != nil }) private var recurring: [TaskItem]
     @State private var now = Date()
     @State private var width: CGFloat = 0
-    @State private var adding = false
     @State private var editing: EditRequest?
+    /// The switch card open in the grid (Mac and iPad, brief 69): adding, or editing a switch.
+    @State private var inlineCard: SwitchCardRequest?
+    /// The switch card over the board (iPhone).
+    @State private var floatingCard: SwitchCardRequest?
+    @State private var cardHasContent = false
+    @State private var confirmingDiscard = false
+    /// When the inline card offered "Discard": one Esc can reach both × and the exit command, and must not
+    /// ask and discard in the same press.
+    @State private var discardOfferedAt = Date.distantPast
+    /// Where the inline card is, in the board's scroll view: a click inside it is never a click away.
+    @State private var cardFrame = CGRect.null
+    private static let boardSpace = "flipboard"
     /// The switch just deleted, while its "Deleted · Undo" toast shows.
     @State private var deleted: Flipboard.DeletedSwitch?
     @State private var deleteGeneration = 0
     @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     private static let spacing: CGFloat = 14
@@ -47,38 +59,70 @@ struct FlipboardView: View {
         #endif
     }
 
-    private var columns: [GridItem] {
-        let count = FlipboardLayout.columnCount(width: width, compact: isCompact, spacing: Self.spacing,
-                                                even: onDuoInnerDisplay)
-        return Array(repeating: GridItem(.flexible(), spacing: Self.spacing, alignment: .top), count: count)
+    private var columnCount: Int {
+        FlipboardLayout.columnCount(width: width, compact: isCompact, spacing: Self.spacing, even: onDuoInnerDisplay)
     }
+
+    /// The columns the inline card takes (`FlipboardLayout.cardSpan`).
+    private var cardSpan: Int {
+        let columns = columnCount
+        let cell = (width - CGFloat(columns - 1) * Self.spacing) / CGFloat(max(1, columns))
+        return FlipboardLayout.cardSpan(columns: columns, cellWidth: cell, spacing: Self.spacing)
+    }
+
+    /// iPhone: the card floats over the board; the Mac and iPad open it in the grid.
+    private var cardFloats: Bool { isCompact }
 
     var body: some View {
         let switches = switches
         SwiftUI.Group {
-            if switches.isEmpty {
+            if switches.isEmpty && inlineCard == nil {
                 ContentUnavailableView {
                     Label("No Switches Yet", systemImage: "switch.2")
                 } description: {
                     Text(Self.emptyMessage)
                 } actions: {
-                    Button("Add a Switch") { adding = true }
+                    Button("Add a Switch") { openCard(.add) }
                         .buttonStyle(.hitPrimary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: Self.spacing) {
-                        ForEach(switches) { task in
-                            FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
-                                           onOpen: { open(task) }, onDelete: { delete(task) })
-                                .hitTip(task.id == switches.first?.id ? HITTip(.flipboard) : nil)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
+                            ForEach(switches) { task in
+                                cell(for: task, first: task.id == switches.first?.id)
+                            }
+                            // The last cell adds a switch: a dashed outline of one, with a big +; on the Mac
+                            // and iPad the card opens in its place.
+                            if inlineCard == .add {
+                                inlineCardView(.add)
+                            } else {
+                                AddSwitchTile { openCard(.add) }
+                                    .allowsHitTesting(inlineCard == nil)
+                            }
                         }
-                        // The last cell adds a switch: a dashed outline of one, with a big +.
-                        AddSwitchTile { adding = true }
+                        .padding(16)
+                        .animation(.snappy(duration: 0.35), value: switches.map(\.id))
                     }
-                    .padding(16)
-                    .animation(.snappy(duration: 0.35), value: switches.map(\.id))
+                    // While the card is open in the grid, a click anywhere off it is a click away: the tiles
+                    // stop taking clicks (no switch flips by accident) and the click reaches the board. A click
+                    // in the card's name reaches it too (the text view is AppKit's or UIKit's and claims no
+                    // SwiftUI gesture), so a click inside the card's frame only ever means keep editing.
+                    .gesture(SpatialTapGesture(coordinateSpace: .named(Self.boardSpace)).onEnded { tap in
+                        if cardFrame.contains(tap.location) {
+                            if confirmingDiscard { keepEditing() }
+                        } else {
+                            clickAway()
+                        }
+                    }, including: inlineCard == nil ? .subviews : .all)
+                    .coordinateSpace(.named(Self.boardSpace))
+                    .onChange(of: inlineCard?.id) { _, id in
+                        guard let id else { return }
+                        Task { @MainActor in
+                            withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
+                        }
+                    }
                 }
             }
         }
@@ -98,7 +142,7 @@ struct FlipboardView: View {
             .help(soundOn ? "Flip sound on" : "Flip sound off")
             .accessibilityIdentifier("flipSound")
         } menu: {
-            Button { adding = true } label: { Label("Add Switch…", systemImage: "plus") }
+            Button { openCard(.add) } label: { Label("Add Switch…", systemImage: "plus") }
         }
         .onReceive(clock) { now = $0 }
         .onAppear {
@@ -107,12 +151,115 @@ struct FlipboardView: View {
         }
         .completionToast(deleted.map { "Deleted ‘\($0.title)’" }, onUndo: undoDelete,
                          onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
-        .sheet(isPresented: $adding) {
-            FlipSwitchEditor(task: nil).slateSheet()
+        #if os(iOS)
+        .fullScreenCover(item: $floatingCard) { request in
+            FloatingSwitchCard(request: request) { _ in
+                withoutAnimation { floatingCard = nil }
+            }
+            .presentationBackground(.clear)
         }
+        #endif
         .sheet(item: $editing) { request in
             FlipSwitchEditor(task: request.task, focus: request.focus).slateSheet()
         }
+    }
+
+    /// A switch's tile, or the card editing it.
+    @ViewBuilder
+    private func cell(for task: TaskItem, first: Bool) -> some View {
+        if inlineCard == .edit(task) {
+            inlineCardView(.edit(task))
+        } else {
+            FlipSwitchTile(task: task, now: now, onEdit: { editing = EditRequest(task: task, focus: $0) },
+                           onOpen: { open(task) }, onDelete: { delete(task) })
+                .hitTip(first ? HITTip(.flipboard) : nil)
+                .allowsHitTesting(inlineCard == nil)
+                .id(task.id)
+        }
+    }
+
+    // MARK: The switch card (brief 69)
+
+    /// The card in the grid, as wide as `cardSpan` columns.
+    private func inlineCardView(_ request: SwitchCardRequest) -> some View {
+        SwitchCard(editing: request.task, style: .inline, isConfirmingDiscard: confirmingDiscard,
+                   onClose: requestClose,
+                   onSaved: { _ in if request != .add { closeCard() } },
+                   onDraftChange: { cardHasContent = $0 },
+                   onDiscard: closeCard,
+                   onKeepEditing: keepEditing)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.boardSpace)) } action: { cardFrame = $0 }
+            .id(request.id)
+            .flipboardGridSpan(cardSpan)
+            .transition(.asymmetric(insertion: .scale(scale: 0.96).combined(with: .opacity)
+                                        .animation(HITMotion.enter(reduceMotion: reduceMotion)),
+                                    removal: .opacity.animation(HITMotion.exit(reduceMotion: reduceMotion))))
+    }
+
+    /// The + tile, the toolbar's Add Switch… or a tile's menu: the card, in the grid or over the board.
+    private func openCard(_ request: SwitchCardRequest) {
+        if cardFloats {
+            withoutAnimation { floatingCard = request }
+            return
+        }
+        guard inlineCard != request else { return }
+        clickAway {
+            withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) {
+                confirmingDiscard = false
+                cardHasContent = false
+                inlineCard = request
+            }
+        }
+    }
+
+    /// A click on the board off the card. An empty card closes and `then` runs; with something to lose,
+    /// "Discard" shows and nothing else happens; with "Discard" showing, back to typing.
+    private func clickAway(then action: (() -> Void)? = nil) {
+        guard inlineCard != nil else { action?(); return }
+        switch BoardInlineAdd.clickAway(hasContent: cardHasContent, confirmingDiscard: confirmingDiscard) {
+        case .close:
+            closeCard()
+            action?()
+        case .askDiscard:
+            discardOfferedAt = Date()
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .keepEditing:
+            keepEditing()
+        }
+    }
+
+    private func keepEditing() {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+    }
+
+    /// × or Escape on the card: an empty card closes; with something to lose "Discard" shows first, and a
+    /// second × or Escape discards.
+    private func requestClose() {
+        switch BoardInlineAdd.close(hasContent: cardHasContent, confirmingDiscard: confirmingDiscard) {
+        case .close:
+            closeCard()
+        case .askDiscard:
+            discardOfferedAt = Date()
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .discard:
+            guard Date().timeIntervalSince(discardOfferedAt) > 0.3 else { return }
+            closeCard()
+        }
+    }
+
+    private func closeCard() {
+        cardFrame = .null
+        withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) {
+            inlineCard = nil
+            confirmingDiscard = false
+            cardHasContent = false
+        }
+    }
+
+    private func withoutAnimation(_ change: () -> Void) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction, change)
     }
 
     /// The empty board's rule, in one sentence (brief 59), then how to add a switch.
@@ -279,12 +426,7 @@ struct FlipSwitchEditor: View {
         }
     }
 
-    private func unitWord(_ unit: FlipInterval.Unit, _ count: Int) -> String {
-        switch unit {
-        case .days: count == 1 ? "day" : "days"
-        case .weeks: count == 1 ? "week" : "weeks"
-        }
-    }
+    private func unitWord(_ unit: FlipInterval.Unit, _ count: Int) -> String { unit.word(count) }
 
     private func save() {
         do {
