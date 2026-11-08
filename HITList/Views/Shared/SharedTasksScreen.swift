@@ -212,8 +212,9 @@ struct SharedListsView: View {
         .onAppear { now = Date() }
     }
 
+    /// Wraps in full: the Mac's list cut a footer to one line.
     private func footer(_ text: String) -> some View {
-        Text(text).font(HITType.footnote).foregroundStyle(Theme.secondaryText)
+        Text(text).font(HITType.footnote).foregroundStyle(Theme.secondaryText).fixedSize(horizontal: false, vertical: true)
     }
 
     private var statusLine: (text: String, symbol: String, tint: Color)? {
