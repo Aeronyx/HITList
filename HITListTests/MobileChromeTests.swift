@@ -94,6 +94,28 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(ListMetrics.rowLineGap, 4)
     }
 
+    func testRowTypeIsAStepLargerOnlyBesideTheUprightIsland() {
+        // Brief 63: a friend on the iPhone Duo asked for slightly larger type on the outer display.
+        #if os(iOS)
+        XCTAssertEqual(HITType.taskTitleSize, 16, "every other iPhone: unchanged")
+        XCTAssertEqual(HITType.taskTitleSideSize, 17)
+        XCTAssertEqual(HITType.taskTitleTracking, -0.3, "the same tracking at both sizes")
+        XCTAssertEqual(HITType.taskMetaSize, 12)
+        XCTAssertEqual(HITType.taskMetaSideSize, 13)
+        XCTAssertEqual(HITType.taskTitle, HITFont.inter(16, .regular, relativeTo: .body))
+        XCTAssertEqual(HITType.taskTitleSide, HITFont.inter(17, .regular, relativeTo: .body))
+        XCTAssertEqual(HITType.taskMeta, HITType.caption, "the meta line is the caption size it always was")
+        XCTAssertEqual(HITType.taskMetaSide, HITFont.inter(13, .regular, relativeTo: .caption))
+        #endif
+        XCTAssertEqual(HITType.taskTitle(for: .bottom), HITType.taskTitle)
+        XCTAssertEqual(HITType.taskMeta(for: .bottom), HITType.taskMeta)
+        for edge in [HorizontalEdge.leading, .trailing] {
+            XCTAssertEqual(HITType.taskTitle(for: .side(edge)), HITType.taskTitleSide)
+            XCTAssertEqual(HITType.taskMeta(for: .side(edge)), HITType.taskMetaSide)
+        }
+        XCTAssertEqual(EnvironmentValues().listIslandPlacement, .bottom, "outside the iPhone shell: the usual sizes")
+    }
+
     func testGlassNeedsTheOSAndBothSwitchesOff() {
         XCTAssertTrue(HITEffects.allowsGlass(osSupportsGlass: true, reduceEffects: false, reduceTransparency: false))
         XCTAssertFalse(HITEffects.allowsGlass(osSupportsGlass: false, reduceEffects: false, reduceTransparency: false))
