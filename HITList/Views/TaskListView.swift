@@ -82,9 +82,9 @@ struct TaskListView: View {
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
         var hidesDay = false
-        /// A Group or shared list section of a Today sorted by Group (briefs 57, 62): drawn by `RowSectionHeader`
-        /// instead of `title`.
-        var heading: RowSectionHeading?
+        /// A Group's or Shared Tasks' section of a Today sorted by Group (briefs 57, 62, 64): drawn by
+        /// `GroupSectionHeader` instead of `title`.
+        var heading: GroupSectionHeading?
         /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
@@ -214,10 +214,9 @@ struct TaskListView: View {
     }
 
     private func groupedTodayGroups(_ rows: [TaskListRow]) -> [Group] {
-        // The same section rule as Today by priority (`todayGroups`), so the two never disagree. Shared lists after
-        // the Groups, "Ungrouped" last (brief 62).
-        let sharedLists = sharedRows.lists
-        let order = ListRows.groupOrder(groups: projects.map(\.id), sharedLists: sharedLists.map(\.id))
+        // The same section rule as Today by priority (`todayGroups`), so the two never disagree. Shared Tasks after
+        // the Groups, "Ungrouped" last (briefs 62, 64).
+        let order = ListRows.groupOrder(groups: projects.map(\.id))
         let split = GroupedOrdering.today(rows, by: .group, groupOrder: order, now: now,
                                           sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) { $0.group }
         guard !split.isEmpty else { return [] }
@@ -225,8 +224,7 @@ struct TaskListView: View {
                       hidesDay: Bool) -> [Group] {
             sections.enumerated().map { index, section in
                 Group(id: "\(half)-\(section.key)", title: "", rows: section.tasks, color: color, hidesDay: hidesDay,
-                      heading: .make(for: section.key, count: section.openCount, projects: projects, sharedLists: sharedLists,
-                                     now: now),
+                      heading: .make(row: section.key, count: section.openCount, projects: projects, now: now),
                       banner: index == 0 ? banner : nil)
             }
         }
@@ -300,7 +298,7 @@ struct TaskListView: View {
                                             if let banner = group.banner {
                                                 Text(banner).taskSectionHeader(color: group.color)
                                             }
-                                            RowSectionHeader(heading: heading, belowBanner: group.banner != nil)
+                                            GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
                                         }
                                         .listRowInsets(EdgeInsets())
                                     } else if !group.title.isEmpty {

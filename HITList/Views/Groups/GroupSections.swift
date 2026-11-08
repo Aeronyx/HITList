@@ -38,6 +38,24 @@ struct GroupSectionHeading: Equatable {
         }
     }
 
+    /// The heading for a section of a list that holds shared tasks among yours (briefs 62, 64): a Group's, "Ungrouped"
+    /// and a day's as above, and Shared Tasks' like any Group's, its dot in its colour.
+    static func make(row key: ListSectionKey<ListRowGroup>, count: Int, projects: [Project], now: Date = Date()) -> GroupSectionHeading {
+        switch key {
+        case .all: make(for: ListSectionKey<UUID>.all, count: count, projects: projects, now: now)
+        case .ungrouped: make(for: ListSectionKey<UUID>.ungrouped, count: count, projects: projects, now: now)
+        case .due(let section): make(for: ListSectionKey<UUID>.due(section), count: count, projects: projects, now: now)
+        case .group(.group(let id)): make(for: ListSectionKey<UUID>.group(id), count: count, projects: projects, now: now)
+        case .group(.sharedTasks): sharedTasks(count: count)
+        }
+    }
+
+    /// Shared Tasks' heading: "Shared Tasks · 3" after its dot (brief 64).
+    static func sharedTasks(count: Int) -> GroupSectionHeading {
+        GroupSectionHeading(title: SharedTasksGroup.name, dot: .filled(Color(hex: SharedTasksGroup.colorHex)),
+                            titleColor: HITColor.text, count: count)
+    }
+
     /// The filter lists' day titles (`DueFormatter.sectionTitle`), with the week's last days as "Later".
     private static func title(of section: DueSection, now: Date) -> String {
         switch section {

@@ -87,7 +87,7 @@ final class ListRowTests: XCTestCase {
         XCTAssertEqual(row.filterProjectName, "Trip", "its list's name is its Group name")
         XCTAssertEqual(row.filterCreatedDate, Fixed.date(2026, 10, 1))
         XCTAssertFalse(row.filterIsSubtask)
-        XCTAssertEqual(row.group, .shared(trip))
+        XCTAssertEqual(row.group, .sharedTasks, "every shared task is in the one Shared Tasks Group")
 
         let own = mine("Call Sam", group: work)
         XCTAssertFalse(own.isShared)
@@ -161,19 +161,25 @@ final class ListRowTests: XCTestCase {
         XCTAssertEqual(FlipboardSwitch.listedDueDate(for: row, now: now, calendar: cal), Fixed.date(2026, 10, 25))
     }
 
-    // MARK: - Sort by Group
+    // MARK: - Sort by Group (brief 64: one forced Group, "Shared Tasks", last)
 
-    func testTheGroupOrderIsYourGroupsThenTheSharedLists() {
-        XCTAssertEqual(ListRows.groupOrder(groups: [work, home], sharedLists: [groceries, trip]),
-                       [.group(work), .group(home), .shared(groceries), .shared(trip)])
+    func testTheGroupOrderIsYourGroupsThenSharedTasks() {
+        XCTAssertEqual(ListRows.groupOrder(groups: [work, home]), [.group(work), .group(home), .sharedTasks])
+        XCTAssertEqual(ListRows.groupOrder(groups: [UUID]()), [.sharedTasks], "always there, even with no Groups of yours")
     }
 
     private func groupSections(_ rows: [Row]) -> [ListSection<ListRowGroup, Row>] {
-        GroupedOrdering.sections(rows, by: .group, groupOrder: ListRows.groupOrder(groups: [work, home], sharedLists: [groceries, trip]),
+        GroupedOrdering.sections(rows, by: .group, groupOrder: ListRows.groupOrder(groups: [work, home]),
                                  now: now, calendar: cal, groupOf: \.group)
     }
 
-    func testSortByGroupPutsEachSharedListAfterTheGroupsAndBeforeUngrouped() {
+    func testEverySharedTaskIsInTheSharedTasksGroup() {
+        XCTAssertEqual(theirs("cabin").group, .sharedTasks)
+        XCTAssertEqual(theirs("milk", list: groceries).group, .sharedTasks, "whichever set of people it is shared with")
+        XCTAssertEqual(mine("report", group: work).group, .group(work))
+    }
+
+    func testSortByGroupGivesSharedTasksOneSectionAfterYourGroupsAndBeforeUngrouped() {
         let rows = [
             mine("loose", priority: 1),
             theirs("cabin", due: Fixed.date(2026, 10, 23)),
@@ -182,39 +188,36 @@ final class ListRowTests: XCTestCase {
             mine("lawn", due: Fixed.date(2026, 10, 24), group: home),
         ]
         let sections = groupSections(rows)
-        XCTAssertEqual(sections.map(\.key), [.group(.group(work)), .group(.group(home)), .group(.shared(groceries)),
-                                             .group(.shared(trip)), .ungrouped])
-        XCTAssertEqual(sections.map { titles($0.tasks) }, [["report"], ["lawn"], ["milk"], ["cabin"], ["loose"]])
+        XCTAssertEqual(sections.map(\.key), [.group(.group(work)), .group(.group(home)), .group(.sharedTasks), .ungrouped])
+        XCTAssertEqual(sections.map { titles($0.tasks) }, [["report"], ["lawn"], ["milk", "cabin"], ["loose"]],
+                       "two sets of people, one Group")
     }
 
-    func testASharedListNamedLikeAGroupHasASectionOfItsOwn() {
+    func testAListSharedByAFriendCalledWorkIsStillInSharedTasks() {
         // A list called "Work" shared by a friend is not your Work Group.
         let otherWork = UUID()
         let rows = [
             mine("yours", due: Fixed.date(2026, 10, 22), group: work),
             theirs("theirs", due: Fixed.date(2026, 10, 22), list: otherWork),
         ]
-        let sections = GroupedOrdering.sections(rows, by: .group,
-                                                groupOrder: ListRows.groupOrder(groups: [work], sharedLists: [otherWork]),
-                                                now: now, calendar: cal, groupOf: \.group)
-        XCTAssertEqual(sections.map(\.key), [.group(.group(work)), .group(.shared(otherWork))])
-        XCTAssertEqual(rows.map(\.filterProjectName), ["Work", "Work"])
+        let sections = groupSections(rows)
+        XCTAssertEqual(sections.map(\.key), [.group(.group(work)), .group(.sharedTasks)])
     }
 
-    func testEachSharedSectionKeepsPriorityThenDateAndCountsItsOpenTasks() {
+    func testTheSharedTasksSectionKeepsPriorityThenDateAndCountsItsOpenTasks() {
         let rows = [
             theirs("later p4", due: Fixed.date(2026, 10, 25)),
-            theirs("sooner p4", due: Fixed.date(2026, 10, 22)),
+            theirs("sooner p4", due: Fixed.date(2026, 10, 22), list: groceries),
             theirs("p1", priority: 1, due: Fixed.date(2026, 10, 30)),
             theirs("done", due: Fixed.date(2026, 10, 21), done: true),
         ]
         let section = groupSections(rows)[0]
-        XCTAssertEqual(section.key, .group(.shared(trip)))
+        XCTAssertEqual(section.key, .group(.sharedTasks))
         XCTAssertEqual(titles(section.tasks), ["p1", "done", "sooner p4", "later p4"])
         XCTAssertEqual(section.openCount, 3)
     }
 
-    func testTodayByGroupGivesSharedListsTheirSectionsInBothHalves() {
+    func testTodayByGroupGivesSharedTasksItsSectionInBothHalves() {
         let rows = [
             theirs("overdue cabin", due: Fixed.date(2026, 10, 20)),
             mine("overdue report", due: Fixed.date(2026, 10, 19), group: work),
@@ -222,11 +225,65 @@ final class ListRowTests: XCTestCase {
             mine("loose today", due: Fixed.date(2026, 10, 21)),
             theirs("cabin next week", due: Fixed.date(2026, 10, 28)),
         ]
-        let split = GroupedOrdering.today(rows, by: .group,
-                                          groupOrder: ListRows.groupOrder(groups: [work, home], sharedLists: [groceries, trip]),
+        let split = GroupedOrdering.today(rows, by: .group, groupOrder: ListRows.groupOrder(groups: [work, home]),
                                           now: now, calendar: cal, groupOf: \.group)
-        XCTAssertEqual(split.overdue.map(\.key), [.group(.group(work)), .group(.shared(trip))])
-        XCTAssertEqual(split.today.map(\.key), [.group(.shared(groceries)), .ungrouped])
+        XCTAssertEqual(split.overdue.map(\.key), [.group(.group(work)), .group(.sharedTasks)])
+        XCTAssertEqual(split.today.map(\.key), [.group(.sharedTasks), .ungrouped])
+    }
+
+    // MARK: - The Shared Tasks Group's own screen: a section per set of people
+
+    func testTheSharedTasksScreenSortsBySetOfPeopleWhenThereAreSeveral() {
+        let rows = [
+            theirs("cabin", due: Fixed.date(2026, 10, 23)),
+            theirs("milk", priority: 1, list: groceries),
+            theirs("tent"),
+        ]
+        let sections = GroupedOrdering.sections(rows, by: .group, groupOrder: [groceries, trip], now: now, calendar: cal) {
+            $0.sharedTask?.rowGroupID
+        }
+        XCTAssertEqual(sections.map(\.key), [.group(groceries), .group(trip)])
+        XCTAssertEqual(sections.map { titles($0.tasks) }, [["milk"], ["cabin", "tent"]], "dated or not, by priority then date")
+    }
+
+    // MARK: - The forced Group in every list of Groups
+
+    func testEveryListOfGroupsEndsWithSharedTasks() {
+        XCTAssertEqual(GroupRef.all(["Work", "Home"]), [.group("Work"), .group("Home"), .sharedTasks])
+    }
+
+    func testTheGroupCardFindsSharedTasksLikeAnyGroup() {
+        let groups = [(id: work, name: "Work"), (id: home, name: "Home"), (id: trip, name: "Shared expenses")]
+        XCTAssertEqual(GroupPicker.rows(groups, search: ""), [.group(work), .group(home), .group(trip), .sharedTasks])
+        XCTAssertEqual(GroupPicker.rows(groups, search: " sha "), [.group(trip), .sharedTasks], "last, after yours")
+        XCTAssertEqual(GroupPicker.rows(groups, search: "tasks"), [.sharedTasks])
+        XCTAssertEqual(GroupPicker.rows(groups, search: "wor"), [.group(work)])
+    }
+
+    func testTheSharedTasksGroupHasAStableIDThatIsNoGroupOfYours() {
+        XCTAssertEqual(SharedTasksGroup.name, "Shared Tasks")
+        XCTAssertEqual(SharedTasksGroup.id, SeedIdentity.uuid(for: "Group/Shared Tasks"))
+        XCTAssertTrue(SharedTasksGroup.colorHex.hasPrefix("#"))
+    }
+
+    func testQuickAddNamesSharedTasksWithItsNameOrShared() {
+        for typed in ["Shared Tasks", "shared tasks", "Shared", "SHARED", "SharedTasks", "shared-tasks"] {
+            XCTAssertTrue(SharedTasksGroup.isNamed(typed), typed)
+        }
+        for typed in ["Share", "Shared Task list", "Work", "", "Tasks"] {
+            XCTAssertFalse(SharedTasksGroup.isNamed(typed), typed)
+        }
+        XCTAssertFalse(SharedTasksGroup.isNamed(nil))
+    }
+
+    func testAGroupOfYoursNamedSharedWinsOverTheForcedGroup() {
+        XCTAssertEqual(SharedTasksGroup.resolve("Shared", groups: ["Work"]), .sharedTasks)
+        XCTAssertEqual(SharedTasksGroup.resolve("shared tasks", groups: ["Work"]), .sharedTasks)
+        XCTAssertEqual(SharedTasksGroup.resolve("shared", groups: ["Work", "Shared"]), .group("Shared"),
+                       "your own Group called Shared keeps #Shared")
+        XCTAssertEqual(SharedTasksGroup.resolve("work", groups: ["Work"]), .group("Work"))
+        XCTAssertEqual(SharedTasksGroup.resolve("Garden", groups: ["Work"]), .group("Garden"), "a new Group of yours")
+        XCTAssertNil(SharedTasksGroup.resolve(nil, groups: ["Work"]), "the Inbox")
     }
 
     func testSortByDateFilesSharedTasksByTheirDay() {
