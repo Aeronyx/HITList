@@ -82,6 +82,38 @@ final class HITListUITests: XCTestCase {
         snapshot("Added on Today")
     }
 
+    /// Brief 63: a tab left for another comes back on its first screen. Browse opened on the Inbox is gone after
+    /// a visit to Today; re-tapping the tab on show still takes it back too.
+    func testLeavingATabTakesItBackToItsFirstScreen() throws {
+        app.launch()
+        let inbox = app.buttons["tab-inbox"], today = app.buttons["tab-today"]
+        XCTAssertTrue(inbox.waitForExistence(timeout: 15))
+        inbox.tap()
+        XCTAssertTrue(inbox.wait(for: \.isSelected, toEqual: true, timeout: 3))
+        let browse = app.buttons["browseButton"].firstMatch
+        let browseSearch = app.descendants(matching: .any)["browseSearch"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 5))
+        browse.tap()
+        XCTAssertTrue(browseSearch.waitForExistence(timeout: 5), "Browse is pushed on the Inbox")
+        snapshot("1 Browse on the Inbox")
+
+        today.tap()
+        XCTAssertTrue(today.wait(for: \.isSelected, toEqual: true, timeout: 3))
+        XCTAssertTrue(browseSearch.waitForNonExistence(timeout: 3))
+        inbox.tap()
+        XCTAssertTrue(inbox.wait(for: \.isSelected, toEqual: true, timeout: 3))
+        XCTAssertTrue(browse.waitForExistence(timeout: 5), "the Inbox is back at its root, the magnifying glass on show")
+        XCTAssertFalse(browseSearch.exists, "Browse is gone")
+        snapshot("2 Inbox at its root after Today")
+
+        // Re-tapping the tab on show pops it as before.
+        browse.tap()
+        XCTAssertTrue(browseSearch.waitForExistence(timeout: 5))
+        inbox.tap()
+        XCTAssertTrue(browseSearch.waitForNonExistence(timeout: 5), "re-tapping the Inbox pops Browse")
+        XCTAssertTrue(browse.waitForExistence(timeout: 5))
+    }
+
     /// Review Inbox (brief 60): three tasks added on the Inbox with no date or Group are offered as "Review 3
     /// unsorted…"; the first is swiped right (Today), the second left (deleted) and brought back from the toast,
     /// then put off with Later; the third is deleted. The review ends on "Inbox reviewed", the menu then offers
