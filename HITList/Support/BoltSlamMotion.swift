@@ -164,11 +164,11 @@ enum BoltSlamMotion {
         return crackles[life > 0.8 ? 0 : 1]
     }
 
-    /// Draws the sparks and the crackle at `life` around `foot`, a point in the canvas, lighter on the dark toolbar.
+    /// Draws the sparks and the crackle at `life` around `foot`, a point in the canvas: the bolt's colour with a white-hot
+    /// core while they are young. Plain strokes in the normal blend mode, nothing that needs a renderer of its own (a
+    /// `.plusLighter` canvas froze the first impact after launch for half a second on the simulator).
     static func drawSparks(in context: inout GraphicsContext, foot: CGPoint, life: Double, color: Color) {
         guard life > 0 else { return }
-        context.blendMode = .plusLighter
-        let hot = color.mix(with: .white, by: 0.55 * life)
         func at(_ point: CGPoint) -> CGPoint { CGPoint(x: foot.x + point.x, y: foot.y + point.y) }
         var streaks = Path()
         for spark in sparks {
@@ -176,14 +176,21 @@ enum BoltSlamMotion {
             streaks.move(to: at(streak.tail))
             streaks.addLine(to: at(streak.head))
         }
-        context.stroke(streaks, with: .color(hot.opacity(min(1, 1.6 * life))),
-                       style: StrokeStyle(lineWidth: 0.5 + 0.3 * CGFloat(life), lineCap: .round))
+        let width = 0.5 + 0.3 * CGFloat(life)
+        context.stroke(streaks, with: .color(color.opacity(min(1, 1.6 * life))),
+                       style: StrokeStyle(lineWidth: width, lineCap: .round))
+        if life > 0.5 {
+            context.stroke(streaks, with: .color(.white.opacity(1.1 * (life - 0.5))),
+                           style: StrokeStyle(lineWidth: width * 0.5, lineCap: .round))
+        }
         if let crackle = crackle(life: life) {
             var arc = Path()
             arc.addLines(crackle.map(at))
             let strength = (life - crackleUntil) / (1 - crackleUntil)
-            context.stroke(arc, with: .color(hot.opacity(0.9 * strength)),
+            context.stroke(arc, with: .color(color.opacity(0.9 * strength)),
                            style: StrokeStyle(lineWidth: 0.6, lineCap: .round, lineJoin: .round))
+            context.stroke(arc, with: .color(.white.opacity(0.6 * strength)),
+                           style: StrokeStyle(lineWidth: 0.3, lineCap: .round, lineJoin: .round))
         }
     }
 
@@ -202,9 +209,8 @@ enum BoltSlamMotion {
                 .modifier(Warp(squash: frame.squash, stretch: frame.stretch, warp: frame.warp))
                 .rotationEffect(.degrees(frame.twirl))
                 .offset(y: frame.lift)
-                .overlay {
-                    if frame.spark > 0 { Sparks(life: frame.spark, color: color) }
-                }
+                // Always there and empty at rest, so the impact doesn't have to build a canvas mid-motion.
+                .overlay { Sparks(life: frame.spark, color: color) }
         }
     }
 
