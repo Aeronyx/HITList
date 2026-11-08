@@ -61,10 +61,10 @@ enum HITFont {
         #endif
     }
 
-    /// Whether the Mac thickens text as it draws it ("font smoothing": every glyph's outline grown by about a
-    /// quarter point). Off since round 15 (brief 67): George's target row is drawn without it, and with it our
-    /// Inter rows read 20–25% heavier than the target's (stems 2.95 px against 2.37 at 2x). Without it the Mac
-    /// draws text the way the iPhone always has. Registered for this process only, as the lowest-priority
+    /// Whether the Mac thickens text as it draws it ("font smoothing": every stem about a third of a point
+    /// thicker). Off since round 15 (brief 67): George's target row is drawn without it, and with it our Inter
+    /// rows read 20% heavier than the target's (stems 2.85 px against 2.37 at 2x; 2.44 without it). Without it
+    /// the Mac draws text the way the iPhone always has. Registered for this process only, as the lowest-priority
     /// default, so a smoothing choice set system-wide in Terminal still wins and nothing is written to disk.
     static let smoothsMacText = false
     static var macTextSmoothingDefaults: [String: Any] { smoothsMacText ? [:] : ["AppleFontSmoothing": 0] }
