@@ -113,9 +113,6 @@ struct UpcomingView: View {
         .quickAddEntry(.upcoming)
         .background(Theme.background)
         .navigationTitle("Upcoming")
-        #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        #endif
         .screenChrome {
             ViewOptionsMenu {
                 Toggle("Show overdue", isOn: $overdueExpanded)

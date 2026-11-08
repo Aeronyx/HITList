@@ -257,8 +257,7 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(IslandMetrics.sideItemHeight, 44, "thumb-sized targets")
         // On the outer display (678 pt tall) the island, the "+" and their gaps leave the top half to the system's
         // own vertical bar (status, toolbar items).
-        let chrome = IslandMetrics.bottomGap + IslandMetrics.sideAddButtonSize.height + IslandMetrics.addButtonGap
-            + IslandMetrics.sideHeight
+        let chrome = IslandMetrics.sideChromeHeight
         XCTAssertLessThan(chrome, outer.height / 2)
     }
 
