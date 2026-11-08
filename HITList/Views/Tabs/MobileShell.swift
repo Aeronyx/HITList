@@ -24,8 +24,9 @@ struct MobileShell: View {
     @Binding var place: ShellPlace
     /// Settings → General → Start screen at launch (through `place`); Today unless chosen otherwise.
     @State private var tab: MobileTab
-    /// Each tab's pushed screens, kept while another tab is on show.
-    /// Holds `MobileDestination.browse` and the `SidebarItem` lists pushed from Browse.
+    /// The pushed screens of the tab on show: `MobileDestination.browse` and the `SidebarItem` lists pushed
+    /// from Browse. A tab left for another goes back to its first screen (`popToRoot`); only the start place
+    /// (`place`, handed over by a fold) arrives with screens already pushed.
     @State private var paths: [MobileTab: NavigationPath]
     /// The same screens as values (`PhoneStack`): a `NavigationPath` can't be read back.
     @State private var stacks: [MobileTab: PhoneStack]
@@ -69,7 +70,13 @@ struct MobileShell: View {
         // The quick-add card docks above the keyboard; the island stays put underneath it.
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onGeometryChange(for: BarColumn.self) { BarColumn($0) } action: { bar = $0 }
-        .onChange(of: tab) { _, _ in popouts.closeAll(); report() }
+        // Leaving a tab takes it back to its first screen (brief 63, George: Browse opened on a tab should be
+        // gone when you come back to it). Its stack is still fading out, and keeps the frame it left on.
+        .onChange(of: tab) { left, _ in
+            popouts.closeAll()
+            popToRoot(left)
+            report()
+        }
         .onReceive(clock) { now = $0 }
         // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
         .intentRouting(tab: $tab)
@@ -140,10 +147,15 @@ struct MobileShell: View {
     private func tabBar(axis: Axis) -> some View {
         MobileTabBar(selection: $tab, day: Calendar.current.component(.day, from: now), axis: axis) { reselected in
             // Tapping the current tab again goes back to its first screen.
-            paths[reselected] = NavigationPath()
-            stacks[reselected] = PhoneStack()
+            popToRoot(reselected)
             report()
         }
+    }
+
+    /// Takes `tab` back to its first screen: re-tapping it, or leaving it for another tab.
+    private func popToRoot(_ tab: MobileTab) {
+        paths[tab] = nil
+        stacks[tab] = nil
     }
 
     private func path(_ tab: MobileTab) -> Binding<NavigationPath> {
