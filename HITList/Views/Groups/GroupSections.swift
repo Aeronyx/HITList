@@ -1,14 +1,14 @@
 import SwiftUI
 import HITListCore
 
-/// What a grouped list's section header shows (brief 57): a Group's colour dot, name and open count; "No
-/// Group" last with a hollow grey dot; "Priority 1" in its colour. Pure, so `GroupsTests` checks it without
-/// drawing anything.
+/// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count; "No
+/// Group" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No date")
+/// in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
 struct GroupSectionHeading: Equatable {
     var title: String
-    /// The dot before the title; nil draws none (priority sections).
+    /// The dot before the title; nil draws none (date sections).
     var dot: Dot?
-    /// The title's colour: the day/priority colours as before, the text colour for a Group.
+    /// The title's colour: the due colours for a day, the text colour for a Group.
     var titleColor: Color
     var count: Int
 
@@ -19,23 +19,43 @@ struct GroupSectionHeading: Equatable {
     }
 
     /// The heading for `key`, looking the Group up among `projects`. A Group deleted a moment ago (the
-    /// list still holds its tasks until SwiftData catches up) reads as "No Group".
-    static func make(for key: ListSectionKey<UUID>, count: Int, projects: [Project]) -> GroupSectionHeading {
+    /// list still holds its tasks until SwiftData catches up) reads as "No Group". `now` names the days.
+    static func make(for key: ListSectionKey<UUID>, count: Int, projects: [Project], now: Date = Date()) -> GroupSectionHeading {
         switch key {
         case .all:
             return GroupSectionHeading(title: "", dot: nil, titleColor: Theme.secondaryText, count: count)
         case .group(let id):
             guard let project = projects.first(where: { $0.id == id }) else {
-                return make(for: .noGroup, count: count, projects: projects)
+                return make(for: .ungrouped, count: count, projects: projects)
             }
             return GroupSectionHeading(title: project.name, dot: .filled(Color(hex: project.colorHex)),
                                        titleColor: HITColor.text, count: count)
-        case .noGroup:
+        case .ungrouped:
             return GroupSectionHeading(title: "No Group", dot: .hollow, titleColor: Theme.secondaryText, count: count)
-        case .priority(let level):
-            let priority = Priority(rawValue: level) ?? .p4
-            return GroupSectionHeading(title: "Priority \(priority.rawValue)", dot: nil,
-                                       titleColor: priority == .p4 ? Theme.secondaryText : priority.color, count: count)
+        case .due(let section):
+            return GroupSectionHeading(title: title(of: section, now: now), dot: nil, titleColor: color(of: section),
+                                       count: count)
+        }
+    }
+
+    /// The filter lists' day titles (`DueFormatter.sectionTitle`), with the week's last days as "Later".
+    private static func title(of section: DueSection, now: Date) -> String {
+        switch section {
+        case .overdue: "Overdue"
+        case .today: "Today"
+        case .tomorrow: "Tomorrow"
+        case .day(let day): DueFormatter.sectionTitle(for: day, now: now)
+        case .later: "Later"
+        case .noDate: DueFormatter.sectionTitle(for: nil, now: now)
+        }
+    }
+
+    /// "Overdue" red, today green, the rest grey (`DueFormatter.sectionColor`).
+    private static func color(of section: DueSection) -> Color {
+        switch section {
+        case .overdue: HITColor.dueOverdue
+        case .today: HITColor.dueToday
+        case .tomorrow, .day, .later, .noDate: Theme.secondaryText
         }
     }
 
@@ -78,19 +98,21 @@ struct GroupSectionHeader: View {
     }
 }
 
-/// The view options' "Group by: None · Group · Priority" (brief 57), a submenu that shows the choice.
-struct GroupByPicker: View {
-    @Binding var selection: ListGrouping
+/// The view options' "Sort by" (brief 61): Priority · Group · Date on the Inbox, Priority · Group on Today, a
+/// submenu that shows the choice.
+struct SortPicker: View {
+    @Binding var selection: ListSort
+    let choices: [ListSort]
 
     var body: some View {
         Picker(selection: $selection) {
-            ForEach(ListGrouping.allCases) { grouping in
-                Text(grouping.title).tag(grouping)
+            ForEach(choices) { sort in
+                Text(sort.title).tag(sort)
             }
         } label: {
-            Label("Group by", systemImage: "rectangle.3.group")
+            Label("Sort by", systemImage: "arrow.up.arrow.down")
         }
         .pickerStyle(.menu)
-        .accessibilityIdentifier("groupByPicker")
+        .accessibilityIdentifier("sortPicker")
     }
 }

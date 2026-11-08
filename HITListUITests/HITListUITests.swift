@@ -295,6 +295,60 @@ final class HITListUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Remove from Flipboard"].waitForExistence(timeout: 3), "the menu opened on \(title)")
     }
 
+    /// Brief 61: the Inbox sorts by Priority (flat, the default), Group or Date and Today by Priority or Group,
+    /// from the view options' "Sort by"; the screen's name once, as its large title.
+    func testSortByOnTheInboxAndToday() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-inbox"].waitForExistence(timeout: 15))
+        tab("inbox")
+        XCTAssertTrue(app.navigationBars["Inbox"].waitForExistence(timeout: 5), "the large title")
+        XCTAssertFalse(element(beginningWith: "Inbox ·").exists, "no \"Inbox · N\" under the title")
+        XCTAssertFalse(element(beginningWith: "Work,").exists, "Priority is one flat list: no headers")
+        snapshot("1 Inbox by Priority")
+
+        sort(by: "Group")
+        XCTAssertTrue(element(beginningWith: "Work, 2 tasks").waitForExistence(timeout: 5), "Work's header")
+        XCTAssertTrue(element(beginningWith: "Home, 2 tasks").exists)
+        let work = element(beginningWith: "Work, 2 tasks"), home = element(beginningWith: "Home, 2 tasks")
+        XCTAssertLessThan(work.frame.minY, home.frame.minY, "the sidebar's order")
+        snapshot("2 Inbox by Group")
+
+        sort(by: "Date")
+        XCTAssertTrue(element(beginningWith: "Today,").waitForExistence(timeout: 5), "the Today section")
+        XCTAssertTrue(element(beginningWith: "No date, 2 tasks").exists, "the undated tasks last")
+        snapshot("3 Inbox by Date")
+
+        tab("today")
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5), "the large title")
+        XCTAssertFalse(element(beginningWith: "Work,").exists, "Priority: no Group headers")
+        snapshot("4 Today by Priority")
+        sort(by: "Group")
+        XCTAssertTrue(element(beginningWith: "Work, 1 task").waitForExistence(timeout: 5), "Work's header on Today")
+        snapshot("5 Today by Group")
+        app.buttons["viewOptions"].firstMatch.tap()
+        app.buttons["Sort by"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Priority"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Date"].exists, "Today sorts by Priority or Group only")
+    }
+
+    /// View options → Sort by → `name`.
+    private func sort(by name: String) {
+        app.buttons["viewOptions"].firstMatch.tap()
+        let sortBy = app.buttons["Sort by"].firstMatch
+        XCTAssertTrue(sortBy.waitForExistence(timeout: 5), "Sort by in the view options")
+        sortBy.tap()
+        let choice = app.buttons[name].firstMatch
+        XCTAssertTrue(choice.waitForExistence(timeout: 5), name)
+        choice.tap()
+        XCTAssertTrue(choice.waitForNonExistence(timeout: 5), "the menu closes")
+    }
+
+    /// The first element whose label starts with `prefix` (section headers read "Work, 2 tasks").
+    private func element(beginningWith prefix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    }
+
     /// Brief 57: a Group's "+" adds the task to that Group. Brief 61: its name once, as the large title.
     func testPlusOnAGroupAddsToIt() throws {
         app.launchArguments += ["-seedDemoData", "YES"]
