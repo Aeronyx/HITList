@@ -2,10 +2,10 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The inbox: every dated task (in any Group) plus undated tasks with no Group, by priority then due date
-/// (`TaskOrdering`) in sections by priority, by Group or none (view options → Group by, brief 57;
-/// `GroupedOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
-/// empty and a Process button that steps through it one task at a time. Undated tasks in a Group are
+/// The inbox: every dated task (in any Group) plus undated tasks with no Group, sorted by Priority (one flat
+/// list, priority then due date: `TaskOrdering`), by Group or by Date (view options → Sort by, brief 61;
+/// `GroupedOrdering`), under the large title "Inbox" and nothing else (the name once), with an
+/// "Inbox zero" state when it's empty and Review Inbox in the view options. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
@@ -15,14 +15,8 @@ struct InboxView: View {
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
-    @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
-    /// The filter control's choices (brief 57), kept while the window is open (a tab switch rebuilds this
-    /// view) as `ListFilter` JSON.
-    @SceneStorage("inboxFilter") private var storedFilter = ""
-    @State private var savedFilter: SavedFilter?
-    /// View options → Group by, remembered for the Inbox (brief 57).
-    @AppStorage(Preferences.inboxGrouping, store: AppGroup.defaults)
-    private var grouping: ListGrouping = Preferences.inboxGroupingDefault
+    /// View options → Sort by, remembered for the Inbox (brief 61), read through `Preferences.sort`.
+    @AppStorage(Preferences.inboxSort, store: AppGroup.defaults) private var storedSort = ""
     @State private var showCompleted = false
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
@@ -35,14 +29,6 @@ struct InboxView: View {
     private var isCompact: Bool { sizeClass == .compact }
     #else
     private let isCompact = false
-    #endif
-
-    #if os(iOS)
-    @Environment(\.mobileChrome) private var mobileChrome
-    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
-    private var pushesGroups: Bool { mobileChrome != nil }
-    #else
-    private let pushesGroups = false
     #endif
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -64,57 +50,8 @@ struct InboxView: View {
     }
 
     private func matchedTasks() -> [TaskItem] {
-        let inbox = TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
-        guard let source = filter.query, let query = try? FilterQuery(source, now: now) else { return inbox }
-        return inbox.filter { query.matches($0, now: now) }
+        TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
     }
-
-    /// The filter control's choices: the list shows the Inbox's tasks that match `filter.query`.
-    private var filter: ListFilter {
-        get { storedFilter.data(using: .utf8).flatMap { try? JSONDecoder().decode(ListFilter.self, from: $0) } ?? ListFilter() }
-        nonmutating set {
-            storedFilter = newValue.isEmpty ? "" : (try? JSONEncoder().encode(newValue)).flatMap { String(data: $0, encoding: .utf8) } ?? ""
-        }
-    }
-
-    private var filterBinding: Binding<ListFilter> {
-        Binding(get: { filter }, set: { filter = $0 })
-    }
-
-    /// Why a filter shows nothing. A Group with No date is always empty here: undated tasks in a Group are
-    /// notes that live in the Group, never in the Inbox (the Inbox rule, `TaskOrdering.isInInbox`).
-    private var noMatchExplanation: String {
-        let names = filter.chips.compactMap { chip -> String? in if case .group(let name) = chip { name } else { nil } }
-        if filter.contains(.noDate), let name = names.first, names.count == 1 {
-            return "Undated tasks in \(name) are notes: they stay in \(name), not the Inbox."
-        }
-        if filter.contains(.noDate), !names.isEmpty {
-            return "Undated tasks in a Group are notes: they stay in their Group, not the Inbox."
-        }
-        return "Nothing in the Inbox matches this filter."
-    }
-
-    /// "Save as filter…": a saved filter with the Inbox rule and these choices, opened in its editor to name it.
-    private func saveFilter() {
-        guard let query = filter.savedQuery(within: ListFilter.inboxQuery) else { return }
-        let count = (try? context.fetchCount(FetchDescriptor<SavedFilter>())) ?? 0
-        let saved = SavedFilter(name: filter.suggestedName, query: query, sortOrder: count)
-        context.insert(saved)
-        try? context.save()
-        savedFilter = saved
-    }
-
-    /// Drops choices naming a Group or label that was renamed or deleted (here or on another device). Not
-    /// while there are none at all: on a first launch they may not have synced yet.
-    private func pruneFilter() {
-        var pruned = filter
-        pruned.keep(groups: projects.isEmpty ? Set(pruned.groups) : Set(projects.map(\.name)),
-                    labels: labels.isEmpty ? Set(pruned.labels) : Set(labels.map(\.name)))
-        if pruned != filter { filter = pruned }
-    }
-
-    /// Open inbox tasks, for the header.
-    private var openCount: Int { allTasks.filter(\.isInInbox).count }
 
     /// The matched tasks plus the recently completed ones, by priority then due date.
     private var rows: [Placed] {
@@ -127,31 +64,22 @@ struct InboxView: View {
         return TaskOrdering.sorted(shown + animating, now: now)
     }
 
-    /// The rows in the chosen grouping's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
+    private var sort: ListSort { Preferences.sort(storedSort, offered: ListSort.inbox) }
+
+    private var sortBinding: Binding<ListSort> {
+        Binding(get: { sort }, set: { storedSort = $0.rawValue })
+    }
+
+    /// The rows in the chosen sort's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
     private func sections(_ rows: [Placed]) -> [ListSection<UUID, Placed>] {
-        GroupedOrdering.sections(rows, by: grouping, groupOrder: projects.map(\.id)) { $0.task.project?.id }
+        GroupedOrdering.sections(rows, by: sort, groupOrder: projects.map(\.id), now: now) { $0.task.project?.id }
     }
 
     var body: some View {
         let rows = rows
         VStack(spacing: 0) {
-            header
-            if !filter.isEmpty {
-                ListFilterChips(filter: filterBinding, projects: projects, labels: labels)
-                    .transition(.opacity)
-            }
             SwiftUI.Group {
-                if rows.isEmpty, !filter.isEmpty {
-                    ContentUnavailableView {
-                        Label("No matching tasks", systemImage: "line.3.horizontal.decrease.circle")
-                    } description: {
-                        Text(noMatchExplanation)
-                    } actions: {
-                        Button("Clear Filter") { withAnimation(HITMotion.quick) { filter = ListFilter() } }
-                            .buttonStyle(.hitPrimary)
-                    }
-                    .transition(.opacity)
-                } else if rows.isEmpty {
+                if rows.isEmpty {
                     InboxZeroView()
                         .transition(.opacity)
                 } else {
@@ -167,17 +95,17 @@ struct InboxView: View {
         .background(Theme.background)
         .navigationTitle("Inbox")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        // The title opens a Group, a label or Browse (brief 57).
-        .groupsTitleMenu()
+        // The name once, as the system large title (brief 61); the count is on Browse's Inbox row and the
+        // Mac sidebar.
+        .navigationBarTitleDisplayMode(.large)
         #endif
-        // The filter control, then Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
+        // Show completed and Sort by behind the filter-lines icon, the only control beside the magnifying glass;
+        // reviewing the inbox one task at a time in the "…".
         .screenChrome {
-            ListFilterMenu(filter: filterBinding, projects: projects, labels: labels, onSave: saveFilter)
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
-                GroupByPicker(selection: $grouping)
+                SortPicker(selection: sortBinding, choices: ListSort.inbox)
             }
         } menu: {
             if let title = InboxText.reviewMenuItem(count: InboxReview.count(allTasks)) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
@@ -185,38 +113,19 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
-        .sheet(item: $savedFilter) { FilterEditorView(filter: $0).slateSheet() }
         .onReceive(clock) { now = $0 }
-        .onAppear {
-            CompletionFeedback.shared.prepare()
-            pruneFilter()
-        }
-        .onChange(of: projects.map(\.name)) { _, _ in pruneFilter() }
-        .onChange(of: labels.map(\.name)) { _, _ in pruneFilter() }
-    }
-
-    private var header: some View {
-        Text(InboxText.header(count: openCount))
-            .font(HITType.title2Bold)
-            .contentTransition(.numericText(value: Double(openCount)))
-            .animation(reduceMotion ? nil : .snappy, value: openCount)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 6)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
+        .onAppear { CompletionFeedback.shared.prepare() }
     }
 
     private func list(_ rows: [Placed]) -> some View {
         List(selection: $selectedTask) {
             ForEach(sections(rows), id: \.key) { section in
                 Section {
-                    ForEach(section.tasks, id: \.task.id) { row($0.task) }
+                    ForEach(section.tasks, id: \.task.id) { row($0.task, hidesDay: Self.namesDay(section.key)) }
                 } header: {
                     if section.key != .all {
-                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects),
-                                           pushes: pushesGroups)
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects,
+                                                          now: now))
                     }
                 }
             }
@@ -234,9 +143,19 @@ struct InboxView: View {
         .slateList()
     }
 
-    private func row(_ task: TaskItem) -> some View {
+    /// Rows under a header that names their one day ("Today", "Tomorrow", "Friday, Nov 13") show only their time.
+    private static func namesDay(_ key: ListSectionKey<UUID>) -> Bool {
+        switch key {
+        case .due(.today), .due(.tomorrow), .due(.day): true
+        default: false
+        }
+    }
+
+    /// Rows name their Group except under that Group's own header.
+    private func row(_ task: TaskItem, hidesDay: Bool) -> some View {
         let phase = completions.phase(of: task.id)
-        return TaskRow(task: task, now: now, showProject: grouping != .group, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+        return TaskRow(task: task, now: now, showProject: sort != .group, hidesDay: hidesDay, completionPhase: phase,
+                       onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(task)
             .completionRowBackground(flashing: phase == .pending)

@@ -4,8 +4,8 @@ import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Brief 57: grouped Inbox and Today on real `TaskItem`s and `Project`s, their section headings, and the
-/// remembered "Group by".
+/// Briefs 57 and 61: the Inbox and Today sorted by Group or Date on real `TaskItem`s and `Project`s, their
+/// section headings, and the remembered "Sort by".
 @MainActor
 final class GroupsTests: XCTestCase {
     private var container: ModelContainer!
@@ -39,68 +39,77 @@ final class GroupsTests: XCTestCase {
 
     // MARK: - Sections on real tasks
 
-    func testInboxGroupedByGroupFollowsTheSidebarOrder() throws {
+    func testInboxSortedByGroupFollowsTheSidebarOrder() throws {
         let home = project("Home", order: 1), work = project("Work", order: 0)
         let tasks = [task("loose"), task("fix sink", in: home), task("ship it", in: work)]
         tasks.forEach { $0.dueDate = Date() } // dated, so the Grouped ones are in the Inbox too
         try context.save()
         let projects = try context.fetch(FetchDescriptor<Project>(sortBy: [SortDescriptor(\.sortOrder)]))
         let inbox = TaskOrdering.inbox(try context.fetch(FetchDescriptor<TaskItem>()))
-        let sections = GroupedOrdering.sections(inbox, by: .group, groupOrder: projects.map(\.id)) { $0.project?.id }
-        XCTAssertEqual(sections.map(\.key), [.group(work.id), .group(home.id), .noGroup])
+        let sections = GroupedOrdering.sections(inbox, by: .group, groupOrder: projects.map(\.id), now: Date()) { $0.project?.id }
+        XCTAssertEqual(sections.map(\.key), [.group(work.id), .group(home.id), .ungrouped])
         XCTAssertEqual(sections.map { $0.tasks.map(\.title) }, [["ship it"], ["fix sink"], ["loose"]])
     }
 
     // MARK: - Headings
 
-    func testAGroupHeadingCarriesItsDotNameCountAndOpensTheGroup() {
+    func testAGroupHeadingCarriesItsDotNameAndCount() {
         let work = project("Work", color: "#6C9EFF", order: 0)
         let heading = GroupSectionHeading.make(for: .group(work.id), count: 3, projects: [work])
         XCTAssertEqual(heading.title, "Work")
         XCTAssertEqual(heading.dot, .filled(Color(hex: "#6C9EFF")))
         XCTAssertEqual(heading.count, 3)
-        XCTAssertEqual(heading.opens, .project(work.id))
         XCTAssertEqual(heading.accessibilityLabel, "Work, 3 tasks")
     }
 
-    func testNoGroupIsHollowAndOpensNothing() {
-        let heading = GroupSectionHeading.make(for: .noGroup, count: 1, projects: [])
-        XCTAssertEqual(heading.title, "No Group")
-        XCTAssertEqual(heading.dot, .hollow)
-        XCTAssertNil(heading.opens)
-        XCTAssertEqual(heading.accessibilityLabel, "No Group, 1 task")
-    }
-
-    func testAGroupDeletedAMomentAgoReadsAsNoGroup() {
-        let heading = GroupSectionHeading.make(for: .group(UUID()), count: 2, projects: [])
-        XCTAssertEqual(heading.title, "No Group")
-        XCTAssertNil(heading.opens)
-    }
-
-    func testPriorityHeadingsKeepTheirColoursAndNoDot() {
-        let p1 = GroupSectionHeading.make(for: .priority(1), count: 2, projects: [])
-        XCTAssertEqual(p1.title, "Priority 1")
-        XCTAssertEqual(p1.titleColor, Priority.p1.color)
-        XCTAssertNil(p1.dot)
-        XCTAssertEqual(GroupSectionHeading.make(for: .priority(4), count: 2, projects: []).titleColor, Theme.secondaryText)
-    }
-
-    // MARK: - Title menu (iPhone)
-
-    func testTitleMenuCountsOpenTopLevelTasksPerGroupAndLabel() throws {
+    func testTheTitleAndCountAreOneRunOfTextWithTheCountInGrey() {
+        // George, 0.8.0: "Priority 4 1 in different fonts". One Text, one font; only the count's colour differs.
         let work = project("Work", order: 0)
-        let waiting = TaskLabel(name: "waiting")
-        context.insert(waiting)
-        let a = task("a", in: work), b = task("b", in: work)
-        a.labels = [waiting]
-        _ = b
-        try context.save()
-        let open = try context.fetch(FetchDescriptor<TaskItem>()).filter { !$0.isCompleted }
-        let counts = GroupsTitleMenuCounts(open)
-        XCTAssertEqual(counts.byProject[work.id], 2)
-        XCTAssertEqual(counts.byLabel[waiting.id], 1)
-        XCTAssertEqual(GroupsTitleMenuCounts.title("Work", count: 2), "Work · 2")
-        XCTAssertEqual(GroupsTitleMenuCounts.title("Errands", count: 0), "Errands")
+        let label = GroupSectionHeading.make(for: .group(work.id), count: 3, projects: [work]).label
+        XCTAssertEqual(String(label.characters), "Work · 3")
+        let runs = Array(label.runs)
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(String(label[runs[0].range].characters), "Work")
+        XCTAssertNil(runs[0].swiftUI.foregroundColor, "the title takes the header's colour")
+        XCTAssertEqual(runs[1].swiftUI.foregroundColor, Theme.secondaryText)
+        XCTAssertNil(runs[0].swiftUI.font, "the font is the header's, for both")
+        XCTAssertNil(runs[1].swiftUI.font)
+        let empty = GroupSectionHeading.make(for: .group(work.id), count: 0, projects: [work]).label
+        XCTAssertEqual(String(empty.characters), "Work", "no count when nothing is open")
+    }
+
+    func testUngroupedIsHollow() {
+        let heading = GroupSectionHeading.make(for: .ungrouped, count: 2, projects: [])
+        XCTAssertEqual(heading.title, "Ungrouped")
+        XCTAssertEqual(heading.dot, .hollow)
+        XCTAssertEqual(String(heading.label.characters), "Ungrouped · 2")
+        XCTAssertEqual(heading.accessibilityLabel, "Ungrouped, 2 tasks")
+    }
+
+    func testAGroupDeletedAMomentAgoReadsAsUngrouped() {
+        let heading = GroupSectionHeading.make(for: .group(UUID()), count: 2, projects: [])
+        XCTAssertEqual(heading.title, "Ungrouped")
+    }
+
+    func testDateHeadingsUseTheDueColoursAndNoDot() {
+        let now = Date()
+        let overdue = GroupSectionHeading.make(for: .due(.overdue), count: 2, projects: [], now: now)
+        XCTAssertEqual(overdue.title, "Overdue")
+        XCTAssertEqual(overdue.titleColor, HITColor.dueOverdue)
+        XCTAssertNil(overdue.dot)
+        let today = GroupSectionHeading.make(for: .due(.today), count: 1, projects: [], now: now)
+        XCTAssertEqual(today.title, "Today")
+        XCTAssertEqual(today.titleColor, HITColor.dueToday)
+        XCTAssertEqual(GroupSectionHeading.make(for: .due(.tomorrow), count: 1, projects: [], now: now).title, "Tomorrow")
+        XCTAssertEqual(GroupSectionHeading.make(for: .due(.later), count: 1, projects: [], now: now).title, "Later")
+        XCTAssertEqual(GroupSectionHeading.make(for: .due(.noDate), count: 1, projects: [], now: now).title, "No date")
+
+        // A day of the coming week by name, as the filter lists title it.
+        let day = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 3, to: now)!)
+        let named = GroupSectionHeading.make(for: .due(.day(day)), count: 1, projects: [], now: now)
+        XCTAssertEqual(named.title, DueFormatter.sectionTitle(for: day, now: now))
+        XCTAssertTrue(named.title.contains(day.formatted(.dateTime.weekday(.wide))), named.title)
+        XCTAssertEqual(named.titleColor, Theme.secondaryText)
     }
 
     // MARK: - Group or label
@@ -110,6 +119,8 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(GroupGuidance.label, "A label is a tag any task can carry: @waiting, @errands.")
         let tip = HITTipKind.quickAddSyntax.message
         XCTAssertTrue(tip.contains("# picks its one Group") && tip.contains("@ adds any labels"), tip)
+        let browse = HITTipKind.browse.message
+        XCTAssertTrue(browse.contains("search that understands #Work"), "the Browse tip teaches filters in the search: \(browse)")
     }
 
     // MARK: - Reordering Groups
@@ -150,12 +161,16 @@ final class GroupsTests: XCTestCase {
 
     // MARK: - Remembered per list
 
-    func testGroupByDefaultsAndStoredValues() {
-        XCTAssertEqual(Preferences.inboxGroupingDefault, .priority, "the Inbox has grouped by priority since build 8")
-        XCTAssertEqual(Preferences.todayGroupingDefault, .none)
-        XCTAssertNotEqual(Preferences.inboxGrouping, Preferences.todayGrouping, "each list remembers its own")
-        XCTAssertEqual(Preferences.grouping("group", default: .none), .group)
-        XCTAssertEqual(Preferences.grouping(nil, default: .priority), .priority)
-        XCTAssertEqual(Preferences.grouping("someday", default: .none), .none, "a value from a later build")
+    func testSortByDefaultsToPriorityAndForgets080sGroupBy() {
+        XCTAssertEqual(Preferences.listSortDefault, .priority, "the Inbox sorts by priority, as it always did")
+        XCTAssertNotEqual(Preferences.inboxSort, Preferences.todaySort, "each list remembers its own")
+        XCTAssertFalse(Preferences.inboxSort.hasPrefix("pref.grouping"), "0.8.0's Group by is not read")
+        XCTAssertFalse(Preferences.todaySort.hasPrefix("pref.grouping"))
+        XCTAssertEqual(Preferences.sort(nil, offered: ListSort.inbox), .priority)
+        XCTAssertEqual(Preferences.sort("group", offered: ListSort.inbox), .group)
+        XCTAssertEqual(Preferences.sort("date", offered: ListSort.inbox), .date)
+        XCTAssertEqual(Preferences.sort("date", offered: ListSort.today), .priority, "Today has no Date sort")
+        XCTAssertEqual(Preferences.sort("none", offered: ListSort.inbox), .priority, "0.8.0's None")
+        XCTAssertEqual(Preferences.sort("someday", offered: ListSort.today), .priority, "a value from a later build")
     }
 }
