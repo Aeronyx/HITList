@@ -11,6 +11,7 @@ invisibly: the window's content drew over them, so clicking "No date", a Group o
 add, the task editor and the Upcoming board.
 
 - Mac: those cards show again. Their layer sits in the window's frame, above the content, instead of inside it.
+- Mac sidebar: Filters sit below Groups.
 
 ## 0.8.1 — build 19, 2026-11-08
 
