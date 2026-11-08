@@ -52,6 +52,7 @@ struct DelightSettingsSection: View {
             Toggle(isOn: $haptics) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }
                 .toggleStyle(.hit)
                 .hitRowPadding()
+            BoltStyleRow()
             holidayTouchesRow
             Toggle(isOn: $rareSurprises) { HITMenuRowLabel("Rare surprises", systemImage: "moon.stars") }
                 .toggleStyle(.hit)
@@ -147,6 +148,41 @@ struct DelightSettingsSection: View {
         CustomSoundStore().remove()
         customName = nil
         if sound == .custom { sound = CompletionSound.fallback }
+    }
+}
+
+/// Extras → Sync bolt (brief 68): what the toolbar's bolt plays when you're good to go, Strike or Slam
+/// (`BoltStyle`), in the design system's segmented picker. Its icon is the bolt itself and plays the style you pick
+/// (and again when tapped), so the choice can be seen without waiting for a sync; the toolbar's bolt still plays only
+/// when `BoltStrikeGate` says. Under Reduce Motion both are the blink.
+private struct BoltStyleRow: View {
+    @AppStorage(BoltStyle.key, store: AppGroup.defaults) private var style: BoltStyle = .fallback
+    @State private var player = BoltPlayer()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: HITSpacing.m) {
+            Button(action: play) {
+                BoltPreviewGlyph(player: player)
+                    .frame(width: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Play the sync bolt")
+            HITMenuRowLabel("Sync bolt", subtitle: "When you're good to go")
+                .foregroundStyle(HITColor.text)
+            Spacer(minLength: HITSpacing.s)
+            HITSegmented(selection: $style, segments: BoltStyle.allCases.map { HITSegment($0, $0.title) })
+                .frame(width: 136)
+                .accessibilityIdentifier("boltStyle")
+        }
+        .hitRowPadding()
+        .onChange(of: style) { _, _ in play() }
+    }
+
+    private func play() {
+        guard let motion = style.motion(for: reduceMotion ? .blink : .strike) else { return }
+        player.play(motion)
     }
 }
 

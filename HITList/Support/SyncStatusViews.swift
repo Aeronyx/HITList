@@ -101,8 +101,10 @@ struct AccountChangeBanner: View {
 ///
 /// It plays once as a "you're good to go": on the first good sync after the app opens, after it comes back from
 /// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
-/// ordinary syncs, never in the background; a short blink under Reduce Motion. What plays is the slam
-/// (brief 68, `BoltSlamMotion`: a twirl, a hop and a slam with a buzz of sparks at its foot, 0.8 s).
+/// ordinary syncs, never in the background; a short blink under Reduce Motion. What plays is the style chosen in
+/// Settings → Extras → Sync bolt (`BoltStyle`): the slam (brief 68, `BoltSlamMotion`: a twirl, a hop and a slam
+/// with a buzz of sparks at its foot, 0.8 s; the default) or the strike (brief 54, `BoltStrikeMotion`: a quick
+/// double flash with a twirl of a few degrees, 280 ms).
 struct SyncBolt: View {
     var action: () -> Void
     /// The glyph's point size: 15% larger than the original 11 pt (George, brief 54), on every platform.
@@ -116,11 +118,9 @@ struct SyncBolt: View {
     private var monitor: CloudSyncMonitor { .shared }
     @State private var flash = false
     @State private var lastPulse: Date?
-    /// Bumped once per strike; the keyframe animator plays on each change.
-    @State private var strikes = 0
-    @State private var strikeKind: BoltStrikeGate.Strike = .strike
-    /// Bumped once per slam (brief 68).
-    @State private var slams = 0
+    /// Counts the strikes and slams; the keyframe animators play on each change.
+    @State private var player = BoltPlayer()
+    @AppStorage(BoltStyle.key, store: AppGroup.defaults) private var style: BoltStyle = .fallback
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -146,21 +146,7 @@ struct SyncBolt: View {
                     .foregroundStyle(look.color.opacity(flash ? 1 : look.opacity))
                     .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
                     .contentTransition(.symbolEffect(.replace))
-                    .keyframeAnimator(initialValue: BoltStrikeMotion.Frame(), trigger: strikes) { glyph, fx in
-                        glyph
-                            .brightness(fx.glow * BoltStrikeMotion.flashBrightness)
-                            .shadow(color: look.color.opacity(fx.glow * 0.7), radius: fx.glow > 0.001 ? 3 : 0)
-                            .scaleEffect(fx.scale)
-                            .rotationEffect(.degrees(fx.twirl))
-                            .opacity(fx.opacity)
-                    } keyframes: { _ in
-                        BoltStrikeMotion.keyframes(for: strikeKind)
-                    }
-                    .keyframeAnimator(initialValue: BoltSlamMotion.Frame(), trigger: slams) { glyph, fx in
-                        glyph.modifier(BoltSlamMotion.Effect(frame: fx, color: look.color))
-                    } keyframes: { _ in
-                        BoltSlamMotion.keyframes()
-                    }
+                    .modifier(BoltMotions(player: player, color: look.color))
                     .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
                     // Drawn a little to the right of its toolbar slot, so it sits nearer the two controls
@@ -217,14 +203,9 @@ struct SyncBolt: View {
 
     private func strikeIfDue(from old: Date?, to new: Date?) {
         let kind = Self.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive, reduceMotion: reduceMotion)
-        guard kind != .none else { return }
-        if kind == .blink {
-            if strikeKind != kind { strikeKind = kind }
-            strikes &+= 1
-        } else {
-            slams &+= 1
-        }
-        SyncConfirmation.log.info("Bolt strike: \(kind == .blink ? "blink" : "slam", privacy: .public) (\(monitor.lastChangePhase?.rawValue ?? "demo", privacy: .public))")
+        guard let motion = style.motion(for: kind) else { return }
+        player.play(motion)
+        SyncConfirmation.log.info("Bolt strike: \(motion.rawValue, privacy: .public) (\(monitor.lastChangePhase?.rawValue ?? "demo", privacy: .public))")
     }
 
     /// What the bolt shows for a state. Pure, so tests can check it.
@@ -375,6 +356,113 @@ enum BoltStrikeMotion {
     /// The whole strike as a timeline, for tests.
     static func timeline(for strike: BoltStrikeGate.Strike) -> KeyframeTimeline<Frame> {
         KeyframeTimeline(initialValue: Frame()) { keyframes(for: strike) }
+    }
+
+    /// Plays one frame on the glyph: the flash, a hair of scale, the twirl, the blink's fade. At `Frame()` it draws
+    /// the glyph exactly as it rests.
+    struct Effect: ViewModifier {
+        var frame: Frame
+        var color: Color
+
+        func body(content: Content) -> some View {
+            content
+                .brightness(frame.glow * flashBrightness)
+                .shadow(color: color.opacity(frame.glow * 0.7), radius: frame.glow > 0.001 ? 3 : 0)
+                .scaleEffect(frame.scale)
+                .rotationEffect(.degrees(frame.twirl))
+                .opacity(frame.opacity)
+        }
+    }
+}
+
+/// How the bolt says "you're good to go" (Settings → Extras → Sync bolt, brief 68): the slam (`BoltSlamMotion`, the
+/// default; George asked for it on 0.8.1) or brief 54's strike (`BoltStrikeMotion`). Kept in `AppGroup.defaults`.
+/// It changes what plays, never when: `BoltStrikeGate` decides that, and Reduce Motion gets the blink for both.
+enum BoltStyle: String, CaseIterable, Identifiable {
+    case strike, slam
+
+    static let key = "delight.boltStyle"
+    static let fallback: BoltStyle = .slam
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .strike: "Strike"
+        case .slam: "Slam"
+        }
+    }
+
+    static func selected(in defaults: UserDefaults = AppGroup.defaults) -> BoltStyle {
+        defaults.string(forKey: key).flatMap(BoltStyle.init(rawValue:)) ?? fallback
+    }
+
+    /// What the bolt plays for the gate's answer: this style for a strike, the blink for a blink, nothing for none.
+    func motion(for strike: BoltStrikeGate.Strike) -> BoltMotion? {
+        switch strike {
+        case .none: nil
+        case .blink: .blink
+        case .strike: self == .slam ? .slam : .strike
+        }
+    }
+}
+
+/// One play of the bolt: brief 54's strike or its Reduce Motion blink, or brief 68's slam.
+enum BoltMotion: String {
+    case strike, blink, slam
+}
+
+/// Counts the bolt's plays: each new `strikes` starts the strike's keyframes (as `strikeKind`), each new `slams` the
+/// slam's (`BoltMotions`).
+struct BoltPlayer: Equatable {
+    var strikes = 0
+    var strikeKind: BoltStrikeGate.Strike = .strike
+    var slams = 0
+
+    mutating func play(_ motion: BoltMotion) {
+        switch motion {
+        case .strike, .blink:
+            let kind: BoltStrikeGate.Strike = motion == .blink ? .blink : .strike
+            if strikeKind != kind { strikeKind = kind }
+            strikes &+= 1
+        case .slam:
+            slams &+= 1
+        }
+    }
+}
+
+/// The bolt's motions on its glyph, both resting at identity: the strike's keyframes on each new `player.strikes`, the
+/// slam's on each new `player.slams`. The toolbar bolt and the Extras preview both wear it, so they play the same frames.
+struct BoltMotions: ViewModifier {
+    var player: BoltPlayer
+    var color: Color
+
+    func body(content: Content) -> some View {
+        content
+            .keyframeAnimator(initialValue: BoltStrikeMotion.Frame(), trigger: player.strikes) { glyph, fx in
+                glyph.modifier(BoltStrikeMotion.Effect(frame: fx, color: color))
+            } keyframes: { _ in
+                BoltStrikeMotion.keyframes(for: player.strikeKind)
+            }
+            .keyframeAnimator(initialValue: BoltSlamMotion.Frame(), trigger: player.slams) { glyph, fx in
+                glyph.modifier(BoltSlamMotion.Effect(frame: fx, color: color))
+            } keyframes: { _ in
+                BoltSlamMotion.keyframes()
+            }
+    }
+}
+
+/// The bolt as the toolbar draws it after a good sync, at the toolbar's size: Settings → Extras → Sync bolt's icon,
+/// which plays a style when asked.
+struct BoltPreviewGlyph: View {
+    var player: BoltPlayer
+
+    var body: some View {
+        let look = SyncBolt.look(for: .synced(.now), everSignedIn: true)
+        Image(systemName: look.symbol)
+            .font(.system(size: SyncBolt.size, weight: .bold))
+            .foregroundStyle(look.color.opacity(look.opacity))
+            .modifier(BoltMotions(player: player, color: look.color))
     }
 }
 
