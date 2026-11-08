@@ -231,11 +231,10 @@ final class PickerPortalView: NSView {
     }
 
     private func sync() {
-        guard let request, let window, let contentView = window.contentView else {
+        guard let request, let window, let host = PickerLayerHost.host(in: window) else {
             releaseLayer()
             return
         }
-        let host = PickerLayerHost.host(in: contentView)
         layerHost = host
         host.show(owner: self, kind: request.kind, anchor: host.convert(request.anchor, from: self),
                   card: request.card, dismiss: request.dismiss)
@@ -287,19 +286,25 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// The window's layer, added on first use and kept frontmost.
-    static func host(in contentView: NSView) -> PickerLayerHost {
-        if let existing = contentView.subviews.lazy.compactMap({ $0 as? PickerLayerHost }).first {
-            if contentView.subviews.last !== existing, existing.model.card == nil {
+    /// The window's layer, added on first use and kept frontmost. It lives beside the content view, in the
+    /// window's frame view, never inside it: with the Xcode 27.2 SDK a SwiftUI hosting view draws its content
+    /// over any view added to it, so every card was laid out (Accessibility saw it) but invisible, on the Mac
+    /// everywhere: quick add, the editor, the board (George, 2026-11-08: "the calendar/groups dropdowns are
+    /// invisible"). Nil only for a window without a content view.
+    static func host(in window: NSWindow) -> PickerLayerHost? {
+        guard let contentView = window.contentView else { return nil }
+        let container = contentView.superview ?? contentView
+        if let existing = container.subviews.lazy.compactMap({ $0 as? PickerLayerHost }).first {
+            if container.subviews.last !== existing, existing.model.card == nil {
                 existing.removeFromSuperview()
-                contentView.addSubview(existing, positioned: .above, relativeTo: nil)
+                container.addSubview(existing, positioned: .above, relativeTo: nil)
             }
             return existing
         }
         let host = PickerLayerHost(rootView: PickerLayerRoot(model: PickerLayerModel()))
-        host.frame = contentView.bounds
+        host.frame = container === contentView ? contentView.bounds : contentView.frame
         host.autoresizingMask = [.width, .height]
-        contentView.addSubview(host, positioned: .above, relativeTo: nil)
+        container.addSubview(host, positioned: .above, relativeTo: nil)
         return host
     }
 
