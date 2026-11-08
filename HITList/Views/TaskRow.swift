@@ -18,13 +18,11 @@ struct TaskRow: View {
     @Environment(PopoutController.self) private var popouts: PopoutController?
     /// Settings → Appearance → Compact rows: less air above and below each row (`ListMetrics`).
     @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The board's cards let the meta line wrap (brief 56); every list keeps it to one line.
     @Environment(\.taskMetaWraps) private var metaWraps
     /// Beside the upright island (the Duo's outer display) the title and meta line are a step larger.
     @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
-    @State private var pops = 0
 
     /// A recurring task never becomes completed (its date advances), so the row also counts as checked
     /// while its completion animates.
@@ -44,77 +42,22 @@ struct TaskRow: View {
         return task.isCompleted ? Theme.secondaryText : task.priorityValue.color
     }
 
-    /// The row slides toward the trailing edge while the list fades it out (see `CompletionMotion`).
-    private var slideOffset: CGFloat {
-        completionPhase == .animating && !effects.calmMotion ? CompletionMotion.slideDistance : 0
-    }
-
-    /// The height of one title line: the checkbox centres on it, so a one-line title reads as one aligned
-    /// row and a two-line title keeps the checkbox on its first line. It is the checkbox's size, so the
-    /// title has no spare air above or below it (the row's insets are `ListMetrics`').
-    #if os(macOS)
-    private let lineHeight: CGFloat = 20
-    private let checkSize: CGFloat = 18
-    #else
-    private let lineHeight: CGFloat = 21
-    private let checkSize: CGFloat = 22
-    #endif
-
     var body: some View {
         HStack(alignment: .top, spacing: HITSpacing.m) {
-            Button {
-                if !isChecked && !effects.calmMotion { pops += 1 }
-                onToggleCompletion()
-            } label: {
-                Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: checkSize, weight: .regular))
-                    .foregroundStyle(checkColor)
-                    // The symbol swap only on completing; un-completing (and Reduce Motion) just cross-fades.
-                    // No .symbolEffect(.bounce): the celebrate pop already scales this glyph, and a bounce
-                    // on top of it overshoots twice.
-                    .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
-                    .hitCelebratePop(trigger: pops)
-                    .animation(HITMotion.standard, value: isChecked)
-                    .frame(width: checkSize + 2, height: lineHeight)
-                    .completionDelight(completing: completionPhase == .pending)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isChecked ? "Mark incomplete" : isSwitch ? "Flip switch" : "Complete task")
+            TaskRowCheckbox(isChecked: isChecked, color: checkColor, completing: completionPhase == .pending,
+                            accessibilityLabel: isChecked ? "Mark incomplete" : isSwitch ? "Flip switch" : "Complete task",
+                            action: onToggleCompletion)
 
             VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
-                // A long title wraps in full (titles are capped at `TaskLimits.titleCharacters`); the
-                // checkbox stays on its first line.
-                Text(task.title)
-                    .font(HITType.taskTitle(for: islandPlacement))
-                    .tracking(HITType.taskTitleTracking)
-                    .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
-                    .overlay { strikeLine }
-                    .animation(CompletionMotion.strike, value: isChecked)
-                    .frame(minHeight: lineHeight, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                TaskRowTitle(title: task.title, isChecked: isChecked)
                 // The description's first line, Todoist style; the popout shows the rest.
-                if !task.notes.isEmpty {
-                    Text(TaskLimits.firstLine(of: task.notes))
-                        .font(HITType.subheadline)
-                        .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .accessibilityLabel("Description: \(TaskLimits.firstLine(of: task.notes))")
-                }
+                TaskRowNotes(notes: task.notes)
                 metaLine
             }
             // Priority shows as the checkbox's colour alone; no "P1" badge.
             Spacer(minLength: 0)
         }
-        // The row owns its insets (the same above and below, and the same on every list) so rows are
-        // equal heights and sit the same distance under every header.
-        .listRowInsets(ListMetrics.rowInsets(compact: compactRows))
-        .listRowSeparatorTint(Theme.separator)
-        .contentShape(Rectangle())
-        // The slide-away: a render offset only, so the row's layout doesn't move.
-        .offset(x: slideOffset)
-        .animation(CompletionMotion.slideAway(calmMotion: effects.calmMotion), value: slideOffset)
+        .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
         .contextMenu {
             Menu("Priority") {
                 ForEach(Priority.allCases, id: \.self) { p in
@@ -238,11 +181,84 @@ struct TaskRow: View {
         task.subtaskProgress?.compactText
     }
 
+}
+
+// MARK: - The parts every row shares
+
+/// A task row's measurements. The height of one title line: the checkbox centres on it, so a one-line title reads
+/// as one aligned row and a two-line title keeps the checkbox on its first line. It is the checkbox's size, so the
+/// title has no spare air above or below it (the row's insets are `ListMetrics`').
+enum TaskRowMetrics {
+    #if os(macOS)
+    static let lineHeight: CGFloat = 20
+    static let checkSize: CGFloat = 18
+    #else
+    static let lineHeight: CGFloat = 21
+    static let checkSize: CGFloat = 22
+    #endif
+}
+
+/// The check circle a task row starts with, yours and a shared task's alike (brief 62): the priority's colour, the
+/// celebrate pop and the delight on completing.
+struct TaskRowCheckbox: View {
+    let isChecked: Bool
+    let color: Color
+    /// The completion's first moment (`CompletionPhase.pending`).
+    var completing = false
+    let accessibilityLabel: String
+    let action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @HITEffectsSetting private var effects
+    @State private var pops = 0
+
+    var body: some View {
+        Button {
+            if !isChecked && !effects.calmMotion { pops += 1 }
+            action()
+        } label: {
+            Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: TaskRowMetrics.checkSize, weight: .regular))
+                .foregroundStyle(color)
+                // The symbol swap only on completing; un-completing (and Reduce Motion) just cross-fades.
+                // No .symbolEffect(.bounce): the celebrate pop already scales this glyph, and a bounce
+                // on top of it overshoots twice.
+                .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
+                .hitCelebratePop(trigger: pops)
+                .animation(HITMotion.standard, value: isChecked)
+                .frame(width: TaskRowMetrics.checkSize + 2, height: TaskRowMetrics.lineHeight)
+                .completionDelight(completing: completing)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+    }
+}
+
+/// A task row's title: wraps in full (titles are capped at `TaskLimits.titleCharacters`), struck through when
+/// checked.
+struct TaskRowTitle: View {
+    let title: String
+    let isChecked: Bool
+    /// Beside the upright island (the Duo's outer display) a step larger.
+    @Environment(\.listIslandPlacement) private var islandPlacement
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Text(title)
+            .font(HITType.taskTitle(for: islandPlacement))
+            .tracking(HITType.taskTitleTracking)
+            .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
+            .overlay { strikeLine }
+            .animation(CompletionMotion.strike, value: isChecked)
+            .frame(minHeight: TaskRowMetrics.lineHeight, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     /// The title's strike-through, drawn on its own so it can sweep left to right when the task is
     /// completed (a mask over a copy of the title with clear glyphs). It fades out when un-completed,
     /// and only cross-fades with Reduce Motion on.
     private var strikeLine: some View {
-        Text(task.title)
+        Text(title)
             .foregroundStyle(.clear)
             .strikethrough(color: Theme.secondaryText)
             .mask(alignment: .leading) {
@@ -254,6 +270,37 @@ struct TaskRow: View {
             .opacity(isChecked ? 1 : 0)
             .animation(isChecked && !reduceMotion ? nil : CompletionMotion.strike, value: isChecked)
             .accessibilityHidden(true)
+    }
+}
+
+/// The description's first line under the title, Todoist style; nothing without one.
+struct TaskRowNotes: View {
+    let notes: String
+
+    var body: some View {
+        if !notes.isEmpty {
+            Text(TaskLimits.firstLine(of: notes))
+                .font(HITType.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .accessibilityLabel("Description: \(TaskLimits.firstLine(of: notes))")
+        }
+    }
+}
+
+extension View {
+    /// A task row's place in its list: its own insets (the same above and below, and the same on every list, so rows
+    /// are equal heights and sit the same distance under every header), the hairline, and the slide toward the
+    /// trailing edge while the list fades it out (`CompletionMotion`), a render offset only so the layout doesn't move.
+    func taskRowChrome(compact: Bool, completionPhase: CompletionPhase?, calmMotion: Bool) -> some View {
+        let slide = completionPhase == .animating && !calmMotion ? CompletionMotion.slideDistance : 0
+        return self
+            .listRowInsets(ListMetrics.rowInsets(compact: compact))
+            .listRowSeparatorTint(Theme.separator)
+            .contentShape(Rectangle())
+            .offset(x: slide)
+            .animation(CompletionMotion.slideAway(calmMotion: calmMotion), value: slide)
     }
 }
 

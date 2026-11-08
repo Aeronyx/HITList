@@ -21,6 +21,10 @@ struct TaskListView: View {
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
+    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
+    @State private var editorOwner = UUID()
+    /// The shared tasks Today shows among yours (brief 62); nothing while Shared Tasks is off.
+    private var sharedRows: SharedRows { SharedRows.shared }
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -73,37 +77,33 @@ struct TaskListView: View {
     private struct Group: Identifiable {
         let id: String
         let title: String
-        let tasks: [TaskItem]
+        let rows: [TaskListRow]
         /// The header's colour: "Overdue" red, today green, other days grey.
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
         var hidesDay = false
-        /// A Group section of a Today sorted by Group (brief 57): drawn by `GroupSectionHeader` instead of
-        /// `title`.
-        var heading: GroupSectionHeading?
+        /// A Group or shared list section of a Today sorted by Group (briefs 57, 62): drawn by `RowSectionHeader`
+        /// instead of `title`.
+        var heading: RowSectionHeading?
         /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
     }
 
-    /// A row's task and the due date it is listed under: its own, or while its completion animates,
-    /// the one it had when tapped (a completed recurring task has already moved to its next date).
-    private struct Placed: FilterableTask {
-        let task: TaskItem
-        let filterDueDate: Date?
-        var filterTitle: String { task.filterTitle }
-        var filterNotes: String { task.filterNotes }
-        var filterPriority: Int { task.filterPriority }
-        var filterHasDueTime: Bool { task.filterHasDueTime }
-        var filterIsCompleted: Bool { task.filterIsCompleted }
-        var filterProjectName: String? { task.filterProjectName }
-        var filterLabelNames: [String] { task.filterLabelNames }
-        var filterIsRecurring: Bool { task.filterIsRecurring }
-        var filterCreatedDate: Date? { task.filterCreatedDate }
-    }
-
     /// Tasks completed here in the last moment, which the list keeps showing until their animation ends.
     private var recentlyCompleted: Set<UUID> { completions.heldIDs }
+
+    /// The shared tasks this list shows (brief 62): Today's, by the same rule as yours. The other lists (a Group, a
+    /// label, a filter, Completed) are yours alone.
+    private func matchedShared() -> [SharedRow] {
+        guard selection == .today else { return [] }
+        return sharedRows.rows.filter { TaskOrdering.isInToday($0, now: now, includeCompleted: showCompleted) }
+    }
+
+    /// Whether a row is still in this list, so a completion settles in place rather than collapsing.
+    private func isListed(_ id: UUID) -> Bool {
+        (try? matchedTasks())?.contains(where: { $0.id == id }) == true || matchedShared().contains { $0.id == id }
+    }
 
     private func matchedTasks() throws -> [TaskItem] {
         // Today and the Inbox follow `TaskOrdering`'s rules rather than a query (an undated task in a
@@ -120,13 +120,20 @@ struct TaskListView: View {
         return try FilterQuery(source, now: now).apply(to: allTasks, now: now)
     }
 
-    /// The matched tasks plus the recently completed ones, in list order.
-    private func placed(_ matched: [TaskItem]) -> [Placed] {
-        guard !completions.isEmpty else { return matched.map { Placed(task: $0, filterDueDate: $0.dueDate) } }
+    /// The matched tasks (yours and shared ones) plus the recently completed ones, each under the due date it is
+    /// listed at: its own, or while its completion animates the one it had when tapped (a completed recurring task
+    /// has already moved to its next date).
+    private func placed(_ matched: [TaskItem], shared: [SharedRow]) -> [TaskListRow] {
+        let rows = ListRows.rows(own: matched, shared: shared)
+        guard !completions.isEmpty else { return rows }
         let held = recentlyCompleted
         let anchors = completions.anchors
-        let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
-        let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
+        let shown = rows.filter { !held.contains($0.id) }
+        let animating = allTasks.compactMap { task in
+            anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
+        } + (selection == .today ? sharedRows.rows : []).compactMap { row in
+            anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
+        }
         return FilterQuery.defaultSort(shown + animating)
     }
 
@@ -135,14 +142,14 @@ struct TaskListView: View {
             let matched = try matchedTasks()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-                return .success([Group(id: "completed", title: "", tasks: sorted)])
+                return .success([Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
             }
-            let rows = placed(matched)
+            let rows = placed(matched, shared: matchedShared())
             switch selection {
             case .today: return .success(todayGroups(rows))
             case .inbox:
-                let tasks = TaskOrdering.sorted(rows, now: now).map(\.task)
-                return .success(tasks.isEmpty ? [] : [Group(id: "inbox", title: "", tasks: tasks)])
+                let sorted = TaskOrdering.sorted(rows, now: now)
+                return .success(sorted.isEmpty ? [] : [Group(id: "inbox", title: "", rows: sorted)])
             default: break
             }
             var groups: [Group] = []
@@ -154,10 +161,10 @@ struct TaskListView: View {
                 // "No date" do not.
                 let singleDay = due != nil && key != "Overdue"
                 if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task], color: groups[i].color,
+                    groups[i] = Group(id: key, title: key, rows: groups[i].rows + [row], color: groups[i].color,
                                       hidesDay: groups[i].hidesDay)
                 } else {
-                    groups.append(Group(id: key, title: key, tasks: [row.task],
+                    groups.append(Group(id: key, title: key, rows: [row],
                                         color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay))
                 }
             }
@@ -173,9 +180,9 @@ struct TaskListView: View {
     /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
     /// Sorted by Group (briefs 57, 61), the Overdue block stays on top: its header, then its tasks in Group
     /// sections, then the day's header and the day's tasks in Group sections the same way.
-    private func todayGroups(_ rows: [Placed]) -> [Group] {
+    private func todayGroups(_ rows: [TaskListRow]) -> [Group] {
         if todaySort == .group { return groupedTodayGroups(rows) }
-        var overdue: [Placed] = [], today: [Placed] = []
+        var overdue: [TaskListRow] = [], today: [TaskListRow] = []
         for row in rows {
             switch TaskOrdering.todaySection(of: row, now: now) {
             case .overdue?: overdue.append(row)
@@ -186,11 +193,11 @@ struct TaskListView: View {
         guard !(overdue.isEmpty && today.isEmpty) else { return [] }
         var groups: [Group] = []
         if !overdue.isEmpty {
-            groups.append(Group(id: "Overdue", title: "Overdue", tasks: TaskOrdering.sorted(overdue, now: now).map(\.task),
+            groups.append(Group(id: "Overdue", title: "Overdue", rows: TaskOrdering.sorted(overdue, now: now),
                                 color: HITColor.dueOverdue))
         }
         groups.append(Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated),
-                            tasks: TaskOrdering.sorted(today, now: now).map(\.task), color: HITColor.dueToday, hidesDay: true))
+                            rows: TaskOrdering.sorted(today, now: now), color: HITColor.dueToday, hidesDay: true))
         return groups
     }
 
@@ -206,18 +213,20 @@ struct TaskListView: View {
         currentProject == nil && !(selection == .today && todaySort == .group)
     }
 
-    private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
-        // The same section rule as Today by priority (`todayGroups`), so the two never disagree.
-        let split = GroupedOrdering.today(rows, by: .group, groupOrder: projects.map(\.id), now: now,
-                                          sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) {
-            $0.task.project?.id
-        }
+    private func groupedTodayGroups(_ rows: [TaskListRow]) -> [Group] {
+        // The same section rule as Today by priority (`todayGroups`), so the two never disagree. Shared lists after
+        // the Groups, "Ungrouped" last (brief 62).
+        let sharedLists = sharedRows.lists
+        let order = ListRows.groupOrder(groups: projects.map(\.id), sharedLists: sharedLists.map(\.id))
+        let split = GroupedOrdering.today(rows, by: .group, groupOrder: order, now: now,
+                                          sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) { $0.group }
         guard !split.isEmpty else { return [] }
-        func sections(_ sections: [ListSection<UUID, Placed>], half: String, banner: String, color: Color,
+        func sections(_ sections: [ListSection<ListRowGroup, TaskListRow>], half: String, banner: String, color: Color,
                       hidesDay: Bool) -> [Group] {
             sections.enumerated().map { index, section in
-                Group(id: "\(half)-\(section.key)", title: "", tasks: section.tasks.map(\.task), color: color,
-                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects, now: now),
+                Group(id: "\(half)-\(section.key)", title: "", rows: section.tasks, color: color, hidesDay: hidesDay,
+                      heading: .make(for: section.key, count: section.openCount, projects: projects, sharedLists: sharedLists,
+                                     now: now),
                       banner: index == 0 ? banner : nil)
             }
         }
@@ -225,7 +234,7 @@ struct TaskListView: View {
         var groups = sections(split.overdue, half: "overdue", banner: "Overdue", color: HITColor.dueOverdue, hidesDay: false)
         if split.today.isEmpty {
             // The day's header still shows, so its "Add task" row sits under it (as by priority).
-            groups.append(Group(id: "today", title: day, tasks: [], color: HITColor.dueToday, hidesDay: true))
+            groups.append(Group(id: "today", title: day, rows: [], color: HITColor.dueToday, hidesDay: true))
         } else {
             groups += sections(split.today, half: "today", banner: day, color: HITColor.dueToday, hidesDay: true)
         }
@@ -259,30 +268,14 @@ struct TaskListView: View {
                         }
                         .frame(maxHeight: .infinity)
                     } else {
-                        List(selection: popouts.selection) {
+                        List(selection: popouts.listSelection(owner: editorOwner)) {
                             ForEach(groups) { group in
                                 Section {
-                                    ForEach(group.tasks) { task in
-                                        let phase = completions.phase(of: task.id)
-                                        TaskRow(task: task, now: now, showProject: showsProjectOnRows,
-                                                hidesDay: group.hidesDay, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
-                                            .opacity(phase == .animating ? 0 : 1)
-                                            .tag(task)
-                                            .completionRowBackground(flashing: phase == .pending)
-                                            .swipeActions(edge: .trailing) {
-                                                Button(role: .destructive) {
-                                                    popouts.requestDelete(task) {
-                                                        if popouts.task?.id == task.id { popouts.closeTask() }
-                                                        TaskActions.delete(task, in: context)
-                                                    }
-                                                } label: { Label("Delete", systemImage: "trash") }
-                                            }
-                                            .swipeActions(edge: .leading) {
-                                                Button {
-                                                    TaskActions.reschedule(task, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), in: context)
-                                                } label: { Label("Tomorrow", systemImage: "sunrise") }
-                                                .tint(.orange)
-                                            }
+                                    ForEach(group.rows) { row in
+                                        switch row.kind {
+                                        case .own(let task): taskRow(task, in: group)
+                                        case .shared(let shared): sharedRow(shared, in: group)
+                                        }
                                     }
                                 } header: {
                                     if let heading = group.heading {
@@ -290,7 +283,7 @@ struct TaskListView: View {
                                             if let banner = group.banner {
                                                 Text(banner).taskSectionHeader(color: group.color)
                                             }
-                                            GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
+                                            RowSectionHeader(heading: heading, belowBanner: group.banner != nil)
                                         }
                                         .listRowInsets(EdgeInsets())
                                     } else if !group.title.isEmpty {
@@ -369,10 +362,66 @@ struct TaskListView: View {
         .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
+        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
+        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
-        .onAppear { CompletionFeedback.shared.prepare() }
+        .onAppear {
+            CompletionFeedback.shared.prepare()
+            sharedRows.start()
+        }
         // Held rows belong to the list they were completed in.
         .onChange(of: selection) { _, _ in completions.cancelAll() }
+    }
+
+    // MARK: - Rows
+
+    private func taskRow(_ task: TaskItem, in group: Group) -> some View {
+        let phase = completions.phase(of: task.id)
+        return TaskRow(task: task, now: now, showProject: showsProjectOnRows,
+                       hidesDay: group.hidesDay, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+            .opacity(phase == .animating ? 0 : 1)
+            .tag(ListSelection.task(task))
+            .completionRowBackground(flashing: phase == .pending)
+            .swipeActions(edge: .trailing) {
+                Button(role: .destructive) {
+                    popouts.requestDelete(task) {
+                        if popouts.task?.id == task.id { popouts.closeTask() }
+                        TaskActions.delete(task, in: context)
+                    }
+                } label: { Label("Delete", systemImage: "trash") }
+            }
+            .swipeActions(edge: .leading) {
+                Button {
+                    TaskActions.reschedule(task, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)), in: context)
+                } label: { Label("Tomorrow", systemImage: "sunrise") }
+                .tint(.orange)
+            }
+    }
+
+    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits; completing goes through the
+    /// shared store; selecting it opens its editor.
+    private func sharedRow(_ row: SharedRow, in group: Group) -> some View {
+        let phase = completions.phase(of: row.id)
+        return SharedTaskListRow(row: row, now: now, showList: showsProjectOnRows, hidesDay: group.hidesDay,
+                                 completionPhase: phase, onToggleCompletion: { toggleCompletion(row) })
+            .opacity(phase == .animating ? 0 : 1)
+            .tag(ListSelection.shared(SharedTaskRef(row)))
+            .completionRowBackground(flashing: phase == .pending)
+            .swipeActions(edge: .trailing) {
+                if row.canWrite {
+                    Button(role: .destructive) {
+                        popouts.requestDelete(title: row.filterTitle) { try? sharedRows.delete(row) }
+                    } label: { Label("Delete", systemImage: "trash") }
+                }
+            }
+            .swipeActions(edge: .leading) {
+                if row.canWrite {
+                    Button {
+                        try? sharedRows.reschedule(row, to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now)))
+                    } label: { Label("Tomorrow", systemImage: "sunrise") }
+                    .tint(.orange)
+                }
+            }
     }
 
     // MARK: - Completion
@@ -408,6 +457,30 @@ struct TaskListView: View {
         showToast(completed)
     }
 
+    /// A shared row: completed in the shared store (stamped with who and when, so the others see it), with the same
+    /// check, toast and Undo as yours (brief 62). A shared task has no repeat and no switch.
+    private func toggleCompletion(_ row: SharedRow) {
+        let record = toast.record(for: row.id)
+        switch completions.tap(on: row.id, isCompleted: row.task.isCompleted, undoable: record != nil) {
+        case .ignore:
+            return
+        case .undo:
+            withAnimation(HITMotion.exit) { toast.remove(row.id) }
+            revert(record.map { [$0] } ?? [])
+            return
+        case .uncheck:
+            withAnimation(HITMotion.standard) { try? sharedRows.setCompleted(false, row) }
+            return
+        case .complete:
+            break
+        }
+        guard (try? sharedRows.setCompleted(true, row)) != nil else { return }
+        let token = withAnimation(HITMotion.quick) { completions.begin(row.id, anchor: row.filterDueDate) }
+        CompletionFeedback.shared.taskCompleted()
+        Task { await finishCompletion(of: row.id, token: token) }
+        showToast(CompletedTask(id: row.id, title: row.filterTitle, revert: .uncomplete))
+    }
+
     private func showToast(_ completed: CompletedTask) {
         let generation = withAnimation(HITMotion.enter) { toast.add(completed) }
         AccessibilityNotification.Announcement(toast.message).post()
@@ -428,6 +501,11 @@ struct TaskListView: View {
         withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
+                if let shared = sharedRows.row(record.id) {
+                    // Reopened in the shared store: the others see it back too.
+                    if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
+                    continue
+                }
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
                 if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
@@ -446,7 +524,7 @@ struct TaskListView: View {
     /// undo or a newer completion of the same task wins.
     private func finishCompletion(of id: UUID, token: Int) async {
         try? await Task.sleep(for: CompletionMotion.hold)
-        if (try? matchedTasks())?.contains(where: { $0.id == id }) == true {
+        if isListed(id) {
             withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }

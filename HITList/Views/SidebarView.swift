@@ -9,6 +9,8 @@ struct SidebarView: View {
     #if os(macOS)
     @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
     #endif
+    /// Optional: the offscreen renders in `ProfileMenuTests` have none.
+    @Environment(PopoutController.self) private var popouts: PopoutController?
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
@@ -131,6 +133,20 @@ struct SidebarView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
         }
+        #endif
+        #if os(macOS)
+        // A shared task's panel is drawn over the list's column (`sharedTaskEditor`); the sidebar dims with it, as it
+        // does under a task of yours, and a click on it closes the panel.
+        .overlay {
+            if let popouts, popouts.state.isSharedTaskOpen {
+                Color.black.opacity(0.45)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { popouts.closeSharedTask() }
+                    .transition(.opacity)
+            }
+        }
+        .animation(HITMotion.enter, value: popouts?.state.isSharedTaskOpen == true)
         #endif
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
