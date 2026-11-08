@@ -276,7 +276,8 @@ struct TaskPopout: View {
     }
 
     private var groupRow: some View {
-        EditorRow(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : "number",
+        // A Group's dot, never "#" (brief 64).
+        EditorRow(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : GroupDot.symbol,
                   tint: task.project.map { Color(hex: $0.colorHex) } ?? Theme.accent,
                   action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {

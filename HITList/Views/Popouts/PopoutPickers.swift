@@ -197,7 +197,7 @@ struct ProjectChipPopover: View {
                     }
                     ForEach(matches) { project in
                         let isSelected = selectedName?.caseInsensitiveCompare(project.name) == .orderedSame
-                        HITMenuRow(project.name, systemImage: "number", iconTint: Color(hex: project.colorHex),
+                        HITMenuRow(project.name, systemImage: GroupDot.symbol, iconTint: Color(hex: project.colorHex),
                                    value: isSelected ? "✓" : nil, accessory: .none) { onPick(project) }
                     }
                 }

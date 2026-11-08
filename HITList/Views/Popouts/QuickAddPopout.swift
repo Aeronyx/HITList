@@ -375,7 +375,8 @@ struct QuickAddPopout: View {
     }
 
     private func groupChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : "number",
+        // A Group's dot, never "#" (brief 64).
+        HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : GroupDot.symbol,
                 tint: projectTint(chips.projectName), isSelected: chips.projectName != nil, size: .compact,
                 action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
