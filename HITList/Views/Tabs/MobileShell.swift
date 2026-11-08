@@ -124,7 +124,7 @@ struct MobileShell: View {
             // is the safe area on that edge, so the stack steps out of it; where the column is narrower than the
             // island, the island keeps its width and the lists their margin (`listSideMargin`).
             let column = max(barColumnWidth(placement), IslandMetrics.sideColumnWidth)
-            VStack(spacing: IslandMetrics.addButtonGap) {
+            VStack(spacing: IslandMetrics.sideAddButtonGap) {
                 tabBar(axis: .vertical)
                 IslandAddButton { popouts.openQuickAdd() }
             }
