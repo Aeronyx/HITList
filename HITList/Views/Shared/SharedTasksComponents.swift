@@ -83,6 +83,8 @@ struct SharedTaskRow: View {
     var now = Date()
     let onToggle: () -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Beside the Duo's upright island a step larger, as every row (brief 63).
+    @Environment(\.listIslandPlacement) private var islandPlacement
 
     #if os(macOS)
     private let checkSize: CGFloat = 18
@@ -111,7 +113,7 @@ struct SharedTaskRow: View {
 
             VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
                 Text(task.title.value)
-                    .font(HITType.taskTitle)
+                    .font(HITType.taskTitle(for: islandPlacement))
                     .tracking(HITType.taskTitleTracking)
                     .foregroundStyle(task.isCompleted ? Theme.secondaryText : HITColor.text)
                     .strikethrough(task.isCompleted, color: Theme.secondaryText)
@@ -153,6 +155,142 @@ struct SharedTaskRow: View {
     private var completer: SharedPerson? {
         guard let by = task.completion.value?.by, by != me else { return nil }
         return SharedPeople.people(in: list, me: me).first { $0.memberID == by }
+    }
+}
+
+/// A shared task as a row of your lists (brief 62): drawn from `TaskRow`'s own parts (the check circle in its
+/// priority's colour, the title, the description's first line, the date), with its list's name and the two-person
+/// marker at the end of the second line, where a Group's name and dot sit on yours. Completing, Undo and opening it
+/// are the list's (`onToggleCompletion`, the list's selection); its menu changes it in the shared store.
+struct SharedTaskListRow: View {
+    let row: SharedRow
+    var now: Date
+    /// The list's name at the end of the second line; off under that list's own section header.
+    var showList = true
+    /// Under a header that names the day: the row shows only the time (or nothing for an all-day task).
+    var hidesDay = false
+    var completionPhase: CompletionPhase? = nil
+    var onToggleCompletion: () -> Void
+    /// Optional: a row drawn outside the app shell (tests) deletes at once.
+    @Environment(PopoutController.self) private var popouts: PopoutController?
+    @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
+    /// The board's cards let the meta line wrap (brief 56).
+    @Environment(\.taskMetaWraps) private var metaWraps
+    @Environment(\.listIslandPlacement) private var islandPlacement
+    @HITEffectsSetting private var effects
+
+    private var task: SharedTask { row.task }
+    private var priority: Priority { Priority(clamping: task.priority.value) }
+    /// Checked while its completion animates too, as `TaskRow`.
+    private var isChecked: Bool { task.isCompleted || completionPhase != nil }
+
+    private var checkColor: Color {
+        if completionPhase != nil { return priority == .p4 ? Theme.accent : priority.color }
+        return task.isCompleted ? Theme.secondaryText : priority.color
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: HITSpacing.m) {
+            TaskRowCheckbox(isChecked: isChecked, color: checkColor, completing: completionPhase == .pending,
+                            accessibilityLabel: isChecked ? "Mark incomplete" : "Complete task", action: onToggleCompletion)
+                .disabled(!row.canWrite)
+            VStack(alignment: .leading, spacing: ListMetrics.rowLineGap) {
+                TaskRowTitle(title: task.title.value, isChecked: isChecked)
+                TaskRowNotes(notes: task.notes.value)
+                metaLine
+            }
+            Spacer(minLength: 0)
+        }
+        .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
+        .contextMenu { menu }
+    }
+
+    // MARK: The meta line
+
+    /// One line in a list, laid out even when empty so every row is the same height; on the board's cards it flows
+    /// onto a second line, the list's name at the trailing end of whichever line it lands on (as `TaskRow`).
+    @ViewBuilder
+    private var metaLine: some View {
+        if metaWraps {
+            MetaFlowLayout(spacing: HITSpacing.s + 2, lineSpacing: ListMetrics.rowLineGap) {
+                dueItem
+                if showList {
+                    listItem.layoutValue(key: MetaTrailingKey.self, value: true)
+                } else if !showsDue {
+                    emptyLine
+                }
+            }
+            .lineLimit(1)
+        } else {
+            HStack(spacing: HITSpacing.s + 2) {
+                dueItem.layoutPriority(1)
+                Spacer(minLength: HITSpacing.s)
+                if showList { listItem } else { emptyLine }
+            }
+            .lineLimit(1)
+        }
+    }
+
+    private var showsDue: Bool {
+        guard let due = task.due.value else { return false }
+        return !hidesDay || due.hasTime
+    }
+
+    @ViewBuilder
+    private var dueItem: some View {
+        if let due = task.due.value {
+            let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due.date, hasTime: due.hasTime, now: now)
+            if !hidesDay {
+                MetaItem(DueFormatter.text(for: due.date, hasTime: due.hasTime, now: now), systemImage: "calendar", tint: tint)
+            } else if due.hasTime {
+                MetaItem(DueFormatter.timeText(for: due.date), systemImage: "clock", tint: tint)
+            }
+        }
+    }
+
+    /// "Trip 👥": the list's name in its colour, the two-person marker after it, where a Group's name and dot sit.
+    private var listItem: some View {
+        MetaItem(row.listTitle, systemImage: "person.2.fill", tint: Color(hex: row.listColorHex), iconSize: 9, iconTrailing: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Shared list \(row.listTitle)")
+    }
+
+    /// The hidden space that keeps an empty line's height.
+    private var emptyLine: some View {
+        Text(" ").font(HITType.taskMeta(for: islandPlacement)).hidden()
+    }
+
+    // MARK: The menu
+
+    /// Priority, Reschedule and Delete, as on a row of yours, through the shared store; nothing for a member who can
+    /// only look.
+    @ViewBuilder
+    private var menu: some View {
+        if row.canWrite {
+            Menu("Priority") {
+                ForEach(Priority.allCases, id: \.self) { p in
+                    Button { try? SharedRows.shared.setPriority(p.rawValue, row) } label: { Label(p.displayName, systemImage: p.symbol) }
+                }
+            }
+            Menu("Reschedule") {
+                Button("Today") { move(to: Calendar.current.startOfDay(for: now)) }
+                Button("Tomorrow") { move(to: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))) }
+                Button("Next Week") {
+                    let p = DateExpressionParser(now: now, weekStart: Preferences.weekStartWeekday())
+                    move(to: p.day(7, from: p.startOfWeek(containing: now)))
+                }
+                Button("Remove Date") { move(to: nil) }
+            }
+            Divider()
+            Button(role: .destructive) {
+                let delete = { try? SharedRows.shared.delete(row) }
+                if let popouts { popouts.requestDelete(title: task.title.value) { _ = delete() } } else { _ = delete() }
+            } label: { Label("Delete", systemImage: "trash") }
+        }
+    }
+
+    private func move(to day: Date?) {
+        try? SharedRows.shared.reschedule(row, to: day)
     }
 }
 

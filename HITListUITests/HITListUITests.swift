@@ -48,6 +48,55 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Upcoming")
     }
 
+    /// Brief 62: shared tasks are rows of your lists, not a screen of their own. With the sample shared lists
+    /// (`-seedSharedTasksSample`: in memory, no CloudKit), "Oat milk" (Groceries, due today, P2) is a row in Today
+    /// with its list's name and the people marker; completing it from the row shows the Undo toast and Undo brings it
+    /// back; tapping it opens its editor; the Inbox sorted by Group gives Groceries a section of its own after the
+    /// Groups and before "Ungrouped"; "Lemons" (tomorrow) is on Upcoming.
+    func testSharedTasksAreRowsOfYourLists() throws {
+        app.launchArguments += ["-seedDemoData", "YES", "-seedSharedTasksSample", "YES"]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 15))
+        tab("today")
+        let oatMilk = app.cells.containing(NSPredicate(format: "label == %@", "Oat milk")).firstMatch
+        XCTAssertTrue(oatMilk.waitForExistence(timeout: 10), "the shared task in Today")
+        XCTAssertTrue(oatMilk.descendants(matching: .any)["Shared list Groceries"].exists, "its list's name with the marker")
+        snapshot("1 Today with a shared task")
+
+        oatMilk.buttons["Complete task"].tap()
+        let undo = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Undo")).firstMatch
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "the Undo toast")
+        snapshot("2 Completed, with Undo")
+        XCTAssertTrue(oatMilk.waitForNonExistence(timeout: 5), "the row leaves Today")
+        undo.tap()
+        XCTAssertTrue(oatMilk.waitForExistence(timeout: 5), "Undo brings it back")
+
+        oatMilk.staticTexts["Oat milk"].firstMatch.tap()
+        let delete = app.buttons["Delete Task"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5), "the shared task's editor")
+        snapshot("3 Its editor")
+        app.buttons["Cancel"].firstMatch.tap()
+        XCTAssertTrue(delete.waitForNonExistence(timeout: 5), "Cancel closes it")
+
+        tab("inbox")
+        XCTAssertTrue(row("Shared list Groceries").waitForExistence(timeout: 5), "a dated shared task is in the Inbox")
+        sort(by: "Group")
+        app.swipeUp()
+        let groceries = element(beginningWith: "Groceries, shared list")
+        XCTAssertTrue(groceries.waitForExistence(timeout: 5), "the shared list's section")
+        let ungrouped = element(beginningWith: "Ungrouped,")
+        if ungrouped.exists { XCTAssertLessThan(groceries.frame.minY, ungrouped.frame.minY, "before Ungrouped") }
+        let health = element(beginningWith: "Health,")
+        if health.exists { XCTAssertLessThan(health.frame.minY, groceries.frame.minY, "after the Groups") }
+        snapshot("4 Inbox by Group")
+        app.swipeDown()
+        sort(by: "Priority")
+
+        tab("upcoming")
+        XCTAssertTrue(row("Lemons").waitForExistence(timeout: 5), "tomorrow's shared task on Upcoming")
+        snapshot("5 Upcoming")
+    }
+
     /// The island's motion (brief 58): every tab change leaves exactly one tab selected, and after the screens
     /// crossfade the "+" adds to the list on show (the incoming list's onAppear sets the card's context while
     /// the outgoing one is still fading). Inbox then Today: a stale Inbox context would add an undated task,

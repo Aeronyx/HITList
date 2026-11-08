@@ -17,8 +17,9 @@ struct UpcomingBoard: View {
     var calendar: Calendar = .current
     /// The completion animation's phase for a task (`CompletionAnimator`), nil when it isn't animating.
     var phase: (UUID) -> CompletionPhase? = { _ in nil }
-    var onToggleCompletion: (TaskItem) -> Void = { _ in }
-    var onOpen: (TaskItem) -> Void = { _ in }
+    /// A card's checkbox: a task of yours or a shared one (brief 62).
+    var onToggleCompletion: (Entry) -> Void = { _ in }
+    var onOpen: (Entry) -> Void = { _ in }
     /// Task ids dropped on a day; true if anything moved.
     var onDrop: ([String], Date) -> Bool = { _, _ in false }
     /// Not called since brief 39: a day's "+ Add task" opens the column's own inline card
@@ -316,22 +317,42 @@ struct UpcomingBoard: View {
     // MARK: - Cards
 
     private func card(_ entry: Entry, inOverdue: Bool) -> some View {
-        let task = entry.task
-        let phase = phase(task.id)
-        // `TaskRow` itself, so the checkbox, its sound and motion, the meta line and the context menu are
-        // the lists'. In a day column the day is in the header, so the card shows only the time (and the
-        // repeat icon); Overdue shows the date.
+        let phase = phase(entry.id)
+        // `TaskRow` itself (or, for a shared task, `SharedTaskListRow`, built from its parts), so the checkbox, its
+        // sound and motion, the meta line and the context menu are the lists'. In a day column the day is in the
+        // header, so the card shows only the time (and the repeat icon); Overdue shows the date.
         return BoardCard(flashing: phase == .pending) {
-            TaskRow(task: task, now: now, hidesDay: !inOverdue, completionPhase: phase,
-                    onToggleCompletion: { onToggleCompletion(task) })
-                // A crowded card's meta line takes a second line rather than truncating (brief 56).
-                .environment(\.taskMetaWraps, true)
+            SwiftUI.Group {
+                switch entry.kind {
+                case .own(let task):
+                    TaskRow(task: task, now: now, hidesDay: !inOverdue, completionPhase: phase,
+                            onToggleCompletion: { onToggleCompletion(entry) })
+                case .shared(let row):
+                    SharedTaskListRow(row: row, now: now, hidesDay: !inOverdue, completionPhase: phase,
+                                      onToggleCompletion: { onToggleCompletion(entry) })
+                }
+            }
+            // A crowded card's meta line takes a second line rather than truncating (brief 56).
+            .environment(\.taskMetaWraps, true)
         }
         .opacity(phase == .animating ? 0 : 1)
         // With a card open, a click on a task is a click away first.
-        .onTapGesture { clickAway { onOpen(task) } }
-        .draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
-        .accessibilityAction(named: "Open") { onOpen(task) }
+        .onTapGesture { clickAway { onOpen(entry) } }
+        .modifier(CardDrag(entry: entry))
+        .accessibilityAction(named: "Open") { onOpen(entry) }
+    }
+}
+
+/// A task of yours drags to another day (its id as the payload). A shared task does not yet.
+private struct CardDrag: ViewModifier {
+    let entry: UpcomingBoard.Entry
+
+    func body(content: Content) -> some View {
+        if let task = entry.ownTask {
+            content.draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
+        } else {
+            content
+        }
     }
 }
 

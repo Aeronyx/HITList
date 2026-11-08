@@ -27,19 +27,23 @@ struct PopoutState: Equatable {
 
     private(set) var quickAdd: QuickAdd?
     private(set) var taskID: UUID?
+    /// A shared task open in its editor (brief 62): one task at a time, a shared one or one of yours.
+    private(set) var sharedTask: SharedTaskRef?
 
     var isQuickAddOpen: Bool { quickAdd != nil }
     var isFloatingQuickAddOpen: Bool { quickAdd?.placement == .floating }
     var isQuickAddClosing: Bool { quickAdd?.isClosing == true }
     var isTaskOpen: Bool { taskID != nil }
+    var isSharedTaskOpen: Bool { sharedTask != nil }
     /// The floating "+" hides while anything is popped out.
-    var showsAddButton: Bool { quickAdd == nil && taskID == nil }
+    var showsAddButton: Bool { quickAdd == nil && taskID == nil && sharedTask == nil }
 
     func isInlineOpen(_ key: String) -> Bool { quickAdd?.placement == .inline(key) }
 
     /// A new card, unless `id` names one being put back after a relaunch.
     mutating func openQuickAdd(_ context: QuickAddContext, placement: Placement = .floating, id: UUID = UUID()) {
         taskID = nil
+        sharedTask = nil
         quickAdd = QuickAdd(id: id, context: context, placement: placement)
     }
 
@@ -64,6 +68,7 @@ struct PopoutState: Equatable {
 
     mutating func openTask(_ id: UUID) {
         quickAdd = nil
+        sharedTask = nil
         taskID = id
     }
 
@@ -71,10 +76,44 @@ struct PopoutState: Equatable {
         taskID = nil
     }
 
+    mutating func openSharedTask(_ ref: SharedTaskRef) {
+        quickAdd = nil
+        taskID = nil
+        sharedTask = ref
+    }
+
+    mutating func closeSharedTask() {
+        sharedTask = nil
+    }
+
     mutating func closeAll() {
         quickAdd = nil
         taskID = nil
+        sharedTask = nil
     }
+}
+
+/// A task of a shared list, by its id and its list's (brief 62).
+struct SharedTaskRef: Hashable, Identifiable {
+    let taskID: UUID
+    let listID: UUID
+    var id: UUID { taskID }
+
+    init(taskID: UUID, listID: UUID) {
+        self.taskID = taskID
+        self.listID = listID
+    }
+
+    init(_ row: SharedRow) {
+        self.init(taskID: row.id, listID: row.listID)
+    }
+}
+
+/// What a list's selection holds (brief 62): a task of yours, whose popout the popout host draws, or a shared task,
+/// whose editor the list that opened it draws (`sharedTaskEditor(owner:)`).
+enum ListSelection: Hashable {
+    case task(TaskItem)
+    case shared(SharedTaskRef)
 }
 
 /// The one presenter for HITList's popouts, shared through the environment by every list (Today,
@@ -145,8 +184,13 @@ final class PopoutController {
     /// Every delete path comes through here with what deleting means for it (`perform`): it runs at
     /// once, or after the confirmation dialog when the preference asks for one.
     func requestDelete(_ task: TaskItem, perform: @escaping () -> Void) {
+        requestDelete(title: task.title, perform: perform)
+    }
+
+    /// The same for a task known by its title alone (a shared task, brief 62).
+    func requestDelete(title: String, perform: @escaping () -> Void) {
         if Preferences.value(Preferences.confirmDelete, default: Preferences.confirmDeleteDefault) {
-            pendingDelete = PendingDelete(title: task.title, perform: perform)
+            pendingDelete = PendingDelete(title: title, perform: perform)
         } else {
             perform()
         }
@@ -165,6 +209,7 @@ final class PopoutController {
     /// A fresh card: it starts empty, whatever is stored (only the card that was open gets that back).
     func openQuickAdd(_ context: QuickAddContext? = nil, placement: PopoutState.Placement = .floating) {
         task = nil
+        sharedOwner = nil
         update { $0.openQuickAdd(context ?? listContext, placement: placement) }
     }
 
@@ -235,6 +280,7 @@ final class PopoutController {
 
     func open(_ task: TaskItem) {
         self.task = task
+        sharedOwner = nil
         update { $0.openTask(task.id) }
     }
 
@@ -245,7 +291,31 @@ final class PopoutController {
 
     func closeAll() {
         task = nil
+        sharedOwner = nil
         update { $0.closeAll() }
+    }
+
+    // MARK: Shared task (brief 62)
+
+    /// The list that opened the shared task's editor and draws it: a sheet on the iPhone and iPad, the panel on the
+    /// Mac. Kept so a list under another on the iPhone's stack never presents it as well.
+    private(set) var sharedOwner: UUID?
+
+    /// Opens a shared task's editor (the one `SharedListScreen` uses), drawn by the list `owner`.
+    func openShared(_ ref: SharedTaskRef, owner: UUID) {
+        task = nil
+        sharedOwner = owner
+        update { $0.openSharedTask(ref) }
+    }
+
+    func closeSharedTask() {
+        sharedOwner = nil
+        update { $0.closeSharedTask() }
+    }
+
+    /// The shared task `owner` should draw an editor for, if any.
+    func sharedTask(for owner: UUID) -> SharedTaskRef? {
+        sharedOwner == owner ? state.sharedTask : nil
     }
 
     /// Closes the popout if its task no longer exists: deleted on another device (arriving with a sync
@@ -344,6 +414,26 @@ final class PopoutController {
             get: { self.task },
             set: { picked in
                 if let picked { self.open(picked) } else { self.closeTask() }
+            }
+        )
+    }
+
+    /// The same for lists that show shared tasks among yours (brief 62): selecting a shared row opens its editor,
+    /// drawn by the list `owner`, and the row stays highlighted while it is open.
+    func listSelection(owner: UUID) -> Binding<ListSelection?> {
+        Binding(
+            get: {
+                if let task = self.task { return .task(task) }
+                return self.sharedTask(for: owner).map(ListSelection.shared)
+            },
+            set: { picked in
+                switch picked {
+                case .task(let task)?: self.open(task)
+                case .shared(let ref)?: self.openShared(ref, owner: owner)
+                case nil:
+                    self.closeTask()
+                    self.closeSharedTask()
+                }
             }
         )
     }

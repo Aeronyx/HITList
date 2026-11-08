@@ -4,7 +4,8 @@ import HITListCore
 
 /// Todoist-style Upcoming. iPhone (and a narrow iPad): a swipeable week strip over a day-by-day list that
 /// starts today, with overdue tasks in a collapsible section on top; the list covers 30 days and grows as
-/// you scroll. Mac (and a full-width iPad): a board of seven day columns (`UpcomingBoard`).
+/// you scroll. Mac (and a full-width iPad): a board of seven day columns (`UpcomingBoard`). Shared tasks with a
+/// date are rows, dots and cards among yours (brief 62).
 struct UpcomingView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -53,6 +54,11 @@ struct UpcomingView: View {
     @State private var headers = HeaderPositions()
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
+    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
+    @State private var editorOwner = UUID()
+    /// "You can see “Trip” but not change it.": a drop or a move a shared list refused, for a moment.
+    @State private var refusal: String?
+    private var sharedRows: SharedRows { SharedRows.shared }
 
     private static let pageDays = 30
     /// The strip's pages: a month back, a year ahead.
@@ -68,32 +74,23 @@ struct UpcomingView: View {
         return calendar.dateComponents([.day], from: today, to: end).day ?? 365
     }
 
-    /// Each open task under the date the list shows it on: its own, or while its completion animates,
-    /// the one it had when tapped (a completed recurring task has already moved to its next date).
-    struct Entry: FilterableTask, Identifiable {
-        let task: TaskItem
-        let filterDueDate: Date?
-        let filterIsCompleted: Bool
-        var id: UUID { task.id }
-        var filterTitle: String { task.filterTitle }
-        var filterNotes: String { task.filterNotes }
-        var filterPriority: Int { task.filterPriority }
-        var filterHasDueTime: Bool { task.filterHasDueTime }
-        var filterProjectName: String? { task.filterProjectName }
-        var filterLabelNames: [String] { task.filterLabelNames }
-        var filterIsRecurring: Bool { task.filterIsRecurring }
-        var filterCreatedDate: Date? { task.filterCreatedDate }
-        var filterIsSubtask: Bool { task.filterIsSubtask }
-    }
+    /// Each task, yours or a shared one (brief 62), under the date the list shows it on: its own, or while its
+    /// completion animates the one it had when tapped (a completed recurring task has already moved to its next
+    /// date), and open while it animates.
+    typealias Entry = TaskListRow
 
     private var entries: [Entry] {
         let anchors = completions.anchors
-        return allTasks.map { task in
+        let own = allTasks.map { task in
             if let anchor = anchors[task.id] {
                 return Entry(task: task, filterDueDate: anchor, filterIsCompleted: false)
             }
             return Entry(task: task, filterDueDate: task.dueDate, filterIsCompleted: task.isCompleted)
         }
+        let shared = sharedRows.rows.map { row in
+            anchors[row.id].map { Entry(.shared(row), listedAt: $0, isCompleted: false) } ?? .shared(row)
+        }
+        return own + shared
     }
 
     var body: some View {
@@ -109,6 +106,9 @@ struct UpcomingView: View {
             // iPhone: drawn by PopoutHost above the island and the "+".
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
                              onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
+        }
+        .overlay(alignment: .bottom) {
+            if let refusal { RefusalNote(text: refusal).transition(.opacity) }
         }
         .quickAddEntry(.upcoming)
         .background(Theme.background)
@@ -128,8 +128,13 @@ struct UpcomingView: View {
         } menu: {
             Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
+        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
+        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
-        .onAppear { CompletionFeedback.shared.prepare() }
+        .onAppear {
+            CompletionFeedback.shared.prepare()
+            sharedRows.start()
+        }
     }
 
     private func jumpToToday() {
@@ -147,14 +152,14 @@ struct UpcomingView: View {
         return UpcomingBoard(board: board, window: $window, now: now, calendar: calendar,
                              phase: { completions.phase(of: $0) },
                              onToggleCompletion: { toggleCompletion($0) },
-                             onOpen: { selectedTask = $0 },
+                             onOpen: { open($0) },
                              onDrop: { drop($0, on: $1) },
                              // The floating quick add (a 270 pt column is too narrow for the inline card).
                              onAdd: { popouts.openQuickAdd(.day($0)) },
                              onRescheduleOverdue: { day in
                                  let held = completions.heldIDs
                                  let overdue = board.columns.first { $0.id == .overdue }?.items ?? []
-                                 rescheduleAll(overdue.map(\.task).filter { !held.contains($0.id) }, to: day)
+                                 rescheduleAll(overdue.filter { !held.contains($0.id) }, to: day)
                              })
     }
 
@@ -178,7 +183,7 @@ struct UpcomingView: View {
     }
 
     private func list(_ schedule: UpcomingSchedule<Entry>) -> some View {
-        List(selection: $selectedTask) {
+        List(selection: popouts.listSelection(owner: editorOwner)) {
             if !schedule.overdue.isEmpty {
                 #if os(iOS)
                 Section {
@@ -236,12 +241,19 @@ struct UpcomingView: View {
         .slateList()
     }
 
+    @ViewBuilder
     private func row(_ entry: Entry) -> some View {
-        let task = entry.task
+        switch entry.kind {
+        case .own(let task): row(task)
+        case .shared(let shared): sharedRow(shared)
+        }
+    }
+
+    private func row(_ task: TaskItem) -> some View {
         let phase = completions.phase(of: task.id)
         return TaskRow(task: task, now: now, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
-            .tag(task)
+            .tag(ListSelection.task(task))
             .completionRowBackground(flashing: phase == .pending)
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
@@ -273,6 +285,43 @@ struct UpcomingView: View {
                     pickingDateFor = nil
                     withAnimation(reduceMotion ? nil : .snappy) { TaskActions.reschedule(task, to: nil, in: context) }
                     rescheduleNotifications()
+                }
+            }
+    }
+
+    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits; the same swipes and menu,
+    /// through the shared store; selecting it opens its editor.
+    private func sharedRow(_ row: SharedRow) -> some View {
+        let phase = completions.phase(of: row.id)
+        return SharedTaskListRow(row: row, now: now, completionPhase: phase, onToggleCompletion: { toggleCompletion(row) })
+            .opacity(phase == .animating ? 0 : 1)
+            .tag(ListSelection.shared(SharedTaskRef(row)))
+            .completionRowBackground(flashing: phase == .pending)
+            .swipeActions(edge: .trailing) {
+                if row.canWrite {
+                    Button(role: .destructive) {
+                        popouts.requestDelete(title: row.filterTitle) { try? sharedRows.delete(row) }
+                    } label: { Label("Delete", systemImage: "trash") }
+                }
+            }
+            .swipeActions(edge: .leading) {
+                if row.canWrite {
+                    Button {
+                        move(row, to: calendar.date(byAdding: .day, value: 1, to: today)!)
+                    } label: { Label("Tomorrow", systemImage: "sunrise") }
+                    .tint(.orange)
+                    Button { pickingDateFor = row.id } label: { Label("Pick Date", systemImage: "calendar") }
+                        .tint(Theme.accent)
+                }
+            }
+            .popover(isPresented: Binding(get: { pickingDateFor == row.id },
+                                          set: { if !$0, pickingDateFor == row.id { pickingDateFor = nil } })) {
+                PickDatePopover(initial: row.filterDueDate ?? today) { day in
+                    pickingDateFor = nil
+                    move(row, to: day)
+                } onRemove: {
+                    pickingDateFor = nil
+                    move(row, to: nil)
                 }
             }
     }
@@ -331,7 +380,7 @@ struct UpcomingView: View {
             Spacer()
             Button("Reschedule all to today") {
                 let held = completions.heldIDs
-                rescheduleAll(overdue.map(\.task).filter { !held.contains($0.id) }, to: today)
+                rescheduleAll(overdue.filter { !held.contains($0.id) }, to: today)
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.accent)
@@ -471,6 +520,30 @@ struct UpcomingView: View {
         return true
     }
 
+    private func open(_ entry: Entry) {
+        switch entry.kind {
+        case .own(let task): selectedTask = task
+        case .shared(let row): popouts.openShared(SharedTaskRef(row), owner: editorOwner)
+        }
+    }
+
+    /// A shared task to `day` (nil: no date), keeping its time; a word if its list won't take the change.
+    private func move(_ row: SharedRow, to day: Date?) {
+        do {
+            try withAnimation(reduceMotion ? nil : .snappy) { try sharedRows.reschedule(row, to: day, calendar: calendar) }
+        } catch let refusal as SharedRows.Refusal where refusal != .gone {
+            showRefusal(refusal.localizedDescription)
+        } catch {}
+    }
+
+    private func showRefusal(_ text: String) {
+        withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { refusal = text }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) { if refusal == text { refusal = nil } }
+        }
+    }
+
     private func dropHover(_ hovering: Bool, on day: Date) {
         if hovering, day >= today { dropTarget = day } else if dropTarget == day { dropTarget = nil }
     }
@@ -480,8 +553,14 @@ struct UpcomingView: View {
         rescheduleNotifications()
     }
 
-    private func rescheduleAll(_ tasks: [TaskItem], to day: Date) {
-        withAnimation(reduceMotion ? nil : .snappy) { TaskRescheduling.reschedule(tasks, to: day, calendar: calendar, in: context) }
+    /// "Reschedule all to today" and the board's Overdue Reschedule: yours, and the shared ones you may change.
+    private func rescheduleAll(_ entries: [Entry], to day: Date) {
+        let own = entries.compactMap(\.ownTask)
+        let shared = entries.compactMap(\.sharedTask).filter(\.canWrite)
+        withAnimation(reduceMotion ? nil : .snappy) {
+            TaskRescheduling.reschedule(own, to: day, calendar: calendar, in: context)
+            for row in shared { try? sharedRows.reschedule(row, to: day, calendar: calendar) }
+        }
         rescheduleNotifications()
     }
 
@@ -490,6 +569,44 @@ struct UpcomingView: View {
     }
 
     // MARK: - Completion (the same behaviour as TaskListView)
+
+    private func toggleCompletion(_ entry: Entry) {
+        switch entry.kind {
+        case .own(let task): toggleCompletion(task)
+        case .shared(let row): toggleCompletion(row)
+        }
+    }
+
+    /// A shared row: completed in the shared store (who and when, so the others see it), with the same check, toast
+    /// and Undo as yours. It has no repeat, so it always leaves the list.
+    private func toggleCompletion(_ row: SharedRow) {
+        let record = toast.record(for: row.id)
+        switch completions.tap(on: row.id, isCompleted: row.task.isCompleted, undoable: record != nil) {
+        case .ignore:
+            return
+        case .undo:
+            withAnimation(HITMotion.exit) { toast.remove(row.id) }
+            revert(record.map { [$0] } ?? [])
+            return
+        case .uncheck:
+            withAnimation(HITMotion.standard) { try? sharedRows.setCompleted(false, row) }
+            return
+        case .complete:
+            break
+        }
+        do {
+            try sharedRows.setCompleted(true, row)
+        } catch let refusal as SharedRows.Refusal where refusal != .gone {
+            showRefusal(refusal.localizedDescription)
+            return
+        } catch {
+            return
+        }
+        let token = withAnimation(HITMotion.quick) { completions.begin(row.id, anchor: row.filterDueDate) }
+        CompletionFeedback.shared.taskCompleted()
+        Task { await collapse(row.id, token: token) }
+        showToast(CompletedTask(id: row.id, title: row.filterTitle, revert: .uncomplete))
+    }
 
     private func toggleCompletion(_ task: TaskItem) {
         let record = toast.record(for: task.id)
@@ -537,6 +654,11 @@ struct UpcomingView: View {
         withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
+                if let shared = sharedRows.row(record.id) {
+                    // Reopened in the shared store: the others see it back too.
+                    if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
+                    continue
+                }
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
                 switch record.revert {
                 case .uncomplete:
@@ -557,6 +679,12 @@ struct UpcomingView: View {
             withAnimation(reduceMotion ? nil : .snappy) { _ = completions.remove(id, token: token) }
             return
         }
+        await collapse(id, token: token, waited: true)
+    }
+
+    /// The row fades and the gap closes (`waited`: the check and flash have already had their moment).
+    private func collapse(_ id: UUID, token: Int, waited: Bool = false) async {
+        if !waited { try? await Task.sleep(for: CompletionMotion.hold) }
         guard withAnimation(HITMotion.exit, { completions.collapse(id, token: token) }) else { return }
         try? await Task.sleep(for: CompletionMotion.collapseSettle)
         if reduceMotion {
@@ -638,5 +766,30 @@ struct DragPreview: View {
             .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.6)))
             .foregroundStyle(.primary)
             .preferredColorScheme(.dark)
+    }
+}
+
+extension ListRow where Own == TaskItem, Shared == SharedRow {
+    /// A task of yours under the date Upcoming shows it on (`UpcomingView.Entry`).
+    init(task: TaskItem, filterDueDate: Date?, filterIsCompleted: Bool) {
+        self.init(.own(task), listedAt: filterDueDate, isCompleted: filterIsCompleted)
+    }
+}
+
+/// A word for a change a shared list refused (brief 62): a capsule at the foot of Upcoming for a moment.
+private struct RefusalNote: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(HITType.footnote)
+            .foregroundStyle(HITColor.text)
+            .padding(.horizontal, HITSpacing.l)
+            .padding(.vertical, HITSpacing.s + 2)
+            .background(Theme.elevated, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.separator, lineWidth: 1))
+            .padding(.bottom, HITSpacing.xl)
+            .accessibilityAddTraits(.updatesFrequently)
+            .onAppear { AccessibilityNotification.Announcement(text).post() }
     }
 }

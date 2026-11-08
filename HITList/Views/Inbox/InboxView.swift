@@ -7,6 +7,8 @@ import HITListCore
 /// `GroupedOrdering`), under the large title "Inbox" and nothing else (the name once), with an
 /// "Inbox zero" state when it's empty and Review Inbox in the view options. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
+/// Shared tasks with a date are rows here too, among yours (brief 62); sorted by Group each shared list has its
+/// section after the Groups and before "Ungrouped".
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -23,6 +25,9 @@ struct InboxView: View {
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
     @State private var processing = false
+    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
+    @State private var editorOwner = UUID()
+    private var sharedRows: SharedRows { SharedRows.shared }
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     /// iPhone: the island's "+" is the only way to add; lists show no "Add task" row.
@@ -33,34 +38,29 @@ struct InboxView: View {
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
-    /// A row's task and the due date it is listed under: its own, or while its completion animates,
-    /// the one it had when tapped (a completed recurring task has already moved to its next date).
-    private struct Placed: FilterableTask {
-        let task: TaskItem
-        let filterDueDate: Date?
-        var filterTitle: String { task.filterTitle }
-        var filterNotes: String { task.filterNotes }
-        var filterPriority: Int { task.filterPriority }
-        var filterHasDueTime: Bool { task.filterHasDueTime }
-        var filterIsCompleted: Bool { task.filterIsCompleted }
-        var filterProjectName: String? { task.filterProjectName }
-        var filterLabelNames: [String] { task.filterLabelNames }
-        var filterIsRecurring: Bool { task.filterIsRecurring }
-        var filterCreatedDate: Date? { task.filterCreatedDate }
-    }
-
     private func matchedTasks() -> [TaskItem] {
         TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
     }
 
-    /// The matched tasks plus the recently completed ones, by priority then due date.
-    private var rows: [Placed] {
-        let matched = matchedTasks()
-        guard !completions.isEmpty else { return matched.map { Placed(task: $0, filterDueDate: $0.dueDate) } }
+    /// The shared tasks in the Inbox, by the same rule as yours: dated ones (an undated one stays in its list).
+    private func matchedShared() -> [SharedRow] {
+        TaskOrdering.inbox(sharedRows.rows, includeCompleted: showCompleted, now: now)
+    }
+
+    /// The matched tasks, yours and shared ones, plus the recently completed ones, by priority then due date. Each
+    /// is listed at its own date, or while its completion animates the one it had when tapped (a completed
+    /// recurring task has already moved to its next date).
+    private var rows: [TaskListRow] {
+        let matched = ListRows.rows(own: matchedTasks(), shared: matchedShared())
+        guard !completions.isEmpty else { return TaskOrdering.sorted(matched, now: now) }
         let held = completions.heldIDs
         let anchors = completions.anchors
-        let shown = matched.filter { !held.contains($0.id) }.map { Placed(task: $0, filterDueDate: $0.dueDate) }
-        let animating = allTasks.compactMap { task in anchors[task.id].map { Placed(task: task, filterDueDate: $0) } }
+        let shown = matched.filter { !held.contains($0.id) }
+        let animating = allTasks.compactMap { task in
+            anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
+        } + sharedRows.rows.compactMap { row in
+            anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
+        }
         return TaskOrdering.sorted(shown + animating, now: now)
     }
 
@@ -70,9 +70,11 @@ struct InboxView: View {
         Binding(get: { sort }, set: { storedSort = $0.rawValue })
     }
 
-    /// The rows in the chosen sort's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
-    private func sections(_ rows: [Placed]) -> [ListSection<UUID, Placed>] {
-        GroupedOrdering.sections(rows, by: sort, groupOrder: projects.map(\.id), now: now) { $0.task.project?.id }
+    /// The rows in the chosen sort's sections (`GroupedOrdering`), each in `TaskOrdering`'s order. By Group: your
+    /// Groups, then the shared lists (by name), then "Ungrouped".
+    private func sections(_ rows: [TaskListRow], sharedLists: [SharedList]) -> [ListSection<ListRowGroup, TaskListRow>] {
+        let order = ListRows.groupOrder(groups: projects.map(\.id), sharedLists: sharedLists.map(\.id))
+        return GroupedOrdering.sections(rows, by: sort, groupOrder: order, now: now) { $0.group }
     }
 
     var body: some View {
@@ -113,19 +115,30 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
+        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
+        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
-        .onAppear { CompletionFeedback.shared.prepare() }
+        .onAppear {
+            CompletionFeedback.shared.prepare()
+            sharedRows.start()
+        }
     }
 
-    private func list(_ rows: [Placed]) -> some View {
-        List(selection: $selectedTask) {
-            ForEach(sections(rows), id: \.key) { section in
+    private func list(_ rows: [TaskListRow]) -> some View {
+        let sharedLists = sharedRows.lists
+        return List(selection: popouts.listSelection(owner: editorOwner)) {
+            ForEach(sections(rows, sharedLists: sharedLists), id: \.key) { section in
                 Section {
-                    ForEach(section.tasks, id: \.task.id) { row($0.task, hidesDay: Self.namesDay(section.key)) }
+                    ForEach(section.tasks) { item in
+                        switch item.kind {
+                        case .own(let task): row(task, hidesDay: Self.namesDay(section.key))
+                        case .shared(let shared): sharedRow(shared, hidesDay: Self.namesDay(section.key))
+                        }
+                    }
                 } header: {
                     if section.key != .all {
-                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects,
-                                                          now: now))
+                        RowSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects,
+                                                        sharedLists: sharedLists, now: now))
                     }
                 }
             }
@@ -144,7 +157,7 @@ struct InboxView: View {
     }
 
     /// Rows under a header that names their one day ("Today", "Tomorrow", "Friday, Nov 13") show only their time.
-    private static func namesDay(_ key: ListSectionKey<UUID>) -> Bool {
+    private static func namesDay(_ key: ListSectionKey<ListRowGroup>) -> Bool {
         switch key {
         case .due(.today), .due(.tomorrow), .due(.day): true
         default: false
@@ -157,7 +170,7 @@ struct InboxView: View {
         return TaskRow(task: task, now: now, showProject: sort != .group, hidesDay: hidesDay, completionPhase: phase,
                        onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
-            .tag(task)
+            .tag(ListSelection.task(task))
             .completionRowBackground(flashing: phase == .pending)
             .swipeActions(edge: .trailing) {
                 Button(role: .destructive) {
@@ -176,7 +189,57 @@ struct InboxView: View {
             }
     }
 
+    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits (except under its own list's
+    /// header); completing goes through the shared store; selecting it opens its editor.
+    private func sharedRow(_ row: SharedRow, hidesDay: Bool) -> some View {
+        let phase = completions.phase(of: row.id)
+        return SharedTaskListRow(row: row, now: now, showList: sort != .group, hidesDay: hidesDay, completionPhase: phase,
+                                 onToggleCompletion: { toggleCompletion(row) })
+            .opacity(phase == .animating ? 0 : 1)
+            .tag(ListSelection.shared(SharedTaskRef(row)))
+            .completionRowBackground(flashing: phase == .pending)
+            .swipeActions(edge: .trailing) {
+                if row.canWrite {
+                    Button(role: .destructive) {
+                        popouts.requestDelete(title: row.filterTitle) { try? sharedRows.delete(row) }
+                    } label: { Label("Delete", systemImage: "trash") }
+                }
+            }
+            .swipeActions(edge: .leading) {
+                if row.canWrite {
+                    Button {
+                        try? sharedRows.reschedule(row, to: TaskRescheduling.QuickDate.tomorrow.date(now: now))
+                    } label: { Label("Tomorrow", systemImage: "sunrise") }
+                    .tint(.orange)
+                }
+            }
+    }
+
     // MARK: - Completion (the same behaviour as TaskListView)
+
+    /// A shared row: completed in the shared store (who and when, so the others see it), with the same check, toast
+    /// and Undo as yours.
+    private func toggleCompletion(_ row: SharedRow) {
+        let record = toast.record(for: row.id)
+        switch completions.tap(on: row.id, isCompleted: row.task.isCompleted, undoable: record != nil) {
+        case .ignore:
+            return
+        case .undo:
+            withAnimation(HITMotion.exit) { toast.remove(row.id) }
+            revert(record.map { [$0] } ?? [])
+            return
+        case .uncheck:
+            withAnimation(HITMotion.standard) { try? sharedRows.setCompleted(false, row) }
+            return
+        case .complete:
+            break
+        }
+        guard (try? sharedRows.setCompleted(true, row)) != nil else { return }
+        let token = withAnimation(HITMotion.quick) { completions.begin(row.id, anchor: row.filterDueDate) }
+        CompletionFeedback.shared.taskCompleted()
+        Task { await finishCompletion(of: row.id, token: token) }
+        showToast(CompletedTask(id: row.id, title: row.filterTitle, revert: .uncomplete))
+    }
 
     private func toggleCompletion(_ task: TaskItem) {
         let record = toast.record(for: task.id)
@@ -221,6 +284,11 @@ struct InboxView: View {
         withAnimation(HITMotion.standard) {
             for record in records {
                 completions.cancel(record.id)
+                if let shared = sharedRows.row(record.id) {
+                    // Reopened in the shared store: the others see it back too.
+                    if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
+                    continue
+                }
                 guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
                 if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
@@ -237,7 +305,7 @@ struct InboxView: View {
     /// settles. When it was the last task, the list gives way to "Inbox zero" once the row is gone.
     private func finishCompletion(of id: UUID, token: Int) async {
         try? await Task.sleep(for: CompletionMotion.hold)
-        if matchedTasks().contains(where: { $0.id == id }) {
+        if matchedTasks().contains(where: { $0.id == id }) || matchedShared().contains(where: { $0.id == id }) {
             withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }

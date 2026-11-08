@@ -191,11 +191,13 @@ struct SharedQuickAdd: View {
     }
 }
 
-/// Edit a shared task: name, description, priority, day; or delete it.
+/// Edit a shared task: name, description, priority, day; or delete it. In a sheet (the Shared screen, the iPhone's
+/// lists) or the Mac's panel (brief 62), which passes `onClose` since nothing presented it to dismiss.
 struct SharedTaskEditor: View {
     let task: SharedTask
     let list: SharedList
     var now: Date
+    var onClose: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var notes: String
@@ -204,10 +206,11 @@ struct SharedTaskEditor: View {
     @State private var dueHasTime: Bool
     @State private var showCalendar = false
 
-    init(task: SharedTask, list: SharedList, now: Date) {
+    init(task: SharedTask, list: SharedList, now: Date, onClose: (() -> Void)? = nil) {
         self.task = task
         self.list = list
         self.now = now
+        self.onClose = onClose
         _title = State(initialValue: task.title.value)
         _notes = State(initialValue: task.notes.value)
         _priority = State(initialValue: task.priority.value)
@@ -216,7 +219,8 @@ struct SharedTaskEditor: View {
     }
 
     var body: some View {
-        HITSheetChrome("Task", isPrimaryEnabled: !title.trimmingCharacters(in: .whitespaces).isEmpty, onPrimary: save) {
+        HITSheetChrome("Task", isPrimaryEnabled: !title.trimmingCharacters(in: .whitespaces).isEmpty, onCancel: onClose,
+                       onPrimary: save) {
             HITSection("Name") { HITField("Task name", text: $title) }
             HITSection("Description") { HITField("Description", text: $notes, axis: .vertical, lineLimit: 1...6) }
             HITSection("Priority") {
@@ -250,7 +254,7 @@ struct SharedTaskEditor: View {
                 HITSection {
                     Button("Delete Task", role: .destructive) {
                         try? SharedTasksCenter.shared.store?.deleteTask(task.id, in: list.id)
-                        dismiss()
+                        close()
                     }
                     .buttonStyle(.hitDestructive)
                 }
@@ -269,8 +273,12 @@ struct SharedTaskEditor: View {
         showCalendar = false
     }
 
+    private func close() {
+        if let onClose { onClose() } else { dismiss() }
+    }
+
     private func save() {
-        guard let store = SharedTasksCenter.shared.store else { dismiss(); return }
+        guard let store = SharedTasksCenter.shared.store else { close(); return }
         do {
             try store.setTitle(title, task: task.id, in: list.id)
             try store.setNotes(notes, task: task.id, in: list.id)
@@ -284,7 +292,7 @@ struct SharedTaskEditor: View {
         } catch {
             // The task went (deleted elsewhere) or the list did: nothing to save into.
         }
-        dismiss()
+        close()
     }
 }
 
