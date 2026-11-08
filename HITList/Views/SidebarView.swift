@@ -30,18 +30,11 @@ struct SidebarView: View {
     /// The shared lists and their tasks (brief 62); nothing while Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
 
-    /// Today's count: yours due today or before, and the shared tasks Today shows (brief 62).
-    private var todayCount: Int {
-        let now = Date(), start = Calendar.current.startOfDay(for: now)
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
-        return openTasks.filter { t in
-            guard let d = t.dueDate else { return false }
-            return d < end
-        }.count + sharedRows.todayCount(now: now)
-    }
+    /// Today's count: the rows Today shows, yours and shared ones (briefs 62, 64).
+    private var todayCount: Int { SidebarCounts.today(openTasks, shared: sharedRows) }
 
     /// The Inbox's count: yours and the dated shared tasks it shows (brief 62).
-    private var inboxCount: Int { openTasks.filter(\.isInInbox).count + sharedRows.inboxCount() }
+    private var inboxCount: Int { SidebarCounts.inbox(openTasks, shared: sharedRows) }
 
     var body: some View {
         List(selection: $selection) {
@@ -329,5 +322,18 @@ struct SidebarSectionHeader: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
+    }
+}
+
+/// The sidebar's counts (brief 64): exactly the rows Today and the Inbox show, by the lists' own rules, so a red
+/// Flipboard switch is one of today's (once, dated or not), a green one none, and shared tasks count among yours.
+@MainActor
+enum SidebarCounts {
+    static func today(_ open: [TaskItem], shared: SharedRows, now: Date = Date()) -> Int {
+        open.filter { TaskOrdering.isInToday($0, now: now) }.count + shared.todayCount(now: now)
+    }
+
+    static func inbox(_ open: [TaskItem], shared: SharedRows, now: Date = Date()) -> Int {
+        open.filter { !$0.isCompleted && TaskOrdering.isInInbox($0, now: now) }.count + shared.inboxCount(now: now)
     }
 }

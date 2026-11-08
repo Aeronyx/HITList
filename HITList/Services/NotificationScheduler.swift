@@ -207,6 +207,15 @@ enum NotificationScheduler {
         isRescheduling = false
     }
 
+    /// Open switches never flipped (no date yet): red, so today's, though the fetch for dated tasks misses them.
+    @MainActor
+    private static func undatedSwitches(in context: ModelContext) -> [NotificationPlan.Item] {
+        let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+            task.isCompleted == false && task.dueDate == nil && task.recurrence != nil
+        })
+        return ((try? context.fetch(descriptor)) ?? []).map(NotificationPlan.Item.init).filter(\.isSwitch)
+    }
+
     static let fingerprintKey = "fingerprint"
     static let dueKey = "due"
     /// userInfo key of a "from now" reminder (`NotificationPlan.Request.Kind.reminder`): the moment it was for.
@@ -239,7 +248,12 @@ enum NotificationScheduler {
             }
         }
         let dated = open.filter { $0.dueDate != nil }
-        await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: dated, now: now, calendar: calendar) : 0)
+        // What the badge and the summary count, as Today shows it (brief 64): yours, every switch (a red one is
+        // today's, an undated one too), and the open shared tasks with a date.
+        let counted = summaryOn || badgeOn
+            ? NotificationPlan.todayItems(own: dated + undatedSwitches(in: context), shared: SharedRows.shared.open)
+            : []
+        await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: counted, now: now, calendar: calendar) : 0)
 
         // Settings' test notification is not the plan's to manage.
         let pending = await center.pendingNotificationRequests().filter { $0.identifier != testIdentifier }
@@ -280,7 +294,7 @@ enum NotificationScheduler {
             : NotificationPlan(requests: [], droppedCount: 0)
         // One more request at most (61 + 1 stays under the system's 64), its text computed now.
         let summary = summaryOn
-            ? NotificationPlan.summaryRequest(tasks: dated, at: Preferences.morningSummaryTime, now: now, calendar: calendar)
+            ? NotificationPlan.summaryRequest(tasks: counted, at: Preferences.morningSummaryTime, now: now, calendar: calendar)
             : nil
         if let summary { plan = NotificationPlan(requests: plan.requests + [summary], droppedCount: plan.droppedCount) }
         let pendingFingerprints = Dictionary(
