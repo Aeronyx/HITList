@@ -769,4 +769,47 @@ final class HITListUITests: XCTestCase {
         shot.lifetime = .keepAlways
         add(shot)
     }
+
+    /// George, 2026-11-08: the lights on the Flipboard's switches "slowly float in from the left side of the screen"
+    /// whenever a friend taps the Flipboard tab on his iPhone, and "all switches should be the same width and height".
+    /// With a switch of every look on the board (`-seedFlipboardStates`: overdue, chargers, green, a long title):
+    /// Today → Flipboard, with a burst of screenshots through the first second and a half (the lights sit on their
+    /// switches from the first frame; an overdue one used to drift in across its title), and every tile, the + tile
+    /// included, is one size.
+    func testFlipboardLightsStayOnTheirSwitches() throws {
+        app.launchArguments += ["-seedDemoData", "-seedFlipboardStates"]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-flipboard"].waitForExistence(timeout: 15))
+        // The first visit seeds a switch of every look (overdue, chargers, green, a long title).
+        tab("flipboard")
+        XCTAssertTrue(switchTile("Clean the litter box").waitForExistence(timeout: 10))
+        sleep(1)
+        tab("today")
+        XCTAssertTrue(text("Water the plants").waitForExistence(timeout: 10))
+        sleep(1)
+        let start = Date()
+        app.buttons["tab-flipboard"].tap()
+        var shots = 0
+        while Date().timeIntervalSince(start) < 1.6 {
+            let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            shot.name = String(format: "tab switch +%04.0f ms", Date().timeIntervalSince(start) * 1000)
+            shot.lifetime = .keepAlways
+            add(shot)
+            shots += 1
+        }
+        XCTAssertGreaterThan(shots, 3)
+
+        // Every switch and the + tile: one width, one height.
+        let tiles = app.descendants(matching: .any).matching(identifier: "flipSwitchTile").allElementsBoundByIndex
+        XCTAssertEqual(tiles.count, 8, "the demo's two switches and the six seeded")
+        let size = try XCTUnwrap(tiles.first).frame.size
+        for tile in tiles {
+            XCTAssertEqual(tile.frame.width, size.width, accuracy: 0.5, "every switch is as wide as the first")
+            XCTAssertEqual(tile.frame.height, size.height, accuracy: 0.5, "every switch is as tall as the first")
+        }
+        let add = app.buttons["addSwitchTile"]
+        XCTAssertEqual(add.frame.width, size.width, accuracy: 0.5, "the + tile too")
+        XCTAssertEqual(add.frame.height, size.height, accuracy: 0.5, "the + tile too")
+        snapshot("Every tile one size")
+    }
 }
