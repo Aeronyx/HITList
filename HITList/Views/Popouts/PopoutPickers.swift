@@ -166,22 +166,27 @@ enum ReminderMomentPick: Equatable {
 /// first match); picking closes it.
 struct ProjectChipPopover: View {
     var projects: [Project]
-    /// Nil is the Inbox.
+    /// Nil is the Inbox; `SharedTasksGroup.name` is Shared Tasks.
     var selectedName: String?
+    /// Picking Shared Tasks, the forced Group, last in the card (brief 64); nil leaves it out.
+    var onPickShared: (() -> Void)? = nil
     var onPick: (Project?) -> Void
 
     @State private var search = ""
     @FocusState private var searchFocused: Bool
     @Environment(\.pickerFocusRequest) private var focusRequest
 
-    private var matches: [Project] {
-        let q = search.trimmingCharacters(in: .whitespaces)
-        return q.isEmpty ? projects : projects.filter { $0.name.localizedCaseInsensitiveContains(q) }
+    /// Your Groups whose names match, then Shared Tasks when its name does (`GroupPicker`).
+    private var matches: [GroupRef<UUID>] {
+        GroupPicker.rows(projects.map { (id: $0.id, name: $0.name) }, search: search)
+            .filter { $0 != .sharedTasks || onPickShared != nil }
     }
 
     private var showsInbox: Bool {
         search.isEmpty || "inbox".contains(search.trimmingCharacters(in: .whitespaces).lowercased())
     }
+
+    private func isSelected(_ name: String) -> Bool { selectedName?.caseInsensitiveCompare(name) == .orderedSame }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -195,10 +200,16 @@ struct ProjectChipPopover: View {
                         HITMenuRow("Inbox", systemImage: "tray", iconTint: Theme.accent,
                                    value: selectedName == nil ? "✓" : nil, accessory: .none) { onPick(nil) }
                     }
-                    ForEach(matches) { project in
-                        let isSelected = selectedName?.caseInsensitiveCompare(project.name) == .orderedSame
-                        HITMenuRow(project.name, systemImage: GroupDot.symbol, iconTint: Color(hex: project.colorHex),
-                                   value: isSelected ? "✓" : nil, accessory: .none) { onPick(project) }
+                    ForEach(matches, id: \.self) { ref in
+                        switch ref {
+                        case .group(let id):
+                            if let project = projects.first(where: { $0.id == id }) {
+                                HITMenuRow(project.name, systemImage: GroupDot.symbol, iconTint: Color(hex: project.colorHex),
+                                           value: isSelected(project.name) ? "✓" : nil, accessory: .none) { onPick(project) }
+                            }
+                        case .sharedTasks:
+                            sharedTasksRow
+                        }
                     }
                 }
             }
@@ -208,11 +219,26 @@ struct ProjectChipPopover: View {
         .onChange(of: focusRequest) { _, _ in searchFocused = true }
     }
 
+    /// Shared Tasks with its dot; while it is switched off, a row that says where to switch it on.
+    @ViewBuilder
+    private var sharedTasksRow: some View {
+        let isOn = SharedTasksCenter.shared.isOn
+        HITMenuRow(SharedTasksGroup.name, subtitle: isOn ? nil : "Off: switch it on in its Group", systemImage: GroupDot.symbol,
+                   iconTint: Color(hex: SharedTasksGroup.colorHex),
+                   value: isSelected(SharedTasksGroup.name) ? "✓" : nil, accessory: .none) { onPickShared?() }
+            .disabled(!isOn)
+            .accessibilityIdentifier("groupCardSharedTasks")
+    }
+
     private func pickFirst() {
         if search.trimmingCharacters(in: .whitespaces).isEmpty || (showsInbox && matches.isEmpty) {
             if showsInbox { onPick(nil) }
-        } else if let first = matches.first {
-            onPick(first)
+            return
+        }
+        switch matches.first {
+        case .group(let id)?: onPick(projects.first { $0.id == id })
+        case .sharedTasks?: if SharedTasksCenter.shared.isOn { onPickShared?() }
+        case nil: break
         }
     }
 }

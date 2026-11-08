@@ -33,6 +33,38 @@ enum TaskActions {
         return task
     }
 
+    // MARK: Shared Tasks (brief 64)
+
+    /// Quick add's task for the Shared Tasks Group (`#Shared`, its chip, its screen's "+"): a shared task with the
+    /// title, description, priority and day; with one set of people it goes there, with several to the one used last
+    /// (`SharedRows.listForNewTask`). Labels, reminders, repeats, deadlines and places are yours alone.
+    @MainActor
+    @discardableResult
+    static func createShared(from parsed: QuickAddResult, notes: String, subtasks: [String], in rows: SharedRows = .shared) throws -> SharedRow {
+        let title = TaskLimits.clampedTitle(parsed.title)
+        guard !title.isEmpty else { throw ActionError.emptyTitle }
+        return try rows.add(title: title, notes: notes, priority: parsed.priority.rawValue,
+                            due: parsed.dueDate.map { SharedDue(date: $0, hasTime: parsed.hasDueTime) }, subtasks: subtasks)
+    }
+
+    /// A task of yours moved into Shared Tasks from its Group card: the shared task gets its title, description,
+    /// priority and date (its open sub-tasks as a list in the description), and yours goes.
+    @MainActor
+    @discardableResult
+    static func moveToSharedTasks(_ task: TaskItem, in context: ModelContext, rows: SharedRows = .shared) throws -> SharedRow {
+        let row = try sharedCopy(of: task, rows: rows)
+        delete(task, in: context)
+        return row
+    }
+
+    /// The shared half of `moveToSharedTasks`, for an editor that deletes yours once it has stopped drawing it.
+    @MainActor
+    static func sharedCopy(of task: TaskItem, rows: SharedRows = .shared) throws -> SharedRow {
+        let subtasks = task.orderedSubtasks.filter { !$0.isCompleted }.map(\.title)
+        return try rows.add(title: task.title, notes: task.notes, priority: task.priority,
+                            due: task.dueDate.map { SharedDue(date: $0, hasTime: task.hasDueTime) }, subtasks: subtasks)
+    }
+
     static func findOrCreateProject(named name: String, in context: ModelContext) throws -> Project {
         let all = try context.fetch(FetchDescriptor<Project>())
         if let existing = all.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { return existing }

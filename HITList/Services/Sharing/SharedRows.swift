@@ -64,11 +64,14 @@ final class SharedRows {
         case cannotChange(list: String)
         /// The task or its list went (deleted or left on another device), or the store isn't running.
         case gone
+        /// Shared Tasks is switched off on this device: nothing can be added to it (brief 64).
+        case off
 
         var errorDescription: String? {
             switch self {
             case .cannotChange(let list): "You can see “\(list)” but not change it."
             case .gone: "That task isn't here any more."
+            case .off: "Shared Tasks is off. Switch it on in the Shared Tasks Group."
             }
         }
     }
@@ -150,6 +153,32 @@ final class SharedRows {
         }
     }
 
+    // MARK: - Adding (brief 64)
+
+    /// Where a task added to Shared Tasks goes: with one set of people (a shared list I may add to), that one; with
+    /// several, the one I added to last, else the first in Sharing…'s order; with none, a new one of mine.
+    func listForNewTask() throws -> SharedList {
+        guard let store else { throw Refusal.off }
+        let writable = store.lists.filter { SharedTasksPermissions.allows(.addTask, in: $0) }
+        if let last = store.lastUsedListID, let list = writable.first(where: { $0.id == last }) { return list }
+        if let first = SharedSets.ordered(writable, me: store.me).first { return first }
+        return try store.createList(title: SharedTasksGroup.name)
+    }
+
+    /// A new shared task with what quick add understood: the title, the description, the priority and the day with
+    /// its time. A shared task has no sub-tasks, so typed ones go in its description as a list.
+    @discardableResult
+    func add(title: String, notes: String, priority: Int, due: SharedDue?, subtasks: [String] = []) throws -> SharedRow {
+        let list = try listForNewTask()
+        guard let store else { throw Refusal.off }
+        let lines = subtasks.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.map { "• " + $0 }
+        let body = ([notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty } + (lines.isEmpty ? [] : [lines.joined(separator: "\n")]))
+            .joined(separator: "\n\n")
+        let task = try store.addTask(to: list.id, title: title, notes: body, priority: priority, due: due)
+        guard let saved = store.list(list.id) else { throw Refusal.gone }
+        return SharedRow(task: saved.task(task.id) ?? task, list: saved, me: store.me)
+    }
+
     // MARK: - Dragged to another day
 
     /// Dragged task ids dropped on `day` (Upcoming's board, its day headers and week strip): each open shared task
@@ -201,4 +230,9 @@ final class SharedRows {
         let moved = calendar.date(bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: 0, of: start) ?? start
         return SharedDue(date: moved, hasTime: true)
     }
+}
+
+extension QuickAddContext {
+    /// Adding from the Shared Tasks Group's screen (brief 64): into Shared Tasks.
+    static let sharedTasks = QuickAddContext.project(name: SharedTasksGroup.name, id: SharedTasksGroup.id)
 }
