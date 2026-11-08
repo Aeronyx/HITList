@@ -141,6 +141,21 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 15 record (2026-11-08; sessions 64–69 merged for 0.9.0)
+Six sessions at once on George's turn, all Opus 5.5: 64 `shared-group` (xhigh, 8 commits), 65 `editor-quick-add`
+(xhigh, 7), 66 `mac-chrome` (high, 6), 67 `type-scale` (xhigh, 3), 68 `bolt-slam` (xhigh, 4), 69 `flipboard-add` (xhigh,
+6). Merged 68, 69, 67, 65, 66, 64; conflicts only in `dev/ROADMAP.md`, the generated project and `HITListUITests.swift`
+(65's new test kept, 64's replacement of 62's kept). Supervisor follow-ups: 67's measured Mac row details (a light circle
+8 pt from the title and 1 pt lower, a 1 pt date icon; `TaskRowMetrics`), Group dots in the editor's Move to… and its
+typed-Group row, the Mac Extras subtitle; George's tweaks (the "+" in the Confirm pill's look, tips outside the
+quick-add card, the Flipboard lights). Left for later: the Priority and Repeat cards' buttons take keyboard focus only
+with Full Keyboard Access (`PopoutPickers`); `TokenHighlightField`'s `apply` can overwrite a letter just typed when its
+owner is rebuilt mid-keystroke inside a keyboard-height `GeometryReader` (69's finding, worked around in the Flipboard
+card; a guard in `apply` would fix it everywhere); the quick-add tips show in the floating Mac card and the iPhone card
+but not in the Mac's inline and board cards; two Apple accounts sharing still untested; side stores `HITList-s64*`,
+`HITList-s65`, `HITList-s66`, `HITList-s68*`, `HITList-s69*`, `HITList-s15*` and `SharedTasks-s64a/b.json` in the Mac app
+group folder (delete by hand in Finder).
+
 ## Round 14 record (2026-11-07/08; sessions 61–63 merged for 0.8.1)
 61 `lists-cleanup` (xhigh, 6 commits), 63 `duo-and-shell` (high, 3) at once, then 62 `shared-in-lists` (xhigh, 6) on
 the merged lists. No conflicts. Supervisor follow-ups: Upcoming's iPhone title made large; the disabled "Sort"

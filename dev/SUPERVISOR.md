@@ -229,8 +229,28 @@ priority then date) by default, Group ("Ungrouped" last) and Date are the other 
 saved filters live in Browse's search field on iPhone, the Inbox has no filter control; one section-header style; Groups
 first in Browse, above Shared Tasks; switching tabs returns the other tab to its first screen; shared tasks are rows in
 your lists, the Shared Tasks screen is for the lists themselves.
+From 2026-11-08 (round 15, superseding the last clause): shared tasks are one forced Group, Shared Tasks, last in every
+list of Groups; a shared task looks like yours with the people's pictures where labels go and opens in the same editor;
+Sharing… sits in that Group's view options. The editor's title reads quick-add phrases typed in it (words already in
+the title stay plain). Every accent-filled control (the "+", Confirm) has the theme's dark `onAccent` glyph, the same
+in a background window; the Mac toolbar's "+" is one capsule. The Mac sidebar from the top: profile, Search (⌘F),
+Inbox …; Groups (Shared Tasks last), Filters, Labels; a filter's query in the toolbar reads "Search: …". Rows: Inter
+14/12 on the Mac, drawn without font smoothing, 17/13 on every iPhone. Tips never push the layout and close on a tap
+anywhere on them. The bolt has two styles in Extras (Slam by default) under the same rare gate. Adding or editing a
+Flipboard switch is a small card, never a sheet; every switch tile on a screen is the same size.
 
-## 8. Where things stand (2026-11-08, after round 14)
+## 8. Where things stand (2026-11-08, after round 15)
+
+**2026-11-08, round 15 merged as 0.9.0 (Opus supervisor).** Six sessions at once (briefs 64–69: Shared Tasks as one
+Group, the editor's quick add, the Mac's toolbar and sidebar search, type, the bolt's slam, the Flipboard's add card),
+after the supervisor's fix for the Mac's invisible picker cards (with the Xcode 27.2 SDK a SwiftUI content view draws
+over an AppKit view added inside it; `PickerLayerHost` now lives in the window's frame view). That fix was 0.8.2, never
+uploaded; its notes fold into 0.9.0. George's last tweaks, by the supervisor: the Mac "+" drawn like the Confirm pill,
+tips hanging outside the quick-add card and closing on any tap, the Flipboard's lights staying on their switches with
+tiles of one size (a forked helper). New for step 8: `HITListUITests/ScreenTourUITests` screenshots every main iPhone
+screen (`TEST_RUNNER_HITLIST_TOUR=1`, see its header). A Debug Mac app may open no window (it restores the real app's
+saved state): launch it with `-ApplePersistenceIgnoreState YES`. Next: George's and the friends' notes on 0.9.0; two
+Apple accounts sharing.
 
 **2026-11-08, round 14 merged as 0.8.1 (Fable).** 0.8.0 shipped an Inbox George called a mess (a small title that was
 a button, two filter-looking controls, "Inbox" twice, two fonts in one header) because the supervisor merged brief 57
