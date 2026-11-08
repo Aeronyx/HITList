@@ -232,6 +232,7 @@
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
 		CBC85972EC6ECCA882D6257C /* TapHaptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D1CD0271090C56E5828586 /* TapHaptic.swift */; };
 		CBC9B3B7528A150F91703102 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF96EABAFDE73C7753F296E /* Diagnostics.swift */; };
+		CD0AC6C2182CF5849ACF96D1 /* FilterQueryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37C0958121EE9D09C269B3F /* FilterQueryBadge.swift */; };
 		D0451E85BE585DB14C789677 /* SidebarSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBCF524064D04B8A6FAF40DA /* SidebarSearch.swift */; };
 		D0EF53976903B23E0A90B324 /* ListChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67740874FB15E62462511914 /* ListChrome.swift */; };
 		D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4744E706011D5D130E88452 /* ICloudCheck.swift */; };
@@ -574,6 +575,7 @@
 		CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdog.swift; sourceTree = "<group>"; };
 		D010EDAA6842A7E3DD29AEED /* CloudKitSchemaCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSchemaCheck.swift; sourceTree = "<group>"; };
 		D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITButtonStyle.swift; sourceTree = "<group>"; };
+		D37C0958121EE9D09C269B3F /* FilterQueryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterQueryBadge.swift; sourceTree = "<group>"; };
 		D3DF87F469E151C325CD9969 /* SyncPush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPush.swift; sourceTree = "<group>"; };
 		D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPlacement.swift; sourceTree = "<group>"; };
 		D566EAC440EFF36E4BB83427 /* DuoDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoDebug.swift; sourceTree = "<group>"; };
@@ -1250,6 +1252,7 @@
 		F81301B232128572F60F24C2 /* Search */ = {
 			isa = PBXGroup;
 			children = (
+				D37C0958121EE9D09C269B3F /* FilterQueryBadge.swift */,
 				E13ACE44A63995095A971A36 /* SearchScreen.swift */,
 				CBCF524064D04B8A6FAF40DA /* SidebarSearch.swift */,
 				081EE4B9DD813C95B28A4AFB /* SidebarSearchField.swift */,
@@ -1500,6 +1503,7 @@
 				AA73819781CB32E769D66E40 /* EditorCarryOver.swift in Sources */,
 				819BC8DBBF310A714A544191 /* FilterDraft.swift in Sources */,
 				74E66A8FC0FB24F9EE188997 /* FilterEditorView.swift in Sources */,
+				CD0AC6C2182CF5849ACF96D1 /* FilterQueryBadge.swift in Sources */,
 				7AEF7B1FCC9604F964887C19 /* FilterQueryField.swift in Sources */,
 				68789767B446111D7C449F59 /* FilterSyntaxHelpView.swift in Sources */,
 				2F12AFD28F5482882F03955C /* FlipSound.swift in Sources */,

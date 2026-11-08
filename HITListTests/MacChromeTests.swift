@@ -32,5 +32,18 @@ final class MacChromeTests: XCTestCase {
     func testTheFrameIsNoTallerThanTheToolbarsControls() {
         XCTAssertLessThanOrEqual(ScreenControlMetrics.height, 24)
     }
+
+    // MARK: - A filter's query (brief 66)
+
+    func testAFiltersQueryReadsSearchWithRoomInsideItsCapsule() {
+        let query = "(p1 | p2) & (overdue | today)"
+        XCTAssertEqual(FilterQueryBadge.prefix, "Search:")
+        let badge = NSHostingView(rootView: FilterQueryBadge(query: query)).fittingSize
+        let bare = NSHostingView(rootView: Text(query).font(HITType.monoCaption)).fittingSize
+        let prefix = NSHostingView(rootView: Text(FilterQueryBadge.prefix).font(HITType.callout)).fittingSize
+        // The prefix, the query and even room either side: nothing touches the capsule's edges.
+        XCTAssertGreaterThanOrEqual(badge.width, bare.width + prefix.width + 2 * FilterQueryBadge.horizontalPadding)
+        XCTAssertGreaterThanOrEqual(FilterQueryBadge.horizontalPadding, 8)
+    }
     #endif
 }
