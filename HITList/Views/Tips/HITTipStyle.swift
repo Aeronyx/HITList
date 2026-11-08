@@ -29,26 +29,58 @@ private struct QuickAddTips: ViewModifier {
         HITTip(.keepAsText)
     }
 
-    /// Inline, inside the card above the title (brief 56), never a popover: a popover on iPhone takes the
-    /// first tap outside it to close itself, and that tap was the friend's first Add.
+    /// Never in the card's own layout (George, 2026-11-08: "Tooltips shouldn't push UI elements around"): the
+    /// current tip goes up to whoever presents the card (`QuickAddTipKey`), which hangs it outside the card
+    /// (`floatingQuickAddTip`), the way the Discard bubble hangs, so the card and its title never move. Never a
+    /// popover either: a popover on iPhone takes the first tap outside it to close itself, and that tap was the
+    /// friend's first Add (brief 56).
     func body(content: Content) -> some View {
-        VStack(alignment: .leading, spacing: HITSpacing.s) {
-            if let tip = group.currentTip as? HITTip {
-                TipView(tip)
-                    .tipViewStyle(HITTipStyle())
-                    .tipBackground(Theme.elevated)
-                    .transition(.opacity)
+        content
+            .preference(key: QuickAddTipKey.self, value: (group.currentTip as? HITTip).map(QuickAddTipBox.init))
+            .onChange(of: hasHighlight, initial: true) { _, shown in
+                if shown { Task { await HITTip.highlightShown.donate() } }
             }
-            content
-        }
-        .onChange(of: hasHighlight, initial: true) { _, shown in
-            if shown { Task { await HITTip.highlightShown.donate() } }
+    }
+}
+
+/// The quick-add card's current tip, carried up past the card's clipped chrome to its presenter.
+struct QuickAddTipBox: Equatable {
+    let tip: HITTip
+    static func == (a: Self, b: Self) -> Bool { a.tip.id == b.tip.id }
+}
+
+struct QuickAddTipKey: PreferenceKey {
+    static var defaultValue: QuickAddTipBox? { nil }
+    static func reduce(value: inout QuickAddTipBox?, nextValue: () -> QuickAddTipBox?) {
+        if value == nil { value = nextValue() }
+    }
+}
+
+extension View {
+    /// Hangs the quick-add card's current tip just outside this view (the card in its chrome), above it, without
+    /// changing its size or place; the tip floats over what is behind the card. `isHidden` while the Discard bubble
+    /// takes that place.
+    func floatingQuickAddTip(isHidden: Bool = false) -> some View {
+        overlayPreferenceValue(QuickAddTipKey.self, alignment: .top) { box in
+            // A zero-height anchor on the card's top edge with the tip standing on it, as the Discard bubble hangs.
+            Color.clear
+                .frame(height: 0)
+                .overlay(alignment: .bottomLeading) {
+                    if let box, !isHidden {
+                        TipView(box.tip)
+                            .tipViewStyle(HITTipStyle())
+                            .tipBackground(Theme.elevated)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.bottom, HITSpacing.s)
+                            .transition(.opacity)
+                    }
+                }
         }
     }
 }
 
-/// A tip in the design system's terms: the symbol in the accent colour, an Inter title and message, a
-/// small × that dismisses it for good. TipKit draws the popover (and its arrow) around it, filled with
+/// A tip in the design system's terms: the symbol in the accent colour, an Inter title and message, and a small ×;
+/// a tap anywhere on it dismisses it for good. TipKit draws the popover (and its arrow) around it, filled with
 /// `Theme.elevated` (`hitTip`).
 struct HITTipStyle: TipViewStyle {
     func makeBody(configuration: Configuration) -> some View {
@@ -83,6 +115,9 @@ struct HITTipStyle: TipViewStyle {
         }
         .padding(HITSpacing.l)
         .frame(maxWidth: 360, alignment: .leading)
+        // A tap anywhere on the tip puts it away for good, not only on its small × (George, 2026-11-08).
+        .contentShape(Rectangle())
+        .onTapGesture { configuration.tip.invalidate(reason: .tipClosed) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("tip")
     }
