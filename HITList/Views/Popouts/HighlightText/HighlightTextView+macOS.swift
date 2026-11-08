@@ -82,7 +82,7 @@ struct HighlightTextField: NSViewRepresentable {
         let width = proposal.width.flatMap { $0.isFinite && $0 > 0 ? $0 : nil } ?? max(scroll.bounds.width, 320)
         let current = (scroll.documentView as? NSTextView)?.string ?? text
         let shown = NSAttributedString(string: current.isEmpty ? text : current, attributes: style.attributes)
-        let height = HighlightGeometry.height(of: shown, width: width, maxLines: HighlightTextStyle.maxLines,
+        let height = HighlightGeometry.height(of: shown, width: width, maxLines: style.maxLineCount,
                                               lineHeight: style.lineHeight)
         return CGSize(width: width, height: height + style.boxOutset)
     }
@@ -154,6 +154,7 @@ final class HighlightNSTextView: NSTextView {
             // Room under the last line for its boxes, which reach a little below their line: the inset adds it
             // above and below, and `textContainerOrigin` keeps the text at the top.
             textContainerInset = NSSize(width: 0, height: newStyle.boxOutset / 2)
+            restyleText()
             needsDisplay = true
         }
         highlightLayout.cornerRadius = TokenHighlightField.highlightRadius
@@ -172,9 +173,16 @@ final class HighlightNSTextView: NSTextView {
     func setTextFromOwner(_ newText: String) {
         string = newText
         typingAttributes = style.attributes
+        restyleText()
         setSelectedRange(NSRange(location: (newText as NSString).length, length: 0))
         coordinator?.undoManager.removeAllActions()
         needsDisplay = true
+    }
+
+    /// Every character in the style's attributes (a strikethrough comes and goes with the task's completion).
+    private func restyleText() {
+        guard let storage = textStorage, storage.length > 0, !hasMarkedText() else { return }
+        storage.setAttributes(style.attributes, range: NSRange(location: 0, length: storage.length))
     }
 
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
