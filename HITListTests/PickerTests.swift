@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import HITListCore
 @testable import HITList
 
@@ -254,4 +255,26 @@ final class PickerTests: XCTestCase {
             XCTAssertLessThanOrEqual(kind.width, 560 - 2 * 20, "\(kind) is wider than the panel's content")
         }
     }
+
+    // MARK: The Mac's card layer
+
+    #if os(macOS)
+    /// George, 2026-11-08: "Trying to click "No date" to add a date while editing a task on Mac does nothing ... I
+    /// think the calendar/groups dropdowns are invisible." Built with the Xcode 27.2 SDK, a SwiftUI content view draws
+    /// over any view added inside it, so the card layer must sit beside the content view, above it, never in it.
+    func testTheCardLayerSitsAboveTheWindowsContentNotInsideIt() throws {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 560),
+                              styleMask: [.titled, .closable, .resizable, .fullSizeContentView],
+                              backing: .buffered, defer: true)
+        window.contentView = NSHostingView(rootView: Color.clear.frame(width: 760, height: 560))
+        let content = try XCTUnwrap(window.contentView)
+        let host = try XCTUnwrap(PickerLayerHost.host(in: window))
+        XCTAssertFalse(host.isDescendant(of: content), "inside the content view, SwiftUI draws over it")
+        XCTAssertTrue(host.superview === content.superview, "beside the content view, in the window's frame view")
+        XCTAssertTrue(host.superview?.subviews.last === host, "frontmost")
+        XCTAssertEqual(host.frame, content.frame, "covers the content")
+        XCTAssertTrue(PickerLayerHost.host(in: window) === host, "one layer per window")
+        XCTAssertNil(host.hitTest(NSPoint(x: 100, y: 100)), "lets every click through while no card is open")
+    }
+    #endif
 }
