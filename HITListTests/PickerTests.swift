@@ -38,16 +38,52 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(left.minX, window.minX + PickerPlacement.margin)
     }
 
-    func testCardWithNoRoomEitherSideStaysInsideOnTheRoomierSide() {
+    /// Brief 65 (every Mac card checked by hand, round 15): the editor's Reminder card, taller than the room above
+    /// or below its pill in a 721 pt window, was slid over the pill that opened it. A card that fits neither
+    /// below nor above goes beside its chip instead (after it, else before it), level with the chip and slid up
+    /// only as far as it must, so the chip stays in sight.
+    func testCardWithNoRoomAboveOrBelowGoesBesideItsChip() {
         // The quick-add chip bar in the minimum window: 390 pt fits neither below nor above.
         let chip = CGRect(x: 150, y: 210, width: 70, height: 30)
         let placed = PickerPlacement.place(anchor: chip, cardSize: dateCard, bounds: window)
-        XCTAssertEqual(placed.edge, .overlapping)
-        XCTAssertEqual(placed.frame.maxY, window.maxY - PickerPlacement.margin, "more room below: pinned to the bottom")
+        XCTAssertEqual(placed.edge, .trailing)
+        XCTAssertEqual(placed.frame.minX, chip.maxX + PickerPlacement.gap, "after the chip")
+        XCTAssertFalse(placed.frame.intersects(chip), "the chip stays in sight")
         XCTAssertTrue(window.contains(placed.frame))
-        let high = CGRect(x: 150, y: 380, width: 70, height: 30)
-        let up = PickerPlacement.place(anchor: high, cardSize: dateCard, bounds: window)
-        XCTAssertEqual(up.frame.minY, window.minY + PickerPlacement.margin, "more room above: pinned to the top")
+        XCTAssertEqual(placed.frame.maxY, window.maxY - PickerPlacement.margin, "level with the chip, slid up to fit")
+
+        // Near the window's right edge: before the chip.
+        let right = CGRect(x: 600, y: 210, width: 70, height: 30)
+        let before = PickerPlacement.place(anchor: right, cardSize: dateCard, bounds: window)
+        XCTAssertEqual(before.edge, .leading)
+        XCTAssertEqual(before.frame.maxX, right.minX - PickerPlacement.gap)
+        XCTAssertFalse(before.frame.intersects(right))
+
+        // A short card beside a chip high in the window starts level with the chip.
+        let tall = CGSize(width: 300, height: 480)
+        let pill = CGRect(x: 400, y: 380, width: 80, height: 30)
+        let big = CGRect(x: 0, y: 52, width: 988, height: 669)
+        let reminder = PickerPlacement.place(anchor: pill, cardSize: tall, bounds: big)
+        XCTAssertEqual(reminder.edge, .trailing)
+        XCTAssertFalse(reminder.frame.intersects(pill))
+        XCTAssertTrue(big.contains(reminder.frame))
+        let level = PickerPlacement.place(anchor: CGRect(x: 100, y: 120, width: 80, height: 30),
+                                          cardSize: CGSize(width: 300, height: 560), bounds: big)
+        XCTAssertEqual(level.edge, .trailing)
+        XCTAssertEqual(level.frame.minY, 120, "level with the chip when it fits from there")
+    }
+
+    func testCardWithNoRoomOnAnySideStaysInsideOnTheRoomierSide() {
+        // A narrow window: the date card fits neither above, below, before nor after the chip.
+        let narrow = CGRect(x: 0, y: 52, width: 560, height: 508)
+        let chip = CGRect(x: 200, y: 210, width: 70, height: 30)
+        let placed = PickerPlacement.place(anchor: chip, cardSize: dateCard, bounds: narrow)
+        XCTAssertEqual(placed.edge, .overlapping)
+        XCTAssertEqual(placed.frame.maxY, narrow.maxY - PickerPlacement.margin, "more room below: pinned to the bottom")
+        XCTAssertTrue(narrow.contains(placed.frame))
+        let high = CGRect(x: 200, y: 380, width: 70, height: 30)
+        let up = PickerPlacement.place(anchor: high, cardSize: dateCard, bounds: narrow)
+        XCTAssertEqual(up.frame.minY, narrow.minY + PickerPlacement.margin, "more room above: pinned to the top")
     }
 
     func testCardTallerOrWiderThanTheWindowShrinksToIt() {
