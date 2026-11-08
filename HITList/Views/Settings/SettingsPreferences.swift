@@ -55,18 +55,18 @@ extension Preferences {
     static let confirmDelete = "pref.confirmDelete"
     static let confirmDeleteDefault = false
 
-    // MARK: Lists (brief 57)
+    // MARK: Lists (briefs 57, 61)
 
-    /// The Inbox's and Today's "Group by" (`ListGrouping`, stored by raw value), each remembered on its own.
-    /// The Inbox has grouped by priority since build 8, so that stays its default; Today starts ungrouped.
-    static let inboxGrouping = "pref.grouping.inbox"
-    static let inboxGroupingDefault = ListGrouping.priority
-    static let todayGrouping = "pref.grouping.today"
-    static let todayGroupingDefault = ListGrouping.none
+    /// The Inbox's and Today's "Sort by" (`ListSort`, stored by raw value), each remembered on its own. New keys
+    /// in 0.8.1: 0.8.0's "Group by" (`pref.grouping.*`) is not read, so everyone starts on Priority again.
+    static let inboxSort = "pref.sort.inbox"
+    static let todaySort = "pref.sort.today"
+    static let listSortDefault = ListSort.priority
 
-    /// A stored grouping, or `fallback` for nothing or a value this build doesn't know.
-    static func grouping(_ stored: String?, default fallback: ListGrouping) -> ListGrouping {
-        stored.flatMap(ListGrouping.init(rawValue:)) ?? fallback
+    /// A stored sort if `offered` has it; Priority for nothing, a value from another build, or a sort this list
+    /// doesn't offer (Today has no Date).
+    static func sort(_ stored: String?, offered: [ListSort]) -> ListSort {
+        stored.flatMap(ListSort.init(rawValue:)).flatMap { offered.contains($0) ? $0 : nil } ?? listSortDefault
     }
 
     // MARK: Readers

@@ -327,84 +327,83 @@ final class HITListUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Remove from Flipboard"].waitForExistence(timeout: 3), "the menu opened on \(title)")
     }
 
-    /// Brief 57: Groups one tap from the Inbox and Today titles. The demo week's Groups are in the title menu;
-    /// choosing one pushes it on the tab's stack (the tab bar stays), Back returns; Today grouped by Group shows
-    /// the Group headers, and a header opens its Group.
-    func testGroupsFromTheTitleMenu() throws {
+    /// Brief 61: the Inbox sorts by Priority (flat, the default), Group or Date and Today by Priority or Group,
+    /// from the view options' "Sort by"; the screen's name once, as its large title.
+    func testSortByOnTheInboxAndToday() throws {
         app.launchArguments += ["-seedDemoData", "YES"]
         app.launch()
-        let inbox = app.buttons["tab-inbox"]
-        XCTAssertTrue(inbox.waitForExistence(timeout: 15))
-        inbox.tap()
-        XCTAssertTrue(inbox.wait(for: \.isSelected, toEqual: true, timeout: 5))
-        snapshot("1 Inbox")
+        XCTAssertTrue(app.buttons["tab-inbox"].waitForExistence(timeout: 15))
+        tab("inbox")
+        XCTAssertTrue(app.navigationBars["Inbox"].waitForExistence(timeout: 5), "the large title")
+        XCTAssertFalse(element(beginningWith: "Inbox ·").exists, "no \"Inbox · N\" under the title")
+        XCTAssertFalse(element(beginningWith: "Work,").exists, "Priority is one flat list: no headers")
+        snapshot("1 Inbox by Priority")
 
-        let title = titleMenu("Inbox")
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "the Inbox title is a menu button: \(app.navigationBars.debugDescription)")
-        title.tap()
-        // Menu items don't keep accessibility identifiers: find them by label.
-        let work = app.buttons["Work · 2"].firstMatch
-        XCTAssertTrue(work.waitForExistence(timeout: 5), "Work in the title menu")
-        snapshot("2 Inbox title menu")
-        work.tap()
-        XCTAssertTrue(app.navigationBars["Work"].waitForExistence(timeout: 5), "Work pushed")
-        XCTAssertTrue(app.buttons["tab-inbox"].isHittable, "the tab bar stays")
-        snapshot("3 Work pushed")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(title.waitForExistence(timeout: 5), "back on the Inbox")
-
-        let today = app.buttons["tab-today"]
-        today.tap()
-        XCTAssertTrue(today.wait(for: \.isSelected, toEqual: true, timeout: 5))
-        let todayTitle = titleMenu("Today")
-        XCTAssertTrue(todayTitle.waitForExistence(timeout: 5), "the Today title is a menu button")
-        todayTitle.tap()
-        XCTAssertTrue(app.buttons["Browse…"].waitForExistence(timeout: 5), "Browse… in the title menu")
-        snapshot("4 Today title menu")
-        app.buttons["Home · 2"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Home"].waitForExistence(timeout: 5), "Home pushed from Today")
-        snapshot("5 Home pushed")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(todayTitle.waitForExistence(timeout: 5), "back on Today")
-
-        // View options → Group by → Group: Today in Group sections; a section header opens its Group.
-        app.buttons["viewOptions"].firstMatch.tap()
-        let groupBy = app.buttons["Group by"].firstMatch
-        XCTAssertTrue(groupBy.waitForExistence(timeout: 5), "Group by in the view options")
-        groupBy.tap()
-        let byGroup = app.buttons["Group"].firstMatch
-        XCTAssertTrue(byGroup.waitForExistence(timeout: 5))
-        byGroup.tap()
-        let header = app.descendants(matching: .any)["Work, 1 task"].firstMatch
-        XCTAssertTrue(header.waitForExistence(timeout: 5), "Work's section header on Today")
-        snapshot("6 Today by Group")
-        header.tap()
-        XCTAssertTrue(app.navigationBars["Work"].waitForExistence(timeout: 5), "the header opens Work")
-        snapshot("7 Work from its header")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-
-        // Browse… from the title menu; Groups and Labels each say what they are.
-        XCTAssertTrue(todayTitle.waitForExistence(timeout: 5), "back on Today")
-        todayTitle.tap()
-        app.buttons["Browse…"].firstMatch.tap()
-        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5), "Browse pushed")
-        XCTAssertTrue(app.staticTexts["A task lives in one Group: Work, Home, a project."].waitForExistence(timeout: 5))
+        sort(by: "Group")
+        let home = element(beginningWith: "Home, 2 tasks"), work = element(beginningWith: "Work, 2 tasks")
+        XCTAssertTrue(home.waitForExistence(timeout: 5), "Home's header")
+        XCTAssertTrue(work.exists, "Work's header")
+        XCTAssertLessThan(home.frame.minY, work.frame.minY, "the sidebar's order (the demo made Home first)")
+        snapshot("2 Inbox by Group")
         app.swipeUp()
-        XCTAssertTrue(app.staticTexts["A label is a tag any task can carry: @waiting, @errands."].waitForExistence(timeout: 5))
-        snapshot("8 Browse")
+        let ungrouped = element(beginningWith: "Ungrouped,")
+        XCTAssertTrue(ungrouped.waitForExistence(timeout: 5), "the tasks in no Group")
+        let health = element(beginningWith: "Health,")
+        if health.exists { XCTAssertLessThan(health.frame.minY, ungrouped.frame.minY, "Ungrouped last") }
+        snapshot("2b Inbox by Group, the end")
+        app.swipeDown()
+
+        sort(by: "Date")
+        XCTAssertTrue(element(beginningWith: "Today,").waitForExistence(timeout: 5), "the Today section")
+        snapshot("3 Inbox by Date")
+        app.swipeUp()
+        XCTAssertTrue(element(beginningWith: "No date, 2 tasks").waitForExistence(timeout: 5), "the undated tasks last")
+        snapshot("3b Inbox by Date, the end")
+        app.swipeDown()
+
+        tab("today")
+        XCTAssertTrue(app.navigationBars["Today"].waitForExistence(timeout: 5), "the large title")
+        XCTAssertFalse(element(beginningWith: "Work,").exists, "Priority: no Group headers")
+        snapshot("4 Today by Priority")
+        sort(by: "Group")
+        XCTAssertTrue(element(beginningWith: "Work, 1 task").waitForExistence(timeout: 5), "Work's header on Today")
+        snapshot("5 Today by Group")
+        app.buttons["viewOptions"].firstMatch.tap()
+        app.buttons["Sort by"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Priority"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Date"].exists, "Today sorts by Priority or Group only")
     }
 
-    /// Brief 57: a Group's screen shows its colour and open count, and its "+" adds the task to that Group.
+    /// View options → Sort by → `name`.
+    private func sort(by name: String) {
+        app.buttons["viewOptions"].firstMatch.tap()
+        let sortBy = app.buttons["Sort by"].firstMatch
+        XCTAssertTrue(sortBy.waitForExistence(timeout: 5), "Sort by in the view options")
+        sortBy.tap()
+        let choice = app.buttons[name].firstMatch
+        XCTAssertTrue(choice.waitForExistence(timeout: 5), name)
+        choice.tap()
+        XCTAssertTrue(choice.waitForNonExistence(timeout: 5), "the menu closes")
+    }
+
+    /// The first element whose label starts with `prefix` (section headers read "Work, 2 tasks").
+    private func element(beginningWith prefix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// Brief 57: a Group's "+" adds the task to that Group. Brief 61: its name once, as the large title.
     func testPlusOnAGroupAddsToIt() throws {
         app.launchArguments += ["-seedDemoData", "YES"]
         app.launch()
-        let title = titleMenu("Today")
-        XCTAssertTrue(title.waitForExistence(timeout: 15))
-        title.tap()
-        app.buttons["Work · 2"].firstMatch.tap()
-        let header = app.descendants(matching: .any)["groupScreenHeader"].firstMatch
-        XCTAssertTrue(header.waitForExistence(timeout: 5))
-        XCTAssertEqual(header.label, "Work, 2 tasks")
+        let browse = app.buttons["browseButton"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 15))
+        browse.tap()
+        let workRow = app.buttons["Work, 2"].firstMatch
+        XCTAssertTrue(workRow.waitForExistence(timeout: 5))
+        workRow.tap()
+        XCTAssertTrue(app.navigationBars["Work"].waitForExistence(timeout: 5), "Work pushed, its name the title")
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Work ·")).firstMatch.exists,
+                       "no second \"Work\" under the title")
         snapshot("1 Work")
 
         let plus = app.buttons["quickAddButton"].firstMatch
@@ -416,8 +415,72 @@ final class HITListUITests: XCTestCase {
         app.buttons["quickAddSave"].tap()
         let row = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Draft the agenda")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5), "the new task is in Work (undated: a note in its Group)")
-        XCTAssertTrue(header.wait(for: \.label, toEqual: "Work, 3 tasks", timeout: 5), "the header counts it")
         snapshot("3 Work after the add")
+    }
+
+    /// Brief 61: Browse puts its Groups first, above Shared Tasks, and the saved filters as chips under the
+    /// search field (no Filters section); the field takes a filter query: "#Work" lists Work's tasks, and "Save
+    /// as filter…" names it as a new filter, which joins the chips.
+    func testBrowseTakesFiltersInTheSearchField() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        let browse = app.buttons["browseButton"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 15))
+        browse.tap()
+        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5))
+        let focus = app.buttons["Focus filter"].firstMatch
+        XCTAssertTrue(focus.waitForExistence(timeout: 5), "the default filters as chips under the field")
+        XCTAssertTrue(app.buttons["newFilterChip"].exists, "the + chip")
+        let work = app.buttons["Work, 2"].firstMatch
+        let shared = app.descendants(matching: .any)["browse-shared-tasks"].firstMatch
+        XCTAssertTrue(work.exists && shared.exists)
+        XCTAssertLessThan(work.frame.minY, shared.frame.minY, "Groups above Shared Tasks")
+        XCTAssertGreaterThan(work.frame.minY, focus.frame.minY, "the chips above the Groups")
+        XCTAssertTrue(app.staticTexts["A task lives in one Group: Work, Home, a project."].exists)
+        snapshot("1 Browse")
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["A label is a tag any task can carry: @waiting, @errands."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Filters"].exists, "no Filters section")
+        app.swipeDown()
+
+        // A chip opens its filter's list.
+        focus.tap()
+        XCTAssertTrue(app.navigationBars["Focus"].waitForExistence(timeout: 5), "the chip opens Focus")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5))
+
+        // A query in the search field filters by it.
+        let field = app.textFields.firstMatch
+        field.tap()
+        app.typeText("#Work")
+        let save = app.buttons["saveSearchAsFilter"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "Save as filter… under the field")
+        XCTAssertTrue(row("Reply to Sam about the lease").waitForExistence(timeout: 5))
+        XCTAssertTrue(row("Finish the quarterly report").exists)
+        XCTAssertFalse(row("Buy groceries").exists, "only Work's tasks")
+        snapshot("2 Search #Work")
+
+        save.tap()
+        XCTAssertTrue(app.navigationBars["New Filter"].waitForExistence(timeout: 5)
+                      || app.staticTexts["New Filter"].waitForExistence(timeout: 1), "the filter editor, to name it")
+        app.typeText("Work only")
+        snapshot("3 Name the filter")
+        app.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["New Filter"].waitForNonExistence(timeout: 5), "the editor closes")
+
+        // The new filter joins the chips; plain words still search titles and notes.
+        app.buttons["Clear"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Work only filter"].waitForExistence(timeout: 5), "the saved filter's chip")
+        snapshot("4 Browse with the new filter")
+        field.tap()
+        app.typeText("groceries")
+        XCTAssertTrue(row("Buy groceries").waitForExistence(timeout: 5), "text searches titles")
+        XCTAssertFalse(save.exists, "no Save as filter… for plain words")
+    }
+
+    /// A task row whose label contains `title`.
+    private func row(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
     }
 
     /// Brief 57: a Group dragged to a new place in Browse stays there (long-press, then drag).
@@ -434,15 +497,6 @@ final class HITListUITests: XCTestCase {
         health.press(forDuration: 1.0, thenDragTo: home, withVelocity: .slow, thenHoldForDuration: 0.5)
         XCTAssertLessThan(health.frame.minY, home.frame.minY, "Health moved above Home")
         snapshot("2 Browse after")
-        // The new order is every list's: Home is now below Health in the title menu too.
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let title = titleMenu("Today")
-        XCTAssertTrue(title.waitForExistence(timeout: 5))
-        title.tap()
-        let menuHealth = app.buttons["Health · 1"].firstMatch, menuHome = app.buttons["Home · 2"].firstMatch
-        XCTAssertTrue(menuHealth.waitForExistence(timeout: 5))
-        XCTAssertLessThan(menuHealth.frame.minY, menuHome.frame.minY, "the title menu follows the new order")
-        snapshot("3 Title menu after")
     }
 
     /// Brief 57: deleting a Group with tasks asks first and says where its tasks go; Cancel keeps it.
@@ -466,11 +520,6 @@ final class HITListUITests: XCTestCase {
         if outside.exists { outside.tap() } else { app.buttons["Cancel"].firstMatch.tap() }
         XCTAssertTrue(message.waitForNonExistence(timeout: 5))
         XCTAssertTrue(work.exists, "Cancel keeps the Group")
-    }
-
-    /// A screen's title menu button (VoiceOver calls it "Today, Actions Menu").
-    private func titleMenu(_ title: String) -> XCUIElement {
-        app.navigationBars.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
     }
 
     /// Keeps a screenshot in the test result.

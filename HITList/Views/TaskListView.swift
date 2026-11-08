@@ -10,9 +10,8 @@ struct TaskListView: View {
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query private var labels: [TaskLabel]
-    /// Today's view options → Group by (brief 57); remembered for Today alone.
-    @AppStorage(Preferences.todayGrouping, store: AppGroup.defaults)
-    private var todayGrouping: ListGrouping = Preferences.todayGroupingDefault
+    /// Today's view options → Sort by (brief 61): Priority or Group, remembered for Today alone.
+    @AppStorage(Preferences.todaySort, store: AppGroup.defaults) private var storedTodaySort = ""
     @Query private var filters: [SavedFilter]
     @State private var showCompleted = false
     @State private var editingProject: Project?
@@ -29,14 +28,6 @@ struct TaskListView: View {
     private var isCompact: Bool { sizeClass == .compact }
     #else
     private let isCompact = false
-    #endif
-
-    #if os(iOS)
-    @Environment(\.mobileChrome) private var mobileChrome
-    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
-    private var pushesGroups: Bool { mobileChrome != nil }
-    #else
-    private let pushesGroups = false
     #endif
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
@@ -87,10 +78,10 @@ struct TaskListView: View {
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
         var hidesDay = false
-        /// A Group or priority section of a grouped Today (brief 57): drawn by `GroupSectionHeader`
-        /// instead of `title`.
+        /// A Group section of a Today sorted by Group (brief 57): drawn by `GroupSectionHeader` instead of
+        /// `title`.
         var heading: GroupSectionHeading?
-        /// Grouped Today: "Overdue" or the day, above the first section of its half (in its header, not a
+        /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
     }
@@ -176,10 +167,10 @@ struct TaskListView: View {
 
     /// Today: "Overdue" (red), then the day, "Oct 31, Saturday" (green), each by priority then due time.
     /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
-    /// Grouped (brief 57), the Overdue block stays on top: its header, then its tasks in Group (or
-    /// priority) sections, then the day's header and the day's tasks in sections the same way.
+    /// Sorted by Group (briefs 57, 61), the Overdue block stays on top: its header, then its tasks in Group
+    /// sections, then the day's header and the day's tasks in Group sections the same way.
     private func todayGroups(_ rows: [Placed]) -> [Group] {
-        if todayGrouping != .none { return groupedTodayGroups(rows) }
+        if todaySort == .group { return groupedTodayGroups(rows) }
         var overdue: [Placed] = [], today: [Placed] = []
         for row in rows {
             switch TaskOrdering.todaySection(of: row, now: now) {
@@ -199,14 +190,21 @@ struct TaskListView: View {
         return groups
     }
 
-    /// Rows name their Group, except in that Group's own list and under its header in a Today grouped by Group.
+    /// Today's sort: Priority (the flat Overdue and day sections) or Group.
+    private var todaySort: ListSort { Preferences.sort(storedTodaySort, offered: ListSort.today) }
+
+    private var todaySortBinding: Binding<ListSort> {
+        Binding(get: { todaySort }, set: { storedTodaySort = $0.rawValue })
+    }
+
+    /// Rows name their Group, except in that Group's own list and under its header in a Today sorted by Group.
     private var showsProjectOnRows: Bool {
-        currentProject == nil && !(selection == .today && todayGrouping == .group)
+        currentProject == nil && !(selection == .today && todaySort == .group)
     }
 
     private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
-        // The same section rule as the ungrouped Today (`todayGroups`), so the two never disagree.
-        let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now,
+        // The same section rule as Today by priority (`todayGroups`), so the two never disagree.
+        let split = GroupedOrdering.today(rows, by: .group, groupOrder: projects.map(\.id), now: now,
                                           sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) {
             $0.task.project?.id
         }
@@ -215,14 +213,14 @@ struct TaskListView: View {
                       hidesDay: Bool) -> [Group] {
             sections.enumerated().map { index, section in
                 Group(id: "\(half)-\(section.key)", title: "", tasks: section.tasks.map(\.task), color: color,
-                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects),
+                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects, now: now),
                       banner: index == 0 ? banner : nil)
             }
         }
         let day = DueFormatter.sectionTitle(for: now, now: now, style: .dated)
         var groups = sections(split.overdue, half: "overdue", banner: "Overdue", color: HITColor.dueOverdue, hidesDay: false)
         if split.today.isEmpty {
-            // The day's header still shows, so its "Add task" row sits under it (as ungrouped).
+            // The day's header still shows, so its "Add task" row sits under it (as by priority).
             groups.append(Group(id: "today", title: day, tasks: [], color: HITColor.dueToday, hidesDay: true))
         } else {
             groups += sections(split.today, half: "today", banner: day, color: HITColor.dueToday, hidesDay: true)
@@ -230,16 +228,8 @@ struct TaskListView: View {
         return groups
     }
 
-    /// A Group's open tasks (sub-tasks live inside their parent), for its screen's header.
-    private func openCount(in project: Project) -> Int {
-        allTasks.filter { $0.project?.id == project.id && !$0.isCompleted && !$0.isSubtask }.count
-    }
-
     var body: some View {
         VStack(spacing: 0) {
-            if let project = currentProject {
-                GroupScreenHeader(name: project.name, colorHex: project.colorHex, openCount: openCount(in: project))
-            }
             SwiftUI.Group {
                 switch result {
                 case .success(let groups):
@@ -296,7 +286,7 @@ struct TaskListView: View {
                                             if let banner = group.banner {
                                                 Text(banner).taskSectionHeader(color: group.color)
                                             }
-                                            GroupSectionHeader(heading: heading, pushes: pushesGroups, belowBanner: group.banner != nil)
+                                            GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
                                         }
                                         .listRowInsets(EdgeInsets())
                                     } else if !group.title.isEmpty {
@@ -337,10 +327,8 @@ struct TaskListView: View {
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
-        // Today's title is a menu on iPhone (brief 57), which the system draws only on an inline title; a
-        // Group's screen has its own header under an inline title, as the Inbox has.
-        .navigationBarTitleDisplayMode((selection == .today && mobileChrome != nil) || currentProject != nil ? .inline : .large)
-        .modifier(TodayTitleMenu(isOn: selection == .today))
+        // Every list's name once, as the system large title (brief 61): a Group's too, with no header under it.
+        .navigationBarTitleDisplayMode(.large)
         #endif
         // The filter-lines icon holds the view options; the "…" beside it (iPhone, iPad) holds this
         // screen's actions, and on iPhone Settings and the sync dot too (`screenChrome`).
@@ -351,12 +339,13 @@ struct TaskListView: View {
                         .keyboardShortcut("c", modifiers: [.command, .shift])
                 }
                 if selection == .today {
-                    GroupByPicker(selection: $todayGrouping)
-                }
-                Section("Sort") {
-                    Button("By due date") {}.disabled(true)
-                    Button("By priority") {}.disabled(true)
-                    Button("By name") {}.disabled(true)
+                    SortPicker(selection: todaySortBinding, choices: ListSort.today)
+                } else {
+                    Section("Sort") {
+                        Button("By due date") {}.disabled(true)
+                        Button("By priority") {}.disabled(true)
+                        Button("By name") {}.disabled(true)
+                    }
                 }
             }
         } menu: {
@@ -499,14 +488,3 @@ struct TaskListView: View {
         }
     }
 }
-
-#if os(iOS)
-/// Today's title opens a Group, a label or Browse on iPhone (brief 57); other lists keep a plain title.
-private struct TodayTitleMenu: ViewModifier {
-    let isOn: Bool
-
-    func body(content: Content) -> some View {
-        if isOn { content.groupsTitleMenu() } else { content }
-    }
-}
-#endif
