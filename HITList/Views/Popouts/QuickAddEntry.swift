@@ -31,21 +31,14 @@ private struct QuickAddEntry: ViewModifier {
             #else
             .toolbar {
                 if showsButton {
-                    ToolbarItem(placement: .primaryAction) {
-                        // The iPhone's accent oval as a prominent toolbar button, so the toolbar sizes and
-                        // aligns it with its neighbours (a hand-drawn capsule sat off-centre on macOS 26).
-                        Button { popouts.openQuickAdd(context) } label: {
-                            // Decently smaller than build 13's (George): the oval measures 50 × 30 pt in
-                            // the toolbar (it was 58 × 36 with a 22 × 16 label and a 13 pt glyph).
-                            Image(systemName: "plus")
-                                .font(.system(size: 10, weight: .bold))
-                                .frame(width: 14, height: 10)
-                        }
-                        // Not `.controlSize(.small)`: on macOS 26 that drew the glass oval in two halves
-                        // (build 10). The toolbar sets this button's height.
-                        .modifier(ProminentToolbarButton())
-                        .accessibilityLabel("Add task")
-                        .help("Add a task (⌘N)")
+                    // One oval, the accent one (brief 66): on macOS 26 the toolbar wraps every item in its own
+                    // shared glass, which drew a second, larger oval around the prominent button. macOS 15 has no
+                    // shared glass, so the item is as it was there.
+                    if #available(macOS 26, *) {
+                        ToolbarItem(placement: .primaryAction) { addButton }
+                            .sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .primaryAction) { addButton }
                     }
                 }
             }
@@ -53,6 +46,29 @@ private struct QuickAddEntry: ViewModifier {
             .onAppear { popouts.listContext = context }
             .onChange(of: context) { _, new in popouts.listContext = new }
     }
+
+    #if os(macOS)
+    /// The iPhone's accent oval as a prominent toolbar button, so the toolbar sizes and aligns it with its
+    /// neighbours (a hand-drawn capsule sat off-centre on macOS 26).
+    private var addButton: some View {
+        Button { popouts.openQuickAdd(context) } label: {
+            // Decently smaller than build 13's (George): the oval measures 50 × 30 pt in the toolbar (it was
+            // 58 × 36 with a 22 × 16 label and a 13 pt glyph).
+            Image(systemName: "plus")
+                .font(.system(size: 10, weight: .bold))
+                .frame(width: 14, height: 10)
+        }
+        // Not `.controlSize(.small)`: on macOS 26 that drew the glass oval in two halves (build 10). The toolbar
+        // sets this button's height.
+        .modifier(ProminentToolbarButton())
+        // The same accent oval in a window in the background: without its shared glass, an inactive prominent
+        // glass button draws no fill at all, only the "+".
+        .environment(\.controlActiveState, .key)
+        .accessibilityLabel("Add task")
+        .accessibilityIdentifier("toolbarAddTask")
+        .help("Add a task (⌘N)")
+    }
+    #endif
 }
 
 /// The thumb-sized accent oval "+" bottom-right, above the iPhone's island tab bar (and floating over a
