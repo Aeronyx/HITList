@@ -162,6 +162,12 @@ extension TaskItem: FilterableTask {
     var filterIsSubtask: Bool { parent != nil }
 }
 
+/// A task of yours as a list row (brief 62, `ListRow`): its Group is its section under Sort by Group.
+extension TaskItem: ListRowItem {
+    var rowID: UUID { id }
+    var rowGroupID: UUID? { project?.id }
+}
+
 /// How far through its checklist a task is: "2/5" on its row, "2 of 5" in the editor.
 struct SubtaskProgress: Equatable {
     let done: Int
