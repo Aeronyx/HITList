@@ -338,21 +338,9 @@ struct UpcomingBoard: View {
         .opacity(phase == .animating ? 0 : 1)
         // With a card open, a click on a task is a click away first.
         .onTapGesture { clickAway { onOpen(entry) } }
-        .modifier(CardDrag(entry: entry))
+        // Its id as the payload: a task of yours, or a shared task (`SharedRows.drop`, brief 62).
+        .draggable(TaskRescheduling.dragPayload(for: entry.id)) { DragPreview(title: entry.filterTitle) }
         .accessibilityAction(named: "Open") { onOpen(entry) }
-    }
-}
-
-/// A task of yours drags to another day (its id as the payload). A shared task does not yet.
-private struct CardDrag: ViewModifier {
-    let entry: UpcomingBoard.Entry
-
-    func body(content: Content) -> some View {
-        if let task = entry.ownTask {
-            content.draggable(TaskRescheduling.dragPayload(for: task.id)) { DragPreview(title: task.title) }
-        } else {
-            content
-        }
     }
 }
 

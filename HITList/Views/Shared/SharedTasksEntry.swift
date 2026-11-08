@@ -9,7 +9,8 @@ import UIKit
 /// Where Shared Tasks is reached (brief 51): a row at the top of the iPhone's Browse, one row in the Mac and iPad
 /// sidebar, and a sheet over whatever is showing when an invitation link opens the app.
 
-/// Browse's first row: "Shared Tasks · Preview", the open count once on. Pushes the Shared screen.
+/// Browse's Shared Tasks section: "Shared Tasks · Preview", the open count once on, which pushes the Shared screen for
+/// managing the lists; then each shared list (brief 62), which pushes that list's screen.
 struct SharedTasksBrowseRow: View {
     private var center: SharedTasksCenter { SharedTasksCenter.shared }
 
@@ -21,6 +22,39 @@ struct SharedTasksBrowseRow: View {
         }
         .slateRow()
         .accessibilityIdentifier("browse-shared-tasks")
+        ForEach(SharedRows.shared.lists) { list in
+            NavigationLink {
+                SharedListScreen(listID: list.id)
+            } label: {
+                SharedListBrowseLabel(list: list, count: SharedRows.shared.openCount(in: list.id))
+            }
+            .slateRow()
+            .accessibilityIdentifier("browse-shared-list")
+        }
+    }
+}
+
+/// A shared list's row in Browse, drawn as a Group's is there: its marker in its colour, its name, its open count.
+struct SharedListBrowseLabel: View {
+    let list: SharedList
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: HITSpacing.m) {
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color(hex: list.colorHex))
+                .frame(width: 24)
+            Text(list.title.isEmpty ? SharedRow.untitled : list.title).foregroundStyle(HITColor.text).lineLimit(1)
+            Spacer(minLength: HITSpacing.s)
+            if count > 0 {
+                Text("\(count)")
+                    .font(HITType.subheadline)
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.secondaryText)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 

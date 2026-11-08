@@ -215,6 +215,88 @@ final class SharedRowsTests: XCTestCase {
         XCTAssertNil(store.list(trip.id)?.task(task.id)?.due.value)
     }
 
+    // MARK: - Dragged to another day (item 4)
+
+    func testADroppedSharedTaskMovesToTheDayKeepingItsTime() throws {
+        let cal = Calendar.current
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        let cabin = try store.addTask(to: trip.id, title: "Book the cabin", due: due(0, hour: 9))
+        let tent = try store.addTask(to: trip.id, title: "Pack the tent", due: due(1))
+        let rows = SharedRows(store: { store })
+        let friday = cal.date(byAdding: .day, value: 3, to: today)!
+
+        let result = rows.drop([TaskRescheduling.dragPayload(for: cabin.id), "not a task", UUID().uuidString], on: friday, now: now,
+                               calendar: cal)
+        XCTAssertEqual(result.moved.map(\.id), [cabin.id], "only the shared task named in the drop")
+        XCTAssertNil(result.refusal)
+        let moved = try XCTUnwrap(store.list(trip.id)?.task(cabin.id)?.due.value)
+        XCTAssertEqual(cal.startOfDay(for: moved.date), friday)
+        XCTAssertEqual(cal.component(.hour, from: moved.date), 9, "its time of day kept")
+        XCTAssertEqual(store.list(trip.id)?.task(tent.id)?.due.value, due(1), "the other task untouched")
+    }
+
+    func testADropOnItsOwnDayOrBeforeTodayMovesNothing() throws {
+        let cal = Calendar.current
+        let store = makeStore()
+        var sent: [SharedTasksStore.Change] = []
+        let trip = try store.createList(title: "Trip")
+        let cabin = try store.addTask(to: trip.id, title: "Book the cabin", due: due(1))
+        store.onChanges = { sent += $0 }
+        let rows = SharedRows(store: { store })
+        let payload = [TaskRescheduling.dragPayload(for: cabin.id)]
+
+        XCTAssertTrue(rows.drop(payload, on: cal.date(byAdding: .day, value: 1, to: today)!, now: now, calendar: cal).moved.isEmpty,
+                      "dropped back where it came from: nothing saved, nothing sent")
+        XCTAssertTrue(rows.drop(payload, on: cal.date(byAdding: .day, value: -1, to: today)!, now: now, calendar: cal).moved.isEmpty,
+                      "days before today are Overdue's")
+        XCTAssertTrue(sent.isEmpty)
+    }
+
+    func testADropOnAViewOnlyListIsRefusedWithAWord() throws {
+        let cal = Calendar.current
+        let store = makeStore()
+        let groceries = joinedList("Groceries", in: store, canWrite: false)
+        let milk = samsTask("Milk", in: groceries, store: store, due: due(0))
+        let rows = SharedRows(store: { store })
+
+        let result = rows.drop([TaskRescheduling.dragPayload(for: milk)], on: cal.date(byAdding: .day, value: 2, to: today)!, now: now,
+                               calendar: cal)
+        XCTAssertTrue(result.moved.isEmpty)
+        XCTAssertEqual(result.refusal, "You can see “Groceries” but not change it.")
+        XCTAssertEqual(store.list(groceries)?.task(milk)?.due.value, due(0), "left where it was")
+    }
+
+    func testACompletedSharedTaskIsNotMovedByADrop() throws {
+        let cal = Calendar.current
+        let store = makeStore()
+        let groceries = joinedList("Groceries", in: store)
+        let bread = samsTask("Bread", in: groceries, store: store, due: due(0), completedBy: sam)
+        let rows = SharedRows(store: { store })
+        let result = rows.drop([TaskRescheduling.dragPayload(for: bread)], on: cal.date(byAdding: .day, value: 2, to: today)!, now: now,
+                               calendar: cal)
+        XCTAssertTrue(result.moved.isEmpty)
+        XCTAssertNil(result.refusal)
+    }
+
+    // MARK: - Counts (item 4)
+
+    func testTheSidebarCountsTakeTheSharedTasksTheListsShow() throws {
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        try store.addTask(to: trip.id, title: "today", due: due(0))
+        try store.addTask(to: trip.id, title: "overdue", due: due(-2))
+        try store.addTask(to: trip.id, title: "next week", due: due(7))
+        try store.addTask(to: trip.id, title: "undated")
+        let groceries = joinedList("Groceries", in: store)
+        samsTask("done today", in: groceries, store: store, due: due(0), completedBy: sam)
+        let rows = SharedRows(store: { store })
+        XCTAssertEqual(rows.inboxCount(now: now), 3, "the dated open ones")
+        XCTAssertEqual(rows.todayCount(now: now), 2, "today's and the overdue one")
+        XCTAssertEqual(rows.openCount(in: trip.id), 4)
+        XCTAssertEqual(rows.openCount(in: groceries), 0)
+    }
+
     func testPriorityAndDeleteGoThroughTheStore() throws {
         let store = makeStore()
         let trip = try store.createList(title: "Trip")

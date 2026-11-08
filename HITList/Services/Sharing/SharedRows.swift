@@ -101,6 +101,51 @@ final class SharedRows {
         }
     }
 
+    // MARK: - Dragged to another day
+
+    /// Dragged task ids dropped on `day` (Upcoming's board, its day headers and week strip): each open shared task
+    /// named there moves to that day, keeping its time of day, as `TaskRescheduling.drop` moves yours. Days before
+    /// today take nothing (they are Overdue's), and a task already on `day` is left alone, so a card dropped back
+    /// where it came from sends nothing. A task in a list that is view-only for you stays put, and `refusal` says so.
+    @discardableResult
+    func drop(_ payload: [String], on day: Date, now: Date, calendar: Calendar = .current) -> (moved: [SharedRow], refusal: String?) {
+        let target = calendar.startOfDay(for: day)
+        guard target >= calendar.startOfDay(for: now) else { return ([], nil) }
+        let ids = Set(TaskRescheduling.taskIDs(in: payload))
+        let named = rows.filter { row in
+            guard ids.contains(row.id), !row.task.isCompleted else { return false }
+            return row.filterDueDate.map { calendar.startOfDay(for: $0) } != target
+        }
+        var moved: [SharedRow] = []
+        var refusal: String?
+        for row in named {
+            do {
+                try reschedule(row, to: target, calendar: calendar)
+                moved.append(row)
+            } catch let refused as Refusal where refused != .gone {
+                refusal = refused.localizedDescription
+            } catch {}
+        }
+        return (moved, refusal)
+    }
+
+    // MARK: - Counts
+
+    /// The shared tasks the Inbox shows (the dated open ones), for the sidebar's count beside it.
+    func inboxCount(now: Date = Date()) -> Int {
+        open.filter { TaskOrdering.isInInbox($0, now: now) }.count
+    }
+
+    /// The shared tasks Today shows (due today or overdue, open), for the sidebar's count beside it.
+    func todayCount(now: Date = Date()) -> Int {
+        open.filter { TaskOrdering.isInToday($0, now: now) }.count
+    }
+
+    /// A list's open tasks, dated or not, as a Group's count counts them.
+    func openCount(in listID: UUID) -> Int {
+        list(listID)?.tasks.filter { !$0.isCompleted }.count ?? 0
+    }
+
     /// A due date moved to `day`: its time of day kept when it has one, else all day.
     nonisolated static func due(movedTo day: Date, from old: SharedDue?, calendar: Calendar = .current) -> SharedDue {
         let start = calendar.startOfDay(for: day)

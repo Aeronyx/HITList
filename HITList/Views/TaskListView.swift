@@ -241,7 +241,24 @@ struct TaskListView: View {
         return groups
     }
 
+    /// A shared list chosen in the Mac and iPad sidebar (`SidebarItem.sharedList`, brief 62).
+    private var sharedListID: UUID? {
+        guard case .filter(let id) = selection, currentFilter == nil, sharedRows.isList(id) else { return nil }
+        return id
+    }
+
     var body: some View {
+        if let listID = sharedListID {
+            // Its own screen (members, invitations, its tasks), in the detail column. The quick add's "+" has no
+            // shared list to add to; the screen's own field does that.
+            SharedListScreen(listID: listID)
+                .quickAddEntry(.plain, showsButton: false)
+        } else {
+            list
+        }
+    }
+
+    private var list: some View {
         VStack(spacing: 0) {
             SwiftUI.Group {
                 switch result {
