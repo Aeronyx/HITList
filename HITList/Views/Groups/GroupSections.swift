@@ -1,9 +1,9 @@
 import SwiftUI
 import HITListCore
 
-/// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count; "No
-/// Group" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No date")
-/// in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
+/// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count;
+/// "Ungrouped" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No
+/// date") in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
 struct GroupSectionHeading: Equatable {
     var title: String
     /// The dot before the title; nil draws none (date sections).
@@ -14,12 +14,12 @@ struct GroupSectionHeading: Equatable {
 
     enum Dot: Equatable {
         case filled(Color)
-        /// "No Group": an outline, since there is no Group colour to show.
+        /// "Ungrouped": an outline, since there is no Group colour to show.
         case hollow
     }
 
     /// The heading for `key`, looking the Group up among `projects`. A Group deleted a moment ago (the
-    /// list still holds its tasks until SwiftData catches up) reads as "No Group". `now` names the days.
+    /// list still holds its tasks until SwiftData catches up) reads as "Ungrouped". `now` names the days.
     static func make(for key: ListSectionKey<UUID>, count: Int, projects: [Project], now: Date = Date()) -> GroupSectionHeading {
         switch key {
         case .all:
@@ -31,7 +31,7 @@ struct GroupSectionHeading: Equatable {
             return GroupSectionHeading(title: project.name, dot: .filled(Color(hex: project.colorHex)),
                                        titleColor: HITColor.text, count: count)
         case .ungrouped:
-            return GroupSectionHeading(title: "No Group", dot: .hollow, titleColor: Theme.secondaryText, count: count)
+            return GroupSectionHeading(title: "Ungrouped", dot: .hollow, titleColor: Theme.secondaryText, count: count)
         case .due(let section):
             return GroupSectionHeading(title: title(of: section, now: now), dot: nil, titleColor: color(of: section),
                                        count: count)
@@ -59,14 +59,27 @@ struct GroupSectionHeading: Equatable {
         }
     }
 
+    /// "Work · 3": the title and the count after a middle dot as one run of text, so both are set in the
+    /// header's one font (George, 0.8.0: "Priority 4 1 in different fonts"); the count in grey. Just the
+    /// title when nothing is open.
+    var label: AttributedString {
+        var label = AttributedString(title)
+        guard count > 0 else { return label }
+        var suffix = AttributedString(" · \(count)")
+        suffix.swiftUI.foregroundColor = Theme.secondaryText
+        label.append(suffix)
+        return label
+    }
+
     /// VoiceOver: "Work, 3 tasks".
     var accessibilityLabel: String {
         "\(title), \(count) \(count == 1 ? "task" : "tasks")"
     }
 }
 
-/// A grouped section's header row, laid out like every task list's (`taskSectionHeader`): the dot, the
-/// title, the count after it in grey. Not a button (brief 61): a Group opens from Browse or the sidebar.
+/// A sorted section's header row, laid out like every task list's (`taskSectionHeader`): the dot, then the
+/// title and count as one `Text` (`GroupSectionHeading.label`). Not a button (brief 61): a Group opens from
+/// Browse or the sidebar.
 struct GroupSectionHeader: View {
     let heading: GroupSectionHeading
     /// Right under Today's "Overdue" or day title (one header, two lines): closer to it than to a row.
@@ -82,12 +95,7 @@ struct GroupSectionHeader: View {
             case nil:
                 EmptyView()
             }
-            Text(heading.title)
-            if heading.count > 0 {
-                Text("\(heading.count)")
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.secondaryText)
-            }
+            Text(heading.label)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .ignore)
