@@ -35,7 +35,7 @@ enum SharedTasksPermissions {
     }
 }
 
-/// A person as the Shared screens show them.
+/// A person as Sharing… and the rows show them.
 struct SharedPerson: Identifiable, Equatable {
     var id: String
     var name: String
@@ -104,6 +104,12 @@ enum SharedPeople {
         }
         for p in pending { add(memberID: p.userID, participant: p, isOwner: false) }
         return people
+    }
+
+    /// Everyone in the list but me (brief 64: the people a shared task is shared with, where its labels would be). A list
+    /// I own has me as its owner, so its owner is left out too, whether or not `me` is known yet.
+    static func others(in list: SharedList, me: SharedMemberID?) -> [SharedPerson] {
+        people(in: list, me: me).filter { !$0.isMe && !(list.isOwned && $0.isOwner) }
     }
 
     /// "you", "Sam", or the name kept with the completion.

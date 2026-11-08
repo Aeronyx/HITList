@@ -171,4 +171,7 @@ struct SharedTasksState: Codable, Equatable, Sendable {
     var engineStates: [String: Data] = [:]
     /// The profile last copied into my member records.
     var profile: SharedProfile?
+    /// The set of people this device last added a task to (brief 64): where a task added to Shared Tasks goes when
+    /// there are several. Optional, so a file written before it reads as none.
+    var lastUsedListID: UUID?
 }

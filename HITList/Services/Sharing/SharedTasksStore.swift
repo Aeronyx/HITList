@@ -70,6 +70,9 @@ final class SharedTasksStore {
     @ObservationIgnored var clock: () -> Date
     /// Told about every local change, in order; the sync layer queues them for CloudKit.
     @ObservationIgnored var onChanges: (([Change]) -> Void)?
+    /// Told whenever the state was saved, local changes and fetched ones alike: the badge and the morning summary
+    /// count shared tasks (brief 64).
+    @ObservationIgnored var onSave: (() -> Void)?
     @ObservationIgnored private var batchDepth = 0
     @ObservationIgnored private var batchedChanges: [Change] = []
     @ObservationIgnored private var batchDirty = false
@@ -89,11 +92,13 @@ final class SharedTasksStore {
 
     var lists: [SharedList] { state.lists }
     var me: SharedMemberID? { state.me }
+    /// The set of people a task was last added to here (brief 64).
+    var lastUsedListID: UUID? { state.lastUsedListID }
     var profile: SharedProfile? { state.profile }
 
     func list(_ id: UUID) -> SharedList? { state.lists.first { $0.id == id } }
 
-    /// Lists in the order the Shared screen shows them: mine and joined together, by name.
+    /// Lists by name, mine and joined together.
     var sortedLists: [SharedList] {
         state.lists.sorted {
             let order = $0.title.localizedCaseInsensitiveCompare($1.title)
@@ -186,6 +191,7 @@ final class SharedTasksStore {
                               priority: Stamped(Self.clampPriority(priority), at: t), due: Stamped(due.map(Self.normalized), at: t),
                               completion: Stamped(nil, at: t), createdAt: t, createdBy: me, createdByName: myName)
         state.lists[i].tasks.append(task)
+        state.lastUsedListID = listID
         commit([.saveRecord(ref(state.lists[i], SharedTasksSchema.taskRecordName(for: task.id)))])
         return task
     }
@@ -537,6 +543,7 @@ final class SharedTasksStore {
 
     private func save() {
         if batchDepth > 0 { batchDirty = true; return }
+        onSave?()
         guard case .file(let url) = persistence else { return }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

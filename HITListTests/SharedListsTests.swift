@@ -4,9 +4,9 @@ import SwiftData
 import HITListCore
 @testable import HITList
 
-/// Brief 62, item 3: shared tasks in your lists. A shared row opens its editor through the popouts (one task at a
-/// time, drawn by the list that opened it), its list's section header carries the two-person marker, and its row is
-/// the height of a row of yours. In-memory stores only.
+/// Briefs 62 and 64: shared tasks in your lists. A shared row opens its editor through the popouts (one task at a time,
+/// drawn by the popout host as yours is), Shared Tasks' section header is a Group's, and its row is the height of a
+/// row of yours. In-memory stores only.
 @MainActor
 final class SharedListsTests: XCTestCase {
     private let ref = SharedTaskRef(taskID: UUID(), listID: UUID())
@@ -38,45 +38,21 @@ final class SharedListsTests: XCTestCase {
         XCTAssertTrue(state.showsAddButton)
     }
 
-    func testOnlyTheListThatOpenedItDrawsTheEditor() {
-        let popouts = controller()
-        let today = UUID(), group = UUID()
-        popouts.openShared(ref, owner: today)
-        XCTAssertEqual(popouts.sharedTask(for: today), ref)
-        XCTAssertNil(popouts.sharedTask(for: group), "a list under it on the stack never presents it too")
-        popouts.closeSharedTask()
-        XCTAssertNil(popouts.sharedTask(for: today))
-        XCTAssertNil(popouts.state.sharedTask)
-    }
-
-    func testSelectingASharedRowOpensItsEditorAndKeepsTheRowSelected() {
-        let popouts = controller()
-        let owner = UUID()
-        let selection = popouts.listSelection(owner: owner)
-        selection.wrappedValue = .shared(ref)
-        XCTAssertEqual(popouts.sharedTask(for: owner), ref)
-        XCTAssertEqual(selection.wrappedValue, .shared(ref), "highlighted while open")
-        XCTAssertNil(popouts.listSelection(owner: UUID()).wrappedValue, "another list's rows stay plain")
-        selection.wrappedValue = nil
-        XCTAssertNil(popouts.state.sharedTask)
-    }
-
     func testSelectingATaskOfYoursClosesASharedEditorAndAnAccountSwitchClosesBoth() throws {
         let container = ModelContainerFactory.preview()
         let task = TaskItem(title: "Call Sam")
         container.mainContext.insert(task)
         let popouts = controller()
-        let owner = UUID()
-        popouts.openShared(ref, owner: owner)
-        popouts.listSelection(owner: owner).wrappedValue = .task(task)
-        XCTAssertNil(popouts.sharedTask(for: owner))
+        popouts.openShared(ref)
+        popouts.listSelection.wrappedValue = .task(task)
+        XCTAssertNil(popouts.state.sharedTask)
         XCTAssertEqual(popouts.task?.id, task.id)
-        XCTAssertEqual(popouts.listSelection(owner: owner).wrappedValue, .task(task))
+        XCTAssertEqual(popouts.listSelection.wrappedValue, .task(task))
 
-        popouts.openShared(ref, owner: owner)
+        popouts.openShared(ref)
         XCTAssertNil(popouts.task, "a shared task replaces the open task of yours")
         popouts.accountDidSwitch()
-        XCTAssertNil(popouts.sharedTask(for: owner), "another Apple account sees nothing the previous one opened")
+        XCTAssertNil(popouts.state.sharedTask, "another Apple account sees nothing the previous one opened")
     }
 
     func testDeletingASharedTaskAsksFirstWhenTheSettingSaysSo() {
@@ -102,15 +78,14 @@ final class SharedListsTests: XCTestCase {
         return store
     }
 
-    func testASharedListsSectionIsHeadedByItsNameWithThePeopleMarker() throws {
-        let trip = try list("Trip", in: sharedStore())
-        let heading = RowSectionHeading.make(for: .group(.shared(trip.id)), count: 2, projects: [], sharedLists: [trip])
-        XCTAssertTrue(heading.isShared)
-        XCTAssertEqual(heading.heading.title, "Trip")
-        XCTAssertNil(heading.heading.dot, "the marker stands where a Group's dot is")
-        XCTAssertEqual(heading.sharedColor, Color(hex: "#F2A65A"))
-        XCTAssertEqual(String(heading.heading.label.characters), "Trip · 2", "name and count as one run, one font")
-        XCTAssertEqual(heading.accessibilityLabel, "Trip, shared list, 2 tasks")
+    func testSharedTasksSectionIsHeadedLikeAnyGroupWithItsDot() {
+        // Brief 64: one forced Group, its dot where any Group's sits, never the two-person marker.
+        let heading = GroupSectionHeading.make(row: .group(.sharedTasks), count: 2, projects: [])
+        XCTAssertEqual(heading.title, "Shared Tasks")
+        XCTAssertEqual(heading.dot, .filled(Color(hex: SharedTasksGroup.colorHex)))
+        XCTAssertEqual(heading.titleColor, HITColor.text)
+        XCTAssertEqual(String(heading.label.characters), "Shared Tasks · 2", "name and count as one run, one font")
+        XCTAssertEqual(heading.accessibilityLabel, "Shared Tasks, 2 tasks")
     }
 
     func testGroupUngroupedAndDaySectionsAreHeadedAsBefore() throws {
@@ -121,23 +96,16 @@ final class SharedListsTests: XCTestCase {
         let now = Date()
         for (key, plain) in [(ListSectionKey<ListRowGroup>.group(.group(work.id)), ListSectionKey<UUID>.group(work.id)),
                              (.ungrouped, .ungrouped), (.due(.tomorrow), .due(.tomorrow)), (.all, .all)] {
-            let heading = RowSectionHeading.make(for: key, count: 3, projects: projects, sharedLists: [], now: now)
-            XCTAssertFalse(heading.isShared)
-            XCTAssertEqual(heading.heading, GroupSectionHeading.make(for: plain, count: 3, projects: projects, now: now))
+            let heading = GroupSectionHeading.make(row: key, count: 3, projects: projects, now: now)
+            XCTAssertEqual(heading, GroupSectionHeading.make(for: plain, count: 3, projects: projects, now: now))
         }
-    }
-
-    func testAListThatJustWentKeepsAnUntitledSection() {
-        let heading = RowSectionHeading.make(for: .group(.shared(UUID())), count: 1, projects: [], sharedLists: [])
-        XCTAssertEqual(heading.heading.title, SharedRow.untitled)
-        XCTAssertTrue(heading.isShared)
     }
 
     // MARK: - The row
 
     #if os(macOS)
-    /// A shared row is drawn from `TaskRow`'s parts: the same height for the same title and second line, so the two
-    /// kinds line up in one list.
+    /// A shared row is drawn from `TaskRow`'s parts (brief 64): the same height as a row of yours with the same fields,
+    /// the people's pictures in the label slot's height, "Shared Tasks" and its dot where your Group sits.
     func testASharedRowIsTheHeightOfARowOfYours() throws {
         let container = ModelContainerFactory.preview()
         let project = Project(name: "Trip")
@@ -147,24 +115,40 @@ final class SharedListsTests: XCTestCase {
         let mine = TaskItem(title: "Book the cabin", dueDate: due)
         mine.project = project
         container.mainContext.insert(mine)
+        let label = TaskLabel(name: "errands")
+        container.mainContext.insert(label)
+        mine.labels = [label]
         try container.mainContext.save()
 
         let store = sharedStore()
         let trip = try list("Trip", in: store)
         let task = try store.addTask(to: trip.id, title: "Book the cabin", due: SharedDue(date: due, hasTime: false))
-        let shared = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)))
+        let sam = SharedPerson(id: "sam", name: "Sam Rivera", avatar: nil, isOwner: true, isMe: false, isPending: false, memberID: "sam")
+        let alex = SharedPerson(id: "alex", name: "Alex Kim", avatar: nil, isOwner: false, isMe: false, isPending: false, memberID: "alex")
+        let shared = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)), people: [sam, alex])
 
         func height<V: View>(_ view: V) -> CGFloat {
             NSHostingView(rootView: view.frame(width: 420).modelContainer(container)).fittingSize.height
         }
         let own = height(TaskRow(task: mine, now: now, onToggleCompletion: {}))
         let theirs = height(SharedTaskListRow(row: shared, now: now, onToggleCompletion: {}))
-        XCTAssertEqual(theirs, own, accuracy: 0.5)
-        // An empty second line (under its own list's header, the day in the day's header) keeps the height an empty
+        XCTAssertEqual(theirs, own, accuracy: 0.5, "the pictures sit in the label slot's height")
+        // An empty second line (under its own Group's header, the day in the day's header) keeps the height an empty
         // line of yours has.
+        mine.labels = []
         let emptyOwn = height(TaskRow(task: mine, now: now, showProject: false, hidesDay: true, onToggleCompletion: {}))
-        let emptyShared = height(SharedTaskListRow(row: shared, now: now, showList: false, hidesDay: true, onToggleCompletion: {}))
+        let alone = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)), people: [])
+        let emptyShared = height(SharedTaskListRow(row: alone, now: now, showGroup: false, hidesDay: true, onToggleCompletion: {}))
         XCTAssertEqual(emptyShared, emptyOwn, accuracy: 0.5)
+    }
+
+    func testTheAvatarsFillTheMetaLinesHeightAndNoMore() throws {
+        let people = (0..<5).map { SharedPerson(id: "\($0)", name: "P\($0)", avatar: nil, isOwner: false, isMe: false,
+                                                isPending: false, memberID: "\($0)") }
+        let line = NSHostingView(rootView: Text(" ").font(HITType.taskMeta)).fittingSize.height
+        let stack = NSHostingView(rootView: SharedRowPeople(people: people)).fittingSize
+        XCTAssertEqual(stack.height, line, accuracy: 0.5)
+        XCTAssertGreaterThan(stack.width, stack.height * 2, "three faces overlapped and a count")
     }
     #endif
 }

@@ -2,7 +2,8 @@ import Foundation
 import HITListCore
 
 /// The morning summary and the app icon badge: both count the Today screen's tasks (overdue + due
-/// today, `TaskOrdering.todaySection`), timed or not.
+/// today, `TaskOrdering.todaySection`), timed or not, as Today shows them (brief 64): shared tasks among yours, and a
+/// red Flipboard switch as one of today's, never overdue.
 extension NotificationPlan {
     static let morningSummaryIdentifier = "HITList.morningSummary"
     static let morningSummaryTitle = "Today in HITList"
@@ -21,7 +22,7 @@ extension NotificationPlan {
         var overdue = 0
         var today: [Item] = []
         for item in tasks where !item.isCompleted {
-            switch TaskOrdering.todaySection(for: item.dueDate, now: fire, calendar: calendar) {
+            switch item.todaySection(now: fire, calendar: calendar) {
             case .overdue?: overdue += 1
             case .today?: today.append(item)
             case nil: break
@@ -47,8 +48,31 @@ extension NotificationPlan {
                        fingerprint: fingerprint([morningSummaryTitle, body, String(Int(fire.timeIntervalSince1970)), zone]))
     }
 
-    /// The app icon badge: open tasks that are overdue or due today.
+    /// The app icon badge: open tasks that are overdue or due today, a red switch once.
     static func badgeCount(tasks: [Item], now: Date, calendar: Calendar = .current) -> Int {
-        tasks.filter { !$0.isCompleted && TaskOrdering.todaySection(for: $0.dueDate, now: now, calendar: calendar) != nil }.count
+        tasks.filter { !$0.isCompleted && $0.todaySection(now: now, calendar: calendar) != nil }.count
+    }
+
+    /// What the badge and the summary count: your dated tasks and your switches (dated or not), and the open shared
+    /// tasks with a date (brief 64).
+    static func todayItems(own: [Item], shared: [SharedRow]) -> [Item] {
+        own.filter { $0.dueDate != nil || $0.isSwitch }
+            + shared.filter { !$0.filterIsCompleted && $0.filterDueDate != nil }.map(Item.init)
+    }
+}
+
+extension NotificationPlan.Item {
+    /// A shared task as the badge and the morning summary count it (brief 64). It never reminds: no offset, no moment.
+    init(_ row: SharedRow) {
+        self.init(id: row.id, title: row.filterTitle, projectName: SharedTasksGroup.name,
+                  priority: Priority(clamping: row.filterPriority), dueDate: row.filterDueDate, hasDueTime: row.filterHasDueTime,
+                  isCompleted: row.filterIsCompleted, updatedAt: row.task.createdAt)
+    }
+
+    /// The Today section it is listed in at `now`: a red switch is today's, a green one in neither (`FlipboardSwitch`),
+    /// anything else by its date.
+    func todaySection(now: Date, calendar: Calendar = .current) -> TaskOrdering.TodaySection? {
+        if isSwitch { return FlipboardSwitch.side(due: dueDate, now: now, calendar: calendar) == .red ? .today : nil }
+        return TaskOrdering.todaySection(for: dueDate, now: now, calendar: calendar)
     }
 }

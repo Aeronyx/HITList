@@ -149,73 +149,90 @@ final class HITListUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForNonExistence(timeout: 5), "the editor closes")
     }
 
-    /// Brief 62: shared tasks are rows of your lists, not a screen of their own. With the sample shared lists
-    /// (`-seedSharedTasksSample`: in memory, no CloudKit), "Oat milk" (Groceries, due today, P2) is a row in Today
-    /// with its list's name and the people marker; completing it from the row shows the Undo toast and Undo brings it
-    /// back; tapping it opens its editor; the Inbox sorted by Group gives Groceries a section of its own after the
-    /// Groups and before "Ungrouped"; "Lemons" (tomorrow) is on Upcoming.
-    func testSharedTasksAreRowsOfYourLists() throws {
+    /// Briefs 62 and 64: shared tasks are tasks of yours in one forced Group, Shared Tasks. With the sample shared lists
+    /// (`-seedSharedTasksSample`: in memory, no CloudKit), "Oat milk" (Sam and Alex's, due today, P2) is a row in Today
+    /// with their faces where labels go and "Shared Tasks" where a Group sits; completing it shows Undo and Undo brings
+    /// it back; it opens in the editor you know. The Inbox sorted by Group gives Shared Tasks one section after your
+    /// Groups. Browse lists it last under Groups; its screen has a section per set of people and Sharing… in its view
+    /// options. `#Shared` in quick add puts a task there.
+    func testSharedTasksAreOneGroup() throws {
         app.launchArguments += ["-seedDemoData", "YES", "-seedSharedTasksSample", "YES"]
         app.launch()
         XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 15))
         tab("today")
         let oatMilk = app.cells.containing(NSPredicate(format: "label == %@", "Oat milk")).firstMatch
         XCTAssertTrue(oatMilk.waitForExistence(timeout: 10), "the shared task in Today")
-        XCTAssertTrue(oatMilk.descendants(matching: .any)["Shared list Groceries"].exists, "its list's name with the marker")
+        XCTAssertTrue(oatMilk.staticTexts["Shared Tasks"].exists, "Shared Tasks where a Group sits")
+        XCTAssertTrue(oatMilk.descendants(matching: .any)["Shared with Sam and Alex"].exists, "their faces where labels go")
         snapshot("1 Today with a shared task")
 
         oatMilk.buttons["Complete task"].tap()
         let undo = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Undo")).firstMatch
         XCTAssertTrue(undo.waitForExistence(timeout: 5), "the Undo toast")
-        snapshot("2 Completed, with Undo")
         XCTAssertTrue(oatMilk.waitForNonExistence(timeout: 5), "the row leaves Today")
         undo.tap()
         XCTAssertTrue(oatMilk.waitForExistence(timeout: 5), "Undo brings it back")
 
         oatMilk.staticTexts["Oat milk"].firstMatch.tap()
-        let delete = app.buttons["Delete Task"].firstMatch
-        XCTAssertTrue(delete.waitForExistence(timeout: 5), "the shared task's editor")
-        snapshot("3 Its editor")
-        app.buttons["Cancel"].firstMatch.tap()
-        XCTAssertTrue(delete.waitForNonExistence(timeout: 5), "Cancel closes it")
+        let editor = app.descendants(matching: .any)["sharedEditor"].firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 5), "the shared task's editor")
+        XCTAssertTrue(app.buttons["Group: Shared Tasks"].exists || element(beginningWith: "Group: Shared Tasks").exists,
+                      "its Group row reads Shared Tasks")
+        snapshot("2 Its editor")
+        XCTAssertTrue(app.descendants(matching: .any)["editorPeopleRow"].exists, "the people row")
+        XCTAssertTrue(app.descendants(matching: .any)["editorConfirm"].firstMatch.waitForExistence(timeout: 3), "Confirm, as yours")
+        app.buttons["Close"].firstMatch.tap()
+        XCTAssertTrue(editor.waitForNonExistence(timeout: 5), "× closes it")
 
         tab("inbox")
-        XCTAssertTrue(row("Shared list Groceries").waitForExistence(timeout: 5), "a dated shared task is in the Inbox")
         sort(by: "Group")
         app.swipeUp()
-        let groceries = element(beginningWith: "Groceries, shared list")
-        XCTAssertTrue(groceries.waitForExistence(timeout: 5), "the shared list's section")
+        let shared = element(beginningWith: "Shared Tasks, ")
+        XCTAssertTrue(shared.waitForExistence(timeout: 5), "Shared Tasks' one section")
         let ungrouped = element(beginningWith: "Ungrouped,")
-        if ungrouped.exists { XCTAssertLessThan(groceries.frame.minY, ungrouped.frame.minY, "before Ungrouped") }
+        if ungrouped.exists { XCTAssertLessThan(shared.frame.minY, ungrouped.frame.minY, "before Ungrouped") }
         let health = element(beginningWith: "Health,")
-        if health.exists { XCTAssertLessThan(health.frame.minY, groceries.frame.minY, "after the Groups") }
-        snapshot("4 Inbox by Group")
+        if health.exists { XCTAssertLessThan(health.frame.minY, shared.frame.minY, "after your Groups") }
+        snapshot("3 Inbox by Group")
         app.swipeDown()
         sort(by: "Priority")
 
-        tab("upcoming")
-        XCTAssertTrue(row("Lemons").waitForExistence(timeout: 5), "tomorrow's shared task on Upcoming")
-        snapshot("5 Upcoming")
+        // Browse: Shared Tasks last under Groups; no Shared Tasks section and no shared lists of their own.
+        app.buttons["browseButton"].firstMatch.tap()
+        let group = app.buttons["browse-shared-tasks"].firstMatch
+        XCTAssertTrue(group.waitForExistence(timeout: 5), "Shared Tasks under Groups")
+        let last = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Health")).firstMatch
+        if last.exists { XCTAssertLessThan(last.frame.minY, group.frame.minY, "after the last Group of yours") }
+        XCTAssertFalse(app.buttons["browse-shared-list"].exists, "no shared lists of their own")
+        snapshot("4 Browse")
+        group.tap()
+        XCTAssertTrue(app.navigationBars["Shared Tasks"].waitForExistence(timeout: 5), "the Group's screen, its name once")
+        XCTAssertTrue(element(beginningWith: "Shared with Sam and Alex").waitForExistence(timeout: 5), "Sam and Alex's set")
+        XCTAssertTrue(element(beginningWith: "Only you").exists, "the set nobody joined yet")
+        snapshot("5 The Shared Tasks Group")
 
-        // Browse: the Shared Tasks row stays for the lists themselves, each list under it opens its own screen.
-        let browse = app.buttons["browseButton"].firstMatch
-        browse.tap()
-        let manage = app.buttons["browse-shared-tasks"].firstMatch
-        XCTAssertTrue(manage.waitForExistence(timeout: 5), "Browse's Shared Tasks row")
-        app.swipeUp()
-        let lists = app.buttons.matching(identifier: "browse-shared-list")
-        XCTAssertTrue(lists.firstMatch.waitForExistence(timeout: 5), "each shared list under it")
-        XCTAssertEqual(lists.count, 2, "Groceries and Weekend trip")
-        snapshot("6 Browse")
-        manage.tap()
-        XCTAssertTrue(app.navigationBars["Shared Tasks"].waitForExistence(timeout: 5), "the Shared Tasks screen, its name once")
-        snapshot("7 Shared Tasks")
-        app.navigationBars.buttons.firstMatch.tap()
-        let groceriesRow = lists.matching(NSPredicate(format: "label BEGINSWITH %@", "Groceries")).firstMatch
-        XCTAssertTrue(groceriesRow.waitForExistence(timeout: 5))
-        groceriesRow.tap()
-        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 5), "the list's own screen")
-        snapshot("8 Groceries")
+        app.buttons["viewOptions"].firstMatch.tap()
+        let sharing = app.buttons["sharingButton"].firstMatch
+        XCTAssertTrue(sharing.waitForExistence(timeout: 5), "Sharing… in the view options")
+        sharing.tap()
+        XCTAssertTrue(app.staticTexts["Sharing"].waitForExistence(timeout: 5), "the Sharing sheet")
+        XCTAssertTrue(app.descendants(matching: .any)["sharedTasksSwitch"].exists, "the switch")
+        snapshot("6 Sharing")
+        app.buttons["Done"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Sharing"].waitForNonExistence(timeout: 5))
+
+        // Quick add's #Shared, from the Group's own "+": the task lands here.
+        app.buttons["quickAddButton"].firstMatch.tap()
+        let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.typeText("Bring snacks tomorrow #Shared ")
+        XCTAssertTrue(app.buttons["Group: Shared Tasks"].firstMatch.waitForExistence(timeout: 5), "the chip names Shared Tasks")
+        snapshot("7 Quick add #Shared")
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(row("Bring snacks").waitForExistence(timeout: 5), "in Shared Tasks")
+        snapshot("8 Added")
     }
 
     /// The island's motion (brief 58): every tab change leaves exactly one tab selected, and after the screens

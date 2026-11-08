@@ -15,6 +15,10 @@ extension SidebarItem {
     /// task list's exhaustive switches (TaskListView) stay as they are; `ListScreen` routes it before
     /// `TaskListView` ever sees it. No saved filter can have this id.
     static let settings = SidebarItem.filter(SeedIdentity.uuid(for: "SidebarItem/settings"))
+
+    /// The Shared Tasks Group (brief 64): a Group to every screen, so a reserved `.project` id rather than a case.
+    /// `TaskListView` shows it as a Group's screen of shared tasks; no Group of yours has this id.
+    static let sharedTasks = SidebarItem.project(SharedTasksGroup.id)
 }
 
 /// Mac and iPad: sidebar + list, Todoist style, no detail column. iPhone (compact width): the four-tab
