@@ -31,6 +31,8 @@ struct FlipboardView: View {
     @State private var discardOfferedAt = Date.distantPast
     /// Where the inline card is, in the board's scroll view: a click inside it is never a click away.
     @State private var cardFrame = CGRect.null
+    /// The switch just added or edited, which settles into its place in the grid (`SwitchLanding`).
+    @State private var landing: SwitchLanding.Mark?
     private static let boardSpace = "flipboard"
     /// The switch just deleted, while its "Deleted · Undo" toast shows.
     @State private var deleted: Flipboard.DeletedSwitch?
@@ -117,6 +119,11 @@ struct FlipboardView: View {
                         }
                     }, including: inlineCard == nil ? .subviews : .all)
                     .coordinateSpace(.named(Self.boardSpace))
+                    // iPhone: the new switch may sort above the fold; bring it into view as it settles.
+                    .onChange(of: landing) { _, mark in
+                        guard cardFloats, let mark else { return }
+                        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: .center) }
+                    }
                     .onChange(of: inlineCard?.id) { _, id in
                         guard let id else { return }
                         Task { @MainActor in
@@ -159,8 +166,10 @@ struct FlipboardView: View {
                          onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
         #if os(iOS)
         .fullScreenCover(item: $floatingCard) { request in
-            FloatingSwitchCard(request: request) { _ in
+            FloatingSwitchCard(request: request) { saved in
                 withoutAnimation { floatingCard = nil }
+                // The board is in view again: the switch settles into its place.
+                if let saved { land(saved) }
             }
             .presentationBackground(.clear)
         }
@@ -176,6 +185,7 @@ struct FlipboardView: View {
             FlipSwitchTile(task: task, now: now, onEdit: { openCard(.edit(task)) },
                            onOpen: { open(task) }, onDelete: { delete(task) })
                 .hitTip(first ? HITTip(.flipboard) : nil)
+                .modifier(SwitchLanding(mark: landing?.id == task.id ? landing : nil))
                 .allowsHitTesting(inlineCard == nil)
                 .id(task.id)
         }
@@ -187,7 +197,10 @@ struct FlipboardView: View {
     private func inlineCardView(_ request: SwitchCardRequest) -> some View {
         SwitchCard(editing: request.task, style: .inline, isConfirmingDiscard: confirmingDiscard,
                    onClose: requestClose,
-                   onSaved: { _ in if request != .add { closeCard() } },
+                   onSaved: { saved in
+                       if request != .add { closeCard() }
+                       land(saved)
+                   },
                    onDraftChange: { cardContent.hasContent = $0 },
                    onDiscard: closeCard,
                    onKeepEditing: keepEditing)
@@ -256,6 +269,18 @@ struct FlipboardView: View {
             inlineCard = nil
             confirmingDiscard = false
             cardContent.hasContent = false
+        }
+    }
+
+    /// A switch was added or saved: its tile settles into the grid (a new one lands as the board's own
+    /// animation inserts it).
+    private func land(_ task: TaskItem) {
+        let mark = SwitchLanding.Mark(id: task.id, generation: (landing?.generation ?? 0) + 1)
+        landing = mark
+        // Landed: the mark goes, so the tile doesn't settle again when the board comes back on screen.
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.5))
+            if landing == mark { landing = nil }
         }
     }
 
