@@ -161,6 +161,9 @@ struct FlipboardView: View {
         .onAppear {
             now = Date()
             FlipSound.prepare()
+            #if DEBUG
+            FlipboardDebug.seedStatesIfRequested(in: context)
+            #endif
         }
         .completionToast(deleted.map { "Deleted ‘\($0.title)’" }, onUndo: undoDelete,
                          onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
@@ -207,6 +210,7 @@ struct FlipboardView: View {
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.boardSpace)) } action: { cardFrame = $0 }
             .id(request.id)
             .flipboardGridSpan(cardSpan)
+            .flipboardGridKeepsOwnHeight()
             .transition(.asymmetric(insertion: .scale(scale: 0.96).combined(with: .opacity)
                                         .animation(HITMotion.enter(reduceMotion: reduceMotion)),
                                     removal: .opacity.animation(HITMotion.exit(reduceMotion: reduceMotion))))
@@ -356,27 +360,25 @@ struct SwitchPreviewRocker: View {
 
     static let size = CGSize(width: 30, height: 44)
 
-    /// A lamp over the rocker (glass; its bezel adds a little).
-    private static let lampSize: CGFloat = 5
+    /// A light over the rocker: the tile's pill, small.
+    private static let pillSize = CGSize(width: 6, height: 3)
 
     var body: some View {
         RockerSwitch(tilt: isGreen ? 1 : -1, size: Self.size)
             // Over the rocker, outside the layout: the card's controls never move as the count changes. One
-            // lamp per flip, each popping in as the count goes up (the tile's charger lamps, small).
+            // light per flip, each popping in as the count goes up (the tile's charger lights, small).
             .overlay(alignment: .topTrailing) {
                 if flips > 1 {
                     HStack(spacing: 2) {
                         ForEach(0..<flips, id: \.self) { _ in
-                            FlipLamp(green: isGreen ? 0.9 : 0, greenBloom: isGreen ? 0.35 : 0, ember: isGreen ? 0 : 0.16,
-                                     size: Self.lampSize)
+                            FlipPill(tint: isGreen ? FlipLightStyle.green : nil, level: FlipLightStyle.countedLevel,
+                                     ember: isGreen ? 0 : FlipLightStyle.ember)
+                                .frame(width: Self.pillSize.width, height: Self.pillSize.height)
                                 .transition(.scale(scale: 0.2).combined(with: .opacity))
                         }
                     }
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(FlipboardPalette.bezelTop))
                     .fixedSize()
-                    .offset(y: -(Self.lampSize * 1.4 + 8))
+                    .offset(y: -(Self.pillSize.height + 6))
                     .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
                 }
             }
@@ -432,7 +434,8 @@ struct AddSwitchTile: View {
                 }
                 .padding(.vertical, 22)
             }
-            .frame(maxWidth: .infinity, minHeight: 150)
+            // As tall as the switches beside it (`FlipboardLayout.frames` gives every tile one height).
+            .frame(maxWidth: .infinity, minHeight: 150, maxHeight: .infinity)
             .contentShape(plate)
         }
         .buttonStyle(.plain)
