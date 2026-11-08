@@ -53,28 +53,25 @@ final class GroupsTests: XCTestCase {
 
     // MARK: - Headings
 
-    func testAGroupHeadingCarriesItsDotNameCountAndOpensTheGroup() {
+    func testAGroupHeadingCarriesItsDotNameAndCount() {
         let work = project("Work", color: "#6C9EFF", order: 0)
         let heading = GroupSectionHeading.make(for: .group(work.id), count: 3, projects: [work])
         XCTAssertEqual(heading.title, "Work")
         XCTAssertEqual(heading.dot, .filled(Color(hex: "#6C9EFF")))
         XCTAssertEqual(heading.count, 3)
-        XCTAssertEqual(heading.opens, .project(work.id))
         XCTAssertEqual(heading.accessibilityLabel, "Work, 3 tasks")
     }
 
-    func testNoGroupIsHollowAndOpensNothing() {
+    func testNoGroupIsHollow() {
         let heading = GroupSectionHeading.make(for: .noGroup, count: 1, projects: [])
         XCTAssertEqual(heading.title, "No Group")
         XCTAssertEqual(heading.dot, .hollow)
-        XCTAssertNil(heading.opens)
         XCTAssertEqual(heading.accessibilityLabel, "No Group, 1 task")
     }
 
     func testAGroupDeletedAMomentAgoReadsAsNoGroup() {
         let heading = GroupSectionHeading.make(for: .group(UUID()), count: 2, projects: [])
         XCTAssertEqual(heading.title, "No Group")
-        XCTAssertNil(heading.opens)
     }
 
     func testPriorityHeadingsKeepTheirColoursAndNoDot() {
@@ -83,24 +80,6 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(p1.titleColor, Priority.p1.color)
         XCTAssertNil(p1.dot)
         XCTAssertEqual(GroupSectionHeading.make(for: .priority(4), count: 2, projects: []).titleColor, Theme.secondaryText)
-    }
-
-    // MARK: - Title menu (iPhone)
-
-    func testTitleMenuCountsOpenTopLevelTasksPerGroupAndLabel() throws {
-        let work = project("Work", order: 0)
-        let waiting = TaskLabel(name: "waiting")
-        context.insert(waiting)
-        let a = task("a", in: work), b = task("b", in: work)
-        a.labels = [waiting]
-        _ = b
-        try context.save()
-        let open = try context.fetch(FetchDescriptor<TaskItem>()).filter { !$0.isCompleted }
-        let counts = GroupsTitleMenuCounts(open)
-        XCTAssertEqual(counts.byProject[work.id], 2)
-        XCTAssertEqual(counts.byLabel[waiting.id], 1)
-        XCTAssertEqual(GroupsTitleMenuCounts.title("Work", count: 2), "Work · 2")
-        XCTAssertEqual(GroupsTitleMenuCounts.title("Errands", count: 0), "Errands")
     }
 
     // MARK: - Group or label

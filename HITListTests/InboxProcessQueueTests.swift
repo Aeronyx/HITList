@@ -99,8 +99,6 @@ final class InboxProcessQueueTests: XCTestCase {
     }
 
     func testTexts() {
-        XCTAssertEqual(InboxText.header(count: 7), "Inbox · 7")
-        XCTAssertEqual(InboxText.header(count: 0), "Inbox · 0")
         XCTAssertEqual(InboxText.progress(3, of: 7), "3 of 7")
         XCTAssertEqual(InboxText.reviewMenuItem(count: 3), "Review 3 unsorted…")
         XCTAssertEqual(InboxText.reviewMenuItem(count: 1), "Review 1 unsorted…")
