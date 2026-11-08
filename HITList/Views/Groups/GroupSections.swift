@@ -11,8 +11,6 @@ struct GroupSectionHeading: Equatable {
     /// The title's colour: the day/priority colours as before, the text colour for a Group.
     var titleColor: Color
     var count: Int
-    /// The list the header opens on iPhone (a Group's own screen); nil for "No Group" and priorities.
-    var opens: SidebarItem?
 
     enum Dot: Equatable {
         case filled(Color)
@@ -31,7 +29,7 @@ struct GroupSectionHeading: Equatable {
                 return make(for: .noGroup, count: count, projects: projects)
             }
             return GroupSectionHeading(title: project.name, dot: .filled(Color(hex: project.colorHex)),
-                                       titleColor: HITColor.text, count: count, opens: .project(project.id))
+                                       titleColor: HITColor.text, count: count)
         case .noGroup:
             return GroupSectionHeading(title: "No Group", dot: .hollow, titleColor: Theme.secondaryText, count: count)
         case .priority(let level):
@@ -48,30 +46,13 @@ struct GroupSectionHeading: Equatable {
 }
 
 /// A grouped section's header row, laid out like every task list's (`taskSectionHeader`): the dot, the
-/// title, the count after it in grey. On iPhone a Group's header opens that Group on the current tab's
-/// stack, with a chevron to say so (brief 57).
+/// title, the count after it in grey. Not a button (brief 61): a Group opens from Browse or the sidebar.
 struct GroupSectionHeader: View {
     let heading: GroupSectionHeading
-    /// Whether a Group's header pushes its screen (iPhone's tab stacks, where a `SidebarItem` value opens it).
-    var pushes = false
     /// Right under Today's "Overdue" or day title (one header, two lines): closer to it than to a row.
     var belowBanner = false
 
     var body: some View {
-        if pushes, let item = heading.opens {
-            NavigationLink(value: item) { content(chevron: true) }
-                .buttonStyle(.plain)
-                .taskSectionHeader(color: heading.titleColor)
-                .padding(.top, belowBanner ? -ListMetrics.headerTop / 2 : 0)
-                .accessibilityHint("Opens the Group")
-        } else {
-            content(chevron: false)
-                .taskSectionHeader(color: heading.titleColor)
-                .padding(.top, belowBanner ? -ListMetrics.headerTop / 2 : 0)
-        }
-    }
-
-    private func content(chevron: Bool) -> some View {
         HStack(spacing: HITSpacing.s) {
             switch heading.dot {
             case .filled(let color)?:
@@ -87,17 +68,13 @@ struct GroupSectionHeader: View {
                     .monospacedDigit()
                     .foregroundStyle(Theme.secondaryText)
             }
-            if chevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.secondaryText.opacity(0.7))
-            }
             Spacer(minLength: 0)
         }
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(heading.accessibilityLabel)
         .accessibilityAddTraits(.isHeader)
+        .taskSectionHeader(color: heading.titleColor)
+        .padding(.top, belowBanner ? -ListMetrics.headerTop / 2 : 0)
     }
 }
 
@@ -115,36 +92,5 @@ struct GroupByPicker: View {
         }
         .pickerStyle(.menu)
         .accessibilityIdentifier("groupByPicker")
-    }
-}
-
-/// A Group's own screen, at the top (brief 57): its colour dot, name and open count, "● Work · 3", in the
-/// Inbox header's type and place, so a Group reads as a place of its own. On iPhone the navigation title
-/// goes inline above it, as the Inbox's does.
-struct GroupScreenHeader: View {
-    let name: String
-    let colorHex: String
-    let openCount: Int
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        HStack(spacing: HITSpacing.s) {
-            Circle()
-                .fill(Color(hex: colorHex))
-                .frame(width: 12, height: 12)
-            Text(openCount > 0 ? "\(name) · \(openCount)" : name)
-                .font(HITType.title2Bold)
-                .lineLimit(1)
-                .contentTransition(.numericText(value: Double(openCount)))
-                .animation(reduceMotion ? nil : .snappy, value: openCount)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isHeader)
-        .accessibilityLabel("\(name), \(openCount) \(openCount == 1 ? "task" : "tasks")")
-        .accessibilityIdentifier("groupScreenHeader")
     }
 }

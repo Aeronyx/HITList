@@ -4,8 +4,8 @@ import HITListCore
 
 /// The inbox: every dated task (in any Group) plus undated tasks with no Group, by priority then due date
 /// (`TaskOrdering`) in sections by priority, by Group or none (view options → Group by, brief 57;
-/// `GroupedOrdering`), under an "Inbox · 7" header, with an "Inbox zero" state when it's
-/// empty and a Process button that steps through it one task at a time. Undated tasks in a Group are
+/// `GroupedOrdering`), under the large title "Inbox" and nothing else (brief 61: the name once), with an
+/// "Inbox zero" state when it's empty and Review Inbox in the view options. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
@@ -32,14 +32,6 @@ struct InboxView: View {
     private let isCompact = false
     #endif
 
-    #if os(iOS)
-    @Environment(\.mobileChrome) private var mobileChrome
-    /// iPhone: a Group's section header opens the Group on this tab's stack (brief 57).
-    private var pushesGroups: Bool { mobileChrome != nil }
-    #else
-    private let pushesGroups = false
-    #endif
-
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     /// A row's task and the due date it is listed under: its own, or while its completion animates,
@@ -62,9 +54,6 @@ struct InboxView: View {
         TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
     }
 
-    /// Open inbox tasks, for the header.
-    private var openCount: Int { allTasks.filter(\.isInInbox).count }
-
     /// The matched tasks plus the recently completed ones, by priority then due date.
     private var rows: [Placed] {
         let matched = matchedTasks()
@@ -84,7 +73,6 @@ struct InboxView: View {
     var body: some View {
         let rows = rows
         VStack(spacing: 0) {
-            header
             SwiftUI.Group {
                 if rows.isEmpty {
                     InboxZeroView()
@@ -102,9 +90,9 @@ struct InboxView: View {
         .background(Theme.background)
         .navigationTitle("Inbox")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        // The title opens a Group, a label or Browse (brief 57).
-        .groupsTitleMenu()
+        // The name once, as the system large title (brief 61); the count is on Browse's Inbox row and the
+        // Mac sidebar.
+        .navigationBarTitleDisplayMode(.large)
         #endif
         // Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
         .screenChrome {
@@ -123,19 +111,6 @@ struct InboxView: View {
         .onAppear { CompletionFeedback.shared.prepare() }
     }
 
-    private var header: some View {
-        Text(InboxText.header(count: openCount))
-            .font(HITType.title2Bold)
-            .contentTransition(.numericText(value: Double(openCount)))
-            .animation(reduceMotion ? nil : .snappy, value: openCount)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 6)
-            .accessibilityAddTraits(.isHeader)
-            .accessibilityLabel("Inbox, \(openCount) \(openCount == 1 ? "task" : "tasks")")
-    }
-
     private func list(_ rows: [Placed]) -> some View {
         List(selection: $selectedTask) {
             ForEach(sections(rows), id: \.key) { section in
@@ -143,8 +118,7 @@ struct InboxView: View {
                     ForEach(section.tasks, id: \.task.id) { row($0.task) }
                 } header: {
                     if section.key != .all {
-                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects),
-                                           pushes: pushesGroups)
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects))
                     }
                 }
             }
