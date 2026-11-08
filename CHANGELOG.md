@@ -4,6 +4,28 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.8.1
+
+0.8.0's Inbox shipped with a small title that was a button, two filter-looking controls, its name twice and two
+fonts in one header. This build puts that right and does what 0.8.0 should have: the Inbox and Today cleaned up,
+shared tasks in your lists, and the iPhone Duo's type and island.
+
+- The Inbox's top is clean again: the large title "Inbox", one view-options button beside the magnifying glass, and
+  no "Inbox · N" header. iPhone titles are large everywhere and are not menus; a Group's screen shows its name once.
+- Sort by, in the Inbox: Priority (the default: the flat list, priority then date, as it always was), Group
+  ("Ungrouped" last) or Date. Today sorts by Priority or Group. Section headers read "Work · 3" in one font, and a day
+  header no longer repeats the day on its rows.
+- Browse lists Groups first, then Shared Tasks and Labels. Saved filters are chips under the search field, and the
+  search understands filters (`#Work`, `@waiting & p1`, `no date`, `overdue`), which can be saved as a filter.
+- Shared tasks are tasks in your lists: with a date they show in Today, Upcoming and the Inbox among your own, with
+  their list's name and the people symbol. Complete them from the row (with Undo) or tap to edit. Sort by Group
+  gives each shared list its own section after your Groups. Mac: each shared list has a row under "Shared" in the
+  sidebar, and its tasks drag to another day on the Upcoming board; iPhone: Browse lists them under Shared Tasks.
+  Coming back to the app fetches shared changes.
+- iPhone Duo: on the outer display, task titles and their details are a little larger, and the side tab bar has
+  more room around its tabs and the "+".
+- Switching tabs takes the tab you left back to its first screen, so Browse is not still open when you return.
+
 ## 0.8.0 — build 18, 2026-11-07
 
 Round 13, from the friends' first week: Groups you can group and filter by, a tab bar that moves, the Flipboard as

@@ -126,6 +126,20 @@ Next version 0.8.1 (0.8.0 shipped as build 18). No schema change. Ownership: 61 
 `Upcoming/*`, `TaskRow`, `SidebarView`, `PopoutController`, core `FilterableTask` + new `ListRow`. The rules of the round
 are in `ROUND-14.md` and SUPERVISOR §7 (a name once, large titles, one control, the three sorts, filters in search).
 
+## Round 14 record (2026-11-07/08; sessions 61–63 merged for 0.8.1)
+61 `lists-cleanup` (xhigh, 6 commits), 63 `duo-and-shell` (high, 3) at once, then 62 `shared-in-lists` (xhigh, 6) on
+the merged lists. No conflicts. Supervisor follow-ups: Upcoming's iPhone title made large; the disabled "Sort"
+placeholders removed from Group, label and filter lists; day headers hide the day on their rows in every list; the
+Duo test sums `IslandMetrics.sideChromeHeight`; Browse's Inbox count includes shared tasks. The supervisor looked at
+every screen on both platforms before the hand-over (ROUND-14's list) and sent the screenshots with it.
+Core API after the round: `ListSort` (priority/group/date) with `Preferences.inboxSort`/`todaySort`; `SearchIntent`
+(Browse's field: text or a filter query); `ListRow` (a task of yours or a `SharedRow`) feeding `TaskOrdering`,
+`GroupedOrdering`, `FlipboardSwitch.listing` and `UpcomingSchedule`; `SharedRows` (observable, actions through the
+shared store); `SidebarItem.sharedList(id)`. Left for later: the Mac shared editor panel is drawn by the list column
+rather than `PopoutHost`; a shared list's screen keeps the Shared screen's card look; the badge and morning summary
+count neither shared tasks nor red switches as George means them; two Apple accounts untested for shared rows; side
+stores `HITList-s6*.store` and `SharedTasks-s62*.json` in the Mac app group folder (delete by hand).
+
 ## Round 13 record (2026-11-07; sessions 57–60 merged for 0.8.0)
 Four sessions at once on George's turn, all Opus 5.5: 57 `groups` (xhigh, 9 commits), 58 `tab-motion` (high, 4),
 59 `flipboard-intervals` (xhigh, 6), 60 `review-inbox` (high, 5). Merged 59, 57, 58, 60; the only conflicts were the

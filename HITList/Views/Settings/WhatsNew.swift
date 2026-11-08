@@ -11,6 +11,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.8.1", items: [
+            "The Inbox's top is clean again: one view-options button. Sort by Priority (the default), Group or Date; Today by Priority or Group.",
+            "Browse: Groups first, saved filters as chips under the search field, and the search understands filters like #Work or overdue.",
+            "Shared tasks show in Today, Upcoming and the Inbox with their list's name; complete them from the row, tap to edit.",
+            "iPhone Duo: larger task text on the outer display and more room around the side tab bar.",
+            "Switching tabs returns the tab you left to its first screen.",
+        ]),
         Entry(version: "0.8.0", items: [
             "Group the Inbox and Today by Group, filter the Inbox, and on iPhone tap the Inbox or Today title to jump to a Group.",
             "The tab bar's highlight slides to the tab you tap, with a tick; screens crossfade.",
