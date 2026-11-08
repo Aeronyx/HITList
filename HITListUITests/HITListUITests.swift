@@ -95,6 +95,26 @@ final class HITListUITests: XCTestCase {
         tab("upcoming")
         XCTAssertTrue(row("Lemons").waitForExistence(timeout: 5), "tomorrow's shared task on Upcoming")
         snapshot("5 Upcoming")
+
+        // Browse: the Shared Tasks row stays for the lists themselves, each list under it opens its own screen.
+        let browse = app.buttons["browseButton"].firstMatch
+        browse.tap()
+        let manage = app.buttons["browse-shared-tasks"].firstMatch
+        XCTAssertTrue(manage.waitForExistence(timeout: 5), "Browse's Shared Tasks row")
+        app.swipeUp()
+        let lists = app.buttons.matching(identifier: "browse-shared-list")
+        XCTAssertTrue(lists.firstMatch.waitForExistence(timeout: 5), "each shared list under it")
+        XCTAssertEqual(lists.count, 2, "Groceries and Weekend trip")
+        snapshot("6 Browse")
+        manage.tap()
+        XCTAssertTrue(app.navigationBars["Shared Tasks"].waitForExistence(timeout: 5), "the Shared Tasks screen, its name once")
+        snapshot("7 Shared Tasks")
+        app.navigationBars.buttons.firstMatch.tap()
+        let groceriesRow = lists.matching(NSPredicate(format: "label BEGINSWITH %@", "Groceries")).firstMatch
+        XCTAssertTrue(groceriesRow.waitForExistence(timeout: 5))
+        groceriesRow.tap()
+        XCTAssertTrue(app.navigationBars["Groceries"].waitForExistence(timeout: 5), "the list's own screen")
+        snapshot("8 Groceries")
     }
 
     /// The island's motion (brief 58): every tab change leaves exactly one tab selected, and after the screens

@@ -64,7 +64,8 @@ struct SharedListScreen: View {
         .sharedListStyle()
         .navigationTitle(list.title.isEmpty ? "Shared list" : list.title)
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        // Its name once, as the system large title, as a Group's screen (round 14).
+        .navigationBarTitleDisplayMode(.large)
         #endif
         .toolbar { toolbar(list, me: me) }
         .refreshable { await center.refresh() }
