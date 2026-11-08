@@ -26,22 +26,36 @@ struct SharedAvatarStack: View {
     let people: [SharedPerson]
     var size: CGFloat = 22
     var limit = 3
+    /// The ring that separates overlapping faces: the colour of what they sit on.
+    var ring: Color = Theme.background
+
+    /// How far each face overlaps the one before it.
+    static let overlap: CGFloat = 0.3
+
+    /// The stack's width for `count` people at `size`.
+    static func width(count: Int, size: CGFloat, limit: Int = 3) -> CGFloat {
+        let faces = min(count, limit) + (count > limit ? 1 : 0)
+        guard faces > 0 else { return 0 }
+        return size + CGFloat(faces - 1) * size * (1 - overlap)
+    }
 
     var body: some View {
         let shown = Array(people.prefix(limit))
-        HStack(spacing: -size * 0.3) {
+        let lineWidth = max(1, min(1.5, size / 12))
+        HStack(spacing: -size * Self.overlap) {
             ForEach(shown) { person in
                 ProfileAvatarView(imageData: person.avatar, name: person.avatarName, size: size)
-                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 1.5))
+                    .overlay(Circle().strokeBorder(ring, lineWidth: lineWidth))
                     .opacity(person.isPending ? 0.5 : 1)
             }
             if people.count > limit {
                 Text("+\(people.count - limit)")
-                    .font(HITType.caption2Semibold)
+                    .font(HITFont.inter(size * 0.45, .semibold))
+                    .minimumScaleFactor(0.5)
                     .foregroundStyle(Theme.secondaryText)
                     .frame(width: size, height: size)
                     .background(Circle().fill(Theme.elevated))
-                    .overlay(Circle().strokeBorder(Theme.background, lineWidth: 1.5))
+                    .overlay(Circle().strokeBorder(ring, lineWidth: lineWidth))
             }
         }
         .accessibilityElement(children: .ignore)
@@ -158,15 +172,40 @@ struct SharedTaskRow: View {
     }
 }
 
-/// A shared task as a row of your lists (brief 62): drawn from `TaskRow`'s own parts (the check circle in its
-/// priority's colour, the title, the description's first line, the date), with its list's name and the two-person
-/// marker at the end of the second line, where a Group's name and dot sit on yours. Completing, Undo and opening it
-/// are the list's (`onToggleCompletion`, the list's selection); its menu changes it in the shared store.
+/// Who a shared task is shared with, where a task of yours has its labels (brief 64): their faces overlapped, in the
+/// meta line's own height, so a shared row is exactly as tall as one of yours. The height is the line's, read from a
+/// space set in the meta font, so the faces follow the type wherever it changes (the Duo's side island, Dynamic Type).
+struct SharedRowPeople: View {
+    let people: [SharedPerson]
+    /// The ring between faces: the row's ground (a list's background, a board card's surface).
+    var ring: Color = Theme.background
+    @Environment(\.listIslandPlacement) private var islandPlacement
+    @State private var line: CGFloat = 12
+
+    var body: some View {
+        if !people.isEmpty {
+            Text(" ")
+                .font(HITType.taskMeta(for: islandPlacement))
+                .hidden()
+                .frame(width: SharedAvatarStack.width(count: people.count, size: line))
+                .overlay(alignment: .leading) { SharedAvatarStack(people: people, size: line, ring: ring) }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { line = max(1, $0) }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(SharedAvatarStack.accessibilityLabel(people))
+        }
+    }
+}
+
+/// A shared task as a row of your lists (briefs 62, 64): a task of yours to look at, drawn from `TaskRow`'s own parts
+/// (the check circle in its priority's colour, the title, the description's first line, the date), with the people it
+/// is shared with where your labels go and "Shared Tasks" with its dot where your Group sits. No people glyph and no
+/// list name. Completing, Undo and opening it are the list's (`onToggleCompletion`, the list's selection); its menu
+/// changes it in the shared store.
 struct SharedTaskListRow: View {
     let row: SharedRow
     var now: Date
-    /// The list's name at the end of the second line; off under that list's own section header.
-    var showList = true
+    /// "Shared Tasks" at the end of the second line; off in the Group's own screen and under its section header.
+    var showGroup = true
     /// Under a header that names the day: the row shows only the time (or nothing for an all-day task).
     var hidesDay = false
     var completionPhase: CompletionPhase? = nil
@@ -207,25 +246,31 @@ struct SharedTaskListRow: View {
 
     // MARK: The meta line
 
-    /// One line in a list, laid out even when empty so every row is the same height; on the board's cards it flows
-    /// onto a second line, the list's name at the trailing end of whichever line it lands on (as `TaskRow`).
+    /// As `TaskRow`'s: one line in a list, laid out even when empty so every row is the same height; on the board's
+    /// cards it flows onto a second line, the Group at the trailing end of whichever line it lands on.
     @ViewBuilder
     private var metaLine: some View {
         if metaWraps {
             MetaFlowLayout(spacing: HITSpacing.s + 2, lineSpacing: ListMetrics.rowLineGap) {
                 dueItem
-                if showList {
-                    listItem.layoutValue(key: MetaTrailingKey.self, value: true)
-                } else if !showsDue {
+                SharedRowPeople(people: row.people, ring: Theme.surface)
+                if showGroup {
+                    groupItem.layoutValue(key: MetaTrailingKey.self, value: true)
+                } else if !showsDue && row.people.isEmpty {
                     emptyLine
                 }
             }
             .lineLimit(1)
         } else {
             HStack(spacing: HITSpacing.s + 2) {
-                dueItem.layoutPriority(1)
+                // The date and the people keep their full width, as yours keep the date and labels.
+                HStack(spacing: HITSpacing.s + 2) {
+                    dueItem
+                    SharedRowPeople(people: row.people)
+                }
+                .layoutPriority(1)
                 Spacer(minLength: HITSpacing.s)
-                if showList { listItem } else { emptyLine }
+                if showGroup { groupItem } else { emptyLine }
             }
             .lineLimit(1)
         }
@@ -248,11 +293,9 @@ struct SharedTaskListRow: View {
         }
     }
 
-    /// "Trip 👥": the list's name in its colour, the two-person marker after it, where a Group's name and dot sit.
-    private var listItem: some View {
-        MetaItem(row.listTitle, systemImage: "person.2.fill", tint: Color(hex: row.listColorHex), iconSize: 9, iconTrailing: true)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Shared list \(row.listTitle)")
+    /// "Shared Tasks" and its dot, where a Group of yours sits.
+    private var groupItem: some View {
+        TaskRowGroupItem(name: SharedTasksGroup.name, colorHex: SharedTasksGroup.colorHex)
     }
 
     /// The hidden space that keeps an empty line's height.

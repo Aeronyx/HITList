@@ -186,11 +186,11 @@ struct InboxView: View {
             }
     }
 
-    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits (except under its own list's
-    /// header); completing goes through the shared store; selecting it opens its editor.
+    /// A shared task (briefs 62, 64): drawn as yours, the people where labels go and Shared Tasks where a Group sits
+    /// (except under its own header); completing goes through the shared store; selecting it opens its editor.
     private func sharedRow(_ row: SharedRow, hidesDay: Bool) -> some View {
         let phase = completions.phase(of: row.id)
-        return SharedTaskListRow(row: row, now: now, showList: sort != .group, hidesDay: hidesDay, completionPhase: phase,
+        return SharedTaskListRow(row: row, now: now, showGroup: sort != .group, hidesDay: hidesDay, completionPhase: phase,
                                  onToggleCompletion: { toggleCompletion(row) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(ListSelection.shared(SharedTaskRef(row)))

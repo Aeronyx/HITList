@@ -12,15 +12,23 @@ struct SharedRow: Identifiable, Equatable {
     let listColorHex: String
     /// Whether this account may complete, edit and move it (`SharedTasksPermissions`).
     let canWrite: Bool
+    /// Who it is shared with, never me (brief 64): their pictures stand where a task of yours has its labels.
+    let people: [SharedPerson]
 
     var id: UUID { task.id }
 
-    init(task: SharedTask, list: SharedList) {
+    init(task: SharedTask, list: SharedList, people: [SharedPerson]) {
         self.task = task
         listID = list.id
         listTitle = list.title.isEmpty ? SharedRow.untitled : list.title
         listColorHex = list.colorHex
         canWrite = SharedTasksPermissions.allows(.completeTask, in: list)
+        self.people = people
+    }
+
+    /// The row with its list's people other than `me` (`SharedPeople.others`).
+    init(task: SharedTask, list: SharedList, me: SharedMemberID? = nil) {
+        self.init(task: task, list: list, people: SharedPeople.others(in: list, me: me))
     }
 
     static let untitled = "Shared list"

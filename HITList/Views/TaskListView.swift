@@ -413,11 +413,11 @@ struct TaskListView: View {
             }
     }
 
-    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits; completing goes through the
-    /// shared store; selecting it opens its editor.
+    /// A shared task (briefs 62, 64): drawn as yours, the people where labels go and Shared Tasks where a Group sits;
+    /// completing goes through the shared store; selecting it opens its editor.
     private func sharedRow(_ row: SharedRow, in group: Group) -> some View {
         let phase = completions.phase(of: row.id)
-        return SharedTaskListRow(row: row, now: now, showList: showsProjectOnRows, hidesDay: group.hidesDay,
+        return SharedTaskListRow(row: row, now: now, showGroup: showsProjectOnRows, hidesDay: group.hidesDay,
                                  completionPhase: phase, onToggleCompletion: { toggleCompletion(row) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(ListSelection.shared(SharedTaskRef(row)))

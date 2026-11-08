@@ -128,8 +128,8 @@ final class SharedListsTests: XCTestCase {
     // MARK: - The row
 
     #if os(macOS)
-    /// A shared row is drawn from `TaskRow`'s parts: the same height for the same title and second line, so the two
-    /// kinds line up in one list.
+    /// A shared row is drawn from `TaskRow`'s parts (brief 64): the same height as a row of yours with the same fields,
+    /// the people's pictures in the label slot's height, "Shared Tasks" and its dot where your Group sits.
     func testASharedRowIsTheHeightOfARowOfYours() throws {
         let container = ModelContainerFactory.preview()
         let project = Project(name: "Trip")
@@ -139,24 +139,40 @@ final class SharedListsTests: XCTestCase {
         let mine = TaskItem(title: "Book the cabin", dueDate: due)
         mine.project = project
         container.mainContext.insert(mine)
+        let label = TaskLabel(name: "errands")
+        container.mainContext.insert(label)
+        mine.labels = [label]
         try container.mainContext.save()
 
         let store = sharedStore()
         let trip = try list("Trip", in: store)
         let task = try store.addTask(to: trip.id, title: "Book the cabin", due: SharedDue(date: due, hasTime: false))
-        let shared = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)))
+        let sam = SharedPerson(id: "sam", name: "Sam Rivera", avatar: nil, isOwner: true, isMe: false, isPending: false, memberID: "sam")
+        let alex = SharedPerson(id: "alex", name: "Alex Kim", avatar: nil, isOwner: false, isMe: false, isPending: false, memberID: "alex")
+        let shared = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)), people: [sam, alex])
 
         func height<V: View>(_ view: V) -> CGFloat {
             NSHostingView(rootView: view.frame(width: 420).modelContainer(container)).fittingSize.height
         }
         let own = height(TaskRow(task: mine, now: now, onToggleCompletion: {}))
         let theirs = height(SharedTaskListRow(row: shared, now: now, onToggleCompletion: {}))
-        XCTAssertEqual(theirs, own, accuracy: 0.5)
-        // An empty second line (under its own list's header, the day in the day's header) keeps the height an empty
+        XCTAssertEqual(theirs, own, accuracy: 0.5, "the pictures sit in the label slot's height")
+        // An empty second line (under its own Group's header, the day in the day's header) keeps the height an empty
         // line of yours has.
+        mine.labels = []
         let emptyOwn = height(TaskRow(task: mine, now: now, showProject: false, hidesDay: true, onToggleCompletion: {}))
-        let emptyShared = height(SharedTaskListRow(row: shared, now: now, showList: false, hidesDay: true, onToggleCompletion: {}))
+        let alone = SharedRow(task: task, list: try XCTUnwrap(store.list(trip.id)), people: [])
+        let emptyShared = height(SharedTaskListRow(row: alone, now: now, showGroup: false, hidesDay: true, onToggleCompletion: {}))
         XCTAssertEqual(emptyShared, emptyOwn, accuracy: 0.5)
+    }
+
+    func testTheAvatarsFillTheMetaLinesHeightAndNoMore() throws {
+        let people = (0..<5).map { SharedPerson(id: "\($0)", name: "P\($0)", avatar: nil, isOwner: false, isMe: false,
+                                                isPending: false, memberID: "\($0)") }
+        let line = NSHostingView(rootView: Text(" ").font(HITType.taskMeta)).fittingSize.height
+        let stack = NSHostingView(rootView: SharedRowPeople(people: people)).fittingSize
+        XCTAssertEqual(stack.height, line, accuracy: 0.5)
+        XCTAssertGreaterThan(stack.width, stack.height * 2, "three faces overlapped and a count")
     }
     #endif
 }
