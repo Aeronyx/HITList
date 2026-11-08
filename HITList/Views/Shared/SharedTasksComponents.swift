@@ -124,7 +124,7 @@ struct SharedTaskListRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: HITSpacing.m) {
+        HStack(alignment: .top, spacing: TaskRowMetrics.checkGap) {
             TaskRowCheckbox(isChecked: isChecked, color: checkColor, completing: completionPhase == .pending,
                             accessibilityLabel: isChecked ? "Mark incomplete" : "Complete task", action: onToggleCompletion)
                 .disabled(!row.canWrite)

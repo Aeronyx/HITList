@@ -43,7 +43,7 @@ struct TaskRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: HITSpacing.m) {
+        HStack(alignment: .top, spacing: TaskRowMetrics.checkGap) {
             TaskRowCheckbox(isChecked: isChecked, color: checkColor, completing: completionPhase == .pending,
                             accessibilityLabel: isChecked ? "Mark incomplete" : isSwitch ? "Flip switch" : "Complete task",
                             action: onToggleCompletion)
@@ -193,9 +193,19 @@ enum TaskRowMetrics {
     #if os(macOS)
     static let lineHeight: CGFloat = 20
     static let checkSize: CGFloat = 18
+    /// The circle and the date icon as George's reference draws them (brief 67's measurements): a light 2 px circle,
+    /// 8 pt from the title, 1 pt lower than centring put it, and a 1 pt icon stroke.
+    static let checkWeight: Font.Weight = .light
+    static let checkGap: CGFloat = 8
+    static let checkDrop: CGFloat = 1
+    static let metaIconWeight: Font.Weight = .regular
     #else
     static let lineHeight: CGFloat = 21
     static let checkSize: CGFloat = 22
+    static let checkWeight: Font.Weight = .regular
+    static let checkGap: CGFloat = HITSpacing.m
+    static let checkDrop: CGFloat = 0
+    static let metaIconWeight: Font.Weight = .semibold
     #endif
 }
 
@@ -229,7 +239,7 @@ struct TaskRowCheckbox: View {
             action()
         } label: {
             Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: TaskRowMetrics.checkSize, weight: .regular))
+                .font(.system(size: TaskRowMetrics.checkSize, weight: TaskRowMetrics.checkWeight))
                 .foregroundStyle(color)
                 // The symbol swap only on completing; un-completing (and Reduce Motion) just cross-fades.
                 // No .symbolEffect(.bounce): the celebrate pop already scales this glyph, and a bounce
@@ -238,6 +248,7 @@ struct TaskRowCheckbox: View {
                 .hitCelebratePop(trigger: pops)
                 .animation(HITMotion.standard, value: isChecked)
                 .frame(width: TaskRowMetrics.checkSize + 2, height: TaskRowMetrics.lineHeight)
+                .offset(y: TaskRowMetrics.checkDrop)
                 .completionDelight(completing: completing)
                 .contentShape(Rectangle())
         }
@@ -351,7 +362,7 @@ struct MetaItem: View {
     private var icon: some View {
         if let systemImage {
             Image(systemName: systemImage)
-                .font(.system(size: iconSize, weight: .semibold))
+                .font(.system(size: iconSize, weight: TaskRowMetrics.metaIconWeight))
                 .frame(width: 12)
         }
     }
