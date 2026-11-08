@@ -10,9 +10,8 @@ struct TaskListView: View {
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query private var labels: [TaskLabel]
-    /// Today's view options → Group by (brief 57); remembered for Today alone.
-    @AppStorage(Preferences.todayGrouping, store: AppGroup.defaults)
-    private var todayGrouping: ListGrouping = Preferences.todayGroupingDefault
+    /// Today's view options → Sort by (brief 61): Priority or Group, remembered for Today alone.
+    @AppStorage(Preferences.todaySort, store: AppGroup.defaults) private var storedTodaySort = ""
     @Query private var filters: [SavedFilter]
     @State private var showCompleted = false
     @State private var editingProject: Project?
@@ -79,10 +78,10 @@ struct TaskListView: View {
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
         var hidesDay = false
-        /// A Group or priority section of a grouped Today (brief 57): drawn by `GroupSectionHeader`
-        /// instead of `title`.
+        /// A Group section of a Today sorted by Group (brief 57): drawn by `GroupSectionHeader` instead of
+        /// `title`.
         var heading: GroupSectionHeading?
-        /// Grouped Today: "Overdue" or the day, above the first section of its half (in its header, not a
+        /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
     }
@@ -168,10 +167,10 @@ struct TaskListView: View {
 
     /// Today: "Overdue" (red), then the day, "Oct 31, Saturday" (green), each by priority then due time.
     /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
-    /// Grouped (brief 57), the Overdue block stays on top: its header, then its tasks in Group (or
-    /// priority) sections, then the day's header and the day's tasks in sections the same way.
+    /// Sorted by Group (briefs 57, 61), the Overdue block stays on top: its header, then its tasks in Group
+    /// sections, then the day's header and the day's tasks in Group sections the same way.
     private func todayGroups(_ rows: [Placed]) -> [Group] {
-        if todayGrouping != .none { return groupedTodayGroups(rows) }
+        if todaySort == .group { return groupedTodayGroups(rows) }
         var overdue: [Placed] = [], today: [Placed] = []
         for row in rows {
             switch TaskOrdering.todaySection(of: row, now: now) {
@@ -191,14 +190,21 @@ struct TaskListView: View {
         return groups
     }
 
-    /// Rows name their Group, except in that Group's own list and under its header in a Today grouped by Group.
+    /// Today's sort: Priority (the flat Overdue and day sections) or Group.
+    private var todaySort: ListSort { Preferences.sort(storedTodaySort, offered: ListSort.today) }
+
+    private var todaySortBinding: Binding<ListSort> {
+        Binding(get: { todaySort }, set: { storedTodaySort = $0.rawValue })
+    }
+
+    /// Rows name their Group, except in that Group's own list and under its header in a Today sorted by Group.
     private var showsProjectOnRows: Bool {
-        currentProject == nil && !(selection == .today && todayGrouping == .group)
+        currentProject == nil && !(selection == .today && todaySort == .group)
     }
 
     private func groupedTodayGroups(_ rows: [Placed]) -> [Group] {
-        // The same section rule as the ungrouped Today (`todayGroups`), so the two never disagree.
-        let split = GroupedOrdering.today(rows, by: todayGrouping, groupOrder: projects.map(\.id), now: now,
+        // The same section rule as Today by priority (`todayGroups`), so the two never disagree.
+        let split = GroupedOrdering.today(rows, by: .group, groupOrder: projects.map(\.id), now: now,
                                           sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) {
             $0.task.project?.id
         }
@@ -207,14 +213,14 @@ struct TaskListView: View {
                       hidesDay: Bool) -> [Group] {
             sections.enumerated().map { index, section in
                 Group(id: "\(half)-\(section.key)", title: "", tasks: section.tasks.map(\.task), color: color,
-                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects),
+                      hidesDay: hidesDay, heading: .make(for: section.key, count: section.openCount, projects: projects, now: now),
                       banner: index == 0 ? banner : nil)
             }
         }
         let day = DueFormatter.sectionTitle(for: now, now: now, style: .dated)
         var groups = sections(split.overdue, half: "overdue", banner: "Overdue", color: HITColor.dueOverdue, hidesDay: false)
         if split.today.isEmpty {
-            // The day's header still shows, so its "Add task" row sits under it (as ungrouped).
+            // The day's header still shows, so its "Add task" row sits under it (as by priority).
             groups.append(Group(id: "today", title: day, tasks: [], color: HITColor.dueToday, hidesDay: true))
         } else {
             groups += sections(split.today, half: "today", banner: day, color: HITColor.dueToday, hidesDay: true)
@@ -333,12 +339,13 @@ struct TaskListView: View {
                         .keyboardShortcut("c", modifiers: [.command, .shift])
                 }
                 if selection == .today {
-                    GroupByPicker(selection: $todayGrouping)
-                }
-                Section("Sort") {
-                    Button("By due date") {}.disabled(true)
-                    Button("By priority") {}.disabled(true)
-                    Button("By name") {}.disabled(true)
+                    SortPicker(selection: todaySortBinding, choices: ListSort.today)
+                } else {
+                    Section("Sort") {
+                        Button("By due date") {}.disabled(true)
+                        Button("By priority") {}.disabled(true)
+                        Button("By name") {}.disabled(true)
+                    }
                 }
             }
         } menu: {

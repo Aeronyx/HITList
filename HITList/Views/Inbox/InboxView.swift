@@ -2,9 +2,9 @@ import SwiftUI
 import SwiftData
 import HITListCore
 
-/// The inbox: every dated task (in any Group) plus undated tasks with no Group, by priority then due date
-/// (`TaskOrdering`) in sections by priority, by Group or none (view options → Group by, brief 57;
-/// `GroupedOrdering`), under the large title "Inbox" and nothing else (brief 61: the name once), with an
+/// The inbox: every dated task (in any Group) plus undated tasks with no Group, sorted by Priority (one flat
+/// list, priority then due date: `TaskOrdering`), by Group or by Date (view options → Sort by, brief 61;
+/// `GroupedOrdering`), under the large title "Inbox" and nothing else (the name once), with an
 /// "Inbox zero" state when it's empty and Review Inbox in the view options. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
 struct InboxView: View {
@@ -15,9 +15,8 @@ struct InboxView: View {
     @Environment(PopoutController.self) private var popouts
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
-    /// View options → Group by, remembered for the Inbox (brief 57).
-    @AppStorage(Preferences.inboxGrouping, store: AppGroup.defaults)
-    private var grouping: ListGrouping = Preferences.inboxGroupingDefault
+    /// View options → Sort by, remembered for the Inbox (brief 61), read through `Preferences.sort`.
+    @AppStorage(Preferences.inboxSort, store: AppGroup.defaults) private var storedSort = ""
     @State private var showCompleted = false
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
@@ -65,9 +64,15 @@ struct InboxView: View {
         return TaskOrdering.sorted(shown + animating, now: now)
     }
 
-    /// The rows in the chosen grouping's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
+    private var sort: ListSort { Preferences.sort(storedSort, offered: ListSort.inbox) }
+
+    private var sortBinding: Binding<ListSort> {
+        Binding(get: { sort }, set: { storedSort = $0.rawValue })
+    }
+
+    /// The rows in the chosen sort's sections (`GroupedOrdering`), each in `TaskOrdering`'s order.
     private func sections(_ rows: [Placed]) -> [ListSection<UUID, Placed>] {
-        GroupedOrdering.sections(rows, by: grouping, groupOrder: projects.map(\.id)) { $0.task.project?.id }
+        GroupedOrdering.sections(rows, by: sort, groupOrder: projects.map(\.id), now: now) { $0.task.project?.id }
     }
 
     var body: some View {
@@ -94,12 +99,13 @@ struct InboxView: View {
         // Mac sidebar.
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // Show completed and Group by behind the filter-lines icon; reviewing the inbox one task at a time in the "…".
+        // Show completed and Sort by behind the filter-lines icon, the only control beside the magnifying glass;
+        // reviewing the inbox one task at a time in the "…".
         .screenChrome {
             ViewOptionsMenu {
                 Toggle("Show completed", isOn: $showCompleted)
                     .keyboardShortcut("c", modifiers: [.command, .shift])
-                GroupByPicker(selection: $grouping)
+                SortPicker(selection: sortBinding, choices: ListSort.inbox)
             }
         } menu: {
             if let title = InboxText.reviewMenuItem(count: InboxReview.count(allTasks)) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
@@ -115,10 +121,11 @@ struct InboxView: View {
         List(selection: $selectedTask) {
             ForEach(sections(rows), id: \.key) { section in
                 Section {
-                    ForEach(section.tasks, id: \.task.id) { row($0.task) }
+                    ForEach(section.tasks, id: \.task.id) { row($0.task, hidesDay: Self.namesDay(section.key)) }
                 } header: {
                     if section.key != .all {
-                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects))
+                        GroupSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects,
+                                                          now: now))
                     }
                 }
             }
@@ -136,9 +143,19 @@ struct InboxView: View {
         .slateList()
     }
 
-    private func row(_ task: TaskItem) -> some View {
+    /// Rows under a header that names their one day ("Today", "Tomorrow", "Friday, Nov 13") show only their time.
+    private static func namesDay(_ key: ListSectionKey<UUID>) -> Bool {
+        switch key {
+        case .due(.today), .due(.tomorrow), .due(.day): true
+        default: false
+        }
+    }
+
+    /// Rows name their Group except under that Group's own header.
+    private func row(_ task: TaskItem, hidesDay: Bool) -> some View {
         let phase = completions.phase(of: task.id)
-        return TaskRow(task: task, now: now, showProject: grouping != .group, completionPhase: phase, onToggleCompletion: { toggleCompletion(task) })
+        return TaskRow(task: task, now: now, showProject: sort != .group, hidesDay: hidesDay, completionPhase: phase,
+                       onToggleCompletion: { toggleCompletion(task) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(task)
             .completionRowBackground(flashing: phase == .pending)
