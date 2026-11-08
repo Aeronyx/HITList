@@ -99,10 +99,10 @@ struct AccountChangeBanner: View {
 /// pastel that sits apart from the accent; struck-through states go grey, errors and sign-out red. It
 /// flicks brighter once when a change lands, and tapping it opens Settings.
 ///
-/// It plays one lightning strike (brief 54, `BoltStrikeMotion`: a quick double flash with a twirl of a few
-/// degrees, gone in 280 ms) as a "you're good to go": on the first good sync after the app opens, after it
-/// comes back from a minute or more away, or after sync was in trouble for a minute or more
-/// (`BoltStrikeGate`). Never for ordinary syncs, never in the background; a short blink under Reduce Motion.
+/// It plays once as a "you're good to go": on the first good sync after the app opens, after it comes back from
+/// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
+/// ordinary syncs, never in the background; a short blink under Reduce Motion. What plays is the slam
+/// (brief 68, `BoltSlamMotion`: a twirl, a hop and a slam with a buzz of sparks at its foot, 0.8 s).
 struct SyncBolt: View {
     var action: () -> Void
     /// The glyph's point size: 15% larger than the original 11 pt (George, brief 54), on every platform.
@@ -119,6 +119,8 @@ struct SyncBolt: View {
     /// Bumped once per strike; the keyframe animator plays on each change.
     @State private var strikes = 0
     @State private var strikeKind: BoltStrikeGate.Strike = .strike
+    /// Bumped once per slam (brief 68).
+    @State private var slams = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -153,6 +155,11 @@ struct SyncBolt: View {
                             .opacity(fx.opacity)
                     } keyframes: { _ in
                         BoltStrikeMotion.keyframes(for: strikeKind)
+                    }
+                    .keyframeAnimator(initialValue: BoltSlamMotion.Frame(), trigger: slams) { glyph, fx in
+                        glyph.modifier(BoltSlamMotion.Effect(frame: fx, color: look.color))
+                    } keyframes: { _ in
+                        BoltSlamMotion.keyframes()
                     }
                     .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
@@ -211,9 +218,13 @@ struct SyncBolt: View {
     private func strikeIfDue(from old: Date?, to new: Date?) {
         let kind = Self.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive, reduceMotion: reduceMotion)
         guard kind != .none else { return }
-        if strikeKind != kind { strikeKind = kind }
-        strikes &+= 1
-        SyncConfirmation.log.info("Bolt strike: \(kind == .blink ? "blink" : "strike", privacy: .public) (\(monitor.lastChangePhase?.rawValue ?? "demo", privacy: .public))")
+        if kind == .blink {
+            if strikeKind != kind { strikeKind = kind }
+            strikes &+= 1
+        } else {
+            slams &+= 1
+        }
+        SyncConfirmation.log.info("Bolt strike: \(kind == .blink ? "blink" : "slam", privacy: .public) (\(monitor.lastChangePhase?.rawValue ?? "demo", privacy: .public))")
     }
 
     /// What the bolt shows for a state. Pure, so tests can check it.
