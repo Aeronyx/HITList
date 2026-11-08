@@ -21,6 +21,8 @@ struct TaskRow: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The board's cards let the meta line wrap (brief 56); every list keeps it to one line.
     @Environment(\.taskMetaWraps) private var metaWraps
+    /// Beside the upright island (the Duo's outer display) the title and meta line are a step larger.
+    @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
     @State private var pops = 0
 
@@ -84,7 +86,7 @@ struct TaskRow: View {
                 // A long title wraps in full (titles are capped at `TaskLimits.titleCharacters`); the
                 // checkbox stays on its first line.
                 Text(task.title)
-                    .font(HITType.taskTitle)
+                    .font(HITType.taskTitle(for: islandPlacement))
                     .tracking(HITType.taskTitleTracking)
                     .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
                     .overlay { strikeLine }
@@ -211,7 +213,7 @@ struct TaskRow: View {
             MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex),
                      iconSize: 8, iconTrailing: true)
         } else {
-            Text(" ").font(HITType.caption).hidden()
+            Text(" ").font(HITType.taskMeta(for: islandPlacement)).hidden()
         }
     }
 
@@ -264,6 +266,8 @@ struct MetaItem: View {
     var iconSize: CGFloat = 11
     /// The icon after the text (the Group at the trailing end of the line).
     var iconTrailing = false
+    /// A step larger beside the upright island (`HITType.taskMeta(for:)`).
+    @Environment(\.listIslandPlacement) private var islandPlacement
 
     init(_ text: String?, systemImage: String?, tint: Color, iconSize: CGFloat = 11, iconTrailing: Bool = false) {
         self.text = text
@@ -277,7 +281,7 @@ struct MetaItem: View {
         HStack(spacing: 4) {
             if !iconTrailing { icon }
             if let text {
-                Text(text).font(HITType.caption)
+                Text(text).font(HITType.taskMeta(for: islandPlacement))
             }
             if iconTrailing { icon }
         }
@@ -295,6 +299,11 @@ struct MetaItem: View {
 }
 
 extension EnvironmentValues {
+    /// Where the island stands beside the lists, for their rows' type (brief 63): the iPhone shell hands its lists
+    /// its own `\.islandPlacement`; everywhere else it stays `.bottom`, so the sidebar layout (iPad, Mac, the Duo's
+    /// inner display, which has no island even where the system's bars stand in a column) keeps the usual sizes.
+    @Entry var listIslandPlacement: IslandPlacement = .bottom
+
     /// The board's cards (brief 56): a row's meta line flows onto a second line instead of truncating.
     /// Off everywhere else: list rows keep one line and equal heights.
     @Entry var taskMetaWraps: Bool = false

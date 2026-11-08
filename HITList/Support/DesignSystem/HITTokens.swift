@@ -125,10 +125,36 @@ enum HITType {
     #if os(macOS)
     static let taskTitle = body
     static let taskTitleTracking: CGFloat = 0
+    static let taskTitleSide = taskTitle
+    /// A row's second line (`MetaItem`): the caption size.
+    static let taskMeta = caption
+    static let taskMetaSide = taskMeta
     #else
-    static let taskTitle = HITFont.inter(16, .regular, relativeTo: .body)
+    static let taskTitleSize: CGFloat = 16
+    static let taskTitle = HITFont.inter(taskTitleSize, .regular, relativeTo: .body)
     static let taskTitleTracking: CGFloat = -0.3
+    /// Beside the upright island (the iPhone Duo's outer display, brief 63): one step up, same tracking, because
+    /// a friend on the Duo found the rows' type a little small there. Only the row's title and meta line; large
+    /// titles and section headers stay as they are.
+    static let taskTitleSideSize: CGFloat = 17
+    static let taskTitleSide = HITFont.inter(taskTitleSideSize, .regular, relativeTo: .body)
+    /// A row's second line (`MetaItem`): the caption size, and a step up beside the upright island.
+    static let taskMetaSize: CGFloat = 12
+    static let taskMeta = HITFont.inter(taskMetaSize, .regular, relativeTo: .caption)
+    static let taskMetaSideSize: CGFloat = 13
+    static let taskMetaSide = HITFont.inter(taskMetaSideSize, .regular, relativeTo: .caption)
     #endif
+
+    /// A row's title where the island stands (`\.listIslandPlacement`): one step up beside the upright island,
+    /// the usual size everywhere else. Chosen by where the island is, never by device model.
+    static func taskTitle(for placement: IslandPlacement) -> Font {
+        placement.isSide ? taskTitleSide : taskTitle
+    }
+
+    /// A row's meta line where the island stands, as `taskTitle(for:)`.
+    static func taskMeta(for placement: IslandPlacement) -> Font {
+        placement.isSide ? taskMetaSide : taskMeta
+    }
     /// Section headers above a group of rows or fields.
     static let sectionHeader = caption2Semibold
     /// A task list's section headers ("Overdue", "Nov 1, Sunday", "Priority 1"): semibold, a step above

@@ -56,6 +56,8 @@ struct MobileShell: View {
                     .transition(HITMotion.tabSwitchTransition(reduceMotion: reduceMotion))
             }
             .animation(HITMotion.tabSwitch(reduceMotion: reduceMotion), value: tab)
+            // Beside the upright island the rows' type is a step larger (brief 63).
+            .environment(\.listIslandPlacement, placement)
             // Lists scroll under the chrome and show through the gaps around the island; the margin
             // keeps their last row reachable. (A safeAreaInset on the stack did not reach the lists
             // inside it on iOS 26: Browse's last row ended behind the island.)
