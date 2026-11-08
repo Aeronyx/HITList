@@ -321,9 +321,16 @@ final class PickerTests: XCTestCase {
         let model = RevealModel()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        // Owned here, not by AppKit: a window released on close as well was torn down again during the next test.
+        window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: RevealRow(model: model).pickerOverlay())
         window.orderFrontRegardless()
-        defer { window.close() }
+        defer {
+            // The card goes first, so its layer lets the keyboard and its event monitor go with a live window.
+            model.isOpen = false
+            spin(0.2)
+            window.close()
+        }
         spin(0.3)
         let chip = try XCTUnwrap(Self.revealViews(in: try XCTUnwrap(window.contentView)).first)
         let clip = try XCTUnwrap(chip.enclosingScrollView?.contentView)
