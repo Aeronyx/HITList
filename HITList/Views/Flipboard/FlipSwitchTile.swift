@@ -69,6 +69,9 @@ struct FlipSwitchTile: View {
                        caption: caption, reduceMotion: reduceMotion) {
             rocker
         }
+        // One element per tile for tests and VoiceOver's rotor; the rocker inside stays the button.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("flipSwitchTile")
         .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         #if os(iOS)
         .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -330,8 +333,10 @@ struct FlipSwitchTile: View {
     }
 }
 
-/// The look of a switch, from plain values: shared by the board's tiles and the editor's live preview.
-/// One flip per interval shows the single LED top right; more show a row of lamps across the top.
+/// The look of a switch, from plain values. Every switch is laid out the same way, so every tile on a board is the
+/// same size (George, 2026-11-08: "all switches should be the same width and height"): the lights' row at the top (one
+/// pill for a plain switch, one per flip for a charger), the title in room for two lines whether it needs one or two,
+/// the interval, the rocker, the interval's line and its caption. The plate fills the height the grid gives it.
 struct FlipSwitchFace<Rocker: View>: View {
     let title: String
     let ruleText: String
@@ -345,32 +350,43 @@ struct FlipSwitchFace<Rocker: View>: View {
     let reduceMotion: Bool
     @ViewBuilder var rocker: Rocker
 
+    static var padding: CGFloat { 14 }
+    static var titleFont: Font { HITType.subheadlineSemibold.smallCaps() }
+
     var body: some View {
-        VStack(spacing: 12) {
-            if target > 1 {
-                FlipChargeLamps(target: target, count: lamps, side: side, reduceMotion: reduceMotion)
-                    .padding(.horizontal, 2)
+        VStack(alignment: .leading, spacing: 10) {
+            FlipLights(target: target, count: lamps, side: side, isOverdue: isOverdue, reduceMotion: reduceMotion)
+
+            // Room for two lines of title and the interval whatever the title, so every tile is one height: a hidden
+            // stand-in sets the height alone, and the real title and interval are drawn over it from the top (the
+            // interval right under a one-line title, not a blank line below it).
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: "A").font(Self.titleFont).lineLimit(2, reservesSpace: true)
+                Text(verbatim: "a").font(HITType.caption2)
             }
-            HStack(alignment: .top, spacing: 8) {
+            .hidden()
+            .accessibilityHidden(true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .overlay(alignment: .topLeading) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(HITType.subheadlineSemibold.smallCaps())
+                        .font(Self.titleFont)
                         .tracking(0.6)
                         .foregroundStyle(.primary)
                         .lineLimit(2)
+                        .truncationMode(.tail)
                         .multilineTextAlignment(.leading)
                     Text(ruleText)
                         .font(HITType.caption2)
                         .foregroundStyle(Theme.secondaryText)
                         .lineLimit(1)
                 }
-                Spacer(minLength: 0)
-                if target <= 1 {
-                    FlipLED(glow: side == .green ? .done : isOverdue ? .overdue : .due, reduceMotion: reduceMotion)
-                }
+                // Its own height, not the stand-in's: offered exactly that, a two-line title rounded down to one.
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             rocker
+                .frame(maxWidth: .infinity)
 
             VStack(spacing: 5) {
                 FlipLightBar(fraction: fraction, side: side)
@@ -380,8 +396,10 @@ struct FlipSwitchFace<Rocker: View>: View {
                     .lineLimit(1)
                     .contentTransition(.numericText())
             }
+            .frame(maxWidth: .infinity)
         }
-        .padding(14)
+        .padding(Self.padding)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Theme.surface)
