@@ -371,7 +371,7 @@ struct TaskListView: View {
         .toolbar {
             if let filter = currentFilter {
                 ToolbarItem(placement: .automatic) {
-                    Text(filter.query).font(HITType.monoCaption).foregroundStyle(.secondary).lineLimit(1)
+                    FilterQueryBadge(query: filter.query)
                 }
             }
         }
