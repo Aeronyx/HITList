@@ -127,7 +127,12 @@ How George works with you:
    helper"), stale comments and README lines, and anything a report says it edited outside its list.
 7. **Run all three suites** (`scripts/test.sh`, in the background). Fix, do not skip.
 8. **Check in the simulator** what no session could tap: the flows George will use first. Fix what you
-   find, commit, rebuild, re-check. Keep this to the real risks; it is the expensive step.
+   find, commit, rebuild, re-check. Then, before the hand-over, screenshot every main screen on both platforms
+   (Inbox, Today, Upcoming, Flipboard, Browse, a Group, Settings; the Mac's equivalents) with demo data
+   (`-seedDemoData`) and look at each as George would: a name shown twice, two controls that look alike, two fonts in
+   one header, a control nobody asked for. Send the screenshots with the hand-over. 0.8.0 shipped an Inbox with all
+   four of those because the supervisor looked at Today and the Flipboard and never opened the Inbox. A session's
+   report that says two things look alike, or that it could not check something, names an item for you to fix.
 9. **Write the notes** (§6): CHANGELOG section, What's New entry, `SettingsTests` pin. Record the round in
    `dev/briefs/COMMON.md`. Add a memory line if a rule changed.
 10. **Push master** (`git push origin master`) and send George the hand-over message: whether a CloudKit
@@ -218,6 +223,12 @@ quick-add phrases stay in the title as plain text; the Mac board always opens on
 hands you off to Mail (copy the address and say so); the bolt's lightning strike is a rare "you're good to go" (launch,
 back after a minute away, recovered after a minute of trouble), never a per-sync animation. Follow Apple's HIG
 (`dev/briefs/HIG-NOTES.md`); George's explicit choices win where they differ (pointing hand over highlights).
+From 2026-11-07 (after 0.8.0): a screen's name appears once, as its title; iPhone titles are large and never
+buttons; beside the magnifying glass a list has one control, the view options; the Inbox sorts by Priority (flat,
+priority then date) by default, Group ("Ungrouped" last) and Date are the other sorts, Today by Priority or Group;
+saved filters live in Browse's search field on iPhone, the Inbox has no filter control; one section-header style; Groups
+first in Browse, above Shared Tasks; switching tabs returns the other tab to its first screen; shared tasks are rows in
+your lists, the Shared Tasks screen is for the lists themselves.
 
 ## 8. Where things stand (2026-11-07, after round 13)
 
