@@ -12,9 +12,23 @@ bundle and `UIAppFonts`/`ATSApplicationFontsPath` register them). Use the `HITTy
 `.font(.subheadline)`: `.largeTitle`, `.title1/2/3` (+ `.title2Bold`), `.headline`, `.body`, `.callout`
 (+ `Medium`/`Bold`), `.subheadline` (+ `Medium`/`Semibold`), `.footnote`, `.caption` (+ `Bold`),
 `.caption2` (+ `Semibold`), `.control` (button/chip labels), `.title` (sheet titles, fixed 17 semibold),
-`.taskName` (quick-add title, bold, one step above body: 20 on iOS, 15 on Mac), `.sectionHeader`, `.listSectionHeader` (task-list headers, applied by `taskSectionHeader`; rows and headers measure from `ListMetrics`), `.mono`/`.monoCaption` (system mono for
+`.taskName` (quick-add title, bold, one step above body: 19 on iOS, 15 on Mac), `.taskTitle`/`.taskMeta` (a task
+row's title, with `.taskTitleTracking`, and its second line), `.sectionHeader`, `.listSectionHeader` (task-list headers, applied by `taskSectionHeader`; rows and headers measure from `ListMetrics`), `.mono`/`.monoCaption` (system mono for
 queries). SF Symbols keep `.font(.system(size:weight:))`. The window root sets `.font(HITType.body)`, so
-unstyled `Text` is Inter. `HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
+unstyled `Text` is Inter. The Mac draws text without font smoothing (`HITFont.smoothsMacText`, set at launch by
+`installPlatformAppearance`), as the iPhone always has.
+
+| Task lists (round 15, brief 67) | Mac | iPhone |
+|---|---|---|
+| Row title (`taskTitle`) | Inter 14 regular, tracking 0 | Inter 17 regular, tracking −0.3 |
+| Second line (`taskMeta`) | Inter 12 regular | Inter 13 regular |
+| Section header (`listSectionHeader`) | Inter 14 bold | Inter 16 semibold |
+| Title baseline to second line's | 22 pt (`rowLineGap` 5.5) | 20.9 pt (`rowLineGap` 4) |
+
+The Mac row matches George's target (Todoist's Mac row, SF Pro 14 over 12 drawn without smoothing) in width and
+weight; the iPhone row is the size the Duo's outer display used since brief 63, now every iPhone's.
+
+`HITColor.onAccent` (near-black text on accent), `.text`, `.danger` (P1 red),
 and the due colours `.dueToday` (green) / `.dueTomorrow` (orange) / `.dueLater` (purple) /
 `.dueOverdue` (red) with `HITColor.due(date, hasTime:now:)` choosing among them.
 `Color.darkened(by:)` for pressed fills.

@@ -112,35 +112,38 @@ final class MobileChromeTests: XCTestCase {
     }
 
     func testRowsMeasureLikeTheReference() {
-        // Todoist's row (George's reference): a little more above the title than below the second line.
         let insets = ListMetrics.rowInsets(compact: false)
+        #if os(macOS)
+        // Round 15: George's Todoist Mac row; the Mac's list draws the top inset below the row too, so the two match.
+        XCTAssertEqual(insets.top, 9)
+        XCTAssertEqual(insets.bottom, insets.top)
+        XCTAssertEqual(ListMetrics.rowLineGap, 5.5)
+        #else
+        // Todoist's row (George's reference): a little more above the title than below the second line.
         XCTAssertEqual(insets.top, 12)
         XCTAssertEqual(insets.bottom, 10)
+        XCTAssertEqual(ListMetrics.rowLineGap, 4)
+        #endif
         XCTAssertEqual(insets.leading, insets.trailing)
         let compact = ListMetrics.rowInsets(compact: true)
         XCTAssertLessThan(compact.top, insets.top)
         XCTAssertLessThan(compact.bottom, insets.bottom)
-        XCTAssertEqual(ListMetrics.rowLineGap, 4)
     }
 
-    func testRowTypeIsAStepLargerOnlyBesideTheUprightIsland() {
-        // Brief 63: a friend on the iPhone Duo asked for slightly larger type on the outer display.
+    func testRowTypeIsTheDuosStepOnEveryIPhone() {
+        // Brief 63: a friend on the iPhone Duo asked for slightly larger type on the outer display (17 over 13).
+        // Round 15 (brief 67): George found every iPhone's rows too small, so that step is every iPhone's and the
+        // two placements give one font.
         #if os(iOS)
-        XCTAssertEqual(HITType.taskTitleSize, 16, "every other iPhone: unchanged")
-        XCTAssertEqual(HITType.taskTitleSideSize, 17)
-        XCTAssertEqual(HITType.taskTitleTracking, -0.3, "the same tracking at both sizes")
-        XCTAssertEqual(HITType.taskMetaSize, 12)
-        XCTAssertEqual(HITType.taskMetaSideSize, 13)
-        XCTAssertEqual(HITType.taskTitle, HITFont.inter(16, .regular, relativeTo: .body))
-        XCTAssertEqual(HITType.taskTitleSide, HITFont.inter(17, .regular, relativeTo: .body))
-        XCTAssertEqual(HITType.taskMeta, HITType.caption, "the meta line is the caption size it always was")
-        XCTAssertEqual(HITType.taskMetaSide, HITFont.inter(13, .regular, relativeTo: .caption))
+        XCTAssertEqual(HITType.taskTitleSize, 17)
+        XCTAssertEqual(HITType.taskTitleTracking, -0.3, "build 13's tracking, which the Duo kept at 17")
+        XCTAssertEqual(HITType.taskMetaSize, 13)
+        XCTAssertEqual(HITType.taskTitle, HITFont.inter(17, .regular, relativeTo: .body))
+        XCTAssertEqual(HITType.taskMeta, HITFont.inter(13, .regular, relativeTo: .caption))
         #endif
-        XCTAssertEqual(HITType.taskTitle(for: .bottom), HITType.taskTitle)
-        XCTAssertEqual(HITType.taskMeta(for: .bottom), HITType.taskMeta)
-        for edge in [HorizontalEdge.leading, .trailing] {
-            XCTAssertEqual(HITType.taskTitle(for: .side(edge)), HITType.taskTitleSide)
-            XCTAssertEqual(HITType.taskMeta(for: .side(edge)), HITType.taskMetaSide)
+        for placement in [IslandPlacement.bottom, .side(.leading), .side(.trailing)] {
+            XCTAssertEqual(HITType.taskTitle(for: placement), HITType.taskTitle)
+            XCTAssertEqual(HITType.taskMeta(for: placement), HITType.taskMeta)
         }
         XCTAssertEqual(EnvironmentValues().listIslandPlacement, .bottom, "outside the iPhone shell: the usual sizes")
     }

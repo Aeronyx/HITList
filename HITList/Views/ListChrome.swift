@@ -9,19 +9,26 @@ import SwiftUI
 /// title over a 12 pt second line, 58 pt on the Mac for 13 over 10. A little more above the title than
 /// below the second line, since the title's own leading sits inside its line and the small line's
 /// descenders hang below it.
+///
+/// Round 15 (brief 67) set the Mac's rows in 14 over 12 after George's Todoist Mac row, whose second line's
+/// baseline sits 22 pt under the title's (ours: 19.5 at 13 over 10, 20.5 at 14 over 12 with the old gap), so
+/// the Mac's gap grew to 5.5. Measured in the Debug Mac app, the Mac's list gives a row its top inset below
+/// the second line too (a bottom inset of 4 or 10 drew the same row), so build 10's 12 drew a 61 pt row, not
+/// 58; the Mac's insets are now 9 and 9, a 58.5 pt row with the larger type (Todoist's is 55). The iPhone's
+/// rows took the Duo's 17 over 13 in the same insets, a point taller.
 enum ListMetrics {
     #if os(macOS)
     /// From the row's edge to the checkbox and to the trailing end of the second line.
     static let horizontalInset: CGFloat = 12
     /// Above the title line.
-    static let rowTopInset: CGFloat = 12
-    /// Below the second line.
-    static let rowBottomInset: CGFloat = 10
+    static let rowTopInset: CGFloat = 9
+    /// Below the second line: the list draws the top inset here whatever this says; kept equal so it reads true.
+    static let rowBottomInset: CGFloat = 9
     /// Settings → Appearance → Compact rows.
-    static let compactRowTopInset: CGFloat = 7
-    static let compactRowBottomInset: CGFloat = 5
-    /// Between the title and the lines under it.
-    static let rowLineGap: CGFloat = 4
+    static let compactRowTopInset: CGFloat = 4
+    static let compactRowBottomInset: CGFloat = 4
+    /// Between the title and the lines under it: the title's baseline 22 pt over the second line's.
+    static let rowLineGap: CGFloat = 5.5
     static let headerTop: CGFloat = 14
     static let headerBottom: CGFloat = 6
     #else
