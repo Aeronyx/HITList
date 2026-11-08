@@ -175,7 +175,14 @@ final class SharedTasksCenter {
 
     private func becameActive() {
         guard let store else { return }
-        if phase != .ready { Task { await connect(Self.container, store: store) } }
+        if phase != .ready {
+            Task { await connect(Self.container, store: store) }
+        } else {
+            // What the others changed while this app was away: shared tasks are rows of Today and the Inbox now
+            // (brief 62), and a push can go missing, so coming back to the app fetches too (cheap: the engine asks
+            // only for what changed since its last fetch).
+            Task { await sync?.fetchNow() }
+        }
         refreshProfile()
         presentPendingInvitation()
     }
