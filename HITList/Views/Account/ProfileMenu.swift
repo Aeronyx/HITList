@@ -266,11 +266,19 @@ enum ProfileButtonMetrics {
     static let height: CGFloat = 40
     static let leading: CGFloat = 6
     #endif
+    #if os(macOS)
+    /// From the top of the sidebar's content area (under the traffic lights) to the button: 8 pt more than 0.8's 4
+    /// (George, 2026-11-08: "more empty space … between the Profile dropdown and the top of the app", brief 66).
+    static let top: CGFloat = HITSpacing.xs + 8
+    /// From the button to the search field under it (brief 66): 8 pt more than the 12 it had to Inbox.
+    static let bottom: CGFloat = HITSpacing.xs + 16
+    #else
     /// From the top of the sidebar's content area to the button.
     static let top: CGFloat = HITSpacing.xs
     /// From the button to the first row (Inbox): 8 pt more than 0.6.0's 4 (George, 2026-11-05: "slightly
     /// more vertical space between the profile in the top left and the first menu tab").
     static let bottom: CGFloat = HITSpacing.xs + 8
+    #endif
 }
 
 /// The dropdown: the account and settings rows, a hairline, What's New and Send Beta Feedback…, a hairline,

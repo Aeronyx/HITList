@@ -45,5 +45,16 @@ final class MacChromeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(badge.width, bare.width + prefix.width + 2 * FilterQueryBadge.horizontalPadding)
         XCTAssertGreaterThanOrEqual(FilterQueryBadge.horizontalPadding, 8)
     }
+
+    // MARK: - The sidebar's top (brief 66)
+
+    /// About 8 pt more above the profile button and between it and the search field than 0.8 had above it and
+    /// between it and Inbox, with the profile's left edge still on the Settings gear's line.
+    func testTheSidebarsTopHasRoomAboveAndBelowTheProfile() {
+        XCTAssertEqual(ProfileButtonMetrics.top, 12)
+        XCTAssertEqual(ProfileButtonMetrics.bottom, 20)
+        XCTAssertEqual(SidebarView.searchBottom, 8)
+        XCTAssertEqual(SidebarView.profileInset, HITSpacing.s + 2)
+    }
     #endif
 }
