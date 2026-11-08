@@ -20,7 +20,7 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(IslandMetrics.pillInset, 6)
         XCTAssertEqual(IslandMetrics.pillHeight, 52, "the bottom island less its inset above and below")
         XCTAssertEqual(IslandMetrics.pillRadius, IslandMetrics.pillHeight / 2, "a capsule, concentric with the island")
-        XCTAssertEqual(IslandMetrics.sidePillWidth, 48, "upright: the island's 60 pt less its inset on both sides")
+        XCTAssertEqual(IslandMetrics.sidePillWidth, 54, "upright: the island's 66 pt less its inset on both sides")
         XCTAssertEqual(IslandMetrics.pillOpacity, 0.18)
     }
 
@@ -64,6 +64,35 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: false), .easeInOut(duration: 0.2))
         XCTAssertEqual(HITMotion.tabSwitch(reduceMotion: true), .easeInOut(duration: 0.15))
         XCTAssertLessThanOrEqual(HITMotion.TabSwitch.duration, 0.25, "within the motion system's 250 ms")
+    }
+
+    func testTheUprightIslandHasRoomToBreathe() {
+        // Brief 63: the friend on the iPhone Duo found the upright island's tabs cramped.
+        XCTAssertEqual(IslandMetrics.sideItemHeight, 60, "52 before")
+        XCTAssertEqual(IslandMetrics.sideWidth, 66, "60 before")
+        XCTAssertEqual(IslandMetrics.sideHeight, 4 * 60 + 2 * 6)
+        XCTAssertEqual(IslandMetrics.sideLabelGap, 5)
+        XCTAssertEqual(IslandMetrics.labelGap, 3, "the bottom island unchanged")
+        XCTAssertEqual(IslandMetrics.sideAddButtonGap, 16, "the + under the upright island")
+        XCTAssertEqual(IslandMetrics.addButtonGap, 12, "the + above the bottom island unchanged")
+        XCTAssertEqual(IslandMetrics.sideAddButtonSize, CGSize(width: 66, height: 50), "as wide as the island")
+        XCTAssertEqual(IslandMetrics.sideChromeHeight, 8 + 50 + 16 + 252)
+        XCTAssertEqual(IslandMetrics.sideColumnWidth, 74)
+
+        // Still inside the outer display's 84 pt bar column and on the camera's line, which sits 36 pt into it.
+        let column: CGFloat = 84
+        let offset = IslandPlacement.sideOffset(columnWidth: column, cameraCentre: 36)
+        XCTAssertEqual(offset, -6, "follows the camera")
+        XCTAssertGreaterThanOrEqual(column / 2 + offset - IslandMetrics.sideWidth / 2, 0, "inside the column's inner edge")
+        XCTAssertLessThanOrEqual(column / 2 + offset + IslandMetrics.sideWidth / 2, column, "inside the screen's edge")
+
+        // The fallback to the bottom island moves up with the taller island: upright (678 pt) it stands at the
+        // side, on its side (466 pt) it goes to the bottom.
+        XCTAssertEqual(IslandPlacement.sideMinimumWindowHeight, 636)
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: 678), .side(.trailing))
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: 466), .bottom)
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: 620), .bottom,
+                       "a column too short for the taller island and the system's items")
     }
 
     func testIslandRendersOnBothAxes() {

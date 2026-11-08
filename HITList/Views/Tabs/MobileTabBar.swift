@@ -69,14 +69,23 @@ enum IslandMetrics {
     // The island on its side (the iPhone Duo's outer display, brief 50), in the column the system leaves for
     // its vertical bar.
 
-    /// The upright island's width: an icon and a short label per tab.
-    static let sideWidth: CGFloat = 60
-    /// One tab's cell, top to bottom.
-    static let sideItemHeight: CGFloat = 52
+    /// The upright island's width: an icon and a short label per tab. 66 pt since brief 63 (60 before; the
+    /// friend on the Duo found the tabs cramped), still inside the outer display's 84 pt bar column.
+    static let sideWidth: CGFloat = 66
+    /// One tab's cell, top to bottom: 60 pt since brief 63 (52 before).
+    static let sideItemHeight: CGFloat = 60
+    /// Between a tab's icon and its label: 5 pt upright, 3 in the bottom island.
+    static let labelGap: CGFloat = 3
+    static let sideLabelGap: CGFloat = 5
     /// The four cells and the pill's inset above and below them.
     static var sideHeight: CGFloat { CGFloat(MobileTab.allCases.count) * sideItemHeight + 2 * pillInset }
     /// The "+" at the island's foot: as wide as the island, as tall as the bottom island's "+".
     static var sideAddButtonSize: CGSize { CGSize(width: sideWidth, height: FloatingAddButton.size.height) }
+    /// Between the foot of the upright island and the "+" under it (the bottom island's `addButtonGap` is 12).
+    static let sideAddButtonGap: CGFloat = HITSpacing.l
+    /// Everything the upright island adds at the foot of the bar column, from the home indicator to the top of
+    /// the island.
+    static var sideChromeHeight: CGFloat { bottomGap + sideAddButtonSize.height + sideAddButtonGap + sideHeight }
     /// The narrowest bar column that holds the island with air on both sides.
     static var sideColumnWidth: CGFloat { sideWidth + 2 * 4 }
 }
@@ -94,9 +103,11 @@ enum IslandPlacement: Equatable {
     case side(HorizontalEdge)
 
     /// The window height (safe areas included, so the keyboard changes nothing) below which the column is too
-    /// short: the system's items take up to about 335 pt from the top, the island and the "+" about 290 from the
-    /// bottom. The outer display upright is 678 pt tall, on its side 466.
-    static let sideMinimumWindowHeight: CGFloat = 600
+    /// short: the system's items take up to about 335 pt from the top, the island and the "+"
+    /// `IslandMetrics.sideChromeHeight` (326 pt since brief 63, 290 before) from the bottom, and the two may
+    /// meet in the bottom safe area's 25 or so (600 for the old 290). The outer display upright is 678 pt tall,
+    /// on its side 466.
+    static var sideMinimumWindowHeight: CGFloat { 310 + IslandMetrics.sideChromeHeight }
 
     /// `windowHeight` 0 (not yet measured) goes by the edge alone.
     init(verticalBarEdge: HorizontalEdge?, windowHeight: CGFloat) {
@@ -232,7 +243,7 @@ struct MobileTabBar: View {
     }
 
     private func item(_ tab: MobileTab, selected: Bool) -> some View {
-        VStack(spacing: 3) {
+        VStack(spacing: axis == .vertical ? IslandMetrics.sideLabelGap : IslandMetrics.labelGap) {
             SwiftUI.Group {
                 if tab == .today {
                     TodayTabIcon(day: day, selected: selected)
@@ -249,7 +260,7 @@ struct MobileTabBar: View {
             Text(tab.title)
                 .font(HITType.caption2Semibold)
                 .lineLimit(1)
-                // Upright, "Flipboard" and "Upcoming" have the island's 60 pt and no more.
+                // Upright, "Flipboard" and "Upcoming" have the island's 66 pt and no more.
                 .minimumScaleFactor(axis == .vertical ? 0.75 : 1)
                 .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
