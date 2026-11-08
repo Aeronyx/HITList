@@ -246,6 +246,7 @@
 		D0EF53976903B23E0A90B324 /* ListChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67740874FB15E62462511914 /* ListChrome.swift */; };
 		D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4744E706011D5D130E88452 /* ICloudCheck.swift */; };
 		D115713E4CA4914942E0170A /* SharingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23CAD2EDCFBEA1E9A68CFB34 /* SharingSheet.swift */; };
+		D2601EFDBCB0C0B693B066B4 /* FlipboardDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 363D84949DE2B865D22C93BF /* FlipboardDebug.swift */; };
 		D2ACE61BEE0D441EEDB488BB /* SchemaVersions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */; };
 		D2F00A6B085AFE5F8C171000 /* Deduplicator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08BB24F8F65457496F557A04 /* Deduplicator.swift */; };
 		D35AC129407851B7BCADF5A5 /* SharedTasksSchema.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7622E79F19BE12C0FCCBF12F /* SharedTasksSchema.swift */; };
@@ -285,6 +286,7 @@
 		E9F91069D04695E89BCEBE1D /* HingeCreakSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BB614B969D4D6C82FE7EE /* HingeCreakSynth.swift */; };
 		EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */; };
 		ECCFD227CF85F94C563A169D /* NotificationStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6E6CED5602E68567841C52F /* NotificationStatus.swift */; };
+		EDB29D421E6A3BE658EB08FE /* FlipboardLightsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B2293E57B181ADE1EEE463 /* FlipboardLightsTests.swift */; };
 		EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B9E9D2B3613BBAC956F8B0 /* LocalBackup.swift */; };
 		EDBEC249FA6239C0F6E4A5B8 /* UpcomingScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */; };
 		EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */; };
@@ -293,6 +295,7 @@
 		EFF74DC0B928EAD8ABFF10AD /* AccountWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */; };
 		F08B3E77DEE13635559AA7E3 /* CompletionRowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */; };
 		F0B419D5ADBCB741085E76E8 /* SharedInvite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4488157340A63D860428C503 /* SharedInvite.swift */; };
+		F1B3D3281707903436AC18D4 /* FlipLights.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FDDA2FD54E3762CF7650A9 /* FlipLights.swift */; };
 		F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C53B2F49702EAFDB0EE2192 /* PickerTests.swift */; };
 		F39BFE7FCD06D98108ED3865 /* ProfileMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4233FD83EC4A73BC7DC5A34 /* ProfileMenu.swift */; };
 		F40E7BC540FD297C5FDB2565 /* HighlightTextView+macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9388258DD5F4BF21418975C1 /* HighlightTextView+macOS.swift */; };
@@ -354,6 +357,7 @@
 		02B0D726E6D45191FFDC6A83 /* MacSettingsPage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsPage.swift; sourceTree = "<group>"; };
 		03340EB6E38EDAB8BB35B0C4 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		05879B3E844E06A330F7B414 /* EditorCarryOver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorCarryOver.swift; sourceTree = "<group>"; };
+		05B2293E57B181ADE1EEE463 /* FlipboardLightsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardLightsTests.swift; sourceTree = "<group>"; };
 		061DFEE95EC7AB33E9B48DCB /* CompactQuickAddCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactQuickAddCard.swift; sourceTree = "<group>"; };
 		06FFD587490C5811840277EC /* ClaudeExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeExport.swift; sourceTree = "<group>"; };
 		0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeEndpoint.swift; sourceTree = "<group>"; };
@@ -370,6 +374,7 @@
 		133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingScheduleTests.swift; sourceTree = "<group>"; };
 		14255A51748F8F42EA94CDCF /* HighlightRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightRun.swift; sourceTree = "<group>"; };
 		14A4D705270750EEB72A1890 /* HITListTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HITListTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		14FDDA2FD54E3762CF7650A9 /* FlipLights.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipLights.swift; sourceTree = "<group>"; };
 		165FA6D62560AF712E0AB48D /* HITSegmented.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITSegmented.swift; sourceTree = "<group>"; };
 		172507FC4FF599F803EE8248 /* TaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopout.swift; sourceTree = "<group>"; };
 		179EC0133891B8DCC4B358ED /* MobileTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTabBar.swift; sourceTree = "<group>"; };
@@ -400,6 +405,7 @@
 		32E6B3699676B4892851C4C9 /* FlipboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardView.swift; sourceTree = "<group>"; };
 		32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeduplicatorTests.swift; sourceTree = "<group>"; };
 		33CC15F6A065400DDD7DE9FE /* ReminderPickerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderPickerCard.swift; sourceTree = "<group>"; };
+		363D84949DE2B865D22C93BF /* FlipboardDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardDebug.swift; sourceTree = "<group>"; };
 		375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddCreateTests.swift; sourceTree = "<group>"; };
 		379D57D8772CB122DAF2854C /* InboxProcessQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessQueue.swift; sourceTree = "<group>"; };
 		37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePickerCard.swift; sourceTree = "<group>"; };
@@ -930,9 +936,11 @@
 		7C434BB7372CC0AAE65EDBDE /* Flipboard */ = {
 			isa = PBXGroup;
 			children = (
+				363D84949DE2B865D22C93BF /* FlipboardDebug.swift */,
 				E0CDA94242E336C8805AF0BF /* FlipboardGrid.swift */,
 				AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */,
 				32E6B3699676B4892851C4C9 /* FlipboardView.swift */,
+				14FDDA2FD54E3762CF7650A9 /* FlipLights.swift */,
 				0F69C7AD0F70F6C933CC821D /* FlipSound.swift */,
 				C88ABAD9BF71EABED1CAB264 /* FlipSwitchTile.swift */,
 				DDB5E498003ED6A77458D9DC /* FloatingSwitchCard.swift */,
@@ -1045,6 +1053,7 @@
 				ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */,
 				DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */,
 				8AEAF40D7B5D7F3D38A794EB /* FlipboardAddTests.swift */,
+				05B2293E57B181ADE1EEE463 /* FlipboardLightsTests.swift */,
 				BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */,
 				825B734C651EF77EF1FA1410 /* FontTests.swift */,
 				82A0C7F15C10E980AB8102DB /* GroupsTests.swift */,
@@ -1547,8 +1556,10 @@
 				CD0AC6C2182CF5849ACF96D1 /* FilterQueryBadge.swift in Sources */,
 				7AEF7B1FCC9604F964887C19 /* FilterQueryField.swift in Sources */,
 				68789767B446111D7C449F59 /* FilterSyntaxHelpView.swift in Sources */,
+				F1B3D3281707903436AC18D4 /* FlipLights.swift in Sources */,
 				2F12AFD28F5482882F03955C /* FlipSound.swift in Sources */,
 				26FB4550CD5C3E37C7E303A4 /* FlipSwitchTile.swift in Sources */,
+				D2601EFDBCB0C0B693B066B4 /* FlipboardDebug.swift in Sources */,
 				220983279DFC5A2C6EE2691B /* FlipboardGrid.swift in Sources */,
 				5BCC5EB9F77215035E7E5B67 /* FlipboardRules.swift in Sources */,
 				9BDB10C54213061AD4DEBDF7 /* FlipboardView.swift in Sources */,
@@ -1731,6 +1742,7 @@
 				C9900D3D916A62FDA1BDC0E2 /* DuoLayoutTests.swift in Sources */,
 				C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */,
 				D7CE880328DE945D47634FF7 /* FlipboardAddTests.swift in Sources */,
+				EDB29D421E6A3BE658EB08FE /* FlipboardLightsTests.swift in Sources */,
 				2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */,
 				F8458ACDEBB20AD4013AD07B /* FontTests.swift in Sources */,
 				11ACEC665C24375E2CCF97EC /* GroupsTests.swift in Sources */,
