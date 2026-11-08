@@ -146,11 +146,9 @@ final class SharedRowsTests: XCTestCase {
         let rows = SharedRows(store: { store })
         XCTAssertEqual(Set(rows.rows.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk", "Bread"])
         XCTAssertEqual(Set(rows.open.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk"])
-        XCTAssertEqual(rows.lists.map(\.title), ["Groceries", "Trip"], "by name, as the Shared screen")
+        XCTAssertEqual(rows.lists.map(\.title), ["Groceries", "Trip"], "by name")
         XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.listTitle, "Groceries")
         XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.filterProjectName, "Shared Tasks")
-        XCTAssertTrue(rows.isList(groceries))
-        XCTAssertFalse(rows.isList(UUID()))
     }
 
     func testRowsFollowTheStoreAndRedrawWhatReadsThem() throws {
@@ -315,8 +313,7 @@ final class SharedRowsTests: XCTestCase {
         let rows = SharedRows(store: { store })
         XCTAssertEqual(rows.inboxCount(now: now), 3, "the dated open ones")
         XCTAssertEqual(rows.todayCount(now: now), 2, "today's and the overdue one")
-        XCTAssertEqual(rows.openCount(in: trip.id), 4)
-        XCTAssertEqual(rows.openCount(in: groceries), 0)
+        XCTAssertEqual(rows.openCount, 4, "the Shared Tasks Group's count: every open shared task, dated or not")
     }
 
     func testPriorityAndDeleteGoThroughTheStore() throws {

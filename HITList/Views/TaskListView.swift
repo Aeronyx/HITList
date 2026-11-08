@@ -23,8 +23,11 @@ struct TaskListView: View {
     @State private var toast = CompletionToastState()
     /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
     @State private var editorOwner = UUID()
-    /// The shared tasks Today shows among yours (brief 62); nothing while Shared Tasks is off.
+    /// The shared tasks Today shows among yours (brief 62), and the Shared Tasks Group's (brief 64); nothing while
+    /// Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
+    /// The Shared Tasks Group's "Sharing…" (brief 64).
+    @State private var showSharing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -49,6 +52,9 @@ struct TaskListView: View {
         return nil
     }
 
+    /// The Shared Tasks Group (brief 64): a Group's screen whose tasks are every shared task, dated or not.
+    private var isSharedTasks: Bool { selection == .sharedTasks }
+
     private var title: String {
         switch selection {
         case .inbox: return "Inbox"
@@ -56,7 +62,7 @@ struct TaskListView: View {
         case .upcoming: return "Upcoming"
         case .completed: return "Completed"
         case .filter: return currentFilter?.name ?? "Filter"
-        case .project: return currentProject?.name ?? "Group"
+        case .project: return isSharedTasks ? SharedTasksGroup.name : currentProject?.name ?? "Group"
         case .label: return currentLabel.map { "@" + $0.name } ?? "Label"
         }
     }
@@ -88,17 +94,23 @@ struct TaskListView: View {
         /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
+        /// A set of people's section in the Shared Tasks Group (brief 64): their faces and first names.
+        var people: SharedSetHeading?
     }
 
     /// Tasks completed here in the last moment, which the list keeps showing until their animation ends.
     private var recentlyCompleted: Set<UUID> { completions.heldIDs }
 
-    /// The shared tasks this list shows (brief 62): Today's, by the same rule as yours. The other lists (a Group, a
-    /// label, a filter, Completed) are yours alone.
+    /// The shared tasks this list shows (brief 62): Today's, by the same rule as yours; the Shared Tasks Group's, all of
+    /// them, dated or not (brief 64). The other lists (a Group, a label, a filter, Completed) are yours alone.
     private func matchedShared() -> [SharedRow] {
+        if isSharedTasks { return sharedRows.rows.filter { showCompleted || !$0.filterIsCompleted } }
         guard selection == .today else { return [] }
         return sharedRows.rows.filter { TaskOrdering.isInToday($0, now: now, includeCompleted: showCompleted) }
     }
+
+    /// Lists whose shared rows animate out here after a completion.
+    private var showsSharedRows: Bool { selection == .today || isSharedTasks }
 
     /// Whether a row is still in this list, so a completion settles in place rather than collapsing.
     private func isListed(_ id: UUID) -> Bool {
@@ -106,6 +118,8 @@ struct TaskListView: View {
     }
 
     private func matchedTasks() throws -> [TaskItem] {
+        // The Shared Tasks Group holds no task of yours.
+        if isSharedTasks { return [] }
         // Today and the Inbox follow `TaskOrdering`'s rules rather than a query (an undated task in a
         // Group is a note: never in Today or the Inbox, only in its Group).
         switch selection {
@@ -131,7 +145,7 @@ struct TaskListView: View {
         let shown = rows.filter { !held.contains($0.id) }
         let animating = allTasks.compactMap { task in
             anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
-        } + (selection == .today ? sharedRows.rows : []).compactMap { row in
+        } + (showsSharedRows ? sharedRows.rows : []).compactMap { row in
             anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
         }
         return FilterQuery.defaultSort(shown + animating)
@@ -145,6 +159,7 @@ struct TaskListView: View {
                 return .success([Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
             }
             let rows = placed(matched, shared: matchedShared())
+            if isSharedTasks { return .success(sharedTasksGroups(rows)) }
             switch selection {
             case .today: return .success(todayGroups(rows))
             case .inbox:
@@ -208,9 +223,26 @@ struct TaskListView: View {
         Binding(get: { todaySort }, set: { storedTodaySort = $0.rawValue })
     }
 
-    /// Rows name their Group, except in that Group's own list and under its header in a Today sorted by Group.
+    /// Rows name their Group, except in that Group's own list (Shared Tasks' too) and under its header in a Today
+    /// sorted by Group.
     private var showsProjectOnRows: Bool {
-        currentProject == nil && !(selection == .today && todaySort == .group)
+        currentProject == nil && !isSharedTasks && !(selection == .today && todaySort == .group)
+    }
+
+    /// The Shared Tasks Group's rows (brief 64), priority then date, dated or not. With more than one set of people
+    /// (shared lists underneath), a section per set headed by their faces and first names; with one, no sections.
+    private func sharedTasksGroups(_ rows: [TaskListRow]) -> [Group] {
+        guard !rows.isEmpty else { return [] }
+        let me = sharedRows.me
+        let lists = SharedSets.ordered(sharedRows.lists, me: me)
+        guard lists.count > 1 else { return [Group(id: "shared", title: "", rows: TaskOrdering.sorted(rows, now: now))] }
+        let sections = GroupedOrdering.sections(rows, by: .group, groupOrder: lists.map(\.id), now: now) { $0.sharedTask?.listID }
+        return sections.map { section in
+            let list: SharedList? = if case .group(let id) = section.key { lists.first { $0.id == id } } else { nil }
+            return Group(id: "set-\(section.key)", title: "", rows: section.tasks,
+                         people: SharedSetHeading(people: list.map { SharedPeople.others(in: $0, me: me) } ?? [],
+                                                  count: section.openCount))
+        }
     }
 
     private func groupedTodayGroups(_ rows: [TaskListRow]) -> [Group] {
@@ -239,29 +271,18 @@ struct TaskListView: View {
         return groups
     }
 
-    /// A shared list chosen in the Mac and iPad sidebar (`SidebarItem.sharedList`, brief 62).
-    private var sharedListID: UUID? {
-        guard case .filter(let id) = selection, currentFilter == nil, sharedRows.isList(id) else { return nil }
-        return id
-    }
-
     var body: some View {
-        if let listID = sharedListID {
-            // Its own screen (members, invitations, its tasks), in the detail column. The quick add's "+" has no
-            // shared list to add to; the screen's own field does that.
-            SharedListScreen(listID: listID)
-                .quickAddEntry(.plain, showsButton: false)
-        } else {
-            list
-        }
-    }
-
-    private var list: some View {
         VStack(spacing: 0) {
             SwiftUI.Group {
                 switch result {
                 case .success(let groups):
-                    if groups.isEmpty, isCompact {
+                    if isSharedTasks, !SharedTasksCenter.shared.isOn {
+                        // Off: what sharing is, and one button to switch it on and invite (brief 64).
+                        SharedTasksOff {
+                            SharedTasksCenter.shared.setOn(true)
+                            showSharing = true
+                        }
+                    } else if groups.isEmpty, isCompact {
                         // iPhone: one quiet grey line; the "+" is right there.
                         Text(emptyTitle)
                             .font(HITType.subheadline)
@@ -276,7 +297,10 @@ struct TaskListView: View {
                         } description: {
                             Text(emptyDescription)
                         } actions: {
-                            if selection != .completed {
+                            if isSharedTasks {
+                                Button("Sharing…") { showSharing = true }
+                                    .buttonStyle(.hitPrimary)
+                            } else if selection != .completed {
                                 Button("Add Task") { popouts.openQuickAdd(addContext) }
                                     .buttonStyle(.hitPrimary)
                             }
@@ -293,7 +317,10 @@ struct TaskListView: View {
                                         }
                                     }
                                 } header: {
-                                    if let heading = group.heading {
+                                    if let people = group.people {
+                                        SharedSetHeader(heading: people)
+                                            .listRowInsets(EdgeInsets())
+                                    } else if let heading = group.heading {
                                         VStack(spacing: 0) {
                                             if let banner = group.banner {
                                                 Text(banner).taskSectionHeader(color: group.color)
@@ -306,7 +333,7 @@ struct TaskListView: View {
                                     }
                                 }
                             }
-                            if selection != .completed, !isCompact {
+                            if selection != .completed, !isSharedTasks, !isCompact {
                                 Section { InlineAddRow(context: addContext, key: "list") }
                             }
                         }
@@ -335,7 +362,7 @@ struct TaskListView: View {
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
                              onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
         }
-        .quickAddEntry(addContext, showsButton: selection != .completed)
+        .quickAddEntry(addContext, showsButton: selection != .completed && !isSharedTasks)
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
@@ -352,6 +379,11 @@ struct TaskListView: View {
                 }
                 if selection == .today {
                     SortPicker(selection: todaySortBinding, choices: ListSort.today)
+                }
+                if isSharedTasks {
+                    // Who shares these tasks: invite, who is in, leave, the switch (brief 64).
+                    Button { showSharing = true } label: { Label("Sharing…", systemImage: "person.2") }
+                        .accessibilityIdentifier("sharingButton")
                 }
             }
         } menu: {
@@ -377,6 +409,7 @@ struct TaskListView: View {
         .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
+        .sharingSheet(isPresented: $showSharing)
         // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
         .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
@@ -558,13 +591,15 @@ struct TaskListView: View {
     private var emptyTitle: String {
         switch selection {
         case .today: return "All clear for today"
+        case .project where isSharedTasks: return "No shared tasks yet"
         case .inbox: return "Inbox zero"
         case .completed: return "Nothing completed yet"
         default: return "No tasks"
         }
     }
     private var emptyDescription: String {
-        selection == .completed ? "Completed tasks show up here." : "Try: Call mom tomorrow 5pm p2 #Family"
+        if isSharedTasks { return "Tasks you share show up here and in everyone's lists. Choose who sees them in Sharing…" }
+        return selection == .completed ? "Completed tasks show up here." : "Try: Call mom tomorrow 5pm p2 #Family"
     }
 
     /// What a task added here defaults to: Today's date in Today, this project in a project, and so on.

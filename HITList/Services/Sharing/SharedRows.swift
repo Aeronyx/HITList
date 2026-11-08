@@ -10,7 +10,7 @@ import HITListCore
 /// this reads through them. Completed tasks are rows too, for Show completed and for a completion still animating;
 /// the lists' own rules leave them out otherwise.
 ///
-/// The actions go through the shared store as `SharedListScreen`'s do: each change is stamped and sent to the others.
+/// The actions go through the shared store: each change is stamped and sent to the others.
 @MainActor
 @Observable
 final class SharedRows {
@@ -30,8 +30,11 @@ final class SharedRows {
     /// The open ones.
     var open: [SharedRow] { rows.filter { !$0.task.isCompleted } }
 
-    /// The lists, in the order the Shared screen and the sidebar show them (by name): Sort by Group's order too.
+    /// The shared lists underneath Shared Tasks (each a set of people), by name.
     var lists: [SharedList] { store?.sortedLists ?? [] }
+
+    /// This account in the shared container, once known.
+    var me: SharedMemberID? { store?.me }
 
     func row(_ id: UUID) -> SharedRow? {
         for list in store?.lists ?? [] {
@@ -41,9 +44,6 @@ final class SharedRows {
     }
 
     func list(_ id: UUID) -> SharedList? { store?.list(id) }
-
-    /// Whether `id` names a shared list (the Mac sidebar's rows select one).
-    func isList(_ id: UUID) -> Bool { list(id) != nil }
 
     /// Each list's people are worked out once for all its rows.
     static func rows(in lists: [SharedList], me: SharedMemberID? = nil) -> [SharedRow] {
@@ -145,10 +145,8 @@ final class SharedRows {
         open.filter { TaskOrdering.isInToday($0, now: now) }.count
     }
 
-    /// A list's open tasks, dated or not, as a Group's count counts them.
-    func openCount(in listID: UUID) -> Int {
-        list(listID)?.tasks.filter { !$0.isCompleted }.count ?? 0
-    }
+    /// The Shared Tasks Group's count: every open shared task, dated or not, as a Group's count counts them (brief 64).
+    var openCount: Int { open.count }
 
     /// A due date moved to `day`: its time of day kept when it has one, else all day.
     nonisolated static func due(movedTo day: Date, from old: SharedDue?, calendar: Calendar = .current) -> SharedDue {

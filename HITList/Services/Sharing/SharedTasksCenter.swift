@@ -339,7 +339,7 @@ final class SharedTasksCenter {
             do {
                 let listID = try await joinPendingInvitation()
                 joiningAtOnce = false
-                if let listID { SharedTasksPresenter.presentScreen(list: listID) }
+                if listID != nil { SharedTasksPresenter.presentSharing() }
             } catch {
                 joiningAtOnce = false
                 problem = SharedTasksSync.describe(error)

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import HITListCore
 
 struct SidebarView: View {
     @Binding var selection: SidebarItem?
@@ -50,7 +51,6 @@ struct SidebarView: View {
                 row("Upcoming", "calendar.badge.clock", .upcoming)
                 row("Flipboard", "switch.2", .flipboard)
                 row("Completed", "checkmark.circle", .completed)
-                SharedTasksSidebarRow() // Shared Tasks preview (brief 51): opens the Shared screen in a sheet
             }
 
             Section {
@@ -75,6 +75,8 @@ struct SidebarView: View {
                 }
                 // Drag a Group to a new place (brief 57); the order is every list's Group order.
                 .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
+                // Shared Tasks, the forced Group, always last (brief 64): no reorder, rename or delete.
+                sharedTasksRow
             } header: {
                 sectionHeader("Groups") { creatingProject = true }
             }
@@ -97,31 +99,6 @@ struct SidebarView: View {
                 .onMove { from, to in move(&filtersSnapshot, from, to) }
             } header: {
                 sectionHeader("Filters") { creatingFilter = true }
-            }
-
-            // Each shared list under "Shared", after the Groups and Filters (brief 62), opening its own screen in the detail column;
-            // the Shared Tasks row above stays for managing them. Only while there are any.
-            let sharedLists = sharedRows.lists
-            if !sharedLists.isEmpty {
-                Section {
-                    ForEach(sharedLists) { list in
-                        Label {
-                            HStack {
-                                Text(list.title.isEmpty ? SharedRow.untitled : list.title)
-                                Spacer()
-                                let n = sharedRows.openCount(in: list.id)
-                                if n > 0 { Text("\(n)").foregroundStyle(.secondary).monospacedDigit() }
-                            }
-                        } icon: {
-                            Image(systemName: "person.2.fill").foregroundStyle(Color(hex: list.colorHex)).imageScale(.small)
-                        }
-                        .tag(SidebarItem.sharedList(list.id))
-                        .slateRow()
-                        .accessibilityIdentifier("sidebar-shared-list")
-                    }
-                } header: {
-                    Text("Shared").textCase(nil)
-                }
             }
 
             Section {
@@ -178,16 +155,35 @@ struct SidebarView: View {
         }
         .animation(HITMotion.enter, value: popouts?.state.isSharedTaskOpen == true)
         #endif
-        // A shared list left or deleted elsewhere while it was showing: back to Today.
-        .onChange(of: sharedRows.lists.map(\.id)) { old, new in
-            if case .filter(let id)? = selection, old.contains(id), !new.contains(id) { selection = .today }
-        }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sheet(isPresented: $creatingProject) { ProjectEditorView(project: nil).slateSheet() }
         .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
         .sheet(isPresented: $creatingLabel) { LabelEditorView(label: nil).slateSheet() }
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
+    }
+
+    /// Shared Tasks under the Groups (brief 64): its dot, its open tasks' count as a Group's (dated or not), or a dot
+    /// while an invitation waits.
+    private var sharedTasksRow: some View {
+        Label {
+            HStack {
+                Text(SharedTasksGroup.name)
+                Spacer()
+                if SharedTasksCenter.shared.pendingInvitation != nil {
+                    Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityLabel("Invitation waiting")
+                } else if sharedRows.openCount > 0 {
+                    Text("\(sharedRows.openCount)").foregroundStyle(.secondary).monospacedDigit()
+                }
+            }
+        } icon: {
+            Image(systemName: "circle.fill").foregroundStyle(Color(hex: SharedTasksGroup.colorHex)).imageScale(.small)
+        }
+        .tag(SidebarItem.sharedTasks)
+        .slateRow()
+        .accessibilityIdentifier("sidebar-shared-tasks")
+        // Shared Tasks starts with the window when it is on, so its tasks are in Today at once.
+        .task { sharedRows.start() }
     }
 
     /// From the sidebar's leading edge to the account button's fill, the same as the Settings button at the
@@ -348,11 +344,4 @@ struct SidebarSectionHeader: View {
         .onHover { isHovered = $0 }
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
     }
-}
-
-extension SidebarItem {
-    /// A shared list chosen in the sidebar (brief 62): a reserved use of `.filter`, as `.settings` and `.flipboard` are,
-    /// so the task list's switches stay as they are. `TaskListView` shows the list's own screen for it; a list's id
-    /// (a random UUID) is never a saved filter's.
-    static func sharedList(_ id: UUID) -> SidebarItem { .filter(id) }
 }

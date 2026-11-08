@@ -15,8 +15,7 @@ import OSLog
 ///   the server while this one renames), share, stop sharing, delete; each step logs PASS or FAIL ("Shared Tasks
 ///   self-test:"). It shows the list and its People in a sheet for 8 s while shared, for a screenshot.
 /// - `-seedSharedTasksSample YES`: an in-memory store with sample lists and people, no CloudKit (screenshots).
-/// - `-openSharedTasks YES` (with `-openSharedList N`, `-openSharedPeople YES`): opens the Shared screen in a sheet a
-///   moment after launch, at the Nth list and its People.
+/// - `-openSharedTasks YES`: opens Sharing… in a sheet a moment after launch.
 /// - `-sharedTasksSchemaPush YES`: the record types into the shared container's Development schema. Run it with its own
 ///   store and the task store's sync off: `HITLIST_STORE_SUFFIX=sNN …/HITList -disableCloudKit YES -sharedTasksSchemaPush
 ///   YES`. It makes a list with every field of every record type set, shares it (a `cloudkit.share` with a title),
@@ -26,8 +25,6 @@ enum SharedTasksDebug {
     static var seedsSample: Bool { UserDefaults.standard.bool(forKey: "seedSharedTasksSample") }
     static var pushesSchema: Bool { UserDefaults.standard.bool(forKey: "sharedTasksSchemaPush") }
     static var opensScreen: Bool { UserDefaults.standard.bool(forKey: "openSharedTasks") }
-    static var openListIndex: Int? { UserDefaults.standard.object(forKey: "openSharedList").map { _ in UserDefaults.standard.integer(forKey: "openSharedList") } }
-    static var opensPeople: Bool { UserDefaults.standard.bool(forKey: "openSharedPeople") }
     static var switchedOnForRun: Bool { UserDefaults.standard.bool(forKey: "sharedTasksOn") }
     static var selfTests: Bool { UserDefaults.standard.bool(forKey: "sharedTasksSelfTest") }
     static var forcesOn: Bool { seedsSample || pushesSchema || switchedOnForRun || selfTests }
@@ -45,9 +42,7 @@ enum SharedTasksDebug {
         if opensScreen {
             Task {
                 try? await Task.sleep(for: .seconds(1.5))
-                let lists = center.store?.sortedLists ?? []
-                let list = openListIndex.flatMap { lists.indices.contains($0) ? lists[$0].id : nil }
-                SharedTasksPresenter.presentScreen(list: list, people: opensPeople)
+                SharedTasksPresenter.presentSharing()
             }
         }
     }
@@ -177,8 +172,8 @@ enum SharedTasksDebug {
             let again = try await center.prepareShare(for: list.id)
             say("3 Invite again reuses the share: \(verdict(again.recordID == share.recordID))")
 
-            SharedTasksPresenter.presentScreen(list: list.id, people: true)
-            say("showing the list and People")
+            SharedTasksPresenter.presentSharing()
+            say("showing Sharing…")
             try? await Task.sleep(for: .seconds(8))
             SharedTasksPresenter.dismiss()
 
