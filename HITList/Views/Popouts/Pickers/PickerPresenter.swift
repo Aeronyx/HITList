@@ -131,11 +131,41 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 
     func body(content: Content) -> some View {
         let binding = $isPresented
-        return content.anchorPreference(key: PickerRequestKey.self, value: .bounds) { anchor in
-            guard binding.wrappedValue else { return nil }
-            return PickerRequest(kind: kind, anchor: anchor, dismiss: { binding.wrappedValue = false },
-                                 card: AnyView(card()))
-        }
+        return content
+            .background(PickerChipReveal(isPresented: isPresented))
+            .anchorPreference(key: PickerRequestKey.self, value: .bounds) { anchor in
+                guard binding.wrappedValue else { return nil }
+                return PickerRequest(kind: kind, anchor: anchor, dismiss: { binding.wrappedValue = false },
+                                     card: AnyView(card()))
+            }
+    }
+}
+
+/// Brings a chip into sight as its card opens (brief 65): the editor's Deadline and Location pills and a chip
+/// the quick-add card's "+" reveals sit past the end of their sideways rows, and the card opened under a chip
+/// nobody could see. The row scrolls to show the chip; the card follows it (`PickerPortalView` re-syncs).
+private struct PickerChipReveal: NSViewRepresentable {
+    let isPresented: Bool
+
+    func makeNSView(context: Context) -> PickerChipRevealView { PickerChipRevealView() }
+
+    func updateNSView(_ view: PickerChipRevealView, context: Context) {
+        guard isPresented != view.wasPresented else { return }
+        view.wasPresented = isPresented
+        guard isPresented else { return }
+        DispatchQueue.main.async { [weak view] in view?.reveal() }
+    }
+}
+
+final class PickerChipRevealView: NSView {
+    var wasPresented = false
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Scrolls the nearest enclosing scroll view just far enough to show the whole chip, with a little room.
+    func reveal() {
+        guard window != nil, enclosingScrollView != nil else { return }
+        scrollToVisible(bounds.insetBy(dx: -PickerPlacement.margin, dy: 0))
     }
 }
 

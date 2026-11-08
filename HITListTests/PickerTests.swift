@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Observation
 import HITListCore
 @testable import HITList
 
@@ -311,6 +312,50 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(host.frame, content.frame, "covers the content")
         XCTAssertTrue(PickerLayerHost.host(in: window) === host, "one layer per window")
         XCTAssertNil(host.hitTest(NSPoint(x: 100, y: 100)), "lets every click through while no card is open")
+    }
+
+    /// Brief 65: a chip past the end of its sideways row (the editor's Deadline and Location pills, a chip the
+    /// quick-add card's "+" reveals) scrolls into sight as its card opens, so the card is never under a chip
+    /// nobody can see.
+    func testAChipScrollsIntoSightWhenItsCardOpens() throws {
+        let model = RevealModel()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        window.contentView = NSHostingView(rootView: RevealRow(model: model).pickerOverlay())
+        window.orderFrontRegardless()
+        defer { window.close() }
+        spin(0.3)
+        let chip = try XCTUnwrap(Self.revealViews(in: try XCTUnwrap(window.contentView)).first)
+        let clip = try XCTUnwrap(chip.enclosingScrollView?.contentView)
+        func shown() -> Bool { clip.documentVisibleRect.contains(chip.convert(chip.bounds, to: clip)) }
+        XCTAssertFalse(shown(), "past the end of the row")
+        model.isOpen = true
+        spin(0.5)
+        XCTAssertTrue(shown(), "scrolled into sight as its card opened")
+    }
+
+    @Observable final class RevealModel { var isOpen = false }
+
+    private struct RevealRow: View {
+        @Bindable var model: RevealModel
+        var body: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(0..<8) { Text("Chip \($0)").frame(width: 80) }
+                    Text("Deadline").frame(width: 80)
+                        .pickerAnchor(.deadline, isPresented: $model.isOpen) { Text("card") }
+                }
+            }
+            .frame(width: 300, height: 200)
+        }
+    }
+
+    private static func revealViews(in view: NSView) -> [PickerChipRevealView] {
+        (view as? PickerChipRevealView).map { [$0] } ?? view.subviews.flatMap(revealViews(in:))
+    }
+
+    private func spin(_ seconds: TimeInterval) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
     #endif
 }
