@@ -199,7 +199,7 @@ struct TaskPopout: View {
             Menu("Move to…", systemImage: "arrow.right.square") {
                 Button("Inbox", systemImage: "tray") { setProject(nil) }
                 ForEach(projects) { project in
-                    Button(project.name, systemImage: "number") { setProject(project) }
+                    Button(project.name, systemImage: GroupDot.symbol) { setProject(project) }
                 }
             }
             Divider()
@@ -321,7 +321,7 @@ struct TaskPopout: View {
     /// default colour), opening the same Group card; a pick there replaces the typed Group.
     private func typedGroupRow(_ name: String) -> some View {
         let project = projects.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-        return EditorRow(project?.name ?? name, systemImage: "number",
+        return EditorRow(project?.name ?? name, systemImage: GroupDot.symbol,
                          tint: project.map { Color(hex: $0.colorHex) } ?? PopoutTint.project,
                          action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
