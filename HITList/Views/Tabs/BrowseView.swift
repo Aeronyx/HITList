@@ -132,7 +132,7 @@ struct BrowseView: View {
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,
-                              count: open.filter(\.isInInbox).count, subtitle: "Default Group")
+                              count: open.filter(\.isInInbox).count + SharedRows.shared.inboxCount(), subtitle: "Default Group")
                 }
                 ForEach(projects) { project in
                     link(.project(project.id)) {

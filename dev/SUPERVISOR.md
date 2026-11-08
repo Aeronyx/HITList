@@ -230,7 +230,15 @@ saved filters live in Browse's search field on iPhone, the Inbox has no filter c
 first in Browse, above Shared Tasks; switching tabs returns the other tab to its first screen; shared tasks are rows in
 your lists, the Shared Tasks screen is for the lists themselves.
 
-## 8. Where things stand (2026-11-07, after round 13)
+## 8. Where things stand (2026-11-08, after round 14)
+
+**2026-11-08, round 14 merged as 0.8.1 (Fable).** 0.8.0 shipped an Inbox George called a mess (a small title that was
+a button, two filter-looking controls, "Inbox" twice, two fonts in one header) because the supervisor merged brief 57
+without opening the Inbox. Round 14 (briefs 61–63) put it right: large titles, one view-options control, Sort by
+Priority/Group/Date, filters in Browse's search field, Groups first in Browse; shared tasks are rows in Today, Upcoming
+and the Inbox (`ListRow`, `SharedRows`) with a Shared section in the Mac sidebar; the Duo's outer display has larger
+rows and a roomier island; leaving a tab resets it. §4 step 8 now requires the screenshot pass and the screenshots in
+the hand-over; §7 holds the rules. Next: George's feedback on 0.8.1; two-account shared tasks with a friend.
 
 **2026-11-07, round 13 merged (Fable).** Briefs 57–60 (Groups, tab motion, Flipboard intervals, Review Inbox) ran as
 four Opus sessions at once and are merged on master as **0.8.0**, together with the day's fixes (the iPad-on-Mac opt-out,
