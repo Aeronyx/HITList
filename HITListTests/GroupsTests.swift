@@ -4,8 +4,8 @@ import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Brief 57: grouped Inbox and Today on real `TaskItem`s and `Project`s, their section headings, and the
-/// remembered "Group by".
+/// Briefs 57 and 61: the Inbox and Today sorted by Group or Date on real `TaskItem`s and `Project`s, their
+/// section headings, and the remembered "Sort by".
 @MainActor
 final class GroupsTests: XCTestCase {
     private var container: ModelContainer!
@@ -119,6 +119,8 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(GroupGuidance.label, "A label is a tag any task can carry: @waiting, @errands.")
         let tip = HITTipKind.quickAddSyntax.message
         XCTAssertTrue(tip.contains("# picks its one Group") && tip.contains("@ adds any labels"), tip)
+        let browse = HITTipKind.browse.message
+        XCTAssertTrue(browse.contains("search that understands #Work"), "the Browse tip teaches filters in the search: \(browse)")
     }
 
     // MARK: - Reordering Groups
