@@ -1,5 +1,10 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
 #if os(iOS)
 extension View {
@@ -85,5 +90,33 @@ struct GroupsTitleMenuCounts {
     /// "Work · 3"; just "Work" with nothing open.
     static func title(_ name: String, count: Int) -> String {
         count == 0 ? name : "\(name) · \(count)"
+    }
+}
+
+/// A small filled circle in a Group's or label's colour, as an image menus keep in colour (they draw
+/// template images in the text colour).
+enum ColorDot {
+    static let diameter: CGFloat = 10
+
+    static func image(hex: String) -> Image {
+        #if os(macOS)
+        let color = NSColor(Color(hex: hex))
+        let size = NSSize(width: diameter, height: diameter)
+        let image = NSImage(size: size, flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return Image(nsImage: image)
+        #else
+        let color = UIColor(Color(hex: hex))
+        let size = CGSize(width: diameter, height: diameter)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            color.setFill()
+            context.cgContext.fillEllipse(in: CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5))
+        }
+        return Image(uiImage: image.withRenderingMode(.alwaysOriginal))
+        #endif
     }
 }
