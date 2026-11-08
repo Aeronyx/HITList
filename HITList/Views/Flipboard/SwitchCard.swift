@@ -167,7 +167,9 @@ struct SwitchCard: View {
             }
             .accessibilityIdentifier("switchIntervalDial")
             unitMenu(interval, parser: parser)
-            Spacer(minLength: 0)
+            Spacer(minLength: HITSpacing.s)
+            // How it will look: tap it to try the flip.
+            SwitchPreviewRocker(flips: draft.flips)
         }
     }
 

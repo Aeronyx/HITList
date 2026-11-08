@@ -278,6 +278,48 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertEqual(task.title, "Shave")
     }
 
+    // MARK: Tactile controls (item 2)
+
+    /// A drag on a dial moves one detent per `FlipDial.stepLength` along its stronger axis: right or up is more.
+    func testADragOnADialMovesOneDetentPerStep() {
+        let step = FlipDial.stepLength
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: step + 2, height: 3)), 1)
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: -(2 * step + 1), height: 0)), -2)
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: 0, height: -(2 * step + 1))), 2, "up is more")
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: 4, height: step + 1)), -1, "down is less")
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: step - 1, height: 0)), 0, "short of a detent")
+        XCTAssertEqual(FlipDial.steps(for: CGSize(width: 3 * step, height: 2 * step)), 3, "the stronger axis wins")
+    }
+
+    /// The Mac: a scroll over a dial steps it, a trackpad by distance and a wheel by notch, finger or wheel up
+    /// meaning more whichever way the system's scrolling is set.
+    func testScrollingOverADialSteps() {
+        var detents = DialScrollDetents()
+        XCTAssertEqual(detents.add(deltaY: DialScrollDetents.preciseStep / 2, precise: true, inverted: false), 0)
+        XCTAssertEqual(detents.add(deltaY: DialScrollDetents.preciseStep / 2 + 1, precise: true, inverted: false), 1,
+                       "trackpad deltas add up")
+        XCTAssertEqual(detents.add(deltaY: -3 * DialScrollDetents.preciseStep, precise: true, inverted: false), -3)
+        var natural = DialScrollDetents()
+        XCTAssertEqual(natural.add(deltaY: -DialScrollDetents.preciseStep, precise: true, inverted: true), 1,
+                       "natural scrolling: the same finger movement")
+        var wheel = DialScrollDetents()
+        XCTAssertEqual(wheel.add(deltaY: 0.4, precise: false, inverted: false), 1, "a wheel notch is one detent")
+        XCTAssertEqual(wheel.add(deltaY: -2, precise: false, inverted: false), -2)
+        XCTAssertEqual(wheel.add(deltaY: 0, precise: false, inverted: false), 0)
+    }
+
+    /// The quick choices are one strip: a press anywhere picks the choice under it, and a finger sliding along
+    /// it moves the choice with it.
+    func testTheChoiceUnderAPointOnTheStrip() {
+        let width: CGFloat = 300, count = 5
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, width: width, count: count), 0)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 150, width: width, count: count), 2)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 299, width: width, count: count), 4)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: -40, width: width, count: count), 0, "past the start: the first")
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 420, width: width, count: count), 4, "past the end: the last")
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, width: 0, count: count), 0)
+    }
+
     // MARK: The grid
 
     /// The card is at least `FlipboardLayout.cardMinWidth` wide: as many columns as that takes.
