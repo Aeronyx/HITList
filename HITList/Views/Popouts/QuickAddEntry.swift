@@ -48,22 +48,17 @@ private struct QuickAddEntry: ViewModifier {
     }
 
     #if os(macOS)
-    /// The iPhone's accent oval as a prominent toolbar button, so the toolbar sizes and aligns it with its
-    /// neighbours (a hand-drawn capsule sat off-centre on macOS 26).
+    /// The Mac's "+": the accent capsule with the dark glyph every accent control has (the Confirm pill's arrow,
+    /// the iPhone's "+"), drawn by us, the same in a key and a background window (George, 2026-11-08: "the
+    /// 'Confirm add task' button inside a task card shouldn't have a differently-colored arrow ... these buttons
+    /// are supposed to be visually consistent"). The system's prominent glass drew the "+" white, greyed the oval
+    /// in a background window, and showed a second oval whenever the toolbar's shared glass came back.
     private var addButton: some View {
         Button { popouts.openQuickAdd(context) } label: {
-            // Decently smaller than build 13's (George): the oval measures 50 × 30 pt in the toolbar (it was
-            // 58 × 36 with a 22 × 16 label and a 13 pt glyph).
             Image(systemName: "plus")
-                .font(.system(size: 10, weight: .bold))
-                .frame(width: 14, height: 10)
+                .font(.system(size: ToolbarAddButton.glyphSize, weight: ConfirmPill.glyphWeight))
         }
-        // Not `.controlSize(.small)`: on macOS 26 that drew the glass oval in two halves (build 10). The toolbar
-        // sets this button's height.
-        .modifier(ProminentToolbarButton())
-        // The same accent oval in a window in the background: without its shared glass, an inactive prominent
-        // glass button draws no fill at all, only the "+".
-        .environment(\.controlActiveState, .key)
+        .buttonStyle(ToolbarAddButton())
         .accessibilityLabel("Add task")
         .accessibilityIdentifier("toolbarAddTask")
         .help("Add a task (⌘N)")
@@ -129,14 +124,35 @@ struct FloatingAddButton: View {
 }
 
 #if os(macOS)
-/// Accent-filled capsule in the Mac toolbar: Liquid Glass on macOS 26, bordered-prominent before.
-private struct ProminentToolbarButton: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content.buttonStyle(.glassProminent).tint(Theme.accent)
-        } else {
-            content.buttonStyle(.borderedProminent).tint(Theme.accent)
-        }
+/// The toolbar "+"'s look: `HITButtonStyle`'s primary colours (accent fill, `HITColor.onAccent` glyph, a little
+/// darker on hover and press) on a 50 × 30 pt capsule, as `ConfirmPill` draws them at its own size.
+struct ToolbarAddButton: ButtonStyle {
+    static let size = CGSize(width: 50, height: 30)
+    static let glyphSize: CGFloat = 13
+
+    func makeBody(configuration: Configuration) -> some View {
+        ToolbarAddButtonBody(configuration: configuration)
+    }
+}
+
+private struct ToolbarAddButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+
+    var body: some View {
+        let look = HITButtonStyle.Appearance(kind: .primary, isPressed: configuration.isPressed,
+                                             isHovered: isHovered, isEnabled: isEnabled)
+        configuration.label
+            .foregroundStyle(look.foreground)
+            .frame(width: ToolbarAddButton.size.width, height: ToolbarAddButton.size.height)
+            .background(Capsule().fill(look.fill))
+            .contentShape(Capsule())
+            .opacity(look.opacity)
+            .onHover { isHovered = $0 }
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: configuration.isPressed)
+            .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
     }
 }
 #endif
