@@ -91,6 +91,24 @@ final class ReminderGrammarTests: XCTestCase {
         }
     }
 
+    /// The task editor's title (brief 65): the task being edited already has a time, so "!15mb" typed alone
+    /// is read against it, though no time is typed. Nothing else about the parse changes.
+    func testBeforeTheDueTimeCountsWhenTheTaskAlreadyHasATime() {
+        var timed = parser
+        timed.dueTimeIsSet = true
+        for (text, minutes) in [("Pack !1hb", 60), ("Pack tomorrow !1db", 1440), ("Pack !at", 0), ("Pack !1h30mb", 90)] {
+            let r = timed.parse(text)
+            XCTAssertEqual(r.reminderOffsetMinutes, minutes, text)
+            XCTAssertEqual(r.title, "Pack", text)
+            XCTAssertEqual(r.tokens.filter { $0.kind == .reminder }.count, 1, text)
+            XCTAssertFalse(r.hasDueTime, "the parse sets no time of its own: \(text)")
+        }
+        XCTAssertNil(timed.parse("Pack !1h").reminderOffsetMinutes, "a from-now reminder is still from now")
+        XCTAssertEqual(timed.parse("Pack !1h").reminderDate, minutes(60))
+        XCTAssertNil(timed.parse("Pack !1hb", mode: .live).reminderOffsetMinutes, "still not read while typed at the end")
+        XCTAssertFalse(parser.dueTimeIsSet, "off unless asked")
+    }
+
     // MARK: Which one counts
 
     func testALaterFromNowOverridesAnEarlierOne() {
