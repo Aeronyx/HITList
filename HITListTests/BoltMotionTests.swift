@@ -75,4 +75,35 @@ final class BoltMotionTests: XCTestCase {
                       "spent sparks draw nothing")
         XCTAssertNil(BoltSlamMotion.crackle(life: 0))
     }
+
+    // MARK: The style (Settings → Extras → Sync bolt)
+
+    func testTheSlamIsTheDefaultAndTheChoiceIsKept() {
+        let defaults = UserDefaults(suiteName: "BoltStyleTests-\(UUID().uuidString)")!
+        XCTAssertEqual(BoltStyle.selected(in: defaults), .slam, "the cooler one George asked for")
+        defaults.set(BoltStyle.strike.rawValue, forKey: BoltStyle.key)
+        XCTAssertEqual(BoltStyle.selected(in: defaults), .strike)
+        defaults.set("firework", forKey: BoltStyle.key)
+        XCTAssertEqual(BoltStyle.selected(in: defaults), .slam, "an unknown value reads as the default")
+        XCTAssertEqual(BoltStyle.allCases.map(\.title), ["Strike", "Slam"], "today's first, in the picker")
+    }
+
+    func testEachStylePlaysOnlyWhenTheGateSaysAndReduceMotionBlinksForBoth() {
+        XCTAssertEqual(BoltStyle.slam.motion(for: .strike), .slam)
+        XCTAssertEqual(BoltStyle.strike.motion(for: .strike), .strike)
+        for style in BoltStyle.allCases {
+            XCTAssertNil(style.motion(for: .none), "the gate decides when, for both")
+            XCTAssertEqual(style.motion(for: .blink), .blink, "Reduce Motion gets the blink for both")
+        }
+    }
+
+    func testPlayingBumpsOnlyTheMotionThatPlays() {
+        var player = BoltPlayer()
+        player.play(.slam)
+        XCTAssertEqual(player, BoltPlayer(strikes: 0, strikeKind: .strike, slams: 1))
+        player.play(.blink)
+        XCTAssertEqual(player, BoltPlayer(strikes: 1, strikeKind: .blink, slams: 1))
+        player.play(.strike)
+        XCTAssertEqual(player, BoltPlayer(strikes: 2, strikeKind: .strike, slams: 1))
+    }
 }
