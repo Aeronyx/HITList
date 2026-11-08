@@ -49,15 +49,25 @@ enum HITFont {
         }
     }
 
-    /// iOS navigation bar titles (large and inline) in Inter; SwiftUI has no modifier for them.
-    /// Call once at launch. A no-op on macOS, where the window title is the system's.
+    /// Call once at launch, before any window draws. iOS: navigation bar titles (large and inline) in Inter;
+    /// SwiftUI has no modifier for them. macOS: text drawn without font smoothing (`smoothsMacText`).
     static func installPlatformAppearance() {
         #if canImport(UIKit)
         let bars = UINavigationBar.appearance()
         if let large = UIFont(name: postScriptName(.bold), size: 34) { bars.largeTitleTextAttributes = [.font: large] }
         if let inline = UIFont(name: postScriptName(.semibold), size: 17) { bars.titleTextAttributes = [.font: inline] }
+        #else
+        UserDefaults.standard.register(defaults: macTextSmoothingDefaults)
         #endif
     }
+
+    /// Whether the Mac thickens text as it draws it ("font smoothing": every glyph's outline grown by about a
+    /// quarter point). Off since round 15 (brief 67): George's target row is drawn without it, and with it our
+    /// Inter rows read 20–25% heavier than the target's (stems 2.95 px against 2.37 at 2x). Without it the Mac
+    /// draws text the way the iPhone always has. Registered for this process only, as the lowest-priority
+    /// default, so a smoothing choice set system-wide in Terminal still wins and nothing is written to disk.
+    static let smoothsMacText = false
+    static var macTextSmoothingDefaults: [String: Any] { smoothsMacText ? [:] : ["AppleFontSmoothing": 0] }
 }
 
 /// Type roles, all Inter. Sizes follow each platform's text styles (iOS Dynamic Type default / macOS),
@@ -119,34 +129,32 @@ enum HITType {
     #else
     static let taskName = HITFont.inter(19, .bold)
     #endif
-    /// A task's title in a list row (`TaskRow`), with `taskTitleTracking`. iPhone: a step under `body`,
-    /// a pixel tighter (George, build 13: "a little too large", the kerning "ever so slightly too much,
-    /// by like a pixel"). Mac: `body`, untouched (13 pt is already the Mac's small list text).
+    /// A task's title in a list row (`TaskRow`), with `taskTitleTracking`, over its second line (`MetaItem`) in
+    /// `taskMeta`. Round 15 (brief 67), measured against George's target, Todoist's Mac row (the system font,
+    /// SF Pro, 14 over 12, drawn without font smoothing): Inter 14 regular spans the target's line to the pixel
+    /// with no extra tracking, its x-height 2% taller and its ascenders 1.5% shorter; Inter 12 spans the target's
+    /// date to the pixel. The Mac's rows were `body` (13) over `caption` (10). iPhone: 17 over 13 with build 13's
+    /// −0.3 tracking, the sizes the Duo's outer display has used since brief 63 and George called solid; rows
+    /// were 16 over 12 (17 until build 13: "a little too large", the kerning "too much, by like a pixel").
     #if os(macOS)
-    static let taskTitle = body
+    static let taskTitleSize: CGFloat = 14
     static let taskTitleTracking: CGFloat = 0
-    static let taskTitleSide = taskTitle
-    /// A row's second line (`MetaItem`): the caption size.
-    static let taskMeta = caption
-    static let taskMetaSide = taskMeta
-    #else
-    static let taskTitleSize: CGFloat = 16
-    static let taskTitle = HITFont.inter(taskTitleSize, .regular, relativeTo: .body)
-    static let taskTitleTracking: CGFloat = -0.3
-    /// Beside the upright island (the iPhone Duo's outer display, brief 63): one step up, same tracking, because
-    /// a friend on the Duo found the rows' type a little small there. Only the row's title and meta line; large
-    /// titles and section headers stay as they are.
-    static let taskTitleSideSize: CGFloat = 17
-    static let taskTitleSide = HITFont.inter(taskTitleSideSize, .regular, relativeTo: .body)
-    /// A row's second line (`MetaItem`): the caption size, and a step up beside the upright island.
     static let taskMetaSize: CGFloat = 12
-    static let taskMeta = HITFont.inter(taskMetaSize, .regular, relativeTo: .caption)
-    static let taskMetaSideSize: CGFloat = 13
-    static let taskMetaSide = HITFont.inter(taskMetaSideSize, .regular, relativeTo: .caption)
+    #else
+    static let taskTitleSize: CGFloat = 17
+    static let taskTitleTracking: CGFloat = -0.3
+    static let taskMetaSize: CGFloat = 13
     #endif
+    static let taskTitle = HITFont.inter(taskTitleSize, .regular, relativeTo: .body)
+    static let taskMeta = HITFont.inter(taskMetaSize, .regular, relativeTo: .caption)
+    /// Beside the upright island (the iPhone Duo's outer display, brief 63) rows were a step larger than on
+    /// other iPhones; since round 15 every iPhone uses that step, so the two are one.
+    static let taskTitleSide = taskTitle
+    static let taskMetaSide = taskMeta
 
-    /// A row's title where the island stands (`\.listIslandPlacement`): one step up beside the upright island,
-    /// the usual size everywhere else. Chosen by where the island is, never by device model.
+    /// A row's title where the island stands (`\.listIslandPlacement`), chosen by where the island is, never by
+    /// device model. Since round 15 both placements give the same font; the rows keep asking, so a side size
+    /// can come back in one line here.
     static func taskTitle(for placement: IslandPlacement) -> Font {
         placement.isSide ? taskTitleSide : taskTitle
     }
@@ -157,12 +165,15 @@ enum HITType {
     }
     /// Section headers above a group of rows or fields.
     static let sectionHeader = caption2Semibold
-    /// A task list's section headers ("Overdue", "Nov 1, Sunday", "Priority 1"): semibold, a step above
-    /// the rows' body text on the Mac and the subheadline size on iPhone. Applied by `taskSectionHeader`.
+    /// A task list's section headers ("Overdue", "Nov 1, Sunday", "Priority 1"), applied by `taskSectionHeader`.
+    /// Mac: the rows' title size, bold, as the target's "Overdue" (Inter 14 bold matches its ink within 2%).
+    /// iPhone: semibold, a step under the rows' title, as it was under 16 pt rows.
     #if os(macOS)
-    static let listSectionHeader = HITFont.inter(13, .semibold, relativeTo: .headline)
+    static let listSectionHeaderSize: CGFloat = 14
+    static let listSectionHeader = HITFont.inter(listSectionHeaderSize, .bold, relativeTo: .headline)
     #else
-    static let listSectionHeader = HITFont.inter(15, .semibold, relativeTo: .subheadline)
+    static let listSectionHeaderSize: CGFloat = 16
+    static let listSectionHeader = HITFont.inter(listSectionHeaderSize, .semibold, relativeTo: .subheadline)
     #endif
     /// Filter queries and other code-like text stay in the system mono; Inter has no mono cut.
     static let mono = Font.callout.monospaced()
