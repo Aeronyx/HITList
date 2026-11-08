@@ -84,10 +84,9 @@ struct SharedRowPeople: View {
                 .font(HITType.taskMeta(for: islandPlacement))
                 .hidden()
                 .frame(width: SharedAvatarStack.width(count: people.count, size: line))
+                // The stack is its own accessibility element ("Shared with Sam and Alex"); the space under it is hidden.
                 .overlay(alignment: .leading) { SharedAvatarStack(people: people, size: line, ring: ring) }
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { line = max(1, $0) }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(SharedAvatarStack.accessibilityLabel(people))
         }
     }
 }

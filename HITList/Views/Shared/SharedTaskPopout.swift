@@ -165,6 +165,8 @@ struct SharedTaskPopout: View {
         #if os(macOS)
         .onExitCommand { requestClose(row) }
         #endif
+        // A container, so its controls keep their own identifiers (`editorConfirm`, `popoutCheckbox`, …).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sharedEditor")
     }
 

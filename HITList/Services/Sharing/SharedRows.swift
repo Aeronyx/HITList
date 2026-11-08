@@ -54,7 +54,7 @@ final class SharedRows {
     }
 
     /// Starts Shared Tasks when its switch is on (the lists call it as they appear, so a launch straight into Today
-    /// shows the shared tasks without a visit to the Shared screen first). Cheap; nothing when off.
+    /// shows the shared tasks without a visit to the Shared Tasks Group first). Cheap; nothing when off.
     func start() { SharedTasksCenter.shared.startIfOn() }
 
     // MARK: - Actions
