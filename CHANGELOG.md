@@ -4,14 +4,38 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
-## 0.8.2
+## 0.9.0
 
-A fix for the Mac. Built with Xcode 27.2, the date, Group, priority, label, reminder and repeat cards opened
-invisibly: the window's content drew over them, so clicking "No date", a Group or a chip seemed to do nothing in quick
-add, the task editor and the Upcoming board.
+George's notes on 0.8.1, in six sessions at once and the day's fixes: shared tasks as one Group that looks like your
+own, the editor's title reading quick add, the Mac's toolbar, sidebar search and type, a second bolt style, and a small
+card for adding Flipboard switches. 0.8.2 (the Mac's invisible picker cards) was never uploaded; its fixes ship here.
 
-- Mac: those cards show again. Their layer sits in the window's frame, above the content, instead of inside it.
-- Mac sidebar: Filters sit below Groups.
+- Shared tasks live in one Group, Shared Tasks, last in your Groups. They look like your tasks, with the people's
+  pictures where labels go, and open in the same editor. Sharing… in its view options invites people, shows who's in,
+  leaves, or switches sharing off. Type `#Shared` in quick add, or pick Shared Tasks in the Group card, to add one.
+- The badge, the morning summary and the sidebar count shared tasks, and count a red Flipboard switch as one of today's
+  tasks, never as overdue. Groups show their coloured dot everywhere instead of "#".
+- The task editor's title understands quick-add phrases: type "tomorrow 5pm p1" and the date row and Priority show it
+  before you Confirm. Words already in the title stay as they are.
+- Mac: the date, Group, priority, label, reminder and repeat cards show again (built with Xcode 27.2 they opened
+  invisibly); a card that doesn't fit under its chip opens beside it, and a chip at the end of a row scrolls into view
+  when its card opens. iPhone: opening a card in the editor moves the keyboard aside so the whole card shows.
+- Rows read larger and lighter, closer to George's reference: Inter 14 over 12 on the Mac, drawn without font
+  smoothing, with 14 bold section headers and the date line 22 pt under the title; 17 over 13 on every iPhone (the
+  Duo's sizes).
+- Mac: a Search field at the top of the sidebar (⌘F), with results in the main column and "Save as filter…" for a
+  filter query; a saved filter's toolbar reads "Search: …" (click it to search with that query); more room above and
+  below the profile; Filters below Groups.
+- Mac toolbar: the "+" is one accent capsule with the same dark glyph as the Confirm pill, in an active or a
+  background window; the view-options pill keeps its width on every screen.
+- Tips float outside the quick-add card instead of pushing it around, and a tap anywhere on a tip puts it away.
+- The sync bolt has a second way of saying you're good to go, the slam: a twirl, a little hop and a slam with a tiny
+  buzz of sparks, all in under a second. Settings → Extras → Sync bolt: Strike or Slam (the default). It still plays
+  only when the app opens, after a while away, or once sync is back after trouble; Reduce Motion keeps the blink.
+- Adding a Flipboard switch is a small card: type "Water the plants every 3 days" and the interval fills in, or pick
+  Daily, 3 days, Weekly, 2 weeks or Monthly, or turn the number like a dial. "Edit switch…" opens the same card.
+- Flipboard: the lights stay on their switches (an overdue switch's light used to drift in across the board each time
+  the Flipboard opened). They are slim pills now, one row at the top of each switch, and every switch is the same size.
 
 ## 0.8.1 — build 19, 2026-11-08
 
