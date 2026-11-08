@@ -4,6 +4,14 @@ One section per version. `scripts/release.sh --version X.Y.Z` refuses to run unt
 section here, then stamps the heading with the build number and date. Builds within a version are
 TestFlight iterations; the heading lists the last build that shipped it.
 
+## 0.8.2
+
+A fix for the Mac. Built with Xcode 27.2, the date, Group, priority, label, reminder and repeat cards opened
+invisibly: the window's content drew over them, so clicking "No date", a Group or a chip seemed to do nothing in quick
+add, the task editor and the Upcoming board.
+
+- Mac: those cards show again. Their layer sits in the window's frame, above the content, instead of inside it.
+
 ## 0.8.1 — build 19, 2026-11-08
 
 0.8.0's Inbox shipped with a small title that was a button, two filter-looking controls, its name twice and two

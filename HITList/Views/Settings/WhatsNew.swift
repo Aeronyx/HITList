@@ -11,6 +11,9 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.8.2", items: [
+            "Mac: the date, Group, priority and label cards open again when you click a task's date, its Group or a chip.",
+        ]),
         Entry(version: "0.8.1", items: [
             "The Inbox's top is clean again: one view-options button. Sort by Priority (the default), Group or Date; Today by Priority or Group.",
             "Browse: Groups first, saved filters as chips under the search field, and the search understands filters like #Work or overdue.",
