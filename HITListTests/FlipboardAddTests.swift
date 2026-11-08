@@ -320,6 +320,20 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertEqual(IntervalChoiceStrip.index(at: 10, width: 0, count: count), 0)
     }
 
+    // MARK: It feels good (item 4)
+
+    /// The new tile's settle is small and quick: it starts a touch small and springs to size with a little
+    /// overshoot, not a bounce, and the same switch can land again (a count, not a flag).
+    func testANewTileSettlesWithASmallSpring() {
+        XCTAssertGreaterThanOrEqual(SwitchLanding.startScale, 0.8, "a touch small, not popping out of nothing")
+        XCTAssertLessThan(SwitchLanding.startScale, 1)
+        XCTAssertGreaterThan(SwitchLanding.spring.dampingRatio, 0.4, "settles, doesn't bounce")
+        XCTAssertLessThan(SwitchLanding.spring.dampingRatio, 1, "a little overshoot, so it lands")
+        XCTAssertLessThanOrEqual(SwitchLanding.spring.settlingDuration, 1.2)
+        let id = UUID()
+        XCTAssertNotEqual(SwitchLanding.Mark(id: id, generation: 1), SwitchLanding.Mark(id: id, generation: 2))
+    }
+
     // MARK: The grid
 
     /// The card is at least `FlipboardLayout.cardMinWidth` wide: as many columns as that takes.

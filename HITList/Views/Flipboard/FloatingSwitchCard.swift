@@ -87,7 +87,11 @@ struct FloatingSwitchCard: View {
         }
         .ignoresSafeArea(.keyboard)
         .onAppear {
-            withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { shown = true }
+            // A turn later: the cover arrives in a transaction without animation, and a change made inside it
+            // popped the card in at once instead of letting it rise.
+            Task { @MainActor in
+                withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { shown = true }
+            }
         }
     }
 

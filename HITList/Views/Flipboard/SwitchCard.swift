@@ -42,7 +42,7 @@ struct SwitchCard: View {
     @State private var draft: SwitchDraft
     @State private var nameFocused = false
     @State private var errorMessage: String?
-    /// The Mac's card stays open after Add for the next switch; this says what was added.
+    /// The Mac's card stays open after Add for the next switch; its empty name says what was added.
     @State private var added: String?
     @State private var addedGeneration = 0
 
@@ -144,7 +144,8 @@ struct SwitchCard: View {
 
     private func nameField(_ read: SwitchDraft.Reading) -> some View {
         // The draft's own binding, as quick add's: typing fast lost a letter through a hand-made Binding.
-        TokenHighlightField(placeholder: "Switch name", text: $draft.text,
+        // After an Add on the Mac the empty name says what was added, until the next switch is typed or 3 s pass.
+        TokenHighlightField(placeholder: added ?? "Switch name", text: $draft.text,
                             tokens: read.tokens, priority: .p4, focus: $nameFocused, bordered: false,
                             onDisable: { token in
                                 withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchOff(token) }
@@ -215,14 +216,6 @@ struct SwitchCard: View {
     private func footer(canSave: Bool) -> some View {
         HStack(spacing: HITSpacing.s) {
             flipsControl
-            if let added {
-                Label(added, systemImage: "checkmark.circle.fill")
-                    .font(HITType.caption)
-                    .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .transition(.opacity)
-            }
             Spacer(minLength: HITSpacing.s)
             Button(action: onClose) { Image(systemName: "xmark") }
                 .buttonStyle(HITButtonStyle(.ghost, size: .small, shape: .circle))

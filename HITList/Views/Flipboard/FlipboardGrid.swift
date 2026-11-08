@@ -96,3 +96,47 @@ struct FlipboardGrid: Layout {
         return (frames, CGSize(width: width, height: height))
     }
 }
+
+/// A switch that has just been added (or saved from its card) settles into its place in the grid (brief 69): it
+/// comes in a touch small and springs to size with a little overshoot, like a part pressed into a panel.
+/// Reduce Motion: nothing moves.
+struct SwitchLanding: ViewModifier {
+    /// Which switch lands, and a count so the same switch can land again.
+    struct Mark: Equatable {
+        let id: UUID
+        let generation: Int
+    }
+
+    /// This tile's landing, or nil.
+    let mark: Mark?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var trigger = 0
+
+    /// How small it starts and how its spring settles.
+    static let startScale: CGFloat = 0.86
+    static let spring = Spring(response: 0.42, dampingRatio: 0.55)
+
+    func body(content: Content) -> some View {
+        content
+            .keyframeAnimator(initialValue: CGFloat(1), trigger: trigger) { content, scale in
+                content.scaleEffect(scale)
+            } keyframes: { _ in
+                KeyframeTrack {
+                    LinearKeyframe(Self.startScale, duration: 0.001)
+                    // The spring's own settling time: a segment cut short holds wherever the spring was then
+                    // (a tile stayed at 93%). Then exactly full size.
+                    SpringKeyframe(1, spring: Self.spring)
+                    LinearKeyframe(1, duration: 0.001)
+                }
+            }
+            // A new tile appears already marked; an edited one is marked while on show.
+            .onAppear { if mark != nil { settle() } }
+            .onChange(of: mark) { _, new in if new != nil { settle() } }
+    }
+
+    private func settle() {
+        guard !reduceMotion else { return }
+        trigger += 1
+    }
+}
