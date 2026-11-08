@@ -18,6 +18,12 @@ enum SwitchCardRequest: Identifiable, Equatable {
     }
 }
 
+/// The switch card's "something to lose", kept where reading and writing it redraws nothing: the hosts only
+/// read it when the card is tapped away from or closed.
+final class SwitchCardContent {
+    var hasContent = false
+}
+
 #if os(iOS)
 /// The iPhone's switch card (brief 69): it rises from the bottom over the dimmed board and floats 12 pt above
 /// the keyboard, the quick-add card's oval and motion (`PopoutHost`), never a full-height sheet. A tap on the
@@ -36,7 +42,9 @@ struct FloatingSwitchCard: View {
     @State private var shown = false
     @State private var closing = false
     @State private var heldKeyboardHeight: CGFloat = 0
-    @State private var hasContent = false
+    /// Whether the card has something to lose: read when it is tapped away from, never drawn, so a box that
+    /// re-renders nothing (the first letter typed re-laid out the whole cover and the next letter was lost).
+    @State private var content = SwitchCardContent()
     @State private var confirmingDiscard = false
 
     /// The oval's distance from the screen's edges and from the top of the keyboard (`PopoutHost.ovalInset`).
@@ -45,6 +53,16 @@ struct FloatingSwitchCard: View {
     static let retractDuration: TimeInterval = 0.2
 
     var body: some View {
+        // Built here, outside the geometry reader, as `PopoutHost` builds the quick-add card: the keyboard moving
+        // re-runs only the reader's closure, never the card. A keyboard change arrives in the middle of a
+        // keystroke (UIKit lays the view out there and then); a card rebuilt at that moment handed its name
+        // field the text from before the keystroke, and the letter was lost (the UI test's "Wter the plants").
+        let card = SwitchCard(editing: request.task, style: .floating, isConfirmingDiscard: confirmingDiscard,
+                              isClosing: closing, focusesName: request == .add,
+                              onClose: requestClose, onSaved: { finish(saved: $0) },
+                              onDraftChange: { content.hasContent = $0 },
+                              onDiscard: { finish(saved: nil) },
+                              onKeepEditing: keepEditing)
         GeometryReader { geo in
             let keyboardHeight = closing ? heldKeyboardHeight : keyboard.height
             let aboveKeyboard = max(0, keyboardHeight - geo.safeAreaInsets.bottom)
@@ -55,12 +73,7 @@ struct FloatingSwitchCard: View {
                     .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(confirmingDiscard ? "Keep editing" : "Close")
                 if shown {
-                    SwitchCard(editing: request.task, style: .floating, isConfirmingDiscard: confirmingDiscard,
-                               isClosing: closing, focusesName: request == .add,
-                               onClose: requestClose, onSaved: { finish(saved: $0) },
-                               onDraftChange: { hasContent = $0 },
-                               onDiscard: { finish(saved: nil) },
-                               onKeepEditing: keepEditing)
+                    card
                         .padding(.horizontal, Self.inset)
                         .padding(.bottom, Self.inset + aboveKeyboard)
                         .opacity(closing ? 0 : 1)
@@ -86,7 +99,7 @@ struct FloatingSwitchCard: View {
     }
 
     private func tapAway() {
-        switch BoardInlineAdd.clickAway(hasContent: hasContent, confirmingDiscard: confirmingDiscard) {
+        switch BoardInlineAdd.clickAway(hasContent: content.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close: finish(saved: nil)
         case .askDiscard: withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
         case .keepEditing: keepEditing()
@@ -94,7 +107,7 @@ struct FloatingSwitchCard: View {
     }
 
     private func requestClose() {
-        switch BoardInlineAdd.close(hasContent: hasContent, confirmingDiscard: confirmingDiscard) {
+        switch BoardInlineAdd.close(hasContent: content.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close, .discard: finish(saved: nil)
         case .askDiscard: withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
         }

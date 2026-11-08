@@ -310,7 +310,7 @@ final class HITListUITests: XCTestCase {
         // The board: a long press opens the menu (red: Flip first; nothing to flip back).
         tab("flipboard")
         openMenu(water)
-        for item in ["Flip", "Edit task…", "Edit interval…", "Flips per interval…", "Remove from Flipboard", "Delete"] {
+        for item in ["Flip", "Edit task…", "Edit switch…", "Remove from Flipboard", "Delete"] {
             XCTAssertTrue(app.buttons[item].exists, item)
         }
         XCTAssertFalse(app.buttons["Flip back to red"].isEnabled, "a red switch with no flip has nothing to undo")
@@ -321,18 +321,13 @@ final class HITListUITests: XCTestCase {
         app.buttons["Close"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForNonExistence(timeout: 5))
 
+        // Brief 69: the interval, flips and name are one item, the switch card, filled in.
         openMenu(water)
-        app.buttons["Edit interval…"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].waitForExistence(timeout: 5), "the interval editor")
-        XCTAssertTrue(text("Turns red").exists)
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].waitForNonExistence(timeout: 5))
-
-        openMenu(water)
-        app.buttons["Flips per interval…"].tap()
-        XCTAssertTrue(text("Flips per Interval").waitForExistence(timeout: 5), "the flips editor")
-        app.buttons["Cancel"].tap()
-        XCTAssertTrue(app.buttons["Cancel"].waitForNonExistence(timeout: 5))
+        app.buttons["Edit switch…"].tap()
+        let switchName = app.descendants(matching: .any)["switchName"].firstMatch
+        XCTAssertTrue(switchName.waitForExistence(timeout: 5), "the switch card")
+        app.buttons["switchClose"].tap()
+        XCTAssertTrue(switchName.waitForNonExistence(timeout: 5), "unchanged: × closes it at once")
 
         // Green: Mark done is there; Flip back to red turns it red again.
         openMenu(recycling)
@@ -371,6 +366,64 @@ final class HITListUITests: XCTestCase {
         app.buttons["Remove from Flipboard"].tap()
         XCTAssertTrue(switchTile(water).waitForNonExistence(timeout: 3))
         snapshot("11 Board after Remove")
+    }
+
+    /// Brief 69 on iPhone: a switch added from the small card in a few seconds, its interval typed and then
+    /// picked from the quick choices; the new tile on the board; its interval changed from the tile's menu with
+    /// the same card; and a tap away with a name typed asking Discard inside the card.
+    func testAddingAndEditingASwitchFromTheCard() throws {
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-flipboard"].waitForExistence(timeout: 15))
+        tab("flipboard")
+        let empty = app.buttons["Add a Switch"], tile = app.buttons["addSwitchTile"]
+        XCTAssertTrue(empty.waitForExistence(timeout: 5) || tile.exists, "a way to add a switch")
+        (empty.exists ? empty : tile).tap()
+
+        let name = app.descendants(matching: .any)["switchName"].firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "the card")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the name has the keyboard at once")
+        snapshot("1 Card empty")
+        app.typeText("Water the plants every 3 days ")
+        let threeDays = choice("3 days"), weekly = choice("Weekly")
+        XCTAssertTrue(threeDays.wait(for: \.isSelected, toEqual: true, timeout: 3), "the typed repeat lights 3 days")
+        snapshot("2 Card typed")
+        weekly.tap()
+        XCTAssertTrue(weekly.wait(for: \.isSelected, toEqual: true, timeout: 3), "a quick choice")
+        XCTAssertTrue((name.value as? String ?? "").contains("every week"), "the typed phrase follows the choice")
+        threeDays.tap()
+        XCTAssertTrue(threeDays.wait(for: \.isSelected, toEqual: true, timeout: 3))
+        snapshot("3 Card with a chosen interval")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5), "the card goes after Add")
+        XCTAssertTrue(switchTile("Water the plants").waitForExistence(timeout: 5), "the new switch on the board")
+        XCTAssertTrue(text("every 3 days").exists)
+        snapshot("4 The new tile")
+
+        // Its tile's menu: the same card, filled in; 2 weeks, saved.
+        openMenu("Water the plants")
+        app.buttons["Edit switch…"].tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "the card, editing")
+        XCTAssertTrue(choice("3 days").isSelected, "filled in")
+        choice("2 weeks").tap()
+        snapshot("5 Editing its interval")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(text("every 2 weeks").waitForExistence(timeout: 5), "the interval changed from its tile")
+
+        // A tap away with a name typed asks inside the card; Discard throws it away.
+        app.buttons["addSwitchTile"].tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeText("Floss")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["switchDiscardRow"].waitForExistence(timeout: 3), "Discard, in the card")
+        snapshot("6 Discard inside the card")
+        app.buttons["switchDiscard"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+        XCTAssertFalse(switchTile("Floss").exists)
+    }
+
+    private func choice(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any)["switchChoice-\(title)"].firstMatch
     }
 
     private func text(_ label: String) -> XCUIElement {
