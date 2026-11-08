@@ -11,13 +11,15 @@ struct SharedTasksScreen: View {
             if center.isOn {
                 SharedListsView()
             } else {
-                ScrollView { SharedTasksExplainer().padding(HITSpacing.l) }
+                // Under the screen's own title, so the explainer doesn't say the name again (brief 62).
+                ScrollView { SharedTasksExplainer(showsTitle: false).padding(HITSpacing.l) }
                     .background(Theme.background)
             }
         }
         .navigationTitle("Shared Tasks")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
+        // The system's large title, as every iPhone screen (round 14).
+        .navigationBarTitleDisplayMode(.large)
         #endif
         .task { await center.refresh() }
     }
@@ -26,22 +28,31 @@ struct SharedTasksScreen: View {
 /// What Shared Tasks is, what it shares, and the switch. Also where an invitation opened while it was off waits.
 struct SharedTasksExplainer: View {
     var showsInvitation = true
+    /// Its own "Shared Tasks" header; off under a screen titled so, where only the Preview badge stays.
+    var showsTitle = true
     private var center: SharedTasksCenter { SharedTasksCenter.shared }
 
+    /// The first says what George asked for (brief 62): a shared list's tasks are tasks in your own lists.
     static let points: [(symbol: String, text: String)] = [
-        ("person.2.fill", "Share a list with friends. Everyone in it can add, complete and edit tasks, and sees who completed what."),
+        ("person.2.fill", "Share a list with friends. Its tasks show in your own lists among yours: with a date, in Today, Upcoming "
+            + "and the Inbox, with the list's name and the people symbol. Everyone in it can add, complete and edit them, "
+            + "and sees who completed what."),
         ("icloud", "No sign-up: it uses your Apple Account and iCloud, like the rest of HITList."),
         ("person.crop.circle", "People in a list see its tasks and your HITList name and picture. Your own tasks and Groups stay private."),
-        ("flask", "It's a preview. Shared lists live apart from your tasks and may need to be made again in a later version."),
+        ("flask", "It's a preview. Shared lists are kept apart from your own tasks and may need to be made again in a later version."),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.l) {
-            HStack(spacing: HITSpacing.s) {
-                Image(systemName: "person.2.fill")
-                    .font(.system(size: 26, weight: .semibold))
-                    .foregroundStyle(Theme.accent)
-                Text("Shared Tasks").font(HITType.title2Bold).foregroundStyle(HITColor.text)
+            if showsTitle {
+                HStack(spacing: HITSpacing.s) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                    Text("Shared Tasks").font(HITType.title2Bold).foregroundStyle(HITColor.text)
+                    SharedPreviewBadge()
+                }
+            } else {
                 SharedPreviewBadge()
             }
             if showsInvitation, let invitation = center.pendingInvitation {
@@ -63,7 +74,8 @@ struct SharedTasksExplainer: View {
             }
             HITGroup(footer: "Switch it off any time: your shared lists stay in iCloud and come back when you switch it on again.") {
                 Toggle(isOn: Binding(get: { center.isOn }, set: { center.setOn($0) })) {
-                    HITMenuRowLabel("Shared Tasks (preview)", systemImage: "person.2")
+                    // Under a screen titled "Shared Tasks" the switch doesn't say the name again (brief 62).
+                    HITMenuRowLabel(showsTitle ? "Shared Tasks (preview)" : "On for this device", systemImage: "person.2")
                 }
                 .toggleStyle(.hit)
                 .hitRowPadding()
@@ -156,7 +168,8 @@ struct SharedListsView: View {
                     Text(error).font(HITType.footnote).foregroundStyle(HITColor.danger).slateRow()
                 }
             } footer: {
-                footer("Make a list, then invite people from its People button.")
+                footer("Make a list, then invite people from its People button. Its tasks with a date show in Today, "
+                       + "Upcoming and the Inbox too, among yours.")
             }
             if let store {
                 let lists = store.sortedLists
@@ -182,8 +195,9 @@ struct SharedListsView: View {
             }
             Section {
                 Toggle(isOn: Binding(get: { center.isOn }, set: { center.setOn($0) })) {
+                    // The screen's title already names it (brief 62); the Preview badge stays.
                     HStack(spacing: HITSpacing.s) {
-                        Text("Shared Tasks")
+                        Text("On for this device")
                         SharedPreviewBadge()
                     }
                 }
