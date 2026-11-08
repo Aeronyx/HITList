@@ -386,6 +386,71 @@ final class HITListUITests: XCTestCase {
         snapshot("3 Work after the add")
     }
 
+    /// Brief 61: Browse puts its Groups first, above Shared Tasks, and the saved filters as chips under the
+    /// search field (no Filters section); the field takes a filter query: "#Work" lists Work's tasks, and "Save
+    /// as filter…" names it as a new filter, which joins the chips.
+    func testBrowseTakesFiltersInTheSearchField() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        let browse = app.buttons["browseButton"].firstMatch
+        XCTAssertTrue(browse.waitForExistence(timeout: 15))
+        browse.tap()
+        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5))
+        let focus = app.buttons["Focus filter"].firstMatch
+        XCTAssertTrue(focus.waitForExistence(timeout: 5), "the default filters as chips under the field")
+        XCTAssertTrue(app.buttons["newFilterChip"].exists, "the + chip")
+        let work = app.buttons["Work, 2"].firstMatch
+        let shared = app.descendants(matching: .any)["browse-shared-tasks"].firstMatch
+        XCTAssertTrue(work.exists && shared.exists)
+        XCTAssertLessThan(work.frame.minY, shared.frame.minY, "Groups above Shared Tasks")
+        XCTAssertGreaterThan(work.frame.minY, focus.frame.minY, "the chips above the Groups")
+        XCTAssertTrue(app.staticTexts["A task lives in one Group: Work, Home, a project."].exists)
+        snapshot("1 Browse")
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["A label is a tag any task can carry: @waiting, @errands."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Filters"].exists, "no Filters section")
+        app.swipeDown()
+
+        // A chip opens its filter's list.
+        focus.tap()
+        XCTAssertTrue(app.navigationBars["Focus"].waitForExistence(timeout: 5), "the chip opens Focus")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Browse"].waitForExistence(timeout: 5))
+
+        // A query in the search field filters by it.
+        let field = app.textFields.firstMatch
+        field.tap()
+        app.typeText("#Work")
+        let save = app.buttons["saveSearchAsFilter"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "Save as filter… under the field")
+        XCTAssertTrue(row("Reply to Sam about the lease").waitForExistence(timeout: 5))
+        XCTAssertTrue(row("Finish the quarterly report").exists)
+        XCTAssertFalse(row("Buy groceries").exists, "only Work's tasks")
+        snapshot("2 Search #Work")
+
+        save.tap()
+        XCTAssertTrue(app.navigationBars["New Filter"].waitForExistence(timeout: 5)
+                      || app.staticTexts["New Filter"].waitForExistence(timeout: 1), "the filter editor, to name it")
+        app.typeText("Work only")
+        snapshot("3 Name the filter")
+        app.buttons["Save"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["New Filter"].waitForNonExistence(timeout: 5), "the editor closes")
+
+        // The new filter joins the chips; plain words still search titles and notes.
+        app.buttons["Clear"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Work only filter"].waitForExistence(timeout: 5), "the saved filter's chip")
+        snapshot("4 Browse with the new filter")
+        field.tap()
+        app.typeText("groceries")
+        XCTAssertTrue(row("Buy groceries").waitForExistence(timeout: 5), "text searches titles")
+        XCTAssertFalse(save.exists, "no Save as filter… for plain words")
+    }
+
+    /// A task row whose label contains `title`.
+    private func row(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", title)).firstMatch
+    }
+
     /// Brief 57: a Group dragged to a new place in Browse stays there (long-press, then drag).
     func testReorderGroupsInBrowse() throws {
         app.launchArguments += ["-seedDemoData", "YES"]

@@ -4,14 +4,17 @@ import SwiftData
 import HITListCore
 
 /// The iPhone's Browse, the Mac sidebar as a page, pushed onto the current tab's stack by the magnifying
-/// glass at the top right (brief 35; the gear there opens Settings): a search field on top, then Groups
-/// (Inbox first, the default grey Group, then each Group in its colour with its open count), Labels and
-/// Filters, each header with its "+", then Completed and Settings (`lastRows`; the Flipboard is a tab).
+/// glass at the top right (brief 35; the gear there opens Settings): the search field on top, the saved
+/// filters as a row of chips under it (brief 61), then Groups (Inbox first, the default grey Group, then each
+/// Group in its colour with its open count), Shared Tasks and Labels, each header with its "+", then
+/// Completed and Settings (`lastRows`; the Flipboard is a tab).
 /// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens the
 /// profile menu (`BrowseProfileMenu`, brief 53): Account settings… (the Settings sheet, whose first group is
 /// Account), What's New, Send Beta Feedback… and the version.
 /// A row pushes its list on the same stack, where the tab bar and the "+" stay. Typing in the search field swaps the sections for
-/// matching tasks (titles and notes, completed ones too); a result opens the task popout.
+/// matching tasks: a filter query (`#Work`, `@waiting & p1`, `overdue`) filters as a saved filter would, with
+/// "Save as filter…" under the field; other text matches titles and notes, completed ones too
+/// (`SearchIntent`). A result opens the task popout.
 struct BrowseView: View {
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
@@ -24,6 +27,8 @@ struct BrowseView: View {
     @State private var now = Date()
     @State private var editingFilter: SavedFilter?
     @State private var creatingFilter = false
+    /// "Save as filter…": the query typed in the search field, for the filter editor to name.
+    @State private var savingQuery: QueryToSave?
     @State private var editingProject: Project?
     @State private var creatingProject = false
     /// The question before deleting a Group with tasks (brief 57).
@@ -32,21 +37,30 @@ struct BrowseView: View {
     @State private var creatingLabel = false
     @State private var showSettings = false
 
-    private var searchText: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
+    /// What the field holds: nothing, words to find, or a filter query (`SearchIntent`, brief 61).
+    private var intent: SearchIntent { SearchIntent(search, now: now) }
 
     var body: some View {
+        let intent = intent
         VStack(spacing: 0) {
-            HITField("Search tasks", text: $search, systemImage: "magnifyingglass", clearable: true)
+            HITField("Search or filter: #Work, p1", text: $search, systemImage: "magnifyingglass", clearable: true)
                 .submitLabel(.search)
                 .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
                 .padding(.horizontal, HITSpacing.l)
                 .padding(.top, HITSpacing.xs)
                 .padding(.bottom, HITSpacing.s)
                 .accessibilityIdentifier("browseSearch")
-            if searchText.isEmpty {
+            switch intent {
+            case .empty:
                 sections
-            } else {
-                SearchResults(results: TaskOrdering.search(allTasks, text: searchText, now: now), now: now)
+            case .query(let query):
+                saveRow(query)
+                SearchResults(results: results(of: query), now: now, emptyMessage: "No task matches this filter.")
+            case .text(let text, let unfinished):
+                SearchResults(results: TaskOrdering.search(allTasks, text: text, now: now), now: now,
+                              emptyMessage: unfinished.map { "Not a filter yet: \($0)" }
+                                  ?? "Search looks through task names and descriptions, completed tasks too.")
             }
         }
         .background(Theme.background)
@@ -71,6 +85,7 @@ struct BrowseView: View {
         .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
+        .sheet(item: $savingQuery) { FilterEditorView(filter: nil, initialQuery: $0.query).slateSheet() }
         .sheet(isPresented: $creatingProject) { ProjectEditorView(project: nil).slateSheet() }
         .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
         .sheet(isPresented: $creatingLabel) { LabelEditorView(label: nil).slateSheet() }
@@ -103,8 +118,16 @@ struct BrowseView: View {
     private var sections: some View {
         let open = openTasks
         return List {
-            // Shared Tasks (brief 51): the preview's switch and, once on, the shared lists.
-            Section { SharedTasksBrowseRow() }
+            // The saved filters, right under the field (brief 61), as the header of a section with no rows: inside
+            // the list, since a second scroll view above it took the large title's room from the list (a 170 pt
+            // gap), and a header, since a row's rounded mask cut into the first chip.
+            Section {
+            } header: {
+                filterChips
+                    .listRowInsets(EdgeInsets())
+                    .textCase(nil)
+            }
+            .listSectionSpacing(HITSpacing.s)
 
             Section {
                 link(.inbox) {
@@ -130,6 +153,10 @@ struct BrowseView: View {
                 guidance(GroupGuidance.group)
             }
 
+            // Shared Tasks (brief 51): the preview's switch and, once on, the shared lists. Below the Groups
+            // (brief 61: "Groups should be first above Shared Tasks").
+            Section { SharedTasksBrowseRow() }
+
             Section {
                 if labels.isEmpty { emptyRow("No labels yet") }
                 ForEach(labels) { label in
@@ -146,22 +173,6 @@ struct BrowseView: View {
                 SidebarSectionHeader(title: "Labels") { creatingLabel = true }
             } footer: {
                 guidance(GroupGuidance.label)
-            }
-
-            Section {
-                if filters.isEmpty { emptyRow("No filters yet") }
-                ForEach(filters) { filter in
-                    link(.filter(filter.id)) {
-                        BrowseRow(title: filter.name, symbol: "line.3.horizontal.decrease.circle.fill",
-                                  tint: Color(hex: filter.colorHex))
-                    }
-                    .contextMenu {
-                        Button("Edit Filter…") { editingFilter = filter }
-                        Button("Delete", role: .destructive) { context.delete(filter); try? context.save() }
-                    }
-                }
-            } header: {
-                SidebarSectionHeader(title: "Filters") { creatingFilter = true }
             }
 
             Section {
@@ -187,8 +198,84 @@ struct BrowseView: View {
             }
         }
         .listStyle(.insetGrouped)
+        // The chips sit just under the field, not a grouped list's full top gap away.
+        .contentMargins(.top, 0, for: .scrollContent)
         .slateList()
         .scrollDismissesKeyboard(.immediately)
+    }
+
+    // MARK: - Filters in the search field (brief 61)
+
+    /// The saved filters as chips under the search field: a tap opens the filter's list, a long press offers
+    /// Edit… and Delete, the "+" at the end makes a new one. (The Mac keeps its sidebar's Filters section.)
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: HITSpacing.s) {
+                ForEach(filters) { filter in
+                    NavigationLink(value: SidebarItem.filter(filter.id)) {
+                        HITChipLabel(filter.name, systemImage: "line.3.horizontal.decrease.circle.fill",
+                                     tint: Color(hex: filter.colorHex))
+                            .padding(.vertical, HITSpacing.s)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button { editingFilter = filter } label: { Label("Edit Filter…", systemImage: "pencil") }
+                        Button(role: .destructive) { context.delete(filter); try? context.save() } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .accessibilityLabel("\(filter.name) filter")
+                }
+                Button { creatingFilter = true } label: {
+                    HITChipLabel(filters.isEmpty ? "New Filter" : "", systemImage: "plus")
+                        .padding(.vertical, HITSpacing.s)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("New Filter")
+                .accessibilityIdentifier("newFilterChip")
+            }
+        }
+        // Chips scroll past the cards' margins to the screen's edges, starting in line with the cards.
+        .scrollClipDisabled()
+        .accessibilityIdentifier("filterChips")
+    }
+
+    /// Under the field while it holds a query: what the query means, and "Save as filter…", which opens the
+    /// filter editor on it to name it.
+    private func saveRow(_ query: String) -> some View {
+        Button { savingQuery = QueryToSave(query: query) } label: {
+            HStack(spacing: HITSpacing.s) {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(Theme.accent)
+                Text("Save as filter…")
+                    .foregroundStyle(Theme.accent)
+                Spacer(minLength: HITSpacing.s)
+                if let summary = (try? FilterQuery(query, now: now))?.summary {
+                    Text(summary)
+                        .foregroundStyle(Theme.secondaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .font(HITType.subheadlineMedium)
+            .padding(.horizontal, HITSpacing.l + HITSpacing.xs)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("saveSearchAsFilter")
+    }
+
+    /// The query's tasks, as its saved filter would list them.
+    private func results(of query: String) -> [TaskItem] {
+        (try? FilterQuery(query, now: now).apply(to: allTasks, now: now)) ?? []
+    }
+
+    struct QueryToSave: Identifiable {
+        let query: String
+        var id: String { query }
     }
 
     /// The last section's rows, in order.
@@ -360,6 +447,8 @@ private struct BrowseRow: View {
 private struct SearchResults: View {
     let results: [TaskItem]
     let now: Date
+    /// Under "No matching tasks": what the search looked through, or what a filter query still lacks.
+    let emptyMessage: String
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
 
@@ -368,7 +457,7 @@ private struct SearchResults: View {
             ContentUnavailableView {
                 Label("No matching tasks", systemImage: "magnifyingglass")
             } description: {
-                Text("Search looks through task names and descriptions, completed tasks too.")
+                Text(emptyMessage)
             }
             .frame(maxHeight: .infinity)
         } else {
