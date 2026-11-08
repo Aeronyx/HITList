@@ -239,6 +239,7 @@
 		D4B8AC61223E3D2E485196DA /* HighlightLayoutManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87D169E2F22861EC8A5E9A35 /* HighlightLayoutManager.swift */; };
 		D531EF7C1FDB3535540C8720 /* bubble.caf in Resources */ = {isa = PBXBuildFile; fileRef = 3EEFA67B186DA52E7B28D2F6 /* bubble.caf */; };
 		D5D0186DDAF23212B7048BC6 /* DesignSystemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0222BC93E2AA258E168B8F5C /* DesignSystemTests.swift */; };
+		D6B06D714B9CD9B5AFA2C011 /* SharedCountsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE3F1D8E01A468353109D2CB /* SharedCountsTests.swift */; };
 		D6CCCE4A2D0A39B2B941C936 /* HITButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */; };
 		D6D05DC0F3BE0D8FEDCE58DD /* CompletionAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E89E8ABE1817CBAD4F72AE06 /* CompletionAnimator.swift */; };
 		D6D0CFCCBE7E6A804A288E03 /* QuickAddCreateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 375E32E41FE3F4D67D47DEED /* QuickAddCreateTests.swift */; };
@@ -544,6 +545,7 @@
 		BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenHighlightField.swift; sourceTree = "<group>"; };
 		BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardTests.swift; sourceTree = "<group>"; };
 		BDBD761482A5F9B84F96433A /* Inter_18pt-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Medium.ttf"; sourceTree = "<group>"; };
+		BE3F1D8E01A468353109D2CB /* SharedCountsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCountsTests.swift; sourceTree = "<group>"; };
 		BF39FE4A72106A76BE1927B5 /* HingeCreakMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HingeCreakMotion.swift; sourceTree = "<group>"; };
 		C05EBAA04FAF57FA69358813 /* TaskEditorDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditorDraft.swift; sourceTree = "<group>"; };
 		C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWatch.swift; sourceTree = "<group>"; };
@@ -1027,6 +1029,7 @@
 				A5C4883652158CAEF157D321 /* SeedingTests.swift */,
 				5E0F881764310827D1A610F1 /* SettingsTests.swift */,
 				5D2FDF2D4FA353062924EFA4 /* SharedAddingTests.swift */,
+				BE3F1D8E01A468353109D2CB /* SharedCountsTests.swift */,
 				8F762856AE6FEDA572D8741B /* SharedEditorTests.swift */,
 				6C465CF288740B05ADBF45DE /* SharedGroupTests.swift */,
 				D68A8A41947C06044085D892 /* SharedListsTests.swift */,
@@ -1683,6 +1686,7 @@
 				C9EE236E00D4759FE273ECD6 /* SeedingTests.swift in Sources */,
 				257118BE09BECCEE77BAA768 /* SettingsTests.swift in Sources */,
 				4A81A461D3A3ABF0CD2800B9 /* SharedAddingTests.swift in Sources */,
+				D6B06D714B9CD9B5AFA2C011 /* SharedCountsTests.swift in Sources */,
 				04E611D88FA7A457BA5C9D0D /* SharedEditorTests.swift in Sources */,
 				7543FED4B4F8EAAB07C5FB12 /* SharedGroupTests.swift in Sources */,
 				86A12A8E5DEEFE48EFC6D33D /* SharedListsTests.swift in Sources */,

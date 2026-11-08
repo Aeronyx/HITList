@@ -70,6 +70,9 @@ final class SharedTasksStore {
     @ObservationIgnored var clock: () -> Date
     /// Told about every local change, in order; the sync layer queues them for CloudKit.
     @ObservationIgnored var onChanges: (([Change]) -> Void)?
+    /// Told whenever the state was saved, local changes and fetched ones alike: the badge and the morning summary
+    /// count shared tasks (brief 64).
+    @ObservationIgnored var onSave: (() -> Void)?
     @ObservationIgnored private var batchDepth = 0
     @ObservationIgnored private var batchedChanges: [Change] = []
     @ObservationIgnored private var batchDirty = false
@@ -540,6 +543,7 @@ final class SharedTasksStore {
 
     private func save() {
         if batchDepth > 0 { batchDirty = true; return }
+        onSave?()
         guard case .file(let url) = persistence else { return }
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -20,6 +20,9 @@ struct NotificationPlan: Equatable {
         var reminderOffsetMinutes: Int? = nil
         /// A reminder at a moment of its own ("!15m", brief 48), independent of the due time; nil for none.
         var reminderDate: Date? = nil
+        /// A Flipboard switch: red, it is one of today's tasks whatever its date (never overdue); green, none of
+        /// today's (brief 64, the badge and the morning summary as Today shows them).
+        var isSwitch = false
 
         /// The offset in seconds, never negative.
         var offset: TimeInterval { TimeInterval(max(0, reminderOffsetMinutes ?? 0) * 60) }
@@ -304,6 +307,6 @@ extension NotificationPlan.Item {
         self.init(id: task.id, title: task.title, projectName: task.project?.name, priority: task.priorityValue,
                   dueDate: task.dueDate, hasDueTime: task.hasDueTime, isCompleted: task.isCompleted,
                   updatedAt: task.updatedAt, reminderOffsetMinutes: task.reminderOffsetMinutes,
-                  reminderDate: task.reminderDate)
+                  reminderDate: task.reminderDate, isSwitch: Flipboard.isMember(task))
     }
 }

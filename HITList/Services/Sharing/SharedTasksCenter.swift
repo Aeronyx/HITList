@@ -110,6 +110,7 @@ final class SharedTasksCenter {
         let sync = SharedTasksSync(container: container, store: store)
         sync.onActivity = { [weak self] in self?.isSyncing = $0 }
         sync.onProblem = { [weak self] in self?.problem = $0 }
+        store.onSave = { [weak self] in self?.refreshCounts() }
         self.store = store
         self.sync = sync
         problem = store.loadProblem
@@ -119,8 +120,23 @@ final class SharedTasksCenter {
         Task { await connect(container, store: store) }
     }
 
+    /// The app badge and the morning summary count shared tasks (brief 64): two seconds after the shared lists last
+    /// changed (a sync often saves several times in a row), and when Shared Tasks is switched off.
+    @ObservationIgnored private var countsRefresh: Task<Void, Never>?
+
+    private func refreshCounts() {
+        guard !isTesting else { return }
+        countsRefresh?.cancel()
+        countsRefresh = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled, let context = try? IntentStore.context() else { return }
+            await NotificationScheduler.reschedule(context: context, reason: "shared tasks")
+        }
+    }
+
     private func stop() {
         Self.log.notice("Shared Tasks: switched off")
+        defer { refreshCounts() }
         let sync = self.sync
         self.sync = nil
         store = nil
