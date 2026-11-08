@@ -335,11 +335,26 @@ struct TaskPopout: View {
     }
 
     private var groupRow: some View {
-        EditorRow(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : "number",
+        // A Group's dot, never "#" (brief 64).
+        EditorRow(task.project?.name ?? "Inbox", systemImage: task.project == nil ? "tray" : GroupDot.symbol,
                   tint: task.project.map { Color(hex: $0.colorHex) } ?? Theme.accent,
                   action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
-                ProjectChipPopover(projects: projects, selectedName: task.project?.name) { project in
+                ProjectChipPopover(projects: projects, selectedName: task.project?.name, onPickShared: {
+                    // Into Shared Tasks (brief 64): the task moves to the shared store and its editor opens there.
+                    openChip = nil
+                    commitDraft()
+                    guard let row = try? TaskActions.sharedCopy(of: task) else { return }
+                    isClosing = true
+                    let moved = task
+                    popouts.openShared(SharedTaskRef(row))
+                    // Yours goes once this editor has stopped drawing it, as Delete does.
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(450))
+                        TaskActions.delete(moved, in: context)
+                        rescheduleNotifications()
+                    }
+                }) { project in
                     openChip = nil
                     setProject(project)
                 }

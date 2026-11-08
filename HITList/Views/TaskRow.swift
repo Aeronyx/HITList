@@ -153,8 +153,7 @@ struct TaskRow: View {
     @ViewBuilder
     private var groupItem: some View {
         if showProject, let project = task.project {
-            MetaItem(project.name, systemImage: "circle.fill", tint: Color(hex: project.colorHex),
-                     iconSize: 8, iconTrailing: true)
+            TaskRowGroupItem(name: project.name, colorHex: project.colorHex)
         } else {
             Text(" ").font(HITType.taskMeta(for: islandPlacement)).hidden()
         }
@@ -198,6 +197,17 @@ enum TaskRowMetrics {
     static let lineHeight: CGFloat = 21
     static let checkSize: CGFloat = 22
     #endif
+}
+
+/// A row's Group at the trailing end of its second line: the name, its dot after it. A shared task's is Shared Tasks
+/// (brief 64).
+struct TaskRowGroupItem: View {
+    let name: String
+    let colorHex: String
+
+    var body: some View {
+        MetaItem(name, systemImage: "circle.fill", tint: Color(hex: colorHex), iconSize: 8, iconTrailing: true)
+    }
 }
 
 /// The check circle a task row starts with, yours and a shared task's alike (brief 62): the priority's colour, the

@@ -81,9 +81,16 @@ struct QuickAddPopout: View {
         _draft = State(initialValue: QuickAddDraft(context: context))
     }
 
+    /// Your Groups, then Shared Tasks (brief 64), so `#"Shared Tasks"` reads as one Group; `#Shared` names it too
+    /// (`SharedTasksGroup.resolve`), unless a Group of yours has that name.
     private var parser: QuickAddParser {
-        QuickAddParser(knownProjects: projects.map(\.name), knownLabels: labels.map(\.name),
+        QuickAddParser(knownProjects: projects.map(\.name) + [SharedTasksGroup.name], knownLabels: labels.map(\.name),
                        weekStart: Preferences.weekStartWeekday())
+    }
+
+    /// Where the typed or picked Group files the task: one of yours, Shared Tasks, or none (the Inbox).
+    private func group(_ name: String?) -> GroupRef<String>? {
+        SharedTasksGroup.resolve(name, groups: projects.map(\.name))
     }
 
     var body: some View {
@@ -140,8 +147,7 @@ struct QuickAddPopout: View {
         .onAppear {
             // The card's own draft, if it had one when the app was last alive (or this view was rebuilt).
             cardID = popouts?.state.quickAdd?.id
-            if let cardID, let popouts,
-               let stored = QuickAddDraftStore.restoredDraft(for: cardID, from: popouts.draftDefaults, projects: projects) {
+            if let cardID, let popouts, let stored = restoredDraft(cardID, from: popouts.draftDefaults) {
                 draft = stored
             }
             titleFocused = true
@@ -375,16 +381,23 @@ struct QuickAddPopout: View {
     }
 
     private func groupChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        HITChip(chips.projectName ?? "Inbox", systemImage: chips.projectName == nil ? "tray" : "number",
-                tint: projectTint(chips.projectName), isSelected: chips.projectName != nil, size: .compact,
-                action: { openChip = .project })
+        // Shared Tasks by its own name and dot when `#Shared` names it (brief 64).
+        let isShared = group(chips.projectName) == .sharedTasks
+        let name = isShared ? SharedTasksGroup.name : chips.projectName
+        // A Group's dot, never "#" (brief 64).
+        return HITChip(name ?? "Inbox", systemImage: name == nil ? "tray" : GroupDot.symbol,
+                       tint: isShared ? Color(hex: SharedTasksGroup.colorHex) : projectTint(chips.projectName),
+                       isSelected: name != nil, size: .compact, action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
-                ProjectChipPopover(projects: projects, selectedName: chips.projectName) { project in
+                ProjectChipPopover(projects: projects, selectedName: name, onPickShared: {
+                    draft.setProject(SharedTasksGroup.name, parser)
+                    done()
+                }) { project in
                     draft.setProject(project?.name, parser)
                     done()
                 }
             }
-            .accessibilityLabel("Group: \(chips.projectName ?? "Inbox")")
+            .accessibilityLabel("Group: \(name ?? "Inbox")")
             .accessibilityIdentifier("quickAddGroupChip")
     }
 
@@ -536,17 +549,29 @@ struct QuickAddPopout: View {
         QuickAddDraftStore.save(draft, card: cardID, to: popouts.draftDefaults)
     }
 
+    /// The card's stored draft, put back with its Group looked up again (`QuickAddDraftStore.restoredDraft`); a card
+    /// that belonged to the Shared Tasks Group keeps it (brief 64).
+    private func restoredDraft(_ cardID: UUID, from defaults: UserDefaults) -> QuickAddDraft? {
+        if let stored = QuickAddDraftStore.draft(for: cardID, from: defaults), stored.context == .sharedTasks { return stored }
+        return QuickAddDraftStore.restoredDraft(for: cardID, from: defaults, projects: projects)
+    }
+
     private func save() {
         let result = draft.result(parser)
         guard !result.title.isEmpty, !hasSavedForClose else { return }
         do {
-            let task = try TaskActions.create(from: result, defaultProject: nil, defaultLabel: nil, in: modelContext)
             let notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !notes.isEmpty {
-                task.notes = notes
-                try? modelContext.save()
+            if group(result.projectName) == .sharedTasks {
+                // Into the shared store, for the people it is shared with (brief 64).
+                try TaskActions.createShared(from: result, notes: notes, subtasks: draft.subtaskTitles)
+            } else {
+                let task = try TaskActions.create(from: result, defaultProject: nil, defaultLabel: nil, in: modelContext)
+                if !notes.isEmpty {
+                    task.notes = notes
+                    try? modelContext.save()
+                }
+                try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)
             }
-            try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)
             errorMessage = nil
             if closesAfterSave { hasSavedForClose = true }
             if let cardID, let popouts { QuickAddDraftStore.clear(card: cardID, from: popouts.draftDefaults) }

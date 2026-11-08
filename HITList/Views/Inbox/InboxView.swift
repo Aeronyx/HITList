@@ -7,8 +7,8 @@ import HITListCore
 /// `GroupedOrdering`), under the large title "Inbox" and nothing else (the name once), with an
 /// "Inbox zero" state when it's empty and Review Inbox in the view options. Undated tasks in a Group are
 /// notes and stay in their Group. Rows, completion, and the undo toast behave as in every other list.
-/// Shared tasks with a date are rows here too, among yours (brief 62); sorted by Group each shared list has its
-/// section after the Groups and before "Ungrouped".
+/// Shared tasks with a date are rows here too, among yours (brief 62); sorted by Group they are one section, Shared
+/// Tasks, after your Groups and before "Ungrouped" (brief 64).
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -25,8 +25,6 @@ struct InboxView: View {
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
     @State private var processing = false
-    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
-    @State private var editorOwner = UUID()
     private var sharedRows: SharedRows { SharedRows.shared }
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -71,10 +69,9 @@ struct InboxView: View {
     }
 
     /// The rows in the chosen sort's sections (`GroupedOrdering`), each in `TaskOrdering`'s order. By Group: your
-    /// Groups, then the shared lists (by name), then "Ungrouped".
-    private func sections(_ rows: [TaskListRow], sharedLists: [SharedList]) -> [ListSection<ListRowGroup, TaskListRow>] {
-        let order = ListRows.groupOrder(groups: projects.map(\.id), sharedLists: sharedLists.map(\.id))
-        return GroupedOrdering.sections(rows, by: sort, groupOrder: order, now: now) { $0.group }
+    /// Groups, then Shared Tasks, then "Ungrouped".
+    private func sections(_ rows: [TaskListRow]) -> [ListSection<ListRowGroup, TaskListRow>] {
+        GroupedOrdering.sections(rows, by: sort, groupOrder: ListRows.groupOrder(groups: projects.map(\.id)), now: now) { $0.group }
     }
 
     var body: some View {
@@ -115,8 +112,6 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
-        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
-        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -125,9 +120,8 @@ struct InboxView: View {
     }
 
     private func list(_ rows: [TaskListRow]) -> some View {
-        let sharedLists = sharedRows.lists
-        return List(selection: popouts.listSelection(owner: editorOwner)) {
-            ForEach(sections(rows, sharedLists: sharedLists), id: \.key) { section in
+        List(selection: popouts.listSelection) {
+            ForEach(sections(rows), id: \.key) { section in
                 Section {
                     ForEach(section.tasks) { item in
                         switch item.kind {
@@ -137,8 +131,7 @@ struct InboxView: View {
                     }
                 } header: {
                     if section.key != .all {
-                        RowSectionHeader(heading: .make(for: section.key, count: section.openCount, projects: projects,
-                                                        sharedLists: sharedLists, now: now))
+                        GroupSectionHeader(heading: .make(row: section.key, count: section.openCount, projects: projects, now: now))
                     }
                 }
             }
@@ -189,11 +182,11 @@ struct InboxView: View {
             }
     }
 
-    /// A shared task (brief 62): drawn as yours, its list's name where a Group's sits (except under its own list's
-    /// header); completing goes through the shared store; selecting it opens its editor.
+    /// A shared task (briefs 62, 64): drawn as yours, the people where labels go and Shared Tasks where a Group sits
+    /// (except under its own header); completing goes through the shared store; selecting it opens its editor.
     private func sharedRow(_ row: SharedRow, hidesDay: Bool) -> some View {
         let phase = completions.phase(of: row.id)
-        return SharedTaskListRow(row: row, now: now, showList: sort != .group, hidesDay: hidesDay, completionPhase: phase,
+        return SharedTaskListRow(row: row, now: now, showGroup: sort != .group, hidesDay: hidesDay, completionPhase: phase,
                                  onToggleCompletion: { toggleCompletion(row) })
             .opacity(phase == .animating ? 0 : 1)
             .tag(ListSelection.shared(SharedTaskRef(row)))

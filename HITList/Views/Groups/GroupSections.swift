@@ -1,6 +1,12 @@
 import SwiftUI
 import HITListCore
 
+/// A Group's dot where a control draws an SF Symbol in an icon column (the editor's Group row, the Group card, the
+/// quick-add chip, brief 64): the small filled circle, so every Group reads as a dot and never as "#".
+enum GroupDot {
+    static let symbol = "circlebadge.fill"
+}
+
 /// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count;
 /// "Ungrouped" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No
 /// date") in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
@@ -36,6 +42,24 @@ struct GroupSectionHeading: Equatable {
             return GroupSectionHeading(title: title(of: section, now: now), dot: nil, titleColor: color(of: section),
                                        count: count)
         }
+    }
+
+    /// The heading for a section of a list that holds shared tasks among yours (briefs 62, 64): a Group's, "Ungrouped"
+    /// and a day's as above, and Shared Tasks' like any Group's, its dot in its colour.
+    static func make(row key: ListSectionKey<ListRowGroup>, count: Int, projects: [Project], now: Date = Date()) -> GroupSectionHeading {
+        switch key {
+        case .all: make(for: ListSectionKey<UUID>.all, count: count, projects: projects, now: now)
+        case .ungrouped: make(for: ListSectionKey<UUID>.ungrouped, count: count, projects: projects, now: now)
+        case .due(let section): make(for: ListSectionKey<UUID>.due(section), count: count, projects: projects, now: now)
+        case .group(.group(let id)): make(for: ListSectionKey<UUID>.group(id), count: count, projects: projects, now: now)
+        case .group(.sharedTasks): sharedTasks(count: count)
+        }
+    }
+
+    /// Shared Tasks' heading: "Shared Tasks · 3" after its dot (brief 64).
+    static func sharedTasks(count: Int) -> GroupSectionHeading {
+        GroupSectionHeading(title: SharedTasksGroup.name, dot: .filled(Color(hex: SharedTasksGroup.colorHex)),
+                            titleColor: HITColor.text, count: count)
     }
 
     /// The filter lists' day titles (`DueFormatter.sectionTitle`), with the week's last days as "Later".

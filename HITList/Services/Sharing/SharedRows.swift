@@ -10,7 +10,7 @@ import HITListCore
 /// this reads through them. Completed tasks are rows too, for Show completed and for a completion still animating;
 /// the lists' own rules leave them out otherwise.
 ///
-/// The actions go through the shared store as `SharedListScreen`'s do: each change is stamped and sent to the others.
+/// The actions go through the shared store: each change is stamped and sent to the others.
 @MainActor
 @Observable
 final class SharedRows {
@@ -25,32 +25,36 @@ final class SharedRows {
     private var store: SharedTasksStore? { source() }
 
     /// Every task of every list, open and completed.
-    var rows: [SharedRow] { Self.rows(in: store?.lists ?? []) }
+    var rows: [SharedRow] { Self.rows(in: store?.lists ?? [], me: store?.me) }
 
     /// The open ones.
     var open: [SharedRow] { rows.filter { !$0.task.isCompleted } }
 
-    /// The lists, in the order the Shared screen and the sidebar show them (by name): Sort by Group's order too.
+    /// The shared lists underneath Shared Tasks (each a set of people), by name.
     var lists: [SharedList] { store?.sortedLists ?? [] }
+
+    /// This account in the shared container, once known.
+    var me: SharedMemberID? { store?.me }
 
     func row(_ id: UUID) -> SharedRow? {
         for list in store?.lists ?? [] {
-            if let task = list.task(id) { return SharedRow(task: task, list: list) }
+            if let task = list.task(id) { return SharedRow(task: task, list: list, me: store?.me) }
         }
         return nil
     }
 
     func list(_ id: UUID) -> SharedList? { store?.list(id) }
 
-    /// Whether `id` names a shared list (the Mac sidebar's rows select one).
-    func isList(_ id: UUID) -> Bool { list(id) != nil }
-
-    static func rows(in lists: [SharedList]) -> [SharedRow] {
-        lists.flatMap { list in list.tasks.map { SharedRow(task: $0, list: list) } }
+    /// Each list's people are worked out once for all its rows.
+    static func rows(in lists: [SharedList], me: SharedMemberID? = nil) -> [SharedRow] {
+        lists.flatMap { list in
+            let people = SharedPeople.others(in: list, me: me)
+            return list.tasks.map { SharedRow(task: $0, list: list, people: people) }
+        }
     }
 
     /// Starts Shared Tasks when its switch is on (the lists call it as they appear, so a launch straight into Today
-    /// shows the shared tasks without a visit to the Shared screen first). Cheap; nothing when off.
+    /// shows the shared tasks without a visit to the Shared Tasks Group first). Cheap; nothing when off.
     func start() { SharedTasksCenter.shared.startIfOn() }
 
     // MARK: - Actions
@@ -60,11 +64,14 @@ final class SharedRows {
         case cannotChange(list: String)
         /// The task or its list went (deleted or left on another device), or the store isn't running.
         case gone
+        /// Shared Tasks is switched off on this device: nothing can be added to it (brief 64).
+        case off
 
         var errorDescription: String? {
             switch self {
             case .cannotChange(let list): "You can see “\(list)” but not change it."
             case .gone: "That task isn't here any more."
+            case .off: "Shared Tasks is off. Switch it on in the Shared Tasks Group."
             }
         }
     }
@@ -85,6 +92,51 @@ final class SharedRows {
         try edit(row) { try $0.setPriority(priority, task: row.id, in: row.listID) }
     }
 
+    /// The editor's Confirm (brief 64): the title as typed (`SharedTaskDraft` cleans it first).
+    func setTitle(_ title: String, _ row: SharedRow) throws {
+        try edit(row) { try $0.setTitle(title, task: row.id, in: row.listID) }
+    }
+
+    func setNotes(_ notes: String, _ row: SharedRow) throws {
+        try edit(row) { try $0.setNotes(notes, task: row.id, in: row.listID) }
+    }
+
+    /// The date card's time: on the task's day (today for an undated one).
+    func setTime(_ row: SharedRow, hour: Int, minute: Int, now: Date = Date(), calendar: Calendar = .current) throws {
+        let day = calendar.startOfDay(for: row.task.due.value?.date ?? now)
+        let at = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day) ?? day
+        try edit(row) { try $0.setDue(SharedDue(date: at, hasTime: true), task: row.id, in: row.listID) }
+    }
+
+    /// The date card's "No time": all day, on the same day.
+    func clearTime(_ row: SharedRow, calendar: Calendar = .current) throws {
+        guard let due = row.task.due.value, due.hasTime else { return }
+        try edit(row) { try $0.setDue(SharedDue(date: calendar.startOfDay(for: due.date), hasTime: false), task: row.id, in: row.listID) }
+    }
+
+    /// The editor's people row (brief 64): the task goes to another set of people, with its fields; it is a new task
+    /// there (another shared list is another CloudKit zone) and goes from the first. Nothing moves when it is there
+    /// already.
+    @discardableResult
+    func move(_ row: SharedRow, to listID: UUID) throws -> SharedRow {
+        guard row.listID != listID else { return row }
+        guard let store, let target = store.list(listID) else { throw Refusal.gone }
+        guard SharedTasksPermissions.allows(.addTask, in: target) else {
+            throw Refusal.cannotChange(list: target.title.isEmpty ? SharedRow.untitled : target.title)
+        }
+        var copy: SharedTask?
+        try edit(row) { store in
+            let task = row.task
+            let added = try store.addTask(to: listID, title: task.title.value, notes: task.notes.value,
+                                          priority: task.priority.value, due: task.due.value)
+            if task.isCompleted { try store.setCompleted(true, task: added.id, in: listID) }
+            try store.deleteTask(row.id, in: row.listID)
+            copy = added
+        }
+        guard let copy, let list = store.list(listID) else { throw Refusal.gone }
+        return SharedRow(task: list.task(copy.id) ?? copy, list: list, me: store.me)
+    }
+
     func delete(_ row: SharedRow) throws {
         try edit(row) { try $0.deleteTask(row.id, in: row.listID) }
     }
@@ -99,6 +151,32 @@ final class SharedRows {
         } catch SharedTasksStore.StoreError.notAllowed {
             throw Refusal.cannotChange(list: row.listTitle)
         }
+    }
+
+    // MARK: - Adding (brief 64)
+
+    /// Where a task added to Shared Tasks goes: with one set of people (a shared list I may add to), that one; with
+    /// several, the one I added to last, else the first in Sharing…'s order; with none, a new one of mine.
+    func listForNewTask() throws -> SharedList {
+        guard let store else { throw Refusal.off }
+        let writable = store.lists.filter { SharedTasksPermissions.allows(.addTask, in: $0) }
+        if let last = store.lastUsedListID, let list = writable.first(where: { $0.id == last }) { return list }
+        if let first = SharedSets.ordered(writable, me: store.me).first { return first }
+        return try store.createList(title: SharedTasksGroup.name)
+    }
+
+    /// A new shared task with what quick add understood: the title, the description, the priority and the day with
+    /// its time. A shared task has no sub-tasks, so typed ones go in its description as a list.
+    @discardableResult
+    func add(title: String, notes: String, priority: Int, due: SharedDue?, subtasks: [String] = []) throws -> SharedRow {
+        let list = try listForNewTask()
+        guard let store else { throw Refusal.off }
+        let lines = subtasks.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }.map { "• " + $0 }
+        let body = ([notes.trimmingCharacters(in: .whitespacesAndNewlines)].filter { !$0.isEmpty } + (lines.isEmpty ? [] : [lines.joined(separator: "\n")]))
+            .joined(separator: "\n\n")
+        let task = try store.addTask(to: list.id, title: title, notes: body, priority: priority, due: due)
+        guard let saved = store.list(list.id) else { throw Refusal.gone }
+        return SharedRow(task: saved.task(task.id) ?? task, list: saved, me: store.me)
     }
 
     // MARK: - Dragged to another day
@@ -141,10 +219,8 @@ final class SharedRows {
         open.filter { TaskOrdering.isInToday($0, now: now) }.count
     }
 
-    /// A list's open tasks, dated or not, as a Group's count counts them.
-    func openCount(in listID: UUID) -> Int {
-        list(listID)?.tasks.filter { !$0.isCompleted }.count ?? 0
-    }
+    /// The Shared Tasks Group's count: every open shared task, dated or not, as a Group's count counts them (brief 64).
+    var openCount: Int { open.count }
 
     /// A due date moved to `day`: its time of day kept when it has one, else all day.
     nonisolated static func due(movedTo day: Date, from old: SharedDue?, calendar: Calendar = .current) -> SharedDue {
@@ -154,4 +230,9 @@ final class SharedRows {
         let moved = calendar.date(bySettingHour: time.hour ?? 0, minute: time.minute ?? 0, second: 0, of: start) ?? start
         return SharedDue(date: moved, hasTime: true)
     }
+}
+
+extension QuickAddContext {
+    /// Adding from the Shared Tasks Group's screen (brief 64): into Shared Tasks.
+    static let sharedTasks = QuickAddContext.project(name: SharedTasksGroup.name, id: SharedTasksGroup.id)
 }

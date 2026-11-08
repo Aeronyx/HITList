@@ -54,8 +54,6 @@ struct UpcomingView: View {
     @State private var headers = HeaderPositions()
     @State private var completions = CompletionAnimator<Date?>()
     @State private var toast = CompletionToastState()
-    /// This list's own id: the shared task editor it opens is drawn here (`sharedTaskEditor(owner:)`).
-    @State private var editorOwner = UUID()
     /// "You can see “Trip” but not change it.": a drop or a move a shared list refused, for a moment.
     @State private var refusal: String?
     private var sharedRows: SharedRows { SharedRows.shared }
@@ -128,8 +126,6 @@ struct UpcomingView: View {
         } menu: {
             Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
-        // A shared row's editor (brief 62): a sheet on the iPhone, the panel on the Mac.
-        .sharedTaskEditor(owner: editorOwner)
         .onReceive(clock) { now = $0 }
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -183,7 +179,7 @@ struct UpcomingView: View {
     }
 
     private func list(_ schedule: UpcomingSchedule<Entry>) -> some View {
-        List(selection: popouts.listSelection(owner: editorOwner)) {
+        List(selection: popouts.listSelection) {
             if !schedule.overdue.isEmpty {
                 #if os(iOS)
                 Section {
@@ -531,7 +527,7 @@ struct UpcomingView: View {
     private func open(_ entry: Entry) {
         switch entry.kind {
         case .own(let task): selectedTask = task
-        case .shared(let row): popouts.openShared(SharedTaskRef(row), owner: editorOwner)
+        case .shared(let row): popouts.openShared(SharedTaskRef(row))
         }
     }
 

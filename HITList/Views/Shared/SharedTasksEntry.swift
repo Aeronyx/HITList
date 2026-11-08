@@ -6,158 +6,19 @@ import AppKit
 import UIKit
 #endif
 
-/// Where Shared Tasks is reached (brief 51): a row at the top of the iPhone's Browse, one row in the Mac and iPad
-/// sidebar, and a sheet over whatever is showing when an invitation link opens the app.
+/// Where Shared Tasks is reached (briefs 51, 64): the Shared Tasks Group, last under Groups in the Mac sidebar and
+/// Browse, and a sheet over whatever is showing when an invitation link opens the app (`SharedTasksPresenter`).
 
-/// Browse's Shared Tasks section: "Shared Tasks · Preview", the open count once on, which pushes the Shared screen for
-/// managing the lists; then each shared list (brief 62), which pushes that list's screen.
-struct SharedTasksBrowseRow: View {
-    private var center: SharedTasksCenter { SharedTasksCenter.shared }
-
-    var body: some View {
-        NavigationLink {
-            SharedTasksScreen()
-        } label: {
-            SharedTasksEntryLabel(symbolSize: 16)
-        }
-        .slateRow()
-        .accessibilityIdentifier("browse-shared-tasks")
-        ForEach(SharedRows.shared.lists) { list in
-            NavigationLink {
-                SharedListScreen(listID: list.id)
-            } label: {
-                SharedListBrowseLabel(list: list, count: SharedRows.shared.openCount(in: list.id))
-            }
-            .slateRow()
-            .accessibilityIdentifier("browse-shared-list")
-        }
-    }
-}
-
-/// A shared list's row in Browse, drawn as a Group's is there: its marker in its colour, its name, its open count.
-struct SharedListBrowseLabel: View {
-    let list: SharedList
-    let count: Int
-
-    var body: some View {
-        HStack(spacing: HITSpacing.m) {
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Color(hex: list.colorHex))
-                .frame(width: 24)
-            Text(list.title.isEmpty ? SharedRow.untitled : list.title).foregroundStyle(HITColor.text).lineLimit(1)
-            Spacer(minLength: HITSpacing.s)
-            if count > 0 {
-                Text("\(count)")
-                    .font(HITType.subheadline)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.secondaryText)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// The sidebar's row (Mac and iPad): opens the Shared screen in a sheet. A detail-column route would need a
-/// `SidebarItem` case in `ListScreen`, which this brief doesn't own.
-struct SharedTasksSidebarRow: View {
-    @State private var showing = false
-    private var center: SharedTasksCenter { SharedTasksCenter.shared }
-
-    var body: some View {
-        Button { showing = true } label: {
-            // Drawn like the sidebar's other rows (`SidebarView.row`): icon in the accent, title, count.
-            Label {
-                HStack(spacing: 6) {
-                    // The badge goes before the title does: in a narrow sidebar it showed "Preview" one letter
-                    // per line (the iPad build in a Mac window, 2026-11-06; a Mac sidebar dragged narrow does the same).
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 6) {
-                            Text("Shared Tasks").lineLimit(1)
-                            SharedPreviewBadge(compact: true).fixedSize()
-                        }
-                        Text("Shared Tasks").lineLimit(1)
-                    }
-                    .layoutPriority(1)
-                    Spacer(minLength: 4)
-                    if center.pendingInvitation != nil {
-                        Circle().fill(Color.accentColor).frame(width: 7, height: 7).accessibilityLabel("Invitation waiting")
-                    } else if let count = SharedTasksEntryLabel.openCount(center), count > 0 {
-                        Text("\(count)").foregroundStyle(.secondary).monospacedDigit()
-                    }
-                }
-            } icon: {
-                Image(systemName: "person.2").foregroundStyle(Color.accentColor)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .slateRow()
-        .accessibilityIdentifier("sidebar-shared-tasks")
-        .task { center.startIfOn() }
-        .sheet(isPresented: $showing) {
-            SharedTasksSheet { showing = false }
-        }
-    }
-}
-
-/// The entry's label: two-person symbol, "Shared Tasks", the Preview badge, the open count (on) or a dot for a
-/// waiting invitation.
-struct SharedTasksEntryLabel: View {
-    var symbolSize: CGFloat
-    private var center: SharedTasksCenter { SharedTasksCenter.shared }
-
-    var body: some View {
-        HStack(spacing: HITSpacing.m) {
-            Image(systemName: "person.2.fill")
-                .font(.system(size: symbolSize, weight: .semibold))
-                .foregroundStyle(Theme.accent)
-                .frame(width: 24)
-            Text("Shared Tasks").foregroundStyle(HITColor.text).lineLimit(1)
-            SharedPreviewBadge()
-            Spacer(minLength: HITSpacing.s)
-            if center.pendingInvitation != nil {
-                Circle().fill(Theme.accent).frame(width: 8, height: 8).accessibilityLabel("Invitation waiting")
-            } else if let count = Self.openCount(center), count > 0 {
-                Text("\(count)").font(HITType.subheadline).monospacedDigit().foregroundStyle(Theme.secondaryText)
-            }
-        }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-    }
-
-    /// Open tasks across the shared lists; nil while Shared Tasks isn't running.
-    static func openCount(_ center: SharedTasksCenter) -> Int? {
-        center.store.map { $0.lists.reduce(0) { $0 + $1.tasks.filter { !$0.isCompleted }.count } }
-    }
-}
-
-/// The Shared screen in a sheet with Done (Mac and iPad sidebar, invitations).
+/// The Sharing… sheet on its own (invitations, Debug launch hooks), with its own Done.
 struct SharedTasksSheet: View {
-    var showsList: UUID?
-    var showsPeople = false
     let onClose: () -> Void
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let showsList {
-                    SharedListScreen(listID: showsList, opensPeople: showsPeople)
-                } else {
-                    SharedTasksScreen()
-                }
-            }
-            .toolbar {
-                // The system's own bar button: a custom style is clipped inside the iOS 26 bar's glass.
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", action: onClose).accessibilityIdentifier("sharedTasksDone")
-                }
-            }
-        }
-        .slateSheet()
-        #if os(macOS)
-        .frame(minWidth: 520, idealWidth: 600, minHeight: 420, idealHeight: 560)
-        #endif
+        SharingSheet(onClose: onClose)
+            .slateSheet()
+            #if os(macOS)
+            .frame(minWidth: 480, idealWidth: 560, minHeight: 420, idealHeight: 600)
+            #endif
     }
 }
 
@@ -171,10 +32,10 @@ enum SharedTasksPresenter {
         present(SharedInvitationSheet(onClose: dismiss))
     }
 
-    /// The Shared screen (or one list, with its People open) in a sheet: Debug launch hooks (`SharedTasksDebug`).
-    static func presentScreen(list: UUID? = nil, people: Bool = false) {
+    /// Sharing… in a sheet: a list just joined, and Debug launch hooks (`SharedTasksDebug`).
+    static func presentSharing() {
         guard host == nil else { return }
-        present(SharedTasksSheet(showsList: list, showsPeople: people, onClose: dismiss))
+        present(SharedTasksSheet(onClose: dismiss))
     }
 
     /// A cold launch from an invitation link arrives before the window exists: try again a few times.
@@ -235,15 +96,15 @@ enum SharedTasksPresenter {
     #endif
 }
 
-/// The invitation, then the list once joined.
+/// The invitation, then Sharing… once joined (who you now share with).
 struct SharedInvitationSheet: View {
     let onClose: () -> Void
     @State private var joined: UUID?
     private var center: SharedTasksCenter { SharedTasksCenter.shared }
 
     var body: some View {
-        if let joined {
-            SharedTasksSheet(showsList: joined, onClose: onClose)
+        if joined != nil {
+            SharedTasksSheet(onClose: onClose)
         } else {
             NavigationStack {
                 ScrollView {
