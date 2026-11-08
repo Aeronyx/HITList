@@ -131,6 +131,8 @@ private struct SplitContent: View {
     /// Mac: the Settings sections are showing in the sidebar column. Follows `selection == .settings` one
     /// run-loop turn later, so the detail column has already swapped when the sidebar starts to fade.
     @State private var settingsSidebarShown = false
+    /// Mac: the sidebar's search field and where it takes the window (brief 66).
+    @State private var search = SidebarSearch()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
@@ -165,8 +167,10 @@ private struct SplitContent: View {
         .intentRouting(selection: $selection)
         .onChange(of: selection) { old, new in
             popouts.closeAll()
-            if let new, new != .settings { place.select(new) }
-            if new == .settings, old != .settings { beforeSettings = old }
+            // The search results are no place of their own: a fold or Settings goes back to where the search began.
+            if let new, new != .settings, new != .search { place.select(new) }
+            if new == .settings, old != .settings { beforeSettings = old == .search ? search.returnTo : old }
+            search.selectionChanged(to: new)
             #if os(macOS)
             let showing = new == .settings
             if showing != settingsSidebarShown {
@@ -178,6 +182,12 @@ private struct SplitContent: View {
             #endif
         }
         #if os(macOS)
+        .environment(\.sidebarSearch, search)
+        // Typing shows the results; emptying the field goes back (brief 66).
+        .onChange(of: search.text) { _, _ in
+            let next = search.selection(afterTextChangeFrom: selection)
+            if next != selection { selection = next }
+        }
         .environment(settingsRouter)
         .focusedSceneValue(\.settingsRouter, settingsRouter)
         .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
@@ -227,6 +237,9 @@ struct ListScreen: View {
         switch item {
         case .settings:
             MacSettingsPage()
+        case .search:
+            // The Mac sidebar's search results (brief 66).
+            SearchScreen()
         case .flipboard:
             // Adding from the Flipboard has no defaults (switches are added with its own "+").
             FlipboardView(selectedTask: popouts.selection)
