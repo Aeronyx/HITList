@@ -112,15 +112,22 @@ final class MobileChromeTests: XCTestCase {
     }
 
     func testRowsMeasureLikeTheReference() {
-        // Todoist's row (George's reference): a little more above the title than below the second line.
         let insets = ListMetrics.rowInsets(compact: false)
+        #if os(macOS)
+        // Round 15: George's Todoist Mac row; the Mac's list draws the top inset below the row too, so the two match.
+        XCTAssertEqual(insets.top, 9)
+        XCTAssertEqual(insets.bottom, insets.top)
+        XCTAssertEqual(ListMetrics.rowLineGap, 5.5)
+        #else
+        // Todoist's row (George's reference): a little more above the title than below the second line.
         XCTAssertEqual(insets.top, 12)
         XCTAssertEqual(insets.bottom, 10)
+        XCTAssertEqual(ListMetrics.rowLineGap, 4)
+        #endif
         XCTAssertEqual(insets.leading, insets.trailing)
         let compact = ListMetrics.rowInsets(compact: true)
         XCTAssertLessThan(compact.top, insets.top)
         XCTAssertLessThan(compact.bottom, insets.bottom)
-        XCTAssertEqual(ListMetrics.rowLineGap, 4)
     }
 
     func testRowTypeIsTheDuosStepOnEveryIPhone() {
