@@ -32,6 +32,9 @@ struct TokenHighlightField: View {
     var onDisable: ((QuickAddToken) -> Void)? = nil
     /// Undo of `onDisable`: the token lights up again. Nil: switching off is not undoable.
     var onEnable: ((QuickAddToken) -> Void)? = nil
+    /// The text's look; nil is the quick-add title's (`HighlightTextStyle.current()`). The task editor passes
+    /// its larger title (`HighlightTextStyle.editorTitle`, brief 65).
+    var look: HighlightTextStyle? = nil
     var onSubmit: () -> Void
 
     /// The highlight's corners (George, brief 28: "slightly rounded, like a button").
@@ -48,7 +51,7 @@ struct TokenHighlightField: View {
     }
 
     private var field: some View {
-        HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: .current(),
+        HighlightTextField(placeholder: placeholder, text: $text, runs: runs, style: look ?? .current(),
                            isFocused: focus.wrappedValue, onFocusChange: { report($0) },
                            onSubmit: onSubmit)
             #if os(macOS)
