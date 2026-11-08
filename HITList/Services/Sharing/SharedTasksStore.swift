@@ -89,6 +89,8 @@ final class SharedTasksStore {
 
     var lists: [SharedList] { state.lists }
     var me: SharedMemberID? { state.me }
+    /// The set of people a task was last added to here (brief 64).
+    var lastUsedListID: UUID? { state.lastUsedListID }
     var profile: SharedProfile? { state.profile }
 
     func list(_ id: UUID) -> SharedList? { state.lists.first { $0.id == id } }
@@ -186,6 +188,7 @@ final class SharedTasksStore {
                               priority: Stamped(Self.clampPriority(priority), at: t), due: Stamped(due.map(Self.normalized), at: t),
                               completion: Stamped(nil, at: t), createdAt: t, createdBy: me, createdByName: myName)
         state.lists[i].tasks.append(task)
+        state.lastUsedListID = listID
         commit([.saveRecord(ref(state.lists[i], SharedTasksSchema.taskRecordName(for: task.id)))])
         return task
     }

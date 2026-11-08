@@ -295,10 +295,7 @@ struct TaskListView: View {
                         } description: {
                             Text(emptyDescription)
                         } actions: {
-                            if isSharedTasks {
-                                Button("Sharing…") { showSharing = true }
-                                    .buttonStyle(.hitPrimary)
-                            } else if selection != .completed {
+                            if selection != .completed {
                                 Button("Add Task") { popouts.openQuickAdd(addContext) }
                                     .buttonStyle(.hitPrimary)
                             }
@@ -331,7 +328,7 @@ struct TaskListView: View {
                                     }
                                 }
                             }
-                            if selection != .completed, !isSharedTasks, !isCompact {
+                            if selection != .completed, !isCompact {
                                 Section { InlineAddRow(context: addContext, key: "list") }
                             }
                         }
@@ -360,7 +357,7 @@ struct TaskListView: View {
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
                              onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
         }
-        .quickAddEntry(addContext, showsButton: selection != .completed && !isSharedTasks)
+        .quickAddEntry(addContext, showsButton: selection != .completed && (!isSharedTasks || SharedTasksCenter.shared.isOn))
         .background(Theme.background)
         .navigationTitle(title)
         #if os(iOS)
@@ -594,7 +591,7 @@ struct TaskListView: View {
         }
     }
     private var emptyDescription: String {
-        if isSharedTasks { return "Tasks you share show up here and in everyone's lists. Choose who sees them in Sharing…" }
+        if isSharedTasks { return "Tasks you add here show up in everyone's lists. Choose who sees them in Sharing…" }
         return selection == .completed ? "Completed tasks show up here." : "Try: Call mom tomorrow 5pm p2 #Family"
     }
 
@@ -604,7 +601,9 @@ struct TaskListView: View {
         case .inbox: return .inbox
         case .today: return .today
         case .upcoming: return .upcoming
-        case .project: return currentProject.map { .project(name: $0.name, id: $0.id) } ?? .plain
+        case .project:
+            if isSharedTasks { return .sharedTasks } // into Shared Tasks (brief 64)
+            return currentProject.map { .project(name: $0.name, id: $0.id) } ?? .plain
         case .label: return currentLabel.map { .label(name: $0.name) } ?? .plain
         case .filter, .completed: return .plain
         }
