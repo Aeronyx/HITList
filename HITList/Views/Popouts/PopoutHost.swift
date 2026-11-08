@@ -370,6 +370,8 @@ struct PopoutHost: ViewModifier {
                         }
                     card
                         .panelChrome()
+                        // A first-run tip hangs above the panel, never inside it (`floatingQuickAddTip`).
+                        .floatingQuickAddTip(isHidden: confirmingDiscard)
                         .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                 }
             }
@@ -395,6 +397,8 @@ struct PopoutHost: ViewModifier {
                         }
                         card
                             .ovalCardChrome()
+                            // A first-run tip floats above the card over the dimmed list, never inside it.
+                            .floatingQuickAddTip(isHidden: confirmingDiscard)
                             // A tap on the card itself also means "keep editing".
                             .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                     }
