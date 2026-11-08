@@ -102,15 +102,14 @@ final class SharedListsTests: XCTestCase {
         return store
     }
 
-    func testASharedListsSectionIsHeadedByItsNameWithThePeopleMarker() throws {
-        let trip = try list("Trip", in: sharedStore())
-        let heading = RowSectionHeading.make(for: .group(.shared(trip.id)), count: 2, projects: [], sharedLists: [trip])
-        XCTAssertTrue(heading.isShared)
-        XCTAssertEqual(heading.heading.title, "Trip")
-        XCTAssertNil(heading.heading.dot, "the marker stands where a Group's dot is")
-        XCTAssertEqual(heading.sharedColor, Color(hex: "#F2A65A"))
-        XCTAssertEqual(String(heading.heading.label.characters), "Trip · 2", "name and count as one run, one font")
-        XCTAssertEqual(heading.accessibilityLabel, "Trip, shared list, 2 tasks")
+    func testSharedTasksSectionIsHeadedLikeAnyGroupWithItsDot() {
+        // Brief 64: one forced Group, its dot where any Group's sits, never the two-person marker.
+        let heading = GroupSectionHeading.make(row: .group(.sharedTasks), count: 2, projects: [])
+        XCTAssertEqual(heading.title, "Shared Tasks")
+        XCTAssertEqual(heading.dot, .filled(Color(hex: SharedTasksGroup.colorHex)))
+        XCTAssertEqual(heading.titleColor, HITColor.text)
+        XCTAssertEqual(String(heading.label.characters), "Shared Tasks · 2", "name and count as one run, one font")
+        XCTAssertEqual(heading.accessibilityLabel, "Shared Tasks, 2 tasks")
     }
 
     func testGroupUngroupedAndDaySectionsAreHeadedAsBefore() throws {
@@ -121,16 +120,9 @@ final class SharedListsTests: XCTestCase {
         let now = Date()
         for (key, plain) in [(ListSectionKey<ListRowGroup>.group(.group(work.id)), ListSectionKey<UUID>.group(work.id)),
                              (.ungrouped, .ungrouped), (.due(.tomorrow), .due(.tomorrow)), (.all, .all)] {
-            let heading = RowSectionHeading.make(for: key, count: 3, projects: projects, sharedLists: [], now: now)
-            XCTAssertFalse(heading.isShared)
-            XCTAssertEqual(heading.heading, GroupSectionHeading.make(for: plain, count: 3, projects: projects, now: now))
+            let heading = GroupSectionHeading.make(row: key, count: 3, projects: projects, now: now)
+            XCTAssertEqual(heading, GroupSectionHeading.make(for: plain, count: 3, projects: projects, now: now))
         }
-    }
-
-    func testAListThatJustWentKeepsAnUntitledSection() {
-        let heading = RowSectionHeading.make(for: .group(.shared(UUID())), count: 1, projects: [], sharedLists: [])
-        XCTAssertEqual(heading.heading.title, SharedRow.untitled)
-        XCTAssertTrue(heading.isShared)
     }
 
     // MARK: - The row

@@ -52,22 +52,24 @@ final class SharedRowsTests: XCTestCase {
         XCTAssertEqual(row.filterDueDate, task.due.value?.date)
         XCTAssertTrue(row.filterHasDueTime)
         XCTAssertFalse(row.filterIsCompleted)
-        XCTAssertEqual(row.filterProjectName, "Trip", "its list's name is its Group name")
+        XCTAssertEqual(row.filterProjectName, "Shared Tasks", "its Group is the forced Shared Tasks Group (brief 64)")
         XCTAssertEqual(row.rowGroupID, trip.id)
         XCTAssertEqual(row.filterCreatedDate, task.createdAt)
         XCTAssertTrue(row.filterLabelNames.isEmpty)
         XCTAssertFalse(row.filterIsRecurring)
         XCTAssertFalse(row.filterIsSubtask)
         XCTAssertTrue(row.canWrite, "my own list")
-        XCTAssertEqual(TaskListRow.shared(row).group, .shared(trip.id))
+        XCTAssertEqual(TaskListRow.shared(row).group, .sharedTasks)
+        XCTAssertEqual(row.listTitle, "Trip", "its list stays underneath: the set of people")
     }
 
-    func testAnUntitledListStillNamesAGroupSoItsUndatedTasksStayInIt() throws {
+    func testAnUntitledListsUndatedTasksStayInSharedTasks() throws {
         let store = makeStore()
         let list = joinedList("", in: store)
         let task = try store.addTask(to: list, title: "Someday")
         let row = SharedRow(task: task, list: try XCTUnwrap(store.list(list)))
-        XCTAssertEqual(row.filterProjectName, SharedRow.untitled)
+        XCTAssertEqual(row.filterProjectName, SharedTasksGroup.name)
+        XCTAssertEqual(row.listTitle, SharedRow.untitled)
         XCTAssertFalse(TaskOrdering.isInInbox(row, now: now), "undated: only on its list's screen")
     }
 
@@ -126,7 +128,8 @@ final class SharedRowsTests: XCTestCase {
         XCTAssertEqual(Set(rows.rows.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk", "Bread"])
         XCTAssertEqual(Set(rows.open.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk"])
         XCTAssertEqual(rows.lists.map(\.title), ["Groceries", "Trip"], "by name, as the Shared screen")
-        XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.filterProjectName, "Groceries")
+        XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.listTitle, "Groceries")
+        XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.filterProjectName, "Shared Tasks")
         XCTAssertTrue(rows.isList(groceries))
         XCTAssertFalse(rows.isList(UUID()))
     }

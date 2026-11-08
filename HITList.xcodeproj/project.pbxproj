@@ -90,7 +90,6 @@
 		4A4E4516E82C7FBCFDEB19BD /* AddTaskIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2396DF976859CE0B43B5E43A /* AddTaskIntent.swift */; };
 		4A5A32F96EDD564B3FC09DE9 /* CompletionFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */; };
 		4C5C4412756C5F3A805276E8 /* AppGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99F5C84701529B786312B4FD /* AppGroupTests.swift */; };
-		4D7457CAD2BF1009CA4FCF4D /* SharedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AA5CBFA6EAC62496862308D /* SharedSections.swift */; };
 		4DA0D7A920592A3351482879 /* HITListUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 779C8E0132E607E31B370A6E /* HITListUITests.swift */; };
 		4E3CC00722B95EA5C12A9D06 /* ProjectEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB8ABD5B832600BB422B2240 /* ProjectEditorView.swift */; };
 		50966C1D4A63EBAC1A08B11D /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD69DA3D48DE01A521546D67 /* UpcomingView.swift */; };
@@ -464,7 +463,6 @@
 		77D16137E9D78AC2AFDE7107 /* WhatsNewPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewPopout.swift; sourceTree = "<group>"; };
 		7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionToastStateTests.swift; sourceTree = "<group>"; };
 		7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxPicker.swift; sourceTree = "<group>"; };
-		7AA5CBFA6EAC62496862308D /* SharedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSections.swift; sourceTree = "<group>"; };
 		7C1C596DE872D32372F5F68A /* AccountSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsSection.swift; sourceTree = "<group>"; };
 		7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppearanceSection.swift; sourceTree = "<group>"; };
 		7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeGatingTests.swift; sourceTree = "<group>"; };
@@ -680,7 +678,6 @@
 			children = (
 				57B844296AE03CBC83B408C4 /* SharedListScreen.swift */,
 				27EA650F8935B9B18A9DF5F4 /* SharedPeopleSheet.swift */,
-				7AA5CBFA6EAC62496862308D /* SharedSections.swift */,
 				91ABF81C13D643B15ED09BC0 /* SharedTaskEditorHost.swift */,
 				BCD1883288948D9C8624C512 /* SharedTasksComponents.swift */,
 				CB6B8998E8DB284D4966C611 /* SharedTasksEntry.swift */,
@@ -1579,7 +1576,6 @@
 				92EB38CE9F299C4F18109EC4 /* SharedPeopleSheet.swift in Sources */,
 				C93586D0536BE7984F2DDA89 /* SharedRow.swift in Sources */,
 				396120C4A271F689060160F4 /* SharedRows.swift in Sources */,
-				4D7457CAD2BF1009CA4FCF4D /* SharedSections.swift in Sources */,
 				61D0C8E80E783E0492D50B56 /* SharedTaskEditorHost.swift in Sources */,
 				A423D0432076CC1FF04FC787 /* SharedTasksCenter.swift in Sources */,
 				8BFBC81113808FF6C522011F /* SharedTasksComponents.swift in Sources */,
