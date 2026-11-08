@@ -126,6 +126,21 @@ Next version 0.8.1 (0.8.0 shipped as build 18). No schema change. Ownership: 61 
 `Upcoming/*`, `TaskRow`, `SidebarView`, `PopoutController`, core `FilterableTask` + new `ListRow`. The rules of the round
 are in `ROUND-14.md` and SUPERVISOR §7 (a name once, large titles, one control, the three sorts, filters in search).
 
+## Round 15 (2026-11-08; briefs 64–69 in parallel, all six at once; `ROUND-15.md` says why)
+Next version 0.9.0 (0.8.2, the supervisor's fix for the Mac's invisible picker cards, may ship before the round merges).
+No schema change. Ownership: the table in `ROUND-15.md` and each brief's list; where two briefs share a file, each
+names its region. New facts:
+- The Mac's picker cards live on a layer in the window's frame view (`PickerLayerHost.host(in: window)`): with the Xcode
+  27.2 SDK a SwiftUI content view draws over any AppKit view added inside it. Never draw over SwiftUI that way.
+- A Debug Mac app has the real app's bundle id and may restore its saved window state and open no window: launch it
+  with `-ApplePersistenceIgnoreState YES` beside `-disableCloudKit YES`, e.g. `open -g -n --env HITLIST_STORE_SUFFIX=sNN
+  build.noindex/mac-NN/Build/Products/Debug/HITList.app --args -disableCloudKit YES -hideTips YES -ApplePersistenceIgnoreState YES`
+  (add `-seedDemoData YES` the first time for a believable week).
+- George's screenshots for this round: `/Users/gtrammell/Desktop/HITList/build.noindex/round-15/` (outside git; read by
+  that absolute path).
+- Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
+  that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
+
 ## Round 14 record (2026-11-07/08; sessions 61–63 merged for 0.8.1)
 61 `lists-cleanup` (xhigh, 6 commits), 63 `duo-and-shell` (high, 3) at once, then 62 `shared-in-lists` (xhigh, 6) on
 the merged lists. No conflicts. Supervisor follow-ups: Upcoming's iPhone title made large; the disabled "Sort"
