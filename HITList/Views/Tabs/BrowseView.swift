@@ -6,7 +6,7 @@ import HITListCore
 /// The iPhone's Browse, the Mac sidebar as a page, pushed onto the current tab's stack by the magnifying
 /// glass at the top right (brief 35; the gear there opens Settings): the search field on top, the saved
 /// filters as a row of chips under it (brief 61), then Groups (Inbox first, the default grey Group, then each
-/// Group in its colour with its open count), Shared Tasks and Labels, each header with its "+", then
+/// Group in its colour with its open count, Shared Tasks last, brief 64) and Labels, each header with its "+", then
 /// Completed and Settings (`lastRows`; the Flipboard is a tab).
 /// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens the
 /// profile menu (`BrowseProfileMenu`, brief 53): Account settings… (the Settings sheet, whose first group is
@@ -147,15 +147,17 @@ struct BrowseView: View {
                 }
                 // Long-press and drag a Group to a new place (brief 57), as in the Mac sidebar.
                 .onMove { from, to in GroupReorder.move(projects, from: from, to: to) }
+                // Shared Tasks, the forced Group, always last (brief 64).
+                link(.sharedTasks) {
+                    BrowseRow(title: SharedTasksGroup.name, symbol: "circle.fill", tint: Color(hex: SharedTasksGroup.colorHex),
+                              count: SharedRows.shared.openCount, smallIcon: true)
+                }
+                .accessibilityIdentifier("browse-shared-tasks")
             } header: {
                 SidebarSectionHeader(title: "Groups") { creatingProject = true }
             } footer: {
                 guidance(GroupGuidance.group)
             }
-
-            // Shared Tasks (brief 51): the preview's switch and, once on, the shared lists. Below the Groups
-            // (brief 61: "Groups should be first above Shared Tasks").
-            Section { SharedTasksBrowseRow() }
 
             Section {
                 if labels.isEmpty { emptyRow("No labels yet") }
