@@ -18,9 +18,9 @@ final class SharedTasksSync: CKSyncEngineDelegate, @unchecked Sendable {
     private var engines: [SharedListScope: CKSyncEngine] = [:]
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sharing")
 
-    /// Main actor: whether an engine is fetching or sending, for the Shared screen's "Syncing…".
+    /// Main actor: whether an engine is fetching or sending, for Sharing…'s "Syncing…".
     @MainActor var onActivity: ((Bool) -> Void)?
-    /// Main actor: a failure worth a line on the Shared screen (nil clears it).
+    /// Main actor: a failure worth a line in Sharing… (nil clears it).
     @MainActor var onProblem: ((String?) -> Void)?
     @MainActor private var busy: Set<String> = []
 
@@ -47,7 +47,7 @@ final class SharedTasksSync: CKSyncEngineDelegate, @unchecked Sendable {
 
     // MARK: - Fetching and sending now
 
-    /// Both engines fetch now (a push, the Shared screen appearing, pull to refresh).
+    /// Both engines fetch now (a push, Sharing… appearing, coming back to the app).
     func fetchNow() async {
         for scope in SharedListScope.allCases {
             do {
@@ -322,7 +322,7 @@ final class SharedTasksSync: CKSyncEngineDelegate, @unchecked Sendable {
             .contains(error.code)
     }
 
-    /// A short line for the Shared screen.
+    /// A short line for Sharing….
     static func describe(_ error: Error) -> String {
         guard let ck = error as? CKError else { return error.localizedDescription }
         switch ck.code {

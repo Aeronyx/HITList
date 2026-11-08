@@ -44,7 +44,7 @@ final class SharedTasksCenter {
     private(set) var phase: Phase = .off
     private(set) var store: SharedTasksStore?
     private(set) var isSyncing = false
-    /// A line for the Shared screen: the last failure, or why the shared lists' file was reset.
+    /// A line for Sharing…: the last failure, or why the shared lists' file was reset.
     private(set) var problem: String?
     var pendingInvitation: Invitation?
 
@@ -225,7 +225,7 @@ final class SharedTasksCenter {
 
     // MARK: - Actions
 
-    /// Fetch now (the Shared screen appearing, pull to refresh).
+    /// Fetch now (Sharing… appearing).
     func refresh() async {
         startIfOn()
         refreshProfile()

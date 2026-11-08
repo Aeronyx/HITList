@@ -35,7 +35,7 @@ enum SharedTasksPermissions {
     }
 }
 
-/// A person as the Shared screens show them.
+/// A person as Sharing… and the rows show them.
 struct SharedPerson: Identifiable, Equatable {
     var id: String
     var name: String

@@ -68,7 +68,11 @@ struct SharingSheet: View {
             switch question {
             case .stop: Text("Everyone else loses these shared tasks. You keep them.")
             case .leave: Text("These shared tasks go from your devices. You can join again only if you're invited again.")
-            case .delete(let list): Text("Its \(list.tasks.count) \(list.tasks.count == 1 ? "task goes" : "tasks go") for everyone in it.")
+            case .delete(let list):
+                let n = list.tasks.count
+                Text(SharedPeople.others(in: list, me: center.store?.me).isEmpty
+                     ? "\(n) \(n == 1 ? "task goes" : "tasks go") from Shared Tasks on all your devices."
+                     : "\(n) \(n == 1 ? "task goes" : "tasks go") for everyone in it.")
             case .remove: Text("They lose these shared tasks.")
             }
         }
@@ -132,7 +136,8 @@ struct SharingSheet: View {
                 }
             }
             if SharedTasksPermissions.allows(.deleteList, in: list), !list.tasks.isEmpty || others.isEmpty {
-                HITMenuRow(list.tasks.isEmpty ? "Remove" : "Delete These Tasks for Everyone…", systemImage: "trash",
+                HITMenuRow(list.tasks.isEmpty ? "Remove" : others.isEmpty ? "Delete These Tasks…" : "Delete These Tasks for Everyone…",
+                           systemImage: "trash",
                            role: .destructive, accessory: .none) {
                     if list.tasks.isEmpty { run { try center.deleteList(list.id) } } else { confirming = .delete(list) }
                 }
@@ -267,26 +272,36 @@ enum SharedSets {
 struct SharedTasksOff: View {
     let onShare: () -> Void
 
+    /// The text's left edge on the rows' (the Mac's inset list adds its own margin to a row's).
+    #if os(macOS)
+    static let inset = ListMetrics.horizontalInset + HITSpacing.l
+    #else
+    static let inset = ListMetrics.horizontalInset
+    #endif
+
     static let sentence = "Share tasks with friends: they show up in everyone's lists like their own, and anyone can add, complete and edit them."
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HITSpacing.l) {
-            Text(Self.sentence)
-                .font(HITType.callout)
-                .foregroundStyle(HITColor.text)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: HITSpacing.s) {
-                Button("Turn On and Share…", action: onShare)
-                    .buttonStyle(.hitPrimary)
-                    .accessibilityIdentifier("sharedTurnOn")
-                SharedPreviewBadge()
+        // In a scroll view: measured at any width it never asks the window for more height (the Mac's split view
+        // measures its detail column narrow first, and a text fixed to its ideal height pushed the window's content up).
+        ScrollView {
+            VStack(alignment: .leading, spacing: HITSpacing.l) {
+                Text(Self.sentence)
+                    .font(HITType.callout)
+                    .foregroundStyle(HITColor.text)
+                    .frame(maxWidth: 520, alignment: .leading)
+                HStack(spacing: HITSpacing.s) {
+                    Button("Turn On and Share…", action: onShare)
+                        .buttonStyle(.hitPrimary)
+                        .accessibilityIdentifier("sharedTurnOn")
+                    SharedPreviewBadge()
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Self.inset)
+            .padding(.top, HITSpacing.l)
         }
-        .frame(maxWidth: 520, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, ListMetrics.horizontalInset)
-        .padding(.top, HITSpacing.l)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .scrollBounceBehavior(.basedOnSize)
     }
 }
 

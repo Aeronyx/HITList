@@ -98,7 +98,7 @@ final class SharedTasksStore {
 
     func list(_ id: UUID) -> SharedList? { state.lists.first { $0.id == id } }
 
-    /// Lists in the order the Shared screen shows them: mine and joined together, by name.
+    /// Lists by name, mine and joined together.
     var sortedLists: [SharedList] {
         state.lists.sorted {
             let order = $0.title.localizedCaseInsensitiveCompare($1.title)

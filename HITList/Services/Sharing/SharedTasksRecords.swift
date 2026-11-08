@@ -156,7 +156,7 @@ enum SharedTasksRecords {
                             systemFields: systemFields(of: record))
     }
 
-    /// The share's people as the Shared screens need them. `me` replaces the placeholder CloudKit uses for the
+    /// The share's people as Sharing… needs them. `me` replaces the placeholder CloudKit uses for the
     /// current user (`CKCurrentUserDefaultName`).
     static func shareInfo(from share: CKShare, me: SharedMemberID?) -> SharedShareInfo {
         let current = share.currentUserParticipant
