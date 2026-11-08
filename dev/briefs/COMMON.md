@@ -118,6 +118,14 @@ no longer runs on a Mac (`SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO`): a Mac che
 iPad app in a Mac window. In a test, keep the `ModelContainer` in a `let` for the whole test (a `ModelContext` does not
 retain its container; `ModelContainerFactory.preview().mainContext` alone traps on the next fetch).
 
+## Round 14 (2026-11-07 evening; briefs 61 and 63 in parallel, 62 after 61 merges; `ROUND-14.md` says why)
+Next version 0.8.1 (0.8.0 shipped as build 18). No schema change. Ownership: 61 `TaskListView`, `InboxView`, `InboxText`,
+`BrowseView`, `ListChrome`, `ScreenMenu`, `Views/Groups/*`, `SettingsPreferences`, `HITTips`, core `GroupedOrdering` + new
+`SearchIntent`, `GroupsTests`, the Groups and Review UI tests; 63 `MobileShell`, `MobileTabBar`, `TaskRow`, `HITTokens`,
+`Views/Duo/*`, `MobileChromeTests`, its own UI test; 62 (later) `Views/Shared/*`, `Services/Sharing/*`, the list views,
+`Upcoming/*`, `TaskRow`, `SidebarView`, `PopoutController`, core `FilterableTask` + new `ListRow`. The rules of the round
+are in `ROUND-14.md` and SUPERVISOR §7 (a name once, large titles, one control, the three sorts, filters in search).
+
 ## Round 13 record (2026-11-07; sessions 57–60 merged for 0.8.0)
 Four sessions at once on George's turn, all Opus 5.5: 57 `groups` (xhigh, 9 commits), 58 `tab-motion` (high, 4),
 59 `flipboard-intervals` (xhigh, 6), 60 `review-inbox` (high, 5). Merged 59, 57, 58, 60; the only conflicts were the
