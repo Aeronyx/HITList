@@ -9,7 +9,9 @@ import HITListCore
 /// - × (close) and "…" (duplicate, move, a day earlier / later, delete) at the top.
 /// - The title card: the check circle and the title, the description under it once it has one (or the
 ///   Description pill is tapped), then the Group row and the date row (with the time and the repeat),
-///   which open the Group and date cards.
+///   which open the Group and date cards. The title reads quick-add phrases typed in it (brief 65): they
+///   light up as in the quick-add card, the rows and pills below show what they set (`EditorFields`), and
+///   Confirm saves them (`TitlePhrases`). Picking a value replaces a typed phrase of its kind.
 /// - A sideways row of pills: Description, Priority, Reminder, Labels, Repeat, Deadline, Location,
 ///   outlined until set, filled with their value once set.
 /// - The Flipboard row for a repeating task, then the "Sub-tasks" checklist (`SubtaskChecklist`).
@@ -50,8 +52,15 @@ struct TaskPopout: View {
     /// The task's id, read once while it certainly exists: the popout may close because the task was
     /// deleted elsewhere, and then nothing may be written to it.
     @State private var taskID: UUID?
-    @FocusState private var titleFocused: Bool
+    /// Not `@FocusState`: the title is a native text view whose own bridge moves its keyboard
+    /// (`TokenHighlightField.focus`).
+    @State private var titleFocused = false
     @FocusState private var notesFocused: Bool
+    #if os(iOS)
+    /// Where the keyboard was when a card opened, to give it back when the card closes.
+    @State private var keyboardBeforeCard: KeyboardPlace?
+    enum KeyboardPlace { case title, notes }
+    #endif
 
     enum Chip: Hashable { case date, priority, project, labels, reminder, repeating, deadline, location }
 
@@ -77,14 +86,26 @@ struct TaskPopout: View {
         #endif
     }
 
+    /// Reads the title's phrases the way the quick-add card does: the person's Groups and labels known.
+    private func parser(now: Date = Date()) -> QuickAddParser {
+        QuickAddParser(now: now, knownProjects: projects.map(\.name), knownLabels: labels.map(\.name),
+                       weekStart: Preferences.weekStartWeekday())
+    }
+
     var body: some View {
+        // The title is read once per keystroke: its highlights, and every row and pill below, come from it.
+        let parser = parser()
+        let parsed = draft.parsed(parser, for: task)
+        let phrases = TitlePhrases(text: draft.title, result: parsed, dueDate: task.dueDate, hasDueTime: task.hasDueTime,
+                                   calendar: parser.dateParser.calendar)
+        let shown = EditorFields(task: task).applying(phrases)
         VStack(spacing: 0) {
             VStack(spacing: 0) {
                 topBar
                 ScrollView {
                     VStack(alignment: .leading, spacing: HITSpacing.l) {
-                        titleCard
-                        pillRow
+                        titleCard(parsed: parsed, typedGroup: phrases.projectName, shown: shown)
+                        pillRow(shown)
                         if task.recurrence != nil, !task.isSubtask { flipboardRow }
                         if !task.isSubtask { SubtaskChecklist(task: task, draft: $draft) }
                     }
@@ -113,6 +134,11 @@ struct TaskPopout: View {
             keepTyping()
         }
         .onChange(of: showsNotes) { _, _ in keepTyping() }
+        #if os(iOS)
+        // iPhone and iPad: the keyboard steps aside while a card is open, as in the quick-add card; with it up, the
+        // date card was squeezed between its row and the keyboard, its presets and time cut off (brief 65).
+        .onChange(of: openChip) { _, chip in keyboardMoves(forCard: chip != nil) }
+        #endif
         // The chips' picker cards (inside the window on the Mac).
         .pickerOverlay()
         .onAppear {
@@ -131,6 +157,24 @@ struct TaskPopout: View {
         .onExitCommand(perform: requestClose)
         #endif
     }
+
+    #if os(iOS)
+    /// A card opening takes the keyboard from the title or the description; closing gives it back there.
+    private func keyboardMoves(forCard isOpen: Bool) {
+        if isOpen {
+            if keyboardBeforeCard == nil { keyboardBeforeCard = titleFocused ? .title : notesFocused ? .notes : nil }
+            titleFocused = false
+            notesFocused = false
+        } else if let place = keyboardBeforeCard {
+            keyboardBeforeCard = nil
+            guard !isClosing else { return }
+            switch place {
+            case .title: titleFocused = true
+            case .notes: notesFocused = true
+            }
+        }
+    }
+    #endif
 
     // MARK: Top bar
 
@@ -213,16 +257,19 @@ struct TaskPopout: View {
 
     private var isChecked: Bool { task.isCompleted || completing }
 
-    private var titleCard: some View {
+    /// `parsed`: the title's phrases; `typedGroup`: a Group typed in it; `shown`: the fields as Confirm saves them.
+    private func titleCard(parsed: QuickAddResult, typedGroup: String?, shown: EditorFields) -> some View {
         let now = Date()
+        let priority = shown.priority
+        let look = HighlightTextStyle.editorTitle(isChecked: isChecked, isCompleted: task.isCompleted)
         return EditorCard {
             HStack(alignment: .top, spacing: EditorMetrics.gap) {
                 Button(action: toggleCompletion) {
                     Image(systemName: isChecked ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: EditorMetrics.checkSize, weight: .light))
                         .frame(width: EditorMetrics.iconColumn, height: EditorMetrics.titleLine)
-                        .foregroundStyle(isChecked ? (task.priorityValue == .p4 ? Theme.accent : task.priorityValue.color)
-                                         : task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color)
+                        .foregroundStyle(isChecked ? (priority == .p4 ? Theme.accent : priority.color)
+                                         : priority == .p4 ? Theme.secondaryText : priority.color)
                         .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
                         .hitCelebratePop(trigger: pops)
                         .contentShape(Rectangle())
@@ -232,26 +279,20 @@ struct TaskPopout: View {
                 .accessibilityIdentifier("popoutCheckbox")
 
                 VStack(alignment: .leading, spacing: HITSpacing.xs) {
-                    TextField("Task name", text: $draft.title, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(HITType.title2Bold)
-                        .foregroundStyle(isChecked ? Theme.secondaryText : HITColor.text)
-                        .strikethrough(task.isCompleted, color: Theme.secondaryText)
-                        .lineLimit(1...6)
-                        .frame(minHeight: EditorMetrics.titleLine, alignment: .leading)
-                        .focused($titleFocused)
-                        #if os(macOS)
-                        .onSubmit(confirm)
-                        #else
-                        // A plain "return" key that does nothing: only Confirm saves (brief 36).
-                        .submitLabel(.return)
-                        #endif
-                        .onChange(of: draft.title) { old, title in
-                            // Return never adds a line: the Mac confirms, the iPhone drops it (`TitleReturn`).
-                            guard let outcome = TitleReturn.resolve(old: old, new: title) else { return }
-                            draft.title = outcome.text
-                            if outcome.submits { confirm() }
-                        }
+                    // The quick-add card's field (brief 65): phrases light up as typed; a click, a tap or Backspace
+                    // right after one keeps it as text. Return never adds a line: the Mac confirms, the iPhone's
+                    // plain "return" key does nothing (brief 36, `TitleReturn`).
+                    TokenHighlightField(placeholder: "Task name", text: $draft.title, tokens: parsed.tokens,
+                                        priority: parsed.priority, focus: $titleFocused, bordered: false,
+                                        onDisable: { token in
+                                            withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.disable(token) }
+                                        },
+                                        onEnable: { token in
+                                            withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchBackOn(token) }
+                                        },
+                                        look: look, onSubmit: confirm)
+                        // The first line centred on the check circle, as the old field's was.
+                        .padding(.top, max(0, (EditorMetrics.titleLine - look.lineHeight) / 2))
                         .accessibilityIdentifier("editorTitle")
                     if showsNotes {
                         TextField("Description", text: $draft.notes, axis: .vertical)
@@ -269,10 +310,28 @@ struct TaskPopout: View {
             .padding(.top, EditorMetrics.inset)
             .padding(.bottom, HITSpacing.m)
 
-            groupRow
+            // While a Group is typed ("#Work"), the row shows it as it will be saved; otherwise the task's own.
+            if let typedGroup { typedGroupRow(typedGroup) } else { groupRow }
             EditorHairline()
-            dateRow(now: now)
+            dateRow(now: now, shown: shown)
         }
+    }
+
+    /// The Group row while a Group is typed in the title (brief 65): its name and colour (a new Group's in the
+    /// default colour), opening the same Group card; a pick there replaces the typed Group.
+    private func typedGroupRow(_ name: String) -> some View {
+        let project = projects.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        return EditorRow(project?.name ?? name, systemImage: "number",
+                         tint: project.map { Color(hex: $0.colorHex) } ?? PopoutTint.project,
+                         action: { openChip = .project })
+            .pickerAnchor(.group, isPresented: chipBinding(.project)) {
+                ProjectChipPopover(projects: projects, selectedName: project?.name ?? name) { project in
+                    openChip = nil
+                    setProject(project)
+                }
+            }
+            .accessibilityLabel("Group: \(project?.name ?? name)")
+            .accessibilityIdentifier("editorGroupRow")
     }
 
     private var groupRow: some View {
@@ -289,13 +348,13 @@ struct TaskPopout: View {
             .accessibilityIdentifier("editorGroupRow")
     }
 
-    private func dateRow(now: Date) -> some View {
-        let due = task.dueDate
-        return EditorRow(due.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) } ?? "No date",
+    private func dateRow(now: Date, shown: EditorFields) -> some View {
+        let due = shown.dueDate
+        return EditorRow(due.map { DueFormatter.text(for: $0, hasTime: shown.hasDueTime, now: now) } ?? "No date",
                          systemImage: "calendar",
-                         tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: task.hasDueTime, now: now),
+                         tint: due == nil ? Theme.secondaryText : PopoutTint.date(due, hasTime: shown.hasDueTime, now: now),
                          isPlaceholder: due == nil, action: { openChip = .date }) {
-            if let rule = task.recurrenceRule {
+            if let rule = shown.recurrence {
                 HStack(spacing: 4) {
                     Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
                     Text(rule.displayText).font(HITType.caption).lineLimit(1)
@@ -307,14 +366,14 @@ struct TaskPopout: View {
             DatePickerCard(selected: due, now: now, onPick: { day in
                 openChip = nil
                 setDate(day)
-            }, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) }, onTime: { time in
+            }, time: shown.timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) }, onTime: { time in
                 if let time {
                     openChip = nil
                     setTime(hour: time.hour, minute: time.minute)
                 } else {
                     clearTime()
                 }
-            }, recurrence: task.recurrenceRule, onRepeat: { rule in
+            }, recurrence: shown.recurrence, onRepeat: { rule in
                 openChip = nil
                 setRecurrence(rule)
             })
@@ -328,21 +387,16 @@ struct TaskPopout: View {
         Binding(get: { openChip == chip }, set: { if !$0, openChip == chip { openChip = nil } })
     }
 
-    private var timeParts: (hour: Int, minute: Int)? {
-        guard task.hasDueTime, let due = task.dueDate else { return nil }
-        let parts = Calendar.current.dateComponents([.hour, .minute], from: due)
-        return (parts.hour ?? 9, parts.minute ?? 0)
-    }
-
-    /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set.
-    private var pillRow: some View {
+    /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set (typed in the
+    /// title or stored: `shown`).
+    private func pillRow(_ shown: EditorFields) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: HITSpacing.s) {
                 descriptionPill
-                priorityPill
-                reminderPill
-                labelsPill
-                repeatPill
+                priorityPill(shown.priority)
+                reminderPill(shown)
+                labelsPill(shown.labelNames)
+                repeatPill(shown.recurrence)
                 deadlinePill
                 locationPill
             }
@@ -365,34 +419,37 @@ struct TaskPopout: View {
         .accessibilityIdentifier("editorDescriptionPill")
     }
 
-    private var priorityPill: some View {
-        HITChip(task.priorityValue == .p4 ? "Priority" : task.priorityValue.shortName, systemImage: task.priorityValue.symbol,
-                tint: task.priorityValue == .p4 ? Theme.secondaryText : task.priorityValue.color,
-                isSelected: task.priorityValue != .p4, size: .compact, action: { openChip = .priority })
+    private func priorityPill(_ priority: Priority) -> some View {
+        HITChip(priority == .p4 ? "Priority" : priority.shortName, systemImage: priority.symbol,
+                tint: priority == .p4 ? Theme.secondaryText : priority.color,
+                isSelected: priority != .p4, size: .compact, action: { openChip = .priority })
             .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
-                PriorityChipPopover(selection: task.priorityValue) { p in
+                PriorityChipPopover(selection: priority) { p in
                     openChip = nil
+                    removeTyped([.priority])
                     task.priorityValue = p
                     save()
                 }
             }
+            .accessibilityIdentifier("popoutPriorityChip")
     }
 
     /// The task's time and its reminders, its own reminder moment included while it is still to come
     /// ("Remind 3:47 PM", brief 48); the card sets, moves or removes it.
-    private var reminderPill: some View {
-        let due = task.dueDate
+    private func reminderPill(_ shown: EditorFields) -> some View {
+        let due = shown.dueDate
         let now = Date()
-        let moment = task.reminderDate.flatMap { $0 > now ? $0 : nil }
+        let timeParts = shown.timeParts
+        let moment = shown.reminderDate.flatMap { $0 > now ? $0 : nil }
         let set = timeParts != nil || moment != nil
-        let title = ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: task.reminderOffsetMinutes,
+        let title = ReminderChipText.title(time: timeParts == nil ? nil : due, offsetMinutes: shown.reminderOffsetMinutes,
                                            reminderDate: moment, now: now)
-        return HITChip(title, systemImage: (task.reminderOffsetMinutes ?? 0) > 0 || moment != nil ? "bell.badge" : "alarm",
+        return HITChip(title, systemImage: (shown.reminderOffsetMinutes ?? 0) > 0 || moment != nil ? "bell.badge" : "alarm",
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: due, time: timeParts.map { PickerTime(hour: $0.hour, minute: $0.minute) },
-                                   offsetMinutes: task.reminderOffsetMinutes, now: now, onTime: { time in
+                                   offsetMinutes: shown.reminderOffsetMinutes, now: now, onTime: { time in
                     if let time {
                         openChip = nil
                         setTime(hour: time.hour, minute: time.minute)
@@ -414,6 +471,7 @@ struct TaskPopout: View {
 
     /// The task's own reminder moment: that long from now, a picked time, or none.
     private func setReminderMoment(_ pick: ReminderMomentPick?) {
+        removeTypedReminders(beforeDue: false)
         let date: Date? = switch pick {
         case .span(let span)?: span.date(from: Date())
         case .at(let at)?: at
@@ -423,25 +481,27 @@ struct TaskPopout: View {
         rescheduleNotifications()
     }
 
-    private var labelsPill: some View {
-        HITChip(task.labelList.isEmpty ? "Labels" : task.labelList.map { "@" + $0.name }.joined(separator: " "),
-                systemImage: "tag", tint: task.labelList.isEmpty ? Theme.secondaryText : PopoutTint.label,
-                isSelected: !task.labelList.isEmpty, size: .compact, action: { openChip = .labels })
+    private func labelsPill(_ names: [String]) -> some View {
+        HITChip(names.isEmpty ? "Labels" : names.map { "@" + $0 }.joined(separator: " "),
+                systemImage: "tag", tint: names.isEmpty ? Theme.secondaryText : PopoutTint.label,
+                isSelected: !names.isEmpty, size: .compact, action: { openChip = .labels })
             .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
-                LabelsChipPopover(labels: labels, selected: task.labelList.map(\.name), onToggle: toggleLabel)
+                LabelsChipPopover(labels: labels, selected: names, onToggle: toggleLabel)
             }
+            .accessibilityIdentifier("popoutLabelsChip")
     }
 
-    private var repeatPill: some View {
-        HITChip(task.recurrenceRule?.displayText ?? "Repeat", systemImage: "repeat",
-                tint: task.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
-                isSelected: task.recurrence != nil, size: .compact, action: { openChip = .repeating })
+    private func repeatPill(_ rule: RecurrenceRule?) -> some View {
+        HITChip(rule?.displayText ?? "Repeat", systemImage: "repeat",
+                tint: rule == nil ? Theme.secondaryText : PopoutTint.today,
+                isSelected: rule != nil, size: .compact, action: { openChip = .repeating })
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
-                RepeatChipPopover(rule: task.recurrenceRule) { rule in
+                RepeatChipPopover(rule: rule) { rule in
                     openChip = nil
                     setRecurrence(rule)
                 }
             }
+            .accessibilityIdentifier("popoutRepeatChip")
     }
 
     private var deadlinePill: some View {
@@ -581,7 +641,7 @@ struct TaskPopout: View {
     private func commitDraft() {
         // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
         guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
-        if (try? draft.commit(to: task, in: context)) == true { rescheduleNotifications() }
+        if (try? draft.commit(to: task, in: context, parser: parser())) == true { rescheduleNotifications() }
     }
 
     // MARK: Changes
@@ -596,13 +656,32 @@ struct TaskPopout: View {
         Task { await NotificationScheduler.reschedule(context: context) }
     }
 
+    // MARK: Picks replace typed phrases (brief 65)
+
+    /// A value picked in the editor wins over a phrase of its kind typed in the title: the phrase leaves it.
+    private func removeTyped(_ kinds: Set<QuickAddToken.Kind>, where include: (QuickAddToken) -> Bool = { _ in true }) {
+        draft.removeTyped(kinds, parser(), for: task, where: include)
+    }
+
+    /// The title's reminder phrases of one sort: before the due time ("!15mb", "!at") or from now ("!15m").
+    private func removeTypedReminders(beforeDue: Bool) {
+        removeTyped([.reminder]) { ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue }
+    }
+
     /// A new day keeps the time of day; nil removes the date (and with it the time).
     private func setDate(_ day: Date?) {
+        if day == nil {
+            removeTyped([.date, .time, .recurrence])
+            removeTypedReminders(beforeDue: true)
+        } else {
+            removeTyped([.date])
+        }
         TaskActions.reschedule(task, to: day, in: context)
         rescheduleNotifications()
     }
 
     private func setTime(hour: Int, minute: Int) {
+        removeTyped([.time])
         let calendar = Calendar.current
         let day = task.dueDate ?? calendar.startOfDay(for: Date())
         task.dueDate = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: day)
@@ -612,6 +691,8 @@ struct TaskPopout: View {
     }
 
     private func clearTime() {
+        removeTyped([.time])
+        removeTypedReminders(beforeDue: true)
         if let due = task.dueDate { task.dueDate = Calendar.current.startOfDay(for: due) }
         task.hasDueTime = false
         task.reminderOffsetMinutes = nil
@@ -621,6 +702,7 @@ struct TaskPopout: View {
 
     /// Nil or 0 reminds at the due time.
     private func setReminderOffset(_ minutes: Int?) {
+        removeTypedReminders(beforeDue: true)
         let value = (minutes ?? 0) > 0 ? minutes : nil
         guard task.reminderOffsetMinutes != value else { return }
         task.reminderOffsetMinutes = value
@@ -643,20 +725,29 @@ struct TaskPopout: View {
     }
 
     private func setRecurrence(_ rule: RecurrenceRule?) {
+        removeTyped([.recurrence])
         TaskActions.setRecurrence(rule, on: task, in: context)
         rescheduleNotifications()
     }
 
     /// The checklist moves with the task (`TaskActions.setProject`).
     private func setProject(_ project: Project?) {
+        removeTyped([.project])
         TaskActions.setProject(project, of: task, in: context)
         rescheduleNotifications()
     }
 
+    /// The labels card: a label typed in the title or on the task is taken off (both), any other is added.
     private func toggleLabel(_ name: String) {
+        let lowered = name.lowercased()
+        let typed = draft.parsed(parser(), for: task, .final).tokens
+            .contains { $0.kind == .label && QuickAddDraft.name(of: $0) == lowered }
+        if typed { removeTyped([.label]) { QuickAddDraft.name(of: $0) == lowered } }
         var current = task.labels ?? []
         if let i = current.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
             current.remove(at: i)
+        } else if typed {
+            return
         } else if let label = try? TaskActions.findOrCreateLabel(named: name, in: context) {
             current.append(label)
         }

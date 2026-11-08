@@ -57,6 +57,9 @@ public struct QuickAddParser: Sendable {
     public var dateParser: DateExpressionParser
     public var knownProjects: [String]
     public var knownLabels: [String]
+    /// The task already has a due time (the task editor's title, brief 65): a reminder before the due time
+    /// ("!15mb", "!at") counts without a time typed beside it. Off for quick add, where the text is the task.
+    public var dueTimeIsSet = false
 
     public init(now: Date = Date(), calendar: Calendar = .current, knownProjects: [String] = [], knownLabels: [String] = [],
                 weekStart: Int = 2) {
@@ -200,7 +203,7 @@ public struct QuickAddParser: Sendable {
         // '!15mb' should not highlight before there's a time"). Once a time is typed it lights up and counts.
         // The Reminder chip picked before a time keeps its offset in the draft (`QuickAddDraft`). A reminder
         // from now ("!15m") needs no time (brief 48).
-        if time == nil, moment == nil {
+        if time == nil, moment == nil, !dueTimeIsSet {
             result.reminderOffsetMinutes = nil
             let beforeDue = { (token: QuickAddToken) in token.kind == .reminder && ReminderPhrase(token: token.text)?.isBeforeDue == true }
             for token in result.tokens where beforeDue(token) {

@@ -30,18 +30,26 @@ struct HighlightTextStyle {
     var tint: HighlightPlatformColor
     /// One line's height as TextKit lays out this font (the field's growth step).
     var lineHeight: CGFloat
+    /// How many lines the field grows to before it scrolls.
+    var maxLineCount: Int
+    /// The words struck through (a completed task's title in the editor).
+    var strikethrough: Bool
 
     init(font: HighlightPlatformFont, textColor: HighlightPlatformColor, placeholderColor: HighlightPlatformColor,
-         tint: HighlightPlatformColor) {
+         tint: HighlightPlatformColor, maxLineCount: Int = HighlightTextStyle.maxLines, strikethrough: Bool = false) {
         self.font = font
         self.textColor = textColor
         self.placeholderColor = placeholderColor
         self.tint = tint
+        self.maxLineCount = maxLineCount
+        self.strikethrough = strikethrough
         lineHeight = HighlightGeometry.lineHeight(of: font)
     }
 
-    static var titleFont: HighlightPlatformFont {
-        HighlightPlatformFont(name: HITFont.postScriptName(.bold), size: fontSize) ?? .boldSystemFont(ofSize: fontSize)
+    static var titleFont: HighlightPlatformFont { font(size: fontSize) }
+
+    private static func font(size: CGFloat) -> HighlightPlatformFont {
+        HighlightPlatformFont(name: HITFont.postScriptName(.bold), size: size) ?? .boldSystemFont(ofSize: size)
     }
 
     static func current() -> HighlightTextStyle {
@@ -50,17 +58,41 @@ struct HighlightTextStyle {
                            tint: HighlightPlatformColor(Theme.accent))
     }
 
+    // MARK: The task editor's title (brief 65)
+
+    /// `HITType.title2Bold`'s size, the editor title's type; `HighlightFieldTests` checks the two measure the same.
+    #if os(macOS)
+    static let editorFontSize: CGFloat = 17
+    #else
+    static let editorFontSize: CGFloat = 22
+    #endif
+    /// The editor's title grows to six lines, as its old field did, then scrolls.
+    static let editorMaxLines = 6
+
+    /// The task editor's title: the same field as quick add's in the editor's larger type, grey once the check is
+    /// ticked and struck through while the task is completed (as the old field was).
+    static func editorTitle(isChecked: Bool, isCompleted: Bool) -> HighlightTextStyle {
+        HighlightTextStyle(font: font(size: editorFontSize),
+                           textColor: HighlightPlatformColor(isChecked ? Theme.secondaryText : HITColor.text),
+                           placeholderColor: HighlightPlatformColor(Theme.secondaryText),
+                           tint: HighlightPlatformColor(Theme.accent), maxLineCount: editorMaxLines,
+                           strikethrough: isCompleted)
+    }
+
     /// How far a box reaches below its line (its room under the descenders): the field leaves this much under
     /// its last line so that box is never cut off.
     var boxOutset: CGFloat { (font.pointSize * HighlightGeometry.boxPadding).rounded(.up) }
 
     /// The attributes every character of the title has.
     var attributes: [NSAttributedString.Key: Any] {
-        [.font: font, .foregroundColor: textColor]
+        guard strikethrough else { return [.font: font, .foregroundColor: textColor] }
+        return [.font: font, .foregroundColor: textColor,
+                .strikethroughStyle: NSUnderlineStyle.single.rawValue, .strikethroughColor: placeholderColor]
     }
 
     func sameLook(as other: HighlightTextStyle) -> Bool {
         font == other.font && textColor == other.textColor && placeholderColor == other.placeholderColor && tint == other.tint
+            && strikethrough == other.strikethrough
     }
 }
 

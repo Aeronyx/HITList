@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Observation
 import HITListCore
 @testable import HITList
 
@@ -38,16 +39,52 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(left.minX, window.minX + PickerPlacement.margin)
     }
 
-    func testCardWithNoRoomEitherSideStaysInsideOnTheRoomierSide() {
+    /// Brief 65 (every Mac card checked by hand, round 15): the editor's Reminder card, taller than the room above
+    /// or below its pill in a 721 pt window, was slid over the pill that opened it. A card that fits neither
+    /// below nor above goes beside its chip instead (after it, else before it), level with the chip and slid up
+    /// only as far as it must, so the chip stays in sight.
+    func testCardWithNoRoomAboveOrBelowGoesBesideItsChip() {
         // The quick-add chip bar in the minimum window: 390 pt fits neither below nor above.
         let chip = CGRect(x: 150, y: 210, width: 70, height: 30)
         let placed = PickerPlacement.place(anchor: chip, cardSize: dateCard, bounds: window)
-        XCTAssertEqual(placed.edge, .overlapping)
-        XCTAssertEqual(placed.frame.maxY, window.maxY - PickerPlacement.margin, "more room below: pinned to the bottom")
+        XCTAssertEqual(placed.edge, .trailing)
+        XCTAssertEqual(placed.frame.minX, chip.maxX + PickerPlacement.gap, "after the chip")
+        XCTAssertFalse(placed.frame.intersects(chip), "the chip stays in sight")
         XCTAssertTrue(window.contains(placed.frame))
-        let high = CGRect(x: 150, y: 380, width: 70, height: 30)
-        let up = PickerPlacement.place(anchor: high, cardSize: dateCard, bounds: window)
-        XCTAssertEqual(up.frame.minY, window.minY + PickerPlacement.margin, "more room above: pinned to the top")
+        XCTAssertEqual(placed.frame.maxY, window.maxY - PickerPlacement.margin, "level with the chip, slid up to fit")
+
+        // Near the window's right edge: before the chip.
+        let right = CGRect(x: 600, y: 210, width: 70, height: 30)
+        let before = PickerPlacement.place(anchor: right, cardSize: dateCard, bounds: window)
+        XCTAssertEqual(before.edge, .leading)
+        XCTAssertEqual(before.frame.maxX, right.minX - PickerPlacement.gap)
+        XCTAssertFalse(before.frame.intersects(right))
+
+        // A short card beside a chip high in the window starts level with the chip.
+        let tall = CGSize(width: 300, height: 480)
+        let pill = CGRect(x: 400, y: 380, width: 80, height: 30)
+        let big = CGRect(x: 0, y: 52, width: 988, height: 669)
+        let reminder = PickerPlacement.place(anchor: pill, cardSize: tall, bounds: big)
+        XCTAssertEqual(reminder.edge, .trailing)
+        XCTAssertFalse(reminder.frame.intersects(pill))
+        XCTAssertTrue(big.contains(reminder.frame))
+        let level = PickerPlacement.place(anchor: CGRect(x: 100, y: 120, width: 80, height: 30),
+                                          cardSize: CGSize(width: 300, height: 560), bounds: big)
+        XCTAssertEqual(level.edge, .trailing)
+        XCTAssertEqual(level.frame.minY, 120, "level with the chip when it fits from there")
+    }
+
+    func testCardWithNoRoomOnAnySideStaysInsideOnTheRoomierSide() {
+        // A narrow window: the date card fits neither above, below, before nor after the chip.
+        let narrow = CGRect(x: 0, y: 52, width: 560, height: 508)
+        let chip = CGRect(x: 200, y: 210, width: 70, height: 30)
+        let placed = PickerPlacement.place(anchor: chip, cardSize: dateCard, bounds: narrow)
+        XCTAssertEqual(placed.edge, .overlapping)
+        XCTAssertEqual(placed.frame.maxY, narrow.maxY - PickerPlacement.margin, "more room below: pinned to the bottom")
+        XCTAssertTrue(narrow.contains(placed.frame))
+        let high = CGRect(x: 200, y: 380, width: 70, height: 30)
+        let up = PickerPlacement.place(anchor: high, cardSize: dateCard, bounds: narrow)
+        XCTAssertEqual(up.frame.minY, narrow.minY + PickerPlacement.margin, "more room above: pinned to the top")
     }
 
     func testCardTallerOrWiderThanTheWindowShrinksToIt() {
@@ -275,6 +312,57 @@ final class PickerTests: XCTestCase {
         XCTAssertEqual(host.frame, content.frame, "covers the content")
         XCTAssertTrue(PickerLayerHost.host(in: window) === host, "one layer per window")
         XCTAssertNil(host.hitTest(NSPoint(x: 100, y: 100)), "lets every click through while no card is open")
+    }
+
+    /// Brief 65: a chip past the end of its sideways row (the editor's Deadline and Location pills, a chip the
+    /// quick-add card's "+" reveals) scrolls into sight as its card opens, so the card is never under a chip
+    /// nobody can see.
+    func testAChipScrollsIntoSightWhenItsCardOpens() throws {
+        let model = RevealModel()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        // Owned here, not by AppKit: a window released on close as well was torn down again during the next test.
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: RevealRow(model: model).pickerOverlay())
+        window.orderFrontRegardless()
+        defer {
+            // The card goes first, so its layer lets the keyboard and its event monitor go with a live window.
+            model.isOpen = false
+            spin(0.2)
+            window.close()
+        }
+        spin(0.3)
+        let chip = try XCTUnwrap(Self.revealViews(in: try XCTUnwrap(window.contentView)).first)
+        let clip = try XCTUnwrap(chip.enclosingScrollView?.contentView)
+        func shown() -> Bool { clip.documentVisibleRect.contains(chip.convert(chip.bounds, to: clip)) }
+        XCTAssertFalse(shown(), "past the end of the row")
+        model.isOpen = true
+        spin(0.5)
+        XCTAssertTrue(shown(), "scrolled into sight as its card opened")
+    }
+
+    @Observable final class RevealModel { var isOpen = false }
+
+    private struct RevealRow: View {
+        @Bindable var model: RevealModel
+        var body: some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(0..<8) { Text("Chip \($0)").frame(width: 80) }
+                    Text("Deadline").frame(width: 80)
+                        .pickerAnchor(.deadline, isPresented: $model.isOpen) { Text("card") }
+                }
+            }
+            .frame(width: 300, height: 200)
+        }
+    }
+
+    private static func revealViews(in view: NSView) -> [PickerChipRevealView] {
+        (view as? PickerChipRevealView).map { [$0] } ?? view.subviews.flatMap(revealViews(in:))
+    }
+
+    private func spin(_ seconds: TimeInterval) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
     }
     #endif
 }
