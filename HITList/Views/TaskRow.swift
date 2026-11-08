@@ -187,7 +187,9 @@ struct TaskRow: View {
 
 /// A task row's measurements. The height of one title line: the checkbox centres on it, so a one-line title reads
 /// as one aligned row and a two-line title keeps the checkbox on its first line. It is the checkbox's size, so the
-/// title has no spare air above or below it (the row's insets are `ListMetrics`').
+/// title has no spare air above or below it (the row's insets are `ListMetrics`'). Round 15's titles still fit one
+/// line: Inter 14's line is 16.9 pt (Mac, 20) and Inter 17's 20.6 (iPhone, 21), and George's target row has the Mac's
+/// 18 pt circle.
 enum TaskRowMetrics {
     #if os(macOS)
     static let lineHeight: CGFloat = 20
