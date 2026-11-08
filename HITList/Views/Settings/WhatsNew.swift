@@ -11,9 +11,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.8.2", items: [
-            "Mac: the date, Group, priority and label cards open again when you click a task's date, its Group or a chip.",
-            "Mac: Filters sit below Groups in the sidebar.",
+        Entry(version: "0.9.0", items: [
+            "Shared tasks live in one Group, Shared Tasks: they look like your own, with your friends' pictures where labels go. Type #Shared to add one.",
+            "The editor's title understands quick add: type \"tomorrow 5pm p1\" and watch the date and priority fill in.",
+            "Larger, lighter rows. Mac: a Search field above Inbox (⌘F), one \"+\" capsule, and the date and Group cards show again.",
+            "Adding a Flipboard switch is a small card: type \"every 3 days\" or turn the dial. The lights stay on their switches, and every switch is one size.",
+            "The sync bolt can slam (Settings → Extras → Sync bolt), and a tap anywhere on a tip puts it away.",
         ]),
         Entry(version: "0.8.1", items: [
             "The Inbox's top is clean again: one view-options button. Sort by Priority (the default), Group or Date; Today by Priority or Group.",
