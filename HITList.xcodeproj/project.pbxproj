@@ -65,6 +65,7 @@
 		3823282AA34F38C7D2FBB63C /* SchemaV1Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3B7CF30F03F2BFC2FA0C00 /* SchemaV1Models.swift */; };
 		384392355165F856C2318A7A /* UpcomingSchedule.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A064393556C9800A4628092 /* UpcomingSchedule.swift */; };
 		387803982AF7D6BED443125C /* AppInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BC723FC9CBCD716C406511B /* AppInfo.swift */; };
+		396120C4A271F689060160F4 /* SharedRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7079E225F1FC9E6B9F9072BD /* SharedRows.swift */; };
 		3AC80CE57BD7C51458E81210 /* InboxPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A5B5748B1E27C24D91546F2 /* InboxPicker.swift */; };
 		3B3D35BD35C09D053F10CBF6 /* UpcomingBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB5A392B0DEB0C542676DBCF /* UpcomingBoard.swift */; };
 		3BBCCD31CDBED8C27116D278 /* SettingsPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */; };
@@ -446,6 +447,7 @@
 		6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Bold.ttf"; sourceTree = "<group>"; };
 		6F47544BF23E1A61CD9357EA /* MacSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsTests.swift; sourceTree = "<group>"; };
 		6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionRowBackground.swift; sourceTree = "<group>"; };
+		7079E225F1FC9E6B9F9072BD /* SharedRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRows.swift; sourceTree = "<group>"; };
 		71906FD6A69511E19F1911F9 /* SyncStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusViews.swift; sourceTree = "<group>"; };
 		71D7AFD21F170C23857C5C17 /* ClaudeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSettings.swift; sourceTree = "<group>"; };
 		71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -863,6 +865,7 @@
 			isa = PBXGroup;
 			children = (
 				F042F45B4C75FB641635ECA0 /* SharedRow.swift */,
+				7079E225F1FC9E6B9F9072BD /* SharedRows.swift */,
 				443183B5EE4B7772E52AF465 /* SharedTasksCenter.swift */,
 				B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */,
 				BD4A928ACFD0598859CD1BB7 /* SharedTasksMerge.swift */,
@@ -1566,6 +1569,7 @@
 				0329D596E6D4A9D7B4A27272 /* SharedListScreen.swift in Sources */,
 				92EB38CE9F299C4F18109EC4 /* SharedPeopleSheet.swift in Sources */,
 				C93586D0536BE7984F2DDA89 /* SharedRow.swift in Sources */,
+				396120C4A271F689060160F4 /* SharedRows.swift in Sources */,
 				A423D0432076CC1FF04FC787 /* SharedTasksCenter.swift in Sources */,
 				8BFBC81113808FF6C522011F /* SharedTasksComponents.swift in Sources */,
 				AF91F77726263D4D03F3DCD7 /* SharedTasksDebug.swift in Sources */,

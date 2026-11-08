@@ -82,4 +82,147 @@ final class SharedRowsTests: XCTestCase {
         let shared = try XCTUnwrap(store.list(list))
         XCTAssertFalse(SharedRow(task: shared.tasks[0], list: shared).canWrite)
     }
+
+    // MARK: - The source (item 2)
+
+    /// A task Sam added to `list`, as fetched.
+    @discardableResult
+    private func samsTask(_ title: String, in list: UUID, store: SharedTasksStore, due: SharedDue? = nil,
+                          completedBy: SharedMemberID? = nil, id: UUID = UUID(), later: TimeInterval = 0) -> UUID {
+        let t = SharedClock.stamp(now.addingTimeInterval(later))
+        let completion = completedBy.map { SharedCompletion(at: t, by: $0, byName: "Sam") }
+        store.applyServerTask(SharedTask(id: id, title: Stamped(title, at: t), notes: Stamped("", at: t), priority: Stamped(4, at: t),
+                                         due: Stamped(due, at: t), completion: Stamped(completion, at: t), createdAt: t,
+                                         createdBy: sam, createdByName: "Sam"),
+                              listID: list, scope: .joined, ownerName: sam)
+        return id
+    }
+
+    func testNothingWhileSharedTasksIsOff() {
+        let rows = SharedRows(store: { nil })
+        XCTAssertTrue(rows.rows.isEmpty)
+        XCTAssertTrue(rows.lists.isEmpty)
+        XCTAssertNil(rows.row(UUID()))
+    }
+
+    func testTheOffSwitchMeansNoStoreAndSoNoRows() {
+        // The real source: a centre that is off (as every test's is) has no store.
+        let center = SharedTasksCenter(defaults: UserDefaults(suiteName: "SharedRowsTests-\(UUID())")!, storeName: "HITList-test.store",
+                                       isTesting: true)
+        XCTAssertNil(center.store)
+        XCTAssertTrue(SharedRows(store: { center.store }).rows.isEmpty)
+    }
+
+    func testEveryTaskOfEveryListIsARow() throws {
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        try store.addTask(to: trip.id, title: "Book the cabin", due: due(2))
+        try store.addTask(to: trip.id, title: "Pack the tent")
+        let groceries = joinedList("Groceries", in: store)
+        samsTask("Milk", in: groceries, store: store, due: due(0))
+        samsTask("Bread", in: groceries, store: store, completedBy: sam)
+
+        let rows = SharedRows(store: { store })
+        XCTAssertEqual(Set(rows.rows.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk", "Bread"])
+        XCTAssertEqual(Set(rows.open.map(\.filterTitle)), ["Book the cabin", "Pack the tent", "Milk"])
+        XCTAssertEqual(rows.lists.map(\.title), ["Groceries", "Trip"], "by name, as the Shared screen")
+        XCTAssertEqual(rows.rows.first { $0.filterTitle == "Milk" }?.filterProjectName, "Groceries")
+        XCTAssertTrue(rows.isList(groceries))
+        XCTAssertFalse(rows.isList(UUID()))
+    }
+
+    func testRowsFollowTheStoreAndRedrawWhatReadsThem() throws {
+        let store = makeStore()
+        let groceries = joinedList("Groceries", in: store)
+        let milk = samsTask("Milk", in: groceries, store: store, due: due(0))
+        let rows = SharedRows(store: { store })
+        XCTAssertEqual(rows.row(milk)?.task.isCompleted, false)
+
+        // A view reading the rows is told when another member's completion arrives.
+        let changed = expectation(description: "the rows' readers are told")
+        withObservationTracking { _ = rows.rows } onChange: { changed.fulfill() }
+        samsTask("Milk", in: groceries, store: store, due: due(0), completedBy: sam, id: milk, later: 5)
+        wait(for: [changed], timeout: 1)
+        XCTAssertEqual(rows.row(milk)?.task.isCompleted, true)
+
+        // Leaving the list takes its rows away.
+        try store.leave(groceries)
+        XCTAssertTrue(rows.rows.isEmpty)
+    }
+
+    func testCompletingFromARowStampsItForTheOthersAndUndoReopensIt() throws {
+        let store = makeStore()
+        var sent: [SharedTasksStore.Change] = []
+        store.onChanges = { sent += $0 }
+        let groceries = joinedList("Groceries", in: store)
+        let milk = samsTask("Milk", in: groceries, store: store, due: due(0))
+        let rows = SharedRows(store: { store })
+
+        try rows.setCompleted(true, try XCTUnwrap(rows.row(milk)))
+        let done = try XCTUnwrap(store.list(groceries)?.task(milk))
+        XCTAssertEqual(done.completion.value?.by, me, "who: me")
+        XCTAssertTrue(sent.contains { if case .saveRecord(let ref) = $0 { ref.listID == groceries } else { false } },
+                      "sent to the list's zone, so the others see it")
+
+        try rows.setCompleted(false, try XCTUnwrap(rows.row(milk)))
+        XCTAssertEqual(store.list(groceries)?.task(milk)?.isCompleted, false)
+    }
+
+    func testAViewOnlyMemberIsRefusedWithAWord() throws {
+        let store = makeStore()
+        let groceries = joinedList("Groceries", in: store, canWrite: false)
+        let milk = samsTask("Milk", in: groceries, store: store, due: due(0))
+        let rows = SharedRows(store: { store })
+        let row = try XCTUnwrap(rows.row(milk))
+        XCTAssertThrowsError(try rows.setCompleted(true, row)) { error in
+            XCTAssertEqual(error as? SharedRows.Refusal, .cannotChange(list: "Groceries"))
+            XCTAssertEqual(error.localizedDescription, "You can see “Groceries” but not change it.")
+        }
+        XCTAssertThrowsError(try rows.reschedule(row, to: Date()))
+        XCTAssertEqual(store.list(groceries)?.task(milk)?.isCompleted, false)
+    }
+
+    func testATaskGoneElsewhereIsRefusedQuietly() throws {
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        let task = try store.addTask(to: trip.id, title: "Book the cabin", due: due(0))
+        let rows = SharedRows(store: { store })
+        let row = try XCTUnwrap(rows.row(task.id))
+        try store.deleteTask(task.id, in: trip.id)
+        XCTAssertThrowsError(try rows.setCompleted(true, row)) { XCTAssertEqual($0 as? SharedRows.Refusal, .gone) }
+    }
+
+    func testMovingToAnotherDayKeepsTheTimeOfDay() throws {
+        let cal = Calendar.current
+        let nine = due(0, hour: 9)
+        let moved = SharedRows.due(movedTo: cal.date(byAdding: .day, value: 3, to: today)!, from: nine, calendar: cal)
+        XCTAssertTrue(moved.hasTime)
+        XCTAssertEqual(cal.component(.hour, from: moved.date), 9)
+        XCTAssertEqual(cal.startOfDay(for: moved.date), cal.date(byAdding: .day, value: 3, to: today))
+
+        let allDay = SharedRows.due(movedTo: cal.date(byAdding: .hour, value: 30, to: today)!, from: due(0), calendar: cal)
+        XCTAssertEqual(allDay, SharedDue(date: cal.date(byAdding: .day, value: 1, to: today)!, hasTime: false))
+        XCTAssertEqual(SharedRows.due(movedTo: today, from: nil, calendar: cal), SharedDue(date: today, hasTime: false))
+
+        // Through the store: rescheduled, and nil removes the date.
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        let task = try store.addTask(to: trip.id, title: "Book the cabin", due: nine)
+        let rows = SharedRows(store: { store })
+        try rows.reschedule(try XCTUnwrap(rows.row(task.id)), to: cal.date(byAdding: .day, value: 1, to: today)!)
+        XCTAssertEqual(store.list(trip.id)?.task(task.id)?.due.value?.hasTime, true)
+        try rows.reschedule(try XCTUnwrap(rows.row(task.id)), to: nil)
+        XCTAssertNil(store.list(trip.id)?.task(task.id)?.due.value)
+    }
+
+    func testPriorityAndDeleteGoThroughTheStore() throws {
+        let store = makeStore()
+        let trip = try store.createList(title: "Trip")
+        let task = try store.addTask(to: trip.id, title: "Book the cabin")
+        let rows = SharedRows(store: { store })
+        try rows.setPriority(1, try XCTUnwrap(rows.row(task.id)))
+        XCTAssertEqual(store.list(trip.id)?.task(task.id)?.priority.value, 1)
+        try rows.delete(try XCTUnwrap(rows.row(task.id)))
+        XCTAssertNil(rows.row(task.id))
+    }
 }
