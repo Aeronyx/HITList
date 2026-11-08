@@ -150,11 +150,15 @@ struct TaskListView: View {
                 // A red switch files under today whatever its date (brief 59).
                 let due = FlipboardSwitch.listedDueDate(for: row, now: now)
                 let key = DueFormatter.sectionTitle(for: due, now: now)
+                // A header that names one day ("Tomorrow", "Friday, Nov 13") says it for its rows; "Overdue" and
+                // "No date" do not.
+                let singleDay = due != nil && key != "Overdue"
                 if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task], color: groups[i].color)
+                    groups[i] = Group(id: key, title: key, tasks: groups[i].tasks + [row.task], color: groups[i].color,
+                                      hidesDay: groups[i].hidesDay)
                 } else {
                     groups.append(Group(id: key, title: key, tasks: [row.task],
-                                        color: DueFormatter.sectionColor(for: due, now: now)))
+                                        color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay))
                 }
             }
             return .success(groups)
@@ -340,12 +344,6 @@ struct TaskListView: View {
                 }
                 if selection == .today {
                     SortPicker(selection: todaySortBinding, choices: ListSort.today)
-                } else {
-                    Section("Sort") {
-                        Button("By due date") {}.disabled(true)
-                        Button("By priority") {}.disabled(true)
-                        Button("By name") {}.disabled(true)
-                    }
                 }
             }
         } menu: {
