@@ -137,8 +137,12 @@ final class FlipboardTests: XCTestCase {
     func testFlipIntervalRoundTrip() {
         XCTAssertEqual(FlipInterval(every3Days), FlipInterval(count: 3, unit: .days))
         XCTAssertEqual(FlipInterval(RecurrenceRule(frequency: .weekly, interval: 2))?.rule, RecurrenceRule(frequency: .weekly, interval: 2))
-        XCTAssertNil(FlipInterval(.monthly))
+        // Brief 69: the card's quick choices include Monthly, so months are an interval the card shows.
+        XCTAssertEqual(FlipInterval(.monthly), FlipInterval(count: 1, unit: .months))
+        XCTAssertEqual(FlipInterval(RecurrenceRule(frequency: .monthly, interval: 2, anchorDay: 31))?.rule,
+                       RecurrenceRule(frequency: .monthly, interval: 2))
         XCTAssertNil(FlipInterval(.weekdays))
+        XCTAssertNil(FlipInterval(.yearly))
     }
 
     // MARK: Flipping (model)
