@@ -62,6 +62,8 @@ private struct QuickAddEntry: ViewModifier {
         .accessibilityLabel("Add task")
         .accessibilityIdentifier("toolbarAddTask")
         .help("Add a task (⌘N)")
+        // The toolbar's last item: 26.7.1's 8 pt from the window's edge on any macOS (brief 70).
+        .trailingEdgeInset()
     }
     #endif
 }
