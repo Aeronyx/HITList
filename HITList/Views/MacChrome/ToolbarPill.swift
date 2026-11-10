@@ -88,7 +88,8 @@ struct SidebarToggleButton: View {
         Button {
             withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.25)) { visibility = Self.toggled(visibility) }
         } label: {
-            Image(systemName: "sidebar.left")
+            // The system toggle's own glyph on 26.7.1 (`sidebar.left` has a narrower left panel).
+            Image(systemName: "sidebar.leading")
                 .foregroundStyle(ToolbarPillMetrics.buttonGlyph)
         }
         .buttonStyle(ToolbarPillControlStyle())

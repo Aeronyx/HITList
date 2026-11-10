@@ -46,8 +46,9 @@ enum MacSidebarStyle {
     static var hoverFill: Color { Theme.elevated.opacity(0.55) }
     /// Today's calendar: dark mode's system red as 26.7.1 has it (`NSColor.systemRed`), pinned, and the lighter
     /// red the focused list drew it in on the selected row (it left the accent's icons as they were).
-    static let todayRed = Color(hex: "#FF4245")
-    static let todayRedSelected = Color(hex: "#FF7AAD")
+    /// In Display P3, as measured: the lighter red is outside sRGB.
+    static let todayRed = Color(.displayP3, red: 1, green: 87 / 255, blue: 91 / 255)
+    static let todayRedSelected = Color(.displayP3, red: 1, green: 131 / 255, blue: 172 / 255)
     /// The section headers and the counts in the system font, as the list drew them whatever the window's font was:
     /// "Groups" in SF Pro 11 semibold, the counts in SF Pro 13 with tabular digits (titles are Inter, the window's).
     static let headerFont = Font.system(size: 11, weight: .semibold)
