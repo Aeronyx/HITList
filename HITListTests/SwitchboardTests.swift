@@ -307,6 +307,23 @@ final class SwitchboardActionsTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Switchboard>()), 0)
     }
 
+    /// Remove from Flipboard takes a switch off its board too, and deleting a board with its switches never deletes a
+    /// task that is no longer a switch.
+    func testRemovingASwitchFromTheFlipboardTakesItOffItsBoard() throws {
+        let bed = try board()
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: bed, in: context)
+        let stretch = try Flipboard.createSwitch(title: "Stretch", rule: .daily, board: bed, in: context)
+        Flipboard.remove(floss, in: context)
+        XCTAssertNil(floss.switchboard)
+        XCTAssertEqual(Flipboard.switches(on: bed).map(\.title), ["Stretch"])
+        // An older build takes the label off but knows nothing of the board.
+        stretch.labels = []
+        XCTAssertTrue(Flipboard.switches(on: bed).isEmpty)
+        Flipboard.deleteSwitchboard(bed, deletingSwitches: true, in: context)
+        XCTAssertEqual(Set(try context.fetch(FetchDescriptor<TaskItem>()).map(\.title)), ["Floss", "Stretch"],
+                       "neither is a switch any more: both stay")
+    }
+
     func testAddingATimedTaskToTheBoardKeepsItsTime() throws {
         let gym = TaskItem(title: "Gym", dueDate: cal.date(bySettingHour: 7, minute: 0, second: 0, of: Date()), hasDueTime: true,
                            recurrence: .weekdays)

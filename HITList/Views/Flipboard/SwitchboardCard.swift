@@ -236,7 +236,7 @@ struct SwitchboardDeleteRow: View {
     /// `keepingSwitches`: its switches stay, as loose switches.
     var onDelete: (_ keepingSwitches: Bool) -> Void
 
-    private var count: Int { board.switches?.count ?? 0 }
+    private var count: Int { Flipboard.switches(on: board).count }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
