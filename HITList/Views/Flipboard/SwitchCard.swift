@@ -367,7 +367,7 @@ struct SwitchCard: View {
 
 /// The card's look. iPhone: the quick-add oval's glass. Mac and iPad: the Upcoming board's Add task card
 /// (`CompactQuickAddCard`), slate with a stronger hairline, in the tiles' grid.
-private struct SwitchCardChrome: ViewModifier {
+struct SwitchCardChrome: ViewModifier {
     let style: SwitchCard.Style
 
     func body(content: Content) -> some View {

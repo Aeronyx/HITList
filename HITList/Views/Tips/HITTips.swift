@@ -12,7 +12,8 @@ import SwiftData
 /// - `quickAddSyntax`, `keepAsText`: the quick-add card's title field, in that order (`quickAddTips`);
 ///   the second waits until a highlight has appeared in a card.
 /// - `browse`: the iPhone's magnifying glass at the top right of a tab's first screen (`ScreenMenu`).
-/// - `flipboard`: the Flipboard's grid.
+/// - `flipboard`: the Flipboard's first switch; `switchesStay` there instead for someone whose switches came from
+///   before Switchboards (brief 72: `FlipboardTips`).
 /// - `boardAddTask`: today's "Add task" on the Upcoming board (Mac, full-width iPad).
 /// - `reviewSwipe`: inline on Review Inbox's card on iPhone (brief 60); gone after the first swipe.
 ///
@@ -22,7 +23,7 @@ import SwiftData
 /// (`HITTip.settled`, `TipSettling`: back in the app after their first task, or any later launch), never
 /// popping up on a first screen or the moment something lands.
 enum HITTipKind: String, CaseIterable, Identifiable {
-    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask, reviewSwipe
+    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask, reviewSwipe, switchesStay
 
     var id: String { rawValue }
 
@@ -34,6 +35,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .flipboard: "Flip a switch when it’s done"
         case .boardAddTask: "Add straight to a day"
         case .reviewSwipe: "Swipe to sort"
+        case .switchesStay: "Switches stay on the Flipboard"
         }
     }
 
@@ -42,9 +44,10 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm p1 #Home’: date and priority fill in. # picks its one Group; @ adds any labels."
         case .keepAsText: "Tap a highlight, or press Backspace right after it, to keep the words as text."
         case .browse: "The magnifying glass opens Browse: Groups, labels and filters, and a search that understands #Work or p1."
-        case .flipboard: "A switch stays off your lists until it’s due, then waits in Today until you flip it."
+        case .flipboard: "A switch is a routine, green when it’s done and red when it’s due: flip it when you’ve done it."
         case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
         case .reviewSwipe: "Swipe right for Today, left to delete."
+        case .switchesStay: "Red switches no longer wait in Today; turn on Overdue becomes task to bring one back when it’s due."
         }
     }
 
@@ -56,6 +59,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .flipboard: "switch.2"
         case .boardAddTask: "calendar.badge.plus"
         case .reviewSwipe: "hand.draw"
+        case .switchesStay: "switch.2"
         }
     }
 }
@@ -84,7 +88,7 @@ struct HITTip: Tip {
     static let settled = Tips.Event(id: "settled")
 
     /// Shows only once the person has settled in, so it never sits on their very first screen.
-    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask || kind == .flipboard }
+    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask || kind == .flipboard || kind == .switchesStay }
 
     var rules: [Rule] {
         if kind == .keepAsText {

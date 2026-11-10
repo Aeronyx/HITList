@@ -336,3 +336,83 @@ final class SwitchboardActionsTests: XCTestCase {
         XCTAssertEqual(Flipboard.sorted(onBoard: [floss, lights, meds], bed).map(\.title), ["Take meds", "Lights out", "Floss"])
     }
 }
+
+/// Brief 72, item 5: the Switchboard card's draft and words.
+@MainActor
+final class SwitchboardDraftTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private var utc: Calendar {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }
+    private let british = Locale(identifier: "en_GB")
+
+    override func setUp() async throws { container = ModelContainerFactory.preview() }
+    override func tearDown() async throws { container = nil }
+
+    func testANewBoardIsDailyAtFour() {
+        let draft = SwitchboardDraft()
+        XCTAssertEqual(draft.cadence, .daily)
+        XCTAssertEqual(draft.resetTime, PickerTime(hour: 4, minute: 0))
+        XCTAssertEqual(draft.resetWeekday, 0)
+        XCTAssertFalse(draft.overdueBecomesTask)
+        XCTAssertFalse(draft.canSave)
+        XCTAssertFalse(draft.hasContent)
+        XCTAssertTrue(SwitchboardDraft(name: "B").hasContent)
+    }
+
+    func testAddWritesTheBoard() throws {
+        var draft = SwitchboardDraft(name: " Deep Clean ")
+        draft.cadence = .weekly
+        draft.resetTime = PickerTime(hour: 9, minute: 30)
+        draft.resetWeekday = 7
+        draft.overdueBecomesTask = true
+        let board = try XCTUnwrap(try draft.save(editing: nil, in: context))
+        XCTAssertEqual(board.name, "Deep Clean")
+        XCTAssertEqual(board.cadenceValue, .weekly)
+        XCTAssertEqual(board.resetMinutes, 570)
+        XCTAssertEqual(board.resetWeekday, 7)
+        XCTAssertTrue(board.overdueBecomesTask)
+        XCTAssertNil(try SwitchboardDraft(name: "  ").save(editing: nil, in: context))
+    }
+
+    func testEditingStartsFilledInAndSaves() throws {
+        let board = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        var draft = SwitchboardDraft(board)
+        XCTAssertFalse(draft.hasContent)
+        draft.resetWeekday = 3
+        XCTAssertFalse(draft.hasContent, "a daily board's reset day is nothing to lose")
+        draft.resetTime = PickerTime(hour: 5, minute: 0)
+        XCTAssertTrue(draft.hasContent)
+        try draft.save(editing: board, in: context)
+        XCTAssertEqual(board.resetMinutes, 300)
+    }
+
+    func testTheCadenceLine() {
+        XCTAssertEqual(SwitchboardDraft.cadenceLine(cadence: .daily, resetMinutes: 240, resetWeekday: 0, weekStart: 2,
+                                                    calendar: utc, locale: british), "Daily · resets 04:00")
+        XCTAssertEqual(SwitchboardDraft.cadenceLine(cadence: .weekly, resetMinutes: 240, resetWeekday: 0, weekStart: 2,
+                                                    calendar: utc, locale: british), "Weekly · resets Monday 04:00")
+        XCTAssertEqual(SwitchboardDraft.cadenceLine(cadence: .weekly, resetMinutes: 9 * 60, resetWeekday: 7, weekStart: 2,
+                                                    calendar: utc, locale: british), "Weekly · resets Saturday 09:00")
+    }
+
+    func testTheWeekdayChoicesStartFromTheWeekStart() {
+        var cal = utc
+        cal.locale = british
+        let choices = SwitchboardDraft.weekdayChoices(weekStart: 2, calendar: cal)
+        XCTAssertEqual(choices.map(\.value), [0, 2, 3, 4, 5, 6, 7, 1])
+        XCTAssertEqual(choices.first?.title, "Week start (Monday)")
+        XCTAssertEqual(choices.last?.title, "Sunday")
+    }
+
+    func testTheDoneCount() throws {
+        let board = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: board, in: context)
+        _ = try Flipboard.createSwitch(title: "Stretch", rule: .daily, board: board, in: context)
+        Flipboard.flip(floss, in: context)
+        XCTAssertEqual(SwitchboardDraft.doneCount(board.switches ?? [], now: Date()), "1 of 2")
+    }
+}

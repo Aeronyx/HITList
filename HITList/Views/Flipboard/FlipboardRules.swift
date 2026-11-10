@@ -622,13 +622,22 @@ enum Flipboard {
         return caption(due: due, rule: clock.rule, started: started, count: count, target: target, now: now, calendar: calendar)
     }
 
-    /// "21:00" (or "9:00 PM" where the clock is 12-hour), as the switch card and the tiles write a time.
+    /// "04:00" and "21:00" where the clock is 24-hour (two digits, as the friend wrote "reset every day at 4am" and
+    /// brief 72 shows it), "4:00 AM" where it is 12-hour: how the tiles, captions and board headers write a time.
     static func timeText(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        var style = uses24HourClock(locale)
+            ? Date.FormatStyle().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+            : Date.FormatStyle(date: .omitted, time: .shortened)
         style.locale = locale
         style.calendar = calendar
         style.timeZone = calendar.timeZone
         return date.formatted(style)
+    }
+
+    /// Whether `locale` writes times on a 24-hour clock.
+    static func uses24HourClock(_ locale: Locale = .current) -> Bool {
+        let format = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: locale) ?? "h a"
+        return format.contains("H") || format.contains("k")
     }
 
     /// The light bar: a board's switch fills through the board day (or week) while green and is full while red; a
@@ -640,8 +649,10 @@ enum Flipboard {
 
     /// The lamps showed full for the interval ending on `recordedDue` the last time the board was on
     /// screen; now that interval is over and nothing is counted yet, so the lamps should drain once.
-    static func shouldDrain(recordedDue: Date?, due: Date?, count: Int, now: Date, calendar: Calendar = .current) -> Bool {
-        guard let recordedDue, let due, count == 0, side(due: due, now: now, calendar: calendar) == .red else { return false }
+    static func shouldDrain(recordedDue: Date?, due: Date?, count: Int, now: Date, clock: Clock? = nil,
+                            calendar: Calendar = .current) -> Bool {
+        let isRed = clock.map { $0.side(due, now: now, calendar: calendar) == .red } ?? (due.map { side(due: $0, now: now, calendar: calendar) == .red } ?? false)
+        guard let recordedDue, let due, count == 0, isRed else { return false }
         return recordedDue == due
     }
 
