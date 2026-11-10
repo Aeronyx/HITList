@@ -66,6 +66,35 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 17 (2026-11-10; briefs 74–77 in parallel, all four at once; `ROUND-17.md` says why)
+0.9.0 (21) is released; this round is **0.9.1** (each release bumps the version by 0.0.1 again). Sessions are Opus
+5.5 (commits end `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. **No
+schema change this round**: a fix that needs one stops and reports.
+- Ownership: 74 `widgets` (xhigh) new `HITListWidgets/`, `Services/Widgets/`, `Services/DeepLinks/`, core's widget
+  snapshot, `project.yml` (the extension target, the version lines, the URL scheme), one line in `HITListApp`. 75
+  `motion-polish` (xhigh) the design system's motion and control styles, `Views/Popouts/*`, `MobileShell`,
+  `MobileTabBar`, `TaskRow`, the completion views, `ProfileMenu`, `Views/Tips/*`, `Views/MacChrome/*`,
+  `MacSettingsPage`, `Views/Flipboard/*`. 76 `companions` (max) new `Views/Companions/*`, `Support/Companions/*`,
+  one overlay line each in `SidebarSearchField`, `BrowseView`, the foot of `SidebarView`, the Extras toggle. 77
+  `calendar-events` (high) new `Services/Calendar/*`, `Views/Calendar/*`, Today's section of `TaskListView`,
+  `Views/Upcoming/*`, `GeneralSettingsSection`, the Mac entitlement, the privacy page. Nobody: `scripts/`,
+  `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's New pin, the models.
+- **`dev/ROADMAP.md` is the supervisor's.** Do not add a row; your report is the record. (Every earlier brief asked
+  for a row, and the rows conflicted at every merge.)
+- **UI tests go in a file of your own** (`HITListUITests/<Yours>UITests.swift`), and run on a fresh simulator.
+- **`project.yml` is edited by two briefs** (74: a new target and the version lines; 77: one usage string). Touch
+  only your lines, run `xcodegen generate`, and never commit a hand-edited `project.pbxproj`.
+- The Mac window's sidebar is a scroll view of `MacSidebarRow`s since round 16, not a `List`, and the toolbar's
+  band, pill and toggle are drawn by the app (`Views/MacChrome/*`): anything new on the Mac is drawn or pinned the
+  same way, never left to the system (a friend's macOS 27.2 draws system chrome differently, and nobody here has it).
+- A switch is not a task unless it opted in and is due (`FlipboardSwitch.listing`); ask core, never judge a switch
+  yourself. Debug arguments worth knowing: `-seedDemoData YES` (a believable week with two Switchboards),
+  `-flipboardNow` (the board's clock), `-focusSearchAtLaunch YES`, `-boltStrikeDemo YES`, `-hideTips YES`.
+- Recording motion: `xcrun simctl io <udid> recordVideo --codec h264 out.mp4`, then `ffmpeg` (installed at
+  `/opt/homebrew/bin/ffmpeg`) for frames and tiled strips; on the Mac, capture the Debug app's own window in a loop
+  with `scripts/window-shot.sh`. `scripts/window-drive.sh` has no scroll: set the vertical scroll bar of the
+  window's `AXScrollArea` through Accessibility on your own Debug app's pid.
+
 ## Round 16 (2026-11-10; briefs 70–73 in parallel, all four at once; `ROUND-16.md` says why)
 The supervisor is a Fable 5.2 chat; sessions are Opus 5.5 as before (commits end `Co-Authored-By: Claude Opus 5.5
 <noreply@anthropic.com>`). **The version stays 0.9.0**: the next upload is 0.9.0 (21), a new build of the same version,

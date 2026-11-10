@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-16.md` (round 16 is merged; its record is in COMMON).
+session reads), then the newest queue, `dev/briefs/ROUND-17.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -168,21 +168,19 @@ files" is obeyed; one that does not produces merge conflicts.
 - Delight: `Support/Delight/*` (sounds, haptics `TapHaptic`), `Views/Delight/*` (completion motion, toast).
 - Notifications: `Services/NotificationScheduler.swift`, `Services/Notifications/*`.
 - Nobody but the supervisor: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`
-  (sessions may add files to it), this file.
+  (sessions may add files to it), `dev/ROADMAP.md`, this file.
 
 ## 6. Releases and notes
 
-- **From 2026-11-10 the version stays 0.9.0** (George: "definitely don't update the major version number for a
-  while"). Every release is a new build of 0.9.0: `scripts/release.sh --quick` (no `--version`), then
-  `git push origin master --tags`. A new version number would send the external group's build back to Beta App Review
-  (one review per version, per platform). The rules below about version sections apply again only when George asks
-  for a new version.
-- **Notes for a build** (N = the build about to be made, one more than `CURRENT_PROJECT_VERSION` in `project.yml`):
-  a `## 0.9.0 (N)` section at the top of `CHANGELOG.md` (unstamped; the script stamps "— date"), an
-  `Entry(version: "0.9.0", build: N, items: […])` at the top of `WhatsNew.swift`, and the pin in `SettingsTests`
-  (`XCTAssertEqual(current.label, "0.9.0 (N)", "this round's list")`). `release.sh` stops before anything slow when
-  the section is missing, and its preflight fails when the running build is newer than the newest entry
-  (`WhatsNew.isBehind`). An entry and section are frozen once their "Release 0.9.0 (N)" commit exists.
+- **Each release bumps the version by 0.0.1** (George, 2026-11-10, after 0.9.0 (21): "we should still bump numbers for
+  versions by 0.0.1 just for our own visual clarity"; builds 20 and 21 sharing 0.9.0 was a one-off). So 0.9.1 next:
+  `scripts/release.sh --version 0.9.1 --quick`, then `git push origin master --tags`. The friends are internal
+  testers and get every build at once. The public-link (external) group's first build of each new version still goes
+  through Beta App Review; nobody waits for it. Do not jump the minor or major number unless George asks.
+- **A build-only release** (two builds of one version, as 0.9.0 (20) and (21)) is still possible with
+  `scripts/release.sh --quick`: it needs a `## X.Y.Z (N)` section in `CHANGELOG.md` (unstamped; the script stamps the
+  date), an `Entry(version:build:items:)` in `WhatsNew.swift` and the pin `current.label == "X.Y.Z (N)"`; the
+  preflight fails when the running build is newer than the newest entry (`WhatsNew.isBehind`).
 - Versions: `## X.Y.Z` section in `CHANGELOG.md` (unreleased sections have no stamp; the release script
   stamps "— build N, date"), an `Entry(version: "X.Y.Z")` at the top of `WhatsNew.swift`, and the pin in
   `SettingsTests` (`XCTAssertEqual(current.version, "X.Y.Z", "this round's list")`). All three or the
@@ -266,8 +264,25 @@ vertical axis (edge-on on the way round); the slam is kept as it is. On the Mac,
 version or by which view holds the keyboard is drawn or pinned by us (the sidebar's rows and selection, the toolbar's
 band, pill and toggle); nothing takes the keyboard at launch. The four Switchboard choices were the supervisor's
 (George: "work freely"), so George may still reverse them: see `dev/briefs/ROUND-16.md`.
+From 2026-11-10 (round 17): each release bumps the version by 0.0.1. Widgets read a snapshot the app writes into the
+App Group; an extension never opens the store. Calendar events are read-only, on the device and off by default.
+Companions (pixel creatures in quiet corners) are original characters only: nothing that is, or could be mistaken
+for, a character someone else owns ships in the app or sits in the repository (the supervisor's call, as with the
+Claude logo in round 12; a user's own sprite on their own device is the roadmap's answer). `dev/ROADMAP.md` is the
+supervisor's file; sessions do not add rows.
 
-## 8. Where things stand (2026-11-10, round 16 merged)
+## 8. Where things stand (2026-11-10, round 17 running)
+
+**2026-11-10, 0.9.0 (21) released; round 17 briefed for 0.9.1 (Fable 5.2 supervisor).** George released build 21 and
+asked for 0.9.1: widgets, everything that moves, pixel companions, and the roadmap's forgotten items. Briefs 74–77
+(`dev/briefs/ROUND-17.md`) run as four Opus sessions: 74 `widgets` (xhigh), 75 `motion-polish` (xhigh), 76
+`companions` (max), 77 `calendar-events` (high). `dev/ROADMAP.md` was rewritten (now, next, parked, shipped) and is
+the supervisor's alone from here on. The companions are original characters: George named three that belong to other
+people, and the app and this public repository ship none of them (§7). No schema change this round. After the merge
+the supervisor must prove a Release archive and export still work with the widget extension before handing over the
+release command. The next brief number is 78.
+
+### Round 16 (kept for the record)
 
 **2026-11-10, round 16 merged for 0.9.0 (21) (Fable 5.2 supervisor).** Briefs 70–73 ran as four Opus sessions at once
 and are merged on master: the Mac's chrome drawn by us for macOS 27 (a friend's 27.2 drew 0.9.0 (20) with a grey
