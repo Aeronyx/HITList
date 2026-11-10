@@ -187,6 +187,7 @@ struct SyncBolt: View {
         }
         #if DEBUG
         .onAppear { BoltStrikeDemo.shared.startIfRequested() }
+        .onAppear { SyncReplayPlayer.shared.startIfRequested() }
         .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
         #endif
     }
