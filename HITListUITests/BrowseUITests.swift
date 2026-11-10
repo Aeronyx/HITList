@@ -64,6 +64,110 @@ final class BrowseUITests: XCTestCase {
         }
     }
 
+    // MARK: - Swipe to delete
+
+    /// George, 2026-11-10: "you also can't swipe left to delete Groups but I wish you could." An empty Group swiped
+    /// left shows a red Delete and goes at once; a Group with tasks asks first, from a full swipe too, and Cancel
+    /// keeps it; a label goes at once, as from its menu; Shared Tasks has no swipe.
+    func testSwipingAGroupLeftDeletesIt() throws {
+        app.launchArguments += ["-seedDemoData", "YES"]
+        app.launch()
+        openBrowse()
+
+        // A new, empty Group: Groups' "+", a name, Return.
+        let add = app.buttons["Add Group"].firstMatch
+        XCTAssertTrue(add.waitForExistence(timeout: 5))
+        add.tap()
+        XCTAssertTrue(app.staticTexts["New Group"].waitForExistence(timeout: 5))
+        app.typeText("Garden\n")
+        let garden = groupRow("Garden")
+        XCTAssertTrue(garden.waitForExistence(timeout: 5), "the new Group is in Browse")
+        bringToTheMiddle(garden)
+
+        garden.swipeLeft()
+        let delete = app.buttons["Delete"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "the swipe shows Delete")
+        snapshot("1 Swiped an empty Group")
+        delete.tap()
+        XCTAssertTrue(garden.waitForNonExistence(timeout: 5), "an empty Group goes at once")
+        XCTAssertFalse(app.staticTexts["Delete “Garden”?"].exists, "without a question")
+
+        // Work has two open tasks: a full swipe asks first and Cancel keeps it.
+        let work = groupRow("Work")
+        bringToTheMiddle(work)
+        fullSwipe(work)
+        let message = app.staticTexts["Its 2 open tasks move to the Inbox."]
+        XCTAssertTrue(message.waitForExistence(timeout: 5), "a full swipe on a Group with tasks asks first")
+        snapshot("2 Delete Work? after a full swipe")
+        cancelQuestion()
+        XCTAssertTrue(message.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(work.exists, "Cancel keeps the Group")
+
+        // A partial swipe and Delete asks too.
+        bringToTheMiddle(work)
+        work.swipeLeft()
+        XCTAssertTrue(delete.waitForExistence(timeout: 3))
+        delete.tap()
+        XCTAssertTrue(message.waitForExistence(timeout: 5), "Delete from the swipe asks first")
+        snapshot("3 Delete Work? from the swipe's Delete")
+        cancelQuestion()
+        XCTAssertTrue(message.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(work.exists, "Cancel keeps the Group")
+
+        // Shared Tasks, the forced Group, has no swipe.
+        let shared = app.buttons["browse-shared-tasks"].firstMatch
+        bringToTheMiddle(shared)
+        shared.swipeLeft()
+        XCTAssertFalse(app.buttons["Delete"].firstMatch.waitForExistence(timeout: 1.5), "Shared Tasks has no swipe")
+        snapshot("4 Shared Tasks, no swipe")
+        // A tap where the swipe would be puts nothing away; go back if it opened.
+        if !app.descendants(matching: .any)["browseSearch"].firstMatch.exists { goBack() }
+
+        // A label goes at once, as from its menu.
+        let bills = groupRow("bills")
+        bringToTheMiddle(bills)
+        bills.swipeLeft()
+        XCTAssertTrue(delete.waitForExistence(timeout: 3), "a label swipes too")
+        delete.tap()
+        XCTAssertTrue(bills.waitForNonExistence(timeout: 5), "a label goes at once")
+    }
+
+    /// A Browse row whose label starts with `name` (its count follows: "Work, 2").
+    private func groupRow(_ name: String) -> XCUIElement {
+        app.collectionViews.firstMatch.buttons
+            .matching(NSPredicate(format: "label == %@ OR label BEGINSWITH %@", name, "\(name),")).firstMatch
+    }
+
+    /// Drags the list so `row` sits mid-screen, clear of the search field above and the island below (a swipe on a
+    /// row behind the island lands on the island).
+    private func bringToTheMiddle(_ row: XCUIElement) {
+        // Out of sight (a short phone): look above, then below.
+        let list = app.collectionViews.firstMatch
+        for _ in 0..<4 where !row.exists { list.swipeDown() }
+        for _ in 0..<6 where !row.exists { list.swipeUp() }
+        XCTAssertTrue(row.exists, "\(row) is in Browse")
+        let middle = app.frame.midY
+        guard abs(row.frame.midY - middle) > 40 else { return }
+        // From the middle of the screen, never from the row: one behind the island can't be grabbed.
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+        let to = from.withOffset(CGVector(dx: 0, dy: middle - row.frame.midY))
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.4)
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
+    /// Drags `row` from its right end past the screen's left edge: the swipe's full-swipe action.
+    private func fullSwipe(_ row: XCUIElement) {
+        let start = row.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5))
+        let end = row.coordinate(withNormalizedOffset: CGVector(dx: -0.3, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0.1)
+    }
+
+    /// The question is a popover on iPhone: a tap outside it is its Cancel.
+    private func cancelQuestion() {
+        let outside = app.otherElements["PopoverDismissRegion"].firstMatch
+        if outside.exists { outside.tap() } else { app.buttons["Cancel"].firstMatch.tap() }
+    }
+
     // MARK: - Helpers
 
     private func openBrowse() {
