@@ -217,6 +217,115 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 0)
     }
 
+    // MARK: Brief 72: a time, "Overdue becomes task", the board
+
+    func testATypedTimeFillsTheTimeAndLeavesTheName() {
+        let read = SwitchDraft(text: "Take meds 9pm").reading(parser)
+        XCTAssertEqual(read.title, "Take meds")
+        XCTAssertEqual(read.time, PickerTime(hour: 21, minute: 0))
+        XCTAssertEqual(read.tokens.map(\.kind), [.time], "the phrase lights up")
+        let both = SwitchDraft(text: "Take meds every day at 9pm").reading(parser)
+        XCTAssertEqual(both.title, "Take meds")
+        XCTAssertEqual(both.rule, .daily)
+        XCTAssertNil(both.rule.time, "the time is the switch's, not the dial's")
+        XCTAssertEqual(both.time, PickerTime(hour: 21, minute: 0))
+        XCTAssertEqual(both.tokens.map(\.kind), [.recurrence, .time])
+        XCTAssertEqual(SwitchDraft(text: "Lights out 12:30am").reading(parser).time, PickerTime(hour: 0, minute: 30))
+        XCTAssertNil(SwitchDraft(text: "Floss").reading(parser).time)
+    }
+
+    func testASwitchedOffTimeIsNameText() throws {
+        var draft = SwitchDraft(text: "Take meds 9pm")
+        let token = try XCTUnwrap(draft.reading(parser).timePhrase)
+        draft.switchOff(token)
+        XCTAssertEqual(draft.reading(parser).title, "Take meds 9pm")
+        XCTAssertNil(draft.reading(parser).time)
+    }
+
+    func testTheTimeFieldSetsATimeOrRewritesTheTypedOne() {
+        var draft = SwitchDraft(text: "Take meds")
+        draft.setTime(PickerTime(hour: 21, minute: 0), parser)
+        XCTAssertEqual(draft.reading(parser).time, PickerTime(hour: 21, minute: 0))
+        XCTAssertEqual(draft.text, "Take meds", "no phrase: the name stays")
+        draft.setTime(nil, parser)
+        XCTAssertNil(draft.reading(parser).time)
+
+        var typed = SwitchDraft(text: "Take meds 9pm sharp")
+        typed.setTime(PickerTime(hour: 7, minute: 30), parser)
+        XCTAssertEqual(typed.reading(parser).time, PickerTime(hour: 7, minute: 30))
+        XCTAssertEqual(typed.reading(parser).title, "Take meds sharp")
+        typed.setTime(nil, parser)
+        XCTAssertNil(typed.reading(parser).time)
+        XCTAssertEqual(typed.text, "Take meds sharp", "the phrase leaves the name")
+    }
+
+    /// What the card writes reads back as the same time, on a 12-hour and a 24-hour clock.
+    func testTheTimePhraseReadsBack() {
+        for locale in [Locale(identifier: "en_US"), Locale(identifier: "en_GB")] {
+            for (hour, minute) in [(0, 0), (0, 30), (7, 5), (11, 59), (12, 0), (12, 30), (21, 0), (23, 45)] {
+                let time = PickerTime(hour: hour, minute: minute)
+                let phrase = SwitchDraft.timePhrase(time, locale: locale)
+                XCTAssertEqual(SwitchDraft(text: "Floss " + phrase).reading(parser).time, time, "\(phrase) in \(locale.identifier)")
+            }
+        }
+        XCTAssertEqual(SwitchDraft.timePhrase(PickerTime(hour: 21, minute: 0), locale: Locale(identifier: "en_US")), "9pm")
+        XCTAssertEqual(SwitchDraft.timePhrase(PickerTime(hour: 7, minute: 30), locale: Locale(identifier: "en_US")), "7:30am")
+        XCTAssertEqual(SwitchDraft.timePhrase(PickerTime(hour: 21, minute: 0), locale: Locale(identifier: "en_GB")), "21:00")
+    }
+
+    func testATimeTheOptInOrABoardAloneIsNothingToLose() {
+        var draft = SwitchDraft()
+        draft.setTime(PickerTime(hour: 9, minute: 0), parser)
+        draft.overdueBecomesTask = true
+        draft.boardID = UUID()
+        XCTAssertFalse(draft.hasContent(parser), "only a name is, on a new switch")
+    }
+
+    func testAddWithATimeTheOptInAndABoard() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        var draft = SwitchDraft(text: "Take meds 9pm", boardID: bed.id)
+        draft.overdueBecomesTask = true
+        let task = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertEqual(task.title, "Take meds")
+        XCTAssertEqual(task.switchboard?.id, bed.id)
+        XCTAssertTrue(task.overdueBecomesTask)
+        XCTAssertEqual(Flipboard.time(of: task), PickerTime(hour: 21, minute: 0))
+        XCTAssertEqual(task.recurrenceRule, .daily, "the board's cadence")
+        XCTAssertEqual(SwitchDraft.boardLine(bed), "Daily, with Before Bed")
+    }
+
+    func testAddALooseTimedSwitchFromTheTimeField() throws {
+        var draft = SwitchDraft(text: "Stretch")
+        draft.setTime(PickerTime(hour: 7, minute: 0), parser)
+        let task = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertNil(task.switchboard)
+        XCTAssertEqual(Flipboard.time(of: task), PickerTime(hour: 7, minute: 0))
+        XCTAssertEqual(task.recurrenceRule, FlipInterval.default.rule)
+    }
+
+    func testEditingABoardSwitchStartsFilledInAndCanMoveIt() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let meds = try Flipboard.createSwitch(title: "Take meds", rule: .daily, time: PickerTime(hour: 21, minute: 0),
+                                              board: bed, overdueBecomesTask: true, in: context)
+        var draft = SwitchDraft(meds)
+        XCTAssertEqual(draft.boardID, bed.id)
+        XCTAssertEqual(draft.reading(parser).time, PickerTime(hour: 21, minute: 0))
+        XCTAssertTrue(draft.overdueBecomesTask)
+        XCTAssertFalse(draft.hasContent(parser), "nothing changed yet")
+        draft.choose(FlipInterval(count: 3, unit: .days), parser)
+        XCTAssertFalse(draft.hasContent(parser), "on a board the dial isn't the interval")
+
+        draft.boardID = nil
+        draft.overdueBecomesTask = false
+        draft.setTime(PickerTime(hour: 22, minute: 0), parser)
+        XCTAssertTrue(draft.hasContent(parser))
+        _ = try draft.save(editing: meds, parser: parser, in: context)
+        XCTAssertNil(meds.switchboard)
+        XCTAssertFalse(meds.overdueBecomesTask)
+        XCTAssertEqual(Flipboard.time(of: meds), PickerTime(hour: 22, minute: 0))
+        XCTAssertEqual(meds.recurrenceRule, FlipInterval(count: 3, unit: .days).rule, "loose again: the dial's interval")
+    }
+
     // MARK: Editing
 
     func testEditingStartsFilledIn() throws {

@@ -198,10 +198,10 @@ struct FlipboardView: View {
 
     /// The card in the grid, as wide as `cardSpan` columns.
     private func inlineCardView(_ request: SwitchCardRequest) -> some View {
-        SwitchCard(editing: request.task, style: .inline, isConfirmingDiscard: confirmingDiscard,
+        SwitchCard(editing: request.task, style: .inline, board: request.board, isConfirmingDiscard: confirmingDiscard,
                    onClose: requestClose,
                    onSaved: { saved in
-                       if request != .add { closeCard() }
+                       if !request.isAdding { closeCard() }
                        land(saved)
                    },
                    onDraftChange: { cardContent.hasContent = $0 },
