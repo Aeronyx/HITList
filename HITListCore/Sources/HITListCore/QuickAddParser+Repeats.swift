@@ -16,7 +16,8 @@ extension QuickAddParser {
         let reader = PhraseReader(words: words)
         if let head = reader.head(at: i) {
             let j = i + head.consumed
-            if head.frequency == .monthly, let (place, n) = reader.monthPlace(at: j, after: .on),
+            if let (place, n) = head.frequency == .monthly ? reader.monthPlace(at: j, after: .on)
+                                                            : reader.yearPlace(at: j, after: .on),
                let rule = RecurrenceRule(head.frequency, interval: head.interval, place: place) {
                 return (rule, head.consumed + n)
             }
@@ -26,6 +27,9 @@ extension QuickAddParser {
         }
         switch reader[i] {
         case "every":
+            // "every March 3", "every 3 March"
+            if let (place, n) = reader.yearPlace(at: i + 1, after: .nothing),
+               let rule = RecurrenceRule(.yearly, place: place) { return (rule, 1 + n) }
             // "every 28th", "every first Monday of the month", "every last day of the month"
             if let (place, n) = reader.monthPlace(at: i + 1, after: .nothing, ordinalOnly: true),
                let rule = RecurrenceRule(.monthly, place: place) {
