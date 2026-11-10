@@ -251,7 +251,7 @@ final class SyncLogTests: XCTestCase {
         let synced = CloudSyncMonitor.SaveSummary(userInfo: userInfo, only: CloudSyncMonitor.syncedEntityNames)
         XCTAssertEqual(synced.entities, ["TaskItem": 1])
         XCTAssertEqual(synced.inserted, 1)
-        XCTAssertEqual(CloudSyncMonitor.syncedEntityNames, ["TaskItem", "Project", "TaskLabel", "SavedFilter", "Profile"])
+        XCTAssertEqual(CloudSyncMonitor.syncedEntityNames, ["TaskItem", "Project", "TaskLabel", "SavedFilter", "Profile", "Switchboard"])
     }
 
     func testSaveSummaryWording() {

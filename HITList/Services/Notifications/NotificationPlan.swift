@@ -20,9 +20,14 @@ struct NotificationPlan: Equatable {
         var reminderOffsetMinutes: Int? = nil
         /// A reminder at a moment of its own ("!15m", brief 48), independent of the due time; nil for none.
         var reminderDate: Date? = nil
-        /// A Flipboard switch: red, it is one of today's tasks whatever its date (never overdue); green, none of
-        /// today's (brief 64, the badge and the morning summary as Today shows them).
+        /// A Flipboard switch (brief 72): none of today's tasks unless it opted in ("Overdue becomes task"); then one
+        /// of today's once it is due, whatever its date, never overdue (the badge and the morning summary as Today
+        /// shows them, brief 64).
         var isSwitch = false
+        /// "Overdue becomes task", the switch's own or its Switchboard's.
+        var switchOptedIn = false
+        /// The clock of the Switchboard a switch is on; nil for a loose switch.
+        var switchboard: SwitchboardSchedule? = nil
 
         /// The offset in seconds, never negative.
         var offset: TimeInterval { TimeInterval(max(0, reminderOffsetMinutes ?? 0) * 60) }
@@ -303,10 +308,19 @@ struct NotificationPlan: Equatable {
 }
 
 extension NotificationPlan.Item {
-    init(_ task: TaskItem) {
+    /// A timed switch reminds at its time as any timed task does (brief 72). One on a Switchboard that was missed in
+    /// an earlier board day is due again at this board day's time, so the plan reads that moment, not the old one.
+    init(_ task: TaskItem, now: Date = Date(), calendar: Calendar = .current) {
+        let isSwitch = Flipboard.isMember(task)
+        let board = isSwitch ? task.filterSwitchboard : nil
+        var due = task.dueDate
+        if let board, task.hasDueTime {
+            due = board.dueMoment(due: task.dueDate, hasTime: true, now: now, calendar: calendar)
+        }
         self.init(id: task.id, title: task.title, projectName: task.project?.name, priority: task.priorityValue,
-                  dueDate: task.dueDate, hasDueTime: task.hasDueTime, isCompleted: task.isCompleted,
+                  dueDate: due, hasDueTime: task.hasDueTime, isCompleted: task.isCompleted,
                   updatedAt: task.updatedAt, reminderOffsetMinutes: task.reminderOffsetMinutes,
-                  reminderDate: task.reminderDate, isSwitch: Flipboard.isMember(task))
+                  reminderDate: task.reminderDate, isSwitch: isSwitch, switchOptedIn: isSwitch && task.filterSwitchOptedIn,
+                  switchboard: board)
     }
 }

@@ -56,9 +56,10 @@ struct TaskEntity: AppEntity {
         spotlightKeywords = task.labelList.map(\.name) + [task.project?.name].compactMap { $0 }
     }
 
-    /// "Flipboard switch · every 3 days".
+    /// "Flipboard switch · every 3 days"; on a Switchboard, "Flipboard switch · Before Bed" (brief 72).
     static func switchLine(_ task: TaskItem) -> String {
-        ["Flipboard switch", task.recurrenceRule?.displayText.lowercased()].compactMap { $0 }.joined(separator: " · ")
+        let detail = task.switchboard.map(\.name) ?? task.recurrenceRule?.displayText.lowercased()
+        return ["Flipboard switch", detail].compactMap { $0 }.joined(separator: " · ")
     }
 
     init(_ task: TaskItem, now: Date = Date()) {
@@ -157,7 +158,7 @@ extension IntentActions {
             case .counted(let n): return "Flipped ‘\(task.title)’: \(n) of \(Flipboard.clampedTarget(task.flipTarget))."
             case .ignored: return "‘\(task.title)’ is already charged for now."
             case .charged:
-                let next = task.dueDate.map { " It’s next due \(spokenDue($0, hasTime: false, now: now))." } ?? ""
+                let next = task.dueDate.map { " It’s next due \(spokenDue($0, hasTime: task.hasDueTime, now: now))." } ?? ""
                 return "Flipped ‘\(task.title)’." + next
             }
         }

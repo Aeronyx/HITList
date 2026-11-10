@@ -17,11 +17,19 @@ public protocol FilterableTask {
     var filterCreatedDate: Date? { get }
     /// A subtask lives inside its parent and is never a row of its own (`TaskOrdering.topLevel`). Default false.
     var filterIsSubtask: Bool { get }
+    /// "Overdue becomes task" (brief 72): a Flipboard switch that is listed as today's task once it is due, by its
+    /// own toggle or its Switchboard's (`FlipboardSwitch.listing`). Default false: a switch is never a task.
+    var filterSwitchOptedIn: Bool { get }
+    /// The clock of the Switchboard a switch is on (`SwitchboardSchedule`); nil for a loose switch, and for every
+    /// task that isn't a switch (the default).
+    var filterSwitchboard: SwitchboardSchedule? { get }
 }
 
 extension FilterableTask {
     public var filterCreatedDate: Date? { nil }
     public var filterIsSubtask: Bool { false }
+    public var filterSwitchOptedIn: Bool { false }
+    public var filterSwitchboard: SwitchboardSchedule? { nil }
 }
 
 /// A plain value implementation, handy for tests and for snapshots.
@@ -37,6 +45,8 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
     public var filterIsRecurring: Bool
     public var filterCreatedDate: Date?
     public var filterIsSubtask: Bool
+    public var filterSwitchOptedIn: Bool
+    public var filterSwitchboard: SwitchboardSchedule?
 
     public init(
         title: String,
@@ -49,7 +59,9 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         labelNames: [String] = [],
         isRecurring: Bool = false,
         createdDate: Date? = nil,
-        isSubtask: Bool = false
+        isSubtask: Bool = false,
+        switchOptedIn: Bool = false,
+        switchboard: SwitchboardSchedule? = nil
     ) {
         filterTitle = title
         filterNotes = notes
@@ -62,5 +74,7 @@ public struct PlainTask: FilterableTask, Equatable, Sendable {
         filterIsRecurring = isRecurring
         filterCreatedDate = createdDate
         filterIsSubtask = isSubtask
+        filterSwitchOptedIn = switchOptedIn
+        filterSwitchboard = switchboard
     }
 }

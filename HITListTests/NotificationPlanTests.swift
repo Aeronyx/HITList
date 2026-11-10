@@ -1,4 +1,5 @@
 import XCTest
+import SwiftData
 import HITListCore
 @testable import HITList
 
@@ -427,5 +428,66 @@ private extension String {
         var h: UInt64 = 14_695_981_039_346_656_037
         for b in utf8 { h = (h ^ UInt64(b)) &* 1_099_511_628_211 }
         return String(h, radix: 16)
+    }
+}
+
+/// Brief 72: a switch's time reminds at that time as any timed task does (the reminder settings and offsets apply;
+/// no time, no notification), whether or not it is ever listed as a task. A switch on a Switchboard missed on an
+/// earlier board day is due again at this board day's time, so it reminds then.
+@MainActor
+final class SwitchReminderTests: XCTestCase {
+    private var container: ModelContainer!
+    private var context: ModelContext { container.mainContext }
+    private let cal = Calendar.current
+
+    override func setUp() async throws { container = ModelContainerFactory.preview() }
+    override func tearDown() async throws { container = nil }
+
+    private func at(_ hour: Int, _ minute: Int = 0, dayOffset: Int = 0) -> Date {
+        let day = cal.date(byAdding: .day, value: dayOffset, to: cal.startOfDay(for: Date()))!
+        return cal.date(bySettingHour: hour, minute: minute, second: 0, of: day)!
+    }
+
+    private func timedSwitch(_ title: String, due: Date) throws -> TaskItem {
+        let task = try Flipboard.createSwitch(title: title, rule: .daily, in: context)
+        task.dueDate = due
+        task.hasDueTime = true
+        task.updatedAt = due.addingTimeInterval(-3 * 86_400)
+        try context.save()
+        return task
+    }
+
+    func testALooseTimedSwitchRemindsAtItsTimeEvenWhenItNeverBecomesATask() throws {
+        let meds = try timedSwitch("Take meds", due: at(21))
+        let item = NotificationPlan.Item(meds, now: at(9))
+        XCTAssertTrue(item.isSwitch)
+        XCTAssertFalse(item.switchOptedIn)
+        let plan = NotificationPlan.make(tasks: [item], now: at(9), calendar: cal)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(21)])
+        XCTAssertEqual(plan.requests.first?.title, "Take meds")
+        XCTAssertNil(item.todaySection(now: at(22), calendar: cal), "never a task, so never in the badge")
+    }
+
+    func testTheReminderOffsetAppliesToASwitch() throws {
+        let meds = try timedSwitch("Take meds", due: at(21))
+        meds.reminderOffsetMinutes = 15
+        let plan = NotificationPlan.make(tasks: [NotificationPlan.Item(meds, now: at(9))], now: at(9), calendar: cal)
+        XCTAssertEqual(plan.requests.map(\.triggerDate), [at(20, 45)])
+    }
+
+    func testABoardSwitchMissedYesterdayRemindsAtTodaysTime() throws {
+        let board = Switchboard(name: "Before Bed")
+        context.insert(board)
+        let meds = try timedSwitch("Take meds", due: at(21, dayOffset: -1))
+        meds.switchboard = board
+        try context.save()
+        let item = NotificationPlan.Item(meds, now: at(9))
+        XCTAssertEqual(item.dueDate, at(21), "this board day's 21:00, not yesterday's")
+        XCTAssertEqual(NotificationPlan.make(tasks: [item], now: at(9), calendar: cal).requests.map(\.triggerDate), [at(21)])
+    }
+
+    func testAnUntimedSwitchNeverReminds() throws {
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, in: context)
+        XCTAssertTrue(NotificationPlan.make(tasks: [NotificationPlan.Item(floss)], now: Date(), calendar: cal).requests.isEmpty)
     }
 }

@@ -168,6 +168,29 @@ extension TaskItem: FilterableTask {
     var filterIsRecurring: Bool { recurrence != nil }
     var filterCreatedDate: Date? { createdAt }
     var filterIsSubtask: Bool { parent != nil }
+    /// Brief 72: "Overdue becomes task", by the switch's own toggle or its Switchboard's.
+    var filterSwitchOptedIn: Bool { overdueBecomesTask || (switchboard?.overdueBecomesTask ?? false) }
+    /// Brief 72: the clock of the Switchboard the switch is on.
+    var filterSwitchboard: SwitchboardSchedule? { switchboard?.schedule() }
+}
+
+extension Switchboard {
+    /// Daily or Weekly; a cadence a later build wrote reads as Daily.
+    var cadenceValue: SwitchboardSchedule.Cadence {
+        get { SwitchboardSchedule.cadence(stored: cadence) }
+        set { cadence = newValue.rawValue }
+    }
+
+    /// The weekday a weekly board resets on, as a Calendar weekday (0, "the week start", reads Settings).
+    func resetWeekdayValue(weekStart: Int = Preferences.weekStartWeekday()) -> Int {
+        SwitchboardSchedule.weekday(stored: resetWeekday, weekStart: weekStart)
+    }
+
+    /// The board's clock (core's `SwitchboardSchedule`): every board day and flip on it is worked out there.
+    func schedule(weekStart: Int = Preferences.weekStartWeekday()) -> SwitchboardSchedule {
+        SwitchboardSchedule(cadence: cadenceValue, resetMinutes: resetMinutes,
+                            resetWeekday: resetWeekdayValue(weekStart: weekStart))
+    }
 }
 
 /// A task of yours as a list row (brief 62, `ListRow`): its Group is its section under Sort by Group.

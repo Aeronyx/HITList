@@ -681,8 +681,8 @@ public struct FilterQuery: Sendable, Equatable {
         }
     }
 
-    /// Whether `task` matches. Unless the query names `@flipboard`, a green switch never does and a red one
-    /// is judged as due today (`FlipboardSwitch.listing`); `flipboardRule: false` judges every task as it is.
+    /// Whether `task` matches. Unless the query names `@flipboard`, a switch never does, except an opted-in one
+    /// that is due, judged as due today (`FlipboardSwitch.listing`); `flipboardRule: false` judges every task as it is.
     public func matches(_ task: FilterableTask, now: Date = Date(), calendar: Calendar = .current,
                         flipboardRule: Bool = true) -> Bool {
         let ctx = EvalContext(parser: DateExpressionParser(calendar: calendar, now: now))
@@ -705,7 +705,7 @@ public struct FilterQuery: Sendable, Equatable {
         return Self.defaultSort(matched, now: now, calendar: calendar, flipboardRule: rule)
     }
 
-    /// `eval` with the Flipboard's listing rule: green switches are left out, red ones are due today.
+    /// `eval` with the Flipboard's listing rule: switches are left out, opted-in ones that are due are due today.
     private static func evalListed(_ node: FilterNode, _ task: FilterableTask, _ ctx: EvalContext, flipboardRule: Bool) -> Bool {
         guard flipboardRule else { return eval(node, task, ctx) }
         func listed<T: FilterableTask>(_ task: T) -> Bool {
@@ -719,7 +719,7 @@ public struct FilterQuery: Sendable, Equatable {
     }
 
     /// Due date ascending (undated last), then priority, then creation order (`TaskOrdering.createdThenTitle`),
-    /// each task by the date it is listed under (a red switch: today) unless `flipboardRule` is false.
+    /// each task by the date it is listed under (a switch listed as today's: today) unless `flipboardRule` is false.
     public static func defaultSort<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current,
                                                       flipboardRule: Bool = true) -> [T] {
         guard flipboardRule else { return dueThenPriority(tasks) }
