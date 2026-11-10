@@ -5,15 +5,18 @@ import SwiftUI
 /// buzz of sparks"). It plays where `BoltStrikeMotion`'s strike does and only when it does: `BoltStrikeGate` decides,
 /// as a "you're good to go", and Reduce Motion gets the strike's blink instead.
 ///
-/// In 0.8 s the 12.65 pt glyph crouches on its foot, hops 3.5 pt while twirling once about its centre, hangs a moment
-/// upright, slams 1.2 pt past its rest, squashing and leaning on its foot as a few sparks and a crackle fly from the foot
+/// In 0.8 s the 12.65 pt glyph crouches on its foot, hops 3.5 pt while spinning once like a coin on a table (about the
+/// vertical axis through its centre: edge-on, a hairline, a quarter and three quarters round, its other face half-way;
+/// brief 73), lands face-on and unmirrored at the top of the hop, hangs a moment, slams 1.2 pt past its rest, squashing and leaning on its foot as a few sparks and a crackle fly from the foot
 /// (gone 0.26 s later), rebounds a hair and settles softly. Keyframes, so it plays on the render timeline at the
 /// display's own rate (120 Hz on ProMotion iPhones, the Mac's refresh rate); the sparks are one `Canvas`, drawn only
 /// while they live, and everything is back at rest (`Frame()`) when it ends.
 enum BoltSlamMotion {
     /// One frame of the slam; `Frame()` is the bolt at rest.
     struct Frame: Equatable {
-        /// Degrees clockwise about the glyph's centre.
+        /// Degrees of the spin about the vertical axis through the glyph's centre, as a coin spins on a table (George,
+        /// 2026-11-10: "halfway through the twirl the bolt would technically be invisible or incredibly thin"): 90 and
+        /// 270 edge-on, 180 its other face. A whole turn is the glyph at rest.
         var twirl: Double = 0
         /// Points, negative up.
         var lift: CGFloat = 0
@@ -28,6 +31,9 @@ enum BoltSlamMotion {
 
         /// Wider as it squashes and narrower as it stretches, so the glyph keeps about its area.
         var stretch: CGFloat { 1 + (1 - squash) * 0.9 }
+
+        /// The face's width under the spin: 1 face-on, 0 edge-on, −1 its other face (the mirror image).
+        var face: Double { cos(twirl * .pi / 180) }
     }
 
     // MARK: Timing (seconds from the start)
@@ -35,7 +41,7 @@ enum BoltSlamMotion {
     static let duration: TimeInterval = 0.8
     /// The crouch on its foot before the hop.
     static let crouch: TimeInterval = 0.05
-    /// The top of the hop; the twirl has come round by then.
+    /// The top of the hop; the spin has come round by then.
     static let apexAt: TimeInterval = 0.3
     /// How long it hangs there before it drops.
     static let hang: TimeInterval = 0.03
@@ -47,6 +53,9 @@ enum BoltSlamMotion {
     // MARK: Size (points of the 12.65 pt glyph)
 
     static let turns: Double = 1
+    /// How much nearer the spin brings the edge coming round (`rotation3DEffect`'s perspective): a little, so the turn
+    /// reads as depth without the near edge swelling past the bolt's frame.
+    static let spinPerspective: CGFloat = 0.25
     static let hop: CGFloat = 3.5
     /// How far past its rest the slam drives it.
     static let depth: CGFloat = 1.2
@@ -196,7 +205,7 @@ enum BoltSlamMotion {
 
     // MARK: Views
 
-    /// Plays one frame on the glyph: the flash, the squash and lean about the foot, the twirl, the hop, and the sparks
+    /// Plays one frame on the glyph: the flash, the squash and lean about the foot, the spin, the hop, and the sparks
     /// (which stay on the ground while the glyph moves). At `Frame()` it draws the glyph exactly as it rests.
     struct Effect: ViewModifier {
         var frame: Frame
@@ -207,10 +216,22 @@ enum BoltSlamMotion {
                 .brightness(frame.glow * flashBrightness)
                 .shadow(color: color.opacity(frame.glow * 0.45), radius: frame.glow > 0.001 ? 2 : 0)
                 .modifier(Warp(squash: frame.squash, stretch: frame.stretch, warp: frame.warp))
-                .rotationEffect(.degrees(frame.twirl))
+                // About the vertical axis, a coin's spin (brief 73; it was a turn in the screen's plane).
+                .modifier(Spin(degrees: frame.twirl))
                 .offset(y: frame.lift)
                 // Always there and empty at rest, so the impact doesn't have to build a canvas mid-motion.
                 .overlay { Sparks(life: frame.spark, color: color) }
+        }
+    }
+
+    /// The coin spin: a turn of `degrees` about the vertical axis through the glyph's centre, with a little perspective.
+    struct Spin: ViewModifier {
+        var degrees: Double
+
+        func body(content: Content) -> some View {
+            // Always applied, so the glyph keeps one identity through the slam; at 0 it is the identity transform.
+            content.rotation3DEffect(.degrees(degrees), axis: (x: 0, y: 1, z: 0), anchor: .center,
+                                     perspective: spinPerspective)
         }
     }
 
