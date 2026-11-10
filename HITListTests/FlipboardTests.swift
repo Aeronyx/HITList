@@ -220,8 +220,9 @@ final class FlipboardTests: XCTestCase {
 
         XCTAssertTrue(Flipboard.isMember(task))
         XCTAssertEqual(task.recurrenceRule, Flipboard.defaultRule)
-        XCTAssertFalse(task.hasDueTime)
-        XCTAssertEqual(task.dueDate, daysFromToday(2), "time of day dropped")
+        XCTAssertTrue(task.hasDueTime, "brief 72: a switch keeps its time of day")
+        XCTAssertEqual(task.dueDate, timed)
+        XCTAssertEqual(task.recurrenceRule?.time, RecurrenceRule.TimeOfDay(hour: 9, minute: 30))
         let labels = try context.fetch(FetchDescriptor<TaskLabel>())
         XCTAssertEqual(labels.map(\.id), [Flipboard.labelID])
         XCTAssertEqual(Flipboard.labelID, SeedIdentity.uuid(for: "TaskLabel/flipboard"))
