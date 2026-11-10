@@ -32,6 +32,8 @@
 	<string>public.app-category.productivity</string>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>UIAppFonts</key>
