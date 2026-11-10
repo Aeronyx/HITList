@@ -67,7 +67,7 @@ struct CalendarSettingsRows: View {
     static func subtitle(for access: CalendarAccess) -> String {
         switch access {
         case .denied, .writeOnly:
-            "HITList isn't allowed to read your calendars. Allow full access in \(settingsPath)."
+            "HITList isn't allowed to read your calendars. Allow full access below."
         case .restricted:
             "Calendar access is restricted on this device."
         case .notDetermined, .fullAccess:
@@ -75,11 +75,8 @@ struct CalendarSettingsRows: View {
         }
     }
 
-    #if os(iOS)
-    static let settingsPath = "Settings → Privacy & Security → Calendars"
-    #else
-    static let settingsPath = "System Settings → Privacy & Security → Calendars"
-    #endif
+    /// Where the switch is, under the system's settings (the row above it opens them).
+    static let settingsPath = "Privacy & Security → Calendars → HITList"
 
     private func switchTo(_ on: Bool) {
         isOn = on

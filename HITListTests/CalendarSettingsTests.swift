@@ -19,8 +19,9 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertEqual(reads, CalendarSettingsRows.subtitle(for: .fullAccess))
         XCTAssertTrue(reads.contains("Read-only"))
         for refused in [CalendarAccess.denied, .writeOnly] {
-            XCTAssertTrue(CalendarSettingsRows.subtitle(for: refused).contains(CalendarSettingsRows.settingsPath), "\(refused)")
+            XCTAssertTrue(CalendarSettingsRows.subtitle(for: refused).contains("isn't allowed"), "\(refused)")
         }
+        XCTAssertTrue(CalendarSettingsRows.settingsPath.hasSuffix("Calendars → HITList"))
         XCTAssertTrue(CalendarSettingsRows.subtitle(for: .restricted).contains("restricted"))
     }
 
