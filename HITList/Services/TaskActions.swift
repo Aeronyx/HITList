@@ -400,6 +400,9 @@ enum TaskActions {
         guard (try? context.fetchCount(FetchDescriptor<TaskItem>())) == 0 else { return }
         let parser = QuickAddParser(now: now, weekStart: Preferences.weekStartWeekday())
         do {
+            // The Flipboard's own label first (green, its stable id), so "@flipboard" in a line finds it rather than
+            // making a grey one: a real store's switches come from the Flipboard and show it green.
+            _ = try Flipboard.label(in: context)
             for line in demoLines {
                 _ = try create(from: parser.parse(line), defaultProject: nil, defaultLabel: nil, in: context)
             }

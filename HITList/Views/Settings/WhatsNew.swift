@@ -20,6 +20,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.0", build: 21, items: [
+            "Switches are routines now: they stay on the Flipboard and never show up in Today. Turn on \"Overdue becomes task\" on a switch to have it wait in Today once it's due.",
+            "Switchboards group switches into routines like \"Before Bed\": tap New Switchboard at the foot of the Flipboard. Each resets daily or weekly at its own time, 4 AM unless you change it.",
+            "A switch can have a time: type \"Take meds 9pm\" in its card and it reminds you then.",
+            "Quick add reads \"every month on the 28th\", \"every first Monday\", \"every last day of the month\" and \"every March 3\". Update every device so they all read them.",
+            "Mac: the sidebar and toolbar look the same on every macOS. iPhone: Browse's last row clears the tab bar, and a swipe left deletes a Group. The bolt spins like a coin.",
+        ]),
         Entry(version: "0.9.0", build: 20, items: [
             "Shared tasks live in one Group, Shared Tasks: they look like your own, with your friends' pictures where labels go. Type #Shared to add one.",
             "The editor's title understands quick add: type \"tomorrow 5pm p1\" and watch the date and priority fill in.",

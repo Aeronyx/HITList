@@ -559,7 +559,7 @@ struct TaskPopout: View {
         return HITGroup {
             HITMenuRow(isMember ? "Remove from Flipboard" : "Add to Flipboard",
                        subtitle: isMember ? "Shows as a switch that turns red when it’s due."
-                                          : task.hasDueTime ? "A switch for this chore; drops its time of day." : "A switch for this chore that turns red when it’s due.",
+                                          : "A switch for this chore that turns red when it’s due.",
                        systemImage: "switch.2", iconTint: isMember ? Theme.secondaryText : PopoutTint.today, accessory: .none) {
                 if isMember {
                     Flipboard.remove(task, in: context)
