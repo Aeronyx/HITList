@@ -35,6 +35,7 @@
 | 75 | `motion-polish` | xhigh | An audit of every transition and small interaction, then repairs: cards, pickers, tabs, rows, controls, the Mac sidebar, the Flipboard |
 | 76 | `companions` | max | Two (perhaps three) original pixel creatures with idle loops and a rare flourish, the engine behind them, the Extras toggle |
 | 77 | `calendar-events` | high | The roadmap's item 8: read-only calendar events in Today and Upcoming, off by default |
+| 78 | `steady-bolt` | xhigh | Added the same evening on George's note: the bolt flickers on every background sync and a sync blip after the update read as an alarm; the bolt and every sync mark get inertia, and the blip's path through the code is traced |
 
 ## The supervisor's decisions (George: "work freely")
 - **Versions.** 0.9.1 next, then 0.0.1 at a time. A patch bump does send the public-link group's copy through Beta

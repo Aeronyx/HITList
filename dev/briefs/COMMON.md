@@ -66,7 +66,7 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
-## Round 17 (2026-11-10; briefs 74–77 in parallel, all four at once; `ROUND-17.md` says why)
+## Round 17 (2026-11-10; briefs 74–78 in parallel; `ROUND-17.md` says why)
 0.9.0 (21) is released; this round is **0.9.1** (each release bumps the version by 0.0.1 again). Sessions are Opus
 5.5 (commits end `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. **No
 schema change this round**: a fix that needs one stops and reports.
@@ -77,7 +77,9 @@ schema change this round**: a fix that needs one stops and reports.
   `MacSettingsPage`, `Views/Flipboard/*`. 76 `companions` (max) new `Views/Companions/*`, `Support/Companions/*`,
   one overlay line each in `SidebarSearchField`, `BrowseView`, the foot of `SidebarView`, the Extras toggle. 77
   `calendar-events` (high) new `Services/Calendar/*`, `Views/Calendar/*`, Today's section of `TaskListView`,
-  `Views/Upcoming/*`, `GeneralSettingsSection`, the Mac entitlement, the privacy page. Nobody: `scripts/`,
+  `Views/Upcoming/*`, `GeneralSettingsSection`, the Mac entitlement, the privacy page. 78 `steady-bolt` (xhigh,
+  added an hour into the round on George's note) the sync marks and what feeds them: `SyncState`, `SyncStatusViews`,
+  `CloudSyncMonitor`, `AccountWatch`, `Services/Sync/*`, the iCloud settings groups and the sync log view. Nobody: `scripts/`,
   `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's New pin, the models.
 - **`dev/ROADMAP.md` is the supervisor's.** Do not add a row; your report is the record. (Every earlier brief asked
   for a row, and the rows conflicted at every merge.)

@@ -13,6 +13,7 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 | 75 `motion-polish` | An audit of everything that moves (cards, pickers, tabs, rows, small controls), and fixes | in progress |
 | 76 `companions` | Two or three original pixel creatures in quiet corners, with idle loops and a rare flourish | in progress |
 | 77 `calendar-events` | Today's and the week's calendar events beside the tasks, read-only and off by default (the last open item of the original list, #8) | in progress |
+| 78 `steady-bolt` | The sync bolt keeps still while status is green and shows work or trouble only when it has lasted; a sync blip after an update no longer reads as an alarm | in progress |
 
 ## Next (in this order unless George says otherwise)
 
