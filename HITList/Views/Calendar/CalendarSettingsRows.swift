@@ -22,7 +22,7 @@ struct CalendarSettingsRows: View {
 
     var body: some View {
         Toggle(isOn: Binding(get: { isOn }, set: { switchTo($0) })) {
-            HITMenuRowLabel("Calendar events", subtitle: Self.subtitle(for: events.access), systemImage: "calendar.day.timeline.left")
+            HITMenuRowLabel("Calendar events", subtitle: Self.subtitle(for: events.access), systemImage: "calendar.badge.clock")
         }
         .toggleStyle(.hit)
         .hitRowPadding()
@@ -45,7 +45,7 @@ struct CalendarSettingsRows: View {
         if events.isShowing {
             // One child of the group, so no hairline cuts the row from its card.
             VStack(spacing: 0) {
-                HITMenuRow("Calendars", systemImage: "square.stack",
+                HITMenuRow("Calendars", systemImage: "checklist",
                            value: CalendarDay.selectionSummary(calendarIDs: events.calendars.map(\.id), hidden: events.hidden),
                            accessory: .expand(isExpanded: showsCalendars)) {
                     withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showsCalendars.toggle() }
@@ -178,7 +178,8 @@ private struct CalendarChoiceRow: View {
             }
             .padding(.horizontal, HITSpacing.m)
             .frame(minHeight: HITRowMetrics.minHeight - 4)
-            .background(hovering ? Theme.surface.opacity(0.6) : .clear)
+            // A step lighter than the elevated card, as a row on a surface lights to elevated.
+            .background(hovering ? Theme.separator.opacity(0.5) : .clear)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

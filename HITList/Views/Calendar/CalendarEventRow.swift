@@ -56,11 +56,15 @@ struct CalendarEventRow: View {
 }
 
 extension View {
-    /// A calendar event's place in a task list: a task row's insets and hairline, and nothing to select.
+    /// A calendar event's place in a task list: a task row's insets, hairline and background (the slate on iPhone,
+    /// as `completionRowBackground` gives task rows; the Mac's own row), and nothing to select.
     func calendarEventListRow(compact: Bool) -> some View {
         self
             .listRowInsets(ListMetrics.rowInsets(compact: compact))
             .listRowSeparatorTint(Theme.separator)
+            #if os(iOS)
+            .listRowBackground(Theme.background)
+            #endif
             .selectionDisabled()
     }
 }
