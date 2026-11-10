@@ -118,8 +118,8 @@ final class IntentsTests: XCTestCase {
     // MARK: Open screens
 
     func testOpenIntentsMapToTabsAndSidebarItems() {
-        XCTAssertEqual(HITScreen.allCases.map(\.mobileTab), [.today, .inbox, .upcoming])
-        XCTAssertEqual(HITScreen.allCases.map(\.sidebarItem), [.today, .inbox, .upcoming])
+        XCTAssertEqual(HITScreen.allCases.map(\.mobileTab), [.today, .inbox, .upcoming, .flipboard])
+        XCTAssertEqual(HITScreen.allCases.map(\.sidebarItem), [.today, .inbox, .upcoming, .flipboard])
     }
 
     func testOpenRequestWaitsForAShellAndIsTakenOnce() async throws {

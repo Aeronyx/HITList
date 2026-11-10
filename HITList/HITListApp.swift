@@ -57,6 +57,7 @@ struct HITListApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .font(HITType.body)
+                .deepLinkRouting() // brief 74: hitlist:// links from the widgets, through IntentRouter
                 #if os(macOS)
                 // Closing the window hides it, so the Dock icon brings it back at once (`MacWindowKeeper`).
                 .keepsWindowOnClose()
