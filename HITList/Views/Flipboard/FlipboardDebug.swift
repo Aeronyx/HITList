@@ -8,6 +8,21 @@ import HITListCore
 /// charger charged, a green switch, a long title and an overdue charger. Debug builds only, side stores only, once.
 @MainActor
 enum FlipboardDebug {
+    /// `-flipboardNow 2026-11-11T03:30` (local time): the board's clock reads that moment, for screenshots either
+    /// side of a Switchboard's reset (brief 72). Debug builds only; it changes what the board shows, not the store.
+    nonisolated static let nowArgument = "-flipboardNow"
+
+    nonisolated static var now: Date? { now(arguments: CommandLine.arguments) }
+
+    nonisolated static func now(arguments: [String], timeZone: TimeZone = .current) -> Date? {
+        guard let index = arguments.firstIndex(of: nowArgument), arguments.indices.contains(index + 1) else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        return formatter.date(from: arguments[index + 1])
+    }
+
     static let argument = "-seedFlipboardStates"
     /// The first switch it makes; its presence means the board was seeded already.
     static let marker = "Clean the litter box"

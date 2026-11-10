@@ -1017,12 +1017,35 @@ private final class RecordingIndex: SpotlightIndexing {
 
 /// Brief 59: the tip and the empty board say the rule in one sentence each.
 final class FlipboardWordsTests: XCTestCase {
-    func testTheTipAndTheEmptyBoardSayASwitchStaysOffTheListsUntilDue() {
-        let rule = "stays off your lists until it’s due"
-        XCTAssertTrue(HITTipKind.flipboard.message.contains(rule), HITTipKind.flipboard.message)
-        XCTAssertTrue(FlipboardView.emptyMessage.contains(rule), FlipboardView.emptyMessage)
+    /// Brief 72: the tip and the empty board say a switch is a routine, and the empty board how one becomes a task.
+    func testTheTipAndTheEmptyBoardSayASwitchIsARoutine() {
+        XCTAssertTrue(HITTipKind.flipboard.message.contains("A switch is a routine"), HITTipKind.flipboard.message)
+        XCTAssertTrue(FlipboardView.emptyMessage.contains("A switch is a routine, not a task"), FlipboardView.emptyMessage)
+        XCTAssertTrue(FlipboardView.emptyRule.contains("Overdue becomes task"))
         for text in [HITTipKind.flipboard.message, FlipboardView.emptyRule] {
             XCTAssertEqual(text.filter { $0 == "." }.count, 1, "one sentence: \(text)")
         }
+    }
+
+    /// Brief 72: someone whose switches came from before Switchboards (their red switches waited in Today) is told
+    /// they stay on the Flipboard now, and how to bring one back; everyone else gets the Flipboard's own tip.
+    func testTheTipForPeopleWhoseRedSwitchesWereInToday() {
+        let before = FlipboardTips.switchesStayFrom.addingTimeInterval(-86_400)
+        let after = FlipboardTips.switchesStayFrom.addingTimeInterval(3600)
+        XCTAssertEqual(FlipboardTips.kind(for: [after, before]), .switchesStay)
+        XCTAssertEqual(FlipboardTips.kind(for: [after]), .flipboard)
+        XCTAssertNil(FlipboardTips.kind(for: []))
+        XCTAssertTrue(HITTipKind.switchesStay.message.contains("Overdue becomes task"))
+        XCTAssertTrue(HITTip(.switchesStay, generation: 0).waitsUntilSettled)
+    }
+
+    func testTheDebugClockReadsTheFlipboardNowArgument() {
+        let utc = TimeZone(identifier: "UTC")!
+        let read = FlipboardDebug.now(arguments: ["HITList", "-flipboardNow", "2026-11-11T03:30"], timeZone: utc)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = utc
+        XCTAssertEqual(read, cal.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 3, minute: 30)))
+        XCTAssertNil(FlipboardDebug.now(arguments: ["HITList"]))
+        XCTAssertNil(FlipboardDebug.now(arguments: ["HITList", "-flipboardNow"]))
     }
 }

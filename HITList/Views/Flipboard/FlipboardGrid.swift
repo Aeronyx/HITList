@@ -5,10 +5,13 @@ extension FlipboardLayout {
     /// card, so the name, the quick choices and the dials have room.
     static let cardMinWidth: CGFloat = 300
 
-    /// How many columns the card takes in the grid: as few as give it `cardMinWidth`, never more than there are.
-    static func cardSpan(columns: Int, cellWidth: CGFloat, spacing: CGFloat) -> Int {
+    /// The Switchboard card's narrowest in place (brief 72): its reset row holds the time field and a weekday.
+    static let boardCardMinWidth: CGFloat = 380
+
+    /// How many columns the card takes in the grid: as few as give it `minWidth`, never more than there are.
+    static func cardSpan(columns: Int, cellWidth: CGFloat, spacing: CGFloat, minWidth: CGFloat = cardMinWidth) -> Int {
         guard columns > 1 else { return 1 }
-        for span in 1...columns where CGFloat(span) * cellWidth + CGFloat(span - 1) * spacing >= cardMinWidth {
+        for span in 1...columns where CGFloat(span) * cellWidth + CGFloat(span - 1) * spacing >= minWidth {
             return span
         }
         return columns

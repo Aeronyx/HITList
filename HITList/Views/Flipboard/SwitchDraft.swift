@@ -170,8 +170,7 @@ struct SwitchDraft: Equatable {
     /// How the card writes a time into a name, so the quick-add grammar reads it back: "21:00" where the clock is
     /// 24-hour, "9pm" and "7:30am" where it is 12-hour.
     static func timePhrase(_ time: PickerTime, locale: Locale = .current) -> String {
-        let format = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: locale) ?? "h a"
-        if format.contains("H") || format.contains("k") { return String(format: "%02d:%02d", time.hour, time.minute) }
+        if Flipboard.uses24HourClock(locale) { return String(format: "%02d:%02d", time.hour, time.minute) }
         let hour = time.hour % 12 == 0 ? 12 : time.hour % 12
         let suffix = time.hour < 12 ? "am" : "pm"
         return time.minute == 0 ? "\(hour)\(suffix)" : String(format: "%d:%02d%@", hour, time.minute, suffix)
