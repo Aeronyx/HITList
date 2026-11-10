@@ -137,6 +137,10 @@ private struct SplitContent: View {
     @State private var settingsSidebarShown = false
     /// Mac: the sidebar's search field and where it takes the window (brief 66).
     @State private var search = SidebarSearch()
+    #if os(macOS)
+    /// Mac: no text field takes the keyboard as the window opens or comes back (brief 70).
+    @State private var focusGuard = WindowFocusGuard()
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
@@ -196,6 +200,22 @@ private struct SplitContent: View {
         .focusedSceneValue(\.settingsRouter, settingsRouter)
         .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
         .onChange(of: settingsRouter.closeRequests) { _, _ in selection = beforeSettings ?? .today }
+        // The window's keyboard is the person's to give (brief 70): an open card or editor focuses its own title.
+        .environment(focusGuard)
+        .windowFocusGuard(focusGuard)
+        .onAppear {
+            let popouts = popouts
+            focusGuard.allowsTextFocus = { !popouts.state.showsAddButton }
+        }
+        #if DEBUG
+        // `-focusSearchAtLaunch YES`: the case macOS 27 showed, kept on purpose for screenshots.
+        .task {
+            guard SidebarSearch.focusesAtLaunch else { return }
+            focusGuard.isDisabled = true
+            try? await Task.sleep(for: .milliseconds(300))
+            search.focus()
+        }
+        #endif
         #endif
     }
 

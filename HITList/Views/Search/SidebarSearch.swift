@@ -58,6 +58,14 @@ final class SidebarSearch {
     }
 }
 
+#if DEBUG
+extension SidebarSearch {
+    /// Debug `-focusSearchAtLaunch YES` (brief 70): the field takes the keyboard as the window opens, as it did on
+    /// macOS 27.2, and the window's focus guard stands aside, so a screenshot shows the sidebar unchanged by it.
+    static var focusesAtLaunch: Bool { UserDefaults.standard.bool(forKey: "focusSearchAtLaunch") }
+}
+#endif
+
 extension EnvironmentValues {
     /// The window's sidebar search; nil on iPhone and iPad, which search in Browse, and in offscreen renders.
     @Entry var sidebarSearch: SidebarSearch?
