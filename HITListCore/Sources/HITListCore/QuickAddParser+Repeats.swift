@@ -26,18 +26,26 @@ extension QuickAddParser {
         }
         switch reader[i] {
         case "every":
-            // "every 28th"
+            // "every 28th", "every first Monday of the month", "every last day of the month"
             if let (place, n) = reader.monthPlace(at: i + 1, after: .nothing, ordinalOnly: true),
                let rule = RecurrenceRule(.monthly, place: place) {
                 return (rule, 1 + n + reader.ofTheMonth(at: i + 1 + n, every: false))
             }
             return nil
-        case "on", "the":
-            // "on the 28th of every month", "the 28th of each month"
+        case "on", "the", "end":
+            // "on the 28th of every month", "the 28th of each month", "end of every month",
+            // "the last day of every month", "the first Monday of each month"
             var j = i
             if reader[j] == "on" { j += 1 }
             if reader[j] == "the" { j += 1 }
-            guard let (place, n) = reader.monthPlace(at: j, after: .nothing) else { return nil }
+            let place: RecurrenceRule.Place, n: Int
+            if reader[j] == "end" {
+                (place, n) = (.lastDay, 1)
+            } else if let found = reader.monthPlace(at: j, after: .nothing) {
+                (place, n) = found
+            } else {
+                return nil
+            }
             let of = reader.ofTheMonth(at: j + n, every: true)
             guard of > 0, let rule = RecurrenceRule(.monthly, place: place) else { return nil }
             return (rule, j + n + of - i)
@@ -106,6 +114,14 @@ private struct PhraseReader {
         if self[j] == "the", lead == .on { j += 1 }
         guard let word = self[j] else { return nil }
         let next = self[j + 1]
+        // "first Monday", "2nd Tuesday", "last Friday"
+        if let ordinal = Self.weekOrdinal(word), let weekday = next.flatMap({ DateExpressionParser.weekdayNames[$0] }) {
+            return (.weekday(weekday, ordinal: ordinal), j + 2 - i)
+        }
+        // "last day", "first day"
+        if next == "day", let ordinal = Self.ordinalWords[word] ?? (Self.hasOrdinalSuffix(word) ? DateExpressionParser.dayNumber(word) : nil) {
+            return (ordinal == -1 ? .lastDay : .day(ordinal), j + 2 - i)
+        }
         // "28th", "1st", "28"; never "5 jan" (a date), "9 am" (a time) or "3 weeks"
         guard let day = DateExpressionParser.dayNumber(word), !ordinalOnly || Self.hasOrdinalSuffix(word) else { return nil }
         if let next, DateExpressionParser.monthNames[next] != nil || DateExpressionParser.unitDays(next) != nil

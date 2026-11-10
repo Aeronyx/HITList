@@ -139,6 +139,44 @@ final class RecurrencePlaceTests: XCTestCase {
         XCTAssertEqual(walk(other, from: Fixed.date(2026, 11, 15), 3), days([(2027, 1, 15), (2027, 3, 15), (2027, 5, 15)]))
     }
 
+    // MARK: Stepping: the month's ends and a weekday in the month
+
+    /// "last day" follows each month's own length, leap Februaries included.
+    func testLastDayFollowsEachMonthsLength() {
+        let rule = RecurrenceRule(frequency: .monthly, place: .lastDay)
+        XCTAssertEqual(walk(rule, from: Fixed.date(2027, 11, 30), 5),
+                       days([(2027, 12, 31), (2028, 1, 31), (2028, 2, 29), (2028, 3, 31), (2028, 4, 30)]))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2026, 1, 31), 1), days([(2026, 2, 28)]))
+        assertDate(rule.firstOccurrence(onOrAfter: Fixed.date(2026, 10, 21), calendar: cal), 2026, 10, 31)
+    }
+
+    func testFirstMondayStepsMonthByMonthAcrossTheYearEnd() {
+        let rule = RecurrenceRule(frequency: .monthly, place: .weekday(2, ordinal: 1))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2026, 11, 2, 9), 4),
+                       days([(2026, 12, 7), (2027, 1, 4), (2027, 2, 1), (2027, 3, 1)], 9))
+        assertDate(rule.firstOccurrence(onOrAfter: Fixed.date(2026, 10, 21), calendar: cal), 2026, 11, 2)
+    }
+
+    func testLastFridayAndSecondTuesday() {
+        let lastFriday = RecurrenceRule(frequency: .monthly, place: .weekday(6, ordinal: -1))
+        XCTAssertEqual(walk(lastFriday, from: Fixed.date(2026, 10, 30), 3), days([(2026, 11, 27), (2026, 12, 25), (2027, 1, 29)]))
+        let secondTuesday = RecurrenceRule(frequency: .monthly, place: .weekday(3, ordinal: 2))
+        XCTAssertEqual(walk(secondTuesday, from: Fixed.date(2026, 11, 10), 3), days([(2026, 12, 8), (2027, 1, 12), (2027, 2, 9)]))
+        // A task moved off its weekday comes back to it.
+        assertDate(secondTuesday.nextOccurrence(after: Fixed.date(2026, 11, 3), calendar: cal), 2026, 11, 10)
+    }
+
+    /// A month without a fifth Monday is skipped.
+    func testFifthMondaySkipsMonthsWithoutOne() {
+        let rule = RecurrenceRule(frequency: .monthly, place: .weekday(2, ordinal: 5))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2026, 11, 30), 3), days([(2027, 3, 29), (2027, 5, 31), (2027, 8, 30)]))
+    }
+
+    func testEveryOtherMonthOnTheFirstMonday() {
+        let rule = RecurrenceRule(frequency: .monthly, interval: 2, place: .weekday(2, ordinal: 1))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2026, 11, 2), 3), days([(2027, 1, 4), (2027, 3, 1), (2027, 5, 3)]))
+    }
+
     func testFirstOccurrence() {
         let on28 = RecurrenceRule(frequency: .monthly, place: .day(28))
         assertDate(on28.firstOccurrence(onOrAfter: Fixed.date(2026, 10, 21), calendar: cal), 2026, 10, 28)
