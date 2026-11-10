@@ -258,6 +258,15 @@ struct ListScreen: View {
     @Environment(PopoutController.self) private var popouts
 
     var body: some View {
+        #if os(macOS)
+        screen.macDetailToolbarBackground()
+        #else
+        screen
+        #endif
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         switch item {
         case .settings:
             MacSettingsPage()

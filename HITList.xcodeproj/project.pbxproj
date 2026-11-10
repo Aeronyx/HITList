@@ -235,6 +235,7 @@
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
 		C09211C77F010492FDC5B15F /* InboxText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD387014332B38314461584 /* InboxText.swift */; };
 		C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */; };
+		C3146E8D50618E05A74AB4F2 /* MacToolbarChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F937FFA18F7912D2028638D3 /* MacToolbarChrome.swift */; };
 		C5EA9C5C8300AC4BFFDBE6D7 /* flip.caf in Resources */ = {isa = PBXBuildFile; fileRef = 46C5F20012A7AE765F02805B /* flip.caf */; };
 		C93586D0536BE7984F2DDA89 /* SharedRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F042F45B4C75FB641635ECA0 /* SharedRow.swift */; };
 		C9900D3D916A62FDA1BDC0E2 /* DuoLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */; };
@@ -653,6 +654,7 @@
 		F65E2352DC18108A2E7F789F /* InboxProcessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessView.swift; sourceTree = "<group>"; };
 		F66A82D7D7E91AA9118B93C6 /* SwitchCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchCard.swift; sourceTree = "<group>"; };
 		F6E6CED5602E68567841C52F /* NotificationStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationStatus.swift; sourceTree = "<group>"; };
+		F937FFA18F7912D2028638D3 /* MacToolbarChrome.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacToolbarChrome.swift; sourceTree = "<group>"; };
 		FC9891D99B55E4B2BC8FF51B /* SchemaV4Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV4Models.swift; sourceTree = "<group>"; };
 		FCF9F197274239D4F4C42673 /* BoltSlamMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoltSlamMotion.swift; sourceTree = "<group>"; };
 		FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RareVisitor.swift; sourceTree = "<group>"; };
@@ -1267,6 +1269,7 @@
 			isa = PBXGroup;
 			children = (
 				55443FB133C7C3BCE6B285B0 /* MacSidebarRow.swift */,
+				F937FFA18F7912D2028638D3 /* MacToolbarChrome.swift */,
 				C9D467C47E42E2AAB3B343D7 /* WindowFocusGuard.swift */,
 			);
 			path = MacChrome;
@@ -1631,6 +1634,7 @@
 				6B7A998AA3C824DE1A2F1654 /* MacSettingsPage.swift in Sources */,
 				46E3CA552C5BA9E3EB324B94 /* MacSettingsSection.swift in Sources */,
 				17321C909FE8987289EB1395 /* MacSidebarRow.swift in Sources */,
+				C3146E8D50618E05A74AB4F2 /* MacToolbarChrome.swift in Sources */,
 				1319FFA3FBE71478A4F3121F /* MacWindowKeeper.swift in Sources */,
 				818B7609A1BA74F19A476E4F /* MobileShell.swift in Sources */,
 				32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */,
