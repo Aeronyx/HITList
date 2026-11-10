@@ -200,8 +200,10 @@ struct BrowseView: View {
             }
         }
         .listStyle(.insetGrouped)
-        // The chips sit just under the field, not a grouped list's full top gap away.
-        .contentMargins(.top, 0, for: .scrollContent)
+        // The chips sit just under the field, not a grouped list's full top gap away. `.automatic`, the placement
+        // `MobileShell` sets its bottom margin for: a `.scrollContent` margin here (0.8.1 to 0.9.0) took the place of
+        // the shell's whole margin for this list, so its last row ended behind the island and the "+" (brief 73).
+        .contentMargins(.top, 0, for: .automatic)
         .slateList()
         .scrollDismissesKeyboard(.immediately)
     }
