@@ -148,7 +148,14 @@ struct FlipboardView: View {
                             ForEach(Array(zip(boards, onBoards)), id: \.0.id) { board, onBoard in
                                 section(board, switches: onBoard, tip: tip, tipID: tipID)
                             }
-                            if boardCard == .new { inlineBoardCard(.new) }
+                            if boardCard == .new {
+                                inlineBoardCard(.new)
+                            } else {
+                                // The way to a first Switchboard that everyone can see: on iPhone the menu's New
+                                // Switchboard… sits behind a long press on the sound button.
+                                NewSwitchboardRow { openBoardCard(.new) }
+                                    .allowsHitTesting(!hasInlineCard)
+                            }
                         }
                         .padding(16)
                         .animation(.snappy(duration: 0.35), value: switches.map(\.id))
@@ -186,9 +193,9 @@ struct FlipboardView: View {
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // Adding lives in the grid (`AddSwitchTile`, a board's "+"); the toolbar's control is the flip sound. Add
-        // Switch… and New Switchboard… are second routes: in the "…" on the Mac and iPad, a long press on the sound
-        // button on iPhone.
+        // Adding lives on the board (`AddSwitchTile`, a board's "+", `NewSwitchboardRow` at its foot); the toolbar's
+        // control is the flip sound. Add Switch… and New Switchboard… are second routes: in the "…" on the Mac and
+        // iPad, a long press on the sound button on iPhone.
         .screenChrome {
             ScreenOptionButton { soundOn.toggle() } label: {
                 Label(soundOn ? "Flip sound on" : "Flip sound off", systemImage: soundOn ? "speaker.wave.2" : "speaker.slash")
@@ -530,6 +537,28 @@ struct SwitchboardHeader: View {
             Divider()
             Button(role: .destructive, action: onDelete) { Label("Delete…", systemImage: "trash") }
         }
+    }
+}
+
+/// "+ New Switchboard" at the foot of the board, drawn like a list's "Add task" row: a quiet line, never a tile.
+struct NewSwitchboardRow: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: HITSpacing.s) {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Theme.accent)
+                Text("New Switchboard").foregroundStyle(Theme.secondaryText)
+                Spacer(minLength: 0)
+            }
+            .font(HITType.body)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("A group of switches that resets daily or weekly, like Before Bed")
+        .accessibilityIdentifier("newSwitchboardRow")
     }
 }
 

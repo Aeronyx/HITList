@@ -155,4 +155,34 @@ final class SharedCountsTests: XCTestCase {
                        "due today, overdue, both opted-in red switches once each, and the shared task; not the green switch, nor the one that didn't opt in")
         XCTAssertEqual(SidebarCounts.inbox(open, shared: rows, now: realNow), open.filter(\.isInInbox).count + 1)
     }
+
+    /// A Group's and a label's count are the rows their screens list (round 16): a switch counts only once it is
+    /// opted in and due; the `flipboard` label's own count is every switch.
+    func testGroupAndLabelCountsLeaveOutSwitchesThatAreNotListed() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let realNow = Date()
+        let realToday = Calendar.current.startOfDay(for: realNow)
+        let twoDaysAgo = Calendar.current.date(byAdding: .day, value: -2, to: realToday)
+        let home = Project(name: "Home")
+        let flipboard = TaskLabel(name: "flipboard")
+        let chores = TaskLabel(name: "chores")
+        context.insert(home); context.insert(flipboard); context.insert(chores)
+        let task = TaskItem(title: "fix the tap", project: home, labels: [chores])
+        let quiet = TaskItem(title: "stretch", dueDate: twoDaysAgo, project: home, labels: [flipboard, chores],
+                             recurrence: RecurrenceRule(frequency: .weekly))
+        let optedIn = TaskItem(title: "plants", dueDate: twoDaysAgo, project: home, labels: [flipboard, chores],
+                               recurrence: RecurrenceRule(frequency: .weekly))
+        optedIn.overdueBecomesTask = true
+        let green = TaskItem(title: "filter", dueDate: Calendar.current.date(byAdding: .day, value: 3, to: realToday),
+                             project: home, labels: [flipboard, chores], recurrence: RecurrenceRule(frequency: .monthly))
+        green.overdueBecomesTask = true
+        for item in [task, quiet, optedIn, green] { context.insert(item) }
+        try context.save()
+
+        let open = try context.fetch(FetchDescriptor<TaskItem>()).filter { !$0.isCompleted }
+        XCTAssertEqual(SidebarCounts.group(open, id: home.id, now: realNow), 2, "the task and the opted-in red switch")
+        XCTAssertEqual(SidebarCounts.label(open, chores, now: realNow), 2)
+        XCTAssertEqual(SidebarCounts.label(open, flipboard, now: realNow), 3, "the flipboard label counts every switch")
+    }
 }

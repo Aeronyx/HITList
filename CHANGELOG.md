@@ -5,6 +5,40 @@ refuses to run until the version has a section here, then stamps the heading wit
 2026-11-10 the version stays 0.9.0 and a release is a new build of it: `scripts/release.sh --quick` refuses to run
 until the build has a section headed `## 0.9.0 (N)`, then stamps that heading with the date.
 
+## 0.9.0 (21)
+
+George's and a friend's notes on 0.9.0, in four sessions at once: the Mac drawn the same on macOS 26 and 27,
+Switchboards and routine switches, monthly and yearly repeats in quick add, Browse's last row and swipe to delete, and
+the bolt's coin spin. The version stays 0.9.0 from here on; each release is a new build with a section of its own.
+
+- Switches are routines now. They stay on the Flipboard, green or red, and never show in Today, the Inbox, search, the
+  badge or the morning summary. Turn on "Overdue becomes task" on a switch, or on a whole Switchboard, to have it wait
+  in Today once it's due. Before this build every red switch was one of today's tasks.
+- Switchboards group switches into routines such as "Before Bed" or "Deep Clean". Each resets daily or weekly at its
+  own time (4 AM for a new one), so a switch flipped at 11 pm stays green until morning. "New Switchboard" is at the foot
+  of the Flipboard; a board's name opens its card (name, Daily or Weekly, the reset time, the toggle, Delete…) and its
+  "+" adds a switch to it. Deleting a board asks whether its switches stay on the Flipboard or go with it.
+- A switch can have a time: type "Take meds 9pm" in the switch card. It shows on the switch, sorts its board and
+  reminds you then.
+- Quick add reads repeats on a day ("every month on the 28th", "every 28th", "every 3 months on the 10th",
+  "quarterly"), the month's ends and weekdays ("every last day of the month", "every first Monday", "every last
+  Friday", "every 2nd Tuesday") and dates in the year ("every year on Mar 3", "every March 3"), each as one highlight.
+  A repeat shows its day: "Monthly on the 28th", "First Monday of the month", "Yearly on Mar 3". Update every device: a
+  build before this one reads the weekday repeats as plain "every month".
+- Mac: HITList draws what macOS used to decide, so the window looks the same on macOS 26 and 27. The sidebar's rows
+  and selection are ours (the selected list stays accent-filled while you type in Search or the window is in the
+  background), the toolbar is the list's own slate with no grey band and no dark strip behind the first header, and the
+  view-options pill and the sidebar toggle are drawn by the app. Nothing takes the keyboard when the window opens. On
+  macOS 27 the sidebar still sits flush with the window's edge where 26 floats it: that shape is the system's.
+- Browse's last row (Settings) no longer hides behind the tab bar on iPhone. Swipe left on a Group or a label in
+  Browse to delete it; a Group with tasks still asks first, from a full swipe too.
+- The sync bolt's twirl is a coin spin: as it hops it turns about its upright axis and for an instant shows only its
+  edge. The slam, the warp and the sparks are as they were.
+- Group and label counts leave out switches that aren't listed. The editor's "Add to Flipboard" no longer says a switch
+  drops its time.
+- CloudKit schema V6: a `Switchboard` record type, and `switchboard` and `overdueBecomesTask` on a task. Deployed to
+  Production before this build.
+
 ## 0.9.0 — build 20, 2026-11-08
 
 George's notes on 0.8.1, in six sessions at once and the day's fixes: shared tasks as one Group that looks like your

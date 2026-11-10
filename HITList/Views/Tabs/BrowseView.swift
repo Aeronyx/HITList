@@ -138,7 +138,7 @@ struct BrowseView: View {
                 ForEach(projects) { project in
                     link(.project(project.id)) {
                         BrowseRow(title: project.name, symbol: "circle.fill", tint: Color(hex: project.colorHex),
-                                  count: open.filter { $0.project?.id == project.id }.count, smallIcon: true)
+                                  count: SidebarCounts.group(open, id: project.id), smallIcon: true)
                     }
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
@@ -167,7 +167,7 @@ struct BrowseView: View {
                 ForEach(labels) { label in
                     link(.label(label.id)) {
                         BrowseRow(title: label.name, symbol: "tag.fill", tint: Color(hex: label.colorHex),
-                                  count: open.filter { $0.labelList.contains { $0.id == label.id } }.count)
+                                  count: SidebarCounts.label(open, label))
                     }
                     .contextMenu {
                         Button("Edit Label…") { editingLabel = label }

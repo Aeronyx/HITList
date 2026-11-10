@@ -106,7 +106,7 @@ struct SidebarView: View {
                         HStack {
                             Text(project.name)
                             Spacer()
-                            let n = openTasks.filter { $0.project?.id == project.id }.count
+                            let n = SidebarCounts.group(openTasks, id: project.id)
                             if n > 0 { Text("\(n)").foregroundStyle(.secondary).monospacedDigit() }
                         }
                     } icon: {
@@ -273,7 +273,7 @@ struct SidebarView: View {
 
     private func macProjectRow(_ project: Project, index: Int) -> some View {
         let item = SidebarItem.project(project.id)
-        let count = openTasks.filter { $0.project?.id == project.id }.count
+        let count = SidebarCounts.group(openTasks, id: project.id)
         return selectable(item) {
             MacSidebarRow(title: project.name, isSelected: selection == item) {
                 Image(systemName: "circle.fill").foregroundStyle(Color(hex: project.colorHex)).imageScale(.small)
@@ -545,5 +545,20 @@ enum SidebarCounts {
 
     static func inbox(_ open: [TaskItem], shared: SharedRows, now: Date = Date()) -> Int {
         open.filter { !$0.isCompleted && TaskOrdering.isInInbox($0, now: now) }.count + shared.inboxCount(now: now)
+    }
+
+    /// A Group's count: its open tasks as its screen lists them, so a switch counts only while it is listed
+    /// (brief 72: never by default, as today's task once an opted-in one is due).
+    static func group(_ open: [TaskItem], id: UUID, now: Date = Date()) -> Int {
+        open.filter { $0.project?.id == id && FlipboardSwitch.listing(for: $0, now: now) != .hidden }.count
+    }
+
+    /// A label's count, the same way. The `flipboard` label itself counts every switch, as its screen shows them.
+    static func label(_ open: [TaskItem], _ label: TaskLabel, now: Date = Date()) -> Int {
+        let seesSwitches = FlipboardSwitch.hasLabel([label.name])
+        return open.filter { task in
+            task.labelList.contains { $0.id == label.id }
+                && (seesSwitches || FlipboardSwitch.listing(for: task, now: now) != .hidden)
+        }.count
     }
 }
