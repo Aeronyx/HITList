@@ -41,6 +41,8 @@ final class BrowseUITests: XCTestCase {
         openBrowse()
         let settings = app.buttons["browse-settings-row"].firstMatch
         XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        // The top is as it was: the chips just under the field.
+        snapshot("Browse at the top, empty store")
         scrollToEnd()
         snapshot("Browse at its end, empty store")
         assertClearOfTheChrome(settings, "Browse's Settings row")
