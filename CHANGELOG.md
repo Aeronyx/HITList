@@ -5,7 +5,7 @@ refuses to run until the version has a section here, then stamps the heading wit
 2026-11-10 the version stays 0.9.0 and a release is a new build of it: `scripts/release.sh --quick` refuses to run
 until the build has a section headed `## 0.9.0 (N)`, then stamps that heading with the date.
 
-## 0.9.0 (21)
+## 0.9.0 (21) — 2026-11-10
 
 George's and a friend's notes on 0.9.0, in four sessions at once: the Mac drawn the same on macOS 26 and 27,
 Switchboards and routine switches, monthly and yearly repeats in quick add, Browse's last row and swipe to delete, and
