@@ -239,16 +239,40 @@ final class SettingsTests: XCTestCase {
     }
 
     func testWhatsNewCoversThisVersion() throws {
-        let versions = WhatsNew.entries.map(\.version)
-        XCTAssertEqual(versions, versions.sorted { WhatsNew.isNewer($0, than: $1) }, "newest first")
-        XCTAssertEqual(Set(versions).count, versions.count)
+        let entries = WhatsNew.entries
+        XCTAssertEqual(entries, entries.sorted { WhatsNew.isNewer($0, than: $1) }, "newest first")
+        XCTAssertEqual(Set(entries.map(\.id)).count, entries.count)
         let current = try XCTUnwrap(WhatsNew.current)
-        XCTAssertFalse(WhatsNew.isNewer(AppInfo.version, than: current.version),
-                       "add a What's new entry for \(AppInfo.version)")
+        // `release.sh` runs this with the new build number: a release without its lines stops here.
+        XCTAssertFalse(WhatsNew.isBehind(version: AppInfo.version, build: AppInfo.build),
+                       "add a What's New entry for \(AppInfo.versionLabel)")
         XCTAssertFalse(current.items.isEmpty)
-        XCTAssertEqual(current.version, "0.9.0", "this round's list")
+        XCTAssertEqual(current.label, "0.9.0 (20)", "this round's list")
         XCTAssertTrue(WhatsNew.isNewer("0.10.0", than: "0.9.1"))
         XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
+    }
+
+    /// The version stays 0.9.0 and each release is a new build (George, 2026-11-10): entries are told apart by build.
+    func testWhatsNewTellsBuildsOfOneVersionApart() {
+        let build21 = WhatsNew.Entry(version: "0.9.0", build: 21, items: ["a"])
+        let build20 = WhatsNew.Entry(version: "0.9.0", build: 20, items: ["b"])
+        let older = WhatsNew.Entry(version: "0.8.1", items: ["c"])
+        XCTAssertEqual(build21.label, "0.9.0 (21)")
+        XCTAssertEqual(older.label, "0.8.1")
+        XCTAssertNotEqual(build21.id, build20.id)
+        XCTAssertTrue(WhatsNew.isNewer(build21, than: build20))
+        XCTAssertFalse(WhatsNew.isNewer(build20, than: build21))
+        XCTAssertTrue(WhatsNew.isNewer(build20, than: older))
+        XCTAssertTrue(WhatsNew.isNewer(WhatsNew.Entry(version: "0.10.0", items: []), than: build21))
+
+        // The running build against the newest entry.
+        XCTAssertFalse(WhatsNew.isBehind(version: "0.9.0", build: "20", newest: build21), "a development build")
+        XCTAssertFalse(WhatsNew.isBehind(version: "0.9.0", build: "21", newest: build21))
+        XCTAssertTrue(WhatsNew.isBehind(version: "0.9.0", build: "22", newest: build21), "a build without its lines")
+        XCTAssertTrue(WhatsNew.isBehind(version: "0.10.0", build: "22", newest: build21))
+        XCTAssertFalse(WhatsNew.isBehind(version: "0.8.1", build: "30", newest: older), "one build per version, as before")
+        XCTAssertTrue(WhatsNew.isBehind(version: "0.9.0", build: "21", newest: nil))
+        XCTAssertEqual(WhatsNewPopoutModel.versionTitle(build21), "Version 0.9.0 (21)")
     }
 
     @MainActor

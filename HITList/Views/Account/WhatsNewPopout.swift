@@ -20,8 +20,8 @@ enum WhatsNewPopoutModel {
     /// Every older entry, newest first.
     static func earlier(_ entries: [WhatsNew.Entry]) -> [WhatsNew.Entry] { Array(entries.dropFirst()) }
 
-    /// "Version 0.7.0".
-    static func versionTitle(_ entry: WhatsNew.Entry) -> String { "Version \(entry.version)" }
+    /// "Version 0.7.0", or "Version 0.9.0 (21)" for a build of a version that has several.
+    static func versionTitle(_ entry: WhatsNew.Entry) -> String { "Version \(entry.label)" }
 }
 
 struct WhatsNewPopout: View {

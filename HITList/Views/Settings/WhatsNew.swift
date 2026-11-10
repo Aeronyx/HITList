@@ -1,17 +1,26 @@
 import SwiftUI
 
-/// Settings → About → "What's new": a short hand-written list per version. Add an entry for each
-/// release, newest first. The sheet shows the newest entry: a released build's own version, or in a
-/// development build (still numbered like the last release) the version being worked on.
+/// Settings → About → "What's new": a short hand-written list per release. Add an entry for each
+/// release, newest first. The sheet shows the newest entry: a released build's own, or in a
+/// development build (still numbered like the last release) the one being worked on.
+///
+/// From 0.9.0 (21) the version stays put and every release is a new build of it (George, 2026-11-10: a new
+/// version sends the testers' build back to Beta App Review), so an entry carries its build number and reads
+/// "0.9.0 (21)". The versions before that had one build each and carry none.
 enum WhatsNew {
     struct Entry: Identifiable, Equatable {
         let version: String
+        /// The build these lines shipped in, for builds that share a version; nil for a version with one build.
+        var build: Int? = nil
         let items: [String]
-        var id: String { version }
+        var id: String { label }
+
+        /// "0.9.0 (21)", the form TestFlight and the profile menu use, or "0.8.1" for a version with one build.
+        var label: String { build.map { AppInfo.label(version: version, build: String($0)) } ?? version }
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.9.0", items: [
+        Entry(version: "0.9.0", build: 20, items: [
             "Shared tasks live in one Group, Shared Tasks: they look like your own, with your friends' pictures where labels go. Type #Shared to add one.",
             "The editor's title understands quick add: type \"tomorrow 5pm p1\" and watch the date and priority fill in.",
             "Larger, lighter rows. Mac: a Search field above Inbox (⌘F), one \"+\" capsule, and the date and Group cards show again.",
@@ -118,9 +127,25 @@ enum WhatsNew {
         ]),
     ]
 
-    /// The newest entry; `release.sh` refuses a version without a CHANGELOG section, and the test
-    /// `testWhatsNewCoversThisVersion` fails when this list falls behind the running version.
+    /// The newest entry; `release.sh` refuses a release without a CHANGELOG section, and the test
+    /// `testWhatsNewCoversThisVersion` fails when this list falls behind the running build (`isBehind`).
     static var current: Entry? { entries.first }
+
+    /// Whether `a` is a later release than `b`: a later version, or a later build of the same one.
+    static func isNewer(_ a: Entry, than b: Entry) -> Bool {
+        if a.version != b.version { return isNewer(a.version, than: b.version) }
+        return (a.build ?? 0) > (b.build ?? 0)
+    }
+
+    /// Whether the running app is newer than the newest entry: a later version, or a later build of the entry's
+    /// version when the entry names its build. The release's preflight runs with the new build number, so a
+    /// release without its lines here fails before anything is uploaded.
+    static func isBehind(version: String, build: String, newest: Entry? = current) -> Bool {
+        guard let newest else { return true }
+        if version != newest.version { return isNewer(version, than: newest.version) }
+        guard let covered = newest.build, let running = Int(build) else { return false }
+        return running > covered
+    }
 
     /// Whether `a` is a later version than `b` ("0.10.0" after "0.9.1").
     static func isNewer(_ a: String, than b: String) -> Bool {
@@ -137,7 +162,7 @@ struct WhatsNewSheet: View {
         HITSheetChrome("What's New", primaryTitle: "Done", cancelTitle: nil, background: Theme.background,
                        onPrimary: { dismiss() }) {
             if let entry {
-                HITGroup("Version \(entry.version)") {
+                HITGroup("Version \(entry.label)") {
                     WhatsNewItems(entry: entry)
                 }
             }
