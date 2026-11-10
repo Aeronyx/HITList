@@ -7,7 +7,8 @@ import HITListCore
 /// glass at the top right (brief 35; the gear there opens Settings): the search field on top, the saved
 /// filters as a row of chips under it (brief 61), then Groups (Inbox first, the default grey Group, then each
 /// Group in its colour with its open count, Shared Tasks last, brief 64) and Labels, each header with its "+", then
-/// Completed and Settings (`lastRows`; the Flipboard is a tab).
+/// Completed and Settings (`lastRows`; the Flipboard is a tab). A Group or a label swipes left to Delete (brief 73;
+/// `SidebarItem.swipesToDelete`), through its menu's path.
 /// Who this is sits at the top left beside the Back chevron (`BrowseProfileButton`, brief 40) and opens the
 /// profile menu (`BrowseProfileMenu`, brief 53): Account settings… (the Settings sheet, whose first group is
 /// Account), What's New, Send Beta Feedback… and the version.
@@ -143,6 +144,8 @@ struct BrowseView: View {
                         Button("Edit Group…") { editingProject = project }
                         Button("Delete", role: .destructive) { askToDelete(project) }
                     }
+                    // Swipe left: the same Delete, so a Group with tasks still asks (brief 73).
+                    .modifier(SwipeToDelete(item: .project(project.id)) { askToDelete(project) })
                     .groupDeletionDialog($deletingProject, for: project) { delete($0) }
                 }
                 // Long-press and drag a Group to a new place (brief 57), as in the Mac sidebar.
@@ -170,6 +173,8 @@ struct BrowseView: View {
                         Button("Edit Label…") { editingLabel = label }
                         Button("Delete", role: .destructive) { delete(label) }
                     }
+                    // Swipe left deletes it at once, as its menu does (brief 73).
+                    .modifier(SwipeToDelete(item: .label(label.id)) { delete(label) })
                 }
             } header: {
                 SidebarSectionHeader(title: "Labels") { creatingLabel = true }
@@ -324,9 +329,12 @@ struct BrowseView: View {
 
     // MARK: - Deleting
 
-    /// A Group with tasks asks first; an empty one goes at once.
+    /// A Group with tasks asks first; an empty one goes at once. From its menu and from a swipe.
     private func askToDelete(_ project: Project) {
-        if let question = GroupDeletion(project: project) { deletingProject = question } else { delete(project) }
+        switch GroupDeletion.request(for: project) {
+        case .ask(let question): deletingProject = question
+        case .now: delete(project)
+        }
     }
 
     private func delete(_ project: Project) {
