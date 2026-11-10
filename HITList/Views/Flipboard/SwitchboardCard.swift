@@ -181,8 +181,8 @@ struct SwitchboardCard: View {
                 Button("Delete Switchboard…", role: .destructive) {
                     withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDelete = true }
                 }
-                .buttonStyle(HITButtonStyle(.ghost, size: .small))
-                .foregroundStyle(HITColor.danger)
+                .buttonStyle(HITButtonStyle(.destructive, size: .small))
+                .disabled(confirmingDelete)
                 .accessibilityIdentifier("switchboardDelete")
             }
             Spacer(minLength: HITSpacing.s)
@@ -246,8 +246,8 @@ struct SwitchboardDeleteRow: View {
                     .font(HITType.body)
                     .foregroundStyle(HITColor.text)
                 if count > 0 {
-                    Text(count == 1 ? "Its switch can stay on the Flipboard, or go with it, from every device."
-                         : "Its \(count) switches can stay on the Flipboard, or go with it, from every device.")
+                    Text(count == 1 ? "Its switch can stay on the Flipboard, or be deleted with it on all your devices."
+                         : "Its \(count) switches can stay on the Flipboard, or be deleted with it on all your devices.")
                         .font(HITType.caption)
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
