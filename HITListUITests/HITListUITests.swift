@@ -391,39 +391,32 @@ final class HITListUITests: XCTestCase {
         snapshot("Second card")
     }
 
-    /// Brief 59 on iPhone, from the demo week's two switches (both red: never flipped). Flipping one from its
-    /// Today row turns it green and it leaves Today, the Inbox and Upcoming; a long press on a tile opens the
-    /// switch's menu and every item works; Delete takes a switch off the board and Today at once, with Undo.
-    func testFlipboardSwitchesStayOffTheListsUntilDue() throws {
+    /// Briefs 59 and 72 on iPhone, from the demo week's two loose switches (both red: never flipped). A switch is
+    /// never a task by default: neither is in Today, the Inbox or Upcoming. "Overdue becomes task" on one (from its
+    /// card) brings it to Today as today's task; flipping it from its Today row turns it green and it leaves. A long
+    /// press on a tile opens the switch's menu and every item works; Delete takes a switch off the board at once,
+    /// with Undo.
+    func testFlipboardSwitchesStayOnTheBoardUnlessTheyOptIn() throws {
         app.launchArguments += ["-seedDemoData"]
         app.launch()
         let water = "Water the plants", recycling = "Take out the recycling"
 
-        // Today: both red switches, as today's tasks.
+        // Today, the Inbox and Upcoming: no switch, red or green, loose or on a board.
         XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 15))
         app.buttons["tab-today"].tap()
-        XCTAssertTrue(text(water).waitForExistence(timeout: 10))
-        XCTAssertTrue(text(recycling).exists)
-        XCTAssertFalse(text("Overdue").exists)
-        snapshot("1 Today: two red switches")
-
-        // Completing a red switch's row flips it: the toast says so, the row leaves Today.
-        let row = app.cells.containing(NSPredicate(format: "label == %@", recycling)).firstMatch
-        row.buttons["Flip switch"].tap()
-        XCTAssertTrue(text("Flipped ‘\(recycling)’").waitForExistence(timeout: 3), "the toast says Flipped")
-        snapshot("2 Flipped from its Today row")
-        XCTAssertTrue(text(recycling).waitForNonExistence(timeout: 8), "green: gone from Today")
-
-        // Green is on the Flipboard only; red is in the Inbox as a today task; Upcoming shows neither.
+        XCTAssertTrue(text("Buy groceries").waitForExistence(timeout: 10))
+        for title in [water, recycling, "Take meds", "Read 20 minutes", "Clean the bathroom"] {
+            XCTAssertFalse(text(title).exists, "\(title) stays on the Flipboard")
+        }
+        snapshot("1 Today: no switches")
         tab("inbox")
-        XCTAssertTrue(text(water).waitForExistence(timeout: 5))
+        sleep(1)
+        XCTAssertFalse(text(water).exists)
         XCTAssertFalse(text(recycling).exists)
-        snapshot("3 Inbox: the red switch only")
         tab("upcoming")
         sleep(1)
         XCTAssertFalse(text(water).exists)
         XCTAssertFalse(text(recycling).exists)
-        snapshot("4 Upcoming: no switches")
 
         // The board: a long press opens the menu (red: Flip first; nothing to flip back).
         tab("flipboard")
@@ -432,58 +425,68 @@ final class HITListUITests: XCTestCase {
             XCTAssertTrue(app.buttons[item].exists, item)
         }
         XCTAssertFalse(app.buttons["Flip back to red"].isEnabled, "a red switch with no flip has nothing to undo")
-        snapshot("5 Long press on a red switch")
+        snapshot("2 Long press on a red switch")
         app.buttons["Edit task…"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForExistence(timeout: 5), "the task editor")
-        snapshot("6 Edit task…")
         app.buttons["Close"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForNonExistence(timeout: 5))
 
-        // Brief 69: the interval, flips and name are one item, the switch card, filled in.
+        // Edit switch…: the switch card, filled in; Overdue becomes task on.
         openMenu(water)
         app.buttons["Edit switch…"].tap()
         let switchName = app.descendants(matching: .any)["switchName"].firstMatch
         XCTAssertTrue(switchName.waitForExistence(timeout: 5), "the switch card")
-        app.buttons["switchClose"].tap()
-        XCTAssertTrue(switchName.waitForNonExistence(timeout: 5), "unchanged: × closes it at once")
+        let optIn = app.switches["switchOverdueToggle"].exists ? app.switches["switchOverdueToggle"]
+            : app.descendants(matching: .any)["switchOverdueToggle"].firstMatch
+        XCTAssertTrue(optIn.waitForExistence(timeout: 3), "Overdue becomes task")
+        optIn.tap()
+        snapshot("3 The switch card, Overdue becomes task on")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(switchName.waitForNonExistence(timeout: 5))
 
-        // Green: Mark done is there; Flip back to red turns it red again.
-        openMenu(recycling)
-        XCTAssertTrue(app.buttons["Mark done"].exists)
-        snapshot("7 Long press on a green switch")
-        app.buttons["Flip back to red"].tap()
-        // And the red one flips from its menu.
+        // Opted in, it is today's task, never overdue; the other switch still isn't.
+        tab("today")
+        XCTAssertTrue(text(water).waitForExistence(timeout: 5), "opted in: in Today")
+        XCTAssertFalse(text(recycling).exists, "not opted in: on the Flipboard only")
+        XCTAssertFalse(text("Overdue").exists)
+        snapshot("4 Today: the opted-in switch")
+        let row = app.cells.containing(NSPredicate(format: "label == %@", water)).firstMatch
+        row.buttons["Flip switch"].tap()
+        XCTAssertTrue(text("Flipped ‘\(water)’").waitForExistence(timeout: 3), "the toast says Flipped")
+        XCTAssertTrue(text(water).waitForNonExistence(timeout: 8), "green: gone from Today")
+        snapshot("5 Flipped from its Today row")
+
+        // Green: Mark done is there; Flip back to red brings it back to Today (it opted in).
+        tab("flipboard")
         openMenu(water)
+        XCTAssertTrue(app.buttons["Mark done"].exists)
+        app.buttons["Flip back to red"].tap()
+        // And the other flips from its menu.
+        openMenu(recycling)
         app.buttons["Flip"].tap()
         sleep(1)
         tab("today")
-        XCTAssertTrue(text(recycling).waitForExistence(timeout: 5), "flipped back to red: in Today again")
-        XCTAssertFalse(text(water).exists, "flipped from its menu: green, gone from Today")
-        snapshot("8 Today after the menu's flips")
+        XCTAssertTrue(text(water).waitForExistence(timeout: 5), "flipped back to red: in Today again")
+        XCTAssertFalse(text(recycling).exists)
 
-        // Delete: off the board at once, with Undo; then for good, and gone from Today.
+        // Delete: off the board at once, with Undo; then for good.
         tab("flipboard")
         openMenu(recycling)
         app.buttons["Delete"].tap()
         XCTAssertTrue(text("Deleted ‘\(recycling)’").waitForExistence(timeout: 3), "the undo toast")
         XCTAssertTrue(switchTile(recycling).waitForNonExistence(timeout: 3), "the tile goes at once")
-        snapshot("9 Deleted, with Undo")
         app.buttons["Deleted ‘\(recycling)’, Undo"].tap()
         XCTAssertTrue(switchTile(recycling).waitForExistence(timeout: 3), "Undo brings it back")
         openMenu(recycling)
         app.buttons["Delete"].tap()
         XCTAssertTrue(switchTile(recycling).waitForNonExistence(timeout: 3))
-        tab("today")
-        sleep(1)
-        XCTAssertFalse(text(recycling).exists, "deleted: gone from Today")
-        snapshot("10 Today after Delete")
 
-        // Remove from Flipboard: the last tile goes; the board shows its empty state.
-        tab("flipboard")
+        // Remove from Flipboard: the tile goes, and Today with it.
         openMenu(water)
         app.buttons["Remove from Flipboard"].tap()
         XCTAssertTrue(switchTile(water).waitForNonExistence(timeout: 3))
-        snapshot("11 Board after Remove")
+        snapshot("6 Board after Remove: the Switchboards stay")
+        XCTAssertTrue(app.buttons["Before Bed"].exists || text("Before Bed").exists)
     }
 
     /// Brief 69 on iPhone: a switch added from the small card in a few seconds, its interval typed and then
@@ -785,7 +788,7 @@ final class HITListUITests: XCTestCase {
         XCTAssertTrue(switchTile("Clean the litter box").waitForExistence(timeout: 10))
         sleep(1)
         tab("today")
-        XCTAssertTrue(text("Water the plants").waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Buy groceries").waitForExistence(timeout: 10))
         sleep(1)
         let start = Date()
         app.buttons["tab-flipboard"].tap()
@@ -801,7 +804,7 @@ final class HITListUITests: XCTestCase {
 
         // Every switch and the + tile: one width, one height.
         let tiles = app.descendants(matching: .any).matching(identifier: "flipSwitchTile").allElementsBoundByIndex
-        XCTAssertEqual(tiles.count, 8, "the demo's two switches and the six seeded")
+        XCTAssertEqual(tiles.count, 15, "the demo's two loose switches, its seven on two Switchboards, and the six seeded")
         let size = try XCTUnwrap(tiles.first).frame.size
         for tile in tiles {
             XCTAssertEqual(tile.frame.width, size.width, accuracy: 0.5, "every switch is as wide as the first")
