@@ -39,6 +39,52 @@ enum Flipboard {
                                               now: now, calendar: calendar) : nil
     }
 
+    // MARK: The clock (brief 72)
+
+    /// How a switch keeps time: a loose switch by its interval (`rule`), its day ending at midnight; one on a
+    /// Switchboard by the board's clock (`board`), its day starting at the board's reset. `hasTime`: the switch has a
+    /// time of day ("Take meds 21:00"), which its due date carries.
+    struct Clock: Equatable {
+        var rule: RecurrenceRule
+        var board: SwitchboardSchedule? = nil
+        var hasTime = false
+
+        init(rule: RecurrenceRule, board: SwitchboardSchedule? = nil, hasTime: Bool = false) {
+            self.rule = rule
+            self.board = board
+            self.hasTime = hasTime
+        }
+
+        init(_ task: TaskItem) {
+            self.init(rule: task.recurrenceRule ?? Flipboard.defaultRule, board: task.filterSwitchboard,
+                      hasTime: task.hasDueTime && task.dueDate != nil)
+        }
+
+        func side(_ due: Date?, now: Date, calendar: Calendar = .current) -> Side {
+            FlipboardSwitch.side(due: due, hasTime: hasTime, board: board, now: now, calendar: calendar)
+        }
+
+        /// The breathing light: a loose switch past its day, or any red switch past its time (`FlipboardSwitch.isLate`).
+        func isLate(_ due: Date?, now: Date, calendar: Calendar = .current) -> Bool {
+            FlipboardSwitch.isLate(due: due, hasTime: hasTime, board: board, now: now, calendar: calendar)
+        }
+
+        /// Where a flip lands: a board's next period, or (loose) the interval from the flip day, at the switch's time.
+        func dueAfterFlip(_ due: Date?, now: Date, calendar: Calendar = .current) -> Date {
+            if let board { return board.dueAfterFlip(due: due, hasTime: hasTime, now: now, calendar: calendar) }
+            let next = Flipboard.dueAfterFlip(due: due, rule: rule, now: now, calendar: calendar)
+            return Flipboard.keepingTime(of: hasTime ? due : nil, on: next, calendar: calendar)
+        }
+    }
+
+    /// `day` at `due`'s wall-clock time; the day's start without a time.
+    static func keepingTime(of due: Date?, on day: Date, calendar: Calendar = .current) -> Date {
+        let start = calendar.startOfDay(for: day)
+        guard let due else { return start }
+        let parts = calendar.dateComponents([.hour, .minute], from: due)
+        return calendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: 0, of: start) ?? start
+    }
+
     // MARK: Sides and the light bar
 
     /// A switch with no due date has never been flipped; it shows red until it is.
@@ -54,9 +100,10 @@ enum Flipboard {
         return calendar.startOfDay(for: due) > calendar.startOfDay(for: createdAt)
     }
 
-    /// A charger has also started once its first flip is counted, though its due date hasn't moved.
+    /// A charger has also started once its first flip is counted, though its due date hasn't moved. A switch on a
+    /// Switchboard is always under way: its board day says whether it is done (brief 72), never "Flip to start".
     static func hasStarted(_ task: TaskItem, now: Date = Date()) -> Bool {
-        hasStarted(due: task.dueDate, createdAt: task.createdAt) || effectiveCount(task, now: now) > 0
+        task.switchboard != nil || hasStarted(due: task.dueDate, createdAt: task.createdAt) || effectiveCount(task, now: now) > 0
     }
 
     /// The line under the light bar: "Flip to start", "2 of 3 days", "Due today" or "3 days overdue".
@@ -147,6 +194,44 @@ enum Flipboard {
         tasks.sorted { isOrderedBefore(($0.dueDate, $0.title), ($1.dueDate, $1.title), calendar: calendar) }
     }
 
+    /// A Switchboard's order (brief 72), steady as its switches flip, as a routine's steps are: the timed ones by
+    /// their time within the board day (with a 04:00 reset, 00:30 comes after 21:00), then the untimed ones in the
+    /// order they were added. Returns the titles in order.
+    static func boardOrder(_ switches: [(title: String, minutes: Int?, created: Date)], resetMinutes: Int) -> [String] {
+        func sinceReset(_ minutes: Int) -> Int { (minutes - resetMinutes + 24 * 60) % (24 * 60) }
+        return switches.sorted { a, b in
+            switch (a.minutes, b.minutes) {
+            case let (ma?, mb?) where ma != mb: return sinceReset(ma) < sinceReset(mb)
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default:
+                if a.created != b.created { return a.created < b.created }
+                return a.title.localizedStandardCompare(b.title) == .orderedAscending
+            }
+        }.map(\.title)
+    }
+
+    /// `tasks`, the switches of `board`, in the board's order (`boardOrder`).
+    static func sorted(onBoard tasks: [TaskItem], _ board: Switchboard, calendar: Calendar = .current) -> [TaskItem] {
+        func minutes(_ task: TaskItem) -> Int? {
+            guard task.hasDueTime, let due = task.dueDate else { return nil }
+            let parts = calendar.dateComponents([.hour, .minute], from: due)
+            return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
+        func sinceReset(_ m: Int) -> Int { (m - board.resetMinutes + 24 * 60) % (24 * 60) }
+        return tasks.sorted { a, b in
+            switch (minutes(a), minutes(b)) {
+            case let (ma?, mb?) where ma != mb: return sinceReset(ma) < sinceReset(mb)
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default:
+                if a.createdAt != b.createdAt { return a.createdAt < b.createdAt }
+                if a.title != b.title { return a.title.localizedStandardCompare(b.title) == .orderedAscending }
+                return a.id.uuidString < b.id.uuidString
+            }
+        }
+    }
+
     // MARK: Flipping
 
     /// The due date a flip lands on. Like a physical switch, flipping restarts the interval from the day
@@ -170,8 +255,8 @@ enum Flipboard {
     @MainActor
     @discardableResult
     static func flip(_ task: TaskItem, in context: ModelContext, now: Date = Date()) -> FlipOutcome {
-        guard let rule = task.recurrenceRule else { return .ignored }
-        let (next, outcome) = afterFlip(Charge(task), target: task.flipTarget, rule: rule, now: now)
+        guard task.recurrenceRule != nil else { return .ignored }
+        let (next, outcome) = afterFlip(Charge(task), target: task.flipTarget, clock: Clock(task), now: now)
         apply(next, outcome: outcome, to: task, in: context, now: now)
         return outcome
     }
@@ -180,8 +265,8 @@ enum Flipboard {
     @MainActor
     @discardableResult
     static func markDone(_ task: TaskItem, in context: ModelContext, now: Date = Date()) -> FlipOutcome {
-        guard let rule = task.recurrenceRule else { return .ignored }
-        let (next, outcome) = afterMarkDone(Charge(task), target: task.flipTarget, rule: rule, now: now)
+        guard task.recurrenceRule != nil else { return .ignored }
+        let (next, outcome) = afterMarkDone(Charge(task), target: task.flipTarget, clock: Clock(task), now: now)
         apply(next, outcome: outcome, to: task, in: context, now: now)
         return outcome
     }
@@ -265,8 +350,8 @@ enum Flipboard {
     /// Undoes the last flip (see `afterFlipBack`).
     @MainActor
     static func flipBack(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
-        guard let rule = task.recurrenceRule,
-              let next = afterFlipBack(Charge(task), target: task.flipTarget, rule: rule, now: now) else { return }
+        guard task.recurrenceRule != nil,
+              let next = afterFlipBack(Charge(task), target: task.flipTarget, clock: Clock(task), now: now) else { return }
         task.dueDate = next.due
         task.flipCount = next.count
         task.flipPeriodStart = next.periodStart
@@ -279,8 +364,8 @@ enum Flipboard {
     static func setTarget(_ target: Int, for task: TaskItem, in context: ModelContext, now: Date = Date()) {
         let target = clampedTarget(target)
         guard target != task.flipTarget else { return }
-        if let rule = task.recurrenceRule {
-            let next = afterTargetChange(Charge(task), from: task.flipTarget, to: target, rule: rule, now: now)
+        if task.recurrenceRule != nil {
+            let next = afterTargetChange(Charge(task), from: task.flipTarget, to: target, clock: Clock(task), now: now)
             task.dueDate = next.due
             task.flipCount = next.count
             task.flipPeriodStart = next.periodStart
@@ -291,7 +376,7 @@ enum Flipboard {
     }
 
     static func effectiveCount(_ task: TaskItem, now: Date = Date()) -> Int {
-        effectiveCount(Charge(task), target: task.flipTarget, rule: task.recurrenceRule ?? defaultRule, now: now)
+        effectiveCount(Charge(task), target: task.flipTarget, clock: Clock(task), now: now)
     }
 
     // MARK: Charging
@@ -340,61 +425,88 @@ enum Flipboard {
         return start
     }
 
-    /// True when `periodStart` belongs to an earlier interval than the one a red switch is counting.
-    static func isStale(periodStart: Date?, due: Date?, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
+    /// True when `periodStart` belongs to an earlier interval than the one a red switch is counting. On a Switchboard
+    /// the interval is the board day (or week) now, from its reset (brief 72: chargers count within the board's period).
+    static func isStale(periodStart: Date?, due: Date?, clock: Clock, now: Date, calendar: Calendar = .current) -> Bool {
         guard let periodStart else { return true }
-        guard let start = countingIntervalStart(due: due, rule: rule, now: now, calendar: calendar) else { return false }
+        if let board = clock.board { return periodStart < board.period(containing: now, calendar: calendar).start }
+        guard let start = countingIntervalStart(due: due, rule: clock.rule, now: now, calendar: calendar) else { return false }
         return calendar.startOfDay(for: periodStart) < start
+    }
+
+    static func isStale(periodStart: Date?, due: Date?, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
+        isStale(periodStart: periodStart, due: due, clock: Clock(rule: rule), now: now, calendar: calendar)
     }
 
     /// The flips that count right now: the full target while green (done for the interval), otherwise
     /// the stored count unless it is stale, never reaching the target while red.
-    static func effectiveCount(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Int {
+    static func effectiveCount(_ charge: Charge, target: Int, clock: Clock, now: Date, calendar: Calendar = .current) -> Int {
         let target = clampedTarget(target)
-        if side(due: charge.due, now: now, calendar: calendar) == .green { return target }
-        if isStale(periodStart: charge.periodStart, due: charge.due, rule: rule, now: now, calendar: calendar) { return 0 }
+        if clock.side(charge.due, now: now, calendar: calendar) == .green { return target }
+        if isStale(periodStart: charge.periodStart, due: charge.due, clock: clock, now: now, calendar: calendar) { return 0 }
         return min(target - 1, max(0, charge.count))
     }
 
+    static func effectiveCount(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Int {
+        effectiveCount(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
+    }
+
     /// A red switch with at least one flip counted in the current interval.
+    static func isCharging(_ charge: Charge, target: Int, clock: Clock, now: Date, calendar: Calendar = .current) -> Bool {
+        clock.side(charge.due, now: now, calendar: calendar) == .red
+            && effectiveCount(charge, target: target, clock: clock, now: now, calendar: calendar) > 0
+    }
+
     static func isCharging(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
-        side(due: charge.due, now: now, calendar: calendar) == .red
-            && effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar) > 0
+        isCharging(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
     }
 
     /// What one flip does. Red: count one more (the first flip of an interval resets a stale count and
-    /// sets `periodStart`), charging at the target. Green: a plain switch is flipped early (the interval
-    /// restarts from today, as before); a charger ignores it.
-    static func afterFlip(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+    /// sets `periodStart`), charging at the target. Green: a plain loose switch is flipped early (the interval
+    /// restarts from today, as before); a charger ignores it, and so does a switch on a Switchboard, which is
+    /// done for its board day (brief 72).
+    static func afterFlip(_ charge: Charge, target: Int, clock: Clock, now: Date,
                           calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
         let target = clampedTarget(target)
-        if side(due: charge.due, now: now, calendar: calendar) == .green {
-            guard target == 1 else { return (charge, .ignored) }
-            return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: 1, periodStart: now),
+        if clock.side(charge.due, now: now, calendar: calendar) == .green {
+            guard target == 1, clock.board == nil else { return (charge, .ignored) }
+            return (Charge(due: clock.dueAfterFlip(charge.due, now: now, calendar: calendar), count: 1, periodStart: now),
                     .charged)
         }
-        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
+        let counted = effectiveCount(charge, target: target, clock: clock, now: now, calendar: calendar)
         let periodStart = counted == 0 ? now : charge.periodStart ?? now
         let flips = counted + 1
         if flips >= target {
-            return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: target,
+            return (Charge(due: clock.dueAfterFlip(charge.due, now: now, calendar: calendar), count: target,
                            periodStart: periodStart), .charged)
         }
-        // A dateless switch gets today, so the interval it is counting has a start.
-        return (Charge(due: charge.due ?? calendar.startOfDay(for: now), count: flips, periodStart: periodStart), .counted(flips))
+        // A dateless switch gets this day (a board's: this board day), so the interval it is counting has a start.
+        let today = clock.board.map { $0.dueAfterFlipBack(due: nil, hasTime: false, now: now, calendar: calendar) }
+            ?? calendar.startOfDay(for: now)
+        return (Charge(due: charge.due ?? today, count: flips, periodStart: periodStart), .counted(flips))
     }
 
-    /// "Mark done": charges a red switch at once, whatever its count. Green, a plain switch is flipped
-    /// early and a charger is left alone (the menu disables it).
-    static func afterMarkDone(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+    static func afterFlip(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                          calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
+        afterFlip(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
+    }
+
+    /// "Mark done": charges a red switch at once, whatever its count. Green, a plain loose switch is flipped
+    /// early and a charger (or a board's switch) is left alone (the menu disables it).
+    static func afterMarkDone(_ charge: Charge, target: Int, clock: Clock, now: Date,
                               calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
         let target = clampedTarget(target)
-        guard side(due: charge.due, now: now, calendar: calendar) == .red else {
-            return afterFlip(charge, target: target, rule: rule, now: now, calendar: calendar)
+        guard clock.side(charge.due, now: now, calendar: calendar) == .red else {
+            return afterFlip(charge, target: target, clock: clock, now: now, calendar: calendar)
         }
-        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
-        return (Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: target,
+        let counted = effectiveCount(charge, target: target, clock: clock, now: now, calendar: calendar)
+        return (Charge(due: clock.dueAfterFlip(charge.due, now: now, calendar: calendar), count: target,
                        periodStart: counted == 0 ? now : charge.periodStart ?? now), .charged)
+    }
+
+    static func afterMarkDone(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                              calendar: Calendar = .current) -> (charge: Charge, outcome: FlipOutcome) {
+        afterMarkDone(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
     }
 
     /// Where "Flip back to red" puts a green switch's due date: the day its interval began, which is the
@@ -408,39 +520,59 @@ enum Flipboard {
 
     /// "Flip back to red" undoes the last flip. Green: the switch turns red, due on the day it was flipped
     /// (or on the day the interval's first flip was counted, so those flips still count), one flip short
-    /// of its target. Red: a charger loses one counted flip. Nil when there is nothing to undo (red with
-    /// no flips counted).
-    static func afterFlipBack(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+    /// of its target; on a Switchboard, due again in this board day (at its time). Red: a charger loses one counted
+    /// flip. Nil when there is nothing to undo (red with no flips counted).
+    static func afterFlipBack(_ charge: Charge, target: Int, clock: Clock, now: Date,
                               calendar: Calendar = .current) -> Charge? {
         let target = clampedTarget(target)
-        if side(due: charge.due, now: now, calendar: calendar) == .green, let due = charge.due {
+        if clock.side(charge.due, now: now, calendar: calendar) == .green, let due = charge.due {
             let flips = charge.periodStart == nil ? 0 : min(target - 1, max(0, charge.count - 1))
-            var back = dueAfterFlipBack(due: due, rule: rule, now: now, calendar: calendar)
+            if let board = clock.board {
+                let back = board.dueAfterFlipBack(due: due, hasTime: clock.hasTime, now: now, calendar: calendar)
+                let inPeriod = charge.periodStart.map { $0 >= board.period(containing: now, calendar: calendar).start } ?? false
+                return Charge(due: back, count: inPeriod ? flips : 0, periodStart: inPeriod && flips > 0 ? charge.periodStart : nil)
+            }
+            var back = dueAfterFlipBack(due: due, rule: clock.rule, now: now, calendar: calendar)
             if flips > 0, let periodStart = charge.periodStart { back = min(back, calendar.startOfDay(for: periodStart)) }
+            back = keepingTime(of: clock.hasTime ? due : nil, on: back, calendar: calendar)
             return Charge(due: back, count: flips, periodStart: flips > 0 ? charge.periodStart : nil)
         }
-        let counted = effectiveCount(charge, target: target, rule: rule, now: now, calendar: calendar)
+        let counted = effectiveCount(charge, target: target, clock: clock, now: now, calendar: calendar)
         guard counted > 0 else { return nil }
         return Charge(due: charge.due, count: counted - 1, periodStart: counted > 1 ? charge.periodStart : nil)
     }
 
+    static func afterFlipBack(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date,
+                              calendar: Calendar = .current) -> Charge? {
+        afterFlipBack(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
+    }
+
+    static func canFlipBack(_ charge: Charge, target: Int, clock: Clock, now: Date, calendar: Calendar = .current) -> Bool {
+        afterFlipBack(charge, target: target, clock: clock, now: now, calendar: calendar) != nil
+    }
+
     static func canFlipBack(_ charge: Charge, target: Int, rule: RecurrenceRule, now: Date, calendar: Calendar = .current) -> Bool {
-        afterFlipBack(charge, target: target, rule: rule, now: now, calendar: calendar) != nil
+        canFlipBack(charge, target: target, clock: Clock(rule: rule), now: now, calendar: calendar)
     }
 
     /// A new "flips per interval". Green stays green (full at the new target if it was full). Red with
     /// at least the new target already counted charges now; otherwise the count carries over.
-    static func afterTargetChange(_ charge: Charge, from oldTarget: Int, to newTarget: Int, rule: RecurrenceRule, now: Date,
+    static func afterTargetChange(_ charge: Charge, from oldTarget: Int, to newTarget: Int, clock: Clock, now: Date,
                                   calendar: Calendar = .current) -> Charge {
         let oldTarget = clampedTarget(oldTarget), newTarget = clampedTarget(newTarget)
-        if side(due: charge.due, now: now, calendar: calendar) == .green {
+        if clock.side(charge.due, now: now, calendar: calendar) == .green {
             return Charge(due: charge.due, count: charge.count >= oldTarget ? newTarget : min(charge.count, newTarget),
                           periodStart: charge.periodStart)
         }
-        let counted = effectiveCount(charge, target: oldTarget, rule: rule, now: now, calendar: calendar)
+        let counted = effectiveCount(charge, target: oldTarget, clock: clock, now: now, calendar: calendar)
         guard counted > 0, counted >= newTarget else { return charge }
-        return Charge(due: dueAfterFlip(due: charge.due, rule: rule, now: now, calendar: calendar), count: newTarget,
+        return Charge(due: clock.dueAfterFlip(charge.due, now: now, calendar: calendar), count: newTarget,
                       periodStart: charge.periodStart)
+    }
+
+    static func afterTargetChange(_ charge: Charge, from oldTarget: Int, to newTarget: Int, rule: RecurrenceRule, now: Date,
+                                  calendar: Calendar = .current) -> Charge {
+        afterTargetChange(charge, from: oldTarget, to: newTarget, clock: Clock(rule: rule), now: now, calendar: calendar)
     }
 
     /// The span a charger counts within, for its caption: "this week", "today", "these 2 weeks".
@@ -466,6 +598,46 @@ enum Flipboard {
         return "\(count) of \(target) \(periodPhrase(rule))"
     }
 
+    /// The caption of any switch on any clock (brief 72). A loose untimed switch reads as before. On a Switchboard:
+    /// "Done today" / "Done this week" while green; red, "Due today" / "Due this week", a charger "2 of 3 today", a
+    /// timed one "Due 21:00", calm, then "Due since 21:00" (never a count of days: a board resets). A loose timed
+    /// switch reads "Due 21:00" / "Due since 21:00" on its day and counts days once past it, as any loose switch.
+    static func caption(clock: Clock, due: Date?, started: Bool, count: Int, target: Int, now: Date,
+                        calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let target = clampedTarget(target)
+        let side = clock.side(due, now: now, calendar: calendar)
+        if let board = clock.board {
+            let span = board.cadence == .daily ? "today" : "this week"
+            if side == .green { return "Done \(span)" }
+            if target > 1 { return "\(count) of \(target) \(span)" }
+            guard clock.hasTime, due != nil else { return "Due \(span)" }
+            let moment = board.dueMoment(due: due, hasTime: true, now: now, calendar: calendar)
+            let time = timeText(moment, calendar: calendar, locale: locale)
+            return now >= moment ? "Due since \(time)" : "Due \(time)"
+        }
+        if clock.hasTime, target == 1, started, let due, side == .red, !isOverdue(due: due, now: now, calendar: calendar) {
+            let time = timeText(due, calendar: calendar, locale: locale)
+            return now >= due ? "Due since \(time)" : "Due \(time)"
+        }
+        return caption(due: due, rule: clock.rule, started: started, count: count, target: target, now: now, calendar: calendar)
+    }
+
+    /// "21:00" (or "9:00 PM" where the clock is 12-hour), as the switch card and the tiles write a time.
+    static func timeText(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        var style = Date.FormatStyle(date: .omitted, time: .shortened)
+        style.locale = locale
+        style.calendar = calendar
+        style.timeZone = calendar.timeZone
+        return date.formatted(style)
+    }
+
+    /// The light bar: a board's switch fills through the board day (or week) while green and is full while red; a
+    /// loose one as before.
+    static func elapsedFraction(clock: Clock, due: Date?, now: Date, calendar: Calendar = .current) -> Double {
+        guard let board = clock.board else { return elapsedFraction(due: due, rule: clock.rule, now: now, calendar: calendar) }
+        return clock.side(due, now: now, calendar: calendar) == .green ? board.elapsedFraction(now: now, calendar: calendar) : 1
+    }
+
     /// The lamps showed full for the interval ending on `recordedDue` the last time the board was on
     /// screen; now that interval is over and nothing is counted yet, so the lamps should drain once.
     static func shouldDrain(recordedDue: Date?, due: Date?, count: Int, now: Date, calendar: Calendar = .current) -> Bool {
@@ -489,20 +661,24 @@ enum Flipboard {
     }
 
     /// Puts a task on the board, giving it what a switch needs: a repeat (weekly if it had none), a due
-    /// day without a time, and the label. A task without a future due date is due today, so it joins red
-    /// and waits for its first flip; one due in the future keeps that day and joins green.
+    /// day, and the label. A task without a future due date is due today, so it joins red and waits for its
+    /// first flip; one due in the future keeps that day and joins green. A time of day stays (brief 72: a switch
+    /// may have one); it is due at that time.
     @MainActor
     static func add(_ task: TaskItem, in context: ModelContext, now: Date = Date()) throws {
         let cal = Calendar.current
         let rule = task.recurrenceRule ?? defaultRule
-        task.recurrenceRule = rule
         let today = cal.startOfDay(for: now)
+        let timed = task.hasDueTime && task.dueDate != nil
+        let day: Date
         if let due = task.dueDate, cal.startOfDay(for: due) > today {
-            task.dueDate = cal.startOfDay(for: due)
+            day = cal.startOfDay(for: due)
         } else {
-            task.dueDate = today
+            day = today
         }
-        task.hasDueTime = false
+        task.dueDate = keepingTime(of: timed ? task.dueDate : nil, on: day, calendar: cal)
+        task.hasDueTime = timed
+        task.recurrenceRule = rule.timed(to: task.dueDate, hasTime: timed)
         task.isCompleted = false
         task.completedAt = nil
         let label = try label(in: context)
@@ -552,6 +728,9 @@ enum Flipboard {
         let projectID: UUID?
         let labelIDs: [UUID]
         let subtasks: [Subtask]
+        /// Brief 72: its Switchboard (by id; it outlives it) and its own "Overdue becomes task".
+        let switchboardID: UUID?
+        let overdueBecomesTask: Bool
 
         init(_ task: TaskItem) {
             id = task.id; title = task.title; notes = task.notes; priority = task.priority
@@ -562,6 +741,8 @@ enum Flipboard {
             flipTarget = task.flipTarget; flipCount = task.flipCount; flipPeriodStart = task.flipPeriodStart
             projectID = task.project?.id
             labelIDs = (task.labels ?? []).map(\.id)
+            switchboardID = task.switchboard?.id
+            overdueBecomesTask = task.overdueBecomesTask
             subtasks = task.orderedSubtasks.map {
                 Subtask(id: $0.id, title: $0.title, isCompleted: $0.isCompleted, completedAt: $0.completedAt,
                         sortOrder: $0.sortOrder, createdAt: $0.createdAt)
@@ -600,7 +781,11 @@ enum Flipboard {
         task.flipTarget = deleted.flipTarget
         task.flipCount = deleted.flipCount
         task.flipPeriodStart = deleted.flipPeriodStart
+        task.overdueBecomesTask = deleted.overdueBecomesTask
         context.insert(task)
+        if let boardID = deleted.switchboardID {
+            task.switchboard = try? context.fetch(FetchDescriptor<Switchboard>(predicate: #Predicate { $0.id == boardID })).first
+        }
         for sub in deleted.subtasks {
             let item = TaskItem(title: sub.title, project: project)
             item.id = sub.id
@@ -621,20 +806,46 @@ enum Flipboard {
 
     /// A new switch, due today: it starts red ("Flip to start") until the chore is first done and flipped.
     /// George's call, 2026-10-31: a green switch reads as "already done".
-    /// `flipTarget` above 1 makes it a charger.
+    /// `flipTarget` above 1 makes it a charger. Brief 72: `time` gives it a time of day (due today at that time);
+    /// `board` puts it on a Switchboard, following the board's cadence and due in this board day (at its time);
+    /// `overdueBecomesTask` opts it in to Today once it is due.
     @MainActor
     @discardableResult
-    static func createSwitch(title: String, rule: RecurrenceRule, flipTarget: Int = 1, in context: ModelContext,
+    static func createSwitch(title: String, rule: RecurrenceRule, flipTarget: Int = 1, time: PickerTime? = nil,
+                             board: Switchboard? = nil, overdueBecomesTask: Bool = false, in context: ModelContext,
                              now: Date = Date()) throws -> TaskItem {
-        let due = Calendar.current.startOfDay(for: now)
-        let parsed = QuickAddResult(title: title, dueDate: due, recurrence: rule)
+        let cal = Calendar.current
+        var day = cal.startOfDay(for: now)
+        var rule = rule
+        if let board {
+            rule = cadenceRule(board.cadenceValue)
+            day = board.schedule().periodDay(containing: now, calendar: cal)
+        }
+        let due = time.map { onBoardDay(day, at: $0, board: board, calendar: cal) } ?? day
+        let parsed = QuickAddResult(title: title, dueDate: due, hasDueTime: time != nil,
+                                    recurrence: rule.timed(to: due, hasTime: time != nil, calendar: cal))
         let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: try label(in: context), in: context)
         let target = clampedTarget(flipTarget)
-        if task.flipTarget != target {
-            task.flipTarget = target
-            try context.save()
-        }
+        var changed = false
+        if task.flipTarget != target { task.flipTarget = target; changed = true }
+        if let board { task.switchboard = board; changed = true }
+        if overdueBecomesTask { task.overdueBecomesTask = true; changed = true }
+        if changed { try context.save() }
         return task
+    }
+
+    /// `time` within the board day `day` stands for: on that day, or the next calendar day for a time before the
+    /// board's reset ("00:30" belongs to the board day that began the evening before). Loose: that day.
+    static func onBoardDay(_ day: Date, at time: PickerTime, board: Switchboard?, calendar: Calendar = .current) -> Date {
+        let moment = time.on(day, calendar: calendar)
+        guard let board, time.hour * 60 + time.minute < board.resetMinutes else { return moment }
+        return calendar.date(byAdding: .day, value: 1, to: moment) ?? moment
+    }
+
+    /// The rule a Switchboard's switches carry: every day, or every week. A build from before Switchboards reads a
+    /// board's switch as a loose switch on this interval, so it flips there the way it does here.
+    static func cadenceRule(_ cadence: SwitchboardSchedule.Cadence) -> RecurrenceRule {
+        cadence == .daily ? .daily : .weekly
     }
 
     /// Changes a switch's interval, keeping when the current interval began: shortening "every 3 days"
@@ -649,7 +860,8 @@ enum Flipboard {
             let start = intervalStart(due: due, rule: old)
             task.dueDate = rule.nextOccurrence(after: start)
         }
-        task.recurrenceRule = rule
+        // A timed switch keeps its time in the rule (brief 72), as any timed repeat.
+        task.recurrenceRule = rule.timed(to: task.dueDate, hasTime: task.hasDueTime)
         task.touch()
         try? context.save()
     }
