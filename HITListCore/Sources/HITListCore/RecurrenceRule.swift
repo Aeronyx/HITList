@@ -372,6 +372,7 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
 
     public var displayText: String {
         let shortDays = [1: "Sun", 2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat"]
+        if let place { return Self.words(for: place, interval: interval) }
         switch frequency {
         case .daily: return interval == 1 ? "Every day" : "Every \(interval) days"
         case .monthly: return interval == 1 ? "Every month" : "Every \(interval) months"
@@ -384,5 +385,38 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
             }
             return interval == 1 ? "Every week" : "Every \(interval) weeks"
         }
+    }
+
+    /// "Monthly on the 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3"; with an
+    /// interval "Every 3 months on the 10th", "Every 2 months on the first Monday", "Every 2 years on Mar 3".
+    private static func words(for place: Place, interval n: Int) -> String {
+        let weekdays = [1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday"]
+        let ordinals = [1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", -1: "last"]
+        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        switch place {
+        case .day(let day):
+            return n == 1 ? "Monthly on the \(ordinal(day))" : "Every \(n) months on the \(ordinal(day))"
+        case .lastDay:
+            return n == 1 ? "Last day of the month" : "Every \(n) months on the last day"
+        case .weekday(let weekday, let ordinal):
+            let which = "\(ordinals[ordinal] ?? "") \(weekdays[weekday] ?? "")"
+            return n == 1 ? which.prefix(1).uppercased() + which.dropFirst() + " of the month" : "Every \(n) months on the \(which)"
+        case .date(let month, let day):
+            let date = "\(months[month - 1]) \(day)"
+            return n == 1 ? "Yearly on \(date)" : "Every \(n) years on \(date)"
+        }
+    }
+
+    /// "1st", "2nd", "3rd", "4th", "11th", "22nd".
+    static func ordinal(_ n: Int) -> String {
+        let suffix: String
+        switch (n % 10, n % 100) {
+        case (_, 11...13): suffix = "th"
+        case (1, _): suffix = "st"
+        case (2, _): suffix = "nd"
+        case (3, _): suffix = "rd"
+        default: suffix = "th"
+        }
+        return "\(n)\(suffix)"
     }
 }

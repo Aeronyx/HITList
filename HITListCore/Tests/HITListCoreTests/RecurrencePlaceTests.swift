@@ -217,4 +217,31 @@ final class RecurrencePlaceTests: XCTestCase {
         assertDate(rule.nextDueDate(from: Fixed.date(2026, 10, 28, 18, 30), now: Fixed.date(2026, 10, 28, 19), calendar: cal),
                    2026, 11, 28, 18, 30)
     }
+
+    // MARK: Words (rows, the editor's Repeat row, the Repeat card)
+
+    func testDisplayText() {
+        let cases: [(RecurrenceRule, String)] = [
+            (RecurrenceRule(frequency: .monthly, place: .day(28)), "Monthly on the 28th"),
+            (RecurrenceRule(frequency: .monthly, place: .day(1)), "Monthly on the 1st"),
+            (RecurrenceRule(frequency: .monthly, place: .day(2)), "Monthly on the 2nd"),
+            (RecurrenceRule(frequency: .monthly, place: .day(3)), "Monthly on the 3rd"),
+            (RecurrenceRule(frequency: .monthly, place: .day(11)), "Monthly on the 11th"),
+            (RecurrenceRule(frequency: .monthly, place: .day(22)), "Monthly on the 22nd"),
+            (RecurrenceRule(frequency: .monthly, interval: 3, place: .day(10)), "Every 3 months on the 10th"),
+            (RecurrenceRule(frequency: .monthly, place: .lastDay), "Last day of the month"),
+            (RecurrenceRule(frequency: .monthly, interval: 2, place: .lastDay), "Every 2 months on the last day"),
+            (RecurrenceRule(frequency: .monthly, place: .weekday(2, ordinal: 1)), "First Monday of the month"),
+            (RecurrenceRule(frequency: .monthly, place: .weekday(6, ordinal: -1)), "Last Friday of the month"),
+            (RecurrenceRule(frequency: .monthly, place: .weekday(3, ordinal: 2)), "Second Tuesday of the month"),
+            (RecurrenceRule(frequency: .monthly, interval: 2, place: .weekday(2, ordinal: 1)), "Every 2 months on the first Monday"),
+            (RecurrenceRule(frequency: .yearly, place: .date(month: 3, day: 3)), "Yearly on Mar 3"),
+            (RecurrenceRule(frequency: .yearly, interval: 2, place: .date(month: 12, day: 31)), "Every 2 years on Dec 31"),
+            // Unchanged for the rules that were already there.
+            (RecurrenceRule(frequency: .monthly, anchorDay: 28), "Every month"),
+            (RecurrenceRule(frequency: .monthly, interval: 3), "Every 3 months"),
+            (RecurrenceRule(frequency: .yearly, anchorDay: 3), "Every year"),
+        ]
+        for (rule, words) in cases { XCTAssertEqual(rule.displayText, words, rule.encoded) }
+    }
 }

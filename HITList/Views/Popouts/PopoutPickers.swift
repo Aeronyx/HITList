@@ -44,6 +44,21 @@ enum RepeatPresets {
         ("Every 3 months", RecurrenceRule(frequency: .monthly, interval: 3)),
         ("Every year", .yearly),
     ]
+
+    /// The preset `rule` is, if any. A rule with a place ("Monthly on the 28th", brief 71) is none of them.
+    static func preset(for rule: RecurrenceRule?) -> (title: String, rule: RecurrenceRule)? {
+        guard let rule else { return nil }
+        return all.first { $0.rule == rule }
+    }
+
+    /// The row the Repeat card shows for a rule it has no preset for ("Monthly on the 28th", "Every Mon, Wed"),
+    /// ticked as the current choice; nil when the rule is a preset or there is none. The row picks nothing: the
+    /// card cannot write every rule back (the quick-add card would turn "every month on the 28th" into "every
+    /// month"), so it leaves the rule alone unless another is picked.
+    static func currentRow(for rule: RecurrenceRule?) -> String? {
+        guard let rule, preset(for: rule) == nil else { return nil }
+        return rule.displayText
+    }
 }
 
 /// A chip-styled menu of repeat presets, for the date popover.
@@ -53,6 +68,10 @@ struct RepeatMenu: View {
 
     var body: some View {
         Menu {
+            if let current = RepeatPresets.currentRow(for: rule) {
+                Button {} label: { Label(current, systemImage: "checkmark") }.disabled(true)
+                Divider()
+            }
             ForEach(RepeatPresets.all, id: \.title) { preset in
                 Button(preset.title) { onPick(preset.rule) }
             }
@@ -87,8 +106,9 @@ struct RepeatChipPopover: View {
                     onPick(preset.rule)
                 }
             }
-            if let rule, !RepeatPresets.all.contains(where: { $0.rule == rule }) {
-                HITMenuRow(rule.displayText, systemImage: "checkmark", iconTint: Theme.accent, accessory: .none) { onPick(rule) }
+            if let current = RepeatPresets.currentRow(for: rule) {
+                HITMenuRow(current, systemImage: "checkmark", iconTint: Theme.accent, accessory: .none, action: nil)
+                    .accessibilityAddTraits(.isSelected)
             }
             if rule != nil {
                 Rectangle().fill(Theme.separator).frame(height: 1)
