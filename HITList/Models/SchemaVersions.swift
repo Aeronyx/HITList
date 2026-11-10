@@ -19,25 +19,26 @@ import SwiftData
 // - `scripts/release.sh` refuses to upload while the Development schema differs from Production
 //   (needs a cktool management token; see the script header).
 //
-// How to add V6: move the live model classes in Models.swift from `extension HITListSchemaV5` to a new
-// `extension HITListSchemaV6`, leaving a frozen copy of V5's stored properties behind (as
-// SchemaV1Models.swift to SchemaV4Models.swift do; V4 and V5 have a fifth model, Profile), point the
-// typealiases and `HITListSchema.current` at V6, append V6 to `HITListMigrationPlan.schemas` and add
-// `.lightweight(fromVersion: HITListSchemaV5.self, toVersion: HITListSchemaV6.self)` to `stages`. Pin V5's
-// hashes in `SchemaTests` first, while V5 is still live (`v5Hashes`). (V3 was added this way on 2026-11-03,
-// V4 on 2026-11-04, V5 on 2026-11-05.)
+// How to add V7: move the live model classes in Models.swift from `extension HITListSchemaV6` to a new
+// `extension HITListSchemaV7`, leaving a frozen copy of V6's stored properties behind (as
+// SchemaV1Models.swift to SchemaV5Models.swift do; V4 and V5 have a fifth model, Profile, and V6 a sixth,
+// Switchboard), point the typealiases and `HITListSchema.current` at V7, append V7 to
+// `HITListMigrationPlan.schemas` and add `.lightweight(fromVersion: HITListSchemaV6.self, toVersion:
+// HITListSchemaV7.self)` to `stages`. V6's hashes are pinned in `SchemaTests` already (`v6Hashes`). (V3 was added
+// this way on 2026-11-03, V4 on 2026-11-04, V5 on 2026-11-05, V6 on 2026-11-10.)
 //
 // A new entity or field reaches the CloudKit Development schema only on a record that has a value for it,
 // so `-seedSampleData` writes one of each (for V4, a sample Profile with a name and both a small and a large
 // picture: CloudKit keeps small binary data inline and large data as a CD_<name>_ckAsset field; for V5, the
-// sample task's `reminderDate`).
+// sample task's `reminderDate`; for V6, a sample Switchboard with a switch on it, both opted in).
 //
 // `SchemaTests.testV1EntityHashesMatchShippedStore` pins V1's entity version hashes to the ones
 // recorded in build 1's store metadata, so an accidental shape change fails the tests;
 // `testV2OnlyAddsTaskItemAttributes` checks V2 against V1 the same way;
 // `testV2EntityHashesMatchShippedBuilds` pins V2 and `testV3OnlyAddsTheSubtaskRelationship` checks V3;
 // `testV3EntityHashesMatchShippedBuilds` pins V3 and `testV4OnlyAddsTheProfileEntity` checks V4;
-// `testV4EntityHashes` pins V4 and `testV5OnlyAddsReminderDate` checks V5; `testV5EntityHashes` pins V5.
+// `testV4EntityHashes` pins V4 and `testV5OnlyAddsReminderDate` checks V5; `testV5EntityHashes` pins V5 and
+// `testV6OnlyAddsTheSwitchboard` checks V6; `testV6EntityHashes` pins V6.
 
 /// Builds 1–4 (0.1.0) schema, frozen in SchemaV1Models.swift. SwiftData names the entities (and so the
 /// CloudKit record types CD_TaskItem, CD_Project, CD_TaskLabel, CD_SavedFilter) after the bare class
@@ -81,10 +82,10 @@ enum HITListSchemaV4: VersionedSchema {
     }
 }
 
-/// 0.7.1 schema: the live models in Models.swift. TaskItem gains `reminderDate` (brief 48: "!15m", a reminder
-/// at a moment of its own, 15 minutes from when the task was added), optional, so the CloudKit change is
-/// additive (a CD_reminderDate field on CD_TaskItem) and the store migrates lightweight. Deploy the schema
-/// to Production in the CloudKit dashboard before 0.7.1 ships (0.7.0 was never uploaded).
+/// 0.7.1–0.9.0 (17–20) schema, frozen in SchemaV5Models.swift. TaskItem gains `reminderDate` (brief 48: "!15m",
+/// a reminder at a moment of its own, 15 minutes from when the task was added), optional, so the CloudKit change
+/// is additive (a CD_reminderDate field on CD_TaskItem) and the store migrates lightweight. Deployed to Production
+/// before 0.7.1 shipped (0.7.0 was never uploaded).
 enum HITListSchemaV5: VersionedSchema {
     static let versionIdentifier = Schema.Version(5, 0, 0)
     static var models: [any PersistentModel.Type] {
@@ -92,14 +93,28 @@ enum HITListSchemaV5: VersionedSchema {
     }
 }
 
+/// 0.9.0 (21) schema: the live models in Models.swift (brief 72, Switchboards). Adds the `Switchboard` entity and
+/// two TaskItem fields, `switchboard` (optional to-one, nullify; its inverse `Switchboard.switches`) and
+/// `overdueBecomesTask` (Bool, default false). All optional or defaulted, so the CloudKit change is additive (a new
+/// CD_Switchboard record type, and CD_switchboard and CD_overdueBecomesTask on CD_TaskItem) and the store migrates
+/// lightweight. Deploy the schema to Production in the CloudKit dashboard before 0.9.0 (21) uploads.
+enum HITListSchemaV6: VersionedSchema {
+    static let versionIdentifier = Schema.Version(6, 0, 0)
+    static var models: [any PersistentModel.Type] {
+        [TaskItem.self, Project.self, TaskLabel.self, SavedFilter.self, Profile.self, Switchboard.self]
+    }
+}
+
 enum HITListMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [HITListSchemaV1.self, HITListSchemaV2.self, HITListSchemaV3.self, HITListSchemaV4.self, HITListSchemaV5.self]
+        [HITListSchemaV1.self, HITListSchemaV2.self, HITListSchemaV3.self, HITListSchemaV4.self, HITListSchemaV5.self,
+         HITListSchemaV6.self]
     }
     static var stages: [MigrationStage] {
         [.lightweight(fromVersion: HITListSchemaV1.self, toVersion: HITListSchemaV2.self),
          .lightweight(fromVersion: HITListSchemaV2.self, toVersion: HITListSchemaV3.self),
          .lightweight(fromVersion: HITListSchemaV3.self, toVersion: HITListSchemaV4.self),
-         .lightweight(fromVersion: HITListSchemaV4.self, toVersion: HITListSchemaV5.self)]
+         .lightweight(fromVersion: HITListSchemaV4.self, toVersion: HITListSchemaV5.self),
+         .lightweight(fromVersion: HITListSchemaV5.self, toVersion: HITListSchemaV6.self)]
     }
 }

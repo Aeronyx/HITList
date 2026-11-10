@@ -352,6 +352,18 @@ enum TaskActions {
             try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
             // Schema V4's Profile, the same way (brief 34).
             try ProfileStore(context: context).seedSampleProfiles()
+            // Schema V6's Switchboard (brief 72) and a switch on it, both opted in and the board weekly on a chosen
+            // day, so CD_Switchboard, CD_switchboard and CD_overdueBecomesTask reach Development with real values.
+            let board = Switchboard(name: "Sample Switchboard (safe to delete)")
+            board.cadence = "weekly"
+            board.resetMinutes = 9 * 60
+            board.resetWeekday = 7
+            board.overdueBecomesTask = true
+            context.insert(board)
+            let sample = try Flipboard.createSwitch(title: "Sample switch (safe to delete)", rule: .weekly, in: context)
+            sample.switchboard = board
+            sample.overdueBecomesTask = true
+            try context.save()
         } catch {
             print("seedSampleData failed: \(error)")
         }
@@ -359,7 +371,9 @@ enum TaskActions {
 
     /// Developer aid for screenshots and sessions: `HITList -seedDemoData` fills an empty side store with a
     /// believable week, each line typed the way quick add reads it (so the data is exactly what a person would
-    /// have), with Groups, labels, repeats, two brain-dump tasks for the Inbox and two Flipboard switches.
+    /// have), with Groups, labels, repeats, two brain-dump tasks for the Inbox and two loose Flipboard switches,
+    /// then two Switchboards (brief 72, `demoBoards`): "Before Bed" (daily, 04:00, four switches, one with a time,
+    /// two flipped) and "Deep Clean" (weekly, three switches, one flipped).
     /// Only a side store, like `-seedSampleData`, and only an empty one, so a relaunch doesn't double it.
     static let demoLines = [
         "Call the dentist tomorrow 9am p2 #Home",
@@ -389,8 +403,41 @@ enum TaskActions {
             for line in demoLines {
                 _ = try create(from: parser.parse(line), defaultProject: nil, defaultLabel: nil, in: context)
             }
+            try seedDemoBoards(in: context, now: now)
         } catch {
             print("seedDemoData failed: \(error)")
+        }
+    }
+
+    /// A demo Switchboard: its name, cadence, and its switches (title, time, flipped).
+    struct DemoBoard {
+        let name: String
+        let cadence: SwitchboardSchedule.Cadence
+        let switches: [(title: String, time: PickerTime?, flipped: Bool)]
+    }
+
+    static let demoBoards = [
+        DemoBoard(name: "Before Bed", cadence: .daily, switches: [
+            ("Take meds", PickerTime(hour: 21, minute: 0), false),
+            ("Brush teeth", nil, true),
+            ("Floss", nil, true),
+            ("Read 20 minutes", nil, false),
+        ]),
+        DemoBoard(name: "Deep Clean", cadence: .weekly, switches: [
+            ("Vacuum", nil, true),
+            ("Clean the bathroom", nil, false),
+            ("Change the sheets", nil, false),
+        ]),
+    ]
+
+    private static func seedDemoBoards(in context: ModelContext, now: Date) throws {
+        for demo in demoBoards {
+            let board = try Flipboard.createSwitchboard(name: demo.name, cadence: demo.cadence, in: context)
+            for item in demo.switches {
+                let task = try Flipboard.createSwitch(title: item.title, rule: Flipboard.cadenceRule(demo.cadence),
+                                                      time: item.time, board: board, in: context, now: now)
+                if item.flipped { Flipboard.flip(task, in: context, now: now) }
+            }
         }
     }
 

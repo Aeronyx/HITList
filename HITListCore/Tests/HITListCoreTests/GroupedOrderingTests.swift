@@ -124,10 +124,11 @@ final class GroupedOrderingTests: XCTestCase {
         XCTAssertEqual(titles(sorted[0].tasks), ["5pm p1", "6pm p1", "9am p4", "6pm p4"])
     }
 
-    func testARedFlipboardSwitchIsFiledUnderToday() {
-        // A switch last flipped long ago is red: listed as today's, never as overdue (brief 59).
+    func testAnOptedInRedFlipboardSwitchIsFiledUnderToday() {
+        // A switch last flipped long ago, with "Overdue becomes task" on, is listed as today's, never as overdue
+        // (briefs 59 and 72).
         let red = PlainTask(title: "water plants", dueDate: Fixed.date(2026, 10, 10),
-                            labelNames: [FlipboardSwitch.labelName], isRecurring: true)
+                            labelNames: [FlipboardSwitch.labelName], isRecurring: true, switchOptedIn: true)
         let sorted = sections([red], by: .date)
         XCTAssertEqual(keys(sorted), [.due(.today)])
     }

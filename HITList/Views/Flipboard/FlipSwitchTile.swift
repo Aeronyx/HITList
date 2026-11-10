@@ -48,23 +48,29 @@ struct FlipSwitchTile: View {
     private static let countDuration: Duration = .milliseconds(240)
 
     private var flipping: Bool { landing != nil }
-    private var rule: RecurrenceRule { task.recurrenceRule ?? Flipboard.defaultRule }
+    /// The switch's clock (brief 72): its interval, or its Switchboard's day; and whether it has a time.
+    private var clock: Flipboard.Clock { Flipboard.Clock(task) }
+    private var rule: RecurrenceRule { clock.rule }
     private var target: Int { Flipboard.clampedTarget(task.flipTarget) }
     private var charge: Flipboard.Charge { landing ?? Flipboard.Charge(task) }
-    private var side: Flipboard.Side { Flipboard.side(due: charge.due, now: now) }
-    private var isOverdue: Bool { Flipboard.isOverdue(due: charge.due, now: now) }
-    private var count: Int { Flipboard.effectiveCount(charge, target: target, rule: rule, now: now) }
+    private var side: Flipboard.Side { clock.side(charge.due, now: now) }
+    /// The breathing light: a loose switch past its day, or a switch past its time.
+    private var isOverdue: Bool { clock.isLate(charge.due, now: now) }
+    private var count: Int { Flipboard.effectiveCount(charge, target: target, clock: clock, now: now) }
     private var tilt: Double { dip ?? (side == .green ? 1 : -1) }
     private var started: Bool {
-        Flipboard.hasStarted(due: charge.due, createdAt: task.createdAt) || count > 0
+        clock.board != nil || Flipboard.hasStarted(due: charge.due, createdAt: task.createdAt) || count > 0
     }
-    private var fraction: Double { started ? Flipboard.elapsedFraction(due: charge.due, rule: rule, now: now) : 0 }
+    private var fraction: Double { started ? Flipboard.elapsedFraction(clock: clock, due: charge.due, now: now) : 0 }
     private var caption: String {
-        Flipboard.caption(due: charge.due, rule: rule, started: started, count: count, target: target, now: now)
+        Flipboard.caption(clock: clock, due: charge.due, started: started, count: count, target: target, now: now)
     }
+    /// A green switch that a tap can't flip again: a charged charger, or a switch done for its board day.
+    private var isDoneForNow: Bool { side == .green && (target > 1 || clock.board != nil) }
 
     var body: some View {
-        FlipSwitchFace(title: task.title, ruleText: rule.displayText.lowercased(), target: target,
+        FlipSwitchFace(title: task.title, ruleText: Self.detailLine(rule: rule, onBoard: clock.board != nil,
+                                                                     time: Flipboard.time(of: task)), target: target,
                        lamps: lampsOverride ?? count, side: side, isOverdue: isOverdue, fraction: fraction,
                        caption: caption, reduceMotion: reduceMotion) {
             rocker
@@ -92,7 +98,7 @@ struct FlipSwitchTile: View {
             Button("Mark Done") { flip() }
         } message: {
             if let due = task.dueDate {
-                Text("It isn’t due until \(DueFormatter.text(for: due, hasTime: false, now: now)).")
+                Text("It isn’t due until \(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now)).")
             }
         }
         .onAppear {
@@ -106,7 +112,18 @@ struct FlipSwitchTile: View {
     private var accessibilityValue: String { side == .red ? "Red, \(caption)" : "Green, \(caption)" }
     private var accessibilityHint: String {
         if side == .red { return target > 1 ? "Counts one flip" : "Flips the switch back to green" }
+        if clock.board != nil { return "Done for now" }
         return target > 1 ? "Already charged" : "Marks it done early"
+    }
+
+    /// The line under the title (brief 72): the interval ("every 3 days"), with the switch's time after it ("every 3
+    /// days · 21:00"); on a Switchboard, whose header names the cadence, its time alone, or the cadence if it has none.
+    static func detailLine(rule: RecurrenceRule, onBoard: Bool, time: PickerTime?, calendar: Calendar = .current,
+                           locale: Locale = .current) -> String {
+        let interval = rule.displayText.lowercased()
+        guard let time else { return interval }
+        let text = Flipboard.timeText(time.on(Date(), calendar: calendar), calendar: calendar, locale: locale)
+        return onBoard ? text : "\(interval) · \(text)"
     }
 
     /// The rocker takes taps only; the long press goes to the tile's menu.
@@ -136,7 +153,7 @@ struct FlipSwitchTile: View {
         press()
         if side == .red {
             flip()
-        } else if target > 1 {
+        } else if isDoneForNow {
             bounce()
         } else {
             confirmEarly = true
@@ -165,7 +182,7 @@ struct FlipSwitchTile: View {
 
     private func flip() {
         guard !flipping else { return }
-        let (next, outcome) = Flipboard.afterFlip(Flipboard.Charge(task), target: target, rule: rule, now: now)
+        let (next, outcome) = Flipboard.afterFlip(Flipboard.Charge(task), target: target, clock: clock, now: now)
         switch outcome {
         case .ignored: bounce()
         case .counted: countFlip(to: next)
@@ -175,7 +192,7 @@ struct FlipSwitchTile: View {
 
     private func markDone() {
         guard !flipping else { return }
-        let (next, outcome) = Flipboard.afterMarkDone(Flipboard.Charge(task), target: target, rule: rule, now: now)
+        let (next, outcome) = Flipboard.afterMarkDone(Flipboard.Charge(task), target: target, clock: clock, now: now)
         switch outcome {
         case .ignored: bounce()
         case .counted: countFlip(to: next)
@@ -256,7 +273,7 @@ struct FlipSwitchTile: View {
 
     /// "Flip back to red": the rocker springs back to red, a lamp goes out.
     private func flipBack() {
-        guard !flipping, Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now) else { return }
+        guard !flipping, Flipboard.canFlipBack(Flipboard.Charge(task), target: target, clock: clock, now: now) else { return }
         FlipHaptic.play()
         FlipSound.play()
         let spring: Animation = reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.6)
@@ -280,7 +297,7 @@ struct FlipSwitchTile: View {
         let recorded = FlipDrainMemory.recordedDue(for: task.id)
         FlipDrainMemory.forget(task.id)
         guard firstAppearance, !reduceMotion,
-              Flipboard.shouldDrain(recordedDue: recorded, due: task.dueDate, count: count, now: now) else { return }
+              Flipboard.shouldDrain(recordedDue: recorded, due: task.dueDate, count: count, now: now, clock: clock) else { return }
         lampsOverride = target
         Task {
             try? await Task.sleep(for: .milliseconds(450))
@@ -293,8 +310,8 @@ struct FlipSwitchTile: View {
     /// Brief 59's order: Flip (or Mark done), Flip back to red, Edit task…, Edit switch… (the interval, flips
     /// and name, brief 69), then Remove from Flipboard and Delete.
     private var menuItems: [FlipMenuItem] {
-        let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, rule: rule, now: now)
-        let chargedCharger = target > 1 && side == .green
+        let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, clock: clock, now: now)
+        let chargedCharger = isDoneForNow
         var items: [FlipMenuItem] = []
         if side == .red {
             // A charger's flip counts one; "Mark done" charges it at once.

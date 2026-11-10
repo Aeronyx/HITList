@@ -41,16 +41,23 @@ final class FlipboardTests: XCTestCase {
 
     // MARK: Membership
 
-    func testMembershipNeedsRepeatNoTimeOpenAndLabel() {
+    func testMembershipNeedsRepeatOpenAndLabel() {
         let weekly = RecurrenceRule.weekly.encoded
-        XCTAssertTrue(Flipboard.isMember(recurrence: weekly, hasDueTime: false, isCompleted: false, labelNames: ["flipboard"]))
-        XCTAssertTrue(Flipboard.isMember(recurrence: weekly, hasDueTime: false, isCompleted: false, labelNames: ["home", "FlipBoard"]),
+        XCTAssertTrue(Flipboard.isMember(recurrence: weekly, isCompleted: false, labelNames: ["flipboard"]))
+        XCTAssertTrue(Flipboard.isMember(recurrence: weekly, isCompleted: false, labelNames: ["home", "FlipBoard"]),
                       "label match ignores case")
-        XCTAssertFalse(Flipboard.isMember(recurrence: weekly, hasDueTime: false, isCompleted: false, labelNames: ["home"]))
-        XCTAssertFalse(Flipboard.isMember(recurrence: nil, hasDueTime: false, isCompleted: false, labelNames: ["flipboard"]))
-        XCTAssertFalse(Flipboard.isMember(recurrence: "garbage", hasDueTime: false, isCompleted: false, labelNames: ["flipboard"]))
-        XCTAssertFalse(Flipboard.isMember(recurrence: weekly, hasDueTime: true, isCompleted: false, labelNames: ["flipboard"]))
-        XCTAssertFalse(Flipboard.isMember(recurrence: weekly, hasDueTime: false, isCompleted: true, labelNames: ["flipboard"]))
+        XCTAssertFalse(Flipboard.isMember(recurrence: weekly, isCompleted: false, labelNames: ["home"]))
+        XCTAssertFalse(Flipboard.isMember(recurrence: nil, isCompleted: false, labelNames: ["flipboard"]))
+        XCTAssertFalse(Flipboard.isMember(recurrence: "garbage", isCompleted: false, labelNames: ["flipboard"]))
+        XCTAssertFalse(Flipboard.isMember(recurrence: weekly, isCompleted: true, labelNames: ["flipboard"]))
+    }
+
+    /// Brief 72: a switch may have a time ("Take meds 21:00"); the membership rule no longer asks for none.
+    func testATimedSwitchIsOnTheBoard() throws {
+        let meds = try Flipboard.createSwitch(title: "Take meds", rule: .daily, in: context)
+        meds.dueDate = cal.date(bySettingHour: 21, minute: 0, second: 0, of: Date())
+        meds.hasDueTime = true
+        XCTAssertTrue(Flipboard.isMember(meds))
     }
 
     // MARK: Sides
@@ -213,8 +220,9 @@ final class FlipboardTests: XCTestCase {
 
         XCTAssertTrue(Flipboard.isMember(task))
         XCTAssertEqual(task.recurrenceRule, Flipboard.defaultRule)
-        XCTAssertFalse(task.hasDueTime)
-        XCTAssertEqual(task.dueDate, daysFromToday(2), "time of day dropped")
+        XCTAssertTrue(task.hasDueTime, "brief 72: a switch keeps its time of day")
+        XCTAssertEqual(task.dueDate, timed)
+        XCTAssertEqual(task.recurrenceRule?.time, RecurrenceRule.TimeOfDay(hour: 9, minute: 30))
         let labels = try context.fetch(FetchDescriptor<TaskLabel>())
         XCTAssertEqual(labels.map(\.id), [Flipboard.labelID])
         XCTAssertEqual(Flipboard.labelID, SeedIdentity.uuid(for: "TaskLabel/flipboard"))
@@ -673,7 +681,8 @@ final class FlipboardRulesTests: XCTestCase {
 }
 
 /// Brief 59: the lists the app builds itself (Upcoming, the board, the Duo, Spotlight, Siri, Claude) follow
-/// `FlipboardSwitch.listing`: a green switch is on the Flipboard only, a red one is a task for today.
+/// `FlipboardSwitch.listing`: a switch is on the Flipboard only (brief 72), green or red, unless it opted in ("Overdue
+/// becomes task"); an opted-in red one is a task for today.
 @MainActor
 final class FlipboardListingAppTests: XCTestCase {
     private var container: ModelContainer!
@@ -689,12 +698,15 @@ final class FlipboardListingAppTests: XCTestCase {
         PlainTask(title: title, dueDate: due, labelNames: isSwitch ? ["flipboard"] : [], isRecurring: isSwitch)
     }
 
-    /// A green switch (flipped today, due in two weeks) and a red one (three days overdue).
-    private func switches() throws -> (green: TaskItem, red: TaskItem) {
+    /// A green switch (flipped today, due in two weeks) and a red one (three days overdue), both opted in unless
+    /// `optedIn` is false.
+    private func switches(optedIn: Bool = true) throws -> (green: TaskItem, red: TaskItem) {
         let green = try Flipboard.createSwitch(title: "Shave", rule: RecurrenceRule(frequency: .weekly, interval: 2), in: context)
         Flipboard.flip(green, in: context)
         let red = try Flipboard.createSwitch(title: "Water plants", rule: RecurrenceRule(frequency: .daily, interval: 3), in: context)
         red.dueDate = daysFromToday(-3)
+        green.overdueBecomesTask = optedIn
+        red.overdueBecomesTask = optedIn
         try context.save()
         XCTAssertEqual(Flipboard.side(due: green.dueDate, now: Date()), .green)
         XCTAssertEqual(Flipboard.side(due: red.dueDate, now: Date()), .red)
@@ -727,6 +739,34 @@ final class FlipboardListingAppTests: XCTestCase {
         let shown = DuoNextDays.listed(items, now: Date())
         XCTAssertEqual(DuoNextDays.group(shown, due: \.filterDueDate, now: Date()).flatMap(\.items).map(\.filterTitle),
                        ["Dentist"])
+    }
+
+    // MARK: The default (brief 72)
+
+    func testByDefaultNoSwitchReachesSpotlightSiriOrShortcuts() throws {
+        let (green, red) = try switches(optedIn: false)
+        let plainTask = TaskItem(title: "Dentist", dueDate: daysFromToday(2))
+        context.insert(plainTask)
+        XCTAssertEqual(SpotlightSync.indexable([green, red, plainTask], now: Date()).map(\.title), ["Dentist"])
+        XCTAssertEqual(try IntentActions.today(in: context).lines.map(\.title), [])
+        XCTAssertEqual(try IntentActions.suggestedTasks(in: context).map(\.title), ["Dentist"])
+        XCTAssertEqual(try IntentActions.openTasks(matching: "water", in: context).map(\.title), [])
+        XCTAssertFalse(TaskOrdering.isInToday(red, now: Date()))
+        XCTAssertFalse(TaskOrdering.isInInbox(red, now: Date()))
+    }
+
+    func testASwitchboardsOptInBringsItsSwitchesBack() throws {
+        let (_, red) = try switches(optedIn: false)
+        let board = Switchboard(name: "Chores")
+        context.insert(board)
+        red.switchboard = board
+        try context.save()
+        XCTAssertFalse(red.filterSwitchOptedIn)
+        board.overdueBecomesTask = true
+        XCTAssertTrue(red.filterSwitchOptedIn, "the board's toggle opts its switches in")
+        XCTAssertEqual(red.filterSwitchboard, SwitchboardSchedule(cadence: .daily, resetMinutes: 240,
+                                                                  resetWeekday: Preferences.weekStartWeekday()))
+        XCTAssertTrue(TaskOrdering.isInToday(red, now: Date()), "never flipped since it joined: due")
     }
 
     // MARK: Spotlight
@@ -780,6 +820,8 @@ final class FlipboardListingAppTests: XCTestCase {
         XCTAssertEqual(shave["flipboard_switch"], "green")
         let water = try XCTUnwrap(tasks.first { $0["title"] == "Water plants" })
         XCTAssertEqual(water["flipboard_switch"], "red")
+        XCTAssertEqual(water["overdue_becomes_task"], true)
+        XCTAssertNil(water["switchboard"], "a loose switch")
     }
 }
 
@@ -797,10 +839,12 @@ final class FlipboardRowTests: XCTestCase {
     override func setUp() async throws { container = ModelContainerFactory.preview() }
     override func tearDown() async throws { container = nil }
 
+    /// A red switch in Today: three days overdue, with "Overdue becomes task" on (brief 72; off, it is on no list).
     private func redSwitch(_ title: String = "Water plants", target: Int = 1) throws -> TaskItem {
         let task = try Flipboard.createSwitch(title: title, rule: RecurrenceRule(frequency: .daily, interval: 3),
                                               flipTarget: target, in: context)
         task.dueDate = daysFromToday(-3)
+        task.overdueBecomesTask = true
         try context.save()
         return task
     }
@@ -946,7 +990,9 @@ final class FlipboardDeleteTests: XCTestCase {
     }
 
     func testSpotlightDropsADeletedSwitch() async throws {
-        let task = try Flipboard.createSwitch(title: "Water plants", rule: .daily, in: context)  // red: indexed
+        let task = try Flipboard.createSwitch(title: "Water plants", rule: .daily, in: context)
+        task.overdueBecomesTask = true  // red and opted in: indexed (brief 72)
+        try context.save()
         let index = RecordingIndex()
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "flipboard-delete-\(UUID().uuidString)"))
         let sync = SpotlightSync(index: index, defaults: defaults, isAllowed: true, refreshDelay: .zero)
@@ -971,12 +1017,35 @@ private final class RecordingIndex: SpotlightIndexing {
 
 /// Brief 59: the tip and the empty board say the rule in one sentence each.
 final class FlipboardWordsTests: XCTestCase {
-    func testTheTipAndTheEmptyBoardSayASwitchStaysOffTheListsUntilDue() {
-        let rule = "stays off your lists until it’s due"
-        XCTAssertTrue(HITTipKind.flipboard.message.contains(rule), HITTipKind.flipboard.message)
-        XCTAssertTrue(FlipboardView.emptyMessage.contains(rule), FlipboardView.emptyMessage)
+    /// Brief 72: the tip and the empty board say a switch is a routine, and the empty board how one becomes a task.
+    func testTheTipAndTheEmptyBoardSayASwitchIsARoutine() {
+        XCTAssertTrue(HITTipKind.flipboard.message.contains("A switch is a routine"), HITTipKind.flipboard.message)
+        XCTAssertTrue(FlipboardView.emptyMessage.contains("A switch is a routine, not a task"), FlipboardView.emptyMessage)
+        XCTAssertTrue(FlipboardView.emptyRule.contains("Overdue becomes task"))
         for text in [HITTipKind.flipboard.message, FlipboardView.emptyRule] {
             XCTAssertEqual(text.filter { $0 == "." }.count, 1, "one sentence: \(text)")
         }
+    }
+
+    /// Brief 72: someone whose switches came from before Switchboards (their red switches waited in Today) is told
+    /// they stay on the Flipboard now, and how to bring one back; everyone else gets the Flipboard's own tip.
+    func testTheTipForPeopleWhoseRedSwitchesWereInToday() {
+        let before = FlipboardTips.switchesStayFrom.addingTimeInterval(-86_400)
+        let after = FlipboardTips.switchesStayFrom.addingTimeInterval(3600)
+        XCTAssertEqual(FlipboardTips.kind(for: [after, before]), .switchesStay)
+        XCTAssertEqual(FlipboardTips.kind(for: [after]), .flipboard)
+        XCTAssertNil(FlipboardTips.kind(for: []))
+        XCTAssertTrue(HITTipKind.switchesStay.message.contains("Overdue becomes task"))
+        XCTAssertTrue(HITTip(.switchesStay, generation: 0).waitsUntilSettled)
+    }
+
+    func testTheDebugClockReadsTheFlipboardNowArgument() {
+        let utc = TimeZone(identifier: "UTC")!
+        let read = FlipboardDebug.now(arguments: ["HITList", "-flipboardNow", "2026-11-11T03:30"], timeZone: utc)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = utc
+        XCTAssertEqual(read, cal.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 3, minute: 30)))
+        XCTAssertNil(FlipboardDebug.now(arguments: ["HITList"]))
+        XCTAssertNil(FlipboardDebug.now(arguments: ["HITList", "-flipboardNow"]))
     }
 }

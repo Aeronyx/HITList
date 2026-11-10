@@ -10,8 +10,9 @@ import Foundation
 /// - Today is two sections, overdue and today, and never shows undated or future tasks.
 /// - Browse search looks through titles and notes of every task, completed ones too.
 /// - Subtasks (brief 32) are never rows of their own anywhere: they live inside their parent.
-/// - Flipboard switches (brief 59, `FlipboardSwitch.listing`): a green one is in no list; a red one is
-///   listed and sorted as due today, never as overdue. Hence the `now` on the rules below.
+/// - Flipboard switches (briefs 59 and 72, `FlipboardSwitch.listing`): a switch is in no list, green or red, unless
+///   it opted in ("Overdue becomes task"); then, from the moment it is due, it is listed and sorted as due today,
+///   never as overdue. Hence the `now` on the rules below.
 public enum TaskOrdering {
 
     // MARK: - Subtasks
@@ -44,7 +45,7 @@ public enum TaskOrdering {
         return a.filterTitle.localizedCaseInsensitiveCompare(b.filterTitle) == .orderedAscending
     }
 
-    /// `tasks` in `priorityThenDue` order, each by the date it is listed under (a red switch: today).
+    /// `tasks` in `priorityThenDue` order, each by the date it is listed under (a switch listed as today's: today).
     public static func sorted<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
         tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }
             .sorted(by: priorityThenDue)
@@ -54,7 +55,7 @@ public enum TaskOrdering {
     // MARK: - Inbox
 
     /// Whether a task belongs in the Inbox, whatever its completion: it has a date (in any Group), or
-    /// it has no Group. A green switch never does; a red one is dated today.
+    /// it has no Group. A switch never does, unless it opted in and is due: then it is dated today.
     public static func isInInbox<T: FilterableTask>(_ task: T, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         guard !task.filterIsSubtask else { return false }
         switch FlipboardSwitch.listing(for: task, now: now, calendar: calendar) {
@@ -88,8 +89,8 @@ public enum TaskOrdering {
         return day == today ? .today : nil
     }
 
-    /// The Today section a task is listed in: a red switch is today's, a green one in neither, anything
-    /// else by its due date (`todaySection(for:now:)`).
+    /// The Today section a task is listed in: an opted-in switch that is due is today's, any other switch in
+    /// neither, anything else by its due date (`todaySection(for:now:)`).
     public static func todaySection<T: FilterableTask>(of task: T, now: Date, calendar: Calendar = .current) -> TodaySection? {
         switch FlipboardSwitch.listing(for: task, now: now, calendar: calendar) {
         case .hidden: return nil
@@ -135,7 +136,8 @@ public enum TaskOrdering {
 
     /// Browse search: every task whose title or notes contain each word of `text` (case and accent
     /// insensitive), completed ones included. Open tasks first in `priorityThenDue` order, then
-    /// completed ones. Blank text matches nothing. Green switches are on the Flipboard only.
+    /// completed ones. Blank text matches nothing. Switches are on the Flipboard only (an opted-in one that is due
+    /// is found as today's).
     public static func search<T: FilterableTask>(_ tasks: [T], text: String, now: Date = Date(),
                                                  calendar: Calendar = .current) -> [T] {
         let words = text.split(whereSeparator: \.isWhitespace).map(String.init)

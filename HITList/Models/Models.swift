@@ -2,18 +2,19 @@ import Foundation
 import SwiftData
 import HITListCore
 
-// The current schema version (V5). V1 to V4 are frozen in SchemaV1Models.swift to SchemaV4Models.swift.
+// The current schema version (V6). V1 to V5 are frozen in SchemaV1Models.swift to SchemaV5Models.swift.
 // CloudKit rules shaped these models: every attribute has a default or is optional,
 // every relationship is optional, and there are no unique constraints. The full rule list is at the
 // top of SchemaVersions.swift; read it before changing anything here.
 
-typealias Project = HITListSchemaV5.Project
-typealias TaskLabel = HITListSchemaV5.TaskLabel
-typealias TaskItem = HITListSchemaV5.TaskItem
-typealias SavedFilter = HITListSchemaV5.SavedFilter
-typealias Profile = HITListSchemaV5.Profile
+typealias Project = HITListSchemaV6.Project
+typealias TaskLabel = HITListSchemaV6.TaskLabel
+typealias TaskItem = HITListSchemaV6.TaskItem
+typealias SavedFilter = HITListSchemaV6.SavedFilter
+typealias Profile = HITListSchemaV6.Profile
+typealias Switchboard = HITListSchemaV6.Switchboard
 
-extension HITListSchemaV5 {
+extension HITListSchemaV6 {
     @Model
     final class Project {
         var id: UUID = UUID()
@@ -37,7 +38,7 @@ extension HITListSchemaV5 {
     }
 }
 
-extension HITListSchemaV5 {
+extension HITListSchemaV6 {
     @Model
     final class TaskLabel {
         var id: UUID = UUID()
@@ -59,7 +60,7 @@ extension HITListSchemaV5 {
     }
 }
 
-extension HITListSchemaV5 {
+extension HITListSchemaV6 {
     @Model
     final class TaskItem {
         var id: UUID = UUID()
@@ -105,6 +106,13 @@ extension HITListSchemaV5 {
         // the task was added), separate from the due time and its `reminderOffsetMinutes`. It goes off once,
         // a repeating task's too (it doesn't roll on with the due date); nil for none.
         var reminderDate: Date? = nil
+
+        // V6 (0.9.0 (21), brief 72): Switchboards, routines of switches. Both are about Flipboard switches only.
+        /// The Switchboard this switch belongs to; nil for a loose switch on the main board (and every other task).
+        var switchboard: Switchboard? = nil
+        /// "Overdue becomes task": the switch is listed as today's task once it is due (or its Switchboard's toggle
+        /// says so). Off: a switch is never a task, only a switch on the Flipboard.
+        var overdueBecomesTask: Bool = false
 
         init(title: String, notes: String = "", priority: Int = 4, dueDate: Date? = nil, hasDueTime: Bool = false,
              project: Project? = nil, labels: [TaskLabel] = [], recurrence: RecurrenceRule? = nil) {
@@ -160,6 +168,29 @@ extension TaskItem: FilterableTask {
     var filterIsRecurring: Bool { recurrence != nil }
     var filterCreatedDate: Date? { createdAt }
     var filterIsSubtask: Bool { parent != nil }
+    /// Brief 72: "Overdue becomes task", by the switch's own toggle or its Switchboard's.
+    var filterSwitchOptedIn: Bool { overdueBecomesTask || (switchboard?.overdueBecomesTask ?? false) }
+    /// Brief 72: the clock of the Switchboard the switch is on.
+    var filterSwitchboard: SwitchboardSchedule? { switchboard?.schedule() }
+}
+
+extension Switchboard {
+    /// Daily or Weekly; a cadence a later build wrote reads as Daily.
+    var cadenceValue: SwitchboardSchedule.Cadence {
+        get { SwitchboardSchedule.cadence(stored: cadence) }
+        set { cadence = newValue.rawValue }
+    }
+
+    /// The weekday a weekly board resets on, as a Calendar weekday (0, "the week start", reads Settings).
+    func resetWeekdayValue(weekStart: Int = Preferences.weekStartWeekday()) -> Int {
+        SwitchboardSchedule.weekday(stored: resetWeekday, weekStart: weekStart)
+    }
+
+    /// The board's clock (core's `SwitchboardSchedule`): every board day and flip on it is worked out there.
+    func schedule(weekStart: Int = Preferences.weekStartWeekday()) -> SwitchboardSchedule {
+        SwitchboardSchedule(cadence: cadenceValue, resetMinutes: resetMinutes,
+                            resetWeekday: resetWeekdayValue(weekStart: weekStart))
+    }
 }
 
 /// A task of yours as a list row (brief 62, `ListRow`): its Group is its section under Sort by Group.
@@ -187,7 +218,7 @@ extension TaskItem {
     }
 }
 
-extension HITListSchemaV5 {
+extension HITListSchemaV6 {
     @Model
     final class SavedFilter {
         var id: UUID = UUID()
@@ -212,7 +243,7 @@ extension HITListSchemaV5 {
     }
 }
 
-extension HITListSchemaV5 {
+extension HITListSchemaV6 {
     /// V4 (0.5.0, brief 34): the account's profile, a name and a picture, one per iCloud account. It lives in
     /// the same private store as the tasks and syncs the same way (record type CD_Profile). Two devices that
     /// each made one before they synced end up with two; `Deduplicator` merges them (`ProfileStore.mergeDuplicates`):
@@ -240,9 +271,45 @@ extension HITListSchemaV5 {
     }
 }
 
+extension HITListSchemaV6 {
+    /// V6 (0.9.0 (21), brief 72): a named group of Flipboard switches, "Before Bed" or "Deep Clean", with a day of
+    /// its own: Daily or Weekly, resetting at `resetMinutes` (04:00 for a new board), a weekly one on `resetWeekday`.
+    /// Record type CD_Switchboard. A switch belongs to at most one (`TaskItem.switchboard`); deleting a board leaves
+    /// its switches loose unless the person asks for them to go too (`Flipboard.deleteSwitchboard`). No default board
+    /// is ever created, so two devices can't each make one. The clock's arithmetic is core's `SwitchboardSchedule`.
+    @Model
+    final class Switchboard {
+        var id: UUID = UUID()
+        var name: String = ""
+        var sortOrder: Int = 0
+        /// `SwitchboardSchedule.Cadence.rawValue`: "daily" or "weekly". A string, so a later cadence is not a retype.
+        var cadence: String = "daily"
+        /// Minutes after midnight the board resets at.
+        var resetMinutes: Int = 240
+        /// The weekday a weekly board resets on: 0 = the week start from Settings, else Calendar's 1...7.
+        var resetWeekday: Int = 0
+        /// "Overdue becomes task" for every switch on the board (a switch's own toggle opts it in too).
+        var overdueBecomesTask: Bool = false
+        var createdAt: Date = Date()
+        var updatedAt: Date = Date()
+        /// Leaving a board never deletes a switch; a switch deleted leaves the board.
+        @Relationship(deleteRule: .nullify, inverse: \TaskItem.switchboard) var switches: [TaskItem]? = []
+
+        init(name: String, sortOrder: Int = 0) {
+            self.id = UUID()
+            self.name = name
+            self.sortOrder = sortOrder
+            self.createdAt = Date()
+            self.updatedAt = self.createdAt
+        }
+
+        func touch() { updatedAt = Date() }
+    }
+}
+
 enum HITListSchema {
     /// The schema version the app runs on. Bump together with the typealiases at the top of this file.
-    static let current: any VersionedSchema.Type = HITListSchemaV5.self
+    static let current: any VersionedSchema.Type = HITListSchemaV6.self
     static var models: [any PersistentModel.Type] { current.models }
     static var schema: Schema { Schema(versionedSchema: current) }
     static let cloudKitContainerID = "iCloud.com.trammells.hitlist"
