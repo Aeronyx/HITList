@@ -15,6 +15,11 @@
 # Tags: every upload is tagged build-N; a run with --version also tags vX.Y.Z. CHANGELOG.md's section for
 # the version gets the build number and date appended to its heading.
 #
+# Without --version the run releases a new build of the current version (since 2026-11-10 the version stays
+# 0.9.0, so the testers' builds never wait for Beta App Review). That build needs its own section,
+# "## 0.9.0 (21)", in CHANGELOG.md before the run, and the run stamps it with the date. The preflight's
+# SettingsTests also fails while WhatsNew.swift has no entry for the new build.
+#
 # Environment overrides: ASC_KEY_ID, ASC_ISSUER_ID (App Store Connect API key, .p8 must live in
 # ~/.appstoreconnect/private_keys/). Defaults are George's "hitlist-upload" key.
 #
@@ -67,6 +72,18 @@ fail() { print -P "%F{red}✗ $1%f"; exit 1; }
 
 if [[ -n "$(git status --porcelain)" ]]; then
   fail "working tree is dirty; commit or stash first so the release tag matches what was built"
+fi
+
+# ---- notes for a build-only release (before anything slow or changed) -----------------------------
+# "## 0.9.0 (21)": the section for the build this run is about to make. Empty for a --version run (its
+# "## X.Y.Z" section was checked above) and for --no-bump (a rebuild of a build that has its notes).
+BUILD_HEADING=""
+if [[ -z "$NEW_VERSION" ]] && (( BUMP )); then
+  NOTES_VERSION=$(grep -E '^[[:space:]]+MARKETING_VERSION:' project.yml | awk '{print $2}' | tr -d '"')
+  NOTES_BUILD=$(grep -E '^[[:space:]]+CURRENT_PROJECT_VERSION:' project.yml | awk '{print $2}')
+  [[ "$NOTES_BUILD" =~ ^[0-9]+$ ]] || fail "could not read CURRENT_PROJECT_VERSION from project.yml"
+  BUILD_HEADING="## $NOTES_VERSION ($((NOTES_BUILD + 1)))"
+  grep -qxF "$BUILD_HEADING" CHANGELOG.md || fail "CHANGELOG.md has no '$BUILD_HEADING' section (unstamped, on a line of its own); write what changed in this build first, and its entry in WhatsNew.swift"
 fi
 
 # ---- schema drift (first: nothing is bumped or built until the schemas match) ---------------------
@@ -217,12 +234,19 @@ if (( BUMP )); then
     # "## 0.2.0" becomes "## 0.2.0 — build 6, 2026-11-01" so the changelog says what shipped when.
     sed -i '' -E "s/^## $NEW_VERSION\$/## $NEW_VERSION — build $NEXT, $(date +%Y-%m-%d)/" CHANGELOG.md
     git add CHANGELOG.md
+  elif [[ -n "$BUILD_HEADING" ]]; then
+    # "## 0.9.0 (21)" becomes "## 0.9.0 (21) — 2026-11-10". Matched as a whole line, so nothing else changes.
+    STAMPED="$BUILD_HEADING — $(date +%Y-%m-%d)"
+    awk -v from="$BUILD_HEADING" -v to="$STAMPED" '$0 == from { print to; next } { print }' CHANGELOG.md > CHANGELOG.md.tmp
+    mv CHANGELOG.md.tmp CHANGELOG.md
+    grep -qxF "$STAMPED" CHANGELOG.md || fail "could not stamp '$BUILD_HEADING' in CHANGELOG.md"
+    git add CHANGELOG.md
   fi
   # The bump regenerates the project and Info.plist; commit them with it so the tag is reproducible.
   git add project.yml HITList.xcodeproj HITList/Info.plist
   git commit -q -m "Release $MARKETING ($NEXT)
 
-Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>"
   git tag -f "build-$NEXT"
   echo "tagged build-$NEXT"
   if [[ -n "$NEW_VERSION" ]]; then

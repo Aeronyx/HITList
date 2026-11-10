@@ -1,8 +1,9 @@
 # HITList changelog
 
-One section per version. `scripts/release.sh --version X.Y.Z` refuses to run until the version has a
-section here, then stamps the heading with the build number and date. Builds within a version are
-TestFlight iterations; the heading lists the last build that shipped it.
+One section per release, newest first. Up to 0.9.0 (20) a release was a version: `scripts/release.sh --version X.Y.Z`
+refuses to run until the version has a section here, then stamps the heading with the build number and date. Since
+2026-11-10 the version stays 0.9.0 and a release is a new build of it: `scripts/release.sh --quick` refuses to run
+until the build has a section headed `## 0.9.0 (N)`, then stamps that heading with the date.
 
 ## 0.9.0 — build 20, 2026-11-08
 

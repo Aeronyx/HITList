@@ -26,7 +26,7 @@ struct MacAboutSection: View {
         }
 
         if let current = WhatsNew.current {
-            HITGroup("What's new in \(current.version)") {
+            HITGroup("What's new in \(current.label)") {
                 WhatsNewItems(entry: current)
             }
             .accessibilityIdentifier("settings-whats-new-inline")
@@ -35,14 +35,14 @@ struct MacAboutSection: View {
             if !earlier.isEmpty {
                 HITGroup {
                     HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
-                               value: earlier.map(\.version).joined(separator: ", "),
+                               value: earlier.map(\.label).joined(separator: ", "),
                                accessory: .expand(isExpanded: showEarlier)) {
                         withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
                     }
                 }
                 if showEarlier {
                     ForEach(earlier) { entry in
-                        HITGroup("Version \(entry.version)") { WhatsNewItems(entry: entry) }
+                        HITGroup("Version \(entry.label)") { WhatsNewItems(entry: entry) }
                     }
                 }
             }

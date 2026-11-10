@@ -174,9 +174,14 @@ files" is obeyed; one that does not produces merge conflicts.
 - **From 2026-11-10 the version stays 0.9.0** (George: "definitely don't update the major version number for a
   while"). Every release is a new build of 0.9.0: `scripts/release.sh --quick` (no `--version`), then
   `git push origin master --tags`. A new version number would send the external group's build back to Beta App Review
-  (one review per version, per platform). Before the first build-only release, the notes need a home, because What's
-  New is keyed by version: see `dev/briefs/ROUND-16.md`, "Supervisor work". The rules below about version sections
-  apply again only when George asks for a new version.
+  (one review per version, per platform). The rules below about version sections apply again only when George asks
+  for a new version.
+- **Notes for a build** (N = the build about to be made, one more than `CURRENT_PROJECT_VERSION` in `project.yml`):
+  a `## 0.9.0 (N)` section at the top of `CHANGELOG.md` (unstamped; the script stamps "— date"), an
+  `Entry(version: "0.9.0", build: N, items: […])` at the top of `WhatsNew.swift`, and the pin in `SettingsTests`
+  (`XCTAssertEqual(current.label, "0.9.0 (N)", "this round's list")`). `release.sh` stops before anything slow when
+  the section is missing, and its preflight fails when the running build is newer than the newest entry
+  (`WhatsNew.isBehind`). An entry and section are frozen once their "Release 0.9.0 (N)" commit exists.
 - Versions: `## X.Y.Z` section in `CHANGELOG.md` (unreleased sections have no stamp; the release script
   stamps "— build N, date"), an `Entry(version: "X.Y.Z")` at the top of `WhatsNew.swift`, and the pin in
   `SettingsTests` (`XCTAssertEqual(current.version, "X.Y.Z", "this round's list")`). All three or the
