@@ -279,6 +279,7 @@ private struct SplitContent: View {
                     .transition(.opacity)
             }
         }
+        .macSidebarColumnBackground()
         #else
         SidebarView(selection: $selection)
         #endif

@@ -82,17 +82,35 @@ private struct ToolbarEdgeReader: NSViewRepresentable {
 
 /// macOS 26 and later draw a soft edge under the toolbar where content scrolls beneath it; ours is opaque already.
 private struct TopScrollEdgeHidden: ViewModifier {
+    var edges: Edge.Set = .top
+
     func body(content: Content) -> some View {
         if #available(macOS 26, *) {
-            content.scrollEdgeEffectHidden(true, for: .top)
+            content.scrollEdgeEffectHidden(true, for: edges)
         } else {
             content
         }
     }
 }
 
+/// The sidebar column's background reaches every edge it can (brief 70, item 5): `Theme.surface` behind the whole
+/// column, the strip under the traffic lights and the sidebar toggle included, with the system's toolbar background
+/// hidden there too and no scroll edge effect under the profile header or above the Settings button. A flush sidebar
+/// (27.2) and a floating one (26.7.1) are both plain slate; whether the column floats stays the system's.
+struct MacSidebarColumnBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(Theme.surface, ignoresSafeAreaEdges: .all)
+            .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+            .modifier(TopScrollEdgeHidden(edges: .vertical))
+    }
+}
+
 extension View {
     /// The Mac detail column's toolbar band in `Theme.background` (brief 70).
     func macDetailToolbarBackground() -> some View { modifier(MacDetailToolbarBackground()) }
+
+    /// The Mac sidebar column in `Theme.surface` to its edges (brief 70).
+    func macSidebarColumnBackground() -> some View { modifier(MacSidebarColumnBackground()) }
 }
 #endif
