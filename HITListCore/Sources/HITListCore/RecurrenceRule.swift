@@ -8,6 +8,11 @@ import Foundation
 /// Feb 29 comes back to Feb 29 in the next leap year (George, 2026-11-02). A timed task's rule carries its
 /// wall-clock time too, so a repeat at 2:30 that the spring change pushed to 3:00 comes back to 2:30 the
 /// next day (George, 2026-11-03). Equality ignores both: they follow the task's due date, not the repeat.
+///
+/// A monthly or yearly rule may also have a place typed in quick add (brief 71): "every month on the
+/// 28th", "every last day of the month", "every first Monday", "every year on Mar 3". A place belongs to
+/// the repeat, as "every monday" keeps Monday: a task moved off it comes back to it at the next
+/// occurrence. Equality includes it.
 public struct RecurrenceRule: Codable, Hashable, Sendable {
     public enum Frequency: String, Codable, Sendable, CaseIterable {
         case daily, weekly, monthly, yearly
@@ -35,23 +40,97 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         var isValid: Bool { (0...23).contains(hour) && (0...59).contains(minute) }
     }
 
-    public init(frequency: Frequency, interval: Int = 1, weekdays: Set<Int>? = nil, anchorDay: Int? = nil) {
+    /// Where in the month or year a monthly or yearly repeat falls (brief 71); nil for every other rule and
+    /// for "every month" / "every year" alone, which follow the due date's day (`anchorDay`).
+    public var place: Place?
+
+    public enum Place: Hashable, Codable, Sendable {
+        /// Monthly on this day (1...31); a shorter month's last day stands in for the 29th to 31st.
+        case day(Int)
+        /// Monthly on each month's own last day.
+        case lastDay
+        /// Monthly on a weekday (1 = Sunday ... 7 = Saturday): the first to fifth (1...5) or the last (-1)
+        /// of its days in the month. A month without a fifth one is skipped.
+        case weekday(Int, ordinal: Int)
+        /// Yearly on this date; Feb 29 is Feb 28 in other years.
+        case date(month: Int, day: Int)
+
+        /// The longest each month can be, Feb 29 allowed.
+        static let monthLengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+        func fits(_ frequency: Frequency) -> Bool {
+            switch self {
+            case .day(let day): return frequency == .monthly && (1...31).contains(day)
+            case .lastDay: return frequency == .monthly
+            case .weekday(let weekday, let ordinal):
+                return frequency == .monthly && (1...7).contains(weekday) && ((1...5).contains(ordinal) || ordinal == -1)
+            case .date(let month, let day):
+                return frequency == .yearly && (1...12).contains(month) && (1...Self.monthLengths[month - 1]).contains(day)
+            }
+        }
+
+        /// The anchor day a build that knows no places reads (`encoded`), so to it "every month on the
+        /// 28th", "every last day of the month" and "every year on Mar 3" repeat as typed; a weekday in
+        /// the month has no day of its own and repeats there on the due date's day.
+        var anchorDay: Int? {
+            switch self {
+            case .day(let day): return day
+            case .lastDay: return 31
+            case .weekday: return nil
+            case .date(_, let day): return day
+            }
+        }
+
+        /// The sixth part of `encoded`: "d28", "dlast", "w2#1" (first Monday), "w6#-1" (last Friday), "m3d3".
+        var code: String {
+            switch self {
+            case .day(let day): return "d\(day)"
+            case .lastDay: return "dlast"
+            case .weekday(let weekday, let ordinal): return "w\(weekday)#\(ordinal)"
+            case .date(let month, let day): return "m\(month)d\(day)"
+            }
+        }
+
+        init?(code: String) {
+            if code == "dlast" { self = .lastDay; return }
+            if code.hasPrefix("d"), let day = Int(code.dropFirst()) { self = .day(day); return }
+            if code.hasPrefix("w") {
+                let parts = code.dropFirst().split(separator: "#", omittingEmptySubsequences: false)
+                guard parts.count == 2, let weekday = Int(parts[0]), let ordinal = Int(parts[1]) else { return nil }
+                self = .weekday(weekday, ordinal: ordinal); return
+            }
+            if code.hasPrefix("m"), let d = code.firstIndex(of: "d"),
+               let month = Int(code[code.index(after: code.startIndex)..<d]), let day = Int(code[code.index(after: d)...]) {
+                self = .date(month: month, day: day); return
+            }
+            return nil
+        }
+    }
+
+    public init(frequency: Frequency, interval: Int = 1, weekdays: Set<Int>? = nil, anchorDay: Int? = nil,
+                place: Place? = nil) {
         self.frequency = frequency
         self.interval = min(max(1, interval), Self.maxInterval)
         self.weekdays = weekdays?.isEmpty == true ? nil : weekdays
-        self.anchorDay = Self.usesAnchor(frequency) ? anchorDay.flatMap { (1...31).contains($0) ? $0 : nil } : nil
+        self.place = place.flatMap { $0.fits(frequency) ? $0 : nil }
+        if let place = self.place {
+            self.anchorDay = place.anchorDay
+        } else {
+            self.anchorDay = Self.usesAnchor(frequency) ? anchorDay.flatMap { (1...31).contains($0) ? $0 : nil } : nil
+        }
     }
 
     private static func usesAnchor(_ frequency: Frequency) -> Bool { frequency == .monthly || frequency == .yearly }
 
     public static func == (a: RecurrenceRule, b: RecurrenceRule) -> Bool {
-        a.frequency == b.frequency && a.interval == b.interval && a.weekdays == b.weekdays
+        a.frequency == b.frequency && a.interval == b.interval && a.weekdays == b.weekdays && a.place == b.place
     }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(frequency)
         hasher.combine(interval)
         hasher.combine(weekdays)
+        hasher.combine(place)
     }
 
     /// The longest interval a rule holds: the date arithmetic (7 × interval for weeks, the weekday walk)
@@ -70,12 +149,18 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     // parts and see an empty weekday list, so to them it is plain "every month" (no schema change).
     // A fifth holds the time: "daily;1;;;02:30", "monthly;1;;31;09:00". Builds up to 0.4.0 (13) read four
     // parts at most, so to them it is the rule without its time.
+    // A sixth holds the place (brief 71): "monthly;1;;28;;d28", "monthly;1;;31;09:00;dlast",
+    // "monthly;1;;;;w2#1", "yearly;1;;3;;m3d3". Builds up to 0.9.0 (20) read five parts at most, so to them
+    // it is the rule with its anchor day: right for a day, the last day and a date in the year, and plain
+    // "every month" from the due date for a weekday in the month. A place this build does not know is
+    // dropped the same way.
 
     public var encoded: String {
         var parts = ["\(frequency.rawValue)", "\(interval)"]
         parts.append(weekdays.map { $0.sorted().map(String.init).joined(separator: ",") } ?? "")
         parts.append(anchorDay.map(String.init) ?? "")
         parts.append(time.map { String(format: "%02d:%02d", $0.hour, $0.minute) } ?? "")
+        parts.append(place?.code ?? "")
         while parts.count > 2, parts.last == "" { parts.removeLast() }
         return parts.joined(separator: ";")
     }
@@ -88,7 +173,8 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
             weekdays = Set(parts[2].split(separator: ",").compactMap { Int($0) }.filter { (1...7).contains($0) })
         }
         let anchorDay = parts.count >= 4 ? Int(parts[3]) : nil
-        self.init(frequency: freq, interval: interval, weekdays: weekdays, anchorDay: anchorDay)
+        let place = parts.count >= 6 ? Place(code: parts[5]) : nil
+        self.init(frequency: freq, interval: interval, weekdays: weekdays, anchorDay: anchorDay, place: place)
         if parts.count >= 5 {
             let clock = parts[4].split(separator: ":", omittingEmptySubsequences: false)
             if clock.count == 2, clock.allSatisfy({ $0.count == 2 }), let h = Int(clock[0]), let m = Int(clock[1]) {
@@ -136,9 +222,10 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     }
 
     /// This rule anchored to a task due at `due`: monthly and yearly rules take the day it keeps returning
-    /// to (an existing anchor `due` still matches is kept); daily and weekly rules are returned as they are.
+    /// to (an existing anchor `due` still matches is kept); daily and weekly rules, and rules with a place,
+    /// are returned as they are.
     public func anchored(to due: Date, calendar: Calendar = .current) -> RecurrenceRule {
-        guard Self.usesAnchor(frequency) else { return self }
+        guard Self.usesAnchor(frequency), place == nil else { return self }
         var rule = self
         rule.anchorDay = targetDay(from: due, calendar: calendar)
         return rule
@@ -151,7 +238,7 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     /// day, as a completion would. A rule that already has an anchor, or has no use for one, is returned
     /// as it is; so is any rule for an undated task.
     public func keepingAnchor(of previous: RecurrenceRule?, due: Date?, calendar: Calendar = .current) -> RecurrenceRule {
-        guard Self.usesAnchor(frequency), anchorDay == nil, let due else { return self }
+        guard Self.usesAnchor(frequency), anchorDay == nil, place == nil, let due else { return self }
         var rule = self
         if let previous, previous.frequency == frequency { rule.anchorDay = previous.anchorDay }
         return rule.anchored(to: due, calendar: calendar)
@@ -170,6 +257,7 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     }
 
     private func step(after date: Date, calendar: Calendar) -> Date {
+        if let place { return occurrence(of: place, after: date, inclusive: false, stride: interval, calendar: calendar) }
         switch frequency {
         case .daily:
             return calendar.date(byAdding: .day, value: interval, to: date)!
@@ -214,8 +302,59 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         return next
     }
 
-    /// The first occurrence on or after `date` (used to pick a start date for "every monday").
+    /// The first day on the rule's place strictly after `date`'s day (or on it, when `inclusive`), at
+    /// `date`'s time of day. Months (years) are counted from `date`'s own in steps of `stride`, as a
+    /// weekly rule counts weeks; one with no such day (no fifth Monday) is skipped.
+    private func occurrence(of place: Place, after date: Date, inclusive: Bool, stride: Int, calendar: Calendar) -> Date {
+        let day = calendar.startOfDay(for: date)
+        let unit: Calendar.Component = frequency == .yearly ? .year : .month
+        var start = calendar.dateComponents([.year, .month], from: date)
+        start.day = 1
+        if frequency == .yearly { start.month = 1 }
+        if let first = calendar.date(from: start) {
+            for k in 0..<64 {
+                guard let period = calendar.date(byAdding: unit, value: k * stride, to: first),
+                      let candidate = Self.day(of: place, in: period, calendar: calendar) else { continue }
+                guard candidate > day || (inclusive && candidate == day) else { continue }
+                let clock = calendar.dateComponents([.hour, .minute, .second], from: date)
+                return calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0, second: clock.second ?? 0,
+                                     of: candidate) ?? candidate
+            }
+        }
+        return calendar.date(byAdding: unit, value: interval, to: date)!
+    }
+
+    /// The start of the day `place` names in the month of `period` (the year of `period` for a date), or
+    /// nil when that month has none.
+    static func day(of place: Place, in period: Date, calendar: Calendar) -> Date? {
+        var parts = calendar.dateComponents([.year, .month], from: period)
+        if case .date(let month, _) = place { parts.month = month }
+        parts.day = 1
+        guard let first = calendar.date(from: parts),
+              let length = calendar.range(of: .day, in: .month, for: first)?.count else { return nil }
+        switch place {
+        case .day(let day), .date(_, let day):
+            parts.day = min(day, length)
+        case .lastDay:
+            parts.day = length
+        case .weekday(let weekday, let ordinal):
+            var day = 1 + (weekday - calendar.component(.weekday, from: first) + 7) % 7
+            if ordinal > 0 {
+                day += 7 * (ordinal - 1)
+                guard day <= length else { return nil }
+            } else {
+                while day + 7 <= length { day += 7 }
+            }
+            parts.day = day
+        }
+        return calendar.date(from: parts).map { calendar.startOfDay(for: $0) }
+    }
+
+    /// The first occurrence on or after `date` (used to pick a start date for "every monday", "every 28th").
+    /// A rule with a place starts on the soonest day on it whatever its interval ("every 3 months on the
+    /// 10th" typed on Oct 21 starts Nov 10); the interval counts from there.
     public func firstOccurrence(onOrAfter date: Date, calendar: Calendar = .current) -> Date {
+        if let place { return occurrence(of: place, after: date, inclusive: true, stride: 1, calendar: calendar) }
         guard frequency == .weekly, let weekdays, !weekdays.isEmpty else { return date }
         let wd = calendar.component(.weekday, from: date)
         if weekdays.contains(wd) { return date }

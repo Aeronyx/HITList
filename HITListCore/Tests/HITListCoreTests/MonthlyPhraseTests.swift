@@ -30,6 +30,40 @@ final class MonthlyPhraseTests: XCTestCase {
     func testThe28thOfEachMonth() { check("the 28th of each month", due: (2026, 10, 28), rule: "monthly;1;;28;;d28") }
     func testEveryMonthOn28() { check("every month on 28", due: (2026, 10, 28), rule: "monthly;1;;28;;d28") }
 
+    /// George's rule: a repeat typed after its moment starts at the next occurrence.
+    func testTypedAfterItsDayStartsNextMonth() {
+        let on29th = QuickAddParser(now: Fixed.date(2026, 10, 29, 8), calendar: Fixed.calendar)
+        assertDate(on29th.parse("every month on the 28th").dueDate, 2026, 11, 28)
+        let late = QuickAddParser(now: Fixed.date(2026, 10, 28, 19), calendar: Fixed.calendar).parse("every 28th at 18:30")
+        assertDate(late.dueDate, 2026, 11, 28, 18, 30)
+        XCTAssertEqual(late.recurrence?.encoded, "monthly;1;;28;18:30;d28")
+        // The 31st in a 30-day month is its last day, and back to the 31st after.
+        let nov = QuickAddParser(now: Fixed.date(2026, 11, 5), calendar: Fixed.calendar).parse("every month on the 31st")
+        assertDate(nov.dueDate, 2026, 11, 30)
+        assertDate(nov.recurrence?.nextOccurrence(after: nov.dueDate!, calendar: Fixed.calendar), 2026, 12, 31)
+    }
+
+    /// Words that look close but are not a repeat on a day keep reading as they did.
+    func testLookalikesReadAsBefore() {
+        let parser = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar)
+        let plain: [(typed: String, rule: String?, title: String)] = [
+            ("Call on the 28th", nil, "Call on the 28th"),
+            ("the 28th of the month", nil, "the 28th of the month"),
+            ("every 28", nil, "every 28"),
+            ("every 2 weeks", "weekly;2", ""),
+            ("every month on fri", "monthly;1;;23", ""),
+            ("every month on 5 jan", "monthly;1;;5", ""),
+            ("Pay every month", "monthly;1;;21", "Pay"),
+        ]
+        for case let (typed, rule, title) in plain {
+            let r = parser.parse(typed)
+            XCTAssertEqual(r.recurrence?.encoded, rule, typed)
+            XCTAssertEqual(r.title, title, typed)
+        }
+        // "every month" then "on fri": the plain repeat and a date, as before.
+        XCTAssertEqual(parser.parse("every month on fri").tokens.map(\.text), ["every month", "on fri"])
+    }
+
     // MARK: Month intervals
 
     func testEveryOtherMonthOnThe15th() { check("every other month on the 15th", due: (2026, 11, 15), rule: "monthly;2;;15;;d15") }
