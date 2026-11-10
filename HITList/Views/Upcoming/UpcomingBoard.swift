@@ -15,6 +15,9 @@ struct UpcomingBoard: View {
     @Binding var window: UpcomingWindow
     let now: Date
     var calendar: Calendar = .current
+    /// A day's calendar events (brief 77), drawn at the top of its column; none by default and while the setting is
+    /// off. Read-only cards: no checkbox, no drag, a click does nothing; the column's count stays its tasks'.
+    var events: (Date) -> [DayEvent] = { _ in [] }
     /// The completion animation's phase for a task (`CompletionAnimator`), nil when it isn't animating.
     var phase: (UUID) -> CompletionPhase? = { _ in nil }
     /// A card's checkbox: a task of yours or a shared one (brief 62).
@@ -236,6 +239,11 @@ struct UpcomingBoard: View {
             ScrollViewReader { proxy in
                 ScrollView(.vertical) {
                     LazyVStack(alignment: .leading, spacing: HITSpacing.s) {
+                        if let day = column.day {
+                            ForEach(events(day)) { event in
+                                CalendarEventCard(event: event, now: now, calendar: calendar)
+                            }
+                        }
                         ForEach(column.items) { entry in
                             card(entry, inOverdue: column.day == nil)
                         }

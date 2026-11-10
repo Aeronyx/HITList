@@ -39,6 +39,20 @@ final class CalendarRowsTests: XCTestCase {
                                                            start: at(9), end: at(10)), now: Date()))
         XCTAssertEqual(long, taskRow, accuracy: 0.5, "a long title truncates rather than wrapping")
     }
+
+    func testEventCardOnTheBoardIsATaskCardsHeight() throws {
+        let container = ModelContainerFactory.preview()
+        let task = TaskItem(title: "Reply to Sam", dueDate: at(9, 30), hasDueTime: true)
+        container.mainContext.insert(task)
+        try container.mainContext.save()
+        let card = CalendarEventCard(event: dayEvent(start: at(9, 30), end: at(10, 15)), now: Date())
+            .frame(width: UpcomingBoard.cardWidth)
+        XCTAssertNotNil(ImageRenderer(content: card).cgImage)
+        let cardHeight = NSHostingView(rootView: card).fittingSize.height
+        let row = NSHostingView(rootView: CalendarEventRow(event: dayEvent(start: at(9, 30), end: at(10, 15)), now: Date())
+            .frame(width: UpcomingBoard.cardWidth)).fittingSize.height
+        XCTAssertEqual(cardHeight, row + 2 * (HITSpacing.s + 2), accuracy: 0.5, "a task card's padding around the row")
+    }
     #endif
 
     func testPastEventsDimOnlyOnceOver() {

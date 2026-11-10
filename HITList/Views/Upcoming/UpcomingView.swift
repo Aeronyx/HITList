@@ -57,6 +57,9 @@ struct UpcomingView: View {
     /// "You can see “Trip” but not change it.": a drop or a move a shared list refused, for a moment.
     @State private var refusal: String?
     private var sharedRows: SharedRows { SharedRows.shared }
+    /// Each day's calendar events at the top of that day (brief 77); none while the setting is off.
+    private var calendarEvents: CalendarEvents { CalendarEvents.shared }
+    @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
 
     private static let pageDays = 30
     /// The strip's pages: a month back, a year ahead.
@@ -130,7 +133,21 @@ struct UpcomingView: View {
         .onAppear {
             CompletionFeedback.shared.prepare()
             sharedRows.start()
+            calendarEvents.start()
+            coverEvents()
         }
+        // The events reach as far as the list or the board does.
+        .onChange(of: dayCount) { _, _ in coverEvents() }
+        .onChange(of: window) { _, _ in coverEvents() }
+    }
+
+    /// A day's events, in order (none while off): never tasks, so no count, dot or drop takes them.
+    private func events(on day: Date) -> [DayEvent] { calendarEvents.events(on: day, calendar: calendar) }
+
+    private func coverEvents() {
+        let last = showsBoard ? window.days(now: now, calendar: calendar).last ?? today
+            : calendar.date(byAdding: .day, value: dayCount, to: today) ?? today
+        calendarEvents.cover(through: last)
     }
 
     private func jumpToToday() {
@@ -146,6 +163,7 @@ struct UpcomingView: View {
     private func board(_ entries: [Entry]) -> some View {
         let board = UpcomingBoardModel(items: entries, window: window, now: now, showOverdue: overdueExpanded, calendar: calendar)
         return UpcomingBoard(board: board, window: $window, now: now, calendar: calendar,
+                             events: { events(on: $0) },
                              phase: { completions.phase(of: $0) },
                              onToggleCompletion: { toggleCompletion($0) },
                              onOpen: { open($0) },
@@ -206,11 +224,13 @@ struct UpcomingView: View {
                 // floats over the top of the rows it is scrolled to).
                 Section {
                     dayHeader(day).headerRow()
+                    eventRows(day.date)
                     ForEach(day.items) { row($0) }
                     addRow(day.date, isEmpty: day.items.isEmpty)
                 }
                 #else
                 Section {
+                    eventRows(day.date)
                     ForEach(day.items) { row($0) }
                     addRow(day.date, isEmpty: day.items.isEmpty)
                 } header: {
@@ -235,6 +255,15 @@ struct UpcomingView: View {
         #endif
         .environment(\.defaultMinListHeaderHeight, 0)
         .slateList()
+    }
+
+    /// The day's calendar events above its tasks (brief 77): read-only rows, nothing to select, swipe or drag.
+    private func eventRows(_ day: Date) -> some View {
+        ForEach(events(on: day)) { event in
+            CalendarEventRow(event: event, now: now, calendar: calendar)
+                .calendarEventListRow(compact: compactRows)
+                .id(EventRowID(day: day, event: event.id))
+        }
     }
 
     @ViewBuilder
@@ -444,16 +473,19 @@ struct UpcomingView: View {
     // MARK: - Week strip ↔ list
 
     private struct AddRowID: Hashable { let day: Date }
+    /// A calendar event's row under its day (brief 77): on the Mac a jump lands on the day's first one.
+    private struct EventRowID: Hashable { let day: Date; let event: String }
     /// A day header (`.distantPast` is Overdue's), the iPhone's jump target.
     private struct HeaderID: Hashable { let day: Date }
 
-    /// Where a day's jump lands: iPhone, the day's header row; the Mac (pinned headers), the first
-    /// task, or the add row of an empty day.
+    /// Where a day's jump lands: iPhone, the day's header row; the Mac (pinned headers), the day's first
+    /// calendar event, else its first task, or the add row of an empty day.
     private func scrollTarget(for day: Date, firstItem: UUID?) -> AnyHashable {
         #if os(iOS)
         AnyHashable(HeaderID(day: day))
         #else
-        firstItem.map { AnyHashable($0) } ?? AnyHashable(AddRowID(day: day))
+        if let event = events(on: day).first { return AnyHashable(EventRowID(day: day, event: event.id)) }
+        return firstItem.map { AnyHashable($0) } ?? AnyHashable(AddRowID(day: day))
         #endif
     }
 
