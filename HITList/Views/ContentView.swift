@@ -157,6 +157,12 @@ private struct SplitContent: View {
                 sidebar.navigationSplitViewColumnWidth(DuoColumns.sidebarWidth(width: geometry.width, crease: geometry.crease))
             } else {
                 sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
+                    #if os(macOS)
+                    // Our sidebar toggle above the sidebar, where the system's was (brief 70); the system's sat in a
+                    // glass circle on 27.2.
+                    .toolbar(removing: .sidebarToggle)
+                    .toolbar { sidebarToggleItem }
+                    #endif
             }
         } detail: {
             if duo {
@@ -167,6 +173,10 @@ private struct SplitContent: View {
             } else {
                 ListScreen(item: selection ?? .today)
                     .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+                    #if os(macOS)
+                    // With the sidebar hidden, the toggle moves to the detail's leading edge, as the system's did.
+                    .toolbar { detailToggleItem }
+                    #endif
             }
         }
         // Duo: side by side, never the sidebar sliding over the list as an upright iPad's does.
@@ -218,6 +228,38 @@ private struct SplitContent: View {
         #endif
         #endif
     }
+
+    #if os(macOS)
+    /// The sidebar toggle in the sidebar column's part of the toolbar, outside the toolbar's shared glass.
+    @ToolbarContentBuilder
+    private var sidebarToggleItem: some ToolbarContent {
+        // At the column's trailing end, as the system's toggle was: a flexible space pushes it past the traffic lights.
+        // Only while the column shows: a hidden column's items went to the toolbar's overflow (»).
+        if SidebarToggleButton.sidebarShown(columnVisibility) {
+            if #available(macOS 26, *) {
+                ToolbarSpacer(.flexible)
+                ToolbarItem { SidebarToggleButton(visibility: $columnVisibility) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem { Spacer() }
+                ToolbarItem { SidebarToggleButton(visibility: $columnVisibility) }
+            }
+        }
+    }
+
+    /// With the column hidden, the toggle at the detail's leading edge (after the traffic lights), outside the glass.
+    @ToolbarContentBuilder
+    private var detailToggleItem: some ToolbarContent {
+        if !SidebarToggleButton.sidebarShown(columnVisibility) {
+            if #available(macOS 26, *) {
+                ToolbarItem(placement: .navigation) { SidebarToggleButton(visibility: $columnVisibility) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .navigation) { SidebarToggleButton(visibility: $columnVisibility) }
+            }
+        }
+    }
+    #endif
 
     /// The sidebar column's content: the lists, or while Settings is selected, its sections with a Back
     /// button, the way System Settings uses its sidebar. The column itself never collapses (build 9 slid
