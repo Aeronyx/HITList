@@ -698,10 +698,12 @@ enum Flipboard {
         try context.save()
     }
 
-    /// Takes a task off the board. It keeps its repeat and due date; only the label goes.
+    /// Takes a task off the board. It keeps its repeat and due date; the label goes, and so does its Switchboard
+    /// (brief 72: a board holds switches only, so deleting the board with its switches never takes an ordinary task).
     @MainActor
     static func remove(_ task: TaskItem, in context: ModelContext) {
         task.labels = (task.labels ?? []).filter { $0.name.caseInsensitiveCompare(labelName) != .orderedSame }
+        task.switchboard = nil
         task.touch()
         try? context.save()
     }

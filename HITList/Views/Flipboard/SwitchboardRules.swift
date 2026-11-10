@@ -13,6 +13,11 @@ extension Flipboard {
         var errorDescription: String? { "A Switchboard needs a name." }
     }
 
+    /// The switches on a board (members only: a task that lost the label on an older build may still point at it).
+    static func switches(on board: Switchboard) -> [TaskItem] {
+        (board.switches ?? []).filter { isMember($0) }
+    }
+
     /// Every Switchboard in the Flipboard's order.
     @MainActor
     static func switchboards(in context: ModelContext) throws -> [Switchboard] {
@@ -56,7 +61,7 @@ extension Flipboard {
                        resetWeekday: Int, overdueBecomesTask: Bool, in context: ModelContext, now: Date = Date()) {
         let trimmed = TaskLimits.clampedTitle(name)
         let before = board.schedule()
-        let sides = (board.switches ?? []).map { ($0, Clock($0).side($0.dueDate, now: now)) }
+        let sides = switches(on: board).map { ($0, Clock($0).side($0.dueDate, now: now)) }
         if !trimmed.isEmpty { board.name = trimmed }
         board.cadenceValue = cadence
         board.resetMinutes = SwitchboardSchedule(cadence: cadence, resetMinutes: resetMinutes).resetMinutes
@@ -88,7 +93,9 @@ extension Flipboard {
     @MainActor
     static func deleteSwitchboard(_ board: Switchboard, deletingSwitches: Bool, in context: ModelContext, now: Date = Date()) {
         for task in board.switches ?? [] {
-            if deletingSwitches {
+            // Only a switch goes with its board; a task that left the Flipboard another way (an older build took its
+            // label off) just leaves the board.
+            if deletingSwitches, isMember(task) {
                 context.delete(task)
             } else {
                 move(task, to: nil, in: context, now: now, save: false)
