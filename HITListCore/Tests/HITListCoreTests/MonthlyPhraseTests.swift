@@ -90,6 +90,22 @@ final class MonthlyPhraseTests: XCTestCase {
         check("every third Wednesday of the month", due: (2026, 10, 21), rule: "monthly;1;;;;w4#3")
     }
 
+    func testMoreEndsAndWeekdays() {
+        check("the last day of every month", due: (2026, 10, 31), rule: "monthly;1;;31;;dlast")
+        check("every month on the first Monday", due: (2026, 11, 2), rule: "monthly;1;;;;w2#1")
+        check("every other month on the last Friday", due: (2026, 10, 30), rule: "monthly;2;;;;w6#-1")
+        check("on the first Monday of each month", due: (2026, 11, 2), rule: "monthly;1;;;;w2#1")
+        check("Standup every 1st Monday of every month", due: (2026, 11, 2), rule: "monthly;1;;;;w2#1",
+              highlight: "every 1st Monday of every month", title: "Standup")
+        // Not repeats: the words stay as they read before.
+        let parser = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar)
+        XCTAssertNil(parser.parse("every last minute").recurrence)
+        XCTAssertEqual(parser.parse("every last minute").title, "every last minute")
+        XCTAssertNil(parser.parse("end of the month").recurrence)
+        XCTAssertNil(parser.parse("every sixth Monday").recurrence)
+        assertDate(parser.parse("end of month").dueDate, 2026, 10, 31)
+    }
+
     // MARK: Yearly
 
     func testEveryYearOnMar3() { check("every year on Mar 3", due: (2027, 3, 3), rule: "yearly;1;;3;;m3d3") }
