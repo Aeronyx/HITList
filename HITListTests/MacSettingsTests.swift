@@ -28,7 +28,8 @@ final class MacSettingsTests: XCTestCase {
                        ["Account", "General", "iCloud", "Reminders", "Extras", "Appearance", "Data", "Claude", "About"])
         for section in MacSettingsSection.allCases {
             XCTAssertFalse(section.caption.isEmpty, "\(section) has a caption")
-            // About 23 characters of caption2 fit beside the icon in the 200 pt column without "…".
+            // One short line: under the page's title, and each section row's tooltip (brief 70 gave the Settings
+            // sidebar the lists' one-line rows).
             XCTAssertLessThanOrEqual(section.caption.count, 24, "\(section)'s caption fits one line of the 200 pt list")
             XCTAssertEqual(section.id, section.rawValue)
         }
