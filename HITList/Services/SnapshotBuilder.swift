@@ -18,6 +18,7 @@ enum SnapshotBuilder {
         let labels = try context.fetch(FetchDescriptor<TaskLabel>())
         let tasks = try context.fetch(FetchDescriptor<TaskItem>())
         let filters = try context.fetch(FetchDescriptor<SavedFilter>())
+        let switchboards = try context.fetch(FetchDescriptor<Switchboard>())
         return Snapshot(
             deviceName: deviceName(),
             projects: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) },
@@ -29,9 +30,15 @@ enum SnapshotBuilder {
                       reminderOffsetMinutes: $0.reminderOffsetMinutes, deadline: $0.deadline, locationName: $0.locationName,
                       flipTarget: $0.flipTarget, flipCount: $0.flipCount, flipPeriodStart: $0.flipPeriodStart,
                       parentID: $0.parent?.id, reminderDate: $0.reminderDate,
-                      schemaVersion: Snapshot.TaskRecord.currentSchemaVersion)
+                      schemaVersion: Snapshot.TaskRecord.currentSchemaVersion,
+                      switchboardID: $0.switchboard?.id, overdueBecomesTask: $0.overdueBecomesTask)
             },
-            filters: filters.map { .init(id: $0.id, name: $0.name, query: $0.query, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
+            filters: filters.map { .init(id: $0.id, name: $0.name, query: $0.query, colorHex: $0.colorHex, sortOrder: $0.sortOrder, createdAt: $0.createdAt, updatedAt: $0.updatedAt) },
+            switchboards: switchboards.map {
+                .init(id: $0.id, name: $0.name, sortOrder: $0.sortOrder, cadence: $0.cadence, resetMinutes: $0.resetMinutes,
+                      resetWeekday: $0.resetWeekday, overdueBecomesTask: $0.overdueBecomesTask, createdAt: $0.createdAt,
+                      updatedAt: $0.updatedAt)
+            }
         )
     }
 
@@ -94,6 +101,28 @@ enum SnapshotBuilder {
             }
         }
 
+        // Schema V6's Switchboards (brief 72); a backup from before 0.9.0 (21) has none and touches none.
+        var boardsByID: [UUID: Switchboard] = [:]
+        for b in try context.fetch(FetchDescriptor<Switchboard>()) { boardsByID[b.id] = b }
+        for r in snapshot.switchboards ?? [] {
+            let board: Switchboard
+            if let existing = boardsByID[r.id] {
+                guard overwriteNewer || r.updatedAt > existing.updatedAt else { summary.skipped += 1; continue }
+                board = existing
+                summary.updated += 1
+            } else {
+                board = Switchboard(name: r.name)
+                board.id = r.id
+                board.createdAt = r.createdAt
+                context.insert(board)
+                boardsByID[r.id] = board
+                summary.inserted += 1
+            }
+            board.name = r.name; board.sortOrder = r.sortOrder; board.cadence = r.cadence
+            board.resetMinutes = r.resetMinutes; board.resetWeekday = r.resetWeekday
+            board.overdueBecomesTask = r.overdueBecomesTask; board.updatedAt = r.updatedAt
+        }
+
         var tasksByID: [UUID: TaskItem] = [:]
         for t in try context.fetch(FetchDescriptor<TaskItem>()) { tasksByID[t.id] = t }
         var restoredTasks: [(record: Snapshot.TaskRecord, task: TaskItem)] = []
@@ -130,6 +159,11 @@ enum SnapshotBuilder {
             }
             // Schema V5's reminder moment ("!15m"), the same way: a backup from before 0.7.0 doesn't say.
             if r.hasV5Fields { target.reminderDate = r.reminderDate }
+            // Schema V6's board and opt-in, the same way: a backup from before 0.9.0 (21) doesn't say.
+            if r.hasV6Fields {
+                target.switchboard = r.switchboardID.flatMap { boardsByID[$0] }
+                target.overdueBecomesTask = r.overdueBecomesTask ?? false
+            }
             target.updatedAt = r.updatedAt
         }
         // Subtasks once every task exists (a child may come before its parent). One level only: a parent

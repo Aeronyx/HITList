@@ -123,8 +123,9 @@ final class SeedingTests: XCTestCase {
         XCTAssertEqual(try d.context.fetchCount(FetchDescriptor<TaskItem>()), 0, "only with the argument")
         TaskActions.seedSampleDataIfRequested(in: d.context, arguments: ["HITList", "-seedSampleData"], storeName: "HITList-schema.store")
         XCTAssertEqual(Set(try d.context.fetch(FetchDescriptor<TaskItem>()).filter { $0.parent == nil }.map(\.title)),
-                       ["Sample task (safe to delete)", "Sample completed task (safe to delete)"],
-                       "plus the sample sub-task (schema V3); the completed one carries completedAt")
+                       ["Sample task (safe to delete)", "Sample completed task (safe to delete)", "Sample switch (safe to delete)"],
+                       "plus the sample sub-task (schema V3); the completed one carries completedAt; the switch is on the sample board (V6)")
+        XCTAssertEqual(try d.context.fetch(FetchDescriptor<Switchboard>()).map(\.name), ["Sample Switchboard (safe to delete)"])
     }
 
     /// Reminders, the app icon badge and the daily backup are the real store's: every build on a device

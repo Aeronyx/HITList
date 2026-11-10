@@ -64,6 +64,7 @@ final class SnapshotRoundTripTests: XCTestCase {
         s.projects.sort { $0.id.uuidString < $1.id.uuidString }
         s.labels.sort { $0.id.uuidString < $1.id.uuidString }
         s.filters.sort { $0.id.uuidString < $1.id.uuidString }
+        s.switchboards?.sort { $0.id.uuidString < $1.id.uuidString }
         s.tasks = s.tasks.map { var t = $0; t.labelIDs.sort { $0.uuidString < $1.uuidString }; return t }
             .sorted { $0.id.uuidString < $1.id.uuidString }
         return s
@@ -300,5 +301,113 @@ final class SnapshotRoundTripTests: XCTestCase {
         let byTitle = Dictionary(uniqueKeysWithValues: try target.mainContext.fetch(FetchDescriptor<TaskItem>()).map { ($0.title, $0) })
         XCTAssertEqual(byTitle["B"]?.parent?.title, "A")
         XCTAssertEqual(byTitle["C"]?.parent?.title, "A")
+    }
+
+    // MARK: - Schema V6: Switchboards (brief 72)
+
+    /// A Switchboard with its cadence, reset and opt-in, and its switches (one opted in itself), come back as they were.
+    func testASwitchboardAndItsSwitchesSurviveABackup() throws {
+        let context = source.mainContext
+        let board = Switchboard(name: "Deep Clean")
+        board.sortOrder = 2
+        board.cadence = "weekly"
+        board.resetMinutes = 9 * 60 + 30
+        board.resetWeekday = 7
+        board.overdueBecomesTask = true
+        board.createdAt = t0
+        board.updatedAt = t0.addingTimeInterval(60)
+        context.insert(board)
+        let vacuum = TaskItem(title: "Vacuum", dueDate: t0, recurrence: .weekly)
+        let windows = TaskItem(title: "Windows", dueDate: t0.addingTimeInterval(10 * 3600), hasDueTime: true, recurrence: .weekly)
+        let loose = TaskItem(title: "Shave", recurrence: RecurrenceRule(frequency: .daily, interval: 3))
+        for task in [vacuum, windows, loose] { context.insert(task) }
+        vacuum.switchboard = board
+        windows.switchboard = board
+        windows.overdueBecomesTask = true
+        loose.overdueBecomesTask = true
+        try context.save()
+
+        let exported = try roundTrip(SnapshotBuilder.build(from: context))
+        XCTAssertEqual(exported.switchboards?.map(\.name), ["Deep Clean"])
+        XCTAssertEqual(exported.tasks.first { $0.title == "Vacuum" }?.switchboardID, board.id)
+        XCTAssertNil(exported.tasks.first { $0.title == "Shave" }?.switchboardID)
+        XCTAssertTrue(exported.tasks.allSatisfy(\.hasV6Fields))
+        let summary = try SnapshotBuilder.restore(exported, into: target.mainContext)
+        XCTAssertEqual(summary.inserted, 4)
+
+        let boards = try target.mainContext.fetch(FetchDescriptor<Switchboard>())
+        let restored = try XCTUnwrap(boards.first)
+        XCTAssertEqual(boards.count, 1)
+        XCTAssertEqual(restored.id, board.id)
+        XCTAssertEqual(restored.sortOrder, 2)
+        XCTAssertEqual(restored.cadence, "weekly")
+        XCTAssertEqual(restored.resetMinutes, 570)
+        XCTAssertEqual(restored.resetWeekday, 7)
+        XCTAssertTrue(restored.overdueBecomesTask)
+        XCTAssertEqual(restored.createdAt, t0)
+        XCTAssertEqual(restored.updatedAt, t0.addingTimeInterval(60))
+        XCTAssertEqual(Set(restored.switches?.map(\.title) ?? []), ["Vacuum", "Windows"])
+        let tasks = try target.mainContext.fetch(FetchDescriptor<TaskItem>())
+        XCTAssertEqual(tasks.first { $0.title == "Windows" }?.overdueBecomesTask, true)
+        XCTAssertEqual(tasks.first { $0.title == "Vacuum" }?.overdueBecomesTask, false)
+        XCTAssertEqual(tasks.first { $0.title == "Shave" }?.overdueBecomesTask, true)
+        XCTAssertNil(tasks.first { $0.title == "Shave" }?.switchboard)
+        XCTAssertEqual(normalized(try SnapshotBuilder.build(from: target.mainContext)), normalized(exported))
+    }
+
+    /// A newer backup moves a switch out of its board (its record says no board) and renames the board.
+    func testANewerBackupMovesASwitchOffItsBoard() throws {
+        let context = source.mainContext
+        let board = Switchboard(name: "Before Bed")
+        let floss = TaskItem(title: "Floss", recurrence: .daily)
+        context.insert(board)
+        context.insert(floss)
+        floss.switchboard = board
+        try context.save()
+        try SnapshotBuilder.restore(try roundTrip(SnapshotBuilder.build(from: context)), into: target.mainContext)
+
+        board.name = "Bedtime"
+        board.updatedAt = Date().addingTimeInterval(60)
+        floss.switchboard = nil
+        floss.updatedAt = Date().addingTimeInterval(60)
+        try context.save()
+        try SnapshotBuilder.restore(try roundTrip(SnapshotBuilder.build(from: context)), into: target.mainContext)
+
+        XCTAssertEqual(try target.mainContext.fetch(FetchDescriptor<Switchboard>()).map(\.name), ["Bedtime"])
+        XCTAssertNil(try target.mainContext.fetch(FetchDescriptor<TaskItem>()).first?.switchboard)
+    }
+
+    /// A backup written by 0.9.0 (20) has no Switchboards and no V6 task fields: it still restores, and leaves a
+    /// switch's board and opt-in as they are here.
+    func testABackupFromBeforeSwitchboardsStillRestores() throws {
+        let local = TaskItem(title: "Floss", recurrence: .daily)
+        let board = Switchboard(name: "Before Bed")
+        target.mainContext.insert(local)
+        target.mainContext.insert(board)
+        local.switchboard = board
+        local.overdueBecomesTask = true
+        local.updatedAt = t0
+        try target.mainContext.save()
+
+        let record = Snapshot.TaskRecord(id: local.id, title: "Floss (from the backup)", notes: "", priority: 4, dueDate: nil,
+                                         hasDueTime: false, isCompleted: false, completedAt: nil, recurrence: "daily;1",
+                                         sortOrder: 0, projectID: nil, labelIDs: [], createdAt: t0,
+                                         updatedAt: t0.addingTimeInterval(3600), flipTarget: 1, flipCount: 0,
+                                         schemaVersion: 5)
+        let older = Snapshot(deviceName: "0.9.0 (20)", projects: [], labels: [], tasks: [record], filters: [])
+        var object = try XCTUnwrap(try JSONSerialization.jsonObject(with: older.jsonData()) as? [String: Any])
+        XCTAssertNil(object["switchboards"], "0.9.0 (20) wrote no such key")
+        object["tasks"] = (object["tasks"] as? [[String: Any]])?.map {
+            var t = $0; t.removeValue(forKey: "switchboardID"); t.removeValue(forKey: "overdueBecomesTask"); return t
+        }
+        let decoded = try Snapshot.from(json: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(decoded.switchboards)
+        XCTAssertFalse(decoded.tasks[0].hasV6Fields)
+        try SnapshotBuilder.restore(decoded, into: target.mainContext)
+
+        XCTAssertEqual(local.title, "Floss (from the backup)", "the backup is newer, so its fields win")
+        XCTAssertEqual(local.switchboard?.name, "Before Bed", "a backup too old to say leaves the board alone")
+        XCTAssertTrue(local.overdueBecomesTask)
+        XCTAssertEqual(try target.mainContext.fetchCount(FetchDescriptor<Switchboard>()), 1)
     }
 }

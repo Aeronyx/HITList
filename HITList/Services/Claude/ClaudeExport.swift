@@ -21,11 +21,15 @@ enum ClaudeExport {
             rule.showsContainer(holding: $0.tasks ?? [], labelNames: ClaudeToolHandler.labelNames, parent: { $0.parent })
         }
         let projectIDs = Set(projects.map(\.id)), labelIDs = Set(labels.map(\.id))
+        let tasks = full.tasks.filter { visible.contains($0.id) }
+        // The Switchboards the shown switches are on (brief 72), and no others.
+        let boardIDs = Set(tasks.compactMap(\.switchboardID))
         return Snapshot(exportedAt: now, deviceName: "HITList",
                         projects: full.projects.filter { projectIDs.contains($0.id) },
                         labels: full.labels.filter { labelIDs.contains($0.id) },
-                        tasks: full.tasks.filter { visible.contains($0.id) },
-                        filters: [])
+                        tasks: tasks,
+                        filters: [],
+                        switchboards: (full.switchboards ?? []).filter { boardIDs.contains($0.id) })
     }
 
     static let schemaNote = """
@@ -34,8 +38,11 @@ enum ClaudeExport {
         "hasDueTime" false means the date only matters, not the time), "isCompleted"/"completedAt", "recurrence" \
         (a repeat rule "frequency;interval;weekdays;day;time", e.g. "weekly;2;2,4" is every other Monday and \
         Wednesday, weekdays 1–7 from Sunday), "deadline", "locationName", "projectID" (its Group in "projects", \
-        or none for the Inbox), "labelIDs" (in "labels"), and "parentID" for a subtask of another task. Dates \
-        are UTC. HITList may leave some of my tasks out on purpose.
+        or none for the Inbox), "labelIDs" (in "labels"), and "parentID" for a subtask of another task. A task \
+        with the "flipboard" label is a switch on my Flipboard, a routine rather than a to-do: "switchboardID" is \
+        the routine it belongs to (in "switchboards", with its daily or weekly reset time in minutes after \
+        midnight), and it counts as a task only when "overdueBecomesTask" is true, on it or on its switchboard. \
+        Dates are UTC. HITList may leave some of my tasks out on purpose.
         """
 
     /// The schema note, then the JSON in a fenced block: what "Copy for Claude" puts on the clipboard.
