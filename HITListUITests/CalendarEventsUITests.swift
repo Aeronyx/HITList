@@ -94,6 +94,33 @@ final class CalendarEventsUITests: XCTestCase {
         XCTAssertEqual(events.count, 0)
     }
 
+    /// The real permission, on the simulator's own (empty) calendar: switching on shows the system's prompt with the
+    /// purpose string; Don't Allow leaves the switch off, says why and offers the system's settings.
+    func testRefusingAccessSaysWhyAndOffersSettings() {
+        app.resetAuthorizationStatus(for: .calendar)
+        app.launch()
+        openSettings()
+        let toggle = app.descendants(matching: .any)["settings-calendar-events"].firstMatch
+        for _ in 0..<8 where !(toggle.exists && toggle.isHittable) { app.swipeUp() }
+        snapshot("8 Settings, calendar events off (not asked yet)")
+        toggle.tap()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let alert = springboard.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system's prompt")
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "only reads them")).firstMatch.exists,
+                      "the purpose string says read-only")
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "9 The permission prompt"
+        shot.lifetime = .keepAlways
+        add(shot)
+        alert.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Don")).firstMatch.tap()
+        let openSettingsRow = app.descendants(matching: .any)["settings-calendar-open-settings"].firstMatch
+        XCTAssertTrue(openSettingsRow.waitForExistence(timeout: 5), "refused: a way to the system's settings")
+        XCTAssertFalse(app.descendants(matching: .any)["settings-calendar-choice"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "isn't allowed")).firstMatch.exists)
+        snapshot("10 Settings, calendar access refused")
+    }
+
     // MARK: Helpers
 
     private var events: XCUIElementQuery { app.descendants(matching: .any).matching(identifier: "calendarEvent") }
