@@ -112,8 +112,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(hashes, v5Hashes)
     }
 
-    /// Entity version hashes of schema V5, the live models (0.7.1). When V6 moves them, these must keep
-    /// matching the frozen copy.
+    /// Entity version hashes of schema V5 as 0.7.1–0.9.0 (17–20) shipped it, taken from the live models before V6
+    /// moved them; `SchemaV5Models.swift` must keep producing them.
     private let v5Hashes: [String: String] = [
         "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
         "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
@@ -121,6 +121,144 @@ final class SchemaTests: XCTestCase {
         "TaskItem": "RyChVfD/kAlVXWZyVVlssicbubYbibgfHmEpfhVyjD8=",
         "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
     ]
+
+    /// CloudKit is additive only: V6 (brief 72) adds the Switchboard entity (record type CD_Switchboard) and two
+    /// TaskItem fields, the optional to-one `switchboard` (a CD_switchboard reference) and `overdueBecomesTask` (Bool,
+    /// default false), and leaves everything else exactly as V5 had it.
+    func testV6OnlyAddsTheSwitchboard() throws {
+        let v5 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV5.models))
+        let v6 = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV6.models))
+        XCTAssertEqual(Set(v6.entitiesByName.keys).subtracting(v5.entitiesByName.keys), ["Switchboard"])
+        XCTAssertTrue(Set(v5.entitiesByName.keys).isSubset(of: v6.entitiesByName.keys))
+        for (name, entity) in v5.entitiesByName where name != "TaskItem" {
+            XCTAssertEqual(entity.versionHash, v6.entitiesByName[name]?.versionHash, "\(name) changed in V6")
+        }
+
+        let before = try XCTUnwrap(v5.entitiesByName["TaskItem"]), after = try XCTUnwrap(v6.entitiesByName["TaskItem"])
+        XCTAssertEqual(Set(after.propertiesByName.keys).subtracting(before.propertiesByName.keys), ["switchboard", "overdueBecomesTask"])
+        XCTAssertTrue(Set(before.propertiesByName.keys).isSubset(of: after.propertiesByName.keys))
+        for (name, attribute) in before.attributesByName {
+            XCTAssertEqual(attribute.attributeType, after.attributesByName[name]?.attributeType, "\(name) changed type")
+            XCTAssertEqual(attribute.isOptional, after.attributesByName[name]?.isOptional, "\(name) changed optionality")
+        }
+        for (name, relationship) in before.relationshipsByName {
+            let now = try XCTUnwrap(after.relationshipsByName[name], name)
+            XCTAssertEqual(relationship.destinationEntity?.name, now.destinationEntity?.name, name)
+            XCTAssertEqual(relationship.deleteRule, now.deleteRule, name)
+            XCTAssertEqual(relationship.isToMany, now.isToMany, name)
+        }
+        let optIn = try XCTUnwrap(after.attributesByName["overdueBecomesTask"])
+        XCTAssertEqual(optIn.attributeType, .booleanAttributeType)
+        XCTAssertEqual(optIn.defaultValue as? Bool, false, "a switch is never a task unless it opts in")
+        let board = try XCTUnwrap(after.relationshipsByName["switchboard"])
+        XCTAssertTrue(board.isOptional, "CloudKit: relationships must be optional")
+        XCTAssertFalse(board.isToMany)
+        XCTAssertEqual(board.destinationEntity?.name, "Switchboard")
+        XCTAssertEqual(board.inverseRelationship?.name, "switches")
+        XCTAssertEqual(board.deleteRule, .nullifyDeleteRule)
+        XCTAssertTrue(after.uniquenessConstraints.isEmpty, "CloudKit: no unique constraints")
+
+        let switchboard = try XCTUnwrap(v6.entitiesByName["Switchboard"])
+        XCTAssertEqual(Set(switchboard.attributesByName.keys),
+                       ["id", "name", "sortOrder", "cadence", "resetMinutes", "resetWeekday", "overdueBecomesTask",
+                        "createdAt", "updatedAt"])
+        XCTAssertEqual(switchboard.attributesByName["cadence"]?.attributeType, .stringAttributeType,
+                       "a string raw value, so a later cadence is not a retype")
+        XCTAssertEqual(switchboard.attributesByName["resetMinutes"]?.defaultValue as? Int, 240, "a new board resets at 04:00")
+        XCTAssertEqual(switchboard.attributesByName["resetWeekday"]?.defaultValue as? Int, 0, "0 = the week start")
+        XCTAssertEqual(switchboard.attributesByName["cadence"]?.defaultValue as? String, "daily")
+        for attribute in switchboard.attributesByName.values {
+            XCTAssertTrue(attribute.isOptional || attribute.defaultValue != nil, "\(attribute.name) needs a default or to be optional")
+        }
+        XCTAssertEqual(Set(switchboard.relationshipsByName.keys), ["switches"])
+        let switches = try XCTUnwrap(switchboard.relationshipsByName["switches"])
+        XCTAssertTrue(switches.isToMany && switches.isOptional)
+        XCTAssertEqual(switches.destinationEntity?.name, "TaskItem")
+        XCTAssertEqual(switches.deleteRule, .nullifyDeleteRule, "deleting a board never deletes its switches by itself")
+        XCTAssertTrue(switchboard.uniquenessConstraints.isEmpty, "CloudKit: no unique constraints")
+    }
+
+    func testV6EntityHashes() throws {
+        let model = try XCTUnwrap(NSManagedObjectModel.makeManagedObjectModel(for: HITListSchemaV6.models))
+        let hashes = model.entityVersionHashesByName.mapValues { $0.base64EncodedString() }
+        XCTAssertEqual(hashes, v6Hashes)
+    }
+
+    /// Entity version hashes of schema V6, the live models (0.9.0 (21), brief 72). When V7 moves them, these must
+    /// keep matching the frozen copy.
+    private let v6Hashes: [String: String] = [
+        "Profile": "4fuLGPUO/Z/mgYSrr9OQT+FX0MzWPTYnppvwLy7LhXk=",
+        "Project": "EQSJTu8iivUIkjagba9Z3CbokkTGYWyO8JFbQdTiAtw=",
+        "SavedFilter": "LYBR+XsnEKMQlGwove4qW3exBMditLirAnGHJQ1i3FY=",
+        "Switchboard": "7RZkAl2E3ErFet8NzwXhovJGjuYG7UftaNR6Yho30Uo=",
+        "TaskItem": "WvU/dSwyNDdim7ugBGx5sgP0w8+WTcRTiNLOJPBl5b8=",
+        "TaskLabel": "sCOK0aPJcEM7FmipO0fPJ3olHo/pG15o5T4k07wGRLk=",
+    ]
+
+    /// A store written by 0.7.1–0.9.0 (V5) opens under V6 with its rows intact, its switches loose (nothing is
+    /// migrated into a board, and no default board is made) and never opted in.
+    func testV5StoreMigratesToV6() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("schema-\(UUID().uuidString).store")
+        defer { for suffix in ["", "-wal", "-shm"] { try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + suffix)) } }
+        do {
+            let schema = Schema(versionedSchema: HITListSchemaV5.self)
+            let v5 = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, url: url, cloudKitDatabase: .none)])
+            let context = ModelContext(v5)
+            let label = HITListSchemaV5.TaskLabel(name: "flipboard")
+            let shave = HITListSchemaV5.TaskItem(title: "Shave")
+            shave.recurrence = "daily;3"
+            shave.reminderDate = Date(timeIntervalSince1970: 1_800_000_000)
+            context.insert(label)
+            context.insert(shave)
+            shave.labels = [label]
+            try context.save()
+        }
+        let v6 = try ModelContainer(for: HITListSchema.schema, migrationPlan: HITListMigrationPlan.self,
+                                    configurations: [ModelConfiguration(schema: HITListSchema.schema, url: url, cloudKitDatabase: .none)])
+        let context = ModelContext(v6)
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        XCTAssertEqual(tasks.map(\.title), ["Shave"])
+        XCTAssertEqual(tasks.first?.labels?.map(\.name), ["flipboard"])
+        XCTAssertEqual(tasks.first?.reminderDate, Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertNil(tasks.first?.switchboard, "existing switches stay loose")
+        XCTAssertEqual(tasks.first?.overdueBecomesTask, false)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Switchboard>()), 0, "no default board")
+    }
+
+    /// Deleting a Switchboard leaves its switches (loose); deleting a switch leaves its board.
+    func testDeletingABoardKeepsItsSwitchesAndTheOtherWayRound() throws {
+        let container = ModelContainerFactory.preview()
+        defer { withExtendedLifetime(container) {} }
+        let context = ModelContext(container)
+        let board = Switchboard(name: "Before Bed")
+        let floss = TaskItem(title: "Floss"), meds = TaskItem(title: "Take meds")
+        for model in [floss, meds] { context.insert(model) }
+        context.insert(board)
+        floss.switchboard = board
+        meds.switchboard = board
+        try context.save()
+        XCTAssertEqual(Set(board.switches?.map(\.title) ?? []), ["Floss", "Take meds"], "the inverse fills in")
+
+        context.delete(floss)
+        try context.save()
+        XCTAssertEqual(board.switches?.map(\.title), ["Take meds"])
+
+        context.delete(board)
+        try context.save()
+        XCTAssertEqual(try context.fetch(FetchDescriptor<TaskItem>()).map(\.title), ["Take meds"])
+        XCTAssertNil(meds.switchboard)
+    }
+
+    func testANewSwitchboardIsADailyBoardResettingAtFour() {
+        let board = Switchboard(name: "Before Bed")
+        XCTAssertEqual(board.cadence, "daily")
+        XCTAssertEqual(board.resetMinutes, 240)
+        XCTAssertEqual(board.resetWeekday, 0)
+        XCTAssertFalse(board.overdueBecomesTask)
+        XCTAssertEqual(board.createdAt, board.updatedAt)
+        XCTAssertFalse(TaskItem(title: "Floss").overdueBecomesTask)
+        XCTAssertNil(TaskItem(title: "Floss").switchboard)
+    }
 
     /// A store written by 0.5.0–0.6.0 (V4) opens under V5 with its rows intact, its profile and subtasks
     /// included, and no reminder dates.
@@ -185,7 +323,8 @@ final class SchemaTests: XCTestCase {
         XCTAssertEqual(HITListSchemaV3.versionIdentifier, Schema.Version(3, 0, 0))
         XCTAssertEqual(HITListSchemaV4.versionIdentifier, Schema.Version(4, 0, 0))
         XCTAssertEqual(HITListSchemaV5.versionIdentifier, Schema.Version(5, 0, 0))
-        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV5.self))
+        XCTAssertEqual(HITListSchemaV6.versionIdentifier, Schema.Version(6, 0, 0))
+        XCTAssertEqual(ObjectIdentifier(HITListSchema.current), ObjectIdentifier(HITListSchemaV6.self))
         XCTAssertEqual(HITListMigrationPlan.schemas.last.map(ObjectIdentifier.init), ObjectIdentifier(HITListSchema.current))
         XCTAssertEqual(HITListMigrationPlan.stages.count, HITListMigrationPlan.schemas.count - 1, "one lightweight stage per version step")
     }

@@ -62,16 +62,21 @@ public struct Snapshot: Codable, Equatable, Sendable {
         public var reminderDate: Date?
         /// The schema version of the build that wrote this record (`currentSchemaVersion`); nil before 0.7.0.
         public var schemaVersion: Int?
+        // Schema V6 (0.9.0 (21), brief 72). The Switchboard a switch is on (nil: a loose switch, or any other task)
+        // and its own "Overdue becomes task". Neither is in a backup written before 0.9.0 (21): `hasV6Fields` says.
+        public var switchboardID: UUID?
+        public var overdueBecomesTask: Bool?
 
         /// What this build writes as `schemaVersion`.
-        public static let currentSchemaVersion = 5
+        public static let currentSchemaVersion = 6
 
         public init(id: UUID, title: String, notes: String, priority: Int, dueDate: Date?, hasDueTime: Bool,
                     isCompleted: Bool, completedAt: Date?, recurrence: String?, sortOrder: Int, projectID: UUID?,
                     labelIDs: [UUID], createdAt: Date, updatedAt: Date,
                     reminderOffsetMinutes: Int? = nil, deadline: Date? = nil, locationName: String? = nil,
                     flipTarget: Int? = nil, flipCount: Int? = nil, flipPeriodStart: Date? = nil, parentID: UUID? = nil,
-                    reminderDate: Date? = nil, schemaVersion: Int? = nil) {
+                    reminderDate: Date? = nil, schemaVersion: Int? = nil, switchboardID: UUID? = nil,
+                    overdueBecomesTask: Bool? = nil) {
             self.id = id; self.title = title; self.notes = notes; self.priority = priority; self.dueDate = dueDate
             self.hasDueTime = hasDueTime; self.isCompleted = isCompleted; self.completedAt = completedAt
             self.recurrence = recurrence; self.sortOrder = sortOrder; self.projectID = projectID
@@ -80,6 +85,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
             self.flipTarget = flipTarget; self.flipCount = flipCount; self.flipPeriodStart = flipPeriodStart
             self.parentID = parentID
             self.reminderDate = reminderDate; self.schemaVersion = schemaVersion
+            self.switchboardID = switchboardID; self.overdueBecomesTask = overdueBecomesTask
         }
 
         /// Whether this record carries the V2 fields (it was written by 0.3.6 or later).
@@ -87,6 +93,30 @@ public struct Snapshot: Codable, Equatable, Sendable {
 
         /// Whether this record carries the V5 field `reminderDate` (it was written by 0.7.0 or later).
         public var hasV5Fields: Bool { (schemaVersion ?? 0) >= 5 }
+
+        /// Whether this record carries the V6 fields `switchboardID` and `overdueBecomesTask` (0.9.0 (21) or later).
+        public var hasV6Fields: Bool { (schemaVersion ?? 0) >= 6 }
+    }
+
+    /// Schema V6 (brief 72): a named group of Flipboard switches with its own day (`SwitchboardSchedule`).
+    public struct SwitchboardRecord: Codable, Equatable, Sendable, Identifiable {
+        public var id: UUID
+        public var name: String
+        public var sortOrder: Int
+        /// `SwitchboardSchedule.Cadence.rawValue`.
+        public var cadence: String
+        public var resetMinutes: Int
+        /// 0 = the week start, else Calendar's 1...7.
+        public var resetWeekday: Int
+        public var overdueBecomesTask: Bool
+        public var createdAt: Date
+        public var updatedAt: Date
+        public init(id: UUID, name: String, sortOrder: Int, cadence: String, resetMinutes: Int, resetWeekday: Int,
+                    overdueBecomesTask: Bool, createdAt: Date, updatedAt: Date) {
+            self.id = id; self.name = name; self.sortOrder = sortOrder; self.cadence = cadence
+            self.resetMinutes = resetMinutes; self.resetWeekday = resetWeekday; self.overdueBecomesTask = overdueBecomesTask
+            self.createdAt = createdAt; self.updatedAt = updatedAt
+        }
     }
 
     public struct FilterRecord: Codable, Equatable, Sendable, Identifiable {
@@ -110,9 +140,11 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var labels: [LabelRecord]
     public var tasks: [TaskRecord]
     public var filters: [FilterRecord]
+    /// Schema V6 (0.9.0 (21)); nil in every backup written before it, which had none.
+    public var switchboards: [SwitchboardRecord]?
 
     public init(exportedAt: Date = Date(), deviceName: String, projects: [ProjectRecord], labels: [LabelRecord],
-                tasks: [TaskRecord], filters: [FilterRecord]) {
+                tasks: [TaskRecord], filters: [FilterRecord], switchboards: [SwitchboardRecord]? = nil) {
         self.version = Self.currentVersion
         self.exportedAt = exportedAt
         self.deviceName = deviceName
@@ -120,6 +152,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.labels = labels
         self.tasks = tasks
         self.filters = filters
+        self.switchboards = switchboards
     }
 
     public static func encoder() -> JSONEncoder {

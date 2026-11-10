@@ -352,6 +352,18 @@ enum TaskActions {
             try addSubtask("Sample sub-task (safe to delete)", to: task, in: context)
             // Schema V4's Profile, the same way (brief 34).
             try ProfileStore(context: context).seedSampleProfiles()
+            // Schema V6's Switchboard (brief 72) and a switch on it, both opted in and the board weekly on a chosen
+            // day, so CD_Switchboard, CD_switchboard and CD_overdueBecomesTask reach Development with real values.
+            let board = Switchboard(name: "Sample Switchboard (safe to delete)")
+            board.cadence = "weekly"
+            board.resetMinutes = 9 * 60
+            board.resetWeekday = 7
+            board.overdueBecomesTask = true
+            context.insert(board)
+            let sample = try Flipboard.createSwitch(title: "Sample switch (safe to delete)", rule: .weekly, in: context)
+            sample.switchboard = board
+            sample.overdueBecomesTask = true
+            try context.save()
         } catch {
             print("seedSampleData failed: \(error)")
         }

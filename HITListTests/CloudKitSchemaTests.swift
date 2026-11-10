@@ -32,12 +32,25 @@ final class CloudKitSchemaTests: XCTestCase {
 
     func testRequiredFieldsFollowTheMirroringNames() {
         let required = CloudKitSchemaCheck.requiredFields(for: HITListSchema.schema)
-        XCTAssertEqual(Set(required.keys), ["CD_TaskItem", "CD_Project", "CD_TaskLabel", "CD_SavedFilter", "CD_Profile"])
+        XCTAssertEqual(Set(required.keys), ["CD_TaskItem", "CD_Project", "CD_TaskLabel", "CD_SavedFilter", "CD_Profile",
+                                             "CD_Switchboard"])
         let task = required["CD_TaskItem"] ?? []
         XCTAssertTrue(task.isSuperset(of: ["CD_title", "CD_deadline", "CD_locationName", "CD_flipPeriodStart",
-                                           "CD_reminderDate", "CD_project", "CD_parent"]), "\(task)")
+                                           "CD_reminderDate", "CD_project", "CD_parent",
+                                           "CD_switchboard", "CD_overdueBecomesTask"]), "\(task)")
         XCTAssertFalse(task.contains("CD_labels"), "to-many relationships have no field")
         XCTAssertFalse(task.contains("CD_subtasks"))
+    }
+
+    /// What schema V6's push adds to CloudKit (brief 72), for George's deploy: a record type and two TaskItem fields.
+    func testV6AddsTheSwitchboardRecordTypeAndTwoTaskFields() {
+        let required = CloudKitSchemaCheck.requiredFields(for: HITListSchema.schema)
+        XCTAssertEqual(required["CD_Switchboard"], ["CD_id", "CD_name", "CD_sortOrder", "CD_cadence", "CD_resetMinutes",
+                                                    "CD_resetWeekday", "CD_overdueBecomesTask", "CD_createdAt", "CD_updatedAt"])
+        XCTAssertFalse(required["CD_Switchboard"]?.contains("CD_switches") ?? true, "to-many: no field")
+        let v5 = CloudKitSchemaCheck.requiredFields(for: Schema(versionedSchema: HITListSchemaV5.self))
+        XCTAssertEqual((required["CD_TaskItem"] ?? []).subtracting(v5["CD_TaskItem"] ?? []), ["CD_switchboard", "CD_overdueBecomesTask"])
+        for type in v5.keys where type != "CD_TaskItem" { XCTAssertEqual(required[type], v5[type], type) }
     }
 
     func testNamesEveryFieldAnExportLacks() {
@@ -78,14 +91,22 @@ final class CloudKitSchemaTests: XCTestCase {
         TaskActions.seedSampleDataIfRequested(in: context, arguments: ["-seedSampleData"], storeName: "HITList-schema.store")
         let tasks = try context.fetch(FetchDescriptor<TaskItem>())
         let profiles = try context.fetch(FetchDescriptor<Profile>())
+        let boards = try context.fetch(FetchDescriptor<Switchboard>())
         XCTAssertGreaterThanOrEqual(tasks.count, 3)
         XCTAssertFalse(profiles.isEmpty)
+        // Schema V6 (brief 72): a Switchboard with a switch on it, both opted in, so CD_Switchboard and both new
+        // TaskItem fields reach Development with a value that isn't the default.
+        XCTAssertEqual(boards.count, 1)
+        XCTAssertTrue(boards.allSatisfy { $0.overdueBecomesTask && $0.cadence == "weekly" && $0.resetWeekday != 0 })
+        XCTAssertTrue(tasks.contains { $0.switchboard != nil && $0.overdueBecomesTask && Flipboard.isMember($0) },
+                      "-seedSampleData needs a switch on the board, opted in")
         // One reader per optional field; a new optional field without a reader here fails the check below.
         let taskReaders: [String: (TaskItem) -> Any?] = [
             "dueDate": { $0.dueDate }, "completedAt": { $0.completedAt }, "recurrence": { $0.recurrence },
             "reminderOffsetMinutes": { $0.reminderOffsetMinutes }, "deadline": { $0.deadline },
             "locationName": { $0.locationName }, "flipPeriodStart": { $0.flipPeriodStart },
             "reminderDate": { $0.reminderDate }, "project": { $0.project }, "parent": { $0.parent },
+            "switchboard": { $0.switchboard },
         ]
         let profileReaders: [String: (Profile) -> Any?] = [
             "nameUpdatedAt": { $0.nameUpdatedAt }, "avatarData": { $0.avatarData }, "avatarUpdatedAt": { $0.avatarUpdatedAt },

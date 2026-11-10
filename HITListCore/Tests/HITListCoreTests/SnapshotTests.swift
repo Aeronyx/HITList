@@ -62,7 +62,43 @@ final class SnapshotTests: XCTestCase {
         XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("\"reminderDate\" : \"2026-10-21T14:45:00Z\""))
         let back = try Snapshot.from(json: data)
         XCTAssertEqual(back.tasks, [record])
-        XCTAssertEqual(Snapshot.TaskRecord.currentSchemaVersion, 5)
+        XCTAssertEqual(Snapshot.TaskRecord.currentSchemaVersion, 6)
+    }
+
+    /// Schema V6 (brief 72): Switchboards and a task's board and opt-in.
+    func testSwitchboardsRoundTrip() throws {
+        let boardID = UUID()
+        let board = Snapshot.SwitchboardRecord(id: boardID, name: "Before Bed", sortOrder: 1, cadence: "daily", resetMinutes: 240,
+                                               resetWeekday: 0, overdueBecomesTask: true, createdAt: Fixed.now, updatedAt: Fixed.now)
+        let record = Snapshot.TaskRecord(id: UUID(), title: "Floss", notes: "", priority: 4, dueDate: nil, hasDueTime: false,
+                                         isCompleted: false, completedAt: nil, recurrence: "daily;1", sortOrder: 0, projectID: nil,
+                                         labelIDs: [], createdAt: Fixed.now, updatedAt: Fixed.now, flipTarget: 1, flipCount: 0,
+                                         schemaVersion: Snapshot.TaskRecord.currentSchemaVersion, switchboardID: boardID,
+                                         overdueBecomesTask: false)
+        XCTAssertTrue(record.hasV6Fields)
+        let snapshot = Snapshot(exportedAt: Fixed.now, deviceName: "x", projects: [], labels: [], tasks: [record], filters: [],
+                                switchboards: [board])
+        let back = try Snapshot.from(json: snapshot.jsonData())
+        XCTAssertEqual(back, snapshot)
+        XCTAssertEqual(back.switchboards, [board])
+        XCTAssertEqual(back.tasks.first?.switchboardID, boardID)
+    }
+
+    /// A backup written by 0.9.0 (20) or earlier has no Switchboards and no V6 task keys; it decodes and says so.
+    func testABackupFromBeforeV6DoesNotSayAboutSwitchboards() throws {
+        let json = """
+            {"deviceName":"iPhone","exportedAt":"2026-10-21T14:30:00Z","filters":[],"labels":[],"projects":[],"version":1,
+             "tasks":[{"createdAt":"2026-10-21T14:30:00Z","hasDueTime":false,"id":"6B1F3E2A-9C4D-4E5F-8A7B-1D2C3E4F5A6B",
+                       "isCompleted":false,"labelIDs":[],"notes":"","priority":4,"sortOrder":0,"title":"0.9.0",
+                       "updatedAt":"2026-10-21T14:30:00Z","flipTarget":1,"flipCount":0,"schemaVersion":5}]}
+            """
+        let snapshot = try Snapshot.from(json: Data(json.utf8))
+        XCTAssertNil(snapshot.switchboards)
+        let task = try XCTUnwrap(snapshot.tasks.first)
+        XCTAssertTrue(task.hasV5Fields)
+        XCTAssertFalse(task.hasV6Fields)
+        XCTAssertNil(task.switchboardID)
+        XCTAssertNil(task.overdueBecomesTask)
     }
 
     func testABackupFromBeforeV5DoesNotSayAboutTheReminderDate() throws {
