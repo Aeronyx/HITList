@@ -2,12 +2,16 @@ import SwiftUI
 
 /// What the switch card is open for.
 enum SwitchCardRequest: Identifiable, Equatable {
+    /// A loose switch, from the + tile or the menu.
     case add
+    /// A switch on a Switchboard, from the "+" by its name (brief 72).
+    case addTo(Switchboard)
     case edit(TaskItem)
 
     var id: String {
         switch self {
         case .add: "add"
+        case .addTo(let board): "add-\(board.id.uuidString)"
         case .edit(let task): "edit-\(task.id.uuidString)"
         }
     }
@@ -16,6 +20,14 @@ enum SwitchCardRequest: Identifiable, Equatable {
         if case .edit(let task) = self { return task }
         return nil
     }
+
+    /// The board a new switch goes on.
+    var board: Switchboard? {
+        if case .addTo(let board) = self { return board }
+        return nil
+    }
+
+    var isAdding: Bool { task == nil }
 }
 
 /// The switch card's "something to lose", kept where reading and writing it redraws nothing: the hosts only
@@ -57,8 +69,8 @@ struct FloatingSwitchCard: View {
         // re-runs only the reader's closure, never the card. A keyboard change arrives in the middle of a
         // keystroke (UIKit lays the view out there and then); a card rebuilt at that moment handed its name
         // field the text from before the keystroke, and the letter was lost (the UI test's "Wter the plants").
-        let card = SwitchCard(editing: request.task, style: .floating, isConfirmingDiscard: confirmingDiscard,
-                              isClosing: closing, focusesName: request == .add,
+        let card = SwitchCard(editing: request.task, style: .floating, board: request.board,
+                              isConfirmingDiscard: confirmingDiscard, isClosing: closing, focusesName: request.isAdding,
                               onClose: requestClose, onSaved: { finish(saved: $0) },
                               onDraftChange: { content.hasContent = $0 },
                               onDiscard: { finish(saved: nil) },
