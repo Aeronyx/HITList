@@ -10,6 +10,9 @@ import Foundation
 //   every first Monday (of the month) · every last Friday · every 2nd Tuesday · every month on the third Wednesday
 //   every year on Mar 3 · every March 3 · yearly on March 3rd · annually on 3 March · every 2 years on 3 Mar
 extension QuickAddParser {
+    /// The words after which a lone "quarterly" is an adjective, not a repeat.
+    private static let determiners: Set<String> = ["the", "a", "an", "my", "our", "your", "his", "her", "their", "this", "that"]
+
     /// A repeat with a place (`RecurrenceRule.Place`) starting at `words[i]`, or "quarterly" / "every quarter";
     /// nil leaves the words to the plain repeat grammar (`matchRecurrence`), which reads "every month" alone.
     static func matchPlacedRepeat(_ words: [String], at i: Int) -> (RecurrenceRule, Int)? {
@@ -21,8 +24,13 @@ extension QuickAddParser {
                let rule = RecurrenceRule(head.frequency, interval: head.interval, place: place) {
                 return (rule, head.consumed + n)
             }
-            // "quarterly" has no plain form to fall back on.
-            if head.isQuarter { return (RecurrenceRule(frequency: .monthly, interval: 3), head.consumed) }
+            // "quarterly" has no plain form to fall back on. Right after "the", "a", "my"… the lone word describes
+            // the thing ("Finish the quarterly report") and stays in the title; anywhere else it is the repeat
+            // ("Pay estimated tax quarterly", "Quarterly review"). "every quarter" is always the repeat.
+            if head.isQuarter {
+                if head.consumed == 1, let before = reader[i - 1], determiners.contains(before) { return nil }
+                return (RecurrenceRule(frequency: .monthly, interval: 3), head.consumed)
+            }
             return nil
         }
         switch reader[i] {

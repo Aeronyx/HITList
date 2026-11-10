@@ -163,6 +163,33 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 16 record (2026-11-10; sessions 70–73 merged for 0.9.0 (21))
+Four sessions at once on George's turn, all Opus 5.5, supervised by a Fable 5.2 chat: 70 `mac-chrome-27` (xhigh, 9
+commits), 71 `quick-add-monthly` (high, 7), 72 `switchboards` (xhigh, 9, schema V6), 73 `browse-and-bolt` (high, 4).
+Merged 71, 73, 70, 72; conflicts only in `dev/ROADMAP.md` (rows kept) and the generated project (regenerated).
+Supervisor follow-ups: Group and label counts leave out unlisted switches (`SidebarCounts.group`, `.label`), the editor's
+"Add to Flipboard" words, the demo week's green flipboard label, `NewSwitchboardRow` at the Flipboard's foot (on iPhone
+"New Switchboard…" sat only behind a long press on the sound button), notes per build (`WhatsNew.Entry.build`,
+`release.sh`'s `## 0.9.0 (N)` check and stamp).
+After the round:
+- Core: `SwitchboardSchedule` (a board's day and week from its reset time), `FlipboardSwitch.listing` (a switch is
+  `.hidden` unless opted in and due), `FilterableTask.filterSwitchOptedIn` and `filterSwitchboard`,
+  `RecurrenceRule.Place` (a day, the last day, a weekday in the month, a date in the year; a sixth part of the encoded
+  string that builds before 0.9.0 (21) ignore), `QuickAddParser+Repeats.swift`.
+- Mac: `Views/MacChrome/*` (`MacSidebarRow`, `MacToolbarChrome`, `ToolbarPill`, `WindowFocusGuard`). The sidebar is a
+  scroll view of our rows, not a `List`; the toolbar's background is hidden and a `Theme.background` band is drawn
+  under its items. Debug arguments: `-focusSearchAtLaunch YES` forces macOS 27's bad case (a text field holding the
+  keyboard at launch), `-flipboardNow` sets the Flipboard's clock for screenshots.
+- Still the system's on the Mac, so macOS 27 can still differ: whether the sidebar column floats or sits flush, the
+  toolbar's height and gaps, menus, and the task list's own selection highlight and header hairlines (`TaskListView`
+  is a system `List`). Owning the column's shape means our own split view and top bar: a round of its own.
+Left for later: no swipe to delete on the iPad's full sidebar (`SidebarView`); a long repeat chip ("Second Tuesday of
+the month") runs past the editor card's edge until scrolled; the Repeat card was checked on iPhone only; VoiceOver and
+Full Keyboard Access on the new Mac sidebar are unchecked; typing a letter no longer jumps to a sidebar row; a
+weekly board's timed switch is due on the reset day only (no weekday of its own); two Apple accounts sharing still
+untested; side stores `HITList-s70a`, `HITList-s71`, `HITList-s72a`, `HITList-s73` and `HITList-sup*` in the Mac app
+group folder (delete by hand in Finder).
+
 ## Round 15 record (2026-11-08; sessions 64–69 merged for 0.9.0)
 Six sessions at once on George's turn, all Opus 5.5: 64 `shared-group` (xhigh, 8 commits), 65 `editor-quick-add`
 (xhigh, 7), 66 `mac-chrome` (high, 6), 67 `type-scale` (xhigh, 3), 68 `bolt-slam` (xhigh, 4), 69 `flipboard-add` (xhigh,
