@@ -198,6 +198,21 @@ final class SyncSteadinessTests: XCTestCase {
         XCTAssertFalse(SyncState.needsAction("app can't use iCloud"))
     }
 
+    // MARK: Inertia in the drawing
+
+    func testEveryChangeOfLookCrossfadesAndTheWorkingLookBreathesSlowly() {
+        XCTAssertGreaterThanOrEqual(BoltSteadyMotion.crossfade, 0.2, "a few tenths of a second, never one frame")
+        XCTAssertLessThanOrEqual(BoltSteadyMotion.crossfade, 0.5)
+        XCTAssertLessThan(BoltSteadyMotion.crossfade, SyncSteadiness.Windows().dwell, "a crossfade ends well inside a dwell")
+        XCTAssertGreaterThanOrEqual(BoltSteadyMotion.breathPeriod, 2, "a breath, not a pulse")
+        XCTAssertGreaterThanOrEqual(BoltSteadyMotion.breathLow, 0.4, "never fades out")
+        XCTAssertTrue(SyncBolt.breathes(.syncing))
+        XCTAssertTrue(SyncBolt.breathes(.retrying(since: start)))
+        XCTAssertFalse(SyncBolt.breathes(synced(0)))
+        XCTAssertFalse(SyncBolt.breathes(.offline))
+        XCTAssertFalse(SyncBolt.breathes(.error("x", start)))
+    }
+
     // MARK: The account status Settings and the profile menu show
 
     func testGeorgesAccountBlipKeepsSignedIn() {

@@ -92,12 +92,14 @@ struct AccountChangeBanner: View {
     }
 }
 
-/// Sync status as one small bolt in the toolbar's empty space, on every screen and platform. Its shape
-/// is the message: a filled bolt when everything has synced recently, a hollow bolt breathing while a
-/// sync is in flight, a struck-through bolt when it cannot sync (offline, signed out, restricted, an
-/// error, local only) or has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a
-/// pastel that sits apart from the accent; struck-through states go grey, errors and sign-out red. It
-/// flicks brighter once when a change lands, and tapping it opens Settings.
+/// Sync status as one small bolt in the toolbar's empty space, on every screen and platform. It says "status is
+/// green" and then keeps still (brief 78): it draws `CloudSyncMonitor.state`, the raw state steadied over time
+/// (`SyncSteadiness`), not every export and import. Its shape is the message: a filled bolt while all is well, a
+/// hollow bolt breathing slowly when work is the news (a sync that keeps trying, the first after a long time,
+/// "will keep trying"), a struck-through bolt once trouble has stayed (offline, signed out, restricted, an error,
+/// local only) or when it has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a pastel that
+/// sits apart from the accent; struck-through states go grey, errors and sign-out red. Every change crossfades
+/// (`BoltSteadyMotion`), plain fades under Reduce Motion. Tapping it opens Settings.
 ///
 /// It plays once as a "you're good to go": on the first good sync after the app opens, after it comes back from
 /// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
@@ -116,8 +118,6 @@ struct SyncBolt: View {
     /// A sync older than this reads as "hasn't synced in a while".
     static let staleAfter: TimeInterval = 24 * 60 * 60
     private var monitor: CloudSyncMonitor { .shared }
-    @State private var flash = false
-    @State private var lastPulse: Date?
     /// Counts the strikes and slams; the keyframe animators play on each change.
     @State private var player = BoltPlayer()
     @AppStorage(BoltStyle.key, store: AppGroup.defaults) private var style: BoltStyle = .fallback
@@ -141,11 +141,7 @@ struct SyncBolt: View {
         TimelineView(.periodic(from: .now, by: 60)) { tick in
             let look = Self.look(for: state, now: tick.date)
             Button(action: action) {
-                Image(systemName: look.symbol)
-                    .font(.system(size: Self.size, weight: .bold))
-                    .foregroundStyle(look.color.opacity(flash ? 1 : look.opacity))
-                    .symbolEffect(.pulse, options: .repeating, isActive: state == .syncing && !reduceMotion)
-                    .contentTransition(.symbolEffect(.replace))
+                BoltGlyph(look: look, breathes: Self.breathes(state), reduceMotion: reduceMotion)
                     .modifier(BoltMotions(player: player, color: look.color))
                     .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
@@ -160,17 +156,6 @@ struct SyncBolt: View {
         }
         // Every list screen draws the bolt, so its first appearance is the launch's first list frame.
         .onAppear { LaunchTiming.firstFrame() }
-        .onChange(of: monitor.lastChangeAt) { old, new in
-            let now = Date()
-            guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
-                                               reduceMotion: reduceMotion) else { return }
-            lastPulse = now
-            withAnimation(HITMotion.quick) { flash = true }
-            Task {
-                try? await Task.sleep(for: .milliseconds(260))
-                withAnimation(HITMotion.standard) { flash = false }
-            }
-        }
         .onChange(of: monitor.lastChangeAt) { old, new in strikeIfDue(from: old, to: new) }
         // What arms the next strike: coming back to the front after a while, and sync trouble that lasted.
         .onChange(of: scenePhase) { _, _ in Self.strikeGate.appActive(isActive, now: Date()) }
@@ -182,7 +167,8 @@ struct SyncBolt: View {
             Self.strikeGate.appActive(isActive, now: Date())
         }
         #endif
-        .onChange(of: monitor.state.isHealthyForStrike, initial: true) { _, healthy in
+        // The gate counts trouble from the raw state, exactly as before the marks were steadied.
+        .onChange(of: monitor.rawState.isHealthyForStrike, initial: true) { _, healthy in
             Self.strikeGate.syncState(healthy: healthy, now: Date())
         }
         #if DEBUG
@@ -190,6 +176,14 @@ struct SyncBolt: View {
         .onAppear { SyncReplayPlayer.shared.startIfRequested() }
         .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
         #endif
+    }
+
+    /// The working look breathes: work that is the news, and "will keep trying".
+    static func breathes(_ state: SyncState) -> Bool {
+        switch state {
+        case .syncing, .retrying: true
+        default: false
+        }
     }
 
     /// In front and visible: on the Mac also the active app, so a sync that lands while George works in
@@ -205,12 +199,14 @@ struct SyncBolt: View {
     private func strikeIfDue(from old: Date?, to new: Date?) {
         let kind = Self.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive, reduceMotion: reduceMotion)
         guard let motion = style.motion(for: kind) else { return }
+        // The strike or slam plays as the bolt turns green, whatever the marks were holding.
+        monitor.goodToGo()
         player.play(motion)
         SyncConfirmation.log.info("Bolt strike: \(motion.rawValue, privacy: .public) (\(monitor.lastChangePhase?.rawValue ?? "demo", privacy: .public))")
     }
 
     /// What the bolt shows for a state. Pure, so tests can check it.
-    struct Look: Equatable {
+    struct Look: Hashable {
         var symbol: String
         var color: Color
         var opacity: Double
@@ -237,6 +233,67 @@ struct SyncBolt: View {
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .notSignedIn, .restricted, .error:
             return Look(symbol: "bolt.slash.fill", color: HITColor.dueOverdue, opacity: 0.85)
+        }
+    }
+}
+
+/// The bolt's inertia in the drawing (brief 78, rule 4): every change of look crossfades, never a swap on one frame,
+/// and the working look breathes slowly rather than pulsing. Reduce Motion: the same timing with plain fades.
+enum BoltSteadyMotion {
+    /// Seconds a change of look takes.
+    static let crossfade: TimeInterval = 0.35
+    /// One slow breath in and out of the working look, and how far its opacity falls at the bottom of it.
+    static let breathPeriod: TimeInterval = 2.8
+    static let breathLow: Double = 0.45
+    /// How much smaller the incoming glyph starts (none under Reduce Motion).
+    static let settleScale: CGFloat = 0.88
+
+    static var crossfadeAnimation: Animation { .easeInOut(duration: crossfade) }
+
+    static func transition(reduceMotion: Bool) -> AnyTransition {
+        reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: settleScale))
+    }
+}
+
+/// The bolt's glyph for one look. A new look crossfades over the old one (`BoltSteadyMotion`); the working look
+/// breathes. The toolbar bolt wears its strike and slam on the outside, so a change of look never restarts them.
+struct BoltGlyph: View {
+    var look: SyncBolt.Look
+    var breathes: Bool
+    var reduceMotion: Bool
+
+    private struct Identity: Hashable {
+        var look: SyncBolt.Look
+        var breathes: Bool
+    }
+
+    var body: some View {
+        let identity = Identity(look: look, breathes: breathes)
+        ZStack {
+            Image(systemName: look.symbol)
+                .font(.system(size: SyncBolt.size, weight: .bold))
+                .foregroundStyle(look.color.opacity(look.opacity))
+                .modifier(BoltBreath(active: breathes))
+                .id(identity)
+                .transition(BoltSteadyMotion.transition(reduceMotion: reduceMotion))
+        }
+        .animation(BoltSteadyMotion.crossfadeAnimation, value: identity)
+    }
+}
+
+/// The working look's slow breath of opacity, from full to `BoltSteadyMotion.breathLow` and back.
+struct BoltBreath: ViewModifier {
+    var active: Bool
+
+    func body(content: Content) -> some View {
+        if active {
+            content.phaseAnimator([1.0, BoltSteadyMotion.breathLow]) { glyph, opacity in
+                glyph.opacity(opacity)
+            } animation: { _ in
+                .easeInOut(duration: BoltSteadyMotion.breathPeriod / 2)
+            }
+        } else {
+            content
         }
     }
 }
