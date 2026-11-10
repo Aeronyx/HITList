@@ -207,13 +207,14 @@ enum NotificationScheduler {
         isRescheduling = false
     }
 
-    /// Open switches never flipped (no date yet): red, so today's, though the fetch for dated tasks misses them.
+    /// Open switches never flipped (no date yet): due now, so today's when they opted in, though the fetch for
+    /// dated tasks misses them.
     @MainActor
-    private static func undatedSwitches(in context: ModelContext) -> [NotificationPlan.Item] {
+    private static func undatedSwitches(in context: ModelContext, now: Date) -> [NotificationPlan.Item] {
         let descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
             task.isCompleted == false && task.dueDate == nil && task.recurrence != nil
         })
-        return ((try? context.fetch(descriptor)) ?? []).map(NotificationPlan.Item.init).filter(\.isSwitch)
+        return ((try? context.fetch(descriptor)) ?? []).map { NotificationPlan.Item($0, now: now) }.filter(\.isSwitch)
     }
 
     static let fingerprintKey = "fingerprint"
@@ -241,17 +242,17 @@ enum NotificationScheduler {
                 task.isCompleted == false && (task.dueDate != nil || task.reminderDate != nil)
             })
             do {
-                open = try context.fetch(descriptor).map(NotificationPlan.Item.init)
+                open = try context.fetch(descriptor).map { NotificationPlan.Item($0, now: now, calendar: calendar) }
             } catch {
                 log.error("Reschedule fetch failed: \(error.localizedDescription, privacy: .public)")
                 return
             }
         }
         let dated = open.filter { $0.dueDate != nil }
-        // What the badge and the summary count, as Today shows it (brief 64): yours, every switch (a red one is
-        // today's, an undated one too), and the open shared tasks with a date.
+        // What the badge and the summary count, as Today shows it (brief 64): yours, every switch (one that opted in
+        // is today's once due, an undated one too; brief 72), and the open shared tasks with a date.
         let counted = summaryOn || badgeOn
-            ? NotificationPlan.todayItems(own: dated + undatedSwitches(in: context), shared: SharedRows.shared.open)
+            ? NotificationPlan.todayItems(own: dated + undatedSwitches(in: context, now: now), shared: SharedRows.shared.open)
             : []
         await updateBadge(count: badgeOn ? NotificationPlan.badgeCount(tasks: counted, now: now, calendar: calendar) : 0)
 

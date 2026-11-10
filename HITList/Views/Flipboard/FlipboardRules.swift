@@ -2,9 +2,10 @@ import Foundation
 import SwiftData
 import HITListCore
 
-/// The Flipboard's rules. A switch is not a new model: it is an open recurring task without a time of
-/// day that carries the `flipboard` label. Green side = due in the future; red side = due today or
-/// overdue; flipping it back completes the task, which rolls the due date forward by its recurrence.
+/// The Flipboard's rules. A switch is not a new model: it is an open recurring task that carries the `flipboard`
+/// label, with or without a time of day (brief 72). Green side = done for now; red side = due today or
+/// overdue; flipping it back completes the task, which rolls the due date forward by its recurrence. A switch
+/// on a Switchboard follows the board's clock (`SwitchboardSchedule`): its day starts at the board's reset time.
 enum Flipboard {
     static let labelName = FlipboardSwitch.labelName
     /// Every device creates the label with this id, so copies made before a CloudKit import collapse.
@@ -19,22 +20,23 @@ enum Flipboard {
     // The pure rules (membership, sides, overdue) live in HITListCore's `FlipboardSwitch`, so every list
     // judges a task the way the board does (brief 59).
 
-    /// A repeat that doesn't decode is no repeat: the board can't step it.
-    static func isMember(recurrence: String?, hasDueTime: Bool, isCompleted: Bool, labelNames: [String]) -> Bool {
+    /// A repeat that doesn't decode is no repeat: the board can't step it. A time of day is allowed (brief 72).
+    static func isMember(recurrence: String?, isCompleted: Bool, labelNames: [String]) -> Bool {
         FlipboardSwitch.isMember(isRecurring: recurrence.flatMap(RecurrenceRule.init(encoded:)) != nil,
-                                 hasDueTime: hasDueTime, isCompleted: isCompleted, labelNames: labelNames)
+                                 isCompleted: isCompleted, labelNames: labelNames)
     }
 
     static func isMember(_ task: TaskItem) -> Bool {
-        isMember(recurrence: task.recurrence, hasDueTime: task.hasDueTime, isCompleted: task.isCompleted,
-                 labelNames: task.filterLabelNames)
+        isMember(recurrence: task.recurrence, isCompleted: task.isCompleted, labelNames: task.filterLabelNames)
     }
 
     static func hasLabel(_ task: TaskItem) -> Bool { FlipboardSwitch.hasLabel(task.filterLabelNames) }
 
-    /// The switch's side, or nil when the task isn't a switch.
+    /// The switch's side, or nil when the task isn't a switch: a loose one by its due day, one on a Switchboard by
+    /// the board's day.
     static func side(of task: TaskItem, now: Date = Date(), calendar: Calendar = .current) -> Side? {
-        isMember(task) ? side(due: task.dueDate, now: now, calendar: calendar) : nil
+        isMember(task) ? FlipboardSwitch.side(due: task.dueDate, hasTime: task.hasDueTime, board: task.filterSwitchboard,
+                                              now: now, calendar: calendar) : nil
     }
 
     // MARK: Sides and the light bar

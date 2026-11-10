@@ -144,6 +144,8 @@ public struct ListRow<Own: ListRowItem, Shared: ListRowItem>: FilterableTask, Id
     public var filterIsRecurring: Bool { base.filterIsRecurring }
     public var filterCreatedDate: Date? { base.filterCreatedDate }
     public var filterIsSubtask: Bool { base.filterIsSubtask }
+    public var filterSwitchOptedIn: Bool { base.filterSwitchOptedIn }
+    public var filterSwitchboard: SwitchboardSchedule? { base.filterSwitchboard }
 }
 
 public enum ListRows {

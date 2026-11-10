@@ -2,8 +2,8 @@ import Foundation
 import HITListCore
 
 /// The morning summary and the app icon badge: both count the Today screen's tasks (overdue + due
-/// today, `TaskOrdering.todaySection`), timed or not, as Today shows them (brief 64): shared tasks among yours, and a
-/// red Flipboard switch as one of today's, never overdue.
+/// today, `TaskOrdering.todaySection`), timed or not, as Today shows them (brief 64): shared tasks among yours, and no
+/// Flipboard switch, unless it opted in and is due (brief 72): then as one of today's, never overdue.
 extension NotificationPlan {
     static let morningSummaryIdentifier = "HITList.morningSummary"
     static let morningSummaryTitle = "Today in HITList"
@@ -48,7 +48,7 @@ extension NotificationPlan {
                        fingerprint: fingerprint([morningSummaryTitle, body, String(Int(fire.timeIntervalSince1970)), zone]))
     }
 
-    /// The app icon badge: open tasks that are overdue or due today, a red switch once.
+    /// The app icon badge: open tasks that are overdue or due today, an opted-in switch that is due once.
     static func badgeCount(tasks: [Item], now: Date, calendar: Calendar = .current) -> Int {
         tasks.filter { !$0.isCompleted && $0.todaySection(now: now, calendar: calendar) != nil }.count
     }
@@ -69,10 +69,14 @@ extension NotificationPlan.Item {
                   isCompleted: row.filterIsCompleted, updatedAt: row.task.createdAt)
     }
 
-    /// The Today section it is listed in at `now`: a red switch is today's, a green one in neither (`FlipboardSwitch`),
-    /// anything else by its date.
+    /// The Today section it is listed in at `now` (`FlipboardSwitch.listing`): an opted-in switch that is due is
+    /// today's, any other switch in neither, anything else by its date.
     func todaySection(now: Date, calendar: Calendar = .current) -> TaskOrdering.TodaySection? {
-        if isSwitch { return FlipboardSwitch.side(due: dueDate, now: now, calendar: calendar) == .red ? .today : nil }
-        return TaskOrdering.todaySection(for: dueDate, now: now, calendar: calendar)
+        switch FlipboardSwitch.listing(isSwitch: isSwitch, optedIn: switchOptedIn, due: dueDate, hasTime: hasDueTime,
+                                       board: switchboard, now: now, calendar: calendar) {
+        case .hidden: return nil
+        case .today: return .today
+        case .unchanged: return TaskOrdering.todaySection(for: dueDate, now: now, calendar: calendar)
+        }
     }
 }

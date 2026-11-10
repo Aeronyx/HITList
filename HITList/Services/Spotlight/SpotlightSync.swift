@@ -159,8 +159,8 @@ final class SpotlightSync {
         SpotlightLedger.forget(in: defaults)
     }
 
-    /// The open tasks Spotlight holds: every one but green Flipboard switches, which are on the Flipboard
-    /// only (brief 59). A switch that turns red comes back with the next refresh (a save, an import, a launch).
+    /// The open tasks Spotlight holds: every one but Flipboard switches, which are on the Flipboard only (brief 72),
+    /// unless one opted in and is due. Such a switch comes back with the next refresh (a save, an import, a launch).
     static func indexable(_ tasks: [TaskItem], now: Date, calendar: Calendar = .current) -> [TaskItem] {
         tasks.filter { FlipboardSwitch.listing(for: $0, now: now, calendar: calendar) != .hidden }
     }
@@ -189,7 +189,11 @@ struct SpotlightRecord {
             task.labelList.map(\.name).joined(separator: ","),
         ]
         // Only for switches, so every other task keeps the fingerprint it was indexed with.
-        if Flipboard.isMember(task) { fields.append("switch:" + (task.recurrence ?? "")) }
+        if Flipboard.isMember(task) {
+            fields.append("switch:" + (task.recurrence ?? ""))
+            // Brief 72: the board it names (only for switches on one, so a loose switch keeps its fingerprint).
+            if let board = task.switchboard { fields.append("board:" + board.name) }
+        }
         let digest = SHA256.hash(data: Data(fields.joined(separator: "\u{1F}").utf8))
         fingerprint = digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
