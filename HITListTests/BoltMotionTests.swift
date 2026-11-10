@@ -51,6 +51,69 @@ final class BoltMotionTests: XCTestCase {
         XCTAssertLessThanOrEqual(all.map(\.frame.glow).max() ?? 0, 1)
     }
 
+    /// George, 2026-11-10: "when I said 'twirl and rise up a bit before slamming', I meant twirl on the Z axis, as in
+    /// halfway through the twirl the bolt would technically be invisible or incredibly thin as the edge of the icon
+    /// would be facing the user for a split second." A coin spinning on a table (brief 73): one whole turn about the
+    /// vertical axis during the hop, edge-on (no width) a quarter and three quarters round, its other face (the mirror
+    /// image) half-way, face-on and unmirrored from the top of the hop on.
+    func testTheTwirlIsACoinSpinThatLandsFaceOn() {
+        let all = samples()
+        let spin = all.filter { $0.time >= BoltSlamMotion.crouch && $0.time <= BoltSlamMotion.apexAt }
+        // The face's width goes 1 → 0 → −1 → 0 → 1: edge-on exactly twice.
+        let crossings = zip(spin, spin.dropFirst()).filter { ($0.frame.face > 0) != ($1.frame.face > 0) }
+        XCTAssertEqual(crossings.count, 2, "edge-on twice in the turn")
+        for crossing in crossings {
+            XCTAssertLessThan(min(abs(crossing.0.frame.face), abs(crossing.1.frame.face)), 0.02,
+                              "a hairline or nothing at \(crossing.1.time) s")
+        }
+        let half = spin.min { abs($0.frame.twirl - 180) < abs($1.frame.twirl - 180) }!
+        XCTAssertEqual(half.frame.face, -1, accuracy: 0.01, "its other face, mirrored, half-way round")
+        XCTAssertGreaterThan(half.time, crossings[0].1.time)
+        XCTAssertLessThan(half.time, crossings[1].1.time)
+        for sample in all where sample.time <= BoltSlamMotion.crouch || sample.time >= BoltSlamMotion.apexAt {
+            XCTAssertEqual(sample.frame.face, 1, accuracy: 1e-6, "face-on and unmirrored at \(sample.time) s")
+        }
+        XCTAssertEqual(all.last!.frame, BoltSlamMotion.Frame(), "it ends as the resting glyph")
+    }
+
+    /// Drawn by the app's own view code, the frame nearest the quarter turn is a sliver of the glyph's width, and the
+    /// half turn's is the glyph's mirror image: as wide as at rest, its ink on the other side of the centre line.
+    @MainActor
+    func testTheSpinIsEdgeOnAtTheQuarterTurnAndMirroredAtTheHalf() throws {
+        let slam = BoltSlamMotion.timeline()
+        let color = boltColor
+        func frame(nearest degrees: Double) -> BoltSlamMotion.Frame {
+            samples().filter { $0.time < BoltSlamMotion.apexAt }
+                .min { abs($0.frame.twirl - degrees) < abs($1.frame.twirl - degrees) }!.frame
+        }
+        let rest = try render(glyph(EmptyModifier()), scale: 2).ink
+        let edgeOn = try render(glyph(BoltSlamMotion.Effect(frame: frame(nearest: 90), color: color)), scale: 2).ink
+        XCTAssertLessThan(edgeOn.isNull ? 0 : edgeOn.width, rest.width * 0.15,
+                          "edge-on at the quarter turn: \(edgeOn.width) pt of the glyph's \(rest.width)")
+        let threeQuarters = try render(glyph(BoltSlamMotion.Effect(frame: frame(nearest: 270), color: color)), scale: 2).ink
+        XCTAssertLessThan(threeQuarters.isNull ? 0 : threeQuarters.width, rest.width * 0.15, "and at three quarters")
+        let halfWay = try render(glyph(BoltSlamMotion.Effect(frame: frame(nearest: 180), color: color)), scale: 2).ink
+        XCTAssertEqual(halfWay.width, rest.width, accuracy: rest.width * 0.12, "the other face is the whole glyph")
+
+        // Exactly half-way round, the glyph is its mirror image left to right (not turned upside down, which a
+        // turn in the plane of the screen gives and which looks alike for a bolt): pixel for pixel.
+        let size = 96  // the 48 pt square at 2x
+        let plain = try render(glyph(EmptyModifier()), scale: 2).bytes
+        let turned = try render(glyph(BoltSlamMotion.Effect(frame: .init(twirl: 180), color: color)), scale: 2).bytes
+        let upsideDown = try render(glyph(EmptyModifier()).rotationEffect(.degrees(180)), scale: 2).bytes
+        func alpha(_ bytes: [UInt8], _ x: Int, _ y: Int) -> Int { Int(bytes[(y * size + x) * 4 + 3]) }
+        func difference(_ bytes: [UInt8], fromPlainFlipped flip: Bool) -> Double {
+            var total = 0
+            for y in 0..<size { for x in 0..<size { total += abs(alpha(bytes, x, y) - alpha(plain, flip ? size - 1 - x : x, y)) } }
+            return Double(total) / Double(size * size)
+        }
+        let mirrorError = difference(turned, fromPlainFlipped: true)
+        XCTAssertLessThan(mirrorError, 1.5, "half-way round is the mirror image (mean alpha error \(mirrorError)/255)")
+        XCTAssertGreaterThan(difference(upsideDown, fromPlainFlipped: true), mirrorError * 3,
+                             "and the test tells a mirror from a turn in the screen's plane")
+        XCTAssertEqual(slam.value(time: slam.duration), BoltSlamMotion.Frame())
+    }
+
     func testTheSparksStayCloseToTheFoot() {
         // Sparks fly up and out of the foot inside a small radius, so the toolbar never clips them oddly.
         var farthest: CGFloat = 0
@@ -191,16 +254,31 @@ final class BoltMotionTests: XCTestCase {
         let color = boltColor
         let slam = BoltSlamMotion.timeline()
         let strike = BoltStrikeMotion.timeline(for: .strike)
-        let styles: [(name: String, duration: TimeInterval, view: (TimeInterval) -> AnyView)] = [
-            ("slam", slam.duration, { AnyView(self.glyph(BoltSlamMotion.Effect(frame: slam.value(time: $0), color: color))) }),
-            ("strike", strike.duration, { AnyView(self.glyph(BoltStrikeMotion.Effect(frame: strike.value(time: $0), color: color))) }),
-        ]
-        for style in styles {
+        // The slam's spin close up (brief 73): from the crouch to the top of the hop at 1/240 s, the edge-on frames
+        // marked, so the quarter and three-quarter turns can be seen.
+        let spinStart = BoltSlamMotion.crouch, spinSteps = Int(((BoltSlamMotion.apexAt - spinStart) * 240).rounded(.up))
+        let styles: [(name: String, title: String, times: [TimeInterval], view: (TimeInterval) -> AnyView)] = [
             // From the first frame to one past the end, which must look like the first.
-            let times = (0...Int((style.duration * 60).rounded(.up)) + 1).map { Double($0) / 60 }
+            ("slam", "1/60 s steps", (0...Int((slam.duration * 60).rounded(.up)) + 1).map { Double($0) / 60 },
+             { AnyView(self.glyph(BoltSlamMotion.Effect(frame: slam.value(time: $0), color: color))) }),
+            ("slam-spin", "the spin, 1/240 s steps", (0...spinSteps).map { spinStart + Double($0) / 240 },
+             { AnyView(self.glyph(BoltSlamMotion.Effect(frame: slam.value(time: $0), color: color))) }),
+            ("strike", "1/60 s steps", (0...Int((strike.duration * 60).rounded(.up)) + 1).map { Double($0) / 60 },
+             { AnyView(self.glyph(BoltStrikeMotion.Effect(frame: strike.value(time: $0), color: color))) }),
+        ]
+        /// Under a slam frame: "edge" where the face is a sliver (edge-on), "mirror" where its other face shows.
+        func mark(_ style: String, _ time: TimeInterval) -> (text: String, color: Color)? {
+            guard style.hasPrefix("slam") else { return nil }
+            let face = slam.value(time: time).face
+            if abs(face) < 0.3 { return ("edge", .red) }
+            if face < -0.7 { return ("mirror", .orange) }
+            return nil
+        }
+        for style in styles {
+            let times = style.times
             let columns = 10
             let sheet = VStack(alignment: .leading, spacing: 4) {
-                Text("Bolt \(style.name), \(platform), 1/60 s steps (rendered by the app's own view code)")
+                Text("Bolt \(style.name), \(platform), \(style.title) (rendered by the app's own view code)")
                     .font(.system(size: 8, weight: .semibold))
                     .foregroundStyle(.white)
                 Grid(horizontalSpacing: 2, verticalSpacing: 2) {
@@ -212,6 +290,9 @@ final class BoltMotionTests: XCTestCase {
                                     Text(String(format: "%.3f s", times[index]))
                                         .font(.system(size: 7).monospacedDigit())
                                         .foregroundStyle(.gray)
+                                    Text(mark(style.name, times[index])?.text ?? " ")
+                                        .font(.system(size: 6, weight: .bold))
+                                        .foregroundStyle(mark(style.name, times[index])?.color ?? .clear)
                                 }
                             }
                         }
@@ -233,15 +314,17 @@ final class BoltMotionTests: XCTestCase {
                 attachment.lifetime = keep ? .keepAlways : .deleteOnSuccess
                 add(attachment)
             }
-            XCTAssertLessThanOrEqual(times.count, 61, "\(style.name): no more than a second of frames at 60 Hz")
+            if !style.name.hasSuffix("spin") {
+                XCTAssertLessThanOrEqual(times.count, 61, "\(style.name): no more than a second of frames at 60 Hz")
+            }
         }
 
-        var table = "| t (s) | twirl (°) | lift (pt, − up) | scale x | scale y | warp | flash | sparks |\n|---|---|---|---|---|---|---|---|\n"
+        var table = "| t (s) | spin (° about y) | face | lift (pt, − up) | scale x | scale y | warp | flash | sparks |\n|---|---|---|---|---|---|---|---|---|\n"
         for step in 0...Int((slam.duration * 60).rounded(.up)) {
             let time = Double(step) / 60
             let fx = slam.value(time: time)
-            table += String(format: "| %.3f | %.0f | %.2f | %.3f | %.3f | %.3f | %.2f | %.2f |\n", time, fx.twirl, fx.lift,
-                            fx.stretch, fx.squash, fx.warp, fx.glow, fx.spark)
+            table += String(format: "| %.3f | %.0f | %.2f | %.2f | %.3f | %.3f | %.3f | %.2f | %.2f |\n", time, fx.twirl, fx.face,
+                            fx.lift, fx.stretch, fx.squash, fx.warp, fx.glow, fx.spark)
         }
         let attachment = XCTAttachment(string: table)
         attachment.name = "bolt-slam-keyframes-\(platform).md"

@@ -159,6 +159,29 @@ final class GroupsTests: XCTestCase {
         XCTAssertEqual(GroupDeletion(project: empty)?.message, "Its 1 open task moves to the Inbox.")
     }
 
+    /// Brief 73: a swipe deletes through the Group menu's path. A Group with tasks asks first (a full swipe too: the
+    /// swipe only asks), an empty one goes at once.
+    func testASwipedGroupAsksFirstOnlyWhenItHasTasks() throws {
+        let empty = project("Empty", order: 0), work = project("Work", order: 1)
+        _ = task("a", in: work)
+        try context.save()
+        guard case .now = GroupDeletion.request(for: empty) else { return XCTFail("an empty Group goes at once") }
+        guard case .ask(let question) = GroupDeletion.request(for: work) else { return XCTFail("Work asks first") }
+        XCTAssertEqual(question.project.id, work.id)
+        XCTAssertEqual(question.message, "Its 1 open task moves to the Inbox.")
+    }
+
+    /// Brief 73: in Browse a swipe left deletes a Group or a label; the Inbox, Shared Tasks (the forced Group, a
+    /// `.project` with a reserved id), Completed and the rest have none.
+    func testOnlyYourGroupsAndLabelsSwipeToDelete() {
+        XCTAssertTrue(SidebarItem.project(UUID()).swipesToDelete)
+        XCTAssertTrue(SidebarItem.label(UUID()).swipesToDelete)
+        XCTAssertFalse(SidebarItem.sharedTasks.swipesToDelete, "Shared Tasks, the forced Group, has no swipe")
+        for item in [SidebarItem.inbox, .today, .upcoming, .completed, .settings, .filter(UUID())] {
+            XCTAssertFalse(item.swipesToDelete, "\(item)")
+        }
+    }
+
     // MARK: - Remembered per list
 
     func testSortByDefaultsToPriorityAndForgets080sGroupBy() {
