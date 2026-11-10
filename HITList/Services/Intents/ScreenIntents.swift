@@ -4,13 +4,14 @@ import SwiftUI
 
 /// The screens Siri and Shortcuts can open: "Open Today in HITList".
 enum HITScreen: String, AppEnum, CaseIterable {
-    case today, inbox, upcoming
+    case today, inbox, upcoming, flipboard
 
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Screen"
     static let caseDisplayRepresentations: [HITScreen: DisplayRepresentation] = [
         .today: DisplayRepresentation(title: "Today", image: .init(systemName: "star")),
         .inbox: DisplayRepresentation(title: "Inbox", image: .init(systemName: "tray")),
         .upcoming: DisplayRepresentation(title: "Upcoming", image: .init(systemName: "calendar")),
+        .flipboard: DisplayRepresentation(title: "Flipboard", image: .init(systemName: "switch.2")), // brief 74's widget
     ]
 
     /// The iPhone tab that shows it.
@@ -19,6 +20,7 @@ enum HITScreen: String, AppEnum, CaseIterable {
         case .today: .today
         case .inbox: .inbox
         case .upcoming: .upcoming
+        case .flipboard: .flipboard
         }
     }
 
@@ -28,6 +30,7 @@ enum HITScreen: String, AppEnum, CaseIterable {
         case .today: .today
         case .inbox: .inbox
         case .upcoming: .upcoming
+        case .flipboard: .flipboard
         }
     }
 }

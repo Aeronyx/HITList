@@ -82,6 +82,11 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         # Shared Tasks (brief 51): lets a CloudKit share link open in HITList and reach the share-acceptance callbacks.
         CKSharingSupported: true
+        # The widgets' links into the app (brief 74, Services/DeepLinks): hitlist://task/<id>, hitlist://today,
+        # hitlist://upcoming, hitlist://flipboard.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.trammells.hitlist
+            CFBundleURLSchemes: [hitlist]
         # ProMotion iPhones may run animations above 60 Hz (the sync bolt's strike, brief 54); without this key
         # Core Animation caps them at 60 on iPhone.
         CADisableMinimumFrameDurationOnPhone: true
@@ -125,13 +130,14 @@ targets:
           - "Info.plist"
           - "**/.DS_Store"
       # Shared with the app, compiled into both (never copied): the palettes, Inter and the type roles, the due and
-      # priority colours, and the calendar's grid arithmetic.
+      # priority colours, the calendar's grid arithmetic, and the deep links.
       - HITList/Support/Theme.swift
       - HITList/Support/Preferences.swift
       - HITList/Support/Formatting.swift
       - HITList/Support/DesignSystem/HITTokens.swift
       - HITList/Support/DesignSystem/HITCalendar.swift
       - HITList/Support/DesignSystem/HITButtonStyle.swift
+      - HITList/Services/DeepLinks/DeepLink.swift
       # The six Inter cuts the app ships, registered by the extension's own Info.plist.
       - path: HITList/Resources/Fonts/Inter/static
         buildPhase: resources
