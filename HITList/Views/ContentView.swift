@@ -137,6 +137,10 @@ private struct SplitContent: View {
     @State private var settingsSidebarShown = false
     /// Mac: the sidebar's search field and where it takes the window (brief 66).
     @State private var search = SidebarSearch()
+    #if os(macOS)
+    /// Mac: no text field takes the keyboard as the window opens or comes back (brief 70).
+    @State private var focusGuard = WindowFocusGuard()
+    #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
@@ -153,6 +157,12 @@ private struct SplitContent: View {
                 sidebar.navigationSplitViewColumnWidth(DuoColumns.sidebarWidth(width: geometry.width, crease: geometry.crease))
             } else {
                 sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
+                    #if os(macOS)
+                    // Our sidebar toggle above the sidebar, where the system's was (brief 70); the system's sat in a
+                    // glass circle on 27.2.
+                    .toolbar(removing: .sidebarToggle)
+                    .toolbar { sidebarToggleItem }
+                    #endif
             }
         } detail: {
             if duo {
@@ -163,6 +173,10 @@ private struct SplitContent: View {
             } else {
                 ListScreen(item: selection ?? .today)
                     .navigationSplitViewColumnWidth(min: 420, ideal: 640)
+                    #if os(macOS)
+                    // With the sidebar hidden, the toggle moves to the detail's leading edge, as the system's did.
+                    .toolbar { detailToggleItem }
+                    #endif
             }
         }
         // Duo: side by side, never the sidebar sliding over the list as an upright iPad's does.
@@ -196,8 +210,56 @@ private struct SplitContent: View {
         .focusedSceneValue(\.settingsRouter, settingsRouter)
         .onChange(of: settingsRouter.openRequests) { _, _ in selection = .settings }
         .onChange(of: settingsRouter.closeRequests) { _, _ in selection = beforeSettings ?? .today }
+        // The window's keyboard is the person's to give (brief 70): an open card or editor focuses its own title.
+        .environment(focusGuard)
+        .windowFocusGuard(focusGuard)
+        .onAppear {
+            let popouts = popouts
+            focusGuard.allowsTextFocus = { !popouts.state.showsAddButton }
+        }
+        #if DEBUG
+        // `-focusSearchAtLaunch YES`: the case macOS 27 showed, kept on purpose for screenshots.
+        .task {
+            guard SidebarSearch.focusesAtLaunch else { return }
+            focusGuard.isDisabled = true
+            try? await Task.sleep(for: .milliseconds(300))
+            search.focus()
+        }
+        #endif
         #endif
     }
+
+    #if os(macOS)
+    /// The sidebar toggle in the sidebar column's part of the toolbar, outside the toolbar's shared glass.
+    @ToolbarContentBuilder
+    private var sidebarToggleItem: some ToolbarContent {
+        // At the column's trailing end, as the system's toggle was: a flexible space pushes it past the traffic lights.
+        // Only while the column shows: a hidden column's items went to the toolbar's overflow (»).
+        if SidebarToggleButton.sidebarShown(columnVisibility) {
+            if #available(macOS 26, *) {
+                ToolbarSpacer(.flexible)
+                ToolbarItem { SidebarToggleButton(visibility: $columnVisibility) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem { Spacer() }
+                ToolbarItem { SidebarToggleButton(visibility: $columnVisibility) }
+            }
+        }
+    }
+
+    /// With the column hidden, the toggle at the detail's leading edge (after the traffic lights), outside the glass.
+    @ToolbarContentBuilder
+    private var detailToggleItem: some ToolbarContent {
+        if !SidebarToggleButton.sidebarShown(columnVisibility) {
+            if #available(macOS 26, *) {
+                ToolbarItem(placement: .navigation) { SidebarToggleButton(visibility: $columnVisibility) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: .navigation) { SidebarToggleButton(visibility: $columnVisibility) }
+            }
+        }
+    }
+    #endif
 
     /// The sidebar column's content: the lists, or while Settings is selected, its sections with a Back
     /// button, the way System Settings uses its sidebar. The column itself never collapses (build 9 slid
@@ -217,6 +279,7 @@ private struct SplitContent: View {
                     .transition(.opacity)
             }
         }
+        .macSidebarColumnBackground()
         #else
         SidebarView(selection: $selection)
         #endif
@@ -238,6 +301,15 @@ struct ListScreen: View {
     @Environment(PopoutController.self) private var popouts
 
     var body: some View {
+        #if os(macOS)
+        screen.macDetailToolbarBackground()
+        #else
+        screen
+        #endif
+    }
+
+    @ViewBuilder
+    private var screen: some View {
         switch item {
         case .settings:
             MacSettingsPage()

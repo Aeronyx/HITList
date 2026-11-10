@@ -31,7 +31,12 @@ struct SidebarSearchField: View {
             .focused($isFocused)
             .onExitCommand {
                 // Escape: an empty field lets go of the keyboard; otherwise it empties, and the window goes back.
-                if search.text.isEmpty { isFocused = false } else { search.clear() }
+                if search.text.isEmpty {
+                    isFocused = false
+                    search.letGo()
+                } else {
+                    search.clear()
+                }
             }
             .accessibilityIdentifier("sidebarSearch")
             if !search.text.isEmpty {

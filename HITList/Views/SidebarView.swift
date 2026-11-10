@@ -29,6 +29,15 @@ struct SidebarView: View {
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var showSettings = false
+    #if os(macOS)
+    /// The rows hold the keyboard (brief 70): ↑ and ↓ move the selection. Taken at launch and whenever the window's
+    /// focus guard lets go of a text field the system handed the keyboard.
+    @FocusState private var rowsFocused: Bool
+    @Environment(WindowFocusGuard.self) private var focusGuard: WindowFocusGuard?
+    /// The Group or Filter being dragged, and the row it would land above or below.
+    @State private var dragging: SidebarItem?
+    @State private var dropTarget: SidebarDropTarget?
+    #endif
     /// The shared lists and their tasks (brief 62); nothing while Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
 
@@ -39,6 +48,49 @@ struct SidebarView: View {
     private var inboxCount: Int { SidebarCounts.inbox(openTasks, shared: sharedRows) }
 
     var body: some View {
+        rows
+        // Who this is, at the top of the sidebar's own area (below the traffic lights and the sidebar
+        // toggle, which live in the window's toolbar): Todoist's account button (brief 40).
+        .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
+        // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
+        .navigationTitle("HITList")
+        #if os(iOS)
+        .scrollContentBackground(.hidden)
+        .background(Theme.surface)
+        .listStyle(.insetGrouped)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showSettings = true } label: { Image(systemName: "gearshape") }
+            }
+        }
+        .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
+        #else
+        .background(Theme.surface)
+        // The gear at the foot of the sidebar opens Settings in this window's detail column.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
+        }
+        #endif
+        .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
+        .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
+        .sheet(isPresented: $creatingProject) { ProjectEditorView(project: nil).slateSheet() }
+        .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
+        .sheet(isPresented: $creatingLabel) { LabelEditorView(label: nil).slateSheet() }
+        .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
+    }
+
+    /// Mac: our own rows (brief 70). iPad: the system's sidebar list, as before.
+    @ViewBuilder
+    private var rows: some View {
+        #if os(macOS)
+        macRows
+        #else
+        iPadList
+        #endif
+    }
+
+    #if os(iOS)
+    private var iPadList: some View {
         List(selection: $selection) {
             Section {
                 row("Inbox", "tray", .inbox, count: inboxCount)
@@ -83,6 +135,7 @@ struct SidebarView: View {
                         Text(filter.name)
                     } icon: {
                         Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(Color(hex: filter.colorHex))
+                    .offset(y: MacSidebarMetrics.symbolDrop)
                     }
                     .tag(SidebarItem.filter(filter.id))
                     .slateRow()
@@ -114,36 +167,175 @@ struct SidebarView: View {
                 sectionHeader("Labels") { creatingLabel = true }
             }
         }
-        // Who this is, at the top of the sidebar's own area (below the traffic lights and the sidebar
-        // toggle, which live in the window's toolbar): Todoist's account button (brief 40).
-        .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
-        // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
-        .navigationTitle("HITList")
-        .scrollContentBackground(.hidden)
-        .background(Theme.surface)
-        #if os(iOS)
-        .listStyle(.insetGrouped)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showSettings = true } label: { Image(systemName: "gearshape") }
-            }
-        }
-        .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
-        #else
-        .listStyle(.sidebar)
-        // The gear at the foot of the sidebar opens Settings in this window's detail column.
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
-        }
-        #endif
-        .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
-        .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
-        .sheet(isPresented: $creatingProject) { ProjectEditorView(project: nil).slateSheet() }
-        .sheet(item: $editingProject) { ProjectEditorView(project: $0).slateSheet() }
-        .sheet(isPresented: $creatingLabel) { LabelEditorView(label: nil).slateSheet() }
-        .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
+    }
+    #endif
+
+    #if os(macOS)
+    /// The rows in the order they are drawn, for ↑ and ↓.
+    private var macOrder: [SidebarItem] {
+        [.inbox, .today, .upcoming, .flipboard, .completed] + projects.map { .project($0.id) } + [.sharedTasks]
+            + filters.map { .filter($0.id) } + labels.map { .label($0.id) }
     }
 
+    /// The Mac's sidebar (brief 70): a scroll view of our own rows, never the sidebar list style's drawing, so the
+    /// selection, the icons and the metrics are the same on any macOS and whichever view holds the keyboard.
+    private var macRows: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 0) {
+                    macRow("Inbox", "tray", .inbox, count: inboxCount)
+                    macRow("Today", "calendar", .today, count: todayCount,
+                           tint: selection == .today ? MacSidebarStyle.todayRedSelected : MacSidebarStyle.todayRed)
+                    macRow("Upcoming", "calendar.badge.clock", .upcoming)
+                    macRow("Flipboard", "switch.2", .flipboard)
+                    macRow("Completed", "checkmark.circle", .completed)
+
+                    MacSidebarHeader(title: "Groups") { creatingProject = true }
+                    ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+                        macProjectRow(project, index: index)
+                    }
+                    // Shared Tasks, the forced Group, always last (brief 64): no reorder, rename or delete.
+                    macSharedTasksRow
+
+                    // Filters below the Groups (George, 2026-11-08: "definitely put it below Groups").
+                    MacSidebarHeader(title: "Filters") { creatingFilter = true }
+                    ForEach(Array(filters.enumerated()), id: \.element.id) { index, filter in
+                        macFilterRow(filter, index: index)
+                    }
+
+                    MacSidebarHeader(title: "Labels") { creatingLabel = true }
+                    ForEach(labels) { label in
+                        selectable(.label(label.id)) {
+                            MacSidebarRow(title: label.name, isSelected: selection == .label(label.id)) {
+                                Image(systemName: "tag.fill").foregroundStyle(Color(hex: label.colorHex))
+                                    .offset(y: MacSidebarMetrics.symbolDrop)
+                            } trailing: { EmptyView() }
+                        }
+                        .contextMenu {
+                            Button("Edit Label…") { editingLabel = label }
+                            Button("Delete", role: .destructive) { delete(label) }
+                        }
+                    }
+                }
+                .padding(.bottom, MacSidebarMetrics.bottomPadding)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            // One stop for the keyboard, as the list was: ↑ and ↓ walk the rows.
+            .focusable()
+            .focused($rowsFocused)
+            .focusEffectDisabled()
+            .onKeyPress(keys: [.upArrow, .downArrow]) { press in
+                let offset = press.key == .downArrow ? 1 : -1
+                if let next = SidebarNavigation.item(after: selection, in: macOrder, offset: offset) {
+                    selection = next
+                    withAnimation(nil) { proxy.scrollTo(next) }
+                }
+                return .handled
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Sidebar")
+        }
+        // The keyboard starts here when the window opens, never in Search (brief 70, item 1), and comes back here
+        // whenever the window's focus guard lets go of a field the system focused.
+        .defaultFocus($rowsFocused, true)
+        .onChange(of: focusGuard?.releases) { _, _ in rowsFocused = true }
+        // Escape in the empty search field: the keyboard comes back to the rows, so ↑ and ↓ work at once.
+        .onChange(of: search?.letGoRequests) { _, _ in rowsFocused = true }
+        // `defaultFocus` alone left the keyboard with the detail column's list on 26.7.1 (↓ opened the first task):
+        // once the window has laid out, the rows take it, unless a card the person opened already has it.
+        .task {
+            try? await Task.sleep(for: .milliseconds(150))
+            if popouts?.state.showsAddButton ?? true { rowsFocused = true }
+        }
+    }
+
+    /// A row that selects its item when clicked and takes the keyboard for ↑ and ↓, with its id for scrolling.
+    private func selectable<Row: View>(_ item: SidebarItem, @ViewBuilder row: () -> Row) -> some View {
+        row()
+            .id(item)
+            .onTapGesture {
+                selection = item
+                rowsFocused = true
+            }
+            .accessibilityAction { selection = item }
+    }
+
+    private func macRow(_ title: String, _ symbol: String, _ item: SidebarItem, count: Int = 0,
+                        tint: Color? = nil) -> some View {
+        selectable(item) {
+            MacSidebarRow(title: title, isSelected: selection == item) {
+                Image(systemName: symbol).foregroundStyle(tint ?? Theme.accent).offset(y: MacSidebarMetrics.symbolDrop)
+            } trailing: {
+                MacSidebarCount(count)
+            }
+        }
+    }
+
+    private func macProjectRow(_ project: Project, index: Int) -> some View {
+        let item = SidebarItem.project(project.id)
+        let count = openTasks.filter { $0.project?.id == project.id }.count
+        return selectable(item) {
+            MacSidebarRow(title: project.name, isSelected: selection == item) {
+                Image(systemName: "circle.fill").foregroundStyle(Color(hex: project.colorHex)).imageScale(.small)
+            } trailing: {
+                MacSidebarCount(count)
+            }
+        }
+        .contextMenu {
+            Button("Edit Group…") { editingProject = project }
+            Button("Delete", role: .destructive) { askToDelete(project) }
+        }
+        .groupDeletionDialog($deletingProject, for: project) { delete($0) }
+        // Drag a Group to a new place (brief 57); the order is every list's Group order.
+        .reorderable(item, index: index, dragging: $dragging, target: $dropTarget,
+                     accepts: { if case .project = $0 { $0 != .sharedTasks } else { false } }) { source, below in
+            guard let from = projects.firstIndex(where: { SidebarItem.project($0.id) == source }),
+                  let move = SidebarReorder.move(from: from, onto: index, below: below) else { return }
+            GroupReorder.move(projects, from: move.from, to: move.to)
+        }
+    }
+
+    /// Shared Tasks under the Groups (brief 64): its dot, its open tasks' count as a Group's (dated or not), or a dot
+    /// while an invitation waits.
+    private var macSharedTasksRow: some View {
+        selectable(.sharedTasks) {
+            MacSidebarRow(title: SharedTasksGroup.name, isSelected: selection == .sharedTasks) {
+                Image(systemName: "circle.fill").foregroundStyle(Color(hex: SharedTasksGroup.colorHex)).imageScale(.small)
+            } trailing: {
+                if SharedTasksCenter.shared.pendingInvitation != nil {
+                    Circle().fill(Theme.accent).frame(width: 7, height: 7).accessibilityLabel("Invitation waiting")
+                } else {
+                    MacSidebarCount(sharedRows.openCount)
+                }
+            }
+        }
+        .accessibilityIdentifier("sidebar-shared-tasks")
+        // Shared Tasks starts with the window when it is on, so its tasks are in Today at once.
+        .task { sharedRows.start() }
+    }
+
+    private func macFilterRow(_ filter: SavedFilter, index: Int) -> some View {
+        let item = SidebarItem.filter(filter.id)
+        return selectable(item) {
+            MacSidebarRow(title: filter.name, isSelected: selection == item) {
+                Image(systemName: "line.3.horizontal.decrease.circle.fill").foregroundStyle(Color(hex: filter.colorHex))
+                    .offset(y: MacSidebarMetrics.symbolDrop)
+            } trailing: { EmptyView() }
+        }
+        .contextMenu {
+            Button("Edit Filter…") { editingFilter = filter }
+            Button("Delete", role: .destructive) { delete(filter) }
+        }
+        .reorderable(item, index: index, dragging: $dragging, target: $dropTarget,
+                     accepts: { if case .filter = $0 { true } else { false } }) { source, below in
+            guard let from = filters.firstIndex(where: { SidebarItem.filter($0.id) == source }),
+                  let move = SidebarReorder.move(from: from, onto: index, below: below) else { return }
+            self.move(&filtersSnapshot, move.from, move.to)
+        }
+    }
+    #endif
+
+    #if os(iOS)
     /// Shared Tasks under the Groups (brief 64): its dot, its open tasks' count as a Group's (dated or not), or a dot
     /// while an invitation waits.
     private var sharedTasksRow: some View {
@@ -166,6 +358,7 @@ struct SidebarView: View {
         // Shared Tasks starts with the window when it is on, so its tasks are in Today at once.
         .task { sharedRows.start() }
     }
+    #endif
 
     /// From the sidebar's leading edge to the account button's fill, the same as the Settings button at the
     /// foot, so the avatar lines up with the gear.
@@ -230,6 +423,7 @@ struct SidebarView: View {
         items = copy
     }
 
+    #if os(iOS)
     @ViewBuilder
     private func row(_ title: String, _ symbol: String, _ item: SidebarItem, count: Int = 0, tint: Color = .accentColor) -> some View {
         Label {
@@ -244,6 +438,7 @@ struct SidebarView: View {
         .tag(item)
         .slateRow()
     }
+    #endif
 
     private func sectionHeader(_ title: String, add: @escaping () -> Void) -> some View {
         SidebarSectionHeader(title: title, add: add)

@@ -115,9 +115,8 @@ struct MacSettingsIcon: View {
     }
 }
 
-/// The left column: one row per section (icon, title, caption). The chosen row sits on a pill (glass
-/// when effects are allowed, `Theme.elevated` otherwise) that glides between rows; hover is a faint fill.
-/// With keyboard focus, ↑ and ↓ move between sections.
+/// The left column: one row per section, the sidebar's rows (`MacSettingsSectionRows`). With keyboard focus,
+/// ↑ and ↓ move between sections.
 struct MacSettingsSectionList: View {
     let selection: MacSettingsSection
     let onSelect: (MacSettingsSection) -> Void
@@ -146,75 +145,34 @@ struct MacSettingsSectionList: View {
     }
 }
 
-/// The rows of `MacSettingsSectionList`, without its scroll view.
+/// The rows of `MacSettingsSectionList`, without its scroll view: the sidebar's own rows (`MacSidebarRow`, brief 70),
+/// so the Settings sections sit in the column exactly as the lists do, with the same fill, height and hover, drawn the
+/// same on any macOS. Each keeps its coloured square; its caption is the row's tooltip and VoiceOver hint (the page's
+/// header shows it under the title).
 struct MacSettingsSectionRows: View {
     let selection: MacSettingsSection
     let onSelect: (MacSettingsSection) -> Void
-    @Namespace private var pill
+
+    /// The coloured square, in the rows' 22 pt icon column.
+    static let iconSize: CGFloat = 20
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             ForEach(MacSettingsSection.allCases) { section in
-                MacSettingsSectionRow(section: section, isSelected: section == selection, pill: pill) {
-                    onSelect(section)
+                MacSidebarRow(title: section.title, isSelected: section == selection) {
+                    MacSettingsIcon(section: section, size: Self.iconSize)
+                } trailing: {
+                    EmptyView()
                 }
+                .onTapGesture { onSelect(section) }
+                .help(section.caption)
+                .accessibilityLabel(section.title)
+                .accessibilityHint(section.caption)
+                .accessibilityAction { onSelect(section) }
+                .accessibilityIdentifier("settings-section-\(section.rawValue)")
             }
         }
-        .padding(.horizontal, HITSpacing.s)
-        .padding(.vertical, HITSpacing.m)
-    }
-}
-
-private struct MacSettingsSectionRow: View {
-    let section: MacSettingsSection
-    let isSelected: Bool
-    let pill: Namespace.ID
-    let action: () -> Void
-    @State private var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: HITSpacing.s + 2) {
-                MacSettingsIcon(section: section)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(section.title)
-                        .font(isSelected ? HITType.subheadlineSemibold : HITType.subheadlineMedium)
-                        .foregroundStyle(HITColor.text)
-                        .lineLimit(1)
-                    Text(section.caption)
-                        .font(HITType.caption2)
-                        .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, HITSpacing.s)
-            .padding(.vertical, 7)
-            .background {
-                if isSelected {
-                    // A half-slate wash on the glass keeps the white title legible whatever the glass
-                    // picks up; with effects off the pill is plain `Theme.elevated`.
-                    Self.shape.fill(Theme.elevated.opacity(0.55))
-                        .hitGlass(in: Self.shape, tint: Theme.accent.opacity(0.14), fallback: Theme.elevated)
-                        .matchedGeometryEffect(id: "selection", in: pill)
-                } else if isHovered {
-                    Self.shape.fill(Theme.elevated.opacity(0.5))
-                }
-            }
-            .contentShape(Self.shape)
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isHovered)
-        .help(section.caption)
-        .accessibilityLabel(section.title)
-        .accessibilityHint(section.caption)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityIdentifier("settings-section-\(section.rawValue)")
+        .padding(.vertical, HITSpacing.s)
     }
 }
 
