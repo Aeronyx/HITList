@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-16.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-16.md` (round 16 is merged; its record is in COMMON).
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -255,8 +255,29 @@ Inbox …; Groups (Shared Tasks last), Filters, Labels; a filter's query in the 
 14/12 on the Mac, drawn without font smoothing, 17/13 on every iPhone. Tips never push the layout and close on a tap
 anywhere on them. The bolt has two styles in Extras (Slam by default) under the same rare gate. Adding or editing a
 Flipboard switch is a small card, never a sheet; every switch tile on a screen is the same size.
+From 2026-11-10 (round 16): the version stays 0.9.0 until George says otherwise; each release is a new build of it.
+Switches are routines first: by default a switch never appears as a task anywhere (this replaces round 13's "a red one
+is in Today"); "Overdue becomes task", on a switch or on its Switchboard, opts it in from the moment it is due.
+Switchboards group switches, Daily or Weekly, each with a reset time (04:00 for a new one; loose switches keep
+midnight); a switch belongs to at most one, and existing switches stay loose. A switch's time is when the step is due
+and reminds then. The Flipboard is a calm status check, not a second to-do list. The bolt's twirl is a spin about the
+vertical axis (edge-on on the way round); the slam is kept as it is. On the Mac, anything the system decides by macOS
+version or by which view holds the keyboard is drawn or pinned by us (the sidebar's rows and selection, the toolbar's
+band, pill and toggle); nothing takes the keyboard at launch. The four Switchboard choices were the supervisor's
+(George: "work freely"), so George may still reverse them: see `dev/briefs/ROUND-16.md`.
 
-## 8. Where things stand (2026-11-10, before round 16)
+## 8. Where things stand (2026-11-10, round 16 merged)
+
+**2026-11-10, round 16 merged for 0.9.0 (21) (Fable 5.2 supervisor).** Briefs 70–73 ran as four Opus sessions at once
+and are merged on master: the Mac's chrome drawn by us for macOS 27 (a friend's 27.2 drew 0.9.0 (20) with a grey
+selection, a dark band behind the first header and filled toolbar glass; nothing here runs 27, so the friend's next
+screenshot is the check), monthly and yearly repeats in quick add, Switchboards (schema V6, pushed to CloudKit
+Development by the supervisor; George deploys it), Browse's last row and swipe to delete, the bolt's coin spin. Notes
+are per build now (§6). Details and leftovers in COMMON's Round 16 record. Next: the friend's screenshot of build 21 on
+macOS 27.2, George's word on the Switchboard choices, and whether to own the sidebar's shape (our own split view).
+The next brief number is 74.
+
+### Before round 16 (kept for the record)
 
 **2026-11-10, 0.9.0 (20) released; handed to a Fable 5.2 chat.** George released 0.9.0 on both platforms. Both builds
 sat in Beta App Review because 0.9.0 was a new version for the external (public-link) group. The friends are now

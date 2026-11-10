@@ -70,6 +70,24 @@ final class MonthlyPhraseTests: XCTestCase {
     func testEvery3MonthsOnThe10th() { check("every 3 months on the 10th", due: (2026, 11, 10), rule: "monthly;3;;10;;d10") }
     func testEvery2Months() { check("every 2 months", due: (2026, 10, 21), rule: "monthly;2;;21") }
     func testQuarterly() { check("quarterly", due: (2026, 10, 21), rule: "monthly;3;;21") }
+
+    /// After "the", "a", "my"… a lone "quarterly" describes the thing and stays in the title (the demo week's
+    /// "Finish the quarterly report" lost the word and repeated every three months); elsewhere it is the repeat.
+    func testQuarterlyAfterAnArticleStaysInTheTitle() {
+        let parser = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar)
+        for input in ["Finish the quarterly report fri p1", "Send a quarterly update fri p1", "Prep my quarterly review fri p1"] {
+            let r = parser.parse(input)
+            XCTAssertNil(r.recurrence, input)
+            XCTAssertTrue(r.title.contains("quarterly"), "\(input): \(r.title)")
+            XCTAssertEqual(r.priority, .p1, input)
+            XCTAssertFalse(r.tokens.contains { $0.kind == .recurrence }, input)
+        }
+        let repeats = parser.parse("Pay estimated tax quarterly")
+        XCTAssertEqual(repeats.recurrence?.encoded, "monthly;3;;21")
+        XCTAssertEqual(repeats.title, "Pay estimated tax")
+        XCTAssertEqual(parser.parse("Quarterly review").recurrence?.encoded, "monthly;3;;21")
+        XCTAssertEqual(parser.parse("Review the numbers every quarter").recurrence?.encoded, "monthly;3;;21")
+    }
     func testEveryQuarter() { check("every quarter", due: (2026, 10, 21), rule: "monthly;3;;21") }
 
     // MARK: The month's ends
