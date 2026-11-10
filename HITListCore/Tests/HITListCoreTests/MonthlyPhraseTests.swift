@@ -114,6 +114,19 @@ final class MonthlyPhraseTests: XCTestCase {
     func testAnnuallyOn3March() { check("annually on 3 March", due: (2027, 3, 3), rule: "yearly;1;;3;;m3d3") }
     func testEveryYear() { check("every year", due: (2026, 10, 21), rule: "yearly;1;;21") }
 
+    func testMoreYearly() {
+        check("every 2 years on 3 Mar", due: (2027, 3, 3), rule: "yearly;2;;3;;m3d3")
+        check("every year on the 3rd of March", due: (2027, 3, 3), rule: "yearly;1;;3;;m3d3")
+        // Feb 28 in a year without a 29th (George's rule for short months).
+        check("Birthday every Feb 29", due: (2027, 2, 28), rule: "yearly;1;;29;;m2d29", highlight: "every Feb 29", title: "Birthday")
+        // Typed today after 9:00: next year's.
+        check("every Oct 21 9am", due: (2027, 10, 21), at: (9, 0), rule: "yearly;1;;21;09:00;m10d21", highlight: "every Oct 21")
+        // Not a date: the plain yearly repeat and the words stay.
+        let parser = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar)
+        XCTAssertNil(parser.parse("every Feb 30").recurrence)
+        XCTAssertEqual(parser.parse("every year on Feb 30").recurrence?.encoded, "yearly;1;;21")
+    }
+
     // MARK: With a time and other tokens
 
     func testPayRentEveryMonthOnThe1st9amP1Finance() {
@@ -131,5 +144,23 @@ final class MonthlyPhraseTests: XCTestCase {
               highlight: "every 28th")
         let r = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar).parse("every 28th at 18:30")
         XCTAssertEqual(r.tokens.map(\.text), ["every 28th", "at 18:30"])
+    }
+
+    /// A tap on the highlight turns the whole phrase back into text: no "every month" inside it lights up.
+    func testSwitchingOffThePhraseKeepsAllItsWords() {
+        let parser = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar)
+        let r = parser.parse("Pay rent every month on the 28th",
+                             disabling: [QuickAddTokenKey(kind: .recurrence, text: "every month on the 28th")])
+        XCTAssertNil(r.recurrence)
+        XCTAssertNil(r.dueDate)
+        XCTAssertEqual(r.title, "Pay rent every month on the 28th")
+        XCTAssertTrue(r.tokens.filter { !$0.isSuperseded }.isEmpty)
+    }
+
+    /// A later repeat overrides it, and its words go back to the title.
+    func testALaterRepeatOverridesIt() {
+        let r = QuickAddParser(now: Fixed.now, calendar: Fixed.calendar).parse("Rent every month on the 28th every first Monday")
+        XCTAssertEqual(r.recurrence?.encoded, "monthly;1;;;;w2#1")
+        XCTAssertEqual(r.title, "Rent every month on the 28th")
     }
 }

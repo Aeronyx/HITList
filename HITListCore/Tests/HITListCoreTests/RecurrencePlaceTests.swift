@@ -177,6 +177,30 @@ final class RecurrencePlaceTests: XCTestCase {
         XCTAssertEqual(walk(rule, from: Fixed.date(2026, 11, 2), 3), days([(2027, 1, 4), (2027, 3, 1), (2027, 5, 3)]))
     }
 
+    // MARK: Stepping: a date in the year
+
+    func testYearlyOnMar3() {
+        let rule = RecurrenceRule(frequency: .yearly, place: .date(month: 3, day: 3))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2027, 3, 3, 9), 2), days([(2028, 3, 3), (2029, 3, 3)], 9))
+        assertDate(rule.firstOccurrence(onOrAfter: Fixed.date(2026, 10, 21), calendar: cal), 2027, 3, 3)
+        assertDate(rule.firstOccurrence(onOrAfter: Fixed.date(2027, 3, 3), calendar: cal), 2027, 3, 3)
+        // Moved to June, it comes back to March 3.
+        assertDate(rule.nextOccurrence(after: Fixed.date(2027, 6, 1), calendar: cal), 2028, 3, 3)
+        assertDate(rule.nextOccurrence(after: Fixed.date(2027, 1, 15), calendar: cal), 2027, 3, 3)
+    }
+
+    /// Feb 29 is Feb 28 in other years and back on the 29th in a leap year.
+    func testYearlyOnFebruary29() {
+        let rule = RecurrenceRule(frequency: .yearly, place: .date(month: 2, day: 29))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2028, 2, 29), 4),
+                       days([(2029, 2, 28), (2030, 2, 28), (2031, 2, 28), (2032, 2, 29)]))
+    }
+
+    func testEveryTwoYearsOnDec31() {
+        let rule = RecurrenceRule(frequency: .yearly, interval: 2, place: .date(month: 12, day: 31))
+        XCTAssertEqual(walk(rule, from: Fixed.date(2026, 12, 31), 2), days([(2028, 12, 31), (2030, 12, 31)]))
+    }
+
     func testFirstOccurrence() {
         let on28 = RecurrenceRule(frequency: .monthly, place: .day(28))
         assertDate(on28.firstOccurrence(onOrAfter: Fixed.date(2026, 10, 21), calendar: cal), 2026, 10, 28)
