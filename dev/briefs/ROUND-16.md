@@ -128,3 +128,35 @@ the high frame rate, and the rare gate. A small brief (high).
 - Switches are routines first: by default they never appear as tasks; "overdue becomes task" opts in. Switchboards
   group them. The Flipboard is a calm status check, not a second to-do list.
 - The bolt's twirl is a spin about the vertical axis (edge-on half-way); the slam is kept as it is.
+
+## The round as briefed (Fable 5.2 supervisor, 2026-11-10)
+
+George: the friend is on macOS 27.2 ("we should still be able to prepare for that, no? In any case, please work
+freely and prepare a new minor build of the app"). Four sessions at once, all Opus 5.5, cut from master after this
+commit; the next upload is 0.9.0 (21).
+
+| Brief | Session | Effort | Owns, in short |
+|---|---|---|---|
+| 70 | `mac-chrome-27` | xhigh | The Mac window draws or pins everything macOS decides by version: launch focus, sidebar rows and selection, toolbar background, the pill, the sidebar toggle |
+| 71 | `quick-add-monthly` | high | "every month on the 28th" and its relatives in core's parser and `RecurrenceRule`; the Repeat card's words |
+| 72 | `switchboards` | xhigh | Schema V6 (`Switchboard`), switches that are never tasks by default, times, reset times, the Flipboard's sections and cards |
+| 73 | `browse-and-bolt` | high | Browse's last row clear of the island, swipe to delete a Group, the bolt's coin spin |
+
+**macOS 27.** No machine here runs it: George's Mac is 26.7.1, GitHub's runner images stop at macOS 26, and a VM would
+need a 15 GB download and George at the keyboard for its setup. Brief 70 therefore removes what the two systems can
+disagree about rather than tuning for 27, and lists what the system still decides. The friend's next screenshot (he
+gets build 21 at once, as an internal tester) is the check. Still the system's after brief 70: whether the sidebar
+column floats (26) or sits flush (27). Owning that means our own split view and top bar, a round of its own.
+
+**Switchboards: the open questions, answered by the supervisor** (George said to work freely; each is marked "choice"
+in brief 72, the schema holds every other answer without another deploy, and George may reverse any of them):
+- "Overdue becomes task" is on a switch and on a Switchboard; either one opts the switch in.
+- A switch belongs to at most one Switchboard; one with none is a loose switch on the main board, as today.
+- A switch's time is when the step is due: it shows on the switch, orders the board, decides when an opted-in switch
+  becomes a task, and reminds at that time as any timed task does.
+- Existing switches stay loose. Nothing is migrated and no default board is created.
+- A new Switchboard resets at 04:00 (the friend's example); loose switches keep midnight.
+
+**Notes per build.** `WhatsNew.Entry` gains a build number, `CHANGELOG.md` a `## 0.9.0 (21)` heading that
+`release.sh` requires and stamps with the date, and `SettingsTests` fails the preflight when the running build is
+newer than the newest entry.

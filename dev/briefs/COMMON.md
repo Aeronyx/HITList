@@ -22,7 +22,7 @@ settings; `ModelContainerFactory.groupStoreURL`). `HITList/Support/Debouncer.swi
 ## Environment (each of these cost hours to learn)
 
 - Every xcodebuild / swift / xcrun command needs `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`
-  (xcode-select points at CommandLineTools). Xcode 27.1, macOS 26.7.1.
+  (xcode-select points at CommandLineTools). Xcode 27.2, macOS 26.7.1.
 - The Xcode project is generated: edit `project.yml`, run `xcodegen generate`; never hand-edit the
   xcodeproj. `HITList/HITList.entitlements` is generated from `project.yml`;
   `HITList/HITList-macOS.entitlements` is hand-maintained. Do not add entitlements unless your brief
@@ -65,6 +65,28 @@ session's build installed over the others'. Make your own at the start and delet
 Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scripts/test.sh ios`. When done:
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
+
+## Round 16 (2026-11-10; briefs 70–73 in parallel, all four at once; `ROUND-16.md` says why)
+The supervisor is a Fable 5.2 chat; sessions are Opus 5.5 as before (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`). **The version stays 0.9.0**: the next upload is 0.9.0 (21), a new build of the same version,
+and its notes are the supervisor's (`CHANGELOG.md` `## 0.9.0 (21)`, `WhatsNew.swift`). Xcode is 27.2 (SDK 27.2), this
+Mac macOS 26.7.1. Brief 72 adds schema V6 (`Switchboard`, two `TaskItem` fields); George deploys it before the build.
+- Ownership: 70 `mac-chrome-27` (xhigh) the Mac's sidebar, toolbar, search field and window: `SidebarView`,
+  `ContentView`, `ScreenMenu` (Mac), `QuickAddEntry` (Mac toolbar item), `Views/Search/*`, `ListChrome`, the Mac Settings
+  sidebar, `MacWindowKeeper`. 71 `quick-add-monthly` (high) core's `QuickAddParser`, `DateExpression`, `RecurrenceRule`,
+  the Repeat card's words. 72 `switchboards` (xhigh) the models and schema, `Views/Flipboard/*`, core `FlipboardSwitch`,
+  `FilterableTask`, `TaskOrdering`, `GroupedOrdering`, snapshot and backup, the switch lines of notifications, Spotlight,
+  Claude and Intents. 73 `browse-and-bolt` (high) `BrowseView`, `Views/Groups/*`, `BoltSlamMotion`, the slam's lines in
+  `SyncStatusViews`. Nobody: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `WhatsNewPopout`, the
+  `SettingsTests` What's New pin, `project.yml` beyond adding files, `TaskRow`, `HITTokens`.
+- **UI tests go in a file of your own** (`HITListUITests/<Yours>UITests.swift`): three rounds of merges conflicted in
+  the shared `HITListUITests.swift`. Only brief 72 edits that file, and only its two Flipboard tests.
+- **A friend's Mac runs macOS 27.2 and nobody here has it** (no VM, no CI runner). Anything you draw on the Mac must
+  not lean on what the system decides by OS version or by which view holds the keyboard: a system list selection, a
+  toolbar's glass or background, a sidebar's icon size. Draw it or pin it with an explicit value (brief 70 does this
+  for the window's chrome; follow it in anything new).
+- A switch is no longer a task by default (brief 72): when your screen lists tasks, call core's rules
+  (`TaskOrdering`, `FlipboardSwitch.listing`) and never judge a switch yourself.
 
 ## Round 11 (2026-11-05; briefs 47–52 run in parallel, all six at once)
 Next version 0.7.0 (17). Session 48 adds schema V5 (`TaskItem.reminderDate`); George deploys it before 0.7.0.
