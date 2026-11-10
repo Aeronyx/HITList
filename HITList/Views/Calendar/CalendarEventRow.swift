@@ -75,3 +75,20 @@ struct CalendarEventsHeader: View {
             .accessibilityAddTraits(.isHeader)
     }
 }
+
+/// An event on the Upcoming board (Mac, iPad), at the top of its day's column: the row in a task card's frame
+/// (`Theme.surface`, the card radius, a hairline), with no hover, since a click does nothing.
+struct CalendarEventCard: View {
+    let event: DayEvent
+    let now: Date
+    var calendar: Calendar = .current
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
+        CalendarEventRow(event: event, now: now, calendar: calendar)
+            .padding(.horizontal, HITSpacing.m)
+            .padding(.vertical, HITSpacing.s + 2)
+            .background(Theme.surface, in: shape)
+            .overlay(shape.strokeBorder(Theme.separator, lineWidth: 1))
+    }
+}
