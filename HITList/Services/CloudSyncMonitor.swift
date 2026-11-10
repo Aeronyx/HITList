@@ -25,8 +25,14 @@ final class CloudSyncMonitor {
     /// The persistent record of everything below (brief 25).
     let syncLog = SyncLog.shared
 
-    /// iCloud account state as reported by CloudKit; nil until the first check returns.
+    /// The iCloud account status Settings, the profile menu and the reset guard read: CloudKit's answer steadied
+    /// (`AccountSteadiness`), so a blip in which the account comes back the same shows nothing and runs nothing (no
+    /// banner, no cleared reminders). Nil until the first check returns.
     private(set) var accountStatus: CKAccountStatus?
+    /// CloudKit's own latest answer: the sync state, the watchdog and the log use it.
+    private(set) var rawAccountStatus: CKAccountStatus?
+    @ObservationIgnored private var accountSteadiness = AccountSteadiness()
+    @ObservationIgnored private var accountSteadyTimer: Task<Void, Never>?
     /// Nil until NWPathMonitor reports the first path.
     private(set) var isOnline: Bool?
     private(set) var lastImportAt: Date?
@@ -95,18 +101,26 @@ final class CloudSyncMonitor {
         lastImportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastImportKey)) as? Date
         lastExportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastExportKey)) as? Date
         watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
+        accountSteadiness = AccountSteadiness(remembered: accountWatch.lastStatus)
     }
 
     var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
 
-    var state: SyncState {
+    /// What every sync mark shows (the bolt, the dot, Settings' status lines, the Account row): `rawState` steadied
+    /// over time (`SyncSteadiness`, brief 78), so it says "status is green" and keeps still rather than reporting
+    /// every export and import, and shows trouble only once it stayed.
+    var state: SyncState { shownState ?? rawState }
+
+    /// What the signals say this instant (`SyncState.derive`): the sync log's "Sync state:" lines and the strike
+    /// gate read it, unchanged.
+    var rawState: SyncState {
         #if DEBUG
         if let replayed = SyncReplayPlayer.shared.state { return replayed }
         #endif
         return SyncState.derive(
             cloudKitEnabled: ModelContainerFactory.isCloudKitEnabled,
             localOnlyReason: ModelContainerFactory.localOnlyReason,
-            account: accountStatus,
+            account: rawAccountStatus,
             isOnline: isOnline ?? true,
             isSyncing: isSyncing,
             lastSynced: lastSyncedAt,
@@ -114,6 +128,12 @@ final class CloudSyncMonitor {
             stalledSince: stalledSince
         )
     }
+
+    /// `state` once the first raw state was seen.
+    private var shownState: SyncState?
+    @ObservationIgnored private var steadiness = SyncSteadiness()
+    /// Wakes the steadiness at its next deadline: one sleep at a time.
+    @ObservationIgnored private var steadyTimer: Task<Void, Never>?
 
     /// An event that never reports its end (the process lost track of it) stops counting after 10 minutes.
     /// Before that, one running for two minutes makes the state say sync is stuck (`stalledSince`) instead
@@ -147,7 +167,7 @@ final class CloudSyncMonitor {
                     as? NSPersistentCloudKitContainer.Event else { return }
             MainActor.assumeIsolated {
                 self?.record(event)
-                self?.logStateIfChanged()
+                self?.stateChanged()
             }
         })
         observers.append(center.addObserver(forName: .CKAccountChanged, object: nil, queue: .main) { [weak self] _ in
@@ -201,6 +221,8 @@ final class CloudSyncMonitor {
             write(.container, "Store opened without CloudKit: \(ModelContainerFactory.localOnlyReason)",
                            level: ModelContainerFactory.startupError == nil ? .notice : .error, fields: fields)
         }
+        // The first state the marks show: only now is it known whether this launch syncs at all.
+        stateChanged()
     }
 
     private func recordLaunch() {
@@ -327,7 +349,7 @@ final class CloudSyncMonitor {
         let stalled = watchdog.stalledSince(now: now)
         if stalled != stalledSince {
             stalledSince = stalled
-            logStateIfChanged()
+            stateChanged()
         }
         armWatchdog(after: now)
         return findings
@@ -404,6 +426,9 @@ final class CloudSyncMonitor {
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastImportKey))
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastExportKey))
         write(.note, "\(reason); sync times cleared", level: .notice)
+        // The marks forget them too: nothing has synced for this store or account yet.
+        steadiness = SyncSteadiness()
+        stateChanged()
     }
 
     /// `AccountSwitch.simulateIfRequested` (Debug only): the banner a real switch would show.
@@ -422,13 +447,21 @@ final class CloudSyncMonitor {
     /// iCloud line). Nothing else runs: no account check, no notice, no hygiene.
     func replayAccount(_ status: CKAccountStatus) {
         accountStatus = status
+        rawAccountStatus = status
     }
 
     /// `SyncReplayPlayer` (Debug only): the replayed raw state moved on.
     func replayStateChanged() {
-        logStateIfChanged()
+        stateChanged()
     }
     #endif
+
+    /// The bolt played its "you're good to go" (`BoltStrikeGate`): the marks turn green with it (`SyncSteadiness`).
+    func goodToGo() {
+        let now = Date()
+        steadiness.goodToGo(at: now)
+        publishShown(now)
+    }
 
     func dismissAccountNotice() {
         if accountNotice == .signedOut { signedOutDismissed = true }
@@ -439,6 +472,7 @@ final class CloudSyncMonitor {
         // The previous launch's status counts too: signing out while the app was closed is still a sign-out.
         let previous = accountStatus ?? accountWatch.lastStatus
         accountStatus = status
+        rawAccountStatus = status
         // The sync log (mirrored to os.Logger) records the status once per change.
         if loggedAccount != status {
             let changed = loggedAccount.map { $0 != status } ?? (previous != nil && previous != status)
@@ -452,7 +486,7 @@ final class CloudSyncMonitor {
         watch(.account(available: !blocking.contains(status), description: Self.describe(status), at: Date()))
         if status == .available { signedOutDismissed = false }
         setNotice(accountWatch.update(status: status, shown: accountNotice, signedOutDismissed: signedOutDismissed))
-        logStateIfChanged()
+        stateChanged()
         if status != .available, status != .couldNotDetermine, status != .temporarilyUnavailable { accountKey = nil }
         // Signed out (now, or while the app was closed): the reminders name tasks the purge took away.
         if status == .noAccount, previous == .available {
@@ -486,7 +520,7 @@ final class CloudSyncMonitor {
     private func networkChanged(online: Bool, description: String) {
         if isOnline != online {
             isOnline = online
-            logStateIfChanged()
+            stateChanged()
         }
         guard description != loggedNetwork else { return }
         let first = loggedNetwork == nil
@@ -686,13 +720,42 @@ final class CloudSyncMonitor {
 
     // MARK: - Events
 
-    /// Logs each change of the status line ("Synced …" counts as one state whatever its time).
-    private func logStateIfChanged() {
-        let current = state
-        let key = current.isSynced ? "synced" : current.summary()
-        guard key != loggedState else { return }
-        loggedState = key
-        Self.log.notice("Sync state: \(current.summary(), privacy: .public)")
+    /// An input of the state changed (an event, the account, the network, a stall): logs the raw state once per
+    /// change ("Synced …" counts as one state whatever its time), feeds the steadiness and publishes what the marks
+    /// show.
+    private func stateChanged() {
+        let now = Date()
+        let raw = rawState
+        let key = raw.isSynced ? "synced" : raw.summary()
+        if key != loggedState {
+            loggedState = key
+            Self.log.notice("Sync state: \(raw.summary(), privacy: .public)")
+        }
+        steadiness.observe(raw, at: now)
+        publishShown(now)
+    }
+
+    /// Publishes what the steadiness shows as `state`, writes each change of look to the sync log ("Marks show: …",
+    /// rare by design, so the log says what the person saw), and sleeps until the steadiness's next deadline.
+    private func publishShown(_ now: Date) {
+        if let shown = steadiness.shown, shown != shownState {
+            let newLook = shownState.map { SyncSteadiness.kind($0) != SyncSteadiness.kind(shown) } ?? true
+            shownState = shown
+            if newLook { write(.note, "Marks show: \(shown.summary(now: now))") }
+        }
+        steadyTimer?.cancel()
+        guard let next = steadiness.nextDeadline(after: now) else {
+            steadyTimer = nil
+            return
+        }
+        let delay = max(0.01, next.timeIntervalSince(now)) + 0.02
+        steadyTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            let now = Date()
+            self.steadiness.tick(now)
+            self.publishShown(now)
+        }
     }
 
     private func setNotice(_ notice: AccountWatch.Notice?) {
