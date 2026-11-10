@@ -58,6 +58,101 @@ final class MacChromeTests: XCTestCase {
         XCTAssertEqual(SidebarView.profileInset, HITSpacing.s + 2)
     }
 
+    // MARK: - The sidebar's rows and selection are ours (brief 70, item 2)
+
+    /// ↑ and ↓ walk the rows in the order they are drawn, and stop at either end, as the list did.
+    func testArrowKeysWalkTheRowsInOrderAndStopAtTheEnds() {
+        let work = SidebarItem.project(UUID()), focus = SidebarItem.filter(UUID()), bills = SidebarItem.label(UUID())
+        let order: [SidebarItem] = [.inbox, .today, .upcoming, .flipboard, .completed, work, .sharedTasks, focus, bills]
+        XCTAssertEqual(SidebarNavigation.item(after: .today, in: order, offset: 1), .upcoming)
+        XCTAssertEqual(SidebarNavigation.item(after: .completed, in: order, offset: 1), work, "into the Groups")
+        XCTAssertEqual(SidebarNavigation.item(after: work, in: order, offset: -1), .completed)
+        XCTAssertEqual(SidebarNavigation.item(after: .sharedTasks, in: order, offset: 1), focus, "past the Groups' header")
+        XCTAssertNil(SidebarNavigation.item(after: .inbox, in: order, offset: -1), "the first row stays")
+        XCTAssertNil(SidebarNavigation.item(after: bills, in: order, offset: 1), "the last row stays")
+        XCTAssertEqual(SidebarNavigation.item(after: nil, in: order, offset: 1), .inbox)
+        XCTAssertEqual(SidebarNavigation.item(after: .search, in: order, offset: -1), .inbox, "from the results, the top")
+    }
+
+    /// Dropping a dragged Group or Filter above or below a row: the move `Array.move(fromOffsets:toOffset:)` makes,
+    /// as `.onMove` gave it, or nothing where the row would land where it is.
+    func testDroppingARowAboveOrBelowAnotherMovesItThere() {
+        XCTAssertEqual(SidebarReorder.move(from: 0, onto: 2, below: true)?.to, 3, "first to below the third")
+        XCTAssertEqual(SidebarReorder.move(from: 3, onto: 1, below: false)?.to, 1, "fourth to above the second")
+        XCTAssertEqual(SidebarReorder.move(from: 3, onto: 1, below: false)?.from, IndexSet(integer: 3))
+        XCTAssertNil(SidebarReorder.move(from: 2, onto: 2, below: true), "onto itself")
+        XCTAssertNil(SidebarReorder.move(from: 2, onto: 1, below: true), "just below the row above it is where it is")
+        XCTAssertNil(SidebarReorder.move(from: 2, onto: 3, below: false), "just above the row below it too")
+        var names = ["Home", "Work", "Finance", "Personal"]
+        guard let move = SidebarReorder.move(from: 0, onto: 2, below: true) else { return XCTFail("no move") }
+        names.move(fromOffsets: move.from, toOffset: move.to)
+        XCTAssertEqual(names, ["Work", "Finance", "Home", "Personal"])
+    }
+
+    /// The selected row's fill: the accent the way macOS 26.7.1 drew a focused sidebar's selection from it (Slate's
+    /// #6C9EFF came out #4D79D1 in sRGB), now ours and the same whatever holds the keyboard. White text on it, or the
+    /// theme's dark `onAccent` where white would not read (Graphite's off-white accent).
+    func testTheSelectionFillIsTheAccentAsTheFocusedListDrewIt() {
+        let fill = MacSidebarStyle.selectionFillHex(accent: "#6C9EFF")
+        let rgb = { (hex: String) -> [Int] in
+            let v = Int(hex.dropFirst(), radix: 16)!
+            return [(v >> 16) & 255, (v >> 8) & 255, v & 255]
+        }
+        for (got, want) in zip(rgb(fill), rgb("#4D79D1")) { XCTAssertEqual(got, want, accuracy: 1, fill) }
+        XCTAssertFalse(MacSidebarStyle.selectedTextIsDark(accent: ThemePalette.slate.hex.accent), "white on Slate's")
+        XCTAssertTrue(MacSidebarStyle.selectedTextIsDark(accent: ThemePalette.graphite.hex.accent), "dark on Graphite's")
+        for palette in ThemePalette.all {
+            let fillHex = MacSidebarStyle.selectionFillHex(accent: palette.hex.accent)
+            let text = MacSidebarStyle.selectedTextIsDark(accent: palette.hex.accent) ? palette.hex.onAccent : "#FFFFFF"
+            XCTAssertGreaterThanOrEqual(Self.contrast(fillHex, text), 3, "\(palette.name): the selected title reads")
+        }
+    }
+
+    /// 26.7.1's sidebar, measured: 32 pt rows whose fill sits 10 pt in from the column's edges, 13 pt symbols.
+    func testTheRowsKeepTheMeasurementsOf26() {
+        XCTAssertEqual(MacSidebarMetrics.rowHeight, 32)
+        XCTAssertEqual(MacSidebarMetrics.rowInset, 10)
+        XCTAssertEqual(MacSidebarMetrics.iconPointSize, 13)
+        let row = MacSidebarRow(title: "Inbox", isSelected: true) { Image(systemName: "tray") } trailing: { MacSidebarCount(12) }
+            .frame(width: 240)
+        XCTAssertEqual(NSHostingView(rootView: row).fittingSize.height, 32)
+    }
+
+    /// The selected row looks the same in a key window, a background window and with the keyboard elsewhere: nothing
+    /// in it reads the window's state (macOS drew a focused list's selection in accent, any other grey, bold on 27).
+    func testASelectedRowIsDrawnTheSameInAKeyAndABackgroundWindow() throws {
+        func render(_ state: ControlActiveState) throws -> Data {
+            let row = MacSidebarRow(title: "Today", isSelected: true) {
+                Image(systemName: "calendar").foregroundStyle(.red)
+            } trailing: { MacSidebarCount(6) }
+                .frame(width: 240)
+                .background(Theme.surface)
+                .environment(\.controlActiveState, state)
+                .preferredColorScheme(.dark)
+            let host = NSHostingView(rootView: row)
+            host.frame = NSRect(origin: .zero, size: host.fittingSize)
+            host.layoutSubtreeIfNeeded()
+            let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: rep)
+            return try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        }
+        let key = try render(.key)
+        XCTAssertEqual(key, try render(.inactive), "a background window")
+        XCTAssertEqual(key, try render(.active), "a key window whose keyboard is elsewhere")
+    }
+
+    private static func contrast(_ a: String, _ b: String) -> Double {
+        func luminance(_ hex: String) -> Double {
+            let v = Int(hex.dropFirst(), radix: 16)!
+            return [(v >> 16) & 255, (v >> 8) & 255, v & 255].map { c -> Double in
+                let s = Double(c) / 255
+                return s <= 0.03928 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
+            }.enumerated().map { [0.2126, 0.7152, 0.0722][$0.offset] * $0.element }.reduce(0, +)
+        }
+        let (l1, l2) = (luminance(a), luminance(b))
+        return (max(l1, l2) + 0.05) / (min(l1, l2) + 0.05)
+    }
+
     // MARK: - Nothing takes the keyboard at launch (brief 70, item 1)
 
     /// On macOS 27.2 the sidebar's search field held the keyboard when the window opened (the friend's screenshot:

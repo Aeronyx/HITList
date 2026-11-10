@@ -51,6 +51,12 @@ final class SidebarSearch {
     /// ⌘F.
     func focus() { focusRequests += 1 }
 
+    /// Bumped when Escape in an empty field lets go of the keyboard; the sidebar's rows take it (brief 70).
+    private(set) var letGoRequests = 0
+
+    /// Escape in the empty field.
+    func letGo() { letGoRequests += 1 }
+
     /// A saved filter's "Search: …" badge: its query in the field, so the person sees that a filter is a search.
     func show(_ query: String) {
         text = query
