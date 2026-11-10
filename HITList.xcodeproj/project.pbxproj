@@ -289,6 +289,7 @@
 		DD66FCDE2203AFD42E38B1B3 /* ScreenMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D756AF47EBCBD00580C2A32D /* ScreenMenu.swift */; };
 		E0405BDAFDF12AD90BCE2E0A /* SyncRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD698A5F08AB63F32AEBED2 /* SyncRecovery.swift */; };
 		E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */; };
+		E0C67B46C8E0D66BE68A6434 /* SyncSteadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C02100B69A596D736C1F59 /* SyncSteadiness.swift */; };
 		E25BBCC46C0D6D97E29A87DA /* SnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BA41BDD7F1A327329DEC2EA /* SnapshotBuilder.swift */; };
 		E2EDC1033F73BA817EFF8FA9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48F188E277BC60A2CD068AAD /* SettingsView.swift */; };
 		E65A49FA2E12370CFA77B9D5 /* TaskRescheduling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406FA3D585ED8606EA5595AF /* TaskRescheduling.swift */; };
@@ -659,6 +660,7 @@
 		E794A10998B1D953655D0ABA /* TipsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipsTests.swift; sourceTree = "<group>"; };
 		E89E8ABE1817CBAD4F72AE06 /* CompletionAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionAnimator.swift; sourceTree = "<group>"; };
 		E95FD3BD15A5E836DBD6E4B3 /* SchemaV3Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV3Models.swift; sourceTree = "<group>"; };
+		E9C02100B69A596D736C1F59 /* SyncSteadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSteadiness.swift; sourceTree = "<group>"; };
 		EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudSyncMonitor.swift; sourceTree = "<group>"; };
 		EAAC54705A328613C9AC2A94 /* Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatting.swift; sourceTree = "<group>"; };
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
@@ -1344,6 +1346,7 @@
 				D3DF87F469E151C325CD9969 /* SyncPush.swift */,
 				8CD698A5F08AB63F32AEBED2 /* SyncRecovery.swift */,
 				4C16A74F5E02178CD99C092C /* SyncReplay.swift */,
+				E9C02100B69A596D736C1F59 /* SyncSteadiness.swift */,
 				53A09C9B1C2278E50B54674A /* SyncStoreGuard.swift */,
 				CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */,
 			);
@@ -1758,6 +1761,7 @@
 				9599623378F7FC2A7CFD9EA5 /* SyncReplay.swift in Sources */,
 				93DCB35BB113FC8E976DB2C1 /* SyncState.swift in Sources */,
 				01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */,
+				E0C67B46C8E0D66BE68A6434 /* SyncSteadiness.swift in Sources */,
 				D7C4627599AB47D55BF7BC04 /* SyncStoreGuard.swift in Sources */,
 				A6DA9DF74D818DD89E711D05 /* SyncWatchdog.swift in Sources */,
 				CBC85972EC6ECCA882D6257C /* TapHaptic.swift in Sources */,

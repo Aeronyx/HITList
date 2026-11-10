@@ -14,6 +14,10 @@ enum SyncState: Equatable {
     case error(String, Date)
     /// The container was opened without CloudKit (`ModelContainerFactory.isCloudKitEnabled == false`).
     case localOnly(String)
+    /// Only ever shown, never derived (`SyncSteadiness`): an error has lasted half a minute but not yet two, so the
+    /// marks say what is known rather than the error's own alarming words (brief 78: George's account blip read
+    /// "Sync paused: iCloud needs you to sign in again", untrue ten seconds later).
+    case retrying(since: Date)
 
     /// The one-line status, e.g. "Synced 2 min ago".
     func summary(now: Date = .now) -> String {
@@ -25,13 +29,17 @@ enum SyncState: Equatable {
         case .synced(let at): return "Synced \(Self.relative(at, now: now))"
         case .error(let reason, _): return "Sync paused: \(reason)"
         case .localOnly(let reason): return "Local only: \(reason)"
+        case .retrying: return Self.retryingWords
         }
     }
+
+    /// What `.retrying` says.
+    static let retryingWords = "iCloud isn't answering, HITList will keep trying"
 
     var symbol: String {
         switch self {
         case .synced: return "checkmark.icloud"
-        case .syncing: return "arrow.triangle.2.circlepath.icloud"
+        case .syncing, .retrying: return "arrow.triangle.2.circlepath.icloud"
         case .offline: return "icloud.slash"
         case .notSignedIn, .restricted, .localOnly: return "xmark.icloud"
         case .error: return "exclamationmark.icloud"
@@ -39,6 +47,23 @@ enum SyncState: Equatable {
     }
 
     var isSynced: Bool { if case .synced = self { true } else { false } }
+
+    /// Whether the marks draw it as trouble (struck through, grey or red): offline, an error, signed out, restricted.
+    /// Syncing, "will keep trying" and local only are not trouble.
+    var showsTrouble: Bool {
+        switch self {
+        case .offline, .error, .notSignedIn, .restricted: true
+        case .synced, .syncing, .retrying, .localOnly: false
+        }
+    }
+
+    /// Errors the person has to act on (free up iCloud storage, update the app, a deleted iCloud zone): once they have
+    /// lasted `SyncSteadiness.Windows.error` they show in their own words, without the calm "will keep trying" first.
+    static func needsAction(_ reason: String) -> Bool {
+        actionReasons.contains(reason)
+    }
+
+    static let actionReasons: Set<String> = ["iCloud storage is full", "update HITList", "iCloud data was deleted"]
 
     /// "just now", "1 min ago", "3 hr ago", "2 days ago". Fixed English wording so it can be tested;
     /// a date slightly in the future (clock skew between devices) reads as "just now".
@@ -231,7 +256,7 @@ extension SyncState {
     var isHealthyForStrike: Bool {
         switch self {
         case .synced, .syncing: true
-        case .offline, .error, .notSignedIn, .restricted, .localOnly: false
+        case .offline, .error, .notSignedIn, .restricted, .localOnly, .retrying: false
         }
     }
 }
