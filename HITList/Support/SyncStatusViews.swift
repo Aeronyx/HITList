@@ -102,8 +102,8 @@ struct AccountChangeBanner: View {
 /// It plays once as a "you're good to go": on the first good sync after the app opens, after it comes back from
 /// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
 /// ordinary syncs, never in the background; a short blink under Reduce Motion. What plays is the style chosen in
-/// Settings → Extras → Sync bolt (`BoltStyle`): the slam (brief 68, `BoltSlamMotion`: a twirl, a hop and a slam
-/// with a buzz of sparks at its foot, 0.8 s; the default) or the strike (brief 54, `BoltStrikeMotion`: a quick
+/// Settings → Extras → Sync bolt (`BoltStyle`): the slam (brief 68, `BoltSlamMotion`: a hop while it spins once like a
+/// coin, edge-on for an instant (brief 73), then a slam with a buzz of sparks at its foot, 0.8 s; the default) or the strike (brief 54, `BoltStrikeMotion`: a quick
 /// double flash with a twirl of a few degrees, 280 ms).
 struct SyncBolt: View {
     var action: () -> Void
