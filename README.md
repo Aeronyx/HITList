@@ -20,7 +20,9 @@ HITList is in beta on TestFlight.
 
 - **Quick add.** `Pay rent tomorrow 5pm p1 #Finance @bills every month !1hb` becomes a dated, repeating,
   labelled task with a reminder an hour before. Recognised phrases are highlighted as you type, and
-  tapping a highlight turns it back into plain text.
+  tapping a highlight turns it back into plain text. Repeats read a place in the month or year too:
+  `every month on the 28th`, `every 3 months on the 10th`, `quarterly`, `every last day of the month`,
+  `every first Monday`, `every year on Mar 3`.
 - **Filters.** `(p1 | p2) & next 7 days & !@waiting`, `#Work & no date`, `due before: next mon`. A saved
   filter is a list like any other.
 - **Views.** Inbox, Today, Upcoming (a list on iPhone, a seven-day board on Mac and iPad), Browse, and
