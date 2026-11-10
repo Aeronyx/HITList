@@ -100,7 +100,10 @@ final class CloudSyncMonitor {
     var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
 
     var state: SyncState {
-        SyncState.derive(
+        #if DEBUG
+        if let replayed = SyncReplayPlayer.shared.state { return replayed }
+        #endif
+        return SyncState.derive(
             cloudKitEnabled: ModelContainerFactory.isCloudKitEnabled,
             localOnlyReason: ModelContainerFactory.localOnlyReason,
             account: accountStatus,
@@ -407,6 +410,25 @@ final class CloudSyncMonitor {
     func simulateSwitchNotice() {
         setNotice(.switched)
     }
+
+    #if DEBUG
+    /// `SyncReplayPlayer` (Debug only): a replayed sync finished, so the marks see the advance a real one makes.
+    func replayChange(at date: Date, phase: Phase) {
+        lastChangeAt = date
+        lastChangePhase = phase
+    }
+
+    /// `SyncReplayPlayer` (Debug only): the account status the replay is at, for what reads it (the profile menu's
+    /// iCloud line). Nothing else runs: no account check, no notice, no hygiene.
+    func replayAccount(_ status: CKAccountStatus) {
+        accountStatus = status
+    }
+
+    /// `SyncReplayPlayer` (Debug only): the replayed raw state moved on.
+    func replayStateChanged() {
+        logStateIfChanged()
+    }
+    #endif
 
     func dismissAccountNotice() {
         if accountNotice == .signedOut { signedOutDismissed = true }
