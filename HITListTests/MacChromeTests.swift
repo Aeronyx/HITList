@@ -28,10 +28,41 @@ final class MacChromeTests: XCTestCase {
         XCTAssertLessThanOrEqual(speaker.height, ScreenControlMetrics.height)
     }
 
-    /// The toolbar shrinks an item taller than its own controls (a 32 pt square came out about 25 pt), which made the
-    /// width follow the glyph again; the frame stays within the toolbar's height.
-    func testTheFrameIsNoTallerThanTheToolbarsControls() {
-        XCTAssertLessThanOrEqual(ScreenControlMetrics.height, 24)
+    /// Brief 70: the pill is our capsule at the size the toolbar's glass had on 26.7.1 (67.5 × 36 pt, measured), each
+    /// control its full height (outside the shared glass nothing scales an item down), with the glass's margins.
+    func testThePillIsTheGlasssSizeOn26() {
+        XCTAssertEqual(ScreenControlMetrics.height, ToolbarPillMetrics.height)
+        XCTAssertEqual(ScreenControlMetrics.width * 2 - ToolbarPillMetrics.controlSpacing, ToolbarPillMetrics.width)
+        XCTAssertEqual(ToolbarPillMetrics.width, 67.5)
+        XCTAssertEqual(ToolbarPillMetrics.height, 36)
+        let pill = ToolbarPill {
+            Image(systemName: "line.3.horizontal.decrease").screenControlFrame()
+            Image(systemName: "ellipsis.circle").screenControlFrame()
+        }
+        // `fittingSize` rounds up to whole points; the window draws it at 67.5 (135 px at 2x, measured).
+        let size = NSHostingView(rootView: pill).fittingSize
+        XCTAssertEqual(size.width, 67.5 + 2 * ToolbarPillMetrics.outerMargin, accuracy: 0.5)
+        XCTAssertEqual(size.height, 36)
+    }
+
+    /// The toolbar's last item keeps 26.7.1's 8 pt from the window's edge: no padding where the system already puts it
+    /// there, the difference where it puts it closer (about 5 pt on 27.2), and nothing for an item that is not last.
+    func testTheLastToolbarItemKeeps26sInsetFromTheEdge() {
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 8, current: 0), 0, "26.7.1")
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 5, current: 0), 3, "27.2")
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 8, current: 3), 3, "padded already: stays")
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 10.5, current: 0), 0, "farther than 26 is left as it is")
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 60, current: 0), 0, "not the last item")
+        XCTAssertEqual(TrailingEdgeInset.padding(gap: 4.6, current: 0), 3.5, "to the half point")
+    }
+
+    /// Our sidebar toggle shows and hides the sidebar column; the window starts with it shown.
+    func testTheSidebarToggleShowsAndHidesTheSidebar() {
+        XCTAssertTrue(SidebarToggleButton.sidebarShown(.automatic))
+        XCTAssertEqual(SidebarToggleButton.toggled(.automatic), .detailOnly)
+        XCTAssertEqual(SidebarToggleButton.toggled(.all), .detailOnly)
+        XCTAssertEqual(SidebarToggleButton.toggled(.detailOnly), .all)
+        XCTAssertFalse(SidebarToggleButton.sidebarShown(.detailOnly))
     }
 
     // MARK: - A filter's query (brief 66)

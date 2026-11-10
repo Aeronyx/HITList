@@ -51,6 +51,20 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     private let trailing: ToolbarItemPlacement = .automatic
     #endif
 
+    #if os(macOS)
+    /// The view-options control and the "…", each the same width whatever its glyph (brief 66), in our capsule. The pill
+    /// is the toolbar's last item on the Flipboard, which has no "+", so it keeps 26.7.1's inset from the edge there.
+    private var pill: some View {
+        ToolbarPill {
+            viewOptions()
+            ScreenMenu(onSettings: openAppSettings, items: menu)
+        }
+        .menuStyle(.button)
+        .buttonStyle(ToolbarPillControlStyle())
+        .trailingEdgeInset()
+    }
+    #endif
+
     func body(content: Content) -> some View {
         content
             .toolbar {
@@ -62,8 +76,8 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 } else {
                     ToolbarItem(placement: trailing) { SyncBolt(action: openAppSettings) }
                 }
+                #if os(iOS)
                 ToolbarItemGroup(placement: trailing) {
-                    #if os(iOS)
                     if let mobileChrome {
                         viewOptions()
                             .environment(\.screenMenuItems, AnyView(menu()))
@@ -77,12 +91,17 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                         viewOptions()
                         ScreenMenu(onSettings: openAppSettings, items: menu)
                     }
-                    #else
-                    // Each in the same frame, so the pill keeps its width (brief 66).
-                    viewOptions().screenControlFrame()
-                    ScreenMenu(onSettings: openAppSettings, items: menu).screenControlFrame()
-                    #endif
                 }
+                #else
+                // Our own capsule around the two controls, with the toolbar's shared glass hidden for it (brief 70): the
+                // glass was an outline on 26.7.1 and filled grey on 27.2. macOS 15 has no shared glass.
+                if #available(macOS 26, *) {
+                    ToolbarItem(placement: trailing) { pill }
+                        .sharedBackgroundVisibility(.hidden)
+                } else {
+                    ToolbarItem(placement: trailing) { pill }
+                }
+                #endif
             }
             #if os(iOS)
             .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
@@ -103,6 +122,9 @@ struct ViewOptionsMenu<Content: View>: View {
         } label: {
             Label("View options", systemImage: "line.3.horizontal.decrease")
                 .labelStyle(.iconOnly)
+                #if os(macOS)
+                .foregroundStyle(ToolbarPillMetrics.menuGlyph)
+                #endif
         }
         .menuIndicator(.hidden)
         .help("View options")
@@ -125,6 +147,9 @@ struct ScreenMenu<Items: View>: View {
             }
         } label: {
             Image(systemName: "ellipsis.circle")
+                #if os(macOS)
+                .foregroundStyle(ToolbarPillMetrics.menuGlyph)
+                #endif
         }
         .menuIndicator(.hidden)
         .accessibilityLabel("More")
@@ -146,7 +171,12 @@ struct ScreenOptionButton<Label: View>: View {
             Menu { screenItems } label: { label } primaryAction: { action() }
                 .menuIndicator(.hidden)
         } else {
-            Button(action: action) { label }
+            Button(action: action) {
+                label
+                    #if os(macOS)
+                    .foregroundStyle(ToolbarPillMetrics.buttonGlyph)
+                    #endif
+            }
         }
     }
 }
@@ -154,11 +184,12 @@ struct ScreenOptionButton<Label: View>: View {
 /// The trailing pill's controls on the Mac (brief 66): each takes the same frame whatever its glyph, so the pill
 /// keeps its width from screen to screen (the Flipboard's speaker is wider than the filter lines and pushed the pill
 /// out to the left). 34 pt holds the widest glyph, `speaker.wave.2`, with room either side, and makes the pill
-/// 67.5 pt on every screen (it was 71 on a list and 74 on the Flipboard). The height stays within the toolbar's own:
-/// a taller item is scaled down to fit, and its width with it.
+/// 67.5 pt on every screen (it was 71 on a list and 74 on the Flipboard). Inside the toolbar's shared glass a taller
+/// item was scaled down to fit; the pill is ours now (brief 70, `ToolbarPill`), outside the glass, and each control is
+/// its full height.
 enum ScreenControlMetrics {
     static let width: CGFloat = 34
-    static let height: CGFloat = 24
+    static let height: CGFloat = 36
 }
 
 extension View {
