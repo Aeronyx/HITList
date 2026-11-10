@@ -3,8 +3,9 @@
 For the Claude Code session that runs HITList rounds in this folder: reads George's feedback, writes
 briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, checks the result in the
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
-rounds 1–8 (2026-10-26 to 2026-11-04); from round 9 an Opus 5.5 session does it. Read this file first,
-then `dev/briefs/COMMON.md` (the facts every delegated session reads), then the queue in `dev/briefs/ROUND-9.md`.
+rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
+(2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
+session reads), then the newest queue, `dev/briefs/ROUND-16.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -15,8 +16,8 @@ CloudKit (`iCloud.com.trammells.hitlist`, private database), iOS 18+ and macOS 1
 (George never uses light mode), Inter typeface through `HITType` roles. `HITListCore` is a pure Swift
 package (filter language, quick-add parser, dates, recurrence, ordering, snapshot JSON); `HITListTests` is
 the app test bundle (in-memory container, hosted in the app, runs on the iPhone 17 simulator and the Mac).
-George uses the app every day on an iPhone 16 and a Mac, both on TestFlight, and is about to invite
-friends as external TestFlight testers. `dev/ROADMAP.md` is the plan and the log of every round; `dev/DESIGN.md`
+George uses the app every day on an iPhone 16 and a Mac, both on TestFlight; a few friends use it too,
+as internal TestFlight testers since 2026-11-10 (§6). `dev/ROADMAP.md` is the plan and the log of every round; `dev/DESIGN.md`
 is the original design; `CHANGELOG.md` has a section per version; `HITList/Support/DesignSystem/README.md`
 is the component guide (custom button, toggle, chip and field styles are mandatory; George calls default
 SwiftUI controls "AI slop").
@@ -38,7 +39,7 @@ How George works with you:
 
 - Every `xcodebuild`, `swift`, `xcrun` and `xcodegen` command needs
   `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` (xcode-select points at the command-line
-  tools). Xcode 27.1, macOS 26.7.1.
+  tools). Xcode 27.2 (SDK 27.2), macOS 26.7.1 on George's Mac. Every Mac look so far was checked on 26.7.1 only.
 - The Xcode project is generated from `project.yml` with XcodeGen: edit `project.yml`, run
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
@@ -54,7 +55,10 @@ How George works with you:
   (bundle id `com.trammells.hitlist`) with the iOS Simulator tool. Its screenshots lag one or two calls
   behind the screen: take two, trust the second. Typing lands before SwiftUI moves focus, so tap the field
   you mean, take a screenshot (as a delay), then type. The simulator's Debug store is throwaway test data.
-- The Mac app cannot be screenshotted by any session. Mac-only looks need George's eyes: list them.
+- The Mac: since 2026-11-05 a session captures and clicks its own Debug Mac app with `scripts/window-shot.sh` and
+  `scripts/window-drive.sh` (single windows only, never `/Applications/HITList.app`). Launch it with
+  `HITLIST_STORE_SUFFIX=<name>` and `-disableCloudKit YES -ApplePersistenceIgnoreState YES`. Real-device feel
+  (haptics, font smoothing on George's display) still needs George's eyes: list it.
 - Logs: `/usr/bin/log show --info --last 5m --predicate 'subsystem == "com.trammells.hitlist"'` (plain
   `log` is a zsh builtin). Categories: sync, storage, dedupe, delight.
 - Builds live in `build.noindex/`; Xcode's DerivedData in `~/Library/Developer/Xcode/DerivedData.noindex`.
@@ -167,6 +171,12 @@ files" is obeyed; one that does not produces merge conflicts.
 
 ## 6. Releases and notes
 
+- **From 2026-11-10 the version stays 0.9.0** (George: "definitely don't update the major version number for a
+  while"). Every release is a new build of 0.9.0: `scripts/release.sh --quick` (no `--version`), then
+  `git push origin master --tags`. A new version number would send the external group's build back to Beta App Review
+  (one review per version, per platform). Before the first build-only release, the notes need a home, because What's
+  New is keyed by version: see `dev/briefs/ROUND-16.md`, "Supervisor work". The rules below about version sections
+  apply again only when George asks for a new version.
 - Versions: `## X.Y.Z` section in `CHANGELOG.md` (unreleased sections have no stamp; the release script
   stamps "— build N, date"), an `Entry(version: "X.Y.Z")` at the top of `WhatsNew.swift`, and the pin in
   `SettingsTests` (`XCTAssertEqual(current.version, "X.Y.Z", "this round's list")`). All three or the
@@ -189,8 +199,10 @@ files" is obeyed; one that does not produces merge conflicts.
   own in the console: pick the container in the menu at the top first. `release.sh` checks both; 0.7.0's release
   stopped because only the first had been deployed. Check either yourself, read-only:
   `xcrun cktool export-schema --team-id UC8N98H3RT --container-id <container> --environment production --output-file x.ckdb`.
-- TestFlight: George's own devices get builds at once. Friends are external testers: the first build
-  for them goes through Beta App Review (up to a day), needs App Store Connect's Test Information filled
+- TestFlight: George's own devices get builds at once, and so do the friends since 2026-11-10: they are internal
+  testers (App Store Connect users on George's team, limited to HITList), with no Beta App Review. They may also still be
+  in the public-link external group, which is harmless. For external testers the first build of each version goes
+  through Beta App Review (up to a day), needs App Store Connect's Test Information filled
   in (description, feedback email, a privacy policy URL), and "Sign-in required" stays unchecked while the
   app has no login of its own. The group's "Test iPhone and iPad apps on Macs with Apple silicon" setting stays
   off: with it on, TestFlight on a Mac offers the iPad build beside the Mac app, and the first friend on a Mac
@@ -239,7 +251,20 @@ Inbox …; Groups (Shared Tasks last), Filters, Labels; a filter's query in the 
 anywhere on them. The bolt has two styles in Extras (Slam by default) under the same rare gate. Adding or editing a
 Flipboard switch is a small card, never a sheet; every switch tile on a screen is the same size.
 
-## 8. Where things stand (2026-11-08, after round 15)
+## 8. Where things stand (2026-11-10, before round 16)
+
+**2026-11-10, 0.9.0 (20) released; handed to a Fable 5.2 chat.** George released 0.9.0 on both platforms. Both builds
+sat in Beta App Review because 0.9.0 was a new version for the external (public-link) group. The friends are now
+internal testers, and the version stays 0.9.0 from here on (§6). George's and a friend's notes on 0.9.0 are queued
+in `dev/briefs/ROUND-16.md`, with what the Opus supervisor found first:
+- **A friend's Mac looks different.** Same build; most likely a newer macOS than George's 26.7.1, so ask for his
+  version first.
+- **Switchboards and routine switches:** schema V6, and George deploys.
+- **Monthly quick-add phrases.**
+- **Browse:** its bottom button behind the home bar, and swipe to delete a Group.
+- **The bolt's twirl** as a coin spin.
+
+No brief is written yet; the next number is 70.
 
 **2026-11-08, round 15 merged as 0.9.0 (Opus supervisor).** Six sessions at once (briefs 64–69: Shared Tasks as one
 Group, the editor's quick add, the Mac's toolbar and sidebar search, type, the bolt's slam, the Flipboard's add card),
