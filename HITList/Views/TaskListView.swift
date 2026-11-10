@@ -26,6 +26,10 @@ struct TaskListView: View {
     private var sharedRows: SharedRows { SharedRows.shared }
     /// The Shared Tasks Group's "Sharing…" (brief 64).
     @State private var showSharing = false
+    /// Today's calendar events above its tasks (brief 77): none while Settings → General → Calendar events is off.
+    private var calendarEvents: CalendarEvents { CalendarEvents.shared }
+    /// The events rows are as tall as task rows, Compact rows included.
+    @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -214,6 +218,20 @@ struct TaskListView: View {
         return groups
     }
 
+    /// Today's calendar events (brief 77), all-day first then by time; none in every other list, and none while the
+    /// setting is off. They are not tasks: no count, filter or sort takes them.
+    private var todayEvents: [DayEvent] {
+        selection == .today ? calendarEvents.events(on: now) : []
+    }
+
+    /// Today with events but no tasks: the day's header (and its "Add task" row) still show under the events, so the
+    /// list reads as the day's; the iPhone, which has no "Add task" row, shows the events alone.
+    private func withDayHeader(_ groups: [Group], events: [DayEvent]) -> [Group] {
+        guard groups.isEmpty, !events.isEmpty, !isCompact else { return groups }
+        return [Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated), rows: [],
+                      color: HITColor.dueToday, hidesDay: true)]
+    }
+
     /// Today's sort: Priority (the flat Overdue and day sections) or Group.
     private var todaySort: ListSort { Preferences.sort(storedTodaySort, offered: ListSort.today) }
 
@@ -273,14 +291,16 @@ struct TaskListView: View {
         VStack(spacing: 0) {
             SwiftUI.Group {
                 switch result {
-                case .success(let groups):
+                case .success(let taskGroups):
+                    let events = todayEvents
+                    let groups = withDayHeader(taskGroups, events: events)
                     if isSharedTasks, !SharedTasksCenter.shared.isOn {
                         // Off: what sharing is, and one button to switch it on and invite (brief 64).
                         SharedTasksOff {
                             SharedTasksCenter.shared.setOn(true)
                             showSharing = true
                         }
-                    } else if groups.isEmpty, isCompact {
+                    } else if groups.isEmpty, events.isEmpty, isCompact {
                         // iPhone: one quiet grey line; the "+" is right there.
                         Text(emptyTitle)
                             .font(HITType.subheadline)
@@ -289,7 +309,7 @@ struct TaskListView: View {
                             .padding(.horizontal, HITSpacing.xl)
                             .padding(.top, HITSpacing.l)
                             .frame(maxHeight: .infinity, alignment: .top)
-                    } else if groups.isEmpty {
+                    } else if groups.isEmpty, events.isEmpty {
                         ContentUnavailableView {
                             Label(emptyTitle, systemImage: "checkmark.circle")
                         } description: {
@@ -303,6 +323,17 @@ struct TaskListView: View {
                         .frame(maxHeight: .infinity)
                     } else {
                         List(selection: popouts.listSelection) {
+                            if !events.isEmpty {
+                                // Above the day's tasks (and Overdue), under a quiet header of their own (brief 77).
+                                Section {
+                                    ForEach(events) { event in
+                                        CalendarEventRow(event: event, now: now)
+                                            .calendarEventListRow(compact: compactRows)
+                                    }
+                                } header: {
+                                    CalendarEventsHeader()
+                                }
+                            }
                             ForEach(groups) { group in
                                 Section {
                                     ForEach(group.rows) { row in
@@ -409,6 +440,7 @@ struct TaskListView: View {
         .onAppear {
             CompletionFeedback.shared.prepare()
             sharedRows.start()
+            calendarEvents.start()
         }
         // Held rows belong to the list they were completed in.
         .onChange(of: selection) { _, _ in completions.cancelAll() }
