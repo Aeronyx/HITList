@@ -16,11 +16,23 @@ import AppKit
 @MainActor
 @Observable
 final class CalendarEvents {
-    static let shared = CalendarEvents(source: CalendarEvents.defaultSource())
+    static let shared = CalendarEvents(source: CalendarEvents.defaultSource(), onForTheRun: CalendarEvents.isDemo())
 
-    /// EventKit on a device.
+    /// EventKit on a device; the demo day under `-seedDemoEvents YES` (Debug builds).
     static func defaultSource(arguments: [String] = CommandLine.arguments) -> any CalendarEventSource {
-        EventKitSource()
+        #if DEBUG
+        if DemoEventSource.isRequested(arguments: arguments) { return DemoEventSource() }
+        #endif
+        return EventKitSource()
+    }
+
+    /// The demo switches the setting on for the run without saving it.
+    static func isDemo(arguments: [String] = CommandLine.arguments) -> Bool {
+        #if DEBUG
+        DemoEventSource.isRequested(arguments: arguments)
+        #else
+        false
+        #endif
     }
 
     @ObservationIgnored private let source: any CalendarEventSource
@@ -50,13 +62,14 @@ final class CalendarEvents {
     /// Days loaded past today at first, and each time a list reaches the end of them.
     static let pageDays = 62
 
+    /// `onForTheRun`: on whatever the setting says, without saving it (the demo).
     init(source: any CalendarEventSource, defaults: UserDefaults = AppGroup.defaults,
-         calendar: @escaping () -> Calendar = { .current }, now: @escaping () -> Date = Date.init) {
+         calendar: @escaping () -> Calendar = { .current }, now: @escaping () -> Date = Date.init, onForTheRun: Bool = false) {
         self.source = source
         self.defaults = defaults
         self.calendarProvider = calendar
         self.clock = now
-        isOn = defaults.object(forKey: Preferences.calendarEvents) as? Bool ?? Preferences.calendarEventsDefault
+        isOn = onForTheRun || (defaults.object(forKey: Preferences.calendarEvents) as? Bool ?? Preferences.calendarEventsDefault)
         hidden = Set(defaults.stringArray(forKey: Preferences.calendarEventsHidden) ?? [])
     }
 
