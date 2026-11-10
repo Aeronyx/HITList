@@ -49,7 +49,7 @@ struct SyncStatusLine: View {
     private func color(for state: SyncState) -> Color {
         switch state {
         case .synced: return .green
-        case .syncing, .offline: return Theme.secondaryText
+        case .syncing, .offline, .retrying: return Theme.secondaryText
         case .notSignedIn where !SyncBolt.everSignedIn(): return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly: return .orange
         }
@@ -231,7 +231,7 @@ struct SyncBolt: View {
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .synced:
             return Look(symbol: "bolt.fill", color: Theme.bolt, opacity: 0.85)
-        case .syncing:
+        case .syncing, .retrying:
             return Look(symbol: "bolt", color: Theme.bolt, opacity: 0.85)
         case .offline, .localOnly:
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
@@ -283,7 +283,7 @@ struct SyncIndicatorDot: View {
     static func color(for state: SyncState, everSignedIn: Bool = SyncBolt.everSignedIn()) -> Color {
         switch state {
         case .synced: return HITColor.dueToday
-        case .syncing, .offline: return Theme.secondaryText
+        case .syncing, .offline, .retrying: return Theme.secondaryText
         case .notSignedIn where !everSignedIn: return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
         }
