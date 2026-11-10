@@ -238,6 +238,7 @@
 		C93586D0536BE7984F2DDA89 /* SharedRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F042F45B4C75FB641635ECA0 /* SharedRow.swift */; };
 		C9900D3D916A62FDA1BDC0E2 /* DuoLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */; };
 		C9EE236E00D4759FE273ECD6 /* SeedingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C4883652158CAEF157D321 /* SeedingTests.swift */; };
+		CAAAAD256541F376A5BEB25A /* WindowFocusGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D467C47E42E2AAB3B343D7 /* WindowFocusGuard.swift */; };
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
 		CBC85972EC6ECCA882D6257C /* TapHaptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D1CD0271090C56E5828586 /* TapHaptic.swift */; };
 		CBC9B3B7528A150F91703102 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF96EABAFDE73C7753F296E /* Diagnostics.swift */; };
@@ -590,6 +591,7 @@
 		C88742D1EA977BE9D0D07677 /* MacSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsSection.swift; sourceTree = "<group>"; };
 		C88ABAD9BF71EABED1CAB264 /* FlipSwitchTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipSwitchTile.swift; sourceTree = "<group>"; };
 		C91DD9F46FB90E53ECB075CB /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		C9D467C47E42E2AAB3B343D7 /* WindowFocusGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusGuard.swift; sourceTree = "<group>"; };
 		CA4AB7CE25CA0272828E9792 /* HITTipStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTipStyle.swift; sourceTree = "<group>"; };
 		CAE7454A9A45B39AFFA579D6 /* HITList.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = HITList.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		CB6B8998E8DB284D4966C611 /* SharedTasksEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksEntry.swift; sourceTree = "<group>"; };
@@ -779,6 +781,7 @@
 				7C434BB7372CC0AAE65EDBDE /* Flipboard */,
 				8627308C9A2A7755BD542F35 /* Groups */,
 				AA043ED05F7A6CA7A1D00831 /* Inbox */,
+				DA1B4D6FE766D8B8EE495BD8 /* MacChrome */,
 				00AEE90E0FD17817958FFD1A /* Popouts */,
 				F81301B232128572F60F24C2 /* Search */,
 				A0F5BE6EE4460460A4EED4D0 /* Settings */,
@@ -1258,6 +1261,14 @@
 			path = Intents;
 			sourceTree = "<group>";
 		};
+		DA1B4D6FE766D8B8EE495BD8 /* MacChrome */ = {
+			isa = PBXGroup;
+			children = (
+				C9D467C47E42E2AAB3B343D7 /* WindowFocusGuard.swift */,
+			);
+			path = MacChrome;
+			sourceTree = "<group>";
+		};
 		DA42176979251F9ED8D78692 /* Fonts */ = {
 			isa = PBXGroup;
 			children = (
@@ -1716,6 +1727,7 @@
 				5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */,
 				69A4CC554774E422023A8E61 /* WhatsNew.swift in Sources */,
 				180AF814EDD1B6BAC0F70795 /* WhatsNewPopout.swift in Sources */,
+				CAAAAD256541F376A5BEB25A /* WindowFocusGuard.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
