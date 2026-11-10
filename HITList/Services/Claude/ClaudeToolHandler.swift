@@ -266,9 +266,12 @@ struct ClaudeToolHandler {
         }
         if let due = dueJSON(task) { out["due"] = due }
         if let rule = task.recurrenceRule { out["repeats"] = .string(rule.displayText) }
-        // A Flipboard switch: "green" (done for its interval; off the lists) or "red" (due; in Today).
+        // A Flipboard switch: "green" (done for now) or "red" (due), its Switchboard, and whether it becomes a task
+        // in Today once due (brief 72: off by default; a switch is a routine, not a to-do).
         if let side = Flipboard.side(of: task, now: now, calendar: calendar) {
             out["flipboard_switch"] = .string(side == .green ? "green" : "red")
+            if let board = task.switchboard { out["switchboard"] = .string(board.name) }
+            out["overdue_becomes_task"] = .bool(task.filterSwitchOptedIn)
         }
         if let deadline = task.deadline { out["deadline"] = .string(dayString(deadline)) }
         if let minutes = task.reminderOffsetMinutes, task.hasDueTime { out["reminder_minutes_before"] = .int(minutes) }

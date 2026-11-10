@@ -29,7 +29,7 @@ final class ReleasePolishTests: XCTestCase {
     /// board's Add task) or right as their first switch lands (the Flipboard) wait until they have settled in.
     func testTipsOnTheFirstScreensWaitUntilThePersonHasSettledIn() {
         let waiting = HITTipKind.allCases.filter { HITTip($0, generation: 0).waitsUntilSettled }
-        XCTAssertEqual(Set(waiting), [.browse, .boardAddTask, .flipboard])
+        XCTAssertEqual(Set(waiting), [.browse, .boardAddTask, .flipboard, .switchesStay])
         for kind in waiting { XCTAssertFalse(HITTip(kind, generation: 0).rules.isEmpty, "\(kind)") }
         // The quick-add tips sit inside the card the person opened (inline, nothing to swallow a tap); the
         // highlight tip waits for a highlight.

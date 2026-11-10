@@ -2,18 +2,79 @@ import SwiftUI
 
 /// What the switch card is open for.
 enum SwitchCardRequest: Identifiable, Equatable {
+    /// A loose switch, from the + tile or the menu.
     case add
+    /// A switch on a Switchboard, from the "+" by its name (brief 72).
+    case addTo(Switchboard)
     case edit(TaskItem)
 
     var id: String {
         switch self {
         case .add: "add"
+        case .addTo(let board): "add-\(board.id.uuidString)"
         case .edit(let task): "edit-\(task.id.uuidString)"
         }
     }
 
     var task: TaskItem? {
         if case .edit(let task) = self { return task }
+        return nil
+    }
+
+    /// The board a new switch goes on.
+    var board: Switchboard? {
+        if case .addTo(let board) = self { return board }
+        return nil
+    }
+
+    var isAdding: Bool { task == nil }
+}
+
+/// What the Switchboard card is open for (brief 72).
+enum SwitchboardCardRequest: Identifiable, Equatable {
+    /// "New Switchboard…" in the Flipboard's menu.
+    case new
+    /// The board's name, or Edit… in its menu.
+    case edit(Switchboard)
+    /// Delete… in its menu: the card opens with its delete question showing.
+    case delete(Switchboard)
+
+    var id: String {
+        switch self {
+        case .new: "board-new"
+        case .edit(let board), .delete(let board): "board-\(board.id.uuidString)"
+        }
+    }
+
+    var board: Switchboard? {
+        switch self {
+        case .new: nil
+        case .edit(let board), .delete(let board): board
+        }
+    }
+}
+
+/// The card floating over the iPhone's board: a switch's or a Switchboard's.
+enum FloatingCardRequest: Identifiable, Equatable {
+    case switchCard(SwitchCardRequest)
+    case switchboard(SwitchboardCardRequest)
+
+    var id: String {
+        switch self {
+        case .switchCard(let request): request.id
+        case .switchboard(let request): request.id
+        }
+    }
+
+    /// The switch the card edits, if it does.
+    var task: TaskItem? {
+        if case .switchCard(let request) = self { return request.task }
+        return nil
+    }
+
+    /// The board the card edits, if it does.
+    var board: Switchboard? {
+        if case .switchboard(let request) = self { return request.board }
         return nil
     }
 }
@@ -31,9 +92,9 @@ final class SwitchCardContent {
 ///
 /// It is presented as a clear full-screen cover so the dimming reaches over the navigation bar and the tab
 /// island the way the quick-add card's does; the cover itself appears and goes without animation, and the
-/// card brings its own (`HITMotion.enter` / `exit`).
+/// card brings its own (`HITMotion.enter` / `exit`). The Switchboard card (brief 72) floats the same way.
 struct FloatingSwitchCard: View {
-    let request: SwitchCardRequest
+    let request: FloatingCardRequest
     /// The card has gone; the switch it added or saved, if any.
     var onFinished: (TaskItem?) -> Void
 
@@ -57,12 +118,7 @@ struct FloatingSwitchCard: View {
         // re-runs only the reader's closure, never the card. A keyboard change arrives in the middle of a
         // keystroke (UIKit lays the view out there and then); a card rebuilt at that moment handed its name
         // field the text from before the keystroke, and the letter was lost (the UI test's "Wter the plants").
-        let card = SwitchCard(editing: request.task, style: .floating, isConfirmingDiscard: confirmingDiscard,
-                              isClosing: closing, focusesName: request == .add,
-                              onClose: requestClose, onSaved: { finish(saved: $0) },
-                              onDraftChange: { content.hasContent = $0 },
-                              onDiscard: { finish(saved: nil) },
-                              onKeepEditing: keepEditing)
+        let card = cardView
         GeometryReader { geo in
             let keyboardHeight = closing ? heldKeyboardHeight : keyboard.height
             let aboveKeyboard = max(0, keyboardHeight - geo.safeAreaInsets.bottom)
@@ -92,6 +148,27 @@ struct FloatingSwitchCard: View {
             Task { @MainActor in
                 withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { shown = true }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var cardView: some View {
+        switch request {
+        case .switchCard(let request):
+            SwitchCard(editing: request.task, style: .floating, board: request.board,
+                       isConfirmingDiscard: confirmingDiscard, isClosing: closing, focusesName: request.isAdding,
+                       onClose: requestClose, onSaved: { finish(saved: $0) },
+                       onDraftChange: { content.hasContent = $0 },
+                       onDiscard: { finish(saved: nil) },
+                       onKeepEditing: keepEditing)
+        case .switchboard(let request):
+            SwitchboardCard(editing: request.board, style: .floating, asksToDelete: { if case .delete = request { true } else { false } }(),
+                            isConfirmingDiscard: confirmingDiscard, isClosing: closing,
+                            onClose: requestClose, onSaved: { _ in finish(saved: nil) },
+                            onDeleted: { finish(saved: nil) },
+                            onDraftChange: { content.hasContent = $0 },
+                            onDiscard: { finish(saved: nil) },
+                            onKeepEditing: keepEditing)
         }
     }
 
