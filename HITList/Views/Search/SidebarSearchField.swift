@@ -21,6 +21,7 @@ struct SidebarSearchField: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(isFocused ? Theme.accent : Theme.secondaryText)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             TextField(text: $search.text) {
                 Text("Search").foregroundStyle(Theme.secondaryText)
             }
@@ -38,6 +39,8 @@ struct SidebarSearchField: View {
                     search.clear()
                 }
             }
+            // VoiceOver read a nameless text field (the word in it is a placeholder), the glass before it as "Search".
+            .accessibilityLabel("Search")
             .accessibilityIdentifier("sidebarSearch")
             if !search.text.isEmpty {
                 Button { search.clear() } label: { Image(systemName: "xmark.circle.fill") }
