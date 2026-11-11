@@ -50,6 +50,13 @@ enum ThemeCompanion {
         "mallow": Seat(placement: .asleepOnDot, along: 0.7),
         // Rosé: Posy peeks over the top, ears and eyes, on the side away from Hush's.
         "posy": Seat(placement: .peeking, along: 0.6),
+        // Round 20's newcomers (Mallow, Posy and Smudge leave when briefs 101 and 102 merge).
+        // Graphite: Gargle peeks over the top as over a parapet, horns, eyes and wing tips.
+        "gargle": Seat(placement: .peeking, along: 0.35),
+        // Mocha: Phase asleep in the accent dot, sunk to its eyes, its point flopped over like a nightcap.
+        "phase": Seat(placement: .asleepOnDot, along: 0.7),
+        // Rosé: Button peeks over the top, cap and eyes, on the side away from Hush's.
+        "button": Seat(placement: .peeking, along: 0.6),
     ]
 
     /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of
