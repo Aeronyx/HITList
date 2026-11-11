@@ -7,24 +7,21 @@ import SwiftUI
 final class MotionPolishTests: XCTestCase {
     // MARK: The Mac and iPad panels
 
-    func testAPanelArrivesFromTwoPercentSmallerAndRestsAtItsSize() {
-        XCTAssertEqual(PanelTransition.scale(phase: .identity, calm: false), 1, "at rest, its own size to the pixel")
-        XCTAssertEqual(PanelTransition.scale(phase: .willAppear, calm: false), 0.98)
-        XCTAssertEqual(PanelTransition.scale(phase: .didDisappear, calm: false), 0.98, "it leaves the way it came")
-        XCTAssertEqual(PanelTransition.arrivalScale, 0.98, "2%: 11 pt on a 560 pt panel, about 3.5 pt a side once eased")
+    func testAPanelComesDownSixPointsAndRestsInItsPlace() {
+        XCTAssertEqual(PanelTransition.offset(phase: .identity, calm: false), 0, "at rest, its own place to the pixel")
+        XCTAssertEqual(PanelTransition.offset(phase: .willAppear, calm: false), -6, "from just above")
+        XCTAssertEqual(PanelTransition.offset(phase: .didDisappear, calm: false), -6, "and back up as it leaves")
     }
 
     func testUnderReduceMotionAPanelOnlyFades() {
         for phase in [TransitionPhase.willAppear, .identity, .didDisappear] {
-            XCTAssertEqual(PanelTransition.scale(phase: phase, calm: true), 1)
+            XCTAssertEqual(PanelTransition.offset(phase: phase, calm: true), 0)
         }
     }
 
-    func testThePanelsScaleFromTheirOwnTopEdge() {
-        // The transition's anchor is the panel's top edge, where `PanelBackdrop` places it.
+    func testTheDimReachesPastTheWindowByMoreThanTheDrop() {
+        XCTAssertGreaterThan(PanelBackdrop<EmptyView>.dimOverscan, PanelTransition.drop)
         XCTAssertEqual(PanelBackdrop<EmptyView>.topFraction, 0.18)
-        XCTAssertGreaterThanOrEqual(PanelBackdrop<EmptyView>.dimOverscan, 560 * (1 - PanelTransition.arrivalScale),
-                                    "the dim reaches past the window by more than the scale takes off it")
     }
 
     // MARK: The Mac sidebar
