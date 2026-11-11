@@ -547,7 +547,7 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .alongTop)
         XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
         XCTAssertEqual(ThemeCompanion.seats["smudge"]?.placement, .asleepOnDot)
-        XCTAssertEqual(ThemeCompanion.seats["glim"]?.placement, .onTop)
+        XCTAssertEqual(ThemeCompanion.seats["posy"]?.placement, .peeking)
         XCTAssertNil(ThemeCompanion.seats["pip"], "Pip retired in 0.9.3")
         // Every companion in the cast has a seat of its own, and no two neighbours in a row of four sit alike.
         for character in CompanionCharacter.all {

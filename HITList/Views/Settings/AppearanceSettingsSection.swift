@@ -82,11 +82,15 @@ struct ThemeSwatchGrid: Layout {
     var top: CGFloat = HITSpacing.m
     var companionTop: CGFloat = HITSpacing.s
 
+    /// Between a companion's highest pixel and the name of the theme above it.
+    static let companionClearance: CGFloat = 2
+
     /// From the end of the row above (or the grid's top) to a row's cells.
     static func gap(before row: Int, rise: CGFloat, rowSpacing: CGFloat, top: CGFloat, companionTop: CGFloat) -> CGFloat {
         let rise = rise.rounded(.up)
         if row == 0 { return rise > 0 ? companionTop + rise : top }
-        return max(rowSpacing, rise)
+        // A companion never touches the name above it.
+        return max(rowSpacing, rise > 0 ? rise + companionClearance : 0)
     }
 
     /// The cell width for `width`: whole, at least the content, with an even margin round the content.
