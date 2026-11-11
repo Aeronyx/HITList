@@ -476,17 +476,20 @@ struct SidebarSettingsButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: HITSpacing.s) {
+            // The rows' icon column and title edge (`MacSidebarMetrics`): the gear under their icons, "Settings"
+            // under their titles (both sat 2 pt left of them).
+            HStack(spacing: MacSidebarMetrics.titleLeading - MacSidebarMetrics.iconLeading - MacSidebarMetrics.iconWidth) {
                 Image(systemName: isSelected ? "gearshape.fill" : "gearshape")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isSelected ? Theme.accent : Theme.secondaryText)
-                    .frame(width: 18)
+                    .frame(width: MacSidebarMetrics.iconWidth)
                 Text("Settings")
                     .font(HITType.body)
                     .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, HITSpacing.s)
+            .padding(.leading, MacSidebarMetrics.iconLeading)
+            .padding(.trailing, HITSpacing.s)
             .frame(height: 28)
             .background {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
