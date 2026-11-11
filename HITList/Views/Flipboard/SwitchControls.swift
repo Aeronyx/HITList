@@ -92,6 +92,8 @@ struct IntervalChoiceStrip: View {
                 }
             }
             .scaleEffect(pressed == index && !reduceMotion ? 0.95 : 1)
+            // Its fifth of the strip, which is what a press picks it by: the audit read the words alone, 18 pt tall.
+            .contentShape(.accessibility, Rectangle())
             .accessibilityElement()
             .accessibilityLabel(choice.title)
             .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

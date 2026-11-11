@@ -74,18 +74,30 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     }
     #endif
 
+    #if os(macOS)
+    /// The bolt and the pill in one toolbar item (brief 94): a toolbar item takes clicks only inside its own bounds, and
+    /// the bolt drawn 12 pt right of an item of its own took them on a 4 pt strip at its left edge. Side by side in one
+    /// item, with our spacing, the bolt is drawn exactly where it was and all of it is the item's.
+    private var boltAndPill: some View {
+        HStack(spacing: ToolbarPillMetrics.boltSpacing) {
+            SyncBolt(action: openSyncSettings)
+            pill
+        }
+    }
+    #endif
+
     func body(content: Content) -> some View {
         content
             .toolbar {
-                // The bolt stands apart from the controls: on iOS 26 / macOS 26 that means outside the
-                // toolbar's shared glass; before, toolbar items have no shared background anyway.
-                if #available(iOS 26, macOS 26, *) {
+                #if os(iOS)
+                // The bolt stands apart from the controls: on iOS 26 that means outside the toolbar's shared glass;
+                // before, toolbar items have no shared background anyway.
+                if #available(iOS 26, *) {
                     ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
                         .sharedBackgroundVisibility(.hidden)
                 } else {
                     ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
                 }
-                #if os(iOS)
                 ToolbarItemGroup(placement: trailing) {
                     if let mobileChrome {
                         viewOptions()
@@ -103,12 +115,13 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 }
                 #else
                 // Our own capsule around the two controls, with the toolbar's shared glass hidden for it (brief 70): the
-                // glass was an outline on 26.7.1 and filled grey on 27.2. macOS 15 has no shared glass.
+                // glass was an outline on 26.7.1 and filled grey on 27.2. macOS 15 has no shared glass. The bolt shares
+                // its item (`boltAndPill`).
                 if #available(macOS 26, *) {
-                    ToolbarItem(placement: trailing) { pill }
+                    ToolbarItem(placement: trailing) { boltAndPill }
                         .sharedBackgroundVisibility(.hidden)
                 } else {
-                    ToolbarItem(placement: trailing) { pill }
+                    ToolbarItem(placement: trailing) { boltAndPill }
                 }
                 #endif
             }

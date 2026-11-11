@@ -112,6 +112,8 @@ struct SharedTaskListRow: View {
     @Environment(\.taskMetaWraps) private var metaWraps
     @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
+    /// The priority written out under Differentiate Without Colour, as `TaskRow` (brief 94).
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     private var task: SharedTask { row.task }
     private var priority: Priority { Priority(clamping: task.priority.value) }
@@ -136,7 +138,28 @@ struct SharedTaskListRow: View {
             Spacer(minLength: 0)
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
+        .taskRowSpeech(label: task.title.value, value: TaskRowSpeech.value(speechParts),
+                       actionName: TaskRowSpeech.actionName(isChecked: isChecked, isSwitch: false),
+                       canToggle: row.canWrite, toggle: onToggleCompletion)
         .contextMenu { menu }
+    }
+
+    /// What the row shows, for VoiceOver (`TaskRowSpeech`).
+    private var speechParts: TaskRowSpeech.Parts {
+        var parts = TaskRowSpeech.Parts(completed: task.isCompleted, priority: priority)
+        if let due = task.due.value {
+            if !hidesDay {
+                parts.due = DueFormatter.text(for: due.date, hasTime: due.hasTime, now: now)
+            } else if due.hasTime {
+                parts.due = DueFormatter.timeText(for: due.date)
+            }
+            parts.overdue = DueFormatter.isOverdue(due.date, hasTime: due.hasTime, isCompleted: task.isCompleted, now: now)
+        }
+        if !row.people.isEmpty { parts.people = SharedAvatarStack.accessibilityLabel(row.people) }
+        if showGroup { parts.group = SharedTasksGroup.name }
+        let notes = task.notes.value
+        parts.notes = notes.isEmpty ? nil : TaskLimits.firstLine(of: notes)
+        return parts
     }
 
     // MARK: The meta line
@@ -185,6 +208,9 @@ struct SharedTaskListRow: View {
             } else if due.hasTime {
                 MetaItem(DueFormatter.timeText(for: due.date), systemImage: "clock", tint: tint)
             }
+        }
+        if differentiateWithoutColor, let words = PriorityWords.shown(priority, isChecked: isChecked) {
+            MetaItem(words, systemImage: "flag.fill", tint: priority.color)
         }
     }
 

@@ -277,7 +277,8 @@ private struct SplitContent: View {
             SidebarView(selection: $selection)
                 .opacity(settingsSidebarShown ? 0 : 1)
                 .allowsHitTesting(!settingsSidebarShown)
-                .accessibilityHidden(settingsSidebarShown)
+                // `isEnabled`: `accessibilityHidden(false)` un-hides what inside is hidden (the companion on Search) (brief 94).
+                .accessibilityHidden(true, isEnabled: settingsSidebarShown)
             if settingsSidebarShown {
                 MacSettingsSidebar { settingsRouter.close() }
                     .transition(.opacity)
