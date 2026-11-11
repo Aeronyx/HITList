@@ -55,6 +55,7 @@
 		1E906881A308126CD1DE4D6A /* LocationQuestionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D4CC6ADB283D58BA2318C98 /* LocationQuestionUITests.swift */; };
 		1F0DF291DE2319844AF6B3CA /* WidgetDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 665FF2BFFB9E4E0A69D46391 /* WidgetDebug.swift */; };
 		207163F0B89DDFD829F45C80 /* CoreLocationSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B6F95E940D05FC1FC1FC81E /* CoreLocationSource.swift */; };
+		20C7117B278D5713A4BEEDC5 /* PanelTabKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C324AB2C4BA4BBB0B7AD717 /* PanelTabKey.swift */; };
 		20CF31C4714CB5F315804F7A /* CompletionAnimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */; };
 		21A306D0DC2302061DC2205C /* ListRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCEA3CCC681372C04E433275 /* ListRulesTests.swift */; };
 		21F111FB7D65C1D8A959118B /* GeocoderZoneSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4299F6AC9EE42F44E5EE3546 /* GeocoderZoneSource.swift */; };
@@ -677,6 +678,7 @@
 		6ADFFB2A9A1BF3CD82513AE1 /* SharedRowsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRowsTests.swift; sourceTree = "<group>"; };
 		6B913CB4E59C18F8AEF313C3 /* WidgetHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetHost.swift; sourceTree = "<group>"; };
 		6BC723FC9CBCD716C406511B /* AppInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfo.swift; sourceTree = "<group>"; };
+		6C324AB2C4BA4BBB0B7AD717 /* PanelTabKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelTabKey.swift; sourceTree = "<group>"; };
 		6C465CF288740B05ADBF45DE /* SharedGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedGroupTests.swift; sourceTree = "<group>"; };
 		6D3A0E27F4F6C6625C35C7C7 /* CalendarEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEvents.swift; sourceTree = "<group>"; };
 		6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Bold.ttf"; sourceTree = "<group>"; };
@@ -976,6 +978,7 @@
 			isa = PBXGroup;
 			children = (
 				67618842F0C28E3CF638D784 /* EditorCard.swift */,
+				6C324AB2C4BA4BBB0B7AD717 /* PanelTabKey.swift */,
 				F32A742F83D1AB9E93A17857 /* SubtaskChecklist.swift */,
 				8B4B1BCA91E86875699EC69D /* SubtaskLineField.swift */,
 				C05EBAA04FAF57FA69358813 /* TaskEditorDraft.swift */,
@@ -2228,6 +2231,7 @@
 				9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */,
 				BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */,
 				ECCFD227CF85F94C563A169D /* NotificationStatus.swift in Sources */,
+				20C7117B278D5713A4BEEDC5 /* PanelTabKey.swift in Sources */,
 				D8DC35F42D40D8941CBBA440 /* PickerPlacement.swift in Sources */,
 				6AD7741C195C9973401AB7E3 /* PickerPresenter.swift in Sources */,
 				DB2233C69DF38E7D751C4A4B /* PickerTime.swift in Sources */,

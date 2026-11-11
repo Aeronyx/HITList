@@ -252,6 +252,13 @@ final class HighlightNSTextView: NSTextView {
         case #selector(insertNewline(_:)), #selector(insertLineBreak(_:)), #selector(insertParagraphSeparator(_:)),
              #selector(insertNewlineIgnoringFieldEditor(_:)):
             onSubmit()
+        // Tab and Shift-Tab typed a tab into the title (brief 94). With Full Keyboard Access they move on to the card's
+        // chips, as in any one-line field; without it the next stop was the list behind the card, so they stay put. An
+        // open picker card takes Tab first (`PickerLayerHost`).
+        case #selector(insertTab(_:)):
+            if NSApp.isFullKeyboardAccessEnabled { window?.selectNextKeyView(self) }
+        case #selector(insertBacktab(_:)):
+            if NSApp.isFullKeyboardAccessEnabled { window?.selectPreviousKeyView(self) }
         default:
             super.doCommand(by: selector)
         }

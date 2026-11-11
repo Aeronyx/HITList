@@ -155,6 +155,8 @@ struct TaskPopout: View {
         }
         #if os(macOS)
         .onExitCommand(perform: requestClose)
+        // Tab from the list behind the panel comes into the title (brief 94).
+        .background(PanelTabKey { titleFocused = true })
         #endif
     }
 
