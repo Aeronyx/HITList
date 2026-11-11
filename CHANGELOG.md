@@ -5,6 +5,30 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.2
+
+George's notes on 0.9.1: companions that keep still, one for each theme; the weather for them; widgets that check a
+task off and wait for iCloud. Three sessions at once.
+
+- Companions keep still now. A companion is a still picture that does one small thing every minute or two (a blink,
+  a swing of a leg) and its flourish about once in three hours of use, so you may not catch it for a day. A tap or
+  click plays the flourish if none has played for twenty minutes; sooner, it only looks up.
+- One companion for each theme, and never two on a screen. Slate has Nod, Midnight has Quill, Nord has Hush (ears
+  longer than it is) and Rosé has Pip (a pinecone that is also a creature); the other four themes have Nod until
+  their own are drawn. On the Mac the companion sits on the search field; on iPhone and iPad, on the top right of
+  the "+". The spots in Browse and beside the Mac's Settings are gone.
+- Companions sleep from 22:00 to 07:00 and stir if tapped, and with Weather on they dress for rain and snow.
+- Weather for your companion: Settings → Extras → Weather. Off until you switch it on; it uses only your approximate
+  location, and only to ask Apple Weather whether it's raining or snowing.
+- Check off a task from the Today and Upcoming widgets, and flip a switch from the Flipboard widget. A checked task
+  stays on the widget, ticked, until iCloud has it; then the next one takes its place. If iCloud is slow or offline
+  the widget says "Waiting for iCloud"; if the Mac app isn't running it says "Open HITList to finish".
+- Widgets catch up after changes from your other devices while HITList is closed (a push now ends in a fresh
+  widget, and there is an hourly background refresh), and say "As of yesterday" when they haven't heard anything in
+  a day.
+- GitHub Actions builds again: the runner's older Swift could not type-check two expressions in the companions'
+  code.
+
 ## 0.9.1 — build 22, 2026-11-10
 
 Widgets, everything that moves, two pixel companions, calendar events and a sync bolt that keeps still: George's
