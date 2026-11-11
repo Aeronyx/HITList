@@ -14,7 +14,7 @@ import UIKit
 ///   the widgets heard of the change only at the next launch.
 /// - **The background refresh**: iPhone and iPad, a `BGAppRefreshTask` (`identifier`, Info.plist's
 ///   `BGTaskSchedulerPermittedIdentifiers`, SwiftUI's `.backgroundTask(.appRefresh)` in `HITListApp`), asked for an hour
-///   ahead each time the app goes to the background and after each run; the system decides when, and whether, it runs.
+///   ahead at the first activation, each time the app goes to the background and after each run; the system decides when, and whether, it runs.
 ///   It waits a little for CloudKit to import (an app launched for it imports as at any launch), then settles. The Mac
 ///   app keeps running with its window closed and gets pushes; `NSBackgroundActivityScheduler` adds an hourly settle,
 ///   timed by the system around sleep and power.
@@ -28,6 +28,7 @@ enum WidgetRefresh {
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "widgets")
     private static var observers: [NSObjectProtocol] = []
+    private static var askedSinceLaunch = false
     #if os(macOS)
     private static var activity: NSBackgroundActivityScheduler?
     #endif
@@ -35,11 +36,19 @@ enum WidgetRefresh {
     /// From `HITListApp.init`, after the snapshot writer and the completion center.
     static func start() {
         #if os(iOS)
-        schedule()
-        observers.append(NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
-                                                                object: nil, queue: .main) { _ in
-            MainActor.assumeIsolated { schedule() }
-        })
+        // Never from `init` itself: a submit there, before launch has finished, hung the app's launch (iOS 27
+        // simulator, 2026-11-10: no first frame, and a widget's tap never reached `perform`). The first activation and
+        // each trip to the background ask instead.
+        let center = NotificationCenter.default
+        for name in [UIApplication.didBecomeActiveNotification, UIApplication.didEnterBackgroundNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { note in
+                MainActor.assumeIsolated {
+                    guard note.name == UIApplication.didEnterBackgroundNotification || !askedSinceLaunch else { return }
+                    askedSinceLaunch = true
+                    schedule()
+                }
+            })
+        }
         #else
         let scheduler = NSBackgroundActivityScheduler(identifier: identifier)
         scheduler.repeats = true
