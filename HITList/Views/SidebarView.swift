@@ -124,7 +124,7 @@ struct SidebarView: View {
                         Image(systemName: "circle.fill").foregroundStyle(Color(hex: project.colorHex)).imageScale(.small)
                     }
                     .tag(SidebarItem.project(project.id))
-                    .slateRow()
+                    .iPadSidebarRow(isSelected: selection == .project(project.id))
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
                         Button("Delete", role: .destructive) { askToDelete(project) }
@@ -149,7 +149,7 @@ struct SidebarView: View {
                     .offset(y: MacSidebarMetrics.symbolDrop)
                     }
                     .tag(SidebarItem.filter(filter.id))
-                    .slateRow()
+                    .iPadSidebarRow(isSelected: selection == .filter(filter.id))
                     .contextMenu {
                         Button("Edit Filter…") { editingFilter = filter }
                         Button("Delete", role: .destructive) { delete(filter) }
@@ -168,7 +168,7 @@ struct SidebarView: View {
                         Image(systemName: "tag.fill").foregroundStyle(Color(hex: label.colorHex))
                     }
                     .tag(SidebarItem.label(label.id))
-                    .slateRow()
+                    .iPadSidebarRow(isSelected: selection == .label(label.id))
                     .contextMenu {
                         Button("Edit Label…") { editingLabel = label }
                         Button("Delete", role: .destructive) { delete(label) }
@@ -178,6 +178,7 @@ struct SidebarView: View {
                 sectionHeader("Labels") { creatingLabel = true }
             }
         }
+        // The selected row is our own fill (`iPadSidebarRow`); the system's keyboard-focus outline is not drawn.
     }
     #endif
 
@@ -382,7 +383,7 @@ struct SidebarView: View {
             Image(systemName: "circle.fill").foregroundStyle(Color(hex: SharedTasksGroup.colorHex)).imageScale(.small)
         }
         .tag(SidebarItem.sharedTasks)
-        .slateRow()
+        .iPadSidebarRow(isSelected: selection == .sharedTasks)
         .accessibilityIdentifier("sidebar-shared-tasks")
         // Shared Tasks starts with the window when it is on, so its tasks are in Today at once.
         .task { sharedRows.start() }
@@ -465,7 +466,7 @@ struct SidebarView: View {
             Image(systemName: symbol).foregroundStyle(tint)
         }
         .tag(item)
-        .slateRow()
+        .iPadSidebarRow(isSelected: selection == item)
     }
     #endif
 
@@ -594,3 +595,61 @@ enum SidebarCounts {
         }.count
     }
 }
+
+#if os(iOS)
+extension View {
+    /// The iPad sidebar's row on our own fill when selected (brief 99): the Mac's selection colour in an 8 pt rounded fill
+    /// inside the row, its title and count in the Mac's selected colours. The system's selection drew only its
+    /// keyboard-focus outline in the accent, and differently with and without a keyboard.
+    func iPadSidebarRow(isSelected: Bool) -> some View {
+        listRowBackground(
+            ZStack {
+                Theme.elevated
+                if isSelected {
+                    RoundedRectangle(cornerRadius: MacSidebarMetrics.rowRadius, style: .continuous)
+                        .fill(MacSidebarStyle.selectionFill)
+                        .padding(IPadSidebarMetrics.fillInset)
+                }
+            }
+        )
+        .foregroundStyle(isSelected ? MacSidebarStyle.selectedForeground : HITColor.text)
+        // UIKit's keyboard-focus halo round the row (the accent outline, drawn with a keyboard attached), which
+        // `focusEffectDisabled` does not reach: taken off the row's cell; focus and the arrow keys stay.
+        .background(NoFocusHalo().allowsHitTesting(false).accessibilityHidden(true))
+    }
+}
+
+/// Clears the focus effect of the list cell it sits in (`UIView.focusEffect`, iOS 15), so a focused row shows no halo.
+private struct NoFocusHalo: UIViewRepresentable {
+    func makeUIView(context: Context) -> Remover { Remover() }
+    func updateUIView(_ view: Remover, context: Context) { view.clear() }
+
+    final class Remover: UIView {
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            clear()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            clear()
+        }
+
+        func clear() {
+            var view = superview
+            while let current = view {
+                if let cell = current as? UICollectionViewCell {
+                    if cell.focusEffect != nil { cell.focusEffect = nil }
+                    return
+                }
+                view = current.superview
+            }
+        }
+    }
+}
+
+enum IPadSidebarMetrics {
+    /// From the row's edges to the selected fill.
+    static let fillInset: CGFloat = 4
+}
+#endif
