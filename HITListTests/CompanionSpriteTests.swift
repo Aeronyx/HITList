@@ -46,8 +46,10 @@ final class CompanionSpriteTests: XCTestCase {
                         let at = "\(character.id) \(place) \(label) \(gesture.name)"
                         // Asleep, a stir may be the whole of it dipping a pixel (Nod nods) once in several minutes.
                         let most = label == "asleep" ? 110 : 16
+                        // A gesture of a sky's own is small against that sky's still (brief 91).
+                        let still = gesture.sky.map { mode.base(CompanionLook.Weather($0)) } ?? mode.rest
                         for tick in gesture.ticks {
-                            XCTAssertLessThanOrEqual(character.difference(tick.frame, mode.rest), most, at)
+                            XCTAssertLessThanOrEqual(character.difference(tick.frame, still), most, at)
                         }
                     }
                     for gesture in mode.gestures {
@@ -138,11 +140,7 @@ final class CompanionSpriteTests: XCTestCase {
             let boxLeft: CGFloat = size.width - spriteWidth + offset.width
             let posture = character.plus
             var stills: [String] = []
-            for mode in [posture.awake, posture.asleep] {
-                stills.append(mode.rest)
-                if let rain = mode.rain { stills.append(rain) }
-                if let snow = mode.snow { stills.append(snow) }
-            }
+            for mode in [posture.awake, posture.asleep] { stills.append(contentsOf: mode.stills) }
             for name in stills {
                 let rows = character.rows(name)!.map(Array.init)
                 let seat = character.seatRow
@@ -164,6 +162,41 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
+    /// The companions the weather shows on so far (brief 91).
+    static let weathered = ["nod"]
+
+    /// Brief 91, for each: in the rain a drip that is its own (a flicker), and a rain routine; snow that piles at least
+    /// two frames deeper and a routine that shakes it off; a hot-day still, a heat flicker and a heat routine. Nothing
+    /// changes where it sits, and the pile and the heat still are its own pictures, not the plain one.
+    func testTheWeatherShowsOnEach() {
+        for character in CompanionCharacter.all where Self.weathered.contains(character.id) {
+            for place in CompanionPlace.allCases {
+                let mode = character.posture(place).awake
+                let at = "\(character.id) \(place)"
+                XCTAssertTrue(mode.gestures.contains { $0.sky == .rain && $0.flicker }, "\(at): a drip in the rain")
+                XCTAssertTrue(mode.routines.contains { $0.sky == .rain }, "\(at): a rain routine")
+                XCTAssertGreaterThanOrEqual(mode.snowDeep.count, 2, "\(at): snow piles up")
+                XCTAssertTrue(mode.routines.contains { $0.sky == .snow && $0.shakesOff }, "\(at): and is shaken off")
+                XCTAssertNotNil(mode.heat, "\(at): a hot day's still")
+                XCTAssertNotEqual(mode.heat, mode.rest)
+                XCTAssertTrue(mode.gestures.contains { $0.sky == .heat && $0.flicker }, "\(at): a heat flicker")
+                XCTAssertTrue(mode.routines.contains { $0.sky == .heat }, "\(at): a heat routine")
+                // Each deeper frame adds snow: more light pixels than the one before.
+                var previous = mode.snow ?? mode.rest
+                for deep in mode.snowDeep {
+                    let more = character.rows(deep)!.joined().filter { $0 == "l" }.count
+                    let less = character.rows(previous)!.joined().filter { $0 == "l" }.count
+                    XCTAssertGreaterThan(more, less, "\(at) \(deep): deeper than \(previous)")
+                    previous = deep
+                }
+                // The shake-off can play from the deepest pile, and only there.
+                let shake = mode.routines.first { $0.shakesOff }!
+                XCTAssertTrue(character.canDraw(shake, in: .snow, mode: mode, depth: mode.deepest), at)
+                XCTAssertFalse(character.canDraw(shake, in: .snow, mode: mode, depth: 0), at)
+            }
+        }
+    }
+
     func testNodsNightAndWeather() {
         let nod = CompanionCharacter.nod
         XCTAssertEqual(nod.field.asleep.rest, "sleep")
@@ -171,8 +204,8 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance"])
-        XCTAssertEqual(nod.field.awake.flickers, [0, 1, 2], "a blink or one swing of a leg; the glance plays in routines")
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance", "rimDrip", "sweat"])
+        XCTAssertEqual(nod.field.awake.flickers, [0, 1, 2, 4, 5], "a blink or one swing of a leg (and the weather's drip and sweat); the glance plays in routines")
         XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
