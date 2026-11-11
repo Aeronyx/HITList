@@ -8,5 +8,6 @@ struct HITListWidgetBundle: WidgetBundle {
     var body: some Widget {
         TodayWidget()
         UpcomingWidget()
+        FlipboardWidget()
     }
 }
