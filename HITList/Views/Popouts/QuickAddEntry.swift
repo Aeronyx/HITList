@@ -217,11 +217,13 @@ struct InlineAddRow: View {
                 .padding(.vertical, HITSpacing.xs)
             } else {
                 Button(action: open) {
-                    HStack(spacing: HITSpacing.s) {
+                    // The task rows' check column and gap (`TaskRow`), so the "+" centres under the checkboxes and
+                    // "Add task" starts on the titles' edge.
+                    HStack(spacing: TaskRowMetrics.checkGap) {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(Theme.accent)
-                            .frame(width: 22)
+                            .frame(width: TaskRowMetrics.checkSize + 2)
                         Text("Add task").foregroundStyle(Theme.secondaryText)
                         Spacer()
                         if let note {
