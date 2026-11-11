@@ -14,6 +14,10 @@ enum ToolbarPillMetrics {
     /// The glass group's own margin on either side of the capsule: it held the bolt 12.5 pt and the "+" 10.5 pt away, and
     /// the Flipboard's pill (the last item there) 10.5 pt from the window's edge.
     static let outerMargin: CGFloat = 2.5
+    /// From the sync bolt's 16 pt frame to the pill's outer margin, in the toolbar item they share (brief 94). Measured on
+    /// 26.7.1 before they shared it: the bolt's frame, drawn `SyncBolt.nudge` right of an item of its own, ended 6.5 pt
+    /// before the pill's item began, so the glyph is drawn where it always was.
+    static let boltSpacing: CGFloat = 6.5
     /// The two controls overlap by half a point, so the pair is the glass's 67.5 wide.
     static let controlSpacing: CGFloat = ScreenControlMetrics.width * 2 - width
     /// The glyphs at the toolbar's size on 26.7.1 (the filter lines 17 × 10 pt, the "…" 17 × 17).
