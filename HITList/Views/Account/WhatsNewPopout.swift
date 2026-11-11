@@ -59,8 +59,9 @@ struct WhatsNewPopout: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             Spacer(minLength: HITSpacing.s)
+            // The accent pill, as every sheet's Done (brief 99: it was grey text here).
             Button(WhatsNewPopoutModel.doneTitle, action: onDone)
-                .buttonStyle(.hitGhost)
+                .buttonStyle(.hitPrimary)
                 .keyboardShortcut(.cancelAction)
                 .accessibilityIdentifier("whatsNewDone")
         }

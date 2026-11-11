@@ -131,8 +131,9 @@ struct InboxProcessView: View {
                     }
                 }
                 Spacer()
+                // The accent pill, as every sheet's Done (brief 99: it was an outlined capsule here).
                 Button("Done") { dismiss() }
-                    .buttonStyle(HITButtonStyle(.secondary, size: .small))
+                    .buttonStyle(.hitPrimary)
                     .keyboardShortcut(editingTitle ? nil : .cancelAction)
                     .help("Close (Esc)")
             }
