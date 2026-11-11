@@ -32,8 +32,8 @@ import HITListCore
 //   or with `heat:` and `snowDeep:` last; Routine's `shakesOff:` before or after `weight:`.
 // - Places: `Posture(inset:)` sprite pixels further in from the host's edge; `Posture(turns: false)` keeps a turning
 //   flourish facing the same way there. A character using none of this still works: flickers and the flourish.
-// - See-through (brief 101): the ink `v` (veil) is the accent at `CompanionInks.veilOpacity`, for a hem fading out;
-//   `seeThrough:` (0 to 0.5) makes the body's inks that see-through too, its eyes and glints (`k`, `l`) staying solid.
+// - See-through (brief 101): the ink `v` (veil) is the accent dimmed toward the background, drawn see-through (a hem
+//   over the "+", a ghost phasing); `seeThrough:` (0 to 0.5) makes the body's inks see-through, eyes and glints solid.
 // `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
 
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
@@ -54,8 +54,9 @@ enum CompanionInk: Character, CaseIterable {
     case warm = "w"
     /// The warm light dimmed into the background: its glow.
     case glow = "g"
-    /// The accent, see-through (brief 101): Phase's hem, and all of it while it phases. Over the "+" (the accent too)
-    /// it vanishes into the button; over the window or the Mac's field, what is behind shows through.
+    /// The accent dimmed toward the background, see-through (brief 101): Phase's hem, and all of it while it phases.
+    /// Over the "+" (the accent) it is the body's own dusky tone with the button showing through; over the window
+    /// or the Mac's field it is fainter, and what is behind shows through.
     case veil = "v"
 
     /// Clear.

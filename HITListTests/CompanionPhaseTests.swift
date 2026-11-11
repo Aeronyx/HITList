@@ -3,8 +3,8 @@ import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Brief 101: Phase, Mocha's ghost, in Mallow's place. A ghost in the "+"'s own colour that lives half inside what it
-/// sits on (nothing but the see-through veil at or below the edge), alive at round 20's pace, the weather on a ghost,
+/// Brief 101: Phase, Mocha's ghost, in Mallow's place. A ghost in the "+"'s own colour whose see-through hem lies over
+/// what it sits on (nothing but the veil at or below the edge), alive at round 20's pace, the weather on a ghost,
 /// nothing between it and the "+", and see-through drawing (the veil ink and `seeThrough`) at the right opacity.
 /// `CompanionSpriteTests` also runs every check that holds for every companion on it.
 @MainActor
@@ -24,8 +24,8 @@ final class CompanionPhaseTests: XCTestCase {
     }
 
     /// Drawn in the accent, a little see-through all over, its eyes and glints solid; at and below the edge it sits on
-    /// only the veil, so it is inside the "+" (where the veil vanishes) and inside the Mac's field (where it shows).
-    func testAGhostHalfInsideWhatItSitsOn() {
+    /// only the veil: its hem, over the "+"'s face and the Mac's field, the host showing through it.
+    func testAGhostWhoseHemLiesOverWhatItSitsOn() {
         XCTAssertEqual(phase.inks, [.ink, .light, .accent, .veil])
         XCTAssertEqual(phase.seeThrough, 0.25)
         XCTAssertEqual(phase.opacity(.accent), 0.75)
@@ -47,8 +47,9 @@ final class CompanionPhaseTests: XCTestCase {
         XCTAssertEqual(rest[15].filter { $0 == "k" }.count, 2, "a tiny mouth")
         XCTAssertTrue(rest[3].contains("a"), "its point")
         XCTAssertFalse(rest[0...2].joined().contains("a"), "room to rise")
-        // The hem is wavy where it shows (the Mac's field).
-        XCTAssertTrue(rest[19].contains("v.v") || rest[19].contains("v.vv"), "a scalloped hem, not a straight edge")
+        // The hem ends in four soft points, on the "+" and on the Mac's field.
+        XCTAssertEqual(rest[19], "....vv..vv..vv..vvv.", "a scalloped hem, not a straight edge")
+        XCTAssertEqual(phase.rows("sleep")![19], rest[19], "asleep too")
     }
 
     /// Round 20's pace (brief 100): at least six flickers and four little loops awake, two breaths asleep, four long
@@ -97,7 +98,7 @@ final class CompanionPhaseTests: XCTestCase {
         let awake = phase.plus.awake
         let seat = phase.seatRow
         let risen = phase.rows("risen")!
-        XCTAssertTrue(risen[seat - 1].contains("v.v"), "the wavy hem above the edge")
+        XCTAssertTrue(risen[seat - 1].contains("v..v"), "the wavy hem above the edge")
         XCTAssertTrue(risen[seat - 2].contains("a"), "and its body above that")
         XCTAssertTrue(awake.ticks(of: awake.routines.first { $0.name == "popUp" }!).contains { $0.tick.frame == "risen" })
         let fin = phase.rows("fin")!
@@ -125,7 +126,7 @@ final class CompanionPhaseTests: XCTestCase {
             XCTAssertEqual(phase.difference(tick.frame, awake.rain!), 1, "\(tick.frame): one drop")
         }
         XCTAssertEqual(awake.routines.first { $0.sky == .storm }?.name, "thunder")
-        XCTAssertTrue(phase.rows("stormJump")![phase.seatRow - 1].contains("v.v"), "out of the + with a jump")
+        XCTAssertTrue(phase.rows("stormJump")![phase.seatRow - 1].contains("v..v"), "out of the + with a jump")
         // Snow: a dusting, a cap, a heap, each more snow than the last, the seat left alone.
         func snow(_ frame: String) -> Int { phase.rows(frame)!.joined().filter { $0 == "l" }.count }
         let piles = [awake.snow!] + awake.snowDeep
@@ -228,7 +229,19 @@ final class CompanionPhaseTests: XCTestCase {
                 XCTAssertGreaterThan(contrast(body, ground), 2.5, "\(palette.id) body on \(ground)")
                 XCTAssertGreaterThan(contrast(body, inks.hex[.ink]!), 2.5, "\(palette.id) eyes on its body")
             }
-            XCTAssertEqual(inks.hex[.veil], palette.hex.accent, "the veil is the accent")
+            XCTAssertEqual(inks.hex[.veil], CompanionInks.mix(palette.hex.accent, palette.hex.background, CompanionInks.veilDusk),
+                           "the veil is the accent dimmed toward the background")
+            // Over the "+" the hem is the body's own dusky tone (the body a quarter see-through over the window), so
+            // its scallops read against the brighter button; over the window it is fainter than the body.
+            let accent: [Int] = CompanionInks.rgb(palette.hex.accent)
+            let veil: [Int] = CompanionInks.rgb(inks.hex[.veil]!)
+            let bodyOverWindow: [Int] = CompanionInks.rgb(CompanionInks.mix(palette.hex.accent, palette.hex.background, phase.seeThrough))
+            let a: Double = CompanionInks.veilOpacity
+            for i in 0..<3 {
+                let over: Double = Double(veil[i]) * a + Double(accent[i]) * (1 - a)
+                XCTAssertLessThanOrEqual(abs(Int(over.rounded()) - bodyOverWindow[i]), 3, "\(palette.id): the hem over the + is the body's tone")
+            }
+            XCTAssertLessThan(a * (1 - CompanionInks.veilDusk), 1 - phase.seeThrough, "the veil fainter than the body over the window")
         }
     }
 

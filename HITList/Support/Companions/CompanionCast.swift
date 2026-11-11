@@ -33,7 +33,7 @@ enum CompanionCast {
         "nord": "hush",
         // A small mouse whose tail ends in a lantern: the one warm light in an indigo night (brief 89).
         "tokyo": "glim",
-        // A sneaky little ghost in the "+"'s own mauve, half inside the button it sits on (brief 101).
+        // A sneaky little ghost in the "+"'s own mauve, its see-through hem passing over the button (brief 101).
         "mocha": "phase",
         // A piglet with wings too small for it and a snout in the theme's rose pink, for George's favourite (brief 85).
         "rose": "posy",
