@@ -114,6 +114,8 @@ public struct QuickAddParser: Sendable {
         var date: Date? = nil
         /// "in 2 hours": the due moment itself, unless a time is typed too (then that time on its day).
         var moment: Date? = nil
+        /// The winning date came after "starting": the repeat's first day, not necessarily one it falls on.
+        var dateIsStart = false
         /// The winning token of each kind that holds one value, by index in `result.tokens`. A reminder has
         /// two places (brief 48): one "from now" and one "before the due time" may stand side by side.
         var winner: [Slot: Int] = [:]
@@ -178,15 +180,15 @@ public struct QuickAddParser: Sendable {
             }
             // "in 10 minutes", "in two hours": a date token that sets the time as well
             if let (at, n) = dateParser.matchRelativeTime(in: lowers, at: i) {
-                moment = at; date = dateParser.startOfDay(at); win(i, n, .date); i += n; continue
+                moment = at; date = dateParser.startOfDay(at); dateIsStart = false; win(i, n, .date); i += n; continue
             }
             // Time
             if let t = dateParser.matchTime(in: lowers, at: i) {
                 time = (t.hour, t.minute); win(i, t.consumed, .time); i += t.consumed; continue
             }
-            // Date (a plain day drops the moment of an earlier "in 2 hours")
-            if let (pd, n) = dateParser.matchDate(in: lowers, at: i) {
-                date = pd.date; moment = nil; win(i, n, .date); i += n
+            // Date (a plain day drops the moment of an earlier "in 2 hours"); "starting friday" too
+            if let (pd, n, isStart) = matchDateOrStart(lowers, at: i) {
+                date = pd.date; moment = nil; dateIsStart = isStart; win(i, n, .date); i += n
                 // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
                 // Only when no time is typed yet: a bare number is too weak to override "5pm".
                 if time == nil, i < words.count, !consumed[i],
@@ -227,6 +229,10 @@ public struct QuickAddParser: Sendable {
         let dateWasTyped = date != nil
         if date == nil, let rule = result.recurrence {
             date = rule.firstOccurrence(onOrAfter: dateParser.today, calendar: dateParser.calendar)
+        } else if dateIsStart, let start = date, let rule = result.recurrence {
+            // "every monday starting nov 24" (a Tuesday) starts on the Monday after; "every month on the
+            // 28th starting dec 1" on Dec 28. A day typed without "starting" is kept as typed.
+            date = rule.firstOccurrence(onOrAfter: start, calendar: dateParser.calendar)
         }
         if let time {
             var candidate = dateParser.date(date ?? dateParser.today, hour: time.0, minute: time.1)
@@ -302,6 +308,8 @@ public struct QuickAddParser: Sendable {
     static func matchRecurrence(_ words: [String], at i: Int) -> (RecurrenceRule, Int)? {
         // "every month on the 28th", "every first Monday", "every year on Mar 3" (QuickAddParser+Repeats)
         if let placed = matchPlacedRepeat(words, at: i) { return placed }
+        // "tue thu sat", "every mon, wed & fri", "every 2 weeks on tue and thu" (QuickAddParser+Weekdays)
+        if let days = matchWeekdayRepeat(words, at: i) { return days }
         let w = DateExpressionParser.normalize(words[i])
         switch w {
         case "daily": return (.daily, 1)
@@ -344,16 +352,6 @@ public struct QuickAddParser: Sendable {
             }
             return (RecurrenceRule(frequency: freq, interval: count), 3)
         }
-        // every mon, wed and fri
-        var days = Set<Int>()
-        var j = i + 1
-        while j < words.count {
-            let wj = DateExpressionParser.normalize(words[j])
-            if wj == "and" || wj == "&" { j += 1; continue }
-            guard let wd = DateExpressionParser.weekdayNames[wj] else { break }
-            days.insert(wd); j += 1
-        }
-        if !days.isEmpty { return (RecurrenceRule(frequency: .weekly, weekdays: days), j - i) }
         return nil
     }
 }

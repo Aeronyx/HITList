@@ -36,8 +36,8 @@ enum ThemeCompanion {
     static let seats: [String: Seat] = [
         // Slate: Nod sits on the card, legs over its edge, its bobble clear of the accent dot.
         "nod": Seat(placement: .onCard, along: 0.27),
-        // Graphite: Smudge asleep on the accent dot, its long legs folded away.
-        "smudge": Seat(placement: .asleepOnDot, along: 0.7),
+        // Graphite: Gargle peeks over the top as over a parapet, horns, eyes and wing tips.
+        "gargle": Seat(placement: .peeking, along: 0.35),
         // Midnight: Quill lies along the top, its tail's inked tip up.
         "quill": Seat(placement: .alongTop, along: 0.62),
         // Moss: Tuck on the card with its pot, left of the accent dot.
@@ -46,10 +46,13 @@ enum ThemeCompanion {
         "hush": Seat(placement: .peeking, along: 0.4),
         // Tokyo Night: Glim on the card, its lantern hanging over the card's edge.
         "glim": Seat(placement: .onCard, along: 0.3),
-        // Mocha: Mallow asleep on the accent dot, a soft toy left on a cushion.
+        // Mocha: Phase asleep in the accent dot, sunk to its eyes, its point flopped over like a nightcap.
+        "phase": Seat(placement: .asleepOnDot, along: 0.7),
+        // Mocha until brief 101 merges: Mallow asleep on the accent dot.
         "mallow": Seat(placement: .asleepOnDot, along: 0.7),
-        // Rosé: Posy peeks over the top, ears and eyes, on the side away from Hush's.
-        "posy": Seat(placement: .peeking, along: 0.6),
+        // Rosé: Button sits on the card under its cap (peeking, its tall cap rose 13 pt and the iPhone's first
+        // screen no longer fit).
+        "button": Seat(placement: .onCard, along: 0.3),
     ]
 
     /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of

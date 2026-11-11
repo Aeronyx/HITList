@@ -26,7 +26,7 @@ final class RepeatPhraseTests: XCTestCase {
         XCTAssertEqual(task.title, "Pay rent")
         XCTAssertEqual(task.dueDate, date(2026, 11, 1, 9))
         XCTAssertEqual(task.recurrence, "monthly;1;;1;09:00;d1")
-        XCTAssertEqual(task.recurrenceRule?.displayText, "Monthly on the 1st")
+        XCTAssertEqual(task.recurrenceRule?.displayText, "Every month on the 1st")
 
         TaskActions.toggleCompletion(task, in: context, now: date(2026, 11, 1, 10))
         XCTAssertFalse(task.isCompleted)
@@ -44,33 +44,31 @@ final class RepeatPhraseTests: XCTestCase {
         XCTAssertEqual(task.dueDate, date(2026, 12, 7))
         TaskActions.toggleCompletion(task, in: context, now: date(2026, 12, 7, 12))
         XCTAssertEqual(task.dueDate, date(2027, 1, 4))
-        XCTAssertEqual(task.recurrenceRule?.displayText, "First Monday of the month")
+        XCTAssertEqual(task.recurrenceRule?.displayText, "Every month on the first Monday")
     }
 
-    /// The Repeat card shows a rule it has no preset for as the current choice, and that row picks nothing:
-    /// the quick-add card would otherwise write it back as plain "every month".
-    func testTheRepeatCardKeepsARuleItCannotEdit() {
+    /// The Repeat menu (brief 97) ticks the choice a rule is on the task's day; a rule that is none of them is its own
+    /// ticked line, and picking it changes nothing (the quick-add card does not rewrite what was typed).
+    func testTheRepeatMenuTicksTheRuleInForce() {
         let on28 = RecurrenceRule(frequency: .monthly, place: .day(28))
-        XCTAssertNil(RepeatPresets.preset(for: on28))
-        XCTAssertEqual(RepeatPresets.currentRow(for: on28), "Monthly on the 28th")
-        XCTAssertEqual(RepeatPresets.preset(for: RecurrenceRule(frequency: .monthly, anchorDay: 21))?.title, "Every month")
-        XCTAssertNil(RepeatPresets.currentRow(for: .monthly))
-        XCTAssertNil(RepeatPresets.currentRow(for: nil))
-        // Picking "Every month" on that task replaces the place and keeps the day the task is on.
-        let picked = RepeatPresets.preset(for: .monthly)!.rule.keepingAnchor(of: on28, due: date(2026, 10, 28))
-        XCTAssertNil(picked.place)
-        XCTAssertEqual(picked.anchorDay, 28)
+        XCTAssertEqual(RepeatChoice.matching(on28, on: date(2026, 10, 28), calendar: calendar)?.title, "Every month on the 28th")
+        XCTAssertNil(RepeatChoice.matching(on28, on: date(2026, 10, 21), calendar: calendar))
+        XCTAssertEqual(on28.rowText, "Every month on the 28th")
+        // "Every month" from before 0.9.4, anchored to the 21st, is "Every month on the 21st" on the 21st.
+        XCTAssertEqual(RepeatChoice.matching(RecurrenceRule(frequency: .monthly, anchorDay: 21), on: date(2026, 10, 21),
+                                             calendar: calendar)?.kind, .monthly)
+        XCTAssertNil(RepeatChoice.matching(nil, on: date(2026, 10, 21), calendar: calendar))
     }
 
     func testRepeatWordsForEachNewShape() {
         let cases: [(String, String)] = [
-            ("every month on the 28th", "Monthly on the 28th"),
+            ("every month on the 28th", "Every month on the 28th"),
             ("every 3 months on the 10th", "Every 3 months on the 10th"),
-            ("every last day of the month", "Last day of the month"),
-            ("every first Monday", "First Monday of the month"),
-            ("every last Friday", "Last Friday of the month"),
-            ("every 2nd Tuesday", "Second Tuesday of the month"),
-            ("every year on Mar 3", "Yearly on Mar 3"),
+            ("every last day of the month", "Every month on the last day"),
+            ("every first Monday", "Every month on the first Monday"),
+            ("every last Friday", "Every month on the last Friday"),
+            ("every 2nd Tuesday", "Every month on the second Tuesday"),
+            ("every year on Mar 3", "Every year on Mar 3"),
             ("quarterly", "Every 3 months"),
         ]
         let parser = QuickAddParser(now: date(2026, 10, 21, 14, 30), calendar: calendar)

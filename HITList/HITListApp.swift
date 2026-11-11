@@ -86,6 +86,7 @@ struct HITListApp: App {
             #if os(macOS)
             // ⌘, opens Settings inside the window (`MacSettingsPage`); there is no Settings window.
             SettingsCommands()
+            QuickAddGuideCommands() // brief 98: Help ▸ Quick Add Guide
             #endif
         }
         #if os(iOS)

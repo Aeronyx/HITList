@@ -256,9 +256,9 @@ final class MobileChromeTests: XCTestCase {
     // MARK: Browse (brief 35)
 
     func testBrowseEndsWithCompletedThenSettings() {
-        XCTAssertEqual(BrowseView.lastRows, [.completed, .settings], "no Flipboard row: it is a tab now")
-        XCTAssertEqual(BrowseView.lastRows.map(\.title), ["Completed", "Settings"])
-        XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape"])
+        XCTAssertEqual(BrowseView.lastRows, [.completed, .settings, .quickAddGuide], "no Flipboard row: it is a tab now")
+        XCTAssertEqual(BrowseView.lastRows.map(\.title), ["Completed", "Settings", "Quick add guide"])
+        XCTAssertEqual(BrowseView.lastRows.map(\.symbol), ["checkmark.circle", "gearshape", "questionmark.circle"])
     }
 
     // MARK: Browse's top left (brief 40)

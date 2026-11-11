@@ -325,9 +325,10 @@ final class CompanionSeatTests: XCTestCase {
         return out
     }
 
-    /// Characters another session is redrawing in round 20 (brief 102 replaces Posy and owns Smudge): measured and
-    /// reported, their failures expected until that session's drawing lands. Remove an id when its character sits.
-    static let awaitingRedraw: Set<String> = ["posy", "smudge"]
+    /// Characters another session is redrawing: measured and reported, their failures expected until that session's
+    /// drawing lands. Remove an id when its character sits. (Brief 102's Button and Gargle, in place of Posy and Smudge,
+    /// sit: none waits.)
+    static let awaitingRedraw: Set<String> = []
 
     /// Its own theme's palette (the one it lives in), else slate.
     static func home(_ character: CompanionCharacter) -> ThemePalette {
