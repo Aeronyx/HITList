@@ -253,7 +253,7 @@ final class SharedRowsTests: XCTestCase {
         let moved = try XCTUnwrap(store.list(trip.id)?.task(cabin.id)?.due.value)
         XCTAssertEqual(cal.startOfDay(for: moved.date), friday)
         XCTAssertEqual(cal.component(.hour, from: moved.date), 9, "its time of day kept")
-        XCTAssertEqual(store.list(trip.id)?.task(tent.id)?.due.value, due(1), "the other task untouched")
+        XCTAssertEqual(store.list(trip.id)?.task(tent.id)?.due.value, SharedTasksStore.normalized(due(1)), "the other task untouched")
     }
 
     func testADropOnItsOwnDayOrBeforeTodayMovesNothing() throws {
