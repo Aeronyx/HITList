@@ -5,7 +5,7 @@ permalink: /privacy/
 
 # HITList Privacy Policy
 
-Effective 2026-11-05.
+Effective 2026-11-10.
 
 ## Who we are
 
@@ -57,6 +57,15 @@ sharing at any time. Switching Shared Tasks off keeps your lists in iCloud.
 
 HITList's Siri phrases and Shortcuts actions run on your device and use the same data as the app. What you say
 to Siri is handled by Apple under Apple's privacy policy.
+
+## Calendar events (optional, off unless you turn it on)
+
+If you switch on Settings → General → Calendar events, HITList asks for access to your calendars and shows the
+events of the calendars you pick beside your tasks in Today and Upcoming. It only reads them: it never adds,
+changes or deletes an event. The events are read on the device each time they are shown and never leave it:
+they are not saved with your tasks, synced through iCloud, put in backups or exports, shown in Spotlight or
+Siri, or given to Claude. Switching it off stops the reading; you can also withdraw access in your device's
+settings under Privacy & Security → Calendars.
 
 ## Notifications
 

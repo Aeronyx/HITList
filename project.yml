@@ -75,6 +75,8 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         # Shared Tasks (brief 51): lets a CloudKit share link open in HITList and reach the share-acceptance callbacks.
         CKSharingSupported: true
+        # Calendar events beside the tasks (brief 77), off until switched on in Settings → General. Read-only.
+        NSCalendarsFullAccessUsageDescription: "HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device."
         # ProMotion iPhones may run animations above 60 Hz (the sync bolt's strike, brief 54); without this key
         # Core Animation caps them at 60 on iPhone.
         CADisableMinimumFrameDurationOnPhone: true

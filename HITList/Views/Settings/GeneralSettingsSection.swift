@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → General: where the iPhone opens, the first day of the week, the app icon badge, and
-/// whether deleting asks first. Keys in `SettingsPreferences.swift`.
+/// Settings → General: where the iPhone opens, the first day of the week, the app icon badge, whether
+/// deleting asks first, and calendar events (brief 77). Keys in `SettingsPreferences.swift`.
 struct GeneralSettingsSection: View {
     @Environment(\.modelContext) private var context
 
@@ -67,6 +67,8 @@ struct GeneralSettingsSection: View {
             .toggleStyle(.hit)
             .hitRowPadding()
             .accessibilityIdentifier("settings-confirm-delete")
+            // Calendar events beside the tasks (brief 77): off by default.
+            CalendarSettingsRows()
         }
     }
 
