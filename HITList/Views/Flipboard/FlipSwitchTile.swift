@@ -399,8 +399,9 @@ struct FlipSwitchFace<Rocker: View>: View {
             FlipLights(target: target, count: lamps, side: side, isOverdue: isOverdue, reduceMotion: reduceMotion)
 
             // Room for two lines of title and the interval whatever the title, so every tile is one height: a hidden
-            // stand-in sets the height alone, and the real title and interval are drawn over it from the top (the
-            // interval right under a one-line title, not a blank line below it).
+            // stand-in sets the height alone. The title is drawn over it from the top and the interval at its foot, so
+            // across a row every name starts on one line and every interval sits on one line, whether a name takes one
+            // line or two (brief 96, the sweep: a wrapped name had put its interval a line lower than its neighbours').
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: "A").font(Self.titleFont).lineLimit(2, reservesSpace: true)
                 Text(verbatim: "a").font(HITType.caption2)
@@ -409,21 +410,21 @@ struct FlipSwitchFace<Rocker: View>: View {
             .accessibilityHidden(true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(Self.titleFont)
-                        .tracking(0.6)
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
-                        .multilineTextAlignment(.leading)
-                    Text(ruleText)
-                        .font(HITType.caption2)
-                        .foregroundStyle(Theme.secondaryText)
-                        .lineLimit(1)
-                }
-                // Its own height, not the stand-in's: offered exactly that, a two-line title rounded down to one.
-                .fixedSize(horizontal: false, vertical: true)
+                Text(title)
+                    .font(Self.titleFont)
+                    .tracking(0.6)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.leading)
+                    // Its own height, not the stand-in's: offered exactly that, a two-line title rounded down to one.
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .overlay(alignment: .bottomLeading) {
+                Text(ruleText)
+                    .font(HITType.caption2)
+                    .foregroundStyle(Theme.secondaryText)
+                    .lineLimit(1)
             }
 
             rocker

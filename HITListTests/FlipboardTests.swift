@@ -1078,3 +1078,51 @@ final class FlipboardWordsTests: XCTestCase {
         XCTAssertNil(FlipboardDebug.now(arguments: ["HITList", "-flipboardNow"]))
     }
 }
+
+/// Brief 96, item 5 (the sweep: on a narrow Mac window "Take out the recycling" wraps and put its subtitle a line lower
+/// than its neighbours'): a tile's name starts at the same height whether it takes one line or two, and its interval
+/// line sits at one height across a row.
+@MainActor
+final class FlipSwitchFaceLayoutTests: XCTestCase {
+    func testTheIntervalLineSitsAtOneHeightWhetherTheNameWrapsOrNot() throws {
+        for width: CGFloat in [150, 180] {
+            let wrapped = try textRows(title: "Take out the recycling every single week", width: width)
+            let short = try textRows(title: "Floss", width: width)
+            XCTAssertEqual(short.top, wrapped.top, accuracy: 1, "the names start together at \(width) pt")
+            XCTAssertEqual(short.bottom, wrapped.bottom, accuracy: 1, "the interval lines end together at \(width) pt")
+            XCTAssertGreaterThan(wrapped.bottom - wrapped.top, 30, "two lines of name and the interval at \(width) pt")
+        }
+    }
+
+    /// The first and last rows (in pixels at 2x) of light text on a switch's face: its name and its interval line. The
+    /// rocker is left out and the caption empty, so nothing else on the face is light.
+    private func textRows(title: String, width: CGFloat) throws -> (top: Int, bottom: Int) {
+        let face = FlipSwitchFace(title: title, ruleText: "every week", target: 1, lamps: 0, side: .green, isOverdue: false,
+                                  fraction: 0, caption: "", reduceMotion: true) {
+            Color.clear.frame(width: 84, height: 124)
+        }
+        let renderer = ImageRenderer(content: face.frame(width: width).background(Color.black).environment(\.colorScheme, .dark))
+        renderer.scale = 2
+        let image = try XCTUnwrap(renderer.cgImage)
+        let w = image.width, h = image.height
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let context = try XCTUnwrap(CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                              space: CGColorSpaceCreateDeviceRGB(),
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var rows: [Int] = []
+        for y in 0..<h {
+            for x in 0..<w {
+                let i = (y * w + x) * 4
+                let (r, g, b) = (Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2]))
+                // Light and grey (the name's white, the interval's grey): never the lights' red or the plate's slate.
+                if min(r, g, b) > 100, max(r, g, b) - min(r, g, b) < 40 {
+                    rows.append(y)
+                    break
+                }
+            }
+        }
+        let top = try XCTUnwrap(rows.first), bottom = try XCTUnwrap(rows.last)
+        return (top, bottom)
+    }
+}
