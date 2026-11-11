@@ -4,6 +4,70 @@ import OSLog
 import AppKit
 #endif
 
+/// A stretch of sync trouble: when it began and the words of its first trouble.
+struct SyncTroubleSpan: Codable, Equatable {
+    var since: Date
+    /// "Sync paused: iCloud needs you to sign in again".
+    var cause: String
+    /// Kept from an earlier launch of this store: the app quit (or was relaunched) in between.
+    var relaunched = false
+}
+
+/// Watches the raw sync state for stretches of trouble (offline, an error, signed out or restricted, stuck) and, when
+/// one ends, gives the line the sync log ends it with: "Sync recovered after 21 s" (brief 78: George's blip of
+/// 2026-11-10 ended without a word in the log). A stretch survives a relaunch, kept in the app group's defaults for
+/// the store, and then ends only with a sync newer than its start ("…, after a relaunch"). Pure but for those defaults.
+struct SyncTroubleTracker {
+    /// A stretch shorter than this ends without a line (a Wi-Fi hand-over), unless a relaunch came in between.
+    static let minimum: TimeInterval = 5
+    static let key = "sync.troubleSpan"
+
+    private let defaults: UserDefaults?
+    private let storeName: String
+    private(set) var span: SyncTroubleSpan?
+
+    /// `defaults` nil: nothing is kept across launches (tests).
+    init(defaults: UserDefaults? = nil, storeName: String = ModelContainerFactory.storeName) {
+        self.defaults = defaults
+        self.storeName = storeName
+        if let data = defaults?.data(forKey: keyName), var saved = try? JSONDecoder().decode(SyncTroubleSpan.self, from: data) {
+            saved.relaunched = true
+            span = saved
+        }
+    }
+
+    private var keyName: String { CloudSyncMonitor.syncTimeKey(Self.key, storeName: storeName) }
+
+    /// A raw state at `now`. Returns the recovery line when a stretch worth a line just ended.
+    mutating func observe(_ state: SyncState, at now: Date) -> (message: String, fields: [String: String])? {
+        if state.showsTrouble {
+            if span == nil {
+                span = SyncTroubleSpan(since: now, cause: state.summary(now: now))
+                save()
+            }
+            return nil
+        }
+        guard case .synced(let syncedAt) = state, let ended = span else { return nil }
+        // After a relaunch the remembered "Synced 3 min ago" proves nothing: wait for a sync of this launch.
+        if ended.relaunched, syncedAt <= ended.since { return nil }
+        span = nil
+        save()
+        let lasted = now.timeIntervalSince(ended.since)
+        guard lasted >= Self.minimum || ended.relaunched else { return nil }
+        let message = "Sync recovered after \(SyncLogFormat.duration(lasted))" + (ended.relaunched ? ", after a relaunch" : "")
+        return (message, ["cause": ended.cause, "since": ended.since.formatted(date: .omitted, time: .standard)])
+    }
+
+    private func save() {
+        guard let defaults else { return }
+        if let span, let data = try? JSONEncoder().encode(span) {
+            defaults.set(data, forKey: keyName)
+        } else {
+            defaults.removeObject(forKey: keyName)
+        }
+    }
+}
+
 /// Getting a stuck sync going again (brief 25, item 6).
 ///
 /// CloudKit's mirroring runs one request at a time. On Nov 1 an import started at 18:51:54 in the

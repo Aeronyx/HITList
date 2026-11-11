@@ -105,6 +105,7 @@ final class CloudSyncMonitor {
         lastExportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastExportKey)) as? Date
         watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
         accountSteadiness = AccountSteadiness(remembered: accountWatch.lastStatus)
+        troubleTracker = SyncTroubleTracker(defaults: AppGroup.defaults)
     }
 
     var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
@@ -135,6 +136,8 @@ final class CloudSyncMonitor {
     /// `state` once the first raw state was seen.
     private var shownState: SyncState?
     @ObservationIgnored private var steadiness = SyncSteadiness()
+    /// Stretches of trouble, for the sync log's "Sync recovered after …" line (kept across launches).
+    @ObservationIgnored private var troubleTracker = SyncTroubleTracker()
     /// Wakes the steadiness at its next deadline: one sleep at a time.
     @ObservationIgnored private var steadyTimer: Task<Void, Never>?
 
@@ -813,6 +816,9 @@ final class CloudSyncMonitor {
         if key != loggedState {
             loggedState = key
             Self.log.notice("Sync state: \(raw.summary(), privacy: .public)")
+        }
+        if let note = troubleTracker.observe(raw, at: now) {
+            write(.note, note.message, level: .notice, fields: note.fields)
         }
         steadiness.observe(raw, at: now)
         publishShown(now)
