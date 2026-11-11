@@ -95,16 +95,21 @@ enum TaskActions {
     /// with its checklist open. Completing the last subtask leaves the parent alone (Todoist's rule).
     ///
     /// `now` is the moment of the tap; callers with their own clock (the Claude tools, tests) pass it.
-    static func toggleCompletion(_ task: TaskItem, in context: ModelContext, now: Date = Date()) {
+    ///
+    /// A day rolls on from its start here, never from the instant it is stored at (brief 92): an anchor is 06:00 in New
+    /// York in summer time, and the rule keeps a date's time of day, so a roll past the autumn change landed at 06:00 EST,
+    /// 11:00 UTC, a value the one place can't vouch for, left unanchored. A time rolls from its moment, as before.
+    static func toggleCompletion(_ task: TaskItem, in context: ModelContext, now: Date = Date(), calendar: Calendar = .current) {
         let wasCompleted = task.isCompleted
         let closedAt = task.completedAt
         if task.isCompleted {
             task.isCompleted = false
             task.completedAt = nil
-        } else if let rule = task.recurrenceRule, let due = task.dueDate {
-            var next = rule.anchored(to: due)
-            if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime) }
-            task.dueDate = next.nextDueDate(from: due, now: now)
+        } else if let rule = task.recurrenceRule, let stored = task.dueDate {
+            let due = task.hasDueTime ? stored : calendar.startOfDay(for: stored)
+            var next = rule.anchored(to: due, calendar: calendar)
+            if !task.hasDueTime || next.time == nil { next = next.timed(to: due, hasTime: task.hasDueTime, calendar: calendar) }
+            task.dueDate = next.nextDueDate(from: due, now: now, calendar: calendar)
             if next.anchorDay != rule.anchorDay || next.time != rule.time { task.recurrence = next.encoded }
             // A "from now" reminder goes off once (brief 48): it belonged to the occurrence just done.
             task.reminderDate = nil
@@ -239,11 +244,17 @@ enum TaskActions {
         if timed.time != rule.time { task.recurrenceRule = timed }
     }
 
-    static func reschedule(_ task: TaskItem, to date: Date?, keepTime: Bool = true, in context: ModelContext) {
+    /// A task without a time moves to the day `date` falls on here, from its start (brief 92): a date picker hands back the
+    /// picked day at the time of day of the date it opened on (an anchor's 05:00 or 06:00 in New York), which across a
+    /// clock change is neither an anchor nor a midnight here, and the one place couldn't anchor it. A timed task keeps its
+    /// time on the new day; with `keepTime: false` (Snooze, an undo) it takes `date` as its moment.
+    static func reschedule(_ task: TaskItem, to date: Date?, keepTime: Bool = true, calendar: Calendar = .current,
+                           in context: ModelContext) {
         if let date, let old = task.dueDate, task.hasDueTime, keepTime {
-            let cal = Calendar.current
-            let comps = cal.dateComponents([.hour, .minute], from: old)
-            task.dueDate = cal.date(bySettingHour: comps.hour ?? 9, minute: comps.minute ?? 0, second: 0, of: date)
+            let comps = calendar.dateComponents([.hour, .minute], from: old)
+            task.dueDate = calendar.date(bySettingHour: comps.hour ?? 9, minute: comps.minute ?? 0, second: 0, of: date)
+        } else if let date, !task.hasDueTime {
+            task.dueDate = calendar.startOfDay(for: date)
         } else {
             task.dueDate = date
             if date == nil { task.hasDueTime = false }

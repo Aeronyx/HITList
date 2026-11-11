@@ -136,7 +136,8 @@ final class DayAnchorTests: XCTestCase {
 
     // MARK: - Rewriting
 
-    /// An old midnight becomes its day's anchor wherever the device is (in the zones the form serves).
+    /// An old midnight becomes its day's anchor on a device whose own midnight it is (the device it was written on, or one
+    /// in the same zone), and is left exactly as stored everywhere else: a device never rewrites on a guess (brief 92).
     func testRewriteTurnsAnOldMidnightIntoItsDaysAnchor() {
         let thursday = Day(year: 2026, month: 11, day: 12)
         for written in Self.zones {
@@ -144,10 +145,13 @@ final class DayAnchorTests: XCTestCase {
             for read in Self.zones {
                 let pair = "\(written.timeZone.identifier) → \(read.timeZone.identifier)"
                 let rewritten = DayAnchor.rewrite(midnight, calendar: read)
+                let sameClock = written.timeZone.secondsFromGMT(for: midnight) == read.timeZone.secondsFromGMT(for: midnight)
                 if written.timeZone.identifier == "Pacific/Honolulu" {
                     XCTAssertNil(rewritten, "Honolulu's midnight is already the anchor: \(pair)")
+                } else if sameClock {
+                    XCTAssertEqual(rewritten, DayAnchor.anchor(of: thursday), "the reader's own midnight too: \(pair)")
                 } else {
-                    XCTAssertEqual(rewritten, DayAnchor.anchor(of: thursday), pair)
+                    XCTAssertNil(rewritten, "another zone's midnight is left as stored: \(pair)")
                 }
             }
         }

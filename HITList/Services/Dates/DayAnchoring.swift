@@ -16,22 +16,69 @@ import HITListCore
 /// touched: a timed due date, `reminderDate`, `completedAt`, `createdAt`, `updatedAt`, `flipPeriodStart`. Anchoring
 /// never touches `updatedAt`: it isn't an edit, and the merges that compare it (JSON import, profiles) must not take it
 /// for one. `DayAnchor.isEnabled` (core) is the one switch: off, nothing is rewritten anywhere.
+///
+/// Brief 92: a pass anchors only what this device can vouch for, a midnight in its own zone (`DayAnchor.verdict`), and
+/// leaves every other value exactly as stored (another zone's midnight, a time left on a day, a stray moment), counting
+/// how many and why (`Count.leftAlone`, in the unified log and the pass's sync-log line).
 enum DayAnchoring {
     static let log = Logger(subsystem: "com.trammells.hitlist", category: "dates")
 
     /// The one switch, as the app reads it (`DayAnchor.isEnabled`).
     static var isEnabled: Bool { DayAnchor.isEnabled }
 
-    /// How many values a pass rewrote, by field.
+    /// How many values a pass rewrote, by field, and how many it left exactly as stored, by why.
     struct Count: Equatable, CustomStringConvertible {
         var dueDates = 0
         var deadlines = 0
+        var leftAlone = LeftAlone()
+
+        /// Days left exactly as stored, by `DayAnchor.Verdict` (brief 92: never rewritten on a guess).
+        struct LeftAlone: Equatable, CustomStringConvertible {
+            /// On a quarter hour but not this zone's midnight: another zone's midnight, or a time on a quarter hour.
+            var notThisZonesMidnight = 0
+            /// No zone's midnight: a stray moment.
+            var notAMidnight = 0
+            /// This zone's own midnight, where an anchor would show another day (UTC−11, −12 and +14).
+            var zoneCannotHoldAnAnchor = 0
+
+            var total: Int { notThisZonesMidnight + notAMidnight + zoneCannotHoldAnAnchor }
+
+            mutating func note(_ verdict: DayAnchor.Verdict) {
+                switch verdict {
+                case .notThisZonesMidnight: notThisZonesMidnight += 1
+                case .notAMidnight: notAMidnight += 1
+                case .zoneCannotHoldAnAnchor: zoneCannotHoldAnAnchor += 1
+                case .anchor, .alreadyAnchored, .disabled: break
+                }
+            }
+
+            static func += (a: inout LeftAlone, b: LeftAlone) {
+                a.notThisZonesMidnight += b.notThisZonesMidnight
+                a.notAMidnight += b.notAMidnight
+                a.zoneCannotHoldAnAnchor += b.zoneCannotHoldAnAnchor
+            }
+
+            /// "1 not a midnight here, 1 a moment rather than a midnight": the reasons that count, in words.
+            var description: String {
+                var parts: [String] = []
+                if notThisZonesMidnight > 0 { parts.append("\(notThisZonesMidnight) not a midnight here") }
+                if notAMidnight > 0 { parts.append("\(notAMidnight) a moment rather than a midnight") }
+                if zoneCannotHoldAnAnchor > 0 { parts.append("\(zoneCannotHoldAnAnchor) in a zone where a stored day shows another day") }
+                return parts.isEmpty ? "none" : parts.joined(separator: ", ")
+            }
+
+            var fields: [String: String] {
+                ["leftNotAMidnightHere": String(notThisZonesMidnight), "leftAMoment": String(notAMidnight),
+                 "leftFarZone": String(zoneCannotHoldAnAnchor)]
+            }
+        }
 
         var total: Int { dueDates + deadlines }
 
         static func += (a: inout Count, b: Count) {
             a.dueDates += b.dueDates
             a.deadlines += b.deadlines
+            a.leftAlone += b.leftAlone
         }
 
         /// "3 due dates and 1 deadline".
@@ -41,37 +88,51 @@ enum DayAnchoring {
             return "\(due) and \(deadline)"
         }
 
-        var fields: [String: String] { ["dueDates": String(dueDates), "deadlines": String(deadlines)] }
+        /// "; 2 left as they were (1 not a midnight here, 1 a moment rather than a midnight)", or "" when none were.
+        var leftAloneSuffix: String {
+            leftAlone.total == 0 ? "" : "; \(leftAlone.total) left as \(leftAlone.total == 1 ? "it was" : "they were") (\(leftAlone))"
+        }
+
+        var fields: [String: String] {
+            ["dueDates": String(dueDates), "deadlines": String(deadlines)].merging(leftAlone.fields) { a, _ in a }
+        }
     }
 
     // MARK: - One task
 
-    /// Anchors `task`'s days in place (`DayAnchor.rewrite`: an old local midnight becomes its day's anchor; an anchor,
-    /// a moment, or a value this zone would show as another day stays as it is). Returns what changed.
+    /// Anchors `task`'s days in place (`DayAnchor.verdict`: this zone's midnight becomes its day's anchor; an anchor, a
+    /// moment, another zone's midnight, or a value this zone would show as another day stays exactly as it is). Returns
+    /// what changed and what was left.
     @discardableResult
     static func anchor(_ task: TaskItem, calendar: Calendar, enabled: Bool = isEnabled) -> Count {
-        var count = Count()
-        guard enabled else { return count }
-        if !task.hasDueTime, let due = task.dueDate, let anchored = DayAnchor.rewrite(due, calendar: calendar, enabled: enabled) {
-            task.dueDate = anchored
-            count.dueDates += 1
-        }
-        if let deadline = task.deadline, let anchored = DayAnchor.rewrite(deadline, calendar: calendar, enabled: enabled) {
-            task.deadline = anchored
-            count.deadlines += 1
-        }
-        return count
+        walk(task, calendar: calendar, enabled: enabled, apply: true)
     }
 
-    /// What `anchor` would change, without changing it.
+    /// What `anchor` would change and leave, without changing anything.
     static func pending(_ task: TaskItem, calendar: Calendar, enabled: Bool = isEnabled) -> Count {
+        walk(task, calendar: calendar, enabled: enabled, apply: false)
+    }
+
+    /// The one walk over a task's days: its due date when it has no time, and its deadline. Only an `.anchor` verdict
+    /// writes, so a value left alone is never assigned at all.
+    private static func walk(_ task: TaskItem, calendar: Calendar, enabled: Bool, apply: Bool) -> Count {
         var count = Count()
         guard enabled else { return count }
-        if !task.hasDueTime, let due = task.dueDate, DayAnchor.rewrite(due, calendar: calendar, enabled: enabled) != nil {
-            count.dueDates += 1
+        if !task.hasDueTime, let due = task.dueDate {
+            switch DayAnchor.verdict(due, calendar: calendar, enabled: enabled) {
+            case .anchor(let anchored):
+                if apply { task.dueDate = anchored }
+                count.dueDates += 1
+            case let verdict: count.leftAlone.note(verdict)
+            }
         }
-        if let deadline = task.deadline, DayAnchor.rewrite(deadline, calendar: calendar, enabled: enabled) != nil {
-            count.deadlines += 1
+        if let deadline = task.deadline {
+            switch DayAnchor.verdict(deadline, calendar: calendar, enabled: enabled) {
+            case .anchor(let anchored):
+                if apply { task.deadline = anchored }
+                count.deadlines += 1
+            case let verdict: count.leftAlone.note(verdict)
+            }
         }
         return count
     }
@@ -161,7 +222,14 @@ enum DayAnchoring {
         }
         guard pending.total > 0 else {
             defaults.set(firstRunVersion, forKey: key)
-            log.notice("First-run day pass: every day was already anchored")
+            if pending.leftAlone.total == 0 {
+                log.notice("First-run day pass: every day was already anchored")
+            } else {
+                log.notice("First-run day pass: nothing this device can anchor; \(pending.leftAlone.total) left as stored (\(pending.leftAlone.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public)")
+                var fields = pending.leftAlone.fields
+                fields["zone"] = calendar.timeZone.identifier
+                syncLog("Days on the first run of this build: none to anchor here\(pending.leftAloneSuffix)", .notice, fields)
+            }
             return .nothingToDo
         }
         let backup: URL
@@ -177,11 +245,11 @@ enum DayAnchoring {
         do {
             let count = try pass(in: context, calendar: calendar, enabled: enabled)
             defaults.set(firstRunVersion, forKey: key)
-            log.notice("First-run day pass rewrote \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public); backup \(backup.lastPathComponent, privacy: .public)")
+            log.notice("First-run day pass rewrote \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public); left \(count.leftAlone.total) as stored (\(count.leftAlone.description, privacy: .public)); backup \(backup.lastPathComponent, privacy: .public)")
             var fields = count.fields
             fields["zone"] = calendar.timeZone.identifier
             fields["backup"] = backup.lastPathComponent
-            syncLog("Days anchored on the first run of this build: \(count.description)", .notice, fields)
+            syncLog("Days anchored on the first run of this build: \(count.description)\(count.leftAloneSuffix)", .notice, fields)
             return .rewrote(count, backup: backup)
         } catch {
             context.rollback()
@@ -255,6 +323,9 @@ enum DayAnchoring {
             if count.total > 0 {
                 DayAnchoring.log.info("Save anchored \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public)")
             }
+            if count.leftAlone.total > 0 {
+                DayAnchoring.log.debug("Save left \(count.leftAlone.total) days as stored (\(count.leftAlone.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public)")
+            }
         }
     }
 
@@ -285,18 +356,31 @@ enum DayAnchoring {
         }
     }
 
-    /// The import pass itself: anchors, saves, logs (unified log `dates`, one sync-log line when anything changed).
+    /// The import pass itself: anchors, saves, logs (unified log `dates`, one sync-log line when anything changed; the
+    /// days it leaves as stored are in both, and alone in the unified log when nothing changed, as every import repeats
+    /// them).
+    ///
+    /// No backup, no pass, here too (brief 92): until this build's first-run pass has run on this store (behind its
+    /// backup), the import pass would be the first whole-store rewrite, without one, so it waits and rewrites nothing. The
+    /// save hook still anchors what each save writes; the next launch backs up and runs the first pass.
     @MainActor
     @discardableResult
     static func importPass(in context: ModelContext, calendar: Calendar = .current, enabled: Bool = isEnabled,
+                           defaults: UserDefaults = AppGroup.defaults, firstRunKey key: String = firstRunKey(),
                            syncLog: ProfileStore.Log = syncLog) -> Count? {
+        guard defaults.integer(forKey: key) >= firstRunVersion else {
+            if enabled { log.info("Import pass waits: this build's first-run day pass hasn't run on this store yet") }
+            return Count()
+        }
         do {
             let count = try pass(in: context, calendar: calendar, enabled: enabled)
             if count.total > 0 {
-                log.notice("Import pass anchored \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public)")
+                log.notice("Import pass anchored \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public); left \(count.leftAlone.total) as stored (\(count.leftAlone.description, privacy: .public))")
                 var fields = count.fields
                 fields["zone"] = calendar.timeZone.identifier
-                syncLog("Days from an older build anchored after an import: \(count.description)", .notice, fields)
+                syncLog("Days from an older build anchored after an import: \(count.description)\(count.leftAloneSuffix)", .notice, fields)
+            } else if count.leftAlone.total > 0 {
+                log.info("Import pass: nothing to anchor; \(count.leftAlone.total) days left as stored (\(count.leftAlone.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public)")
             }
             return count
         } catch {
