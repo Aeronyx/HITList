@@ -84,7 +84,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions with routines so far (brief 84, items 2 to 4).
-    static let lively = ["nod"]
+    static let lively = ["nod", "quill"]
 
     /// Each has at least three everyday routines of its own in each place, and one for rain, one for snow and a start
     /// at thunder; every routine is a few seconds, four to nine moves, and is drawn in every look it can play in.
@@ -140,19 +140,28 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(quill.field.awake.rest, "loaf", "lying on the Mac's field")
         XCTAssertEqual(quill.plus.awake.rest, "sit", "sitting up on the +")
         XCTAssertEqual(quill.field.asleep.rest, "curl")
-        XCTAssertEqual(quill.plus.asleep.rest, "curl")
+        XCTAssertEqual(quill.plus.asleep.rest, "drape", "on the +, curled with its hindquarters down the shoulder")
         // Awake by day: its eyes are open (the curl's are shut).
         for frame in ["loaf", "sit"] {
             XCTAssertTrue(quill.rows(frame)!.joined().contains("k"), "\(frame): eyes open")
         }
         XCTAssertFalse(quill.rows("curl")!.joined().contains("k"), "the curl: eyes shut")
+        XCTAssertFalse(quill.rows("drape")!.joined().contains("k"), "the drape: eyes shut")
         XCTAssertGreaterThan(quill.difference("curl", "loaf"), 40, "night is not its day pose")
-        // The flourish still stretches and turns: from each day pose and back to it, the other way round.
-        for place in CompanionPlace.allCases {
-            let ticks = quill.posture(place).flourish
-            XCTAssertTrue(ticks.contains { $0.frame == "stretchDeep" })
-            XCTAssertEqual(ticks.last, .init(frame: quill.posture(place).awake.rest, mirrored: true))
+        // The flourish still stretches: on the field it turns and settles the other way round; on the "+" it comes
+        // back the way it was, its hindquarters on the shoulder (brief 84).
+        XCTAssertTrue(quill.field.flourish.contains { $0.frame == "stretchDeep" })
+        XCTAssertEqual(quill.field.flourish.last, .init(frame: "loaf", mirrored: true))
+        XCTAssertTrue(quill.turns(.field))
+        XCTAssertTrue(quill.plus.flourish.contains { $0.frame == "stretchDeepPlus" })
+        XCTAssertEqual(quill.plus.flourish.last, .init(frame: "sit"))
+        XCTAssertFalse(quill.turns(.plus))
+        XCTAssertFalse(quill.plus.flourish.contains(where: \.mirrored))
+        // What lies over the "+"'s shoulder hangs below the edge there: the drape's hindquarters, the standing back feet.
+        for frame in ["drape", "standPlus", "stretchDeepPlus"] {
+            XCTAssertTrue(quill.rows(frame)![quill.seatRow...].joined().contains { $0 != "." }, frame)
         }
+        XCTAssertFalse(quill.rows("loaf")![quill.seatRow...].joined().contains { $0 != "." }, "on the field nothing hangs")
         // In the rain it holds its tail over its head; its tip still twitches there (drawn by hand).
         XCTAssertNotNil(quill.index["loafTip@loafRain"])
         XCTAssertNotNil(quill.index["sitTip@sitRain"])
