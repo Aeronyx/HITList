@@ -114,19 +114,45 @@ final class WeekdayListTests: XCTestCase {
         XCTAssertEqual(seen, [Fixed.date(2026, 10, 22), Fixed.date(2026, 10, 24), Fixed.date(2026, 10, 27), Fixed.date(2026, 10, 29)])
     }
 
-    /// For the supervisor (brief 98 builds this rule; `RecurrenceRule.swift` is brief 97's): an every-other-week
-    /// rule whose days straddle the calendar's week boundary steps wrong. With a Sunday-first week (US, as
-    /// `Fixed.calendar`) "every other sat and sun" from Sat Oct 24 goes to Sun Nov 1, then Sat Nov 7, Sun Nov
-    /// 15: the first weekend's Sunday is skipped and every Sunday falls in the off week, because the walk counts
-    /// calendar weeks from the due date's own week. A Monday-first week gets it right. Every week (interval 1)
-    /// and days inside one week (tue and thu) are unaffected.
+    /// Found by brief 98, fixed at the merge: an every-other-week rule whose days straddle the calendar's week
+    /// boundary stepped wrong. With a Sunday-first week "every other sat and sun" from Sat Oct 24 went to Sun
+    /// Nov 1, then Sat Nov 7: the walk counted calendar weeks, so the weekend's Sunday fell in the off week.
     func testEveryOtherWeekendStepsByTheWeekendNotTheCalendarWeek() {
         let r = parser.parse("every other sat and sun")
         XCTAssertEqual(r.recurrence?.encoded, "weekly;2;1,7")
         assertDate(r.dueDate, 2026, 10, 24)
-        let cal = Fixed.calendar
-        XCTExpectFailure("RecurrenceRule's weekly walk counts calendar weeks (brief 97 owns RecurrenceRule.swift)")
-        assertDate(r.recurrence?.nextOccurrence(after: r.dueDate!, calendar: cal), 2026, 10, 25)
+        // The rule's week begins after its longest rest (Saturday here), not on the calendar's first day, so the
+        // weekend stays whole under a Sunday-first calendar and a Monday-first one alike.
+        for firstWeekday in 1...7 {
+            var cal = Fixed.calendar
+            cal.firstWeekday = firstWeekday
+            var date = r.dueDate!
+            for (month, day) in [(10, 25), (11, 7), (11, 8), (11, 21), (11, 22)] {
+                date = r.recurrence!.nextOccurrence(after: date, calendar: cal)
+                assertDate(date, 2026, month, day)
+            }
+        }
+    }
+
+    func testARepeatsOwnWeekBeginsAfterItsLongestRest() {
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [1, 7], calendarFirst: 1), 7, "sat and sun: from Saturday")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [1, 2], calendarFirst: 2), 1, "sun and mon: from Sunday")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [3, 5], calendarFirst: 1), 3, "tue and thu: from Tuesday")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [2, 6], calendarFirst: 1), 6, "fri and mon: a long weekend")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [2, 4, 6], calendarFirst: 1), 2, "mon, wed, fri: from Monday")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [4], calendarFirst: 2), 2, "one day: the calendar's week")
+        XCTAssertEqual(RecurrenceRule.cycleStart(of: [1, 2, 3, 4, 5, 6, 7], calendarFirst: 2), 2, "no longest rest")
+        // Days inside one calendar week step as they always did, whichever day the week starts on.
+        let rule = RecurrenceRule(frequency: .weekly, interval: 2, weekdays: [3, 5])
+        for firstWeekday in [1, 2] {
+            var cal = Fixed.calendar
+            cal.firstWeekday = firstWeekday
+            var date = cal.date(from: DateComponents(year: 2026, month: 10, day: 20))!
+            for (month, day) in [(10, 22), (11, 3), (11, 5), (11, 17)] {
+                date = rule.nextOccurrence(after: date, calendar: cal)
+                assertDate(date, 2026, month, day)
+            }
+        }
     }
 
     // MARK: What stays as it is today
