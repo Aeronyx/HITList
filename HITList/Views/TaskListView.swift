@@ -397,12 +397,12 @@ struct TaskListView: View {
         // Every list's name once, as the system large title (brief 61): a Group's too, with no header under it.
         .navigationBarTitleDisplayMode(.large)
         #endif
-        // The filter-lines icon holds the view options; the "…" beside it (iPhone, iPad) holds this
-        // screen's actions, and on iPhone Settings and the sync dot too (`screenChrome`).
+        // The filter-lines icon holds the view options and, under a divider, this screen's actions; Settings is
+        // the control beside it (`screenChrome`).
         .screenChrome {
             ViewOptionsMenu {
                 if selection != .completed {
-                    Toggle("Show completed", isOn: $showCompleted)
+                    Toggle(isOn: $showCompleted) { Label("Show completed", systemImage: "checkmark.circle") }
                         .keyboardShortcut("c", modifiers: [.command, .shift])
                 }
                 if selection == .today {

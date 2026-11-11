@@ -116,13 +116,15 @@ struct UpcomingView: View {
         .navigationTitle("Upcoming")
         .screenChrome {
             ViewOptionsMenu {
-                Toggle("Show overdue", isOn: $overdueExpanded)
+                Toggle(isOn: $overdueExpanded) { Label("Show overdue", systemImage: "exclamationmark.circle") }
                 // The board always shows seven days.
                 if !showsBoard {
-                    Picker("Days shown", selection: $dayCount) {
+                    Picker(selection: $dayCount) {
                         Text("2 weeks").tag(14)
                         Text("1 month").tag(30)
                         Text("2 months").tag(60)
+                    } label: {
+                        Label("Days shown", systemImage: "calendar.day.timeline.leading")
                     }
                 }
             }
