@@ -41,6 +41,13 @@ sweep, and accessibility.
   iPad and the Mac and it becomes a task. Type a date, p1 or #Group in the title as in quick add; the address and
   the text you chose go in the notes. What you share is saved the moment you press Add and becomes a task the next
   time HITList opens (at once on a Mac where HITList is running).
+- Accessibility. VoiceOver hears a task as one stop (its title, then its second line, with completing as an
+  action), the iPhone's tabs as a tab bar, a Flipboard switch as off or on instead of red or green, a chip by what it
+  is ("Date: Tomorrow", "Priority: P1"), an open card alone, and the Undo toast when it appears. Under Differentiate
+  Without Colour a priority is written as well as coloured. Small iPhone controls take a press in the space around
+  them. On the Mac the keyboard reaches the editor, and the toolbar's sync bolt takes a click anywhere on it (it
+  used to answer only on a 4 pt strip). The system's accessibility audit now runs on every main screen with the UI
+  tests.
 - From the screen-by-screen sweep: Settings rows are all one height on the Mac; "+ Add task" lines up under the
   tasks on the Mac and iPad; an empty Completed says "Nothing completed yet"; the Mac sidebar's Settings lines up
   with the rows above it; Upcoming's "Overdue" is the same red as Today's.
