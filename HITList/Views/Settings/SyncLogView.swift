@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Settings → iCloud → Sync log (brief 25, item 5): the sync log's entries newest first, errors in red,
-/// a filter (All / Errors), "Copy log", and "Share…" (iPhone) or "Save…" (Mac) of the full text. The
+/// a segmented filter (All / Errors), "Copy log", and "Share…" (iPhone) or "Save…" (Mac) of the full text. The
 /// iPhone shows it as a page inside the Settings sheet (`SyncLogPage`); the Mac page shows it inline in its iCloud
 /// section, fewer rows at a time. New entries appear as they are recorded.
 struct SyncLogView: View {
@@ -68,13 +68,13 @@ struct SyncLogView: View {
         #endif
     }
 
+    /// The filter is the design system's segmented control and the actions are capsules (brief 99: the filter's two
+    /// chips looked like the buttons beside them).
     private var controls: some View {
         HITChipRow(spacing: HITSpacing.s) {
-            HITChip("All \(entries.count)", isSelected: filter == .all, action: { setFilter(.all) })
-                .accessibilityIdentifier("sync-log-filter-all")
-            HITChip("Errors \(errorCount)", systemImage: "exclamationmark.triangle.fill", tint: HITColor.danger,
-                    isSelected: filter == .errors, action: { setFilter(.errors) })
-                .accessibilityIdentifier("sync-log-filter-errors")
+            HITSegmented(selection: $filter, segments: Self.segments(total: entries.count, errors: errorCount), size: .small)
+                .fixedSize()
+                .accessibilityIdentifier("sync-log-filter")
             Button(copied ? "Copied" : "Copy log", action: copy)
                 .buttonStyle(HITButtonStyle(.secondary, size: .small))
                 .accessibilityIdentifier("sync-log-copy")
@@ -90,8 +90,10 @@ struct SyncLogView: View {
         }
     }
 
-    private func setFilter(_ new: Filter) {
-        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { filter = new }
+    /// "All 12" and "Errors 0", the errors' triangle in red.
+    static func segments(total: Int, errors: Int) -> [HITSegment<Filter>] {
+        [HITSegment(.all, "All \(total)"),
+         HITSegment(.errors, "Errors \(errors)", systemImage: "exclamationmark.triangle.fill", tint: HITColor.danger)]
     }
 
     private func reload() {

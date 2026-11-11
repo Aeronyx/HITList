@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import SwiftData
 import CloudKit
 @testable import HITList
@@ -701,6 +702,24 @@ final class SyncLogTextTests: XCTestCase {
         let first = try XCTUnwrap(lines.firstIndex { $0.hasSuffix("first") })
         let second = try XCTUnwrap(lines.firstIndex { $0.hasSuffix("second") })
         XCTAssertLessThan(first, second, "sorted by time, whatever order the lines were written in")
+    }
+
+    // MARK: The view's filter (brief 99)
+
+    /// "All" and "Errors" are one segmented control (the design system's `HITSegmented`), not two chips that looked like
+    /// the Copy log and Save…/Share… capsules beside them; each segment carries its count.
+    @MainActor
+    func testTheFilterIsOneSegmentedControlWithItsCounts() {
+        let segments = SyncLogView.segments(total: 12, errors: 0)
+        XCTAssertEqual(segments.map(\.value), [.all, .errors])
+        XCTAssertEqual(segments.map(\.title), ["All 12", "Errors 0"])
+        XCTAssertEqual(segments.last?.systemImage, "exclamationmark.triangle.fill")
+        // Small: the whole control is a small button's 28 pt, so it sits level with Copy log and Save…/Share….
+        XCTAssertEqual(HITSegmented<SyncLogView.Filter>.segmentHeight(.small) + 2 * HITSegmented<SyncLogView.Filter>.trackInset,
+                       HITButtonStyle.Size.small.height)
+        XCTAssertEqual(HITSegmented<SyncLogView.Filter>.segmentHeight(.regular), 28, "the regular control is unchanged")
+        let view = SyncLogView(log: SyncLog(url: nil, mirrorToOSLog: false)).frame(width: 560, height: 400).preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: view).cgImage)
     }
 }
 
