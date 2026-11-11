@@ -22,7 +22,13 @@ enum PickerKind: Hashable, CaseIterable {
     /// Every card fits well inside the 560 pt panel.
     var width: CGFloat {
         switch self {
+        // iPhone and iPad: Custom… opens in the date card's place, and its Daily · Weekly · Monthly · Yearly need
+        // 360 at the phone's control size (brief 97).
+        #if os(macOS)
         case .date, .deadline: 320
+        #else
+        case .date, .deadline: 360
+        #endif
         case .reminder: 300
         case .location: 300
         case .priority, .group, .labels: 280
@@ -109,7 +115,9 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
     let card: () -> Card
 
     func body(content: Content) -> some View {
-        content.popover(isPresented: $isPresented) {
+        content
+            .background(PickerChipReveal(isPresented: isPresented))
+            .popover(isPresented: $isPresented) {
             card()
                 .frame(width: kind.width)
                 .background(Theme.surface)
@@ -123,6 +131,34 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 
 private struct PickerOverlayModifier: ViewModifier {
     func body(content: Content) -> some View { content }
+}
+
+/// Brings a chip into sight as its card opens, as on the Mac (brief 65): the quick-add card's Repeat chip, revealed by
+/// "+" → Repeat at the end of the sideways row, opened its popover off the screen's edge (brief 97, iPhone 17).
+private struct PickerChipReveal: UIViewRepresentable {
+    let isPresented: Bool
+
+    func makeUIView(context: Context) -> PickerChipRevealView { PickerChipRevealView() }
+
+    func updateUIView(_ view: PickerChipRevealView, context: Context) {
+        guard isPresented != view.wasPresented else { return }
+        view.wasPresented = isPresented
+        if isPresented { view.reveal() }
+    }
+}
+
+final class PickerChipRevealView: UIView {
+    var wasPresented = false
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { false }
+
+    /// Scrolls the nearest enclosing scroll view just far enough to show the whole chip, with a little room.
+    func reveal() {
+        var view = superview
+        while let candidate = view, !(candidate is UIScrollView) { view = candidate.superview }
+        guard let scroll = view as? UIScrollView, window != nil else { return }
+        scroll.scrollRectToVisible(convert(bounds, to: scroll).insetBy(dx: -PickerPlacement.margin, dy: 0), animated: false)
+    }
 }
 #endif
 
