@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.1
+## 0.9.1 — build 22, 2026-11-10
 
 Widgets, everything that moves, two pixel companions, calendar events and a sync bolt that keeps still: George's
 notes after 0.9.0 (21), in five sessions at once. Versions bump by 0.0.1 per release again.

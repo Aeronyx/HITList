@@ -15,8 +15,8 @@ settings:
     # The version and build of everything in the app: the app, its widget extension (whose version must equal the
     # app's) and the helpers inherit these. scripts/release.sh reads and bumps exactly one line of each, so no target
     # sets its own.
-    CURRENT_PROJECT_VERSION: 21
-    MARKETING_VERSION: "0.9.0"
+    CURRENT_PROJECT_VERSION: 22
+    MARKETING_VERSION: "0.9.1"
 packages:
   HITListCore:
     path: HITListCore
@@ -70,8 +70,8 @@ targets:
       path: HITList/Info.plist
       properties:
         CFBundleDisplayName: HITList
-        CFBundleShortVersionString: "0.9.0"
-        CFBundleVersion: "21"
+        CFBundleShortVersionString: "0.9.1"
+        CFBundleVersion: "22"
         LSApplicationCategoryType: public.app-category.productivity
         UIBackgroundModes: [remote-notification]
         UILaunchScreen: {}
