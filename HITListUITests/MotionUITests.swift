@@ -247,25 +247,62 @@ final class MotionUITests: XCTestCase {
             mark("flip back")
             tile.tap()
             pause(1.5)
+        }
+        let add = element("addSwitchTile")
+        if add.waitForExistence(timeout: 3) {
+            mark("switch card")
+            add.tap()
+            waitForKeyboard()
+            pause(1.5)
+            app.typeText("Water the ferns")
+            pause(0.8)
+            mark("save switch")
+            element("switchSave").tap()
+            pause(2.5)
+            mark("switch card close")
+            add.tap()
+            pause(1.5)
+            element("switchClose").tap()
+            pause(1.5)
+        }
+        if tile.exists {
             mark("switch menu")
             tile.press(forDuration: 1.0)
             pause(1.5)
             app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05)).tap()
             pause(1.2)
         }
-        let add = element("addSwitchTile")
-        if add.waitForExistence(timeout: 3) {
-            mark("switch card")
-            add.tap()
-            pause(1.5)
-            app.typeText("Water the ferns")
-            pause(0.8)
-            mark("save switch")
-            element("switchSave").tap()
+    }
+
+    /// The screens at rest, for overlays against another build (brief 75: nothing may move at rest). Pin the status
+    /// bar first (`xcrun simctl status_bar <udid> override --time 9:41`).
+    func testRestScreens() {
+        for name in ["today", "inbox", "upcoming", "flipboard"] {
+            app.buttons["tab-\(name)"].tap()
+            pause(2)
+            still(name)
+        }
+        app.buttons["tab-today"].tap()
+        pause(1.5)
+        let row = app.staticTexts.matching(NSPredicate(format: "label == %@", "Buy groceries")).firstMatch
+        if row.waitForExistence(timeout: 5) {
+            row.tap()
+            pause(2.5)
+            still("editor")
+            app.buttons["Close"].firstMatch.tap()
             pause(2)
         }
-        mark("switch card close")
-        if add.exists { add.tap(); pause(1.5); element("switchClose").tap(); pause(1.5) }
+        element("quickAddButton").tap()
+        waitForKeyboard()
+        pause(2.5)
+        still("quick-add")
+    }
+
+    private func still(_ name: String) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
     }
 
     // MARK: Helpers
