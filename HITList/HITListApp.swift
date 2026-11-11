@@ -48,6 +48,7 @@ struct HITListApp: App {
         NotificationScheduler.bootstrap(container: container)
         ClaudeConnector.start(container: container)  // brief 43: the Mac's Claude connector, if allowed
         WidgetSnapshotWriter.start(container: container) // brief 74: the widgets' snapshot, after every change
+        WidgetCompletionCenter.start(container: container) // brief 81: completes what the widgets ask, once iCloud can have it
     }
 
     var body: some Scene {
