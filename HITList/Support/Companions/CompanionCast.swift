@@ -3,14 +3,14 @@ import Foundation
 extension CompanionCharacter {
     /// Every companion drawn so far.
     static let all: [CompanionCharacter] = [CompanionCharacter.nod, CompanionCharacter.quill, CompanionCharacter.hush,
-                                            CompanionCharacter.pip]
+                                            CompanionCharacter.posy]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }
 
-/// One companion per colour theme (brief 79), and only that one shows. Slate has Nod (the default), Midnight has
-/// Quill, Nord has Hush, Rosé has Pip; a theme whose companion isn't drawn yet has Nod. There are no points, unlocks
-/// or collecting of any kind: the theme alone decides. Debug: `-companion quill` picks one whatever the theme.
+/// One companion per colour theme (briefs 79 and 85), and only that one shows. Slate has Nod (the default), Midnight
+/// has Quill, Nord has Hush, Rosé has Posy; a theme whose companion isn't drawn yet has Nod. There are no points,
+/// unlocks or collecting of any kind: the theme alone decides. Debug: `-companion quill` picks one whatever the theme.
 enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
@@ -18,8 +18,8 @@ enum CompanionCast {
         "midnight": "quill",
         // Its own ears keep it warm, and its nose is cold: Nord's ice-blue accent (brief 79).
         "nord": "hush",
-        // A pinecone of a creature with a rose-pink nose, for the theme named after a rose and a pine (brief 79).
-        "rose": "pip",
+        // A piglet with wings too small for it and a snout in the theme's rose pink, for George's favourite (brief 85).
+        "rose": "posy",
     ]
 
     /// The companion for the theme `themeID`.
