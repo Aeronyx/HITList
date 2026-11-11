@@ -42,6 +42,8 @@ struct HITField: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(isFocused ? Theme.accent : Theme.secondaryText)
+                    // VoiceOver stopped on it ("Search") before the field itself (brief 94).
+                    .accessibilityHidden(true)
             }
             TextField(text: $text, axis: axis) {
                 Text(placeholder).foregroundStyle(Theme.secondaryText)
