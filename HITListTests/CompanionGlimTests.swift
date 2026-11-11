@@ -2,10 +2,11 @@ import XCTest
 import SwiftUI
 @testable import HITList
 
-/// Brief 89: Glim, Tokyo Night's companion. A small dark mouse whose tail ends in a lantern-fruit: its light is its
-/// one warm detail and the source of the flickers nobody else has; its routines are its own; its light goes out in
-/// the flourish and only its eyes show; nothing it rests on floats over the "+"'s curved shoulder. No test here reads
-/// the wall clock: every date is fixed.
+/// Briefs 89 and 91: Glim, Tokyo Night's companion. A small dark mouse whose tail ends in a lantern-fruit: its light
+/// is its one warm detail and the source of the flickers nobody else has; its routines are its own; its light goes out
+/// in the flourish and only its eyes show; the weather shows on it (a drop off its lantern, snow piling on its head
+/// and shaken off, its light turned down on a hot day) and nothing is drawn in the air round it; nothing it rests on
+/// floats over the "+"'s curved shoulder. No test here reads the wall clock: every date is fixed.
 @MainActor
 final class CompanionGlimTests: XCTestCase {
     private let glim = CompanionCharacter.glim
@@ -44,11 +45,14 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertGreaterThan(warmPixels("sleepDream"), ember, "a dream brightens it")
     }
 
-    /// Its flickers are a blink and its light flickering; everything else plays inside its routines.
+    /// Its flickers are a blink and its light flickering, and one for each of rain and heat (a drop off its lantern,
+    /// a bead of sweat); everything else plays inside its routines.
     func testItsFlickersAreABlinkAndItsLight() throws {
         for place in CompanionPlace.allCases {
             let mode = glim.posture(place).awake
-            XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name }, ["blink", "flicker"], "\(place)")
+            XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name }, ["blink", "flicker", "drop", "sweat"], "\(place)")
+            let skies = mode.gestures.filter(\.flicker).map { $0.sky?.rawValue ?? "every sky" }
+            XCTAssertEqual(skies, ["every sky", "every sky", "rain", "heat"], "\(place)")
             XCTAssertGreaterThanOrEqual(mode.gestures.count, 5, "\(place): five gestures or more")
         }
         // The flicker changes only the lantern's own warm pixels: the light dims, nothing else moves.
@@ -73,8 +77,9 @@ final class CompanionGlimTests: XCTestCase {
             let everyday = mode.routines.filter { $0.sky == nil }.map(\.name)
             XCTAssertEqual(everyday, ["swing", "checkLight", "warmPaws", "wash", "sniffAir"], "\(place)")
             XCTAssertEqual(mode.routines.filter { $0.sky == .rain }.map(\.name), ["drip"])
-            XCTAssertEqual(mode.routines.filter { $0.sky == .snow }.map(\.name), ["melt"])
+            XCTAssertEqual(mode.routines.filter { $0.sky == .snow }.map(\.name), ["melt", "shakeOff"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .storm }.map(\.name), ["thunder"])
+            XCTAssertEqual(mode.routines.filter { $0.sky == .heat }.map(\.name), ["shade"])
             for routine in mode.routines {
                 let seconds = glim.duration(of: routine, mode: mode)
                 XCTAssertTrue((3...7).contains(seconds), "\(routine.name): \(seconds) s")
@@ -142,26 +147,82 @@ final class CompanionGlimTests: XCTestCase {
                                        act: CompanionAct(kind: .gesture(ear), start: start))
         let earPose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: snowStage)
         XCTAssertEqual(earPose.frame, glim.index["ear@snow"])
+        // The rain's own flicker, a drop gathering under the lantern it holds, is drawn whole.
+        let drop = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "drop" })
+        let dropStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .rain),
+                                       act: CompanionAct(kind: .gesture(drop), start: start), sky: .rain)
+        let dropPose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: dropStage)
+        XCTAssertEqual(dropPose.frame, glim.index["rainDrip1"])
+    }
+
+    /// Brief 91: the weather is told by Glim, not drawn round it. Every still it shows is one shape (nothing floating
+    /// beside it); its flickers add at most the single drop it lets fall. In snow the pile grows on its head and ears,
+    /// never on its warm lantern, keeps the line where it sits, and a shake-off from the deepest pile sends it off.
+    /// On a hot day its light is turned right down and its ears droop.
+    func testTheWeatherIsOnIt() throws {
+        let mode = glim.field.awake
+        let asleep = glim.field.asleep
+        for still in mode.stills + asleep.stills {
+            XCTAssertEqual(try pieces(still).count, 1, "\(still): one shape, nothing in the air round it")
+        }
+        for gesture in mode.gestures where gesture.sky != nil {
+            for tick in gesture.ticks {
+                let parts = try pieces(tick.frame)
+                XCTAssertLessThanOrEqual(parts.count, 2, "\(gesture.name) \(tick.frame)")
+                XCTAssertLessThanOrEqual(parts.dropFirst().map(\.count).reduce(0, +), 1, "\(tick.frame): one drop at most")
+            }
+        }
+        // The pile: a dusting, a cap, a heap, each with more snow on its head; the lantern's pixels as by day.
+        XCTAssertEqual(mode.snowDeep, ["snowCap", "snowHeap"])
+        XCTAssertEqual(asleep.snowDeep, ["sleepSnowCap", "sleepSnowHeap"])
+        let depths = [try XCTUnwrap(mode.snow)] + mode.snowDeep
+        var snowAbove: [Int] = []
+        for name in depths {
+            let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
+            snowAbove.append(rows[0..<7].joined().filter { $0 == "l" }.count)
+            let rest = try XCTUnwrap(glim.rows("rest")).map(Array.init)
+            for y in 13..<glim.height {
+                XCTAssertEqual(String(rows[y][15...]), String(rest[y][15...]), "\(name) row \(y): no snow on the lantern")
+            }
+        }
+        XCTAssertEqual(snowAbove, snowAbove.sorted(), "the pile only grows")
+        XCTAssertEqual(Set(snowAbove).count, snowAbove.count, "each depth adds snow")
+        let shakeOff = try XCTUnwrap(mode.routines.first { $0.name == "shakeOff" })
+        XCTAssertTrue(shakeOff.shakesOff)
+        XCTAssertTrue(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 2), "from the heap")
+        XCTAssertFalse(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 1), "only from the deepest pile")
+        // A hot day: no warm pixel left (its light turned right down), its ears lower than by day.
+        let heat = try XCTUnwrap(mode.heat)
+        XCTAssertFalse(try XCTUnwrap(glim.rows(heat)).joined().contains("w"), "its light turned right down")
+        XCTAssertGreaterThan(try topRow(heat), try topRow("rest"), "its ears droop")
+        XCTAssertEqual(mode.gestures.filter { $0.sky == .heat && $0.flicker }.map(\.name), ["sweat"])
     }
 
     /// Nothing floats (brief 84, rule 6): on the "+" (a capsule whose top curves down at both ends) every pixel it
-    /// rests on lies on the flat of the button, less than a device pixel at 3x above it, in every still pose and in
-    /// every pose of its routines; only its tail and lantern hang over the edge. On the "+" it sits a pixel further in.
+    /// rests on lies on the flat of the button, the device row under it at 3x at least half covered, in every still
+    /// pose and in every pose of its routines; only its tail and lantern hang over the edge. The iPhone's glass "+"
+    /// curves like SwiftUI's continuous capsule, some 8 pt before a circle would (measured in the simulator at 3x:
+    /// a circle's geometry passed an inset of 1 that left a device row of background under the held lantern), so the
+    /// check takes whichever of the two falls away first, and on the "+" Glim sits three pixels further in.
     func testNothingItRestsOnFloatsOverThePlusShoulder() throws {
-        XCTAssertEqual(glim.plus.inset, 1)
+        XCTAssertEqual(glim.plus.inset, 3)
         XCTAssertEqual(glim.field.inset, 0)
         let size = FloatingAddButton.size
-        let radius: CGFloat = size.height / 2
+        let shapes = [Capsule(style: .continuous), Capsule(style: .circular)].map {
+            $0.path(in: CGRect(origin: .zero, size: size))
+        }
         let offset = CompanionPerch.offset(glim, spot: .addButton)
         let spriteWidth: CGFloat = CGFloat(glim.width) * CompanionCharacter.pointsPerPixel
         let left: CGFloat = size.width - spriteWidth + offset.width
         let mode = glim.plus.awake
-        var frames: Set<String> = [mode.rest, glim.plus.asleep.rest]
-        if let rain = mode.rain { frames.insert(rain) }
-        if let snow = mode.snow { frames.insert(snow) }
-        if let snow = glim.plus.asleep.snow { frames.insert(snow) }
+        // Every still it may show (rain, snow and its pile, heat; asleep too), every routine's frames and the weather's
+        // own flickers.
+        var frames = Set(mode.stills + glim.plus.asleep.stills)
         for routine in mode.routines {
             for entry in mode.ticks(of: routine) { frames.insert(entry.tick.frame) }
+        }
+        for gesture in mode.gestures where gesture.sky != nil {
+            for tick in gesture.ticks { frames.insert(tick.frame) }
         }
         for name in frames.sorted() {
             let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
@@ -169,11 +230,16 @@ final class CompanionGlimTests: XCTestCase {
                 let opaque = (0..<glim.height).filter { rows[$0][x] != CompanionInk.clear }
                 // It rests in this column when its lowest pixel is on the seat line and nothing hangs below it.
                 guard let lowest = opaque.last, lowest == glim.seatRow - 1 else { continue }
+                // Its last device pixel at 3x on each side, by the middle of that device pixel.
                 let from: CGFloat = left + CGFloat(x) * CompanionCharacter.pointsPerPixel
-                let to: CGFloat = from + CompanionCharacter.pointsPerPixel
-                let drop = max(capsuleDrop(at: from, width: size.width, radius: radius),
-                               capsuleDrop(at: to, width: size.width, radius: radius))
-                XCTAssertLessThan(drop, 1.0 / 3.0, "\(name) column \(x): \(drop) pt of background under it")
+                let first: CGFloat = from + 1.0 / 6.0
+                let last: CGFloat = from + CompanionCharacter.pointsPerPixel - 1.0 / 6.0
+                var drop: CGFloat = 0
+                for path in shapes {
+                    drop = max(drop, topEdge(of: path, at: first, height: size.height))
+                    drop = max(drop, topEdge(of: path, at: last, height: size.height))
+                }
+                XCTAssertLessThan(drop, 1.0 / 6.0, "\(name) column \(x): \(drop) pt of background under it")
             }
         }
         // By day only the tail and the lantern are below the seat line: nothing of the mouse sinks into the button.
@@ -213,24 +279,54 @@ final class CompanionGlimTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// The separate shapes a frame is made of (4-connected opaque pixels), the biggest first.
+    private func pieces(_ frame: String) throws -> [[(Int, Int)]] {
+        let rows = try XCTUnwrap(glim.rows(frame), frame).map(Array.init)
+        var seen = Set<Int>()
+        var out: [[(Int, Int)]] = []
+        for y in 0..<glim.height {
+            for x in 0..<glim.width where rows[y][x] != CompanionInk.clear && !seen.contains(y * glim.width + x) {
+                var piece: [(Int, Int)] = []
+                var stack = [(x, y)]
+                seen.insert(y * glim.width + x)
+                while let (px, py) = stack.popLast() {
+                    piece.append((px, py))
+                    for (nx, ny) in [(px + 1, py), (px - 1, py), (px, py + 1), (px, py - 1)] {
+                        guard (0..<glim.width).contains(nx), (0..<glim.height).contains(ny) else { continue }
+                        let key: Int = ny * glim.width + nx
+                        guard rows[ny][nx] != CompanionInk.clear, !seen.contains(key) else { continue }
+                        seen.insert(key)
+                        stack.append((nx, ny))
+                    }
+                }
+                out.append(piece)
+            }
+        }
+        return out.sorted { $0.count > $1.count }
+    }
+
+    /// The first row with anything drawn in it.
+    private func topRow(_ frame: String) throws -> Int {
+        let rows = try XCTUnwrap(glim.rows(frame), frame)
+        return try XCTUnwrap(rows.firstIndex { $0.contains { $0 != CompanionInk.clear } })
+    }
+
     private func warmPixels(_ frame: String) -> Int {
         (glim.rows(frame) ?? []).joined().filter { $0 == "w" }.count
     }
 
-    /// How far below the capsule's flat top its top edge is at `x` (from its left edge), in points.
-    private func capsuleDrop(at x: CGFloat, width: CGFloat, radius: CGFloat) -> CGFloat {
-        let rightCentre: CGFloat = width - radius
-        let dx: CGFloat
-        if x > rightCentre {
-            dx = x - rightCentre
-        } else if x < radius {
-            dx = radius - x
-        } else {
-            return 0
+    /// How far below the shape's top its top edge is at `x`, in points: the first point inside it going down,
+    /// to a hundredth of a point.
+    private func topEdge(of path: Path, at x: CGFloat, height: CGFloat) -> CGFloat {
+        var outside: CGFloat = 0
+        var inside: CGFloat = height / 2
+        guard path.contains(CGPoint(x: x, y: inside)) else { return height }
+        if path.contains(CGPoint(x: x, y: outside)) { return 0 }
+        while inside - outside > 0.01 {
+            let mid: CGFloat = (inside + outside) / 2
+            if path.contains(CGPoint(x: x, y: mid)) { inside = mid } else { outside = mid }
         }
-        guard dx < radius else { return radius }
-        let squared: CGFloat = radius * radius - dx * dx
-        return radius - squared.squareRoot()
+        return inside
     }
 
     private struct Pixels {
