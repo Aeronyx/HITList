@@ -10,8 +10,11 @@ struct CompanionInks: Equatable {
     /// How far the dark tone and the glow lean into the background.
     static let darkMix = 0.52
     static let glowMix = 0.5
-    /// How opaque the veil is (brief 101): the accent at this, so the window or the field shows through Phase's hem.
-    static let veilOpacity = 0.4
+    /// The veil (brief 101): the accent dimmed `veilDusk` toward the background, drawn at `veilOpacity`. Over the "+"
+    /// (the accent) that comes to the accent dimmed 0.25, the tone a body a quarter see-through (Phase's) has over the
+    /// window, so its hem reads on the button with the button showing through; over the window it is fainter.
+    static let veilDusk = 0.42
+    static let veilOpacity = 0.6
 
     init(palette: ThemePalette) {
         let h = palette.hex
@@ -23,8 +26,8 @@ struct CompanionInks: Equatable {
             (.accent, h.accent),
             (.warm, h.bolt),
             (.glow, Self.mix(h.bolt, h.background, Self.glowMix)),
-            // The accent's colour; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
-            (.veil, h.accent),
+            // The accent dimmed toward the background; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
+            (.veil, Self.mix(h.accent, h.background, Self.veilDusk)),
         ]
         hex = Dictionary(uniqueKeysWithValues: pairs)
         colors = Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, Color(hex: $0.1)) })

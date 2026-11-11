@@ -2,15 +2,16 @@ import Foundation
 
 // Generated from Phase's design sheets (brief 101); edit the frames here, `CompanionSpriteTests` and
 // `CompanionPhaseTests` check them.
-// Inks: . clear  k ink  l light  a accent  v veil (see `CompanionInk`). Rows 17 to 19 are inside the "+" or the
-// field: only the veil is drawn there.
+// Inks: . clear  k ink  l light  a accent  v veil (see `CompanionInk`). Rows 17 to 19 lie over the "+" or the
+// field: only the see-through veil is drawn there, its hem's points on the last row.
 
 extension CompanionCharacter {
     /// Phase: Mocha's companion (brief 101). A small ghost drawn in the "+"'s own colour (the theme's accent, Mocha's
-    /// mauve; the one companion drawn mostly in it), a little see-through all over (`seeThrough`), that lives half
-    /// inside what it sits on: it rises out of the "+" (or the Mac's search field) to its waist, the rest of it inside,
-    /// in the see-through veil that vanishes into the button. A head that is nearly all of it, big low eyes set wide
-    /// with a glint each, a tiny mouth, a sheen on its crown, and a soft point that curls back like a wisp of smoke.
+    /// mauve; the one companion drawn mostly in it), a little see-through all over (`seeThrough`), passing through
+    /// what it sits on: its body rises out of the "+" (or the Mac's search field), and its hem, scalloped into four soft
+    /// points, lies over the top of the button's face in the see-through veil, the "+" showing through it. A head that
+    /// is nearly all of it, big low eyes set wide with a glint each, a tiny mouth, a sheen on its crown, and a soft
+    /// point that curls back like a wisp of smoke.
     /// Mischief is its nature: a sly look from under its lids, a grin, its tongue out, a wink, the point flicked.
     /// Little loops (`phaseRoutines`): it sinks to its eyes and peeks both ways; it vanishes for a blink and comes
     /// back grinning; it side-eyes; it twirls its point. Now and then: it rises right out of the "+" so its wavy hem
@@ -50,7 +51,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "blink", rows: [
                 "....................",
@@ -72,7 +73,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "half", rows: [
                 "....................",
@@ -94,7 +95,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sly", rows: [
                 "....................",
@@ -116,7 +117,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaalaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "grin", rows: [
                 "....................",
@@ -138,7 +139,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "tongue", rows: [
                 "....................",
@@ -160,7 +161,7 @@ extension CompanionCharacter {
                 "...aaaaaaallaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "wink", rows: [
                 "....................",
@@ -182,7 +183,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "winkTongue", rows: [
                 "....................",
@@ -204,7 +205,7 @@ extension CompanionCharacter {
                 "...aaaaaaallaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "lookL", rows: [
                 "....................",
@@ -226,7 +227,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "lookR", rows: [
                 "....................",
@@ -248,7 +249,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "slyL", rows: [
                 "....................",
@@ -270,7 +271,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaalaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "slyR", rows: [
                 "....................",
@@ -292,7 +293,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaalaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "flick", rows: [
                 "....................",
@@ -314,7 +315,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "curl", rows: [
                 "....................",
@@ -336,7 +337,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "curl2", rows: [
                 "....................",
@@ -358,7 +359,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sink1", rows: [
                 "....................",
@@ -380,7 +381,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "peek", rows: [
                 "....................",
@@ -402,7 +403,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "peekL", rows: [
                 "....................",
@@ -424,7 +425,7 @@ extension CompanionCharacter {
                 "...aakkaaaaaakkaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "peekR", rows: [
                 "....................",
@@ -446,7 +447,7 @@ extension CompanionCharacter {
                 "...aaaakkaaaaaakkaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "peekHalf", rows: [
                 "....................",
@@ -468,7 +469,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sink3", rows: [
                 "....................",
@@ -490,7 +491,7 @@ extension CompanionCharacter {
                 "...aakkkkaaaakkkkaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "fin", rows: [
                 "....................",
@@ -512,7 +513,7 @@ extension CompanionCharacter {
                 "........aaaaaaa.....",
                 "......vvvvvvvvvv....",
                 ".....vvvvvvvvvvvv...",
-                "....vvv.vvvv.vvvv...",
+                "....vv..vv..vv..vv..",
             ]),
             Frame(name: "finL1", rows: [
                 "....................",
@@ -534,7 +535,7 @@ extension CompanionCharacter {
                 ".......aaaaaaa......",
                 ".....vvvvvvvvvv.....",
                 "....vvvvvvvvvvvv....",
-                "...vvv.vvvv.vvvv....",
+                "...vv..vv..vv..vv...",
             ]),
             Frame(name: "finL2", rows: [
                 "....................",
@@ -556,7 +557,7 @@ extension CompanionCharacter {
                 "......aaaaaaa.......",
                 "....vvvvvvvvvv......",
                 "...vvvvvvvvvvvv.....",
-                "..vvv.vvvv.vvvv.....",
+                "..vv..vv..vv..vv....",
             ]),
             Frame(name: "finL3", rows: [
                 "....................",
@@ -578,7 +579,7 @@ extension CompanionCharacter {
                 ".....aaaaaaa........",
                 "...vvvvvvvvvv.......",
                 "..vvvvvvvvvvvv......",
-                ".vvv.vvvv.vvvv......",
+                ".vv..vv..vv..vv.....",
             ]),
             Frame(name: "alongPeek", rows: [
                 "....................",
@@ -600,7 +601,7 @@ extension CompanionCharacter {
                 "aakkaaaaaakkaaaa....",
                 "vvvvvvvvvvvvvvvv....",
                 "vvvvvvvvvvvvvvvv....",
-                "vvvv.vvvv.vvvv.v....",
+                ".vv..vv..vv..vvv....",
             ]),
             Frame(name: "along", rows: [
                 "....................",
@@ -622,7 +623,7 @@ extension CompanionCharacter {
                 "aaaaaaakkaaaaaaa....",
                 "vvvvvvvvvvvvvvvv....",
                 "vvvvvvvvvvvvvvvv....",
-                "vvvv.vvvv.vvvv.v....",
+                ".vv..vv..vv..vvv....",
             ]),
             Frame(name: "alongR", rows: [
                 "....................",
@@ -644,7 +645,7 @@ extension CompanionCharacter {
                 "aaaaaaaaalaaaaaa....",
                 "vvvvvvvvvvvvvvvv....",
                 "vvvvvvvvvvvvvvvv....",
-                "vvvv.vvvv.vvvv.v....",
+                ".vv..vv..vv..vvv....",
             ]),
             Frame(name: "alongSink", rows: [
                 "....................",
@@ -666,7 +667,7 @@ extension CompanionCharacter {
                 "aakkkkaaaakkkkaa....",
                 "vvvvvvvvvvvvvvvv....",
                 "vvvvvvvvvvvvvvvv....",
-                "vvvv.vvvv.vvvv.v....",
+                ".vv..vv..vv..vvv....",
             ]),
             Frame(name: "rise1", rows: [
                 "....................",
@@ -687,8 +688,8 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
             ]),
             Frame(name: "rise2", rows: [
                 "....................",
@@ -708,8 +709,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
             ]),
             Frame(name: "risen", rows: [
@@ -729,8 +730,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
                 "....................",
             ]),
@@ -751,8 +752,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
                 "....................",
             ]),
@@ -773,8 +774,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
                 "....................",
             ]),
@@ -798,7 +799,7 @@ extension CompanionCharacter {
                 "...aaklkkaaaaklkkaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "boo", rows: [
                 "....................",
@@ -818,8 +819,8 @@ extension CompanionCharacter {
                 "...aaaaaakkkkaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
             ]),
             Frame(name: "giggle", rows: [
@@ -842,7 +843,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "giggle2", rows: [
                 "....................",
@@ -864,7 +865,7 @@ extension CompanionCharacter {
                 "...aaaaaakaakaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "fadeHalf", rows: [
                 "....................",
@@ -886,7 +887,7 @@ extension CompanionCharacter {
                 "...avavavavavavavav.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "gone", rows: [
                 "....................",
@@ -908,7 +909,7 @@ extension CompanionCharacter {
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "goneL", rows: [
                 "....................",
@@ -930,7 +931,7 @@ extension CompanionCharacter {
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "goneR", rows: [
                 "....................",
@@ -952,7 +953,7 @@ extension CompanionCharacter {
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "fadeBack", rows: [
                 "....................",
@@ -974,7 +975,7 @@ extension CompanionCharacter {
                 "...avavavakkvavavav.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rain", rows: [
                 "....................",
@@ -996,7 +997,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainFall1", rows: [
                 "....................",
@@ -1018,7 +1019,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainFall2", rows: [
                 "....................",
@@ -1040,7 +1041,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainFall3", rows: [
                 "....................",
@@ -1062,7 +1063,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainFall4", rows: [
                 "....................",
@@ -1084,7 +1085,7 @@ extension CompanionCharacter {
                 "...aaaaaalaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainUp", rows: [
                 "....................",
@@ -1106,7 +1107,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainDropHigh", rows: [
                 "....................",
@@ -1128,7 +1129,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainDropIn", rows: [
                 "....................",
@@ -1150,7 +1151,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainDropThrough", rows: [
                 "....................",
@@ -1172,7 +1173,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainDropOut", rows: [
                 "....................",
@@ -1194,7 +1195,7 @@ extension CompanionCharacter {
                 "...aaaaaaaalaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "rainPout", rows: [
                 "....................",
@@ -1216,7 +1217,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "stormStart", rows: [
                 "....................",
@@ -1238,7 +1239,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "stormJump", rows: [
                 ".............aa.....",
@@ -1257,8 +1258,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...aaaaaaaaaaaaaaaa.",
                 "...avavavavavavavav.",
-                "...vvvv.vvvv.vvvv.v.",
-                "....vv...vv...vv....",
+                "....vv..vv..vv..vvv.",
+                "....................",
                 "....................",
                 "....................",
             ]),
@@ -1282,7 +1283,7 @@ extension CompanionCharacter {
                 "...aakkkkaaaakkkkaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "stormPeek", rows: [
                 "....................",
@@ -1304,7 +1305,7 @@ extension CompanionCharacter {
                 "...aakkaaaaaakkaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "stormPeekR", rows: [
                 "....................",
@@ -1326,7 +1327,7 @@ extension CompanionCharacter {
                 "...aaaakkaaaaaakkaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "stormRise", rows: [
                 "....................",
@@ -1348,7 +1349,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snow", rows: [
                 "....................",
@@ -1370,7 +1371,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowCap", rows: [
                 "....................",
@@ -1392,7 +1393,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowHeap", rows: [
                 "....................",
@@ -1414,7 +1415,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heapUp", rows: [
                 "....................",
@@ -1436,7 +1437,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heapFade", rows: [
                 "....................",
@@ -1458,7 +1459,7 @@ extension CompanionCharacter {
                 "...avavavavavavavav.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heapFall1", rows: [
                 "....................",
@@ -1480,7 +1481,7 @@ extension CompanionCharacter {
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heapFall2", rows: [
                 "....................",
@@ -1502,7 +1503,7 @@ extension CompanionCharacter {
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heapFall3", rows: [
                 "....................",
@@ -1524,7 +1525,7 @@ extension CompanionCharacter {
                 "...vvvvvvlvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowBack", rows: [
                 "....................",
@@ -1546,7 +1547,7 @@ extension CompanionCharacter {
                 "...avavavakkvavavav.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowGrin", rows: [
                 "....................",
@@ -1568,7 +1569,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heat", rows: [
                 "....................",
@@ -1590,7 +1591,7 @@ extension CompanionCharacter {
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvv.vvvv.vvvv.vv",
+                "....vv..vv..vv..vvvv",
             ]),
             Frame(name: "heatDrip1", rows: [
                 "....................",
@@ -1612,7 +1613,7 @@ extension CompanionCharacter {
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvv.vvvv.vvvv.vv",
+                "....vv..vv..vv..vvvv",
             ]),
             Frame(name: "heatDrip2", rows: [
                 "....................",
@@ -1634,7 +1635,7 @@ extension CompanionCharacter {
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvv.vvvv.vvvv.vv",
+                "....vv..vv..vv..vvvv",
             ]),
             Frame(name: "heatSink1", rows: [
                 "....................",
@@ -1656,7 +1657,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "..vvvvv.vvvv.vvvv.vv",
+                "..v.vv..vv..vv..vvvv",
             ]),
             Frame(name: "heatCool", rows: [
                 "....................",
@@ -1678,7 +1679,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "heatSigh", rows: [
                 "....................",
@@ -1700,7 +1701,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleep", rows: [
                 "....................",
@@ -1722,7 +1723,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepIn", rows: [
                 "....................",
@@ -1744,7 +1745,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepTip", rows: [
                 "....................",
@@ -1766,7 +1767,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepSink", rows: [
                 "....................",
@@ -1788,7 +1789,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepPeek", rows: [
                 "....................",
@@ -1810,7 +1811,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepPeekOpen", rows: [
                 "....................",
@@ -1832,7 +1833,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepSnow", rows: [
                 "....................",
@@ -1854,7 +1855,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepIn@sleepSnow", rows: [
                 "....................",
@@ -1876,7 +1877,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepSink@sleepSnow", rows: [
                 "....................",
@@ -1898,7 +1899,7 @@ extension CompanionCharacter {
                 "...aaakkaaaaaakkaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "sleepTip@sleepSnow", rows: [
                 "....................",
@@ -1920,7 +1921,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "flick@heat", rows: [
                 "....................",
@@ -1942,7 +1943,7 @@ extension CompanionCharacter {
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvv.vvvv.vvvv.vv",
+                "....vv..vv..vv..vvvv",
             ]),
             Frame(name: "snowUp", rows: [
                 "....................",
@@ -1964,7 +1965,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowTongue", rows: [
                 "....................",
@@ -1986,7 +1987,7 @@ extension CompanionCharacter {
                 "...aaaaaaallaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowTongueFlake", rows: [
                 "....................",
@@ -2008,7 +2009,7 @@ extension CompanionCharacter {
                 "...aaaaaaallaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
             Frame(name: "snowGulp", rows: [
                 "....................",
@@ -2030,7 +2031,7 @@ extension CompanionCharacter {
                 "...aaaaaaaaaaaaaaaa.",
                 "...vvvvvvvvvvvvvvvv.",
                 "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "....vv..vv..vv..vvv.",
             ]),
         ],
         gestureFPS: 8,
