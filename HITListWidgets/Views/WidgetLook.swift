@@ -18,6 +18,8 @@ enum WidgetLook {
     static let rowMetaLine: CGFloat = 15
     static let ringSize: CGFloat = 14
     static let ringWeight: Font.Weight = .light
+    static let pill = HITType.callout                     // 12
+    static let pillHeight: CGFloat = 20
     #else
     static let header = HITType.calloutBold               // 16 bold
     static let bigCount = HITType.title1                  // 28 bold
@@ -29,7 +31,11 @@ enum WidgetLook {
     static let rowMetaLine: CGFloat = 15
     static let ringSize: CGFloat = 16
     static let ringWeight: Font.Weight = .regular
+    static let pill = HITType.footnote                    // 13
+    static let pillHeight: CGFloat = 22
     #endif
+    /// A Flipboard pill's widest; a longer name truncates.
+    static let pillMaxWidth: CGFloat = 150
     /// Ring to title.
     static let ringGap: CGFloat = 8
     /// Between a row's title and its second line.
