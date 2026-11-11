@@ -114,6 +114,56 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
+    /// Brief 84, "nothing floats": on the "+" (a capsule whose top curves away under a companion's right side),
+    /// every column of a still pose that rests on the edge line reaches down to the curve, in every look. Over the
+    /// flat and the start of the curve no more than half a point of background shows under it (under 2 device pixels
+    /// at 3x, inside the edge's own antialiasing); where the shoulder is steep, a 2 pt pixel stair leaves at most a
+    /// point at its corner. On the field (flat) every resting column sits on the line by construction.
+    func testNothingFloatsOnThePlus() {
+        let size = FloatingAddButton.size
+        let radius: CGFloat = size.height / 2
+        func top(_ x: CGFloat) -> CGFloat {
+            let left: CGFloat = radius
+            let right: CGFloat = size.width - radius
+            guard x < left || x > right else { return 0 }
+            let centre: CGFloat = x < left ? left : right
+            let dx: CGFloat = x - centre
+            let under: CGFloat = max(0, radius * radius - dx * dx)
+            return radius - under.squareRoot()
+        }
+        let p = CompanionCharacter.pointsPerPixel
+        for character in CompanionCharacter.all where Self.lively.contains(character.id) {
+            let offset = CompanionPerch.offset(character, spot: .addButton)
+            let spriteWidth: CGFloat = CGFloat(character.width) * p
+            let boxLeft: CGFloat = size.width - spriteWidth + offset.width
+            let posture = character.plus
+            var stills: [String] = []
+            for mode in [posture.awake, posture.asleep] {
+                stills.append(mode.rest)
+                if let rain = mode.rain { stills.append(rain) }
+                if let snow = mode.snow { stills.append(snow) }
+            }
+            for name in stills {
+                let rows = character.rows(name)!.map(Array.init)
+                let seat = character.seatRow
+                for c in 0..<character.width where rows[seat - 1][c] != CompanionInk.clear {
+                    var y = seat - 1
+                    while y + 1 < rows.count, rows[y + 1][c] != CompanionInk.clear { y += 1 }
+                    let bottom: CGFloat = CGFloat(y + 1 - seat) * p
+                    let x0: CGFloat = boxLeft + CGFloat(c) * p
+                    var lowest: CGFloat = 0
+                    for k in 0...8 {
+                        let step: CGFloat = CGFloat(k) * p / 8
+                        lowest = max(lowest, top(x0 + step))
+                    }
+                    let gap: CGFloat = lowest - bottom
+                    let allowed: CGFloat = x0 + p <= 60 ? 0.56 : 1.01
+                    XCTAssertLessThanOrEqual(gap, allowed, "\(character.id) \(name) column \(c): \(gap) pt of background under it")
+                }
+            }
+        }
+    }
+
     func testNodsNightAndWeather() {
         let nod = CompanionCharacter.nod
         XCTAssertEqual(nod.field.asleep.rest, "sleep")

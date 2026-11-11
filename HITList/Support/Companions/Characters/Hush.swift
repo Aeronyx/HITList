@@ -1341,7 +1341,9 @@ extension CompanionCharacter {
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekLook", 5), ("sleepPeek", 2)))),
             flourish:
-                Self.ticks(("rest", 1), ("flake1", 1), ("flake2", 1), ("flake3", 2), ("flake4", 1), ("crossEyed", 2), ("ah1", 1), ("ah2", 1), ("sneeze", 1), ("earsUp", 2), ("earsHalf", 1), ("earsOut", 1), ("rest", 1), ("blink", 1), ("rest", 1)))
+                Self.ticks(("rest", 1), ("flake1", 1), ("flake2", 1), ("flake3", 2), ("flake4", 1), ("crossEyed", 2), ("ah1", 1), ("ah2", 1), ("sneeze", 1), ("earsUp", 2), ("earsHalf", 1), ("earsOut", 1), ("rest", 1), ("blink", 1), ("rest", 1)),
+            // Its feet and its curled-up ball sit on the flat of the "+", not over the shoulder where its top curves away.
+            inset: 2)
     )
 
     /// Hush's routines (brief 84), the same in both places. Its ears are who it is: it swings them out one after the
