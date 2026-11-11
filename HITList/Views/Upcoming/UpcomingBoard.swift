@@ -46,9 +46,21 @@ struct UpcomingBoard: View {
 
     static let columnWidth: CGFloat = 270
     static let columnSpacing: CGFloat = 14
+    /// The columns' row starts this far in from the board's edges.
+    static let boardInset: CGFloat = HITSpacing.l
+    /// A column's sides, inside its drop outline.
+    static let columnInset: CGFloat = 4
+    /// The cards' inset inside a column.
+    static let cardInset: CGFloat = 2
     /// A card inside a column (a task, or the inline add card): the column less its 4 pt sides and the
     /// cards' 2 pt inset.
-    static let cardWidth: CGFloat = columnWidth - 2 * 4 - 2 * 2
+    static let cardWidth: CGFloat = columnWidth - 2 * columnInset - 2 * cardInset
+    /// The cards' left edge from the board's (22 pt), which the month's name and the day headers share (brief 99: they
+    /// sat at 16 and 26, three edges within 10 pt).
+    static let cardEdge: CGFloat = boardInset + columnInset + cardInset
+    /// The month header's leading padding, and a day header's inside its column: both put their text on `cardEdge`.
+    static let monthLeading: CGFloat = cardEdge
+    static let dayHeaderInset: CGFloat = cardInset
 
     private var today: Date { calendar.startOfDay(for: now) }
 
@@ -123,7 +135,8 @@ struct UpcomingBoard: View {
                 }
             }
         }
-        .padding(.horizontal, HITSpacing.l)
+        .padding(.leading, Self.monthLeading)
+        .padding(.trailing, Self.boardInset)
         .padding(.top, HITSpacing.m)
         .padding(.bottom, HITSpacing.s)
     }
@@ -157,7 +170,7 @@ struct UpcomingBoard: View {
                         .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
-            .padding(.horizontal, HITSpacing.l)
+            .padding(.horizontal, Self.boardInset)
             .frame(maxHeight: .infinity, alignment: .top)
         }
         .scrollIndicators(.automatic)
@@ -253,7 +266,7 @@ struct UpcomingBoard: View {
                         }
                     }
                     .padding(.vertical, HITSpacing.s)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, Self.cardInset)
                 }
                 .scrollIndicators(.never)
                 // The column scrolls so its card is in view when it opens and after each task it adds.
@@ -265,7 +278,7 @@ struct UpcomingBoard: View {
                 }
             }
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, Self.columnInset)
         .background {
             RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
                 .fill(Theme.accent.opacity(targeted ? 0.10 : 0))
@@ -316,7 +329,8 @@ struct UpcomingBoard: View {
             }
         }
         .font(HITType.listSectionHeader)
-        .padding(.horizontal, 6)
+        // On the cards' edges, left and right (the count and Reschedule end where the cards do).
+        .padding(.horizontal, Self.dayHeaderInset)
         .padding(.top, HITSpacing.s)
         .padding(.bottom, HITSpacing.s + 2)
         .accessibilityElement(children: .combine)

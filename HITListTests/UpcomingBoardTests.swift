@@ -328,4 +328,18 @@ final class UpcomingBoardTests: XCTestCase {
         }
     }
     #endif
+
+    // MARK: One left edge (brief 99)
+
+    /// The month's name, the day headers and the cards share the cards' left edge, 22 pt in from the board's (they sat at
+    /// 16, 26 and 22). Measured on the Debug Mac app's pixels before and after; these are the paddings that draw it.
+    func testTheMonthTheDayHeadersAndTheCardsShareOneLeftEdge() {
+        XCTAssertEqual(UpcomingBoard.cardEdge, 22)
+        XCTAssertEqual(UpcomingBoard.boardInset + UpcomingBoard.columnInset + UpcomingBoard.cardInset, UpcomingBoard.cardEdge,
+                       "a card: the board's inset, the column's, the card's")
+        XCTAssertEqual(UpcomingBoard.monthLeading, UpcomingBoard.cardEdge, "the month's name")
+        XCTAssertEqual(UpcomingBoard.boardInset + UpcomingBoard.columnInset + UpcomingBoard.dayHeaderInset,
+                       UpcomingBoard.cardEdge, "a day's header")
+        XCTAssertEqual(UpcomingBoard.cardWidth, UpcomingBoard.columnWidth - 12)
+    }
 }
