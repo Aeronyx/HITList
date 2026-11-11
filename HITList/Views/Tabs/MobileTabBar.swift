@@ -179,6 +179,9 @@ struct MobileTabBar: View {
         if axis == .vertical {
             VStack(spacing: 0) { buttons }
                 .background { pill }
+                // VoiceOver: "Inbox, tab, 1 of 4" (brief 94).
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isTabBar)
                 .padding(.vertical, IslandMetrics.pillInset)
                 .frame(width: IslandMetrics.sideWidth, height: IslandMetrics.sideHeight)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
@@ -188,6 +191,9 @@ struct MobileTabBar: View {
         } else {
             HStack(spacing: 0) { buttons }
                 .background { pill }
+                // VoiceOver: "Inbox, tab, 1 of 4" (brief 94).
+                .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isTabBar)
                 .padding(.horizontal, IslandMetrics.pillInset)
                 .frame(height: IslandMetrics.height)
                 .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
