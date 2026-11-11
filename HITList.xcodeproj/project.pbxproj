@@ -190,6 +190,7 @@
 		5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC4D93807A35FCE5D6C76B9A /* WeekStripView.swift */; };
 		5D712F189C629EFE086A2FDA /* TaskEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */; };
 		5DAA5C7FC987D7BDBE50BDBA /* WeatherDemoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D33301AFC5A1DD9651A8298 /* WeatherDemoTests.swift */; };
+		5DF15A3C12EC8DD5DF109718 /* RepeatPickerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCB8433A7D2C8CEE6F362F61 /* RepeatPickerUITests.swift */; };
 		5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */; };
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
 		6051A713FB5D533FBE49DFB3 /* CompanionGlimTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */; };
@@ -926,6 +927,7 @@
 		CBA41DFD36958529902FFC2C /* DataSettingsGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSettingsGroups.swift; sourceTree = "<group>"; };
 		CBCF524064D04B8A6FAF40DA /* SidebarSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSearch.swift; sourceTree = "<group>"; };
 		CC94AAC22806CB55BB755C84 /* PopoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutController.swift; sourceTree = "<group>"; };
+		CCB8433A7D2C8CEE6F362F61 /* RepeatPickerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatPickerUITests.swift; sourceTree = "<group>"; };
 		CD07B7B5284AF9BC93E97D20 /* Mallow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mallow.swift; sourceTree = "<group>"; };
 		CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITToggleStyle.swift; sourceTree = "<group>"; };
 		CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdog.swift; sourceTree = "<group>"; };
@@ -1445,6 +1447,7 @@
 				298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */,
 				36F862657166AD5243F378BC /* QASweepUITests.swift */,
 				5A323EAA03324E42F9B45926 /* RepeatPhraseUITests.swift */,
+				CCB8433A7D2C8CEE6F362F61 /* RepeatPickerUITests.swift */,
 				EE874329A609F401C90AEE96 /* ScreenTourUITests.swift */,
 				DACD23C3CE315DB27A101BC8 /* SettingsTidyUITests.swift */,
 				DCB76AF4D5676AE6F706E206 /* ShareExtensionUITests.swift */,
@@ -2223,6 +2226,7 @@
 				A20591E19F9667344A905D92 /* ProfileMenuUITests.swift in Sources */,
 				BDD9A27F2F93953F44792BA3 /* QASweepUITests.swift in Sources */,
 				F8D402AC7AD510F09615293C /* RepeatPhraseUITests.swift in Sources */,
+				5DF15A3C12EC8DD5DF109718 /* RepeatPickerUITests.swift in Sources */,
 				0AC460CA744488B40EE66866 /* ScreenTourUITests.swift in Sources */,
 				E2FAA51761481A222F151CE0 /* SettingsTidyUITests.swift in Sources */,
 				84FF1E12F4EAB33D5B5CCB6E /* ShareExtensionUITests.swift in Sources */,
