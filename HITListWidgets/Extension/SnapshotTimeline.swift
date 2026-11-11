@@ -10,12 +10,15 @@ enum WidgetSnapshotStore {
 
     /// The real store's file; in a Debug build made with `HITLIST_WIDGET_SUFFIX=<name>` (project.yml), that side store's,
     /// so a session's demo week shows in real widgets without touching George's.
-    static var fileName: String {
+    static var fileName: String { WidgetSnapshot.fileName(suffix: suffix) }
+
+    /// The side store this Debug build reads (`HITLIST_WIDGET_SUFFIX`); nil, the real store's, in Release. The outbox
+    /// beside the snapshot follows it (`WidgetIntentRoad`).
+    static var suffix: String? {
         #if DEBUG
-        let suffix = Bundle.main.object(forInfoDictionaryKey: "HITListWidgetSuffix") as? String
-        return WidgetSnapshot.fileName(suffix: suffix)
+        return Bundle.main.object(forInfoDictionaryKey: "HITListWidgetSuffix") as? String
         #else
-        return WidgetSnapshot.mainFileName
+        return nil
         #endif
     }
 
