@@ -26,9 +26,16 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var looseSwitchIDs: [UUID]
     /// The Switchboards in the Flipboard's order, each with its switches in its order.
     public var switchboards: [Switchboard]
+    /// Taps from the widgets the app has picked up and not yet finished (brief 81): each row as the widget showed it,
+    /// drawn checked in place of the task until iCloud has the completion. Nil when there are none (and in files from
+    /// builds before 0.9.2).
+    public var pending: [Pending]?
+    /// The sync state the app was in when it wrote the file (brief 81); nil in files from builds before 0.9.2.
+    public var sync: Sync?
 
     public init(format: Int = WidgetSnapshot.currentFormat, writtenAt: Date, themeID: String, weekStart: Int,
-                tasks: [Task], looseSwitchIDs: [UUID], switchboards: [Switchboard]) {
+                tasks: [Task], looseSwitchIDs: [UUID], switchboards: [Switchboard], pending: [Pending] = [],
+                sync: Sync? = nil) {
         self.format = format
         self.writtenAt = writtenAt
         self.themeID = themeID
@@ -36,6 +43,43 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         self.tasks = tasks
         self.looseSwitchIDs = looseSwitchIDs
         self.switchboards = switchboards
+        self.pending = pending.isEmpty ? nil : pending
+        self.sync = sync
+    }
+
+    /// A tap the app has picked up (brief 81, `WidgetLedger.pending`).
+    public struct Pending: Codable, Equatable, Sendable {
+        public var requestID: UUID
+        public var askedAt: Date
+        /// When the app completed (or flipped) it in the store; nil while it waits to (a store that hasn't imported
+        /// since a reset).
+        public var appliedAt: Date?
+        /// The row as the widget showed it before the tap.
+        public var task: Task
+
+        public var taskID: UUID { task.id }
+
+        public init(requestID: UUID, askedAt: Date, appliedAt: Date?, task: Task) {
+            self.requestID = requestID
+            self.askedAt = askedAt
+            self.appliedAt = appliedAt
+            self.task = task
+        }
+    }
+
+    /// The sync state behind the file, as coarse as the widgets need it: whether a pending row can expect iCloud soon.
+    public enum Sync: String, Codable, Sendable {
+        /// Synced or syncing: an export follows a save within seconds.
+        case fine
+        /// Offline, stuck, retrying or failing: a pending row says "Waiting for iCloud".
+        case waiting
+        /// iCloud off, signed out or restricted: nothing waits for iCloud.
+        case localOnly
+
+        /// A state a later build adds reads as `fine`, so the file still reads.
+        public init(from decoder: Decoder) throws {
+            self = Sync(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .fine
+        }
     }
 
     /// One open task: what a widget row shows and what the list rules ask of it.
