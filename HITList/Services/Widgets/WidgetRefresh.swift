@@ -48,8 +48,7 @@ enum WidgetRefresh {
         scheduler.qualityOfService = .utility
         scheduler.schedule { completion in
             Task { @MainActor in
-                await settle(waitForMerge: false)
-                log.notice("widget refresh (Mac activity) settled")
+                await settle(waitForMerge: false, reason: "Mac background activity")
                 completion(.finished)
             }
         }
@@ -60,10 +59,11 @@ enum WidgetRefresh {
     /// After an import, a push or a refresh: the import's changes merged into the store's context (a moment after the
     /// event ends), the outbox drained (a tap completed elsewhere resolves; an export may have finished), the snapshot
     /// written now and the widgets reloaded.
-    static func settle(waitForMerge: Bool = true) async {
+    static func settle(waitForMerge: Bool = true, reason: String = "push") async {
         if waitForMerge { try? await Task.sleep(for: .seconds(1)) }
         WidgetCompletionCenter.shared?.drain()
-        WidgetSnapshotWriter.shared.writeNow()
+        let wrote = WidgetSnapshotWriter.shared.writeNow()
+        log.notice("widgets settled after a \(reason, privacy: .public): snapshot \(wrote ? "written" : "unchanged", privacy: .public) (pid \(ProcessInfo.processInfo.processIdentifier))")
     }
 
     #if os(iOS)
@@ -87,7 +87,7 @@ enum WidgetRefresh {
         if ModelContainerFactory.isCloudKitEnabled {
             heard = "import \(await monitor.nextImport(after: started, within: importWait))"
         }
-        await settle()
+        await settle(reason: "background refresh")
         schedule()
         monitor.write(.note, "Background refresh for the widgets after \(SyncLogFormat.duration(Date().timeIntervalSince(started))): \(heard)")
     }

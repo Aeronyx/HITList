@@ -113,9 +113,10 @@ final class WidgetSnapshotWriter {
         debounce.schedule { [weak self] in self?.writeNow() }
     }
 
-    /// Builds the snapshot and writes it if anything changed.
-    func writeNow(now: Date = Date()) {
-        guard let container, !ModelContainerFactory.isRunningInMemory else { return }
+    /// Builds the snapshot and writes it if anything changed; true when it wrote.
+    @discardableResult
+    func writeNow(now: Date = Date()) -> Bool {
+        guard let container, !ModelContainerFactory.isRunningInMemory else { return false }
         do {
             // Brief 81: the widgets' taps the app is finishing, and the sync state they wait on.
             let snapshot = try WidgetSnapshotBuilder.build(from: container.mainContext, shared: SharedRows.shared.open,
@@ -123,9 +124,10 @@ final class WidgetSnapshotWriter {
                                                            weekStart: Preferences.weekStartWeekday(), now: now,
                                                            pending: WidgetCompletionCenter.shared?.pending ?? [],
                                                            sync: CloudSyncMonitor.shared.widgetSync)
-            try write(snapshot)
+            return try write(snapshot)
         } catch {
             Self.log.error("widget snapshot not written: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
