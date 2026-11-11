@@ -66,6 +66,8 @@ targets:
         # iOS form. macOS uses the team-prefixed UC8N98H3RT.com.trammells.hitlist in HITList-macOS.entitlements
         # (see AppGroup.swift for why).
         com.apple.security.application-groups: [group.com.trammells.hitlist]
+        # The sky for the companions (brief 80): Apple's weather, off until switched on in Settings → Extras.
+        com.apple.developer.weatherkit: true
     info:
       path: HITList/Info.plist
       properties:
@@ -87,6 +89,10 @@ targets:
         CKSharingSupported: true
         # Calendar events beside the tasks (brief 77), off until switched on in Settings → General. Read-only.
         NSCalendarsFullAccessUsageDescription: "HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device."
+        # The sky for the companions (brief 80), off until switched on in Settings → Extras → Weather. While in use, and
+        # approximate only: the prompt offers no precise location.
+        NSLocationWhenInUseUsageDescription: "HITList uses your approximate location only to ask Apple Weather whether it is raining or snowing, so your companion can dress for it. It is never stored or shared."
+        NSLocationDefaultAccuracyReduced: true
         # The widgets' links into the app (brief 74, Services/DeepLinks): hitlist://task/<id>, hitlist://today,
         # hitlist://upcoming, hitlist://flipboard.
         CFBundleURLTypes:
