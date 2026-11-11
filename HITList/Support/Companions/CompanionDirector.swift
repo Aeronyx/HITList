@@ -339,7 +339,9 @@ final class CompanionDirector {
     /// Takes the showing time since the budget began to be spent off it, and saves.
     private func settleBudget(now: Date) {
         guard let since = spendingSince else { return }
-        budget = max(0, budget - max(0, now.timeIntervalSince(since)))
+        let spent: TimeInterval = max(0, now.timeIntervalSince(since))
+        let left: TimeInterval = budget - spent
+        budget = max(0, left)
         spendingSince = nil
         save()
     }

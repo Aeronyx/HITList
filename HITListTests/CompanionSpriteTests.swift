@@ -150,10 +150,15 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertFalse(pip.rows("sleep")!.joined().contains("k"), "asleep it is just a pinecone")
         XCTAssertEqual(pip.rows("sleep")!.joined().filter { $0 == "a" }.count, 1, "the tip of its nose")
         // In the rain its scales close: no highlight left on them.
-        let rest = pip.rows("rest")!.map(Array.init), rain = pip.rows("rain")!.map(Array.init)
-        let scaleLights = { (rows: [[Character]]) in (0..<11).reduce(0) { n, y in n + rows[y].filter { $0 == "l" }.count } }
-        XCTAssertGreaterThan(scaleLights(rest), 4)
-        XCTAssertEqual(scaleLights(rain), 0)
+        func scaleLights(_ frame: String) -> Int {
+            var count = 0
+            for row in pip.rows(frame)!.prefix(11) {
+                for c in row where c == "l" { count += 1 }
+            }
+            return count
+        }
+        XCTAssertGreaterThan(scaleLights("rest"), 4)
+        XCTAssertEqual(scaleLights("rain"), 0)
         // Its flourish lets a winged seed fall past the edge in front of it.
         XCTAssertTrue(pip.field.flourish.contains { $0.frame == "seed6" })
         XCTAssertTrue(pip.rows("seed6")![pip.seatRow...].joined().contains("l"), "the seed below the edge")
@@ -161,11 +166,12 @@ final class CompanionSpriteTests: XCTestCase {
 
     func testTheChecksCatchBadData() {
         typealias C = CompanionCharacter
-        let mode = C.Mode(rest: "rest", rain: "wet", gestures: [.init(name: "slow", ticks: C.ticks(("rest", 9))),
-                                                                 .init(name: "cut", ticks: C.ticks(("cut", 1)))],
-                          answer: .init(name: "gone", ticks: C.ticks(("gone", 1))))
-        let posture = C.Posture(awake: mode, asleep: .init(rest: "rest", gestures: [], answer: mode.answer),
-                                flourish: C.ticks(("rest", 3), ("gone", 1)))
+        let slow = C.Gesture(name: "slow", ticks: C.ticks(("rest", 9)))
+        let cut = C.Gesture(name: "cut", ticks: C.ticks(("cut", 1)))
+        let gone = C.Gesture(name: "gone", ticks: C.ticks(("gone", 1)))
+        let mode = C.Mode(rest: "rest", rain: "wet", gestures: [slow, cut], answer: gone)
+        let asleep = C.Mode(rest: "rest", gestures: [], answer: gone)
+        let posture = C.Posture(awake: mode, asleep: asleep, flourish: C.ticks(("rest", 3), ("gone", 1)))
         let bad = C(id: "bad", name: "Bad", width: 3, height: 2, seatRow: 3,
                     frames: [.init(name: "rest", rows: ["mmm", "mxm"]), .init(name: "two", rows: ["mm", "mmm"]),
                              .init(name: "wet", rows: ["lll", "mmm"]), .init(name: "cut", rows: ["kmm", "mmm"])],
@@ -173,7 +179,7 @@ final class CompanionSpriteTests: XCTestCase {
         let problems = bad.problems.joined(separator: "\n")
         for expected in ["unknown ink x", "2 wide, not 3", "no frame gone", "doesn't end on rest", "not under a second",
                          "no gestures", "flourish at 12.0 fps", "not 12…24", "colours", "seat row 3",
-                         "cut changes pixels that wet changes"] {
+                         "cut changes pixels that wet changes", "bad.two: drawn nowhere"] {
             XCTAssertTrue(problems.contains(expected), "missing: \(expected)\n\(problems)")
         }
     }
@@ -231,7 +237,9 @@ final class CompanionSpriteTests: XCTestCase {
                         let c = rows[y][x]
                         let px = pixels.at(x * 6 + 3, y * 6 + 3)
                         if c == CompanionInk.clear { XCTAssertEqual(px.alpha, 0) } else {
-                            XCTAssertTrue(close(px.rgb, CompanionInks.rgb(inks.hex[CompanionInk(rawValue: c)!]!)), "\(character.id) \(x),\(y)")
+                            let ink: CompanionInk = CompanionInk(rawValue: c)!
+                            let want: [Int] = CompanionInks.rgb(inks.hex[ink]!)
+                            XCTAssertTrue(close(px.rgb, want), "\(character.id) \(x),\(y)")
                         }
                     }
                 }
@@ -257,11 +265,13 @@ final class CompanionSpriteTests: XCTestCase {
         let seat = nod.seatRow
         let rest = nod.index[nod.field.awake.rest]!
         let shape = CompanionCharacter.tapShape(runs: nod.drawn[rest], width: nod.width, mirrored: false, belowRow: seat)
-        // Its face takes a tap; its dangling feet, which hang over the field, don't.
-        XCTAssertTrue(shape.contains(CGPoint(x: 9 * 2 + 1, y: 11 * 2 + 1)))
-        XCTAssertFalse(shape.contains(CGPoint(x: 6 * 2 + 1, y: 19 * 2 + 1)))
+        // Its face takes a tap; its dangling feet, which hang over the field, don't. (Sprite pixel (x, y) is the
+        // 2 pt square from (2x, 2y): its middle is (2x + 1, 2y + 1).)
+        XCTAssertTrue(shape.contains(CGPoint(x: 19, y: 23)), "its face, pixel (9, 11)")
+        XCTAssertFalse(shape.contains(CGPoint(x: 13, y: 39)), "a foot, pixel (6, 19)")
         XCTAssertFalse(shape.contains(CGPoint(x: 1, y: 1)), "the empty corner above its cap")
-        XCTAssertFalse(shape.contains(CGPoint(x: 9 * 2 + 1, y: CGFloat(seat) * 2 + 1)), "nothing at or below the edge it sits on")
+        let seatLine: CGFloat = CGFloat(seat) * 2
+        XCTAssertFalse(shape.contains(CGPoint(x: 19, y: seatLine + 1)), "nothing at or below the edge it sits on")
     }
 
     // MARK: - Contact sheets
@@ -367,13 +377,29 @@ final class CompanionSpriteTests: XCTestCase {
         let height: Int
         let bytes: [UInt8]
 
+        // One step per line: the CI runner's older Swift could not type-check `colors` as one expression.
         func at(_ x: Int, _ y: Int) -> (rgb: [Int], alpha: Int) {
-            let i = (y * width + x) * 4
-            return ([Int(bytes[i]), Int(bytes[i + 1]), Int(bytes[i + 2])], Int(bytes[i + 3]))
+            let row: Int = y * width
+            let i: Int = (row + x) * 4
+            return pixel(i)
+        }
+
+        func pixel(_ i: Int) -> (rgb: [Int], alpha: Int) {
+            let r = Int(bytes[i])
+            let g = Int(bytes[i + 1])
+            let b = Int(bytes[i + 2])
+            let a = Int(bytes[i + 3])
+            return ([r, g, b], a)
         }
 
         var colors: [([Int], Int)] {
-            stride(from: 0, to: bytes.count, by: 4).map { ([Int(bytes[$0]), Int(bytes[$0 + 1]), Int(bytes[$0 + 2])], Int(bytes[$0 + 3])) }
+            var out: [([Int], Int)] = []
+            out.reserveCapacity(bytes.count / 4)
+            for i in stride(from: 0, to: bytes.count, by: 4) {
+                let p = pixel(i)
+                out.append((p.rgb, p.alpha))
+            }
+            return out
         }
     }
 
@@ -392,18 +418,30 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The same colour, give or take the colour space's rounding.
-    private func close(_ a: [Int], _ b: [Int]) -> Bool { zip(a, b).allSatisfy { abs($0 - $1) <= 2 } }
+    private func close(_ a: [Int], _ b: [Int]) -> Bool {
+        for (x, y) in zip(a, b) where abs(x - y) > 2 { return false }
+        return true
+    }
+
+    private func linear(_ v: Int) -> Double {
+        let s: Double = Double(v) / 255
+        if s <= 0.03928 { return s / 12.92 }
+        let shifted: Double = (s + 0.055) / 1.055
+        return pow(shifted, 2.4)
+    }
 
     private func luminance(_ hex: String) -> Double {
-        let c = CompanionInks.rgb(hex).map { v -> Double in
-            let s = Double(v) / 255
-            return s <= 0.03928 ? s / 12.92 : pow((s + 0.055) / 1.055, 2.4)
-        }
-        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+        let c: [Int] = CompanionInks.rgb(hex)
+        let r: Double = 0.2126 * linear(c[0])
+        let g: Double = 0.7152 * linear(c[1])
+        let b: Double = 0.0722 * linear(c[2])
+        return r + g + b
     }
 
     private func contrast(_ a: String, _ b: String) -> Double {
         let la = luminance(a), lb = luminance(b)
-        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+        let light: Double = max(la, lb) + 0.05
+        let dark: Double = min(la, lb) + 0.05
+        return light / dark
     }
 }

@@ -91,6 +91,14 @@ struct CompanionCharacter: Identifiable {
         let gestures: [Gesture]
         let answer: Gesture
 
+        /// Every tick of its gestures and its answer, in order.
+        var everyTick: [Tick] {
+            var out: [Tick] = []
+            for gesture in gestures { out.append(contentsOf: gesture.ticks) }
+            out.append(contentsOf: answer.ticks)
+            return out
+        }
+
         /// The still frame for `weather`.
         func base(_ weather: CompanionLook.Weather) -> String {
             switch weather {
@@ -172,7 +180,7 @@ struct CompanionCharacter: Identifiable {
         for posture in [field, plus] {
             for mode in [posture.awake, posture.asleep] {
                 for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
-                    for tick in (mode.gestures + [mode.answer]).flatMap(\.ticks) {
+                    for tick in mode.everyTick {
                         let key = "\(tick.frame)@\(base)"
                         guard composites[key] == nil else { continue }
                         // A frame of that name, drawn by hand, wins over the composite (Nod's nod in the snow).
@@ -249,9 +257,13 @@ struct CompanionCharacter: Identifiable {
 
     /// The rightmost opaque column of a frame: where a perch lines the companion up.
     func rightmostColumn(_ name: String) -> Int {
-        (rows(name) ?? []).map { row in
-            Array(row).lastIndex { $0 != CompanionInk.clear } ?? 0
-        }.max() ?? width - 1
+        guard let rows = rows(name) else { return width - 1 }
+        var best = 0
+        for row in rows {
+            let chars = Array(row)
+            for x in chars.indices where chars[x] != CompanionInk.clear && x > best { best = x }
+        }
+        return best
     }
 
     func duration(_ ticks: [Tick], fps: Double) -> TimeInterval { Double(ticks.count) / fps }
@@ -306,7 +318,7 @@ struct CompanionCharacter: Identifiable {
                 // weather changes too, or the prop would be cut through.
                 for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
                     guard let r = rows(mode.rest), let b = rows(base) else { continue }
-                    for tick in (mode.gestures + [mode.answer]).flatMap(\.ticks) where index["\(tick.frame)@\(base)"] == nil {
+                    for tick in mode.everyTick where index["\(tick.frame)@\(base)"] == nil {
                         guard let g = rows(tick.frame) else { continue }
                         if Self.overlap(gesture: g, rest: r, base: b) > 0 {
                             out.append("\(id) \(at): \(tick.frame) changes pixels that \(base) changes")
@@ -323,6 +335,21 @@ struct CompanionCharacter: Identifiable {
             if !(12...24).contains(posture.flourish.count) {
                 out.append("\(id) \(place.rawValue): flourish of \(posture.flourish.count) frames, not 12…24")
             }
+        }
+        // Every frame is drawn somewhere (a frame named "gesture@weather" is drawn in place of a composite).
+        var used = Set<String>()
+        for place in CompanionPlace.allCases {
+            let posture = posture(place)
+            for mode in [posture.awake, posture.asleep] {
+                used.insert(mode.rest)
+                if let rain = mode.rain { used.insert(rain) }
+                if let snow = mode.snow { used.insert(snow) }
+                for tick in mode.everyTick { used.insert(tick.frame) }
+            }
+            for tick in posture.flourish { used.insert(tick.frame) }
+        }
+        for frame in frames where !used.contains(frame.name) && !frame.name.contains("@") {
+            out.append("\(id).\(frame.name): drawn nowhere")
         }
         if !(4...10).contains(gestureFPS) { out.append("\(id): gestures at \(gestureFPS) fps, not 4…10") }
         if !(8...10).contains(flourishFPS) { out.append("\(id): flourish at \(flourishFPS) fps, not 8…10") }

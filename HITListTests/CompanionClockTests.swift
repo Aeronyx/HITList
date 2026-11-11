@@ -27,7 +27,7 @@ final class CompanionClockTests: XCTestCase {
             .init(name: "peek", rows: ["....", "....", "kmmm", "dddd"]),
             .init(name: "sleepSnow", rows: ["....", "l.l.", "mmmm", "dddd"]),
         ]
-        static let awake = CompanionCharacter.Mode(
+        static let awake: CompanionCharacter.Mode = CompanionCharacter.Mode(
             rest: "rest", rain: "rain", snow: "snow",
             gestures: [
                 .init(name: "blink", weight: 2, ticks: CompanionCharacter.ticks(("blink", 2))),
@@ -35,23 +35,28 @@ final class CompanionClockTests: XCTestCase {
                 .init(name: "both", ticks: CompanionCharacter.ticks(("both", 2))),
             ],
             answer: .init(name: "look", ticks: CompanionCharacter.ticks(("blink", 4))))
-        static let asleep = CompanionCharacter.Mode(
+        static let asleep: CompanionCharacter.Mode = CompanionCharacter.Mode(
             rest: "sleep", snow: "sleepSnow",
             gestures: [.init(name: "stir", ticks: CompanionCharacter.ticks(("stir", 3)))],
             answer: .init(name: "wake", ticks: CompanionCharacter.ticks(("peek", 8))))
         static func posture(turns: Bool) -> CompanionCharacter.Posture {
-            let flourish = turns
-                ? CompanionCharacter.ticks(("rest", 1), ("hop", 5)) + CompanionCharacter.ticks(mirrored: true, ("hop", 5), ("rest", 1))
-                : CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1))
-            return .init(awake: awake, asleep: asleep, flourish: flourish)
+            var flourish: [CompanionCharacter.Tick]
+            if turns {
+                flourish = CompanionCharacter.ticks(("rest", 1), ("hop", 5))
+                let back: [CompanionCharacter.Tick] = CompanionCharacter.ticks(mirrored: true, ("hop", 5), ("rest", 1))
+                flourish.append(contentsOf: back)
+            } else {
+                flourish = CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1))
+            }
+            return CompanionCharacter.Posture(awake: awake, asleep: asleep, flourish: flourish)
         }
-        static let stayer = CompanionCharacter(
+        static let stayer: CompanionCharacter = CompanionCharacter(
             id: "stayer", name: "Stayer", width: 4, height: 4, seatRow: 3, frames: frames, gestureFPS: 8,
             flourishFPS: 9, flourishTurns: false, field: posture(turns: false), plus: posture(turns: false))
-        static let turner = CompanionCharacter(
+        static let turner: CompanionCharacter = CompanionCharacter(
             id: "turner", name: "Turner", width: 4, height: 4, seatRow: 4, frames: frames, gestureFPS: 8,
             flourishFPS: 9, flourishTurns: true, field: posture(turns: true), plus: posture(turns: true))
-        static let all = [stayer, turner]
+        static let all: [CompanionCharacter] = [stayer, turner]
     }
 
     private func stage(_ act: CompanionAct? = nil, look: CompanionLook = .day, turned: Bool = false,
@@ -83,9 +88,10 @@ final class CompanionClockTests: XCTestCase {
         let s = stage(CompanionAct(kind: .gesture(1), start: at(10)))
         XCTAssertEqual(c.pose(at: at(9.9), stage: s).frame, character.index["rest"])
         for k in 0..<3 {
-            XCTAssertEqual(c.pose(at: at(10 + (Double(k) + 0.5) / 8), stage: s).frame, character.index["wag"], "tick \(k)")
+            let middle: TimeInterval = (Double(k) + 0.5) / 8
+            XCTAssertEqual(c.pose(at: at(10 + middle), stage: s).frame, character.index["wag"], "tick \(k)")
         }
-        XCTAssertEqual(c.end(of: s.act!, stage: s), at(10 + 3.0 / 8))
+        XCTAssertEqual(c.end(of: s.act!, stage: s), at(10.375))
         XCTAssertEqual(c.pose(at: at(10.375), stage: s).frame, character.index["rest"])
         XCTAssertFalse(c.isActing(at: at(10.375), stage: s))
         // Its changes: the first tick, then the rest frame at the end; nothing after.
@@ -131,7 +137,8 @@ final class CompanionClockTests: XCTestCase {
             let s = stage(CompanionAct(kind: .flourish, start: at(100)))
             let ticks = character.field.flourish
             for (k, tick) in ticks.enumerated() {
-                let pose = c.pose(at: at(100 + (Double(k) + 0.5) / 9), stage: s)
+                let middle: TimeInterval = (Double(k) + 0.5) / 9
+                let pose = c.pose(at: at(100 + middle), stage: s)
                 XCTAssertEqual(pose.frame, character.index[tick.frame], "\(character.id) tick \(k)")
                 XCTAssertEqual(pose.mirrored, tick.mirrored, "\(character.id) tick \(k)")
             }
@@ -195,8 +202,10 @@ final class CompanionClockTests: XCTestCase {
         let draws = (0..<20_000).map { CompanionSchedule.flourishBudget(unit: CompanionRandom.unit(5, $0)) }
         XCTAssertGreaterThanOrEqual(draws.min()!, 45 * 60)
         XCTAssertLessThanOrEqual(draws.max()!, 12 * 3600)
-        let mean = draws.reduce(0, +) / Double(draws.count)
-        XCTAssertEqual(mean / 3600, 3, accuracy: 0.1, "about once in three hours of showing")
+        var total: TimeInterval = 0
+        for draw in draws { total += draw }
+        let meanHours: Double = total / Double(draws.count) / 3600
+        XCTAssertEqual(meanHours, 3, accuracy: 0.1, "about once in three hours of showing")
         XCTAssertEqual(CompanionSchedule.flourishBudget(unit: 0), 45 * 60)
     }
 

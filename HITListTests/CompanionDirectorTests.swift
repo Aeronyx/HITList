@@ -76,8 +76,9 @@ final class CompanionDirectorTests: XCTestCase {
         d.appear("stayer", place: .field, still: false, calm: false, now: time(9))
         let acts = run(d, until: time(13))
         let gestures = acts.filter { if case .gesture = $0.kind { return true } else { return false } }
-        XCTAssertGreaterThan(gestures.count, 4 * 3600 / 120 - 2)
-        XCTAssertLessThan(gestures.count, 4 * 3600 / 45 + 2)
+        // Four hours: no fewer than one every two minutes, no more than one every 45 seconds.
+        XCTAssertGreaterThan(gestures.count, 118)
+        XCTAssertLessThan(gestures.count, 322)
         let clock = CompanionClock(character: Cast.stayer)
         var kinds: [CompanionAct.Kind] = []
         for (a, b) in zip(acts, acts.dropFirst()) {
@@ -128,7 +129,8 @@ final class CompanionDirectorTests: XCTestCase {
             for day in 0..<days {
                 for session in sessions {
                     let start = time(session.start, day: day)
-                    let end = start.addingTimeInterval(TimeInterval(session.minutes * 60))
+                    let length: TimeInterval = TimeInterval(session.minutes) * 60
+                    let end = start.addingTimeInterval(length)
                     d.setAppActive(true, now: start)
                     for act in run(d, until: end) where act.kind == .flourish { flourishes.append(act.start) }
                     d.setAppActive(false, now: end)
@@ -144,17 +146,23 @@ final class CompanionDirectorTests: XCTestCase {
             for (a, b) in zip(heavy.flourishes, heavy.flourishes.dropFirst()) {
                 XCTAssertGreaterThanOrEqual(b.timeIntervalSince(a), 45 * 60, "never within 45 minutes of the last")
             }
-            perHour.append(heavy.shown / 3600 / Double(heavy.flourishes.count))
+            let hours: Double = heavy.shown / 3600
+            perHour.append(hours / Double(heavy.flourishes.count))
         }
-        let meanGap = perHour.reduce(0, +) / Double(perHour.count)
+        var sumGaps: Double = 0
+        for gap in perHour { sumGaps += gap }
+        let meanGap: Double = sumGaps / Double(perHour.count)
         XCTAssertEqual(meanGap, 3, accuracy: 0.5, "about once in three hours of the screen showing: \(perHour)")
         // An hour a day, in three twenty-minute visits, over twelve weeks.
         var perWeek: [Double] = []
         for seed in [4, 5, 6] as [UInt64] {
             let light = month(sessions: [(9, 20), (13, 20), (20, 20)], days: 84, seed: seed)
-            perWeek.append(Double(light.flourishes.count) / 12)
+            let count: Double = Double(light.flourishes.count)
+            perWeek.append(count / 12)
         }
-        let weekly = perWeek.reduce(0, +) / Double(perWeek.count)
+        var sumWeeks: Double = 0
+        for week in perWeek { sumWeeks += week }
+        let weekly: Double = sumWeeks / Double(perWeek.count)
         print("Companion month: \(perHour) hours of showing per flourish at twelve hours a day; \(perWeek) a week at an hour a day")
         XCTAssertEqual(weekly, 2.3, accuracy: 0.8, "perhaps twice a week: \(perWeek)")
     }
@@ -310,6 +318,13 @@ final class CompanionDirectorTests: XCTestCase {
 
     // MARK: - A day
 
+    /// "3 blink, 1 flourish": counts by name, in name order.
+    private static func summary(_ counts: [String: Int]) -> String {
+        var parts: [String] = []
+        for name in counts.keys.sorted() { parts.append("\(counts[name]!) \(name)") }
+        return parts.joined(separator: ", ")
+    }
+
     /// What Nod does over a simulated eight-hour afternoon and evening, 15:00 to 23:00, with the app in front most
     /// of it: the report's timeline (printed, and attached to the result).
     func testAnEightHourDay() {
@@ -331,8 +346,11 @@ final class CompanionDirectorTests: XCTestCase {
             var hourCounts: [String: Int] = [:]
             var hour = calendar.component(.hour, from: sitting.0)
             func flush() {
-                let text = hourCounts.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", ")
-                if !text.isEmpty { lines.append(String(format: "  %02d:00–%02d:59  ", hour, hour) + text) }
+                let text = Self.summary(hourCounts)
+                if !text.isEmpty {
+                    let label = String(format: "  %02d:00–%02d:59  ", hour, hour)
+                    lines.append(label + text)
+                }
                 hourCounts = [:]
             }
             for act in run(d, "nod", until: sitting.1) {
@@ -356,7 +374,7 @@ final class CompanionDirectorTests: XCTestCase {
             d.setAppActive(false, now: sitting.1)
             lines.append("\(formatter.string(from: sitting.1))  app left")
         }
-        lines.append("In all: " + counts.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", "))
+        lines.append("In all: " + Self.summary(counts))
         let text = lines.joined(separator: "\n")
         print("Companion day:\n\(text)")
         let attachment = XCTAttachment(string: text)

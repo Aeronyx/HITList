@@ -2,7 +2,8 @@ import Foundation
 
 extension CompanionCharacter {
     /// Every companion drawn so far.
-    static let all: [CompanionCharacter] = [.nod, .quill, .hush, .pip]
+    static let all: [CompanionCharacter] = [CompanionCharacter.nod, CompanionCharacter.quill, CompanionCharacter.hush,
+                                            CompanionCharacter.pip]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }

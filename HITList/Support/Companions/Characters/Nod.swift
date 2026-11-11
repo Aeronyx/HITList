@@ -10,7 +10,7 @@ extension CompanionCharacter {
     /// bobble flares into a small star; a few embers fall as it sits back down. At night its eyes shut and the
     /// lamp turns down to a glow; now and then it nods, or the lamp sways. In the rain a small umbrella; in snow,
     /// a dusting on its cap.
-    static let nod = CompanionCharacter(
+    static let nod: CompanionCharacter = CompanionCharacter(
         id: "nod",
         name: "Nod",
         width: 20,
@@ -82,28 +82,6 @@ extension CompanionCharacter {
                 "......md..md........",
                 "......ll..md........",
                 "..........ll........",
-            ]),
-            Frame(name: "rightKick", rows: [
-                "....................",
-                "....................",
-                "....................",
-                ".......ddddd........",
-                ".....dddddddddd.....",
-                "....dmmdddddddddd...",
-                "....dmddddddddddd...",
-                "...mmmmmmmmmmmm.dd..",
-                "...mlllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllmgwg.",
-                "...mllkllllkllm.www.",
-                "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
-                "...lmddddddddml.....",
-                "......md..md........",
-                "......md..ll........",
-                "......ll............",
             ]),
             Frame(name: "lookUp", rows: [
                 "....................",
