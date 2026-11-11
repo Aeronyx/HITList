@@ -48,6 +48,7 @@ struct BrowseView: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }
                 .padding(.horizontal, HITSpacing.l)
                 .padding(.top, HITSpacing.xs)
                 .padding(.bottom, HITSpacing.s)
@@ -202,7 +203,7 @@ struct BrowseView: View {
                         .accessibilityIdentifier("browse-settings-row")
                     }
                 }
-            }
+            } header: { CompanionShelf() }
         }
         .listStyle(.insetGrouped)
         // The chips sit just under the field, not a grouped list's full top gap away. `.automatic`, the placement
