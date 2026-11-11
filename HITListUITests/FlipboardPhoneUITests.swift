@@ -119,19 +119,27 @@ final class FlipboardPhoneUITests: XCTestCase {
 
         // The loose switches' first row and Before Bed's together on the screen.
         scroll(by: 0.2)
-        // Held, then moved onto Before Bed, and held there a moment before letting go.
-        water.press(forDuration: 0.8, thenDragTo: bed, withVelocity: .slow, thenHoldForDuration: 3)
+        // Held until it lifts, then moved at once onto Before Bed (moving while the menu shows, a finger that crosses
+        // the menu picks an item instead), and held there a moment before letting go.
+        water.press(forDuration: 0.6, thenDragTo: bed, withVelocity: .default, thenHoldForDuration: 2)
         XCTAssertTrue(boardLine(containing: "2 of 5").waitForExistence(timeout: 5), "on Before Bed now")
         snapshot("2 Dropped on Before Bed")
 
-        // Back off it: dragged onto the loose switches.
-        let recycling = switchTile("Take out the recycling")
+        // Back off it: dragged onto the loose switches' + tile, which stands just above Before Bed, once both are clear
+        // of the bars (the board has centred the switch where it landed).
+        let addTile = app.buttons["addSwitchTile"]
         let moved = switchTile("Water the plants")
         XCTAssertTrue(moved.waitForExistence(timeout: 3))
-        for _ in 0..<3 where !(moved.isHittable && recycling.isHittable) {
-            scroll(by: moved.frame.midY > app.frame.height * 0.7 ? 0.15 : -0.15)
+        for _ in 0..<4 {
+            if addTile.frame.minY < 120 {
+                scroll(by: -0.12)
+            } else if moved.frame.maxY > app.frame.height - 110 {
+                scroll(by: 0.1)
+            } else {
+                break
+            }
         }
-        moved.press(forDuration: 0.8, thenDragTo: recycling, withVelocity: .slow, thenHoldForDuration: 1.0)
+        moved.press(forDuration: 0.6, thenDragTo: addTile, withVelocity: .default, thenHoldForDuration: 1.0)
         XCTAssertTrue(boardLine(containing: "2 of 4").waitForExistence(timeout: 5), "off Before Bed again")
         snapshot("3 Dragged back onto the loose switches")
     }
