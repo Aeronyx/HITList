@@ -169,13 +169,18 @@ struct CompanionCharacter: Identifiable {
         /// Brief 91: it ends with the snow shaken off, the still frame `snow` again, the first of the pile. A snow
         /// routine only; drawn from the deepest pile, it plays only there.
         var shakesOff = false
+        /// Round 20 (brief 100): a little loop, two to four moves in a second or two (a blink and two swings of a
+        /// foot). It plays in an idle slot, beside the flickers; the long routines keep their own clock.
+        var little = false
         let steps: [Step]
 
-        init(name: String, sky: CompanionSky? = nil, weight: Int = 1, shakesOff: Bool = false, steps: [Step]) {
+        init(name: String, sky: CompanionSky? = nil, weight: Int = 1, shakesOff: Bool = false, little: Bool = false,
+             steps: [Step]) {
             self.name = name
             self.sky = sky
             self.weight = weight
             self.shakesOff = shakesOff
+            self.little = little
             self.steps = steps
         }
 
