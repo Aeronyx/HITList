@@ -9,10 +9,11 @@ import UIKit
 import AppKit
 #endif
 
-// Settings → Account (brief 34). HITList has no sign-in of its own: the account is the Apple account the
-// device uses for iCloud, whose private database already keeps each person's tasks to themselves. This
-// screen shows who that is (a profile: name and picture, synced like the tasks), whether iCloud is healthy,
-// how to sign out, and how to delete data. The first group on the iPhone sheet; its own section on the Mac.
+// Settings → Account (brief 34; regrouped in brief 86). HITList has no sign-in of its own: the account is the
+// Apple account the device uses for iCloud, whose private database already keeps each person's tasks to
+// themselves. This page shows who that is (a profile: name and picture, synced like the tasks), whether the iCloud
+// account is healthy, how to sign out, and Delete profile. On iPhone and iPad the first screen's profile row opens
+// it; on the Mac it is the first section. Exporting and deleting everything from iCloud live in iCloud & data.
 
 /// What Settings says about the iCloud account: the Account screen's status row and the iCloud screen's
 /// environment line use the same words. Pure, so tests pin every state.
@@ -127,8 +128,8 @@ enum AccountState: Equatable {
 
 /// The words of the Account screen that don't depend on state. Pure, so tests pin the paths.
 enum AccountCopy {
-    /// Under the Account group. The status row above it says where the tasks are right now.
-    static let storage = "HITList has no sign-in of its own: your Apple account is your account, and your tasks live in its private iCloud database, which the app's developer can't see."
+    /// Under the iCloud group. The status row above it says where the tasks are right now. Two lines at most.
+    static let storage = "No sign-in of its own: your tasks live in your Apple account's private iCloud database, which the developer can't see."
 
     #if os(macOS)
     static let signOutTitle = "Sign out in System Settings"
@@ -157,8 +158,7 @@ struct AccountSettingsSection: View {
     @State private var isLoadingPhoto = false
     @State private var message: String?
     @State private var confirmDeleteProfile = false
-    @State private var showDeleteAll = false
-    @State private var exportDocument: SnapshotDocument?
+    @State private var showSignOut = false
 
     private var profile: Profile? { ProfileStore.shown(profiles) }
     private var store: ProfileStore { ProfileStore(context: context) }
@@ -166,42 +166,30 @@ struct AccountSettingsSection: View {
     private var nameIsDirty: Bool { ProfileStore.cleanName(draftName) != storedName }
 
     var body: some View {
-        HITGroup("Account", footer: AccountCopy.storage) {
+        // No header: the page's title says Account.
+        HITGroup {
             profileRow
-            AccountStatusRow(state: AccountState.current)
             if let message { SettingsMessage(text: message) }
         }
         .onAppear { loadDraft(force: true) }
         .onChange(of: storedName) { _, _ in loadDraft(force: false) }
         .onChange(of: pickedPhoto) { _, item in if let item { loadPhoto(item) } }
         .onDisappear { saveName() }
-        .accessibilityIdentifier("settings-account")
 
-        HITGroup("Signing out") {
-            HITMenuRowLabel(AccountCopy.signOutTitle, subtitle: AccountCopy.signOut, systemImage: "rectangle.portrait.and.arrow.right")
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .hitRowPadding()
+        HITGroup("iCloud", footer: AccountCopy.storage) {
+            AccountStatusRow(state: AccountState.current)
+            HITMenuRow(AccountCopy.signOutTitle, systemImage: "rectangle.portrait.and.arrow.right",
+                       accessory: .expand(isExpanded: showSignOut)) {
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSignOut.toggle() }
+            }
+            .accessibilityIdentifier("settings-account-sign-out")
+            if showSignOut {
+                SettingsNote(text: AccountCopy.signOut)
+            }
         }
 
-        HITGroup("Your data", footer: AccountCopy.deleteProfile) {
-            HITMenuRow("Export your tasks…", systemImage: "square.and.arrow.up", accessory: .none) {
-                if let snap = try? SnapshotBuilder.build(from: context) { exportDocument = SnapshotDocument(snapshot: snap) }
-            }
-            .accessibilityIdentifier("settings-account-export")
-            HITMenuRow("Delete all data from iCloud", systemImage: "trash.slash",
-                       accessory: .expand(isExpanded: showDeleteAll)) {
-                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showDeleteAll.toggle() }
-            }
-            .accessibilityIdentifier("settings-account-delete-all")
-            if showDeleteAll {
-                Text(AccountCopy.deleteAll)
-                    .font(HITType.caption)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .hitRowPadding()
-                    .textSelection(.enabled)
-            }
+        // Apart, at the foot: the one that removes something.
+        HITGroup(footer: AccountCopy.deleteProfile) {
             HITMenuRow("Delete profile…", systemImage: "person.crop.circle.badge.xmark", role: .destructive, accessory: .none) {
                 confirmDeleteProfile = true
             }
@@ -214,9 +202,6 @@ struct AccountSettingsSection: View {
         } message: {
             Text(AccountCopy.deleteProfile)
         }
-        .fileExporter(isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
-                      document: exportDocument, contentType: .json,
-                      defaultFilename: "HITList-\(Date().formatted(.iso8601.year().month().day()))") { _ in }
     }
 
     private var profileRow: some View {

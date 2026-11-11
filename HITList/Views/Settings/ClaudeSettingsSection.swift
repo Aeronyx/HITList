@@ -81,8 +81,9 @@ struct ClaudeSettingsSection: View {
 
     // MARK: The switch
 
+    /// No header: the page's title says Claude.
     private var masterGroup: some View {
-        HITGroup("Claude") {
+        HITGroup {
             Toggle(isOn: Binding(get: { toggle.isOn }, set: { toggle.request($0) })) {
                 HITMenuRowLabel(ClaudeIntegration.switchTitle, subtitle: ClaudeIntegration.summary(mac: Self.isMac),
                                 systemImage: "sparkles")

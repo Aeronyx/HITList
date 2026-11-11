@@ -49,7 +49,7 @@ struct BackupsGroup: View {
     #if os(macOS)
     static let footer = "A copy of your data is saved once a day; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON."
     #else
-    static let footer = "A copy of your data is saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON."
+    static let footer = "Saved once a day in Files → On My iPhone → HITList; the newest \(LocalBackup.keep) are kept. Restore one with Import JSON."
     #endif
 
     var body: some View {
@@ -80,6 +80,23 @@ struct BackupsGroup: View {
         } catch {
             backupMessage = "Backup failed: \(error.localizedDescription)"
         }
+    }
+}
+
+/// Words a disclosure row opens (how to sign out, how to delete everything from iCloud): the caption type, selectable,
+/// lined up with the row titles above it.
+struct SettingsNote: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(HITType.caption)
+            .foregroundStyle(Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, HITRowMetrics.titleInset)
+            .hitRowPadding()
+            .textSelection(.enabled)
     }
 }
 

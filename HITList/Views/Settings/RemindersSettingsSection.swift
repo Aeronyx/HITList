@@ -5,8 +5,9 @@ import UserNotifications
 import UIKit
 #endif
 
-/// Settings → Reminders: the on/off switch, the system's side (permission, what is scheduled, a link
-/// to the system settings) and a test notification.
+/// Settings → Reminders: the choices (notify at due time, the default reminder, the morning summary), then at the
+/// foot "If reminders don't arrive": the system's side (the permission, a link to the system's settings, what is
+/// scheduled) and a test notification, which matter only when something is wrong.
 struct RemindersSettingsSection: View {
     @Environment(\.modelContext) private var context
     @Environment(\.openURL) private var openURL
@@ -36,7 +37,8 @@ struct RemindersSettingsSection: View {
     @State private var isSendingTest = false
 
     var body: some View {
-        HITGroup("Reminders", footer: footer) {
+        // No header: the page's title says Reminders.
+        HITGroup(footer: footer) {
             Toggle(isOn: $notificationsEnabled) {
                 HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a specific time get a notification.",
                                 systemImage: "bell")
@@ -92,8 +94,10 @@ struct RemindersSettingsSection: View {
                 })
                 .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
             }
+        }
 
-            HITMenuRow("Authorization", systemImage: "hand.raised",
+        HITGroup(Self.troubleTitle) {
+            HITMenuRow("Permission", systemImage: "hand.raised",
                        value: NotificationStatus.authorizationText(authorization))
                 .accessibilityIdentifier("settings-notification-authorization")
             HITMenuRow("Open system settings", systemImage: "gearshape", accessory: .chevron) { openSystemSettings() }
@@ -119,6 +123,7 @@ struct RemindersSettingsSection: View {
     }
 
     private let footer = "Reminders are scheduled on each device from the tasks it has synced."
+    static let troubleTitle = "If reminders don't arrive"
 
     private func refresh() async {
         authorization = await NotificationScheduler.authorizationStatus()

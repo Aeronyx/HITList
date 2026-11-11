@@ -1,25 +1,31 @@
 import SwiftUI
 
-/// Settings → Appearance (iPhone sheet): the dark themes as swatches, and the Reduce Effects switch. A `HITGroup`
-/// for SettingsView's page, `AppearanceSettingsSection()`. Picking a theme applies at once in every window
-/// (`ThemeStore`); both choices are saved in `AppGroup.defaults`.
+/// Settings → Appearance on iPhone and iPad: the dark themes as swatches, and the Reduce Effects switch, the second
+/// group of the first screen (`SettingsHome`). Picking a theme applies at once in every window (`ThemeStore`); both
+/// choices are saved in `AppGroup.defaults`.
 struct AppearanceSettingsSection: View {
     @AppStorage(Preferences.reduceEffects, store: AppGroup.defaults) private var reduceEffects = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let store = ThemeStore.shared
 
+    static let title = "Appearance"
+    /// The Mac's Display group says it in full; the iPhone's first screen has room for one line under the switch.
     static let footer = "Turns off glass, blur and the larger movements. HITList also follows Reduce Motion and Reduce Transparency."
+    static let reduceEffectsSubtitle = "Less glass, blur and movement"
 
     var body: some View {
-        HITGroup("Appearance", footer: Self.footer) {
+        HITGroup(Self.title) {
             ThemeSwatchRow(selection: store.palette) { palette in
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
             }
             .padding(.horizontal, HITSpacing.l)
             .padding(.vertical, HITSpacing.m)
-            Toggle(isOn: $reduceEffects) { HITMenuRowLabel("Reduce effects", systemImage: "sparkles") }
-                .toggleStyle(.hit)
-                .hitRowPadding()
+            Toggle(isOn: $reduceEffects) {
+                HITMenuRowLabel("Reduce effects", subtitle: Self.reduceEffectsSubtitle, systemImage: "sparkles")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .accessibilityIdentifier("settings-reduce-effects")
         }
     }
 }

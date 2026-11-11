@@ -1,21 +1,40 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → About: the version, Copy diagnostics, What's New (a page of its own, `SettingsPage.whatsNew`), Show
-/// tips again and the privacy policy. The iPhone sheet's page; the Mac page's About section builds on the same rows.
+/// Settings → About on iPhone and iPad: the version and What's New (a page of its own, `SettingsPage.whatsNew`), the
+/// privacy policy, Show tips again, then Send Beta Feedback… with Copy diagnostics beside it. No header: the page's
+/// title says About. The Mac's About section (`MacAboutSection`) builds on the same rows.
 struct AboutSettingsGroup: View {
     @Environment(\.hitPages) private var pages
 
     var body: some View {
-        HITGroup("About") {
+        HITGroup {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
-            CopyDiagnosticsRow()
-            HITMenuRow("What's new", systemImage: "sparkles") { pages(SettingsPage.whatsNew) }
+            HITMenuRow("What's New", systemImage: "sparkles") { pages(SettingsPage.whatsNew) }
                 .accessibilityIdentifier("settings-whats-new")
-            ShowTipsAgainRow()
             PrivacyPolicyRow()
+            ShowTipsAgainRow()
         }
+        HITGroup {
+            SendFeedbackRow()
+            CopyDiagnosticsRow()
+        }
+    }
+}
+
+/// "Send Beta Feedback…", as the profile menu's row does it (`SendBetaFeedbackAction`): a mail to George on iPhone
+/// and iPad (the card with the address when no mail app opens it), the address copied and the card at once on the Mac.
+struct SendFeedbackRow: View {
+    @Environment(\.openURL) private var openURL
+    @State private var showsCard = false
+
+    var body: some View {
+        HITMenuRow(ProfileMenuModel.feedbackTitle, systemImage: "envelope", accessory: .none) {
+            SendBetaFeedbackAction(openURL: openURL) { showsCard = true }()
+        }
+        .betaFeedbackCard(isPresented: $showsCard)
+        .accessibilityIdentifier("settings-feedback")
     }
 }
 
