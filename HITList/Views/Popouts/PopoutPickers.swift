@@ -41,40 +41,6 @@ extension RecurrenceRule {
     var rowText: String { displayText(weekStart: Preferences.weekStartWeekday()) }
 }
 
-/// The date card's Repeat chip (a system menu until brief 97's item 3 draws it), worded for the card's day.
-struct RepeatMenu: View {
-    var rule: RecurrenceRule?
-    var day: Date
-    var onPick: (RecurrenceRule?) -> Void
-
-    var body: some View {
-        let ticked = RepeatChoice.matching(rule, on: day)?.kind
-        Menu {
-            if let rule, ticked == nil {
-                Button {} label: { Label(rule.rowText, systemImage: "checkmark") }.disabled(true)
-                Divider()
-            }
-            ForEach(RepeatChoice.all(for: day)) { choice in
-                if ticked == choice.kind {
-                    Button {} label: { Label(choice.title, systemImage: "checkmark") }
-                } else {
-                    Button(choice.title) { onPick(choice.rule) }
-                }
-            }
-            if rule != nil {
-                Divider()
-                Button("Don’t repeat") { onPick(nil) }
-            }
-        } label: {
-            HITChipLabel(rule?.rowText ?? "Repeat", systemImage: "repeat", tint: PopoutTint.today, isSelected: rule != nil)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
-        .fixedSize()
-    }
-}
-
 // MARK: - Priority
 
 struct PriorityChipPopover: View {

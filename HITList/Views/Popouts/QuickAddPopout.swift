@@ -326,7 +326,7 @@ struct QuickAddPopout: View {
                 }, recurrence: chips.recurrence, onRepeat: { rule in
                     draft.setRecurrence(rule, parser, keepingDay: chips.dueDate)
                     done()
-                })
+                }, onRepeatKept: { done() })
             }
             .accessibilityIdentifier("quickAddDateChip")
     }

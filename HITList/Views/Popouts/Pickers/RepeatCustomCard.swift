@@ -259,6 +259,7 @@ struct RepeatIntervalField: View {
         HStack(spacing: 0) {
             step(-1, systemImage: "minus", label: "Fewer")
                 .disabled(value <= 1)
+                .accessibilityIdentifier("repeatCustomIntervalDown")
             TextField("", text: $text)
                 .textFieldStyle(.plain)
                 .font(HITType.body)
@@ -281,10 +282,12 @@ struct RepeatIntervalField: View {
                 .accessibilityIdentifier("repeatCustomInterval")
             step(1, systemImage: "plus", label: "More")
                 .disabled(value >= RecurrenceRule.maxInterval)
+                .accessibilityIdentifier("repeatCustomIntervalUp")
         }
         .frame(height: HITButtonStyle.Size.small.height)
         .background(shape.fill(Theme.elevated))
-        .overlay(shape.strokeBorder(isFocused ? Theme.accent : Theme.separator, lineWidth: isFocused ? 1.5 : 1))
+        .overlay(shape.strokeBorder(isFocused ? Theme.accent : Theme.separator, lineWidth: isFocused ? 1.5 : 1)
+            .allowsHitTesting(false))
         .onChange(of: focusRequest) { _, _ in isFocused = true }
     }
 
