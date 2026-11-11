@@ -27,7 +27,9 @@ struct WidgetCompletionIntent: AppIntent {
     /// Only the widgets' buttons run it: not offered in Shortcuts or Spotlight (Siri's is `CompleteTaskIntent`).
     static let isDiscoverable = false
 
-    #if os(macOS)
+    // `IntentExecutionTargets` arrived with the macOS 27 SDK (Xcode 27, Swift 6.4). The CI runner builds with
+    // Xcode 26.6, whose SDK has no such type, so the declaration is compiled only by a compiler that ships with it.
+    #if os(macOS) && compiler(>=6.4)
     @available(macOS 27.0, *)
     static var allowedExecutionTargets: IntentExecutionTargets { [.widgetKitExtension] }
     #endif
