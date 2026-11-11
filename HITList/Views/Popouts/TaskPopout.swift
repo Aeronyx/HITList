@@ -395,9 +395,6 @@ struct TaskPopout: View {
                 setRecurrence(rule)
             })
         }
-        // "Date: Tomorrow 9:00 AM, every week" rather than "Calendar, Tomorrow 9:00 AM, Repeat, every week" (brief 94).
-        .accessibilityLabel(ChipSpeech.date(due.map { DueFormatter.text(for: $0, hasTime: shown.hasDueTime, now: now) }
-                                            .map { day in shown.recurrence.map { "\(day), \($0.displayText)" } ?? day }))
         .accessibilityIdentifier("popoutDateRow")
     }
 
