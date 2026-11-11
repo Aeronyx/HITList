@@ -123,8 +123,9 @@ struct BetaFeedbackCard: View {
                     .font(HITType.title3)
                     .foregroundStyle(HITColor.text)
                 Spacer(minLength: HITSpacing.s)
+                // The accent pill, as every sheet's Done (brief 99: it was grey text here).
                 Button("Done", action: onDone)
-                    .buttonStyle(.hitGhost)
+                    .buttonStyle(.hitPrimary)
                     .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("betaFeedbackDone")
             }
