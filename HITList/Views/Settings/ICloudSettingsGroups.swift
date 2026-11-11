@@ -39,8 +39,7 @@ struct ICloudCheckGroup: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSyncDetails = false
-    @State private var isCheckingICloud = false
-    @State private var iCloudCheck: ICloudCheck?
+    @State private var audit = SyncAuditModel()
 
     static let title = "If something doesn't sync"
 
@@ -56,37 +55,14 @@ struct ICloudCheckGroup: View {
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.vertical, HITSpacing.m)
             }
-            HITMenuRow("Check iCloud…", systemImage: "checkmark.icloud", accessory: .none) { runICloudCheck() }
-                .disabled(isCheckingICloud)
+            HITMenuRow("Check iCloud…", subtitle: ICloudAuditRows.subtitle, systemImage: "checkmark.icloud",
+                       accessory: .none) { audit.run(container: context.container, reduceMotion: reduceMotion) }
+                .disabled(audit.isBusy)
                 .overlay(alignment: .trailing) {
-                    if isCheckingICloud { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
+                    if audit.isBusy { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
                 }
                 .accessibilityIdentifier("settings-check-icloud")
-            if let iCloudCheck {
-                Label(iCloudCheck.summary, systemImage: iCloudCheck.isHealthy ? "checkmark.circle" : "exclamationmark.circle")
-                    .font(HITType.caption)
-                    .foregroundStyle(iCloudCheck.isHealthy ? Theme.secondaryText : HITColor.dueTomorrow)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .hitRowPadding()
-                    .textSelection(.enabled)
-                    .accessibilityIdentifier("settings-check-icloud-result")
-            }
-        }
-    }
-
-    private func runICloudCheck() {
-        guard !isCheckingICloud else { return }
-        isCheckingICloud = true
-        Task {
-            let result = await ICloudCheck.run()
-            CloudSyncMonitor.shared.write(.note, "Check iCloud: \(result.summary)",
-                                          level: result.isHealthy ? .info : .notice,
-                                          fields: ["environment": SyncEnvironment.current.summary])
-            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-                iCloudCheck = result
-                isCheckingICloud = false
-            }
+            ICloudAuditRows(audit: audit)
         }
     }
 
@@ -289,5 +265,272 @@ struct DeleteAllFromICloudRows: View {
         if isOpen {
             SettingsNote(text: AccountCopy.deleteAll)
         }
+    }
+}
+
+// MARK: - Check iCloud… as an audit (brief 95)
+
+/// What "Check iCloud…" is doing and found: the round trip (`ICloudCheck`), then the audit (`SyncAudit`), and the
+/// repairs the person asks for (`SyncRepair`). Words only on the device; the sync log gets counts and short hashes.
+@MainActor
+@Observable
+final class SyncAuditModel {
+    enum Phase: Equatable {
+        case idle
+        /// Reading: how many of iCloud's records so far (nil before the first).
+        case checking(read: Int?)
+        case done
+        case failed(String)
+    }
+
+    private(set) var phase: Phase = .idle
+    private(set) var roundTrip: ICloudCheck?
+    private(set) var report: SyncAudit.Report?
+    private(set) var repairMessage: String?
+    private(set) var isRepairing = false
+
+    var isBusy: Bool {
+        if case .checking = phase { return true }
+        return isRepairing
+    }
+
+    private var monitor: CloudSyncMonitor { .shared }
+
+    /// The round trip, then the audit when the round trip reached iCloud.
+    func run(container: ModelContainer, reduceMotion: Bool) {
+        guard !isBusy else { return }
+        repairMessage = nil
+        phase = .checking(read: nil)
+        Task { await check(container: container) }
+    }
+
+    private func check(container: ModelContainer) async {
+        let result = await ICloudCheck.run()
+        monitor.write(.note, "Check iCloud: \(result.summary)", level: result.isHealthy ? .info : .notice,
+                      fields: ["environment": SyncEnvironment.current.summary])
+        roundTrip = result
+        guard result.account == .available, result.reachable == true else {
+            phase = .failed(result.summary)
+            return
+        }
+        await audit(container: container)
+    }
+
+    private func audit(container: ModelContainer) async {
+        phase = .checking(read: report == nil ? nil : 0)
+        let outcome = await SyncAudit.run(container: container, progress: { [weak self] count in
+            self?.phase = .checking(read: count)
+        }, adopt: { [weak self] changes, token in
+            self?.monitor.auditRead(changes, databaseToken: token)
+        })
+        switch outcome {
+        case .report(let found):
+            report = found
+            let line = SyncAuditWords.logLine(found)
+            monitor.write(.note, line.message, level: found.agree ? .info : .notice, fields: line.fields)
+            phase = .done
+        case .failed(let words):
+            monitor.write(.note, "Check iCloud couldn't compare: \(words)", level: .notice)
+            phase = .failed(words)
+        }
+    }
+
+    /// "Send to iCloud": a backup, an ordinary save of each, the export it starts, then the audit again, which says
+    /// whether each arrived.
+    func send(_ items: [SyncComparison.Difference], container: ModelContainer) {
+        guard !isBusy, !items.isEmpty else { return }
+        isRepairing = true
+        repairMessage = "Saving a backup, then sending \(SyncAuditWords.counted(items))…"
+        Task {
+            defer { isRepairing = false }
+            let context = container.mainContext
+            let savedAt = Date()
+            do {
+                let backup = try SyncRepair.backUp(context: context)
+                var sent = 0
+                for (entity, group) in Dictionary(grouping: items, by: \.entity) {
+                    sent += try SyncRepair.sendToICloud(Set(group.map(\.id)), entity: entity, in: context, now: savedAt)
+                }
+                monitor.write(.note, "Check iCloud: sending \(sent) on request", level: .notice,
+                              fields: ["records": Self.hashes(items), "backup": backup?.lastPathComponent ?? "none (store empty)"])
+            } catch {
+                repairMessage = "Nothing was sent: \(error.localizedDescription)"
+                monitor.write(.note, "Check iCloud: sending failed", level: .error, fields: SyncLogFormat.errorFields(error))
+                return
+            }
+            repairMessage = "Waiting for iCloud to receive \(SyncAuditWords.counted(items))…"
+            let exported = await monitor.waitForExport(startedAfter: savedAt, within: 60)
+            await audit(container: container)
+            let missing = items.filter { item in
+                report?.comparison.differences.contains { $0.id == item.id && ($0.kind == .onlyHere || $0.kind == .newerHere) } ?? true
+            }
+            repairMessage = Self.sendResult(sent: items, missing: missing, exported: exported)
+            monitor.write(.note, "Check iCloud: after sending, \(items.count - missing.count) of \(items.count) in iCloud",
+                          level: missing.isEmpty ? .info : .notice,
+                          fields: ["stillMissing": Self.hashes(missing), "exportFinished": exported ? "yes" : "no"])
+        }
+    }
+
+    /// "Remove from this device": a backup, then each deleted here; iCloud never had them, so nothing changes there.
+    func remove(_ items: [SyncComparison.Difference], container: ModelContainer) {
+        guard !isBusy, !items.isEmpty else { return }
+        isRepairing = true
+        Task {
+            defer { isRepairing = false }
+            let context = container.mainContext
+            do {
+                let backup = try SyncRepair.backUp(context: context)
+                var removed = 0
+                for (entity, group) in Dictionary(grouping: items, by: \.entity) {
+                    removed += try SyncRepair.removeFromDevice(Set(group.map(\.id)), entity: entity, in: context)
+                }
+                monitor.write(.note, "Check iCloud: removed \(removed) from this device on request", level: .notice,
+                              fields: ["records": Self.hashes(items), "backup": backup?.lastPathComponent ?? "none (store empty)"])
+                repairMessage = "Removed \(SyncAuditWords.counted(items)) from this device. "
+                    + "A backup was saved first (Settings → iCloud & data → Backups)."
+            } catch {
+                repairMessage = "Nothing was removed: \(error.localizedDescription)"
+                monitor.write(.note, "Check iCloud: removing failed", level: .error, fields: SyncLogFormat.errorFields(error))
+                return
+            }
+            await audit(container: container)
+        }
+    }
+
+    /// "Sent: Shave is in iCloud now." / "1 of 2 still isn't in iCloud: …".
+    static func sendResult(sent: [SyncComparison.Difference], missing: [SyncComparison.Difference], exported: Bool) -> String {
+        if missing.isEmpty {
+            return sent.count == 1 ? "Sent: it is in iCloud now." : "Sent: all \(sent.count) are in iCloud now."
+        }
+        let still = missing.count == 1 ? "1 still isn't" : "\(missing.count) still aren't"
+        let why = exported ? "iCloud didn't take it; the Sync log has the export's answer." : "No export finished within a minute; try again once the bolt is filled."
+        return "\(still) in iCloud. \(why)"
+    }
+
+    private static func hashes(_ items: [SyncComparison.Difference]) -> String {
+        items.prefix(20).map { "\(SyncComparison.name(of: $0.entity).one) \(SyncComparison.shortHash($0.id))" }.joined(separator: ", ")
+    }
+}
+
+/// The audit's rows under "Check iCloud…": its progress, the round trip's line, the answer in words, one row per kind
+/// of difference that opens its list, and the two repairs, each behind a confirmation.
+struct ICloudAuditRows: View {
+    let audit: SyncAuditModel
+    @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded: Set<SyncComparison.Difference.Kind> = []
+    @State private var confirmSend: [SyncComparison.Difference] = []
+    @State private var confirmRemove: [SyncComparison.Difference] = []
+
+    static let subtitle = "Compares this device with iCloud, task by task"
+
+    var body: some View {
+        if case .checking(let read) = audit.phase {
+            caption(read.map { "Reading iCloud… \($0) records" } ?? "Asking iCloud…", systemImage: "icloud.and.arrow.down")
+                .accessibilityIdentifier("settings-check-icloud-progress")
+        }
+        if let check = audit.roundTrip {
+            Label(check.summary, systemImage: check.isHealthy ? "checkmark.circle" : "exclamationmark.circle")
+                .font(HITType.caption)
+                .foregroundStyle(check.isHealthy ? Theme.secondaryText : HITColor.dueTomorrow)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .hitRowPadding()
+                .textSelection(.enabled)
+                .accessibilityIdentifier("settings-check-icloud-result")
+        }
+        if case .failed(let words) = audit.phase, audit.roundTrip?.isHealthy == true {
+            caption("Couldn't compare with iCloud: \(words)", systemImage: "exclamationmark.circle", warning: true)
+        }
+        if let report = audit.report {
+            caption(SyncAuditWords.headline(report), systemImage: report.agree ? "checkmark.circle" : "exclamationmark.circle",
+                    warning: !report.agree)
+                .accessibilityIdentifier("settings-check-icloud-audit")
+            ForEach(SyncAuditWords.sections(report)) { section in
+                HITMenuRow(section.title, systemImage: Self.symbol(section.kind), iconTint: HITColor.dueTomorrow,
+                           accessory: .expand(isExpanded: expanded.contains(section.kind))) {
+                    withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { toggle(section.kind) }
+                }
+                .accessibilityIdentifier("settings-check-icloud-\(section.kind.rawValue)")
+                if expanded.contains(section.kind) {
+                    SettingsNote(text: section.names.joined(separator: "\n"))
+                    SettingsNote(text: note(for: section.kind, report: report))
+                    if section.kind == .onlyHere { repairButtons(report.items(.onlyHere)) }
+                }
+            }
+        }
+        if let message = audit.repairMessage {
+            SettingsMessage(text: message)
+                .padding(.leading, HITRowMetrics.titleInset)
+                .accessibilityIdentifier("settings-check-icloud-repair")
+        }
+    }
+
+    private func repairButtons(_ items: [SyncComparison.Difference]) -> some View {
+        HStack(spacing: HITSpacing.s) {
+            Button("Send to iCloud") { confirmSend = items }
+                .buttonStyle(HITButtonStyle(.secondary, size: .small))
+                .accessibilityIdentifier("settings-check-icloud-send")
+            Button("Remove from this device", role: .destructive) { confirmRemove = items }
+                .buttonStyle(HITButtonStyle(.destructive, size: .small))
+                .accessibilityIdentifier("settings-check-icloud-remove")
+            Spacer(minLength: 0)
+        }
+        .disabled(audit.isBusy)
+        .padding(.leading, HITRowMetrics.titleInset)
+        .hitRowPadding()
+        .confirmationDialog(Self.sendQuestion(confirmSend), isPresented: presenting($confirmSend), titleVisibility: .visible) {
+            Button("Send to iCloud") { audit.send(confirmSend, container: context.container); confirmSend = [] }
+            Button("Cancel", role: .cancel) { confirmSend = [] }
+        } message: {
+            Text("HITList saves a backup first, then saves each one again so that iCloud receives it, and checks that it arrived.")
+        }
+        .confirmationDialog(Self.removeQuestion(confirmRemove), isPresented: presenting($confirmRemove), titleVisibility: .visible) {
+            Button("Remove from this device", role: .destructive) { audit.remove(confirmRemove, container: context.container); confirmRemove = [] }
+            Button("Cancel", role: .cancel) { confirmRemove = [] }
+        } message: {
+            Text("HITList saves a backup first. Nothing changes in iCloud, which never had them.")
+        }
+    }
+
+    private func presenting(_ items: Binding<[SyncComparison.Difference]>) -> Binding<Bool> {
+        Binding(get: { !items.wrappedValue.isEmpty }, set: { if !$0 { items.wrappedValue = [] } })
+    }
+
+    static func sendQuestion(_ items: [SyncComparison.Difference]) -> String {
+        "Send \(SyncAuditWords.counted(items)) to iCloud?"
+    }
+
+    static func removeQuestion(_ items: [SyncComparison.Difference]) -> String {
+        "Remove \(SyncAuditWords.counted(items)) from this device?"
+    }
+
+    private func note(for kind: SyncComparison.Difference.Kind, report: SyncAudit.Report) -> String {
+        switch kind {
+        case .onlyHere: SyncAuditWords.onlyHereNote
+        case .onlyThere: report.resetIsSafe ? SyncAuditWords.onlyThereNote : SyncAuditWords.onlyThereWaitNote
+        case .newerHere, .newerThere: "Changes usually cross within seconds; check again in a minute."
+        }
+    }
+
+    private static func symbol(_ kind: SyncComparison.Difference.Kind) -> String {
+        switch kind {
+        case .onlyHere, .newerHere: "icloud.and.arrow.up"
+        case .onlyThere, .newerThere: "icloud.and.arrow.down"
+        }
+    }
+
+    private func toggle(_ kind: SyncComparison.Difference.Kind) {
+        if expanded.contains(kind) { expanded.remove(kind) } else { expanded.insert(kind) }
+    }
+
+    private func caption(_ text: String, systemImage: String, warning: Bool = false) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(HITType.caption)
+            .foregroundStyle(warning ? HITColor.dueTomorrow : Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hitRowPadding()
+            .textSelection(.enabled)
     }
 }

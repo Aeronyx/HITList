@@ -247,6 +247,8 @@ struct SyncWatchdog: Sendable {
 
     /// Saves and pushes not yet covered by an export or import.
     var waitingSaves: Int { exports?.times.count ?? 0 }
+    /// The oldest save no export has covered yet (brief 95: past the grace, the bolt isn't confirmed).
+    var oldestWaitingSave: Date? { exports?.times.first }
     var waitingPushes: Int { imports?.times.count ?? 0 }
     var inFlightCount: Int { flights.count }
 
