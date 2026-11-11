@@ -90,7 +90,7 @@ final class CompanionSmudgeTests: XCTestCase {
         let everyday = awake.routines.filter { $0.sky == nil }.map(\.name)
         XCTAssertEqual(everyday, ["heron", "tilts", "peer", "doodle", "preen"])
         XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear])
-        XCTAssertEqual(awake.routines.filter { $0.sky != nil }.map(\.name), ["drip", "coldFeet", "thunder", "bask"])
+        XCTAssertEqual(awake.routines.filter { $0.sky != nil }.map(\.name), ["shakeOff", "coldFeet", "thunder", "bask"])
         XCTAssertEqual(smudge.plus.awake.routines.map(\.name), awake.routines.map(\.name), "the same on the +")
         XCTAssertTrue(smudge.field.asleep.routines.isEmpty)
         XCTAssertTrue(smudge.plus.asleep.routines.isEmpty)
@@ -110,7 +110,40 @@ final class CompanionSmudgeTests: XCTestCase {
         XCTAssertFalse(plays("heron", .rain), "its sway would leave the wing behind")
         XCTAssertTrue(plays("heron", .snow), "its sways in the snow are drawn by hand, the snow going with its head")
         XCTAssertNotNil(smudge.index["swayL@snow"])
-        XCTAssertFalse(plays("drip", .plain), "a weather routine plays only under its sky")
+        XCTAssertFalse(plays("shakeOff", .plain), "a weather routine plays only under its sky")
+    }
+
+    /// Brief 91: the weather is told by the creature, and nothing is drawn in the air round it but the one drop or
+    /// flake it touches. Its rain routine is a shake-off (a drop finds its way under its wing onto its head; it shakes
+    /// from head to tail, then fluffs); no frame has more than one pixel standing alone.
+    func testTheWeatherIsOnItNotInTheAir() throws {
+        let rain = try XCTUnwrap(smudge.field.awake.routines.first { $0.name == "shakeOff" })
+        var order: [String] = []
+        for entry in smudge.field.awake.ticks(of: rain) where order.last != entry.tick.frame {
+            order.append(entry.tick.frame)
+        }
+        XCTAssertEqual(order, ["rainUp", "plip0", "plip", "wetL", "wetR", "wetL", "wetR", "wetPuff", "rest", "wetPuff",
+                               "rest", "blink", "rest"])
+        XCTAssertTrue(smudge.rows("plip0")![1].contains("l"), "the drop, hanging from its wing over its head")
+        XCTAssertTrue(smudge.rows("plip")![2].contains("l"), "and on its head")
+        for frame in smudge.frames {
+            let rows = frame.rows.map(Array.init)
+            var alone = 0
+            for y in rows.indices {
+                for x in rows[y].indices where rows[y][x] != CompanionInk.clear {
+                    var neighbours = 0
+                    for dy in -1...1 {
+                        for dx in -1...1 where dx != 0 || dy != 0 {
+                            let (nx, ny) = (x + dx, y + dy)
+                            guard rows.indices.contains(ny), rows[ny].indices.contains(nx) else { continue }
+                            if rows[ny][nx] != CompanionInk.clear { neighbours += 1 }
+                        }
+                    }
+                    if neighbours == 0 { alone += 1 }
+                }
+            }
+            XCTAssertLessThanOrEqual(alone, 1, "\(frame.name): a single drop or flake at most")
+        }
     }
 
     /// The doodle as the clock plays it: a toe tap, the leg out, a heart drawn in two strokes, seen, scribbled out, the

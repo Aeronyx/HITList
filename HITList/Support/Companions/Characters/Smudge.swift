@@ -15,10 +15,10 @@ extension CompanionCharacter {
     /// stands on; it lifts a leg and draws a heart in the air with its toe, sees you looking and scribbles it out; it
     /// fluffs up, shakes and nibbles at its shoulder. Rare: it turns its head all the way round, the back of its head
     /// and round again, a little past, and wobbles on its stilts, dizzy. At night it sits down on its folded legs, a
-    /// round owlet with its eyes shut; now and then a long leg stretches out in a dream; woken, one eye opens. In the
-    /// rain it holds a wing up over its head (a drop runs off the tip; it shakes); in snow, a dusting on its head and
-    /// cold feet; at thunder, a start; on a clear day, now and then, it sunbathes the way owls do, wings drooped out
-    /// and eyes half shut.
+    /// round owlet with its eyes shut; now and then a long leg kicks out in a dream; woken, one eye opens. In the rain
+    /// it holds a wing up over its head (a drop finds its way under it onto its head; it shakes itself from head to
+    /// tail); in snow, a dusting on its head and cold feet; at thunder, a start; on a clear day, now and then, it
+    /// sunbathes the way owls do, wings drooped out and eyes half shut.
     static let smudge: CompanionCharacter = CompanionCharacter(
         id: "smudge",
         name: "Smudge",
@@ -1016,10 +1016,10 @@ extension CompanionCharacter {
                 "........m..m........",
                 "......mmm..mmm......",
             ]),
-            Frame(name: "drip1", rows: [
+            Frame(name: "plip0", rows: [
                 "..dddmmmmmmmmmmmdd..",
-                ".d.d.d........dmmd..",
-                ".l....dddddddd...md.",
+                ".d.d.d....l...dmmd..",
+                "......dddddddd...md.",
                 "....ddmmmmmmmmdd.md.",
                 "...dmmlllmmlllmmd.md",
                 "..dmmllkllllkllmmdmd",
@@ -1038,15 +1038,15 @@ extension CompanionCharacter {
                 "........m..m........",
                 "......mmm..mmm......",
             ]),
-            Frame(name: "drip2", rows: [
+            Frame(name: "plip", rows: [
                 "..dddmmmmmmmmmmmdd..",
                 ".d.d.d........dmmd..",
-                "......dddddddd...md.",
+                "......dddllddd...md.",
                 "....ddmmmmmmmmdd.md.",
-                ".l.dmmlllmmlllmmd.md",
+                "...dmmlllmmlllmmd.md",
                 "..dmmllllllllllmmdmd",
-                "..dmllkllllkllllmdmd",
-                "..dmllkllllkllllmdmd",
+                "..dmllllllllllllmdmd",
+                "..dmllldlllldlllmdmd",
                 "..dmlllllwwlllllmdmd",
                 "..ddmllllllllllmdmd.",
                 "..dmdmllllllllmmd...",
@@ -1060,16 +1060,16 @@ extension CompanionCharacter {
                 "........m..m........",
                 "......mmm..mmm......",
             ]),
-            Frame(name: "drip3", rows: [
+            Frame(name: "wetR", rows: [
                 "..dddmmmmmmmmmmmdd..",
                 ".d.d.d........dmmd..",
                 "......dddddddd...md.",
                 "....ddmmmmmmmmdd.md.",
-                "...dmmlllmmlllmmd.md",
-                "..dmmllllllllllmmdmd",
-                "..dmllllllllllllmdmd",
-                "..dmllkllllkllllmdmd",
-                ".ldmllkllwwkllllmdmd",
+                "...dmmmlllmmlllmd.md",
+                "..dmmmllllllllllmdmd",
+                "..dmmlllkllllkllmdmd",
+                "..dmmlllkllllkllmdmd",
+                "..dmmlllllwwllllmdmd",
                 "..ddmllllllllllmdmd.",
                 "..dmdmllllllllmmd...",
                 "...dmdmmllllmmmd....",
@@ -1082,20 +1082,42 @@ extension CompanionCharacter {
                 "........m..m........",
                 "......mmm..mmm......",
             ]),
-            Frame(name: "rainShake", rows: [
+            Frame(name: "wetL", rows: [
                 "..dddmmmmmmmmmmmdd..",
                 ".d.d.d........dmmd..",
                 "......dddddddd...md.",
                 "....ddmmmmmmmmdd.md.",
+                "...dmlllmmlllmmmd.md",
+                "..dmllllllllllmmmdmd",
+                "..dmllkllllklllmmdmd",
+                "..dmllkllllklllmmdmd",
+                "..dmllllwwlllllmmdmd",
+                "..ddmllllllllllmdmd.",
+                "..dmdmllllllllmmd...",
+                "...dmdmmllllmmmd....",
+                ".....ddmmmmmmdd.....",
+                "........m..m........",
+                "........m..m........",
+                "........m..m........",
+                "........m..m........",
+                "........m..m........",
+                "........m..m........",
+                "......mmm..mmm......",
+            ]),
+            Frame(name: "wetPuff", rows: [
+                "..dddmmmmmmmmmmmdd..",
+                ".d.d.d........dmmd..",
+                "......dddddddd...md.",
+                "...dmdmmmmmmmmdd.mmd",
                 "..dmmmlllmmlllmmd.md",
                 ".dmmmllllllllllmmdmd",
-                "ldmmlllkllllklllmdmd",
+                ".dmmlllkllllklllmdmd",
                 ".dmmlllkllllklllmdmd",
                 ".dmmlllllwwlllllmdmd",
                 ".dmdmllllllllllmdmmd",
-                ".dmmdmllllllllmmmd.l",
-                ".ldmmdmmllllmmmmd...",
-                ".....ddmmmmmmdd...l.",
+                ".dmmdmllllllllmmmd..",
+                "..dmmdmmllllmmmmd...",
+                ".....ddmmmmmmdd.....",
                 "........m..m........",
                 "........m..m........",
                 "........m..m........",
@@ -1190,7 +1212,7 @@ extension CompanionCharacter {
                 "........m..m.m......",
                 "........m..mm.......",
                 "........m.....l.....",
-                "......mmm...l.......",
+                "......mmm...........",
             ]),
             Frame(name: "snowFootL", rows: [
                 "....................",
@@ -1234,7 +1256,7 @@ extension CompanionCharacter {
                 "......m.m..m........",
                 ".......mm..m........",
                 ".....l.....m........",
-                ".......l...mmm......",
+                "...........mmm......",
             ]),
             Frame(name: "snowShiver", rows: [
                 "....................",
@@ -1514,10 +1536,11 @@ extension CompanionCharacter {
                 .play(("turn1", 1), ("nuzzle", 3), ("nuzzle2", 2), ("nuzzle", 2), ("turn1", 1)), .hold(3),
                 .gesture("blink"), .hold(4),
             ]),
-            // Rain: it peeks up at its wing, a drop runs off the tip, and it shakes the wet off.
-            Routine(name: "drip", sky: .rain, steps: [
-                .play(("rainUp", 4)), .play(("drip1", 3), ("drip2", 2), ("drip3", 2)), .hold(2),
-                .play(("rainShake", 2), ("rest", 1), ("rainShake", 2)), .hold(3), .gesture("blink"), .hold(4),
+            // Rain: a drop finds its way under its wing onto its head, and it shakes itself from head to tail.
+            Routine(name: "shakeOff", sky: .rain, steps: [
+                .play(("rainUp", 3), ("plip0", 2)), .play(("plip", 3)),
+                .play(("wetL", 1), ("wetR", 1), ("wetL", 1), ("wetR", 1)),
+                .play(("wetPuff", 2), ("rest", 1), ("wetPuff", 2)), .hold(3), .gesture("blink"), .hold(4),
             ]),
             // Snow is cold on its feet: it lifts one and shakes it, then the other, and shivers.
             Routine(name: "coldFeet", sky: .snow, steps: [
