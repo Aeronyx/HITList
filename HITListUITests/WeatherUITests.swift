@@ -59,7 +59,7 @@ final class WeatherUITests: XCTestCase {
         switchOffThenOn()
         let alert = springboard.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system's prompt")
-        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "approximate location only")).firstMatch.exists,
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "on local time and dressed for the weather")).firstMatch.exists,
                       "the purpose string")
         let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         shot.name = "4 The location prompt"
