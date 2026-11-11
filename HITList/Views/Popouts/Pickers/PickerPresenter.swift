@@ -26,7 +26,13 @@ enum PickerKind: Hashable, CaseIterable {
         case .reminder: 300
         case .location: 300
         case .priority, .group, .labels: 280
-        case .repeating: 260
+        // The Repeat menu's longest choices ("Every 2 weeks on Wednesday") and Custom's Daily · Weekly · Monthly ·
+        // Yearly, whole at each platform's control size (brief 97).
+        #if os(macOS)
+        case .repeating: 320
+        #else
+        case .repeating: 360
+        #endif
         }
     }
 }

@@ -64,6 +64,51 @@ final class RepeatPickerTests: XCTestCase {
         XCTAssertEqual(typed.result(parser).recurrence, .daily)
     }
 
+    // MARK: Item 2: Custom… in the quick-add card
+
+    /// A rule Custom makes that quick add cannot type ("every 2 weeks on Tue and Thu") is kept on the card, applied as
+    /// a typed one would be, and survives the card being stored; a typed repeat wins over it.
+    func testACustomRuleWithoutWordsIsKeptOnTheCard() throws {
+        let parser = parser()
+        let rule = RecurrenceRule(frequency: .weekly, interval: 2, weekdays: [3, 5])
+        XCTAssertNil(rule.typedWords)
+        var draft = QuickAddDraft(context: .inbox, text: "Gym")
+        draft.setRecurrence(rule, parser)
+        XCTAssertEqual(draft.text, "Gym")
+        var result = draft.result(parser)
+        XCTAssertEqual(result.recurrence, rule)
+        XCTAssertEqual(result.dueDate, date(2026, 11, 12), "its next occurrence: Thursday")
+        XCTAssertFalse(result.hasDueTime)
+        XCTAssertEqual(draft.chips(parser).recurrence?.rowText, "Every 2 weeks on Tue and Thu")
+        // Stored and put back (the open card survives a kill).
+        let restored = try JSONDecoder().decode(QuickAddDraft.self, from: JSONEncoder().encode(draft))
+        XCTAssertEqual(restored.result(parser).recurrence, rule)
+        // With a time typed, on that day at that time, the rule timed to it.
+        draft.text = "Gym fri 7am"
+        result = draft.result(parser)
+        XCTAssertEqual(result.dueDate, date(2026, 11, 13, 7))
+        XCTAssertEqual(result.recurrence?.time, RecurrenceRule.TimeOfDay(hour: 7, minute: 0))
+        // A typed repeat wins; Don't repeat and No date take it away.
+        draft.text = "Gym every day"
+        XCTAssertEqual(draft.result(parser).recurrence, .daily)
+        draft.text = "Gym"
+        XCTAssertEqual(draft.result(parser).recurrence, rule)
+        draft.setRecurrence(nil, parser)
+        XCTAssertNil(draft.result(parser).recurrence)
+        draft.setRecurrence(rule, parser)
+        draft.setDate(nil, parser)
+        XCTAssertNil(draft.result(parser).recurrence)
+    }
+
+    /// A card stored by 0.9.3, which has no picked repeat, still opens.
+    func testACardStoredBeforeCustomStillOpens() throws {
+        let stored = try JSONEncoder().encode(QuickAddDraft(context: .inbox, text: "Gym every day"))
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: stored) as? [String: Any])
+        json.removeValue(forKey: "pickedRecurrence")
+        let old = try JSONDecoder().decode(QuickAddDraft.self, from: JSONSerialization.data(withJSONObject: json))
+        XCTAssertEqual(old.result(parser()).recurrence, .daily)
+    }
+
     /// A pick replaces a typed repeat; Don't repeat takes it away.
     func testAPickReplacesATypedRepeat() {
         let parser = parser()
