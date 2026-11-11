@@ -48,4 +48,17 @@ final class AccessibilityTests: XCTestCase {
         XCTAssertNil(PriorityWords.shown(.p4, isChecked: false), "no priority, nothing to say")
         XCTAssertNil(PriorityWords.shown(.p1, isChecked: true), "a checked circle is grey for every priority")
     }
+
+    /// A chip that shows only its value, or only its name when empty, says both.
+    func testChipsSayWhatTheyAre() {
+        XCTAssertEqual(ChipSpeech.date("Tomorrow"), "Date: Tomorrow")
+        XCTAssertEqual(ChipSpeech.date(nil), "Date: none")
+        XCTAssertEqual(ChipSpeech.priority(.p2), "Priority 2")
+        XCTAssertEqual(ChipSpeech.priority(.p4), "Priority: none")
+        XCTAssertEqual(ChipSpeech.labels(["errands", "waiting"]), "Labels: errands, waiting")
+        XCTAssertEqual(ChipSpeech.labels([]), "Labels: none")
+        XCTAssertEqual(ChipSpeech.repeats("Every week"), "Repeat: Every week")
+        XCTAssertEqual(ChipSpeech.deadline(nil), "Deadline: none")
+        XCTAssertEqual(ChipSpeech.location("Home"), "Location: Home")
+    }
 }
