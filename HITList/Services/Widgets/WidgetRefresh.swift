@@ -71,6 +71,7 @@ enum WidgetRefresh {
     static func settle(waitForMerge: Bool = true, reason: String = "push") async {
         if waitForMerge { try? await Task.sleep(for: .seconds(1)) }
         WidgetCompletionCenter.shared?.drain()
+        ShareInbox.shared?.drain() // brief 90: a push or a refresh also makes what was shared while the app slept
         let wrote = WidgetSnapshotWriter.shared.writeNow()
         log.notice("widgets settled after a \(reason, privacy: .public): snapshot \(wrote ? "written" : "unchanged", privacy: .public) (pid \(ProcessInfo.processInfo.processIdentifier))")
     }
