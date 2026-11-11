@@ -4,11 +4,12 @@ extension CompanionCharacter {
     /// Every companion drawn so far.
     static let all: [CompanionCharacter] = [
         CompanionCharacter.nod,
+        CompanionCharacter.smudge,
         CompanionCharacter.quill,
-        CompanionCharacter.hush,
-        CompanionCharacter.posy,
-        CompanionCharacter.mallow,
         CompanionCharacter.tuck,
+        CompanionCharacter.hush,
+        CompanionCharacter.mallow,
+        CompanionCharacter.posy,
     ]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
@@ -22,15 +23,17 @@ enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
         "slate": "nod",
+        // An owlet on legs far too long, drawn in pencil greys with a paper-white face (brief 87).
+        "graphite": "smudge",
         "midnight": "quill",
-        // Its own ears keep it warm, and its nose is cold: Nord's ice-blue accent (brief 79).
-        "nord": "hush",
-        // A piglet with wings too small for it and a snout in the theme's rose pink, for George's favourite (brief 85).
-        "rose": "posy",
-        // Round 18's plushy sketch, fatter and rounder, in a knitted band: a marshmallow for a mocha (brief 85).
-        "mocha": "mallow",
         // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
         "moss": "tuck",
+        // Its own ears keep it warm, and its nose is cold: Nord's ice-blue accent (brief 79).
+        "nord": "hush",
+        // Round 18's plushy sketch, fatter and rounder, in a knitted band: a marshmallow for a mocha (brief 85).
+        "mocha": "mallow",
+        // A piglet with wings too small for it and a snout in the theme's rose pink, for George's favourite (brief 85).
+        "rose": "posy",
     ]
 
     /// The companion for the theme `themeID`.
