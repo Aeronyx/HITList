@@ -59,6 +59,17 @@ larger movements when the app's Reduce Effects switch is on. `HITMotion.spring` 
 withAnimation(effects.animation(.enter)) { showToast = true }
 ```
 
+Built on the roles (round 17, brief 75; each measured frame by frame on the simulator and the Mac):
+- **With the keyboard** (iPhone cards): `KeyboardObserver.height` moves on `KeyboardObserver.Follow`, the keyboard's
+  own curve (an ease-out, `1 - e^(-t/τ)`, τ a fifth of the notification's duration), set on the next turn of the run
+  loop: a SwiftUI change made inside UIKit's keyboard animation is drawn wrongly. Never animate with the keyboard
+  any other way.
+- **Panels** (Mac and iPad quick add, editor, shared task): `PanelBackdrop.transition` fades the backdrop and grows
+  the panel its last 2% from its top edge, in on `enter`, out on `exit`.
+- **The Mac sidebar's selection**: `macSidebarSelectionGlide(selection)` on a column of `MacSidebarRow`s draws one
+  fill that glides to the selected row on `tabPill`, as the iPhone island's pill does.
+- **Numbers** that change in place roll (`.contentTransition(.numericText(value:))` on `standard`).
+
 ## Material (`HITMaterial.swift`)
 `hitGlass(in:tint:interactive:fallback:)` is the one way to draw Liquid Glass: glass on iOS 26 / macOS 26 when
 effects are allowed, the slate fill otherwise (`fallback`, else the tint, else `Theme.surface`). Glass is off
