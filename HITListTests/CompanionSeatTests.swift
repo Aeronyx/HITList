@@ -485,3 +485,27 @@ final class CompanionSeatTests: XCTestCase {
         XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
 }
+
+/// Brief 100, item 4: on iPhone the last row of a list scrolls clear of the "+" and of the companion on it: the lists'
+/// bottom margin grows by how far the companion stands above the button.
+@MainActor
+final class CompanionListMarginTests: XCTestCase {
+    func testEveryCompanionsClearance() {
+        for character in CompanionCharacter.all {
+            let clearance = CompanionPerch.clearance(character)
+            let p = CompanionCharacter.pointsPerPixel
+            XCTAssertGreaterThan(clearance, 0, character.id)
+            XCTAssertLessThanOrEqual(clearance, CGFloat(character.seatRow) * p, character.id)
+            // Every still's top is under it.
+            for mode in [character.plus.awake, character.plus.asleep] {
+                for still in mode.stills {
+                    let rows = character.rows(still)!
+                    let top = rows.firstIndex { $0.contains { $0 != CompanionInk.clear } }!
+                    XCTAssertLessThanOrEqual(CGFloat(character.seatRow - top) * p, clearance, "\(character.id) \(still)")
+                }
+            }
+        }
+        // Tuck stands 16 pixels above the "+" (its seedling's tip, row 4 of 20).
+        XCTAssertEqual(CompanionPerch.clearance(.tuck), 32)
+    }
+}
