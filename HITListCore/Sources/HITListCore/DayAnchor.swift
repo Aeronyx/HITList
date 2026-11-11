@@ -18,6 +18,15 @@ import Foundation
 ///    22:00, and a device that flew west before it updated still finds the day it was given;
 /// 4. anything else (a stray moment on an undated-time task): the local day it shows here.
 ///
+/// **Rewriting never guesses (brief 92).** Readings 3 and 4 are guesses: a value on a quarter hour need not be a
+/// midnight. Thursday 09:00 in Chicago is 15:00 UTC, the moment Tokyo's Friday begins; anything that steps an anchor
+/// keeping its time of day (a repeat's roll-over, a date picker that keeps the time of the date it opened on, a 0.9.2
+/// device doing either) lands it, after a clock change, an hour off 10:00 UTC (Oct 30's anchor, 06:00 EDT in New York,
+/// stepped to Nov 11 is 06:00 EST: 11:00 UTC, where UTC+13's Nov 12 begins). So `verdict` stores an anchor only for a
+/// value this device can vouch for, a midnight in its own zone (reading 2, the first moment after a gap in the clock
+/// included), and leaves every other value exactly as it is stored, whatever `day(of:)` makes of it. Such a value reads
+/// as the local day it shows on each device, as before 0.9.3, until a device in its writer's zone anchors it.
+///
 /// Rewriting happens in the app's one place (the save, the import pass, the first-run pass); `isEnabled` turns it off
 /// and leaves reading as it is.
 public enum DayAnchor {
@@ -69,15 +78,55 @@ public enum DayAnchor {
         isAnchor(value) ? value : anchor(of: day(of: value, calendar: calendar))
     }
 
-    /// What the store should keep instead of `value`, or nil to keep it as it is: already an anchor, rewriting is off
-    /// (`isEnabled`), or the anchor would read as another day in `calendar`'s zone (UTC−11, −12 and +14), so the device
-    /// it is on keeps showing the day it shows now.
+    // MARK: - Rewriting (brief 92: only what this device can vouch for)
+
+    /// What a store makes of a date with no time on a device in `calendar`'s zone, and why.
+    public enum Verdict: Equatable, Sendable {
+        /// Store this instead: the value is a midnight in this device's zone (the first moment after a gap in the clock
+        /// counts), and this is its day's anchor.
+        case anchor(Date)
+        /// Already an anchor: nothing to do, in any zone.
+        case alreadyAnchored
+        /// Rewriting is off (`isEnabled`).
+        case disabled
+        /// Left exactly as stored: on a quarter hour in UTC but not a midnight in this device's zone. It may be another
+        /// zone's midnight (Tokyo's Friday, read in Chicago) or a time on a quarter hour (Chicago's Thursday 09:00, the
+        /// same instant); nothing here can tell which.
+        case notThisZonesMidnight
+        /// Left exactly as stored: not on a quarter hour, so no zone's midnight (a stray moment).
+        case notAMidnight
+        /// Left exactly as stored: this zone's own midnight, but the anchor would read as another day here (UTC−11, −12
+        /// and +14), so the device keeps showing the day it shows now.
+        case zoneCannotHoldAnAnchor
+
+        /// Whether the value stays exactly as stored for a reason worth counting (not an anchor, not the switch).
+        public var isLeftAlone: Bool {
+            switch self {
+            case .notThisZonesMidnight, .notAMidnight, .zoneCannotHoldAnAnchor: return true
+            case .anchor, .alreadyAnchored, .disabled: return false
+            }
+        }
+    }
+
+    /// The verdict on `value` (the rules at the top): an anchor only for a midnight in this device's zone, kept to the
+    /// millisecond (CloudKit's and the Shared Tasks store's precision); every other value is left exactly as it is.
+    public static func verdict(_ value: Date, calendar: Calendar, enabled: Bool = isEnabled) -> Verdict {
+        guard enabled else { return .disabled }
+        if isAnchor(value) { return .alreadyAnchored }
+        let here = gregorian(in: calendar.timeZone)
+        let start = here.startOfDay(for: value.addingTimeInterval(0.0005))
+        guard abs(start.timeIntervalSince(value)) < 0.0005 else {
+            return isOnAQuarterHour(value) ? .notThisZonesMidnight : .notAMidnight
+        }
+        let day = localDay(of: start, calendar: calendar)
+        let anchor = anchor(of: day)
+        return localDay(of: anchor, calendar: calendar) == day ? .anchor(anchor) : .zoneCannotHoldAnAnchor
+    }
+
+    /// What the store should keep instead of `value`, or nil to keep it exactly as it is (`verdict`).
     public static func rewrite(_ value: Date, calendar: Calendar, enabled: Bool = isEnabled) -> Date? {
-        guard enabled, !isAnchor(value) else { return nil }
-        let named = day(of: value, calendar: calendar)
-        let anchor = anchor(of: named)
-        guard localDay(of: anchor, calendar: calendar) == named else { return nil }
-        return anchor
+        if case .anchor(let anchor) = verdict(value, calendar: calendar, enabled: enabled) { return anchor }
+        return nil
     }
 
     // MARK: - Reading
@@ -88,9 +137,8 @@ public enum DayAnchor {
         if isAnchor(value) { return utcDay(of: value) }
         let here = gregorian(in: calendar.timeZone)
         if here.startOfDay(for: value) == value { return localDay(of: value, calendar: calendar) }
+        guard isOnAQuarterHour(value) else { return localDay(of: value, calendar: calendar) }
         let seconds = secondsIntoUTCDay(value)
-        let quarters = seconds / 900
-        guard abs(quarters - quarters.rounded()) < 0.000_001 else { return localDay(of: value, calendar: calendar) }
         // A midnight at `seconds` past midnight UTC was written at UTC−seconds or UTC+(24 h − seconds): the one inside
         // −10:00...+14:00, west of +14 at 10:00 (where an anchor sits).
         let offset = seconds <= Double(hourUTC * 3600) ? -seconds : 86_400 - seconds
@@ -123,6 +171,13 @@ public enum DayAnchor {
     private static func utcDay(of value: Date) -> Day {
         let parts = utc.dateComponents([.year, .month, .day], from: value)
         return Day(year: parts.year ?? 1, month: parts.month ?? 1, day: parts.day ?? 1)
+    }
+
+    /// Whether `value` is on a quarter hour in UTC (to a millisecond), as every zone's midnight is: every offset in use is
+    /// a whole number of quarter hours.
+    static func isOnAQuarterHour(_ value: Date) -> Bool {
+        let quarters = secondsIntoUTCDay(value) / 900
+        return abs(quarters - quarters.rounded()) < 0.000_001
     }
 
     /// Seconds since midnight UTC on `value`'s UTC day, 0..<86 400. Every UTC day is 86 400 s long for `Date`.
