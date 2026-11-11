@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import SwiftUI
 import HITListCore
 @testable import HITList
 
@@ -1015,16 +1016,44 @@ private final class RecordingIndex: SpotlightIndexing {
     func removeAll() async throws {}
 }
 
-/// Brief 59: the tip and the empty board say the rule in one sentence each.
+/// Brief 59: the tip says the rule in one sentence. Brief 96: the empty board says nothing but its Add a Switch tile.
 final class FlipboardWordsTests: XCTestCase {
-    /// Brief 72: the tip and the empty board say a switch is a routine, and the empty board how one becomes a task.
-    func testTheTipAndTheEmptyBoardSayASwitchIsARoutine() {
+    /// Brief 72: the tip says a switch is a routine, in one sentence.
+    func testTheTipSaysASwitchIsARoutine() {
         XCTAssertTrue(HITTipKind.flipboard.message.contains("A switch is a routine"), HITTipKind.flipboard.message)
-        XCTAssertTrue(FlipboardView.emptyMessage.contains("A switch is a routine, not a task"), FlipboardView.emptyMessage)
-        XCTAssertTrue(FlipboardView.emptyRule.contains("Overdue becomes task"))
-        for text in [HITTipKind.flipboard.message, FlipboardView.emptyRule] {
-            XCTAssertEqual(text.filter { $0 == "." }.count, 1, "one sentence: \(text)")
+        XCTAssertEqual(HITTipKind.flipboard.message.filter { $0 == "." }.count, 1, "one sentence")
+    }
+
+    /// Brief 96 (George: "New Switchboard shouldn't be a starting option"): the empty board offers a switch alone; a
+    /// Switchboard is offered once there is a switch to put on one, or a board already.
+    func testTheEmptyBoardOffersASwitchAlone() {
+        XCTAssertFalse(FlipboardView.offersNewSwitchboard(switches: 0, boards: 0), "the empty board")
+        XCTAssertTrue(FlipboardView.offersNewSwitchboard(switches: 1, boards: 0), "a switch to group")
+        XCTAssertTrue(FlipboardView.offersNewSwitchboard(switches: 0, boards: 1), "a board, still empty")
+    }
+
+    /// Brief 96: the Add a Switch tile is the size of a switch, alone on an empty board as beside switches, at the
+    /// iPhone's tile width and the Mac's.
+    @MainActor
+    func testTheAddTileIsTheSizeOfASwitch() {
+        for width: CGFloat in [161, 187, 240] {
+            let tile = Self.height(AddSwitchTile {}, width: width)
+            let face = Self.height(FlipSwitchFace(title: "Take out the recycling", ruleText: "every week", target: 1, lamps: 0,
+                                                  side: .red, isOverdue: false, fraction: 0, caption: "Flip to start",
+                                                  reduceMotion: true) { RockerSwitch(tilt: -1) }, width: width)
+            XCTAssertGreaterThan(face, 200, "a real switch's face at \(width) pt")
+            XCTAssertEqual(tile, face, accuracy: 0.5, "the + tile at \(width) pt")
         }
+    }
+
+    @MainActor
+    private static func height<V: View>(_ view: V, width: CGFloat) -> CGFloat {
+        let sized = view.frame(width: width)
+        #if os(macOS)
+        return NSHostingView(rootView: sized).fittingSize.height
+        #else
+        return UIHostingController(rootView: sized).sizeThatFits(in: CGSize(width: width, height: 2000)).height
+        #endif
     }
 
     /// Brief 72: someone whose switches came from before Switchboards (their red switches waited in Today) is told

@@ -92,7 +92,14 @@ final class SwitchboardUITests: XCTestCase {
     func testANewSwitchboardAndASwitchOnItWithATime() throws {
         app.launch()
         openFlipboard()
-        // The empty board offers a Switchboard straight away.
+        // The empty board offers a switch alone (brief 96); once there is one, a Switchboard at the board's foot.
+        XCTAssertFalse(app.buttons["New Switchboard"].exists, "no Switchboard before a switch")
+        app.buttons["addSwitchTile"].tap()
+        let first = app.descendants(matching: .any)["switchName"].firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5), "the switch card")
+        app.typeText("Stretch")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(first.waitForNonExistence(timeout: 5))
         let newBoard = app.buttons["New Switchboard"]
         XCTAssertTrue(newBoard.waitForExistence(timeout: 5))
         newBoard.tap()
