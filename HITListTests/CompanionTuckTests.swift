@@ -250,28 +250,16 @@ final class CompanionTuckTests: XCTestCase {
         let p = CompanionCharacter.pointsPerPixel
         let rest = try XCTUnwrap(tuck.rows("rest"))
         let foot = Self.opaque(rest[tuck.seatRow - 1])
-        XCTAssertEqual(foot, Array(3...17))
+        // Brief 100: its sole spreads to under the ends of its body (it was 3...17, and the body's bottom row,
+        // 1...19, overhung it with a notch of background under each end); `CompanionSeatTests` checks the rest.
+        XCTAssertEqual(foot, Array(2...18))
         for frame in tuck.frames {
             let lowest = frame.rows.lastIndex { $0.contains { $0 != CompanionInk.clear } }
             XCTAssertEqual(lowest, tuck.seatRow - 1, "\(frame.name): its foot on the edge")
             XCTAssertEqual(Self.opaque(frame.rows[tuck.seatRow - 1]), foot, "\(frame.name): the same foot")
         }
-        // The "+": a 76 × 50 pt capsule, flat on top only between its two half-circle ends.
-        let size = FloatingAddButton.size
-        let radius: CGFloat = size.height / 2
         let offset = CompanionPerch.offset(tuck, spot: .addButton)
         XCTAssertEqual(offset.height, -CGFloat(tuck.seatRow) * p, "the foot's row on the capsule's top edge")
-        let spriteWidth: CGFloat = CGFloat(tuck.width) * p
-        let left: CGFloat = size.width - spriteWidth + offset.width
-        let footLeft: CGFloat = left + CGFloat(foot[0]) * p
-        let footRight: CGFloat = left + CGFloat(foot[foot.count - 1] + 1) * p
-        for x in [footLeft, footRight] {
-            let flatEnd: CGFloat = size.width - radius
-            let fromFlat: CGFloat = max(radius - x, x - flatEnd, 0)
-            let inside: CGFloat = radius * radius - fromFlat * fromFlat
-            let drop: CGFloat = radius - inside.squareRoot()
-            XCTAssertLessThan(drop, 0.25, "the capsule's top under the foot's end at \(x) pt is \(drop) pt down")
-        }
         // The Mac's field: a rounded rectangle (radius 7); the foot ends well clear of its trailing corner.
         let field = CompanionPerch.offset(tuck, spot: .searchField)
         let clearOfCorner: CGFloat = -field.width + CGFloat(tuck.width - 1 - foot[foot.count - 1]) * p
