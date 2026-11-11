@@ -239,7 +239,10 @@ final class CompanionGlimTests: XCTestCase {
                     drop = max(drop, topEdge(of: path, at: first, height: size.height))
                     drop = max(drop, topEdge(of: path, at: last, height: size.height))
                 }
-                XCTAssertLessThan(drop, 1.0 / 6.0, "\(name) column \(x): \(drop) pt of background under it")
+                // Brief 100: the seat carries a base down to the curve (`CompanionSeat`, checked by
+                // `CompanionSeatTests`); its paw, put down beside the lantern in the rain and asleep, rests where the
+                // shoulder has begun to fall, within the pixel the seat reaches.
+                XCTAssertLessThan(drop, CompanionCharacter.pointsPerPixel, "\(name) column \(x): \(drop) pt under it")
             }
         }
         // By day only the tail and the lantern are below the seat line: nothing of the mouse sinks into the button.
