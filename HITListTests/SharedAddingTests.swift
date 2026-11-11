@@ -54,7 +54,7 @@ final class SharedAddingTests: XCTestCase {
         XCTAssertEqual(task.notes.value, "Oat")
         XCTAssertEqual(task.priority.value, 2)
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: now))!
-        XCTAssertEqual(task.due.value, SharedDue(date: tomorrow, hasTime: false))
+        XCTAssertEqual(task.due.value, SharedTasksStore.normalized(SharedDue(date: tomorrow, hasTime: false)), "tomorrow, kept as its day (brief 82)")
     }
 
     func testWithSeveralItGoesToTheOneUsedLast() throws {

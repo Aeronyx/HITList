@@ -36,7 +36,7 @@ struct BrowseView: View {
     @State private var deletingProject: GroupDeletion?
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
-    @State private var showSettings = false
+    @State private var settingsRequest: SettingsSheetRequest?
 
     /// What the field holds: nothing, words to find, or a filter query (`SearchIntent`, brief 61).
     private var intent: SearchIntent { SearchIntent(search, now: now) }
@@ -83,7 +83,8 @@ struct BrowseView: View {
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
-        .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
+        .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
+        .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sheet(item: $savingQuery) { FilterEditorView(filter: nil, initialQuery: $0.query).slateSheet() }
@@ -108,7 +109,7 @@ struct BrowseView: View {
 
     /// The profile menu (brief 53): Account settings…, What's New, Send Beta Feedback… and the version.
     private var profileButton: some View {
-        BrowseProfileMenu { showSettings = true }
+        BrowseProfileMenu { settingsRequest = SettingsSheetRequest(page: .account) }
             .accessibilityIdentifier("browse-profile")
     }
 
@@ -188,7 +189,7 @@ struct BrowseView: View {
                     case .completed:
                         link(.completed) { BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.accent) }
                     case .settings:
-                        Button { showSettings = true } label: {
+                        Button { settingsRequest = SettingsSheetRequest() } label: {
                             HStack {
                                 BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.secondaryText)
                                 Image(systemName: "chevron.right")

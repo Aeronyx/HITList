@@ -286,3 +286,350 @@ final class SettingsTests: XCTestCase {
         }
     }
 }
+
+// MARK: - Brief 86: Settings you can find things in
+
+import SwiftUI
+import SwiftData
+#if os(iOS)
+import UIKit
+#else
+import AppKit
+#endif
+
+/// Brief 86: the first screen and its pages, one home per option, the Mac's sections under the same names, the
+/// companions on the swatches, and the ways into Settings.
+@MainActor
+final class SettingsTidyTests: XCTestCase {
+    private var container: ModelContainer!
+
+    override func setUp() async throws {
+        container = ModelContainerFactory.preview()
+    }
+
+    override func tearDown() async throws {
+        container = nil
+    }
+
+    // MARK: Pages
+
+    func testTheFirstScreenListsThePagesInTheBriefsOrder() {
+        XCTAssertEqual(SettingsPage.list, [.general, .reminders, .extras, .iCloud, .claude, .about],
+                       "Account is the profile row and Appearance the group above these")
+        XCTAssertEqual(SettingsPage.list.map(\.title), ["General", "Reminders", "Extras", "iCloud & data", "Claude", "About"])
+        XCTAssertEqual(Set(SettingsPage.allCases.map(\.title)).count, SettingsPage.allCases.count, "a name once")
+        XCTAssertEqual(Set(SettingsPage.list.map(\.systemImage)).count, SettingsPage.list.count)
+        for page in SettingsPage.allCases {
+            XCTAssertFalse(page.summary.isEmpty)
+            // One line under the row's name on an iPhone (about 40 characters of the caption type).
+            XCTAssertLessThanOrEqual(page.summary.count, 40, "\(page)'s line fits one line")
+            // The back control leaves the bar's centred title its room.
+            XCTAssertLessThanOrEqual(page.backTitle.count, 10, "\(page)'s back words")
+        }
+        XCTAssertEqual(SettingsPage.iCloud.backTitle, "iCloud")
+        XCTAssertEqual(SettingsPage.syncLog.title, "Sync log")
+        XCTAssertEqual(SettingsPage.whatsNew.title, "What's New")
+    }
+
+    /// Rule 3: the Mac has the same homes under the same names in the same order, iCloud & data as two sections.
+    func testTheMacHasTheSameHomesUnderTheSameNames() {
+        let mac = MacSettingsSection.allCases.map(\.title)
+        XCTAssertEqual(mac.first, "Account")
+        XCTAssertEqual(mac[1], AppearanceSettingsSection.title, "Appearance second, as on the iPhone's first screen")
+        let iPhone = ["Account", "Appearance"] + SettingsPage.list.map(\.title)
+        let macAsIPhone = mac.reduce(into: [String]()) { names, title in
+            let name = (title == "iCloud" || title == "Data") ? SettingsPage.iCloud.title : title
+            if names.last != name { names.append(name) }
+        }
+        XCTAssertEqual(macAsIPhone, iPhone)
+        for page in [SettingsPage.account, .general, .reminders, .claude, .about] {
+            let section = MacSettingsSection.allCases.first { $0.title == page.title }
+            XCTAssertEqual(section?.systemImage, page.systemImage, "\(page) keeps the Mac's symbol")
+        }
+        XCTAssertEqual(SettingsPage.extras.systemImage, MacSettingsSection.completing.systemImage)
+        XCTAssertEqual(MacSettingsSection.completing.title, "Extras")
+    }
+
+    /// Rule 5: each path a What's New line names ("Settings → Extras → Weather") is a page and a row in it.
+    func testWhatsNewPathsNameRealHomes() throws {
+        let homes: [String: Set<String>] = [
+            // Rows and the groups that hold them, by the names the pages show.
+            "Account": ["Your name", "Delete profile", "iCloud account", "Sign out"],
+            "Appearance": ["Reduce effects", "Compact rows", "Themes"],
+            "General": ["Start screen", "Week starts on", "Show task count on the app icon", "Confirm before deleting",
+                        "Calendar events", "Keyboard shortcuts"],
+            "Reminders": ["Notify at due time", "Default reminder", "Morning summary", "If reminders don't arrive",
+                          "Send a test notification"],
+            "Extras": ["Completion sound", "Haptics", "Companions", "Show companions", "Weather", "Sync bolt",
+                       "Holiday touches", "Rare surprises", "Creaky hinge", "Completing a task", "Effects"],
+            "iCloud": ["Sync", "Sync log", "Check iCloud", "Reset local cache", "If something doesn't sync"],
+            "iCloud & data": ["Sync", "Sync log", "Check iCloud", "Reset local cache", "Backups", "Export JSON",
+                              "Import JSON", "Delete all data from iCloud", "If something doesn't sync"],
+            "Data": ["Backups", "Export JSON", "Import JSON", "Delete all data from iCloud"],
+            "Claude": ["Claude integration"],
+            "About": ["Show tips again", "What's New", "Privacy policy", "Send Beta Feedback", "Copy diagnostics"],
+        ]
+        let pageNames = Set(SettingsPage.allCases.map(\.title) + MacSettingsSection.allCases.map(\.title) + ["Appearance"])
+        let current = try XCTUnwrap(WhatsNew.current)
+        var checked = 0
+        for item in current.items {
+            for match in item.matches(of: /Settings → ([A-Za-z&' ]+?) → ([A-Za-z' ]+?)(?=[.,;:)]|$| turns| lets| shows)/) {
+                let page = String(match.1)
+                let row = String(match.2)
+                XCTAssertTrue(pageNames.contains(page), "\"\(page)\" is a page (\(item))")
+                XCTAssertTrue(homes[page]?.contains(row) == true, "\"\(row)\" is in \(page) (\(item))")
+                checked += 1
+            }
+        }
+        XCTAssertGreaterThan(checked, 0, "this version's notes name at least one path")
+    }
+
+    /// Rule 2: no option is removed and no stored key renamed. Every key a Settings row writes, as it shipped.
+    func testEverySettingsKeyIsTheShippedOne() {
+        XCTAssertEqual(Preferences.startTab, "pref.startTab")
+        XCTAssertEqual(Preferences.weekStart, "pref.weekStart")
+        XCTAssertEqual(Preferences.showBadge, "pref.showBadge")
+        XCTAssertEqual(Preferences.confirmDelete, "pref.confirmDelete")
+        XCTAssertEqual(Preferences.defaultReminderOffsetMinutes, "pref.defaultReminderOffsetMinutes")
+        XCTAssertEqual(Preferences.morningSummaryEnabled, "pref.morningSummary.enabled")
+        XCTAssertEqual(Preferences.morningSummaryMinutes, "pref.morningSummary.minutes")
+        XCTAssertEqual(Preferences.theme, "pref.theme")
+        XCTAssertEqual(Preferences.reduceEffects, "pref.reduceEffects")
+        XCTAssertEqual(Preferences.compactRows, "pref.compactRows")
+        XCTAssertEqual(Preferences.macSettingsSection, "pref.mac.settingsSection")
+        XCTAssertEqual(Preferences.companions, "delight.companions")
+        XCTAssertEqual(Preferences.holidayTouches, "delight.holidayTouches")
+        XCTAssertEqual(Preferences.rareSurprises, "delight.rareSurprises")
+        XCTAssertEqual(CompletionFeedback.hapticsKey, "delight.haptics")
+        XCTAssertEqual(CompletionSound.key, "delight.soundName")
+        XCTAssertEqual(BoltStyle.key, "delight.boltStyle")
+        XCTAssertEqual(HingeCreak.key, "delight.squeakyHinge")
+        XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
+                       ["account", "appearance", "general", "reminders", "completing", "iCloud", "data", "claude", "about"])
+    }
+
+    func testRowsSayWhatIsWrongOnlyWhenSomethingIs() {
+        XCTAssertEqual(SettingsProfileRow.subtitle(for: .signedIn), SettingsPage.account.summary)
+        XCTAssertEqual(SettingsProfileRow.subtitle(for: .neverSignedIn), SettingsPage.account.summary,
+                       "never using iCloud is not trouble")
+        XCTAssertEqual(SettingsProfileRow.subtitle(for: .signedOut), AccountState.signedOut.title)
+        let now = Date(timeIntervalSinceReferenceDate: 815_000_000)
+        XCTAssertEqual(SettingsPageRow.subtitle(for: .iCloud, sync: .synced(now), stuck: false).text, SettingsPage.iCloud.summary)
+        XCTAssertFalse(SettingsPageRow.subtitle(for: .iCloud, sync: .syncing, stuck: false).isWarning)
+        XCTAssertTrue(SettingsPageRow.subtitle(for: .iCloud, sync: .error("Quota", now), stuck: false).isWarning)
+        XCTAssertTrue(SettingsPageRow.subtitle(for: .iCloud, sync: .offline, stuck: false).isWarning)
+        XCTAssertEqual(SettingsPageRow.subtitle(for: .iCloud, sync: .synced(now), stuck: true).text, SettingsPageRow.stuckWords)
+        XCTAssertFalse(SettingsPageRow.subtitle(for: .general, sync: .offline, stuck: true).isWarning, "only iCloud & data")
+    }
+
+    // MARK: Heights (rule 1)
+
+    #if os(iOS)
+    /// An iPhone 17 (402 × 874 pt) shows the sheet from 62 pt down under its 58 pt bar, and keeps the 34 pt home
+    /// indicator clear: 720 pt for the first screen's content with its 16 pt margins.
+    static let iPhone17Room: CGFloat = 874 - 62 - 58 - 34
+
+    private func height<V: View>(_ view: V, width: CGFloat = 402) -> CGFloat {
+        let content = VStack(alignment: .leading, spacing: HITSpacing.xl) { view }
+            .padding(HITSpacing.l)
+            .frame(width: width, alignment: .leading)
+            .modelContainer(container)
+            .preferredColorScheme(.dark)
+        let host = UIHostingController(rootView: content)
+        return host.sizeThatFits(in: CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)).height
+    }
+
+    func testFirstScreenFitsAnIPhone17() {
+        let first = height(SettingsHome())
+        print("SETTINGS-HEIGHT first screen: \(first) pt of \(Self.iPhone17Room)")
+        XCTAssertLessThanOrEqual(first, Self.iPhone17Room, "the first screen fits an iPhone 17 without scrolling")
+        var longest: (SettingsPage, CGFloat) = (.general, 0)
+        for page in SettingsPage.allCases where page != .syncLog {
+            let h = height(SettingsPageContent(page: page))
+            print("SETTINGS-HEIGHT \(page.rawValue): \(h) pt")
+            if h > longest.1 { longest = (page, h) }
+        }
+        print("SETTINGS-HEIGHT longest page: \(longest.0.rawValue) \(longest.1) pt")
+        // The old single column measured 3,636 pt (brief 86's before); no page comes near it.
+        XCTAssertLessThan(longest.1, 1_400)
+    }
+    #endif
+
+    // MARK: Rendering
+
+    private func render<V: View>(_ view: V, _ name: String, width: CGFloat = 402, file: StaticString = #filePath, line: UInt = #line) {
+        let content = view.modelContainer(container).frame(width: width).background(Theme.background).preferredColorScheme(.dark)
+        let renderer = ImageRenderer(content: content)
+        XCTAssertNotNil(renderer.cgImage, "\(name) didn't render", file: file, line: line)
+    }
+
+    func testTheFirstScreenAndEveryPageRender() {
+        render(VStack { SettingsHome() }, "first screen")
+        for page in SettingsPage.allCases {
+            render(VStack { SettingsPageContent(page: page) }, "page \(page)")
+        }
+        render(SettingsView(), "the sheet", width: 402)
+        render(SettingsView(page: .extras), "the sheet on a page", width: 402)
+    }
+
+    // MARK: The sheet's pages
+
+    func testAPageGoesBackPastAThirdOrWithAFlick() {
+        typealias Pages = HITSheetPages<SettingsPage, EmptyView, EmptyView>
+        XCTAssertFalse(Pages.popsBack(translation: 100, predicted: 150, width: 402))
+        XCTAssertTrue(Pages.popsBack(translation: 140, predicted: 150, width: 402), "past a third")
+        XCTAssertTrue(Pages.popsBack(translation: 60, predicted: 260, width: 402), "a flick")
+        XCTAssertFalse(Pages.popsBack(translation: 300, predicted: 300, width: 0))
+        XCTAssertEqual(Pages.coveredOffset(width: 400, drag: 0), -120, "the screen under a page sits a third left")
+        XCTAssertEqual(Pages.coveredOffset(width: 400, drag: 200), -60)
+        XCTAssertEqual(Pages.coveredOffset(width: 400, drag: 400), 0)
+        XCTAssertLessThan(Pages.edgeWidth, HITSpacing.l + HITSpacing.l, "the edge strip stays in the gutter, clear of the rows' icons")
+    }
+
+    // MARK: Companions on the swatches (rule 6)
+
+    func testOnlyAThemesOwnCompanionSitsOnItsSwatch() {
+        let launch = CompanionLaunchOptions(arguments: [])
+        var shown: [String: String] = [:]
+        for palette in ThemePalette.all {
+            guard let character = ThemeCompanion.character(for: palette) else {
+                // A theme with none of its own would borrow one another theme already shows.
+                let borrowed = CompanionCast.character(forTheme: palette.id, launch: launch)
+                XCTAssertTrue(ThemePalette.all.contains { $0.id != palette.id && ThemeCompanion.character(for: $0)?.id == borrowed.id },
+                              "\(palette.name) shows none only when its companion is another theme's")
+                continue
+            }
+            XCTAssertEqual(character.id, CompanionCast.character(forTheme: palette.id, launch: launch).id)
+            XCTAssertNil(shown[character.id], "\(character.name) on one swatch only")
+            shown[character.id] = palette.id
+        }
+        XCTAssertEqual(shown["nod"], "slate", "Nod on Slate, never on the themes that borrow it")
+        XCTAssertLessThan(shown.count, ThemePalette.all.count, "no grid of Nods")
+    }
+
+    func testEveryCompanionSitsOnItsSwatchOnWholePoints() {
+        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+            let metrics = ThemeSwatch.Metrics(side: side)
+            XCTAssertEqual(metrics.cardTop, metrics.cardTop.rounded(), "the card's edge on a whole point")
+            XCTAssertEqual(metrics.dot.minX, metrics.dot.minX.rounded())
+            XCTAssertEqual(metrics.dot.minY, metrics.dot.minY.rounded())
+            for character in CompanionCharacter.all {
+                for placement in ThemeCompanion.Placement.allCases {
+                    let seat = ThemeCompanion.Seat(placement: placement, along: 0.5)
+                    let layout = ThemeCompanion.layout(for: character, seat: seat, side: side)
+                    let label = "\(character.id) \(placement) at \(side)"
+                    XCTAssertEqual(layout.origin.x, layout.origin.x.rounded(), label)
+                    XCTAssertEqual(layout.origin.y, layout.origin.y.rounded(), label)
+                    XCTAssertNotNil(character.rows(layout.frame), "\(label): a frame it has")
+                    XCTAssertGreaterThanOrEqual(layout.origin.x, -1, label)
+                    XCTAssertLessThanOrEqual(layout.origin.x + CGFloat(character.width), side + 1, label)
+                    let seatY = layout.origin.y + CGFloat(character.seatRow)
+                    switch placement {
+                    case .onCard: XCTAssertEqual(seatY, metrics.cardTop, "\(label): legs over the card's edge")
+                    case .onTop: XCTAssertEqual(seatY, 0, "\(label): legs over the top edge")
+                    case .asleepOnDot: XCTAssertEqual(seatY, metrics.dot.minY, "\(label): on the dot")
+                    case .alongTop:
+                        let last = ThemeCompanion.lastOpaqueRow(character.rows(layout.frame) ?? []) ?? 0
+                        XCTAssertEqual(layout.origin.y + CGFloat(last + 1), 0, "\(label): lying on the top edge, not floating")
+                    case .peeking:
+                        XCTAssertNotNil(layout.visibleRows, label)
+                        XCTAssertEqual(layout.origin.y + CGFloat(layout.visibleRows ?? -99), 0,
+                                       "\(label): hidden behind the swatch below its top edge")
+                    }
+                    XCTAssertLessThanOrEqual(layout.rise, 20, label)
+                }
+            }
+        }
+    }
+
+    func testTheFourCompanionsSitTheirOwnWayAndANewOneGetsTheDefault() {
+        XCTAssertEqual(ThemeCompanion.seats["nod"]?.placement, .onCard)
+        XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .alongTop)
+        XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
+        XCTAssertEqual(ThemeCompanion.seats["pip"]?.placement, .asleepOnDot)
+        XCTAssertEqual(ThemeCompanion.seat(forID: "someone-new"), ThemeCompanion.defaultSeat)
+        XCTAssertEqual(ThemeCompanion.defaultSeat.placement, .onCard, "inside the swatch: a newcomer adds no height")
+        for character in CompanionCharacter.all {
+            let layout = ThemeCompanion.layout(for: character, seat: ThemeCompanion.defaultSeat, side: ThemeSwatch.size)
+            XCTAssertEqual(layout.rise, 0, "\(character.name) on the card stays inside its swatch")
+            let dot = ThemeSwatch.Metrics(side: ThemeSwatch.size).dot
+            // The rightmost drawn column, one step per line (the CI runner's older Swift).
+            var right = 0
+            for row in character.rows(layout.frame) ?? [] {
+                let pixels = Array(row)
+                if let last = pixels.lastIndex(where: { $0 != CompanionInk.clear }) { right = max(right, last) }
+            }
+            let rightEdge: CGFloat = layout.origin.x + CGFloat(right)
+            XCTAssertLessThan(rightEdge, dot.minX, "\(character.name) clear of the accent dot")
+        }
+        XCTAssertEqual(ThemeCompanion.eyeRow(["....", ".kk.", ".kk.", "mmmm", ".k.."]), 2, "the first run of eye rows")
+        XCTAssertNil(ThemeCompanion.eyeRow(["mmmm"]))
+        XCTAssertEqual(ThemeCompanion.firstOpaqueRow(["....", "..m."]), 1)
+        XCTAssertEqual(ThemeCompanion.lastOpaqueRow(["..m.", "...."]), 0)
+        // Hush's peek stops one row under its eyes.
+        if let hush = CompanionCharacter.named("hush") {
+            let layout = ThemeCompanion.layout(for: hush, seat: ThemeCompanion.seat(for: hush), side: ThemeSwatch.size)
+            let rest = hush.rows(hush.posture(.plus).awake.rest) ?? []
+            XCTAssertEqual(layout.visibleRows, (ThemeCompanion.eyeRow(rest) ?? 0) + 2)
+        }
+    }
+
+    func testTheGridKeepsWholePointsAndEvenMargins() {
+        for (width, content) in [(CGFloat(338), CGFloat(50)), (329, 50), (540, 70), (480, 70), (300, 50)] {
+            let cell = ThemeSwatchGrid.cellWidth(for: width, columns: 4, spacing: HITSpacing.s, content: content)
+            XCTAssertEqual(cell, cell.rounded(), "\(width)")
+            XCTAssertEqual((cell - content).truncatingRemainder(dividingBy: 2), 0, "\(width): the swatch centred on a whole point")
+            XCTAssertLessThanOrEqual(cell * 4 + HITSpacing.s * 3, width, "\(width): four fit")
+        }
+        XCTAssertEqual(ThemeSwatch.outerSide(44), 50)
+        XCTAssertEqual(ThemeSwatchRow.columns, 4, "two rows of four")
+    }
+
+    func testSwatchesWithTheirCompanionsRenderInEveryTheme() {
+        for palette in ThemePalette.all {
+            let companion = ThemeCompanion.character(for: palette)
+            for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+                render(ThemeSwatch(palette: palette, isSelected: true, side: side, companion: companion),
+                       "\(palette.name) at \(side)", width: side + 40)
+            }
+        }
+        render(ThemeSwatchRow(selection: .midnight) { _ in }, "the iPhone grid", width: 338)
+        render(ThemeSwatchRow(selection: .rose, side: MacAppearanceSection.swatchSide) { _ in }, "the Mac grid", width: 540)
+    }
+
+    // MARK: The ways in (rule 5)
+
+    /// The Mac's ways in all go through `SettingsRouter`: the sidebar's gear and the profile menu's Settings… and
+    /// "…"'s Settings… and the sync bolt (`open()`, the section last shown), ⌘, (`SettingsCommands`), the profile
+    /// menu's Account settings… (`open(at: .account)`). Every section can be opened straight, and one the build
+    /// doesn't know falls back to General.
+    func testEverySectionCanBeOpenedStraight() throws {
+        let suite = "SettingsTidyTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let router = SettingsRouter(defaults: defaults)
+        for (index, section) in MacSettingsSection.allCases.enumerated() {
+            router.open(at: section)
+            XCTAssertEqual(MacSettingsSection.load(from: defaults), section)
+            XCTAssertEqual(router.openRequests, index + 1)
+        }
+        router.open()
+        XCTAssertEqual(MacSettingsSection.load(from: defaults), .about, "a plain open comes back to the last one")
+        defaults.set("completing", forKey: Preferences.macSettingsSection)
+        XCTAssertEqual(MacSettingsSection.load(from: defaults), .completing, "0.9.2's stored Extras still opens Extras")
+        defaults.set("delight", forKey: Preferences.macSettingsSection)
+        XCTAssertEqual(MacSettingsSection.load(from: defaults), .general)
+        XCTAssertEqual(HITShortcuts.settings.shortcut?.key, KeyEquivalent(","))
+    }
+
+    #if os(iOS)
+    /// iPhone and iPad: every way in presents `SettingsView()`, which opens on the first screen; `SettingsView(page:)`
+    /// opens straight on a page, for a way in that wants one.
+    func testTheSheetOpensOnTheFirstScreenOrStraightOnAPage() {
+        let first = SettingsView()
+        let onPage = SettingsView(page: .iCloud)
+        render(first, "first screen sheet")
+        render(onPage, "iCloud & data sheet")
+    }
+    #endif
+}

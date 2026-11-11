@@ -31,6 +31,6 @@ final class CompanionSkySourceTests: XCTestCase {
     }
 
     func testEverySkyHasAStableName() {
-        XCTAssertEqual(CompanionSky.allCases.map(\.rawValue), ["unknown", "clear", "clouds", "rain", "snow", "storm"])
+        XCTAssertEqual(CompanionSky.allCases.map(\.rawValue), ["unknown", "clear", "clouds", "rain", "snow", "storm", "heat"])
     }
 }

@@ -62,7 +62,7 @@ struct CompanionLook: Hashable {
             switch sky {
             case .rain, .storm: self = .rain
             case .snow: self = .snow
-            case .unknown, .clear, .clouds: self = .plain
+            case .unknown, .clear, .clouds, .heat: self = .plain
             }
         }
     }

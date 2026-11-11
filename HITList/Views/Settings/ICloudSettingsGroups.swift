@@ -1,22 +1,19 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…, and on
-/// the iPhone the Sync log (a sheet; the Mac page shows the log inline, `SyncLogSection`). Shared by the
-/// iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
+/// Settings → iCloud & data → Sync: the status line, a warning while sync is stuck, and on the iPhone the Sync log
+/// (a page of its own, `SettingsPage.syncLog`; the Mac page shows the log inline, `SyncLogSection`). Shared by the
+/// iPhone's iCloud & data page and the Mac page's iCloud section, which adds the "Last change" row
+/// (`showsLastChange`). What only matters when something doesn't sync is in `ICloudCheckGroup`, further down.
 struct ICloudSyncGroup: View {
     var showsLastChange = false
-    @Environment(\.modelContext) private var context
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showSyncDetails = false
-    @State private var isCheckingICloud = false
-    @State private var iCloudCheck: ICloudCheck?
-    @State private var showSyncLog = false
+    @Environment(\.hitPages) private var pages
 
+    static let title = "Sync"
     static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows."
 
     var body: some View {
-        HITGroup("iCloud Sync", footer: Self.footer) {
+        HITGroup(Self.title, footer: Self.footer) {
             SyncStatusLine()
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -27,14 +24,33 @@ struct ICloudSyncGroup: View {
             if showsLastChange {
                 LastSyncChangeRow()
             }
-            SyncEnvironmentRow()
             #if os(iOS)
-            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { showSyncLog = true }
+            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { pages(SettingsPage.syncLog) }
                 .accessibilityIdentifier("settings-sync-log-row")
             #endif
+        }
+    }
+}
+
+/// Settings → iCloud & data → "If something doesn't sync": which CloudKit environment this build uses, Details (the
+/// account, network, last import and export, push, the store) and Check iCloud…, near the page's foot because they
+/// matter only when something is wrong.
+struct ICloudCheckGroup: View {
+    @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showSyncDetails = false
+    @State private var isCheckingICloud = false
+    @State private var iCloudCheck: ICloudCheck?
+
+    static let title = "If something doesn't sync"
+
+    var body: some View {
+        HITGroup(Self.title) {
+            SyncEnvironmentRow()
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
+            .accessibilityIdentifier("settings-sync-details")
             if showSyncDetails {
                 VStack(alignment: .leading, spacing: HITSpacing.s) { syncDetails }
                     .padding(.horizontal, HITSpacing.l)
@@ -56,9 +72,6 @@ struct ICloudSyncGroup: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("settings-check-icloud-result")
             }
-        }
-        .sheet(isPresented: $showSyncLog) {
-            SyncLogSheet().slateSheet()
         }
     }
 
@@ -197,19 +210,39 @@ struct SyncEnvironmentRow: View {
     }
 }
 
-/// The end of the iCloud block, set apart so it isn't tapped on the way to Check iCloud: Reset local
-/// cache and re-download, with its confirmation and the "reopen" alert.
+/// Settings → iCloud & data on iPhone and iPad: sync, backups, export and import, what to look at when something
+/// doesn't sync, then, last and apart, the two that throw something away. (The Mac splits it into its iCloud and
+/// Data sections.)
+struct ICloudDataPage: View {
+    var body: some View {
+        ICloudSyncGroup()
+        BackupsGroup()
+        ExportImportGroup()
+        ICloudCheckGroup()
+        ResetLocalCacheGroup(includesDeleteAll: true)
+    }
+}
+
+/// The end of the iCloud block, set apart so it isn't tapped on the way to anything else: Reset local cache and
+/// re-download, with its confirmation and the "reopen" alert; on iPhone and iPad also Delete all data from iCloud
+/// (`includesDeleteAll`), whose words say how (the Mac keeps that one at the foot of its Data section).
 struct ResetLocalCacheGroup: View {
+    var includesDeleteAll = false
     @State private var confirmReset = false
     @State private var showReopenAlert = false
 
-    static let footer = "Danger: this throws away this device's copy and downloads everything again from iCloud. Changes that haven't synced yet are lost."
+    /// Under the reset row: what it does and what it costs.
+    static let subtitle = "Downloads it all again; unsynced changes are lost"
 
     var body: some View {
-        HITGroup(footer: Self.footer) {
-            HITMenuRow("Reset local cache and re-download…", systemImage: "arrow.counterclockwise",
+        HITGroup {
+            HITMenuRow("Reset local cache…", subtitle: Self.subtitle, systemImage: "arrow.counterclockwise",
                        role: .destructive, accessory: .none) { confirmReset = true }
                 .disabled(!LocalCacheReset.isAvailable)
+                .accessibilityIdentifier("settings-reset-cache")
+            if includesDeleteAll {
+                DeleteAllFromICloudRows()
+            }
         }
         .confirmationDialog("Reset local cache?", isPresented: $confirmReset, titleVisibility: .visible) {
             Button(resetActionTitle, role: .destructive) { resetLocalCache() }
@@ -239,5 +272,22 @@ struct ResetLocalCacheGroup: View {
         #else
         showReopenAlert = true
         #endif
+    }
+}
+
+/// "Delete all data from iCloud": HITList never deletes in bulk itself, so the row opens the words that say where the
+/// system does it (`AccountCopy.deleteAll`). Rows for a `HITGroup`.
+struct DeleteAllFromICloudRows: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isOpen = false
+
+    var body: some View {
+        HITMenuRow("Delete all data from iCloud", systemImage: "trash.slash", accessory: .expand(isExpanded: isOpen)) {
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { isOpen.toggle() }
+        }
+        .accessibilityIdentifier("settings-account-delete-all")
+        if isOpen {
+            SettingsNote(text: AccountCopy.deleteAll)
+        }
     }
 }

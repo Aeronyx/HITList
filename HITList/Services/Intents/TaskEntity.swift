@@ -47,13 +47,20 @@ struct TaskEntity: AppEntity {
             : task.dueDate.map { $0.formatted(date: .abbreviated, time: task.hasDueTime ? .shortened : .omitted) }
         let line = [due, task.project?.name].compactMap { $0 }.joined(separator: " · ")
         let notes = task.notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
+        self.init(id: task.id, title: task.title, dueDate: Self.shownDue(task), group: task.project?.name,
                   detail: line.isEmpty ? nil : line)
         // One line: Spotlight runs lines together ("Home Ask about Sunday").
         let description = [line, notes.replacingOccurrences(of: "\n", with: " ")].filter { !$0.isEmpty }
             .joined(separator: " — ")
         spotlightDescription = description.isEmpty ? nil : description
         spotlightKeywords = task.labelList.map(\.name) + [task.project?.name].compactMap { $0 }
+    }
+
+    /// The "Due" Shortcuts shows: a timed task's moment; a day's start here (brief 82: a day is stored at 10:00 UTC,
+    /// which Shortcuts would show as a time of day).
+    static func shownDue(_ task: TaskItem, calendar: Calendar = .current) -> Date? {
+        guard let due = task.dueDate else { return nil }
+        return task.hasDueTime ? due : calendar.startOfDay(for: due)
     }
 
     /// "Flipboard switch · every 3 days"; on a Switchboard, "Flipboard switch · Before Bed" (brief 72).
@@ -66,7 +73,7 @@ struct TaskEntity: AppEntity {
         let due = Flipboard.side(of: task, now: now) == .red ? "Today"
             : task.dueDate.map { DueFormatter.text(for: $0, hasTime: task.hasDueTime, now: now) }
         let parts = [due, task.project?.name].compactMap { $0 }
-        self.init(id: task.id, title: task.title, dueDate: task.dueDate, group: task.project?.name,
+        self.init(id: task.id, title: task.title, dueDate: Self.shownDue(task), group: task.project?.name,
                   detail: parts.isEmpty ? nil : parts.joined(separator: " · "))
     }
 }
