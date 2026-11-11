@@ -74,37 +74,35 @@ enum TaskRescheduling {
     }
 }
 
-/// A graphical month picker that applies the date as soon as one is tapped.
+/// Pick Date (Upcoming's swipe and row menu, Review Inbox): our date card in a popover, as everywhere else (brief 97;
+/// the system's graphical picker it used began its weeks on Sunday whatever Settings said): the presets (Today,
+/// Tomorrow, Next week, Weekend, No date) and `HITCalendar` from the first day of the week in Settings. A day applies
+/// as soon as it is picked; No date removes the date where `onRemove` is given, and is off where it is not.
 struct PickDatePopover: View {
-    let initial: Date
+    /// The task's day, ringed in the calendar; nil for an undated task.
+    let selected: Date?
+    var now = Date()
     var onPick: (Date) -> Void
     var onRemove: (() -> Void)?
 
-    @State private var date: Date
-
-    init(initial: Date, onPick: @escaping (Date) -> Void, onRemove: (() -> Void)? = nil) {
-        self.initial = initial
+    init(selected: Date?, now: Date = Date(), onPick: @escaping (Date) -> Void, onRemove: (() -> Void)? = nil) {
+        self.selected = selected
+        self.now = now
         self.onPick = onPick
         self.onRemove = onRemove
-        _date = State(initialValue: initial)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            DatePicker("Due date", selection: $date, displayedComponents: .date)
-                .datePickerStyle(.graphical)
-                .labelsHidden()
-                .onChange(of: date) { _, picked in onPick(picked) }
-            if let onRemove {
-                Button("Remove Date", systemImage: "calendar.badge.minus", role: .destructive, action: onRemove)
-                    .buttonStyle(.borderless)
-            }
-        }
-        .padding()
-        .frame(minWidth: 300)
-        .background(Theme.elevated)
+        DatePickerCard(selected: selected, now: now, canClear: onRemove != nil, onPick: { day in
+            if let day { onPick(day) } else { onRemove?() }
+        })
+        .frame(width: PickerKind.date.width)
+        .background(Theme.surface)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
+        .font(HITType.body)
+        .presentationBackground(Theme.surface)
         .presentationCompactAdaptation(.popover)
+        .accessibilityIdentifier("pickDateCard")
     }
 }

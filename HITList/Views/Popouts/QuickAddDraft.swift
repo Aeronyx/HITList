@@ -65,6 +65,10 @@ struct QuickAddDraft: Equatable, Codable {
     /// drift as the minutes pass), kept here until the task is added. A "from now" phrase typed in the text wins
     /// over it. Optional on disk like the rest: a card stored by 0.6.0 has none.
     private(set) var pickedReminderDate: Date?
+    /// A repeat made in Custom… that quick add cannot type (days of their own two or more weeks apart, brief 97): no
+    /// text token, kept here until the task is added, applied as a typed one would be. A repeat typed in the text wins
+    /// over it; another pick, Don't repeat or No date takes it away. Optional on disk: a card stored by 0.9.3 has none.
+    private(set) var pickedRecurrence: RecurrenceRule?
     /// Tokens switched off by tapping their highlight (brief 28), each where it sits in the text (brief 41):
     /// their words stay plain title text; the same words typed elsewhere are read as usual. Kept optional on
     /// disk like the sub-task lines (a card stored by 0.5.0 kept keys only; its switched-off words light up
@@ -220,6 +224,15 @@ struct QuickAddDraft: Equatable, Codable {
             let parts = calendar.dateComponents([.hour, .minute], from: due)
             result.dueDate = parser.dateParser.date(defaultDay, hour: parts.hour ?? 9, minute: parts.minute ?? 0)
         }
+        // A repeat picked in Custom… that has no words, unless one is typed: on the day the text or the list gives,
+        // else from its next occurrence, anchored and timed as the parser does a typed one.
+        if let picked = pickedRecurrence, !kinds.contains(.recurrence) {
+            let due = result.dueDate ?? picked.firstOccurrence(onOrAfter: parser.dateParser.today, calendar: calendar)
+            if result.dueDate == nil { result.hasDueTime = false }
+            result.dueDate = due
+            result.recurrence = picked.anchored(to: due, calendar: calendar)
+                .timed(to: due, hasTime: result.hasDueTime, calendar: calendar)
+        }
         if result.projectName == nil, !inboxChosen { result.projectName = context.defaultProjectName }
         if let label = context.defaultLabelName, !defaultLabelRemoved,
            !result.labelNames.contains(where: { $0.caseInsensitiveCompare(label) == .orderedSame }) {
@@ -248,6 +261,7 @@ struct QuickAddDraft: Equatable, Codable {
         } else {
             holdReminderForLater(parser)
             text = removing([.date, .time, .recurrence], parser)
+            pickedRecurrence = nil
             dateCleared = context.defaultDate() != nil
         }
     }
@@ -335,9 +349,21 @@ struct QuickAddDraft: Equatable, Codable {
         }
     }
 
-    mutating func setRecurrence(_ rule: RecurrenceRule?, _ parser: QuickAddParser) {
+    /// Writes the repeat's words (`RecurrenceRule.typedWords`), replacing a typed one; nil removes it. With
+    /// `keepingDay` (the day the card showed, typed or the list's), a repeat whose words alone would start it on
+    /// another day ("every week" typed in an Upcoming day's row starts today) writes that day too, so the task
+    /// keeps the day the menu was worded for (brief 97). A card with no day takes the repeat's next occurrence,
+    /// as typing it does.
+    mutating func setRecurrence(_ rule: RecurrenceRule?, _ parser: QuickAddParser, keepingDay: Date? = nil) {
         text = removing([.recurrence], parser)
-        if let rule { append(QuickAddTokens.recurrence(rule)); dateCleared = false }
+        pickedRecurrence = nil
+        guard let rule else { return }
+        if let words = rule.typedWords { append(words) } else { pickedRecurrence = rule }
+        dateCleared = false
+        let calendar = parser.dateParser.calendar
+        if let keepingDay, let due = result(parser).dueDate, !calendar.isDate(due, inSameDayAs: keepingDay) {
+            setDate(keepingDay, parser)
+        }
     }
 
     /// Accepts an autocomplete suggestion: a title replaces the text, anything else the last word.
@@ -441,22 +467,12 @@ enum QuickAddTokens {
 
     static func label(_ name: String) -> String { "@" + quoted(name) }
 
-    /// "every day", "every 2 weeks", "every mon and thu", "every weekday".
+    /// "every day", "every 2 weeks", "every mon and thu", "every weekday", "every month on the 11th", "every year on
+    /// nov 11" (core's `typedWords`, which read back as the rule). A rule quick add cannot type (days of their own
+    /// two or more weeks apart) is written as its interval alone; the card keeps such a pick off the text
+    /// (`QuickAddDraft.pickedRecurrence`).
     static func recurrence(_ rule: RecurrenceRule) -> String {
-        let n = rule.interval
-        switch rule.frequency {
-        case .daily: return n == 1 ? "every day" : "every \(n) days"
-        case .monthly: return n == 1 ? "every month" : "every \(n) months"
-        case .yearly: return n == 1 ? "every year" : "every \(n) years"
-        case .weekly:
-            if let days = rule.weekdays, !days.isEmpty, n == 1 {
-                if days == [2, 3, 4, 5, 6] { return "every weekday" }
-                let names = [1: "sun", 2: "mon", 3: "tue", 4: "wed", 5: "thu", 6: "fri", 7: "sat"]
-                let list = days.sorted().compactMap { names[$0] }
-                return "every " + (list.count == 1 ? list[0] : list.dropLast().joined(separator: ", ") + " and " + list.last!)
-            }
-            return n == 1 ? "every week" : "every \(n) weeks"
-        }
+        rule.typedWords ?? (rule.interval == 1 ? "every week" : "every \(rule.interval) weeks")
     }
 
     private static func quoted(_ name: String) -> String {
