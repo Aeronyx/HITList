@@ -122,3 +122,17 @@ extension DayHeadingLine where Trailing == EmptyView {
         self.init(full: full, short: short) { EmptyView() }
     }
 }
+
+extension View {
+    /// iPhone: a task list's section with no header draws no hairline above its first row (brief 99: the Inbox and
+    /// Completed drew one 1 pt under the large title; Today, Upcoming and a Group, whose first section has a header, did
+    /// not). The Mac's inset list is left as it is.
+    @ViewBuilder
+    func hidesTopSeparatorWithoutHeader(_ headerless: Bool) -> some View {
+        #if os(iOS)
+        listSectionSeparator(headerless ? .hidden : .automatic, edges: .top)
+        #else
+        self
+        #endif
+    }
+}

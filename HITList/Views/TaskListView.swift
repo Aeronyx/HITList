@@ -372,6 +372,9 @@ struct TaskListView: View {
                                             .taskSectionHeader(color: group.color)
                                     }
                                 }
+                                // No hairline between the large title and the first row (brief 99: Completed and a
+                                // one-set Shared Tasks drew one; a section with a header has none).
+                                .hidesTopSeparatorWithoutHeader(group.title.isEmpty && group.heading == nil && group.people == nil)
                             }
                             if selection != .completed, !isCompact {
                                 Section { InlineAddRow(context: addContext, key: "list") }

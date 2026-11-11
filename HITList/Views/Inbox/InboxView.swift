@@ -135,6 +135,8 @@ struct InboxView: View {
                         GroupSectionHeader(heading: .make(row: section.key, count: section.openCount, projects: projects, now: now))
                     }
                 }
+                // No hairline between the large title and the first row (brief 99): a section with no header drew one.
+                .hidesTopSeparatorWithoutHeader(section.key == .all)
             }
             if !isCompact {
                 Section { InlineAddRow(context: .inbox, key: "inbox") }
