@@ -229,34 +229,34 @@ struct BoltTruth: Equatable {
     // MARK: Judging a beat
 
     /// What a beat that iCloud answered found, from the comparison of this device with iCloud (nil while the first read
-    /// of iCloud's records is still running) and the mirror's own state at the answer. Differences that a save younger
-    /// than the grace explains are not counted: the export that carries them may not have started.
+    /// of iCloud's records is still running) and the mirror's own state at the answer. A difference that its own recent
+    /// change explains is not counted: the export that carries it may not have started.
     /// - `oldestUnsentSave`: the oldest local save no export has covered (`SyncWatchdog`), and `unsentSaves` how many.
-    /// - `lastLocalSaveAt`: the latest local save of the task store's kinds. A record here that iCloud lacks, or a record
-    ///   in iCloud that is gone here, is excused while it is younger than the grace (a new task, a deletion, on its way).
-    /// - `deletedHere`: records this session deleted (by id), so a record iCloud still has counts as a deletion waiting to
-    ///   be sent rather than a change waiting to come in.
+    /// - A record here that iCloud lacks or holds older is excused while its own `updatedAt` is younger than the grace (a
+    ///   new task, an edit, on its way out). Another record's save excuses nothing (16:13:36 on 2026-11-11: a profile merge
+    ///   at launch once excused six old records, and the bolt filled).
+    /// - `deletedHere`: records this session deleted, by id, with when. A record iCloud still has and this device deleted
+    ///   is a deletion on its way out (excused for the grace, then waiting to be sent), never a change to come in.
+    /// - `lastLocalSaveAt` is kept for the callers' sake; only the records' own times count.
     static func findings(comparison: SyncComparison.Result?, unsentSaves: Int, oldestUnsentSave: Date?,
-                         lastLocalSaveAt: Date?, deletedHere: Set<UUID> = [], inFlight: Bool, now: Date,
+                         lastLocalSaveAt: Date?, deletedHere: [UUID: Date] = [:], inFlight: Bool, now: Date,
                          grace: TimeInterval = Rules().exportGrace) -> Findings {
         var findings = Findings(inFlight: inFlight)
         guard let comparison else {
             findings.reading = true
             return findings
         }
-        let recentSave = lastLocalSaveAt.map { now.timeIntervalSince($0) < grace } ?? false
         var sending = 0
         var receiving = 0
         for difference in comparison.differences {
             switch difference.kind {
             case .onlyHere, .newerHere:
-                let changed = difference.local?.updatedAt
-                let young = changed.map { now.timeIntervalSince($0) < grace } ?? false
-                if !(young || recentSave) { sending += 1 }
+                let young = difference.local.map { now.timeIntervalSince($0.updatedAt) < grace } ?? false
+                if !young { sending += 1 }
             case .onlyThere:
-                if deletedHere.contains(difference.id) {
-                    if !recentSave { sending += 1 }
-                } else if !recentSave {
+                if let deletedAt = deletedHere[difference.id] {
+                    if now.timeIntervalSince(deletedAt) >= grace { sending += 1 }
+                } else {
                     receiving += 1
                 }
             case .newerThere:

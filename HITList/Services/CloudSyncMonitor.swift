@@ -1072,7 +1072,7 @@ final class CloudSyncMonitor {
             pruneDeletions(now)
             return .answered(BoltTruth.findings(
                 comparison: result, unsentSaves: watchdog.waitingSaves, oldestUnsentSave: watchdog.oldestWaitingSave,
-                lastLocalSaveAt: lastLocalSaveAt, deletedHere: Set(deletedHere.keys), inFlight: isSyncing, now: now))
+                lastLocalSaveAt: lastLocalSaveAt, deletedHere: deletedHere, inFlight: isSyncing, now: now))
         }
     }
 
