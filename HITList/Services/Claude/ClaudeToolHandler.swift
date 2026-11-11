@@ -155,7 +155,9 @@ struct ClaudeToolHandler {
         let task = try self.task(arguments["id"])
         guard !task.isCompleted else { throw ToolError("That task is already completed.") }
         let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate { .restoreDueDate(due) } else { .uncomplete }
-        TaskActions.toggleCompletion(task, in: context, now: now)
+        // The handler's own calendar, as for everything else it reads and writes: a repeat rolls on from the start of
+        // its day in that zone (brief 92), which CI's UTC runner told apart from the device's.
+        TaskActions.toggleCompletion(task, in: context, now: now, calendar: calendar)
         log("Claude completed a task", ["tool": ClaudeTools.completeTask, "task": task.id.uuidString])
         didWrite()
         didComplete(CompletedTask(id: task.id, title: task.title, revert: revert))
