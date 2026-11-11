@@ -63,6 +63,15 @@ struct SwitchDraft: Equatable {
                             overdueBecomesTask: task.overdueBecomesTask, boardID: task.switchboard?.id)
     }
 
+    /// Duplicate (brief 96): every setting of `task` (its interval, or a repeat the dial can't show; its time, flips,
+    /// opt-in and Switchboard) and an empty name. A new switch: nothing to lose until a name is typed, nothing saved
+    /// without one.
+    init(duplicating task: TaskItem) {
+        self.init(task)
+        text = ""
+        original = nil
+    }
+
     // MARK: Reading
 
     /// The draft as the card shows it and Add saves it.

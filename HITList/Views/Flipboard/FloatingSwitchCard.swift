@@ -7,27 +7,48 @@ enum SwitchCardRequest: Identifiable, Equatable {
     /// A switch on a Switchboard, from the "+" by its name (brief 72).
     case addTo(Switchboard)
     case edit(TaskItem)
+    /// Duplicate in a switch's menu (brief 96): a new switch with every setting of this one and an empty name.
+    case duplicate(TaskItem)
 
     var id: String {
         switch self {
         case .add: "add"
         case .addTo(let board): "add-\(board.id.uuidString)"
         case .edit(let task): "edit-\(task.id.uuidString)"
+        case .duplicate(let task): "duplicate-\(task.id.uuidString)"
         }
     }
 
+    /// The switch being edited.
     var task: TaskItem? {
         if case .edit(let task) = self { return task }
         return nil
     }
 
-    /// The board a new switch goes on.
-    var board: Switchboard? {
-        if case .addTo(let board) = self { return board }
+    /// The switch a duplicate copies.
+    var source: TaskItem? {
+        if case .duplicate(let task) = self { return task }
         return nil
     }
 
+    /// The board a new switch goes on.
+    var board: Switchboard? {
+        switch self {
+        case .addTo(let board): board
+        case .duplicate(let task): task.switchboard
+        case .add, .edit: nil
+        }
+    }
+
     var isAdding: Bool { task == nil }
+
+    /// The Mac's and iPad's card stays open after Add, empty, for the next switch; a duplicate's closes, as an edit's.
+    var staysOpenAfterAdd: Bool {
+        switch self {
+        case .add, .addTo: true
+        case .edit, .duplicate: false
+        }
+    }
 }
 
 /// What the Switchboard card is open for (brief 72).
@@ -155,7 +176,7 @@ struct FloatingSwitchCard: View {
     private var cardView: some View {
         switch request {
         case .switchCard(let request):
-            SwitchCard(editing: request.task, style: .floating, board: request.board,
+            SwitchCard(editing: request.task, style: .floating, board: request.board, duplicating: request.source,
                        isConfirmingDiscard: confirmingDiscard, isClosing: closing, focusesName: request.isAdding,
                        onClose: requestClose, onSaved: { finish(saved: $0) },
                        onDraftChange: { content.hasContent = $0 },
