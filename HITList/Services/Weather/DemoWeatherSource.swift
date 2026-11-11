@@ -50,6 +50,7 @@ final class DemoWeatherSource: WeatherLocationSource, WeatherConditionSource, We
         case .rain: "rain"
         case .snow: "snow"
         case .storm: "thunderstorms"
+        case .heat: "hot"
         }
     }
 
