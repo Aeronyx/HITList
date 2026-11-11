@@ -33,8 +33,15 @@ struct RemindersSettingsSection: View {
 
     static func summaryMinutes(_ time: PickerTime) -> Int { time.hour * 60 + time.minute }
 
-    /// The field's width in the row: "12:45 PM" and its clock and × with room.
-    static let summaryFieldWidth: CGFloat = 132
+    /// The field's width in the row: the widest time ("10:30 AM", 73 pt of Inter 17 on iPhone, 56 of 13 on the Mac) with
+    /// the field's padding, its clock and its × (70 pt), growing with the text size.
+    #if os(macOS)
+    static let summaryFieldBaseWidth: CGFloat = 132
+    #else
+    static let summaryFieldBaseWidth: CGFloat = 156
+    #endif
+    @ScaledMetric(relativeTo: .body) private var summaryFieldWidth = RemindersSettingsSection.summaryFieldBaseWidth
+    static let summaryFieldMinWidth: CGFloat = 120
     @State private var authorization: UNAuthorizationStatus?
     @State private var scheduled = "…"
     @State private var testMessage: String?
@@ -97,7 +104,10 @@ struct RemindersSettingsSection: View {
                         if let time { morningMinutes = Self.summaryMinutes(time) } else { summaryFieldRevision += 1 }
                     }
                     .id(summaryFieldRevision)
-                    .frame(width: Self.summaryFieldWidth)
+                    // The title keeps its one line first; the field takes the rest, up to its width (on iPhone 16 that
+                    // is 153 pt, room for "10:30 AM").
+                    .frame(minWidth: Self.summaryFieldMinWidth, maxWidth: summaryFieldWidth)
+                    .layoutPriority(-1)
                 })
                 .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
             }
