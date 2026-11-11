@@ -586,7 +586,7 @@ struct CompanionCharacter: Identifiable {
         switch ink {
         case .veil: CompanionInks.veilOpacity
         case .ink, .light: 1
-        case .dark, .mid, .accent, .warm, .glow: 1 - seeThrough
+        case .dark, .mid, .accent, .warm, .glow, .accentDark: 1 - seeThrough
         }
     }
 
