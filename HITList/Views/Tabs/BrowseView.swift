@@ -65,6 +65,8 @@ struct BrowseView: View {
             }
         }
         .background(Theme.background)
+        // Search results' rows on the field's and the large title's edge (brief 99); the cards keep the system's insets.
+        .followsSystemListMargin()
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
         .toolbar { profileItem }
@@ -158,7 +160,8 @@ struct BrowseView: View {
                 }
                 .accessibilityIdentifier("browse-shared-tasks")
             } header: {
-                SidebarSectionHeader(title: "Groups") { creatingProject = true }
+                // The lists' one header (brief 99); the list puts it on the rows' edge.
+                HITSectionHeader("Groups", inset: 0, addLabel: "Add Group") { creatingProject = true }
             } footer: {
                 guidance(GroupGuidance.group)
             }
@@ -178,7 +181,8 @@ struct BrowseView: View {
                     .modifier(SwipeToDelete(item: .label(label.id)) { delete(label) })
                 }
             } header: {
-                SidebarSectionHeader(title: "Labels") { creatingLabel = true }
+                // The lists' one header (brief 99); the list puts it on the rows' edge.
+                HITSectionHeader("Labels", inset: 0, addLabel: "Add Label") { creatingLabel = true }
             } footer: {
                 guidance(GroupGuidance.label)
             }
@@ -248,8 +252,9 @@ struct BrowseView: View {
                 .accessibilityIdentifier("newFilterChip")
             }
         }
-        // Chips scroll past the cards' margins to the screen's edges, starting in line with the cards.
-        .scrollClipDisabled()
+        // Chips scroll past the cards' margins to the screen's edges, starting in line with the cards, and stop at the
+        // safe area (`ChipsReachTheSafeArea`).
+        .modifier(ChipsReachTheSafeArea())
         .accessibilityIdentifier("filterChips")
     }
 
@@ -498,6 +503,19 @@ private struct SearchResults: View {
             .slateList()
             .scrollDismissesKeyboard(.immediately)
         }
+    }
+}
+
+/// Browse's filter chips draw past their scroll view by the list's margin each side, to the safe area's edges: the
+/// screen's on most phones, as before, but never under a bar beside the screen (brief 99: on the Duo's outer display
+/// they scrolled under the trailing status bar). The list's margin is its cards' (the system's, `followsSystemListMargin`).
+private struct ChipsReachTheSafeArea: ViewModifier {
+    @Environment(\.listMargin) private var margin
+
+    func body(content: Content) -> some View {
+        content
+            .scrollClipDisabled()
+            .mask { Rectangle().padding(.horizontal, -margin) }
     }
 }
 #endif

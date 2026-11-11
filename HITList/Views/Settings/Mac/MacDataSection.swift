@@ -102,9 +102,14 @@ struct DataLibraryGroup: View {
     }
 }
 
-/// The six counts as small tiles in a grid that wraps at narrow widths: big number, caption under it.
+/// The six counts as small tiles, three across in two rows at every width (brief 99, George: "three columns of two is
+/// good"; an adaptive grid wrapped them five and one on the Mac): big number, caption under it.
 struct DataCountTiles: View {
     let stats: DataStats
+
+    /// Three columns of two: the narrowest iPhone's group (311 pt inside) holds three of the 86 pt tiles with room.
+    static let columns = 3
+    static let minimumTileWidth: CGFloat = 86
 
     private var tiles: [(label: String, value: Int, tint: Color?)] {
         [("Open tasks", stats.openTasks, nil),
@@ -116,8 +121,9 @@ struct DataCountTiles: View {
     }
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: HITSpacing.s)], alignment: .leading,
-                  spacing: HITSpacing.s) {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: Self.minimumTileWidth), spacing: HITSpacing.s),
+                                 count: Self.columns),
+                  alignment: .leading, spacing: HITSpacing.s) {
             ForEach(tiles, id: \.label) { tile in
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(tile.value)")

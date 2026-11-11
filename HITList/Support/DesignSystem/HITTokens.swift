@@ -110,8 +110,11 @@ enum HITType {
     static let subheadlineMedium = HITFont.inter(15, .medium, relativeTo: .subheadline)
     static let subheadlineSemibold = HITFont.inter(15, .semibold, relativeTo: .subheadline)
     static let footnote = HITFont.inter(13, .regular, relativeTo: .footnote)
-    static let caption = HITFont.inter(12, .regular, relativeTo: .caption)
-    static let captionBold = HITFont.inter(12, .bold, relativeTo: .caption)
+    /// Captions scale with caption2's metrics, which never shrink below the default size: relative to caption they fell
+    /// to 9.7 pt at the smallest text size (brief 99: captions and meta lines never below 11 pt). Above the default the
+    /// two grow alike (XL 14.2 against 14.0).
+    static let caption = HITFont.inter(12, .regular, relativeTo: .caption2)
+    static let captionBold = HITFont.inter(12, .bold, relativeTo: .caption2)
     static let caption2 = HITFont.inter(11, .regular, relativeTo: .caption2)
     static let caption2Semibold = HITFont.inter(11, .semibold, relativeTo: .caption2)
     /// Button and chip labels.
@@ -146,7 +149,9 @@ enum HITType {
     static let taskMetaSize: CGFloat = 13
     #endif
     static let taskTitle = HITFont.inter(taskTitleSize, .regular, relativeTo: .body)
-    static let taskMeta = HITFont.inter(taskMetaSize, .regular, relativeTo: .caption)
+    /// Relative to caption2, as `caption`: at the smallest text size it stays 13 (relative to caption it fell to 10.7).
+    static let taskMeta = HITFont.inter(taskMetaSize, .regular, relativeTo: taskMetaStyle)
+    static let taskMetaStyle: Font.TextStyle = .caption2
     /// Beside the upright island (the iPhone Duo's outer display, brief 63) rows were a step larger than on
     /// other iPhones; since round 15 every iPhone uses that step, so the two are one.
     static let taskTitleSide = taskTitle

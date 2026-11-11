@@ -8,8 +8,8 @@ enum GroupDot {
 }
 
 /// What a sorted list's section header shows (briefs 57, 61): a Group's colour dot, name and open count;
-/// "Ungrouped" last with a hollow grey dot; a due day ("Overdue", "Today", "Friday, Nov 13", "Later", "No
-/// date") in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
+/// "Ungrouped" last with a hollow grey dot; a due day ("Overdue", "Nov 11 · Today · Wednesday", "Nov 13 · Friday",
+/// "Later", "No date") in the due colours. Pure, so `GroupsTests` checks it without drawing anything.
 struct GroupSectionHeading: Equatable {
     var title: String
     /// The dot before the title; nil draws none (date sections).
@@ -17,6 +17,8 @@ struct GroupSectionHeading: Equatable {
     /// The title's colour: the due colours for a day, the text colour for a Group.
     var titleColor: Color
     var count: Int
+    /// A day's title with the weekday in three letters, drawn when the full one does not fit (`DayHeadingLine`).
+    var shortTitle: String? = nil
 
     enum Dot: Equatable {
         case filled(Color)
@@ -39,8 +41,10 @@ struct GroupSectionHeading: Equatable {
         case .ungrouped:
             return GroupSectionHeading(title: "Ungrouped", dot: .hollow, titleColor: Theme.secondaryText, count: count)
         case .due(let section):
-            return GroupSectionHeading(title: title(of: section, now: now), dot: nil, titleColor: color(of: section),
-                                       count: count)
+            let day = day(of: section, now: now)
+            return GroupSectionHeading(title: day.map { DueFormatter.dayHeading(for: $0, now: now) } ?? title(of: section, now: now),
+                                       dot: nil, titleColor: color(of: section), count: count,
+                                       shortTitle: day.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) })
         }
     }
 
@@ -62,15 +66,23 @@ struct GroupSectionHeading: Equatable {
                             titleColor: HITColor.text, count: count)
     }
 
-    /// The filter lists' day titles (`DueFormatter.sectionTitle`), with the week's last days as "Later".
+    /// The day a section names, which its title writes in the lists' one form (`DueFormatter.dayHeading`, brief 99);
+    /// nil for "Overdue", "Later" and "No date".
+    private static func day(of section: DueSection, now: Date, calendar: Calendar = .current) -> Date? {
+        switch section {
+        case .today: calendar.startOfDay(for: now)
+        case .tomorrow: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+        case .day(let day): day
+        case .overdue, .later, .noDate: nil
+        }
+    }
+
+    /// The sections that name no one day.
     private static func title(of section: DueSection, now: Date) -> String {
         switch section {
         case .overdue: "Overdue"
-        case .today: "Today"
-        case .tomorrow: "Tomorrow"
-        case .day(let day): DueFormatter.sectionTitle(for: day, now: now)
         case .later: "Later"
-        case .noDate: DueFormatter.sectionTitle(for: nil, now: now)
+        case .today, .tomorrow, .day, .noDate: DueFormatter.sectionTitle(for: nil, now: now)
         }
     }
 
@@ -86,7 +98,12 @@ struct GroupSectionHeading: Equatable {
     /// "Work · 3": the title and the count after a middle dot as one run of text, so both are set in the
     /// header's one font (George, 0.8.0: "Priority 4 1 in different fonts"); the count in grey. Just the
     /// title when nothing is open.
-    var label: AttributedString {
+    var label: AttributedString { Self.label(title, count: count) }
+
+    /// `label` with the day's short title, when there is one.
+    var shortLabel: AttributedString? { shortTitle.map { Self.label($0, count: count) } }
+
+    private static func label(_ title: String, count: Int) -> AttributedString {
         var label = AttributedString(title)
         guard count > 0 else { return label }
         var suffix = AttributedString(" · \(count)")
@@ -119,7 +136,7 @@ struct GroupSectionHeader: View {
             case nil:
                 EmptyView()
             }
-            Text(heading.label)
+            DayHeadingLine(full: heading.label, short: heading.shortLabel)
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .ignore)

@@ -60,7 +60,7 @@ extension View {
     /// as `completionRowBackground` gives task rows; the Mac's own row), and nothing to select.
     func calendarEventListRow(compact: Bool) -> some View {
         self
-            .listRowInsets(ListMetrics.rowInsets(compact: compact))
+            .listRowInsetsOnMargin(compact: compact)
             .listRowSeparatorTint(Theme.separator)
             #if os(iOS)
             .listRowBackground(Theme.background)

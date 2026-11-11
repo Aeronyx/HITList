@@ -1,8 +1,8 @@
 import XCTest
 
 /// The iPhone profile menu (brief 53), through the real app: Browse's profile button opens the menu with
-/// What's New, Send Beta Feedback… and the version; What's New opens as a sheet and expands its earlier
-/// versions; Send Beta Feedback… on a simulator (no Mail app) shows the card with the address and Copy.
+/// What's New, Send Beta Feedback… and the version; What's New opens as a sheet with this version's lines;
+/// Send Beta Feedback… on a simulator (no Mail app) shows the card with the address and Copy.
 /// In its own file beside `HITListUITests.swift` (session 56 owns that one this round).
 final class ProfileMenuUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -46,18 +46,13 @@ final class ProfileMenuUITests: XCTestCase {
         XCTAssertTrue(version.label.hasPrefix("HITList version "), version.label)
         snapshot("1 Profile menu")
 
-        // What's New: a sheet with this version's lines, then the earlier versions.
+        // What's New: a sheet with this version's lines only (brief 99: no earlier versions).
         element("profile-menu-whatsnew").tap()
         let done = element("whatsNewDone")
         XCTAssertTrue(done.waitForExistence(timeout: 5), "What's New opened once the menu had gone")
         XCTAssertTrue(app.staticTexts["What's New"].exists)
+        XCTAssertFalse(element("whatsNewEarlier").exists, "no Earlier versions")
         snapshot("2 What's New")
-        let earlier = element("whatsNewEarlier")
-        XCTAssertTrue(earlier.exists)
-        earlier.tap()
-        XCTAssertTrue(app.staticTexts["VERSION 0.6.0"].waitForExistence(timeout: 3)
-                      || app.staticTexts["Version 0.6.0"].exists, "earlier versions expanded")
-        snapshot("3 What's New, earlier versions")
         done.tap()
         XCTAssertTrue(done.waitForNonExistence(timeout: 5), "Done closes it")
 

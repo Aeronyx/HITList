@@ -2,6 +2,9 @@ import XCTest
 import SwiftUI
 import SwiftData
 import CoreGraphics
+#if canImport(UIKit)
+import UIKit
+#endif
 import HITListCore
 @testable import HITList
 
@@ -68,7 +71,153 @@ final class SpacingTests: XCTestCase {
     }
     #endif
 
+    #if os(macOS)
+    // MARK: The Mac editor's check circle (brief 99)
+
+    /// The editor's check circle takes clicks on 24 × 24 pt (it was 22 × 24, its icon column's width): the outset fills
+    /// the column out to 24 and the layout keeps the column's 22, so nothing moves. Read from Accessibility on the Debug
+    /// Mac app before and after: 22 × 24, then 24 × 24.
+    func testTheEditorsCheckCircleTakesClicksOn24By24() {
+        let outset = HITHitTarget.outset(for: EditorMetrics.iconColumn)
+        XCTAssertEqual(EditorMetrics.iconColumn + 2 * outset, 24)
+        XCTAssertEqual(EditorMetrics.titleLine, 24, "the frame's height, the title's line")
+        let circle = Image(systemName: "circle").frame(width: EditorMetrics.iconColumn, height: EditorMetrics.titleLine)
+        let hit = circle.hitOutset(horizontal: outset)
+        XCTAssertEqual(NSHostingView(rootView: hit).fittingSize, CGSize(width: 24, height: 24), "the hit frame")
+        XCTAssertEqual(NSHostingView(rootView: hit.hitOutsetLayout(horizontal: outset)).fittingSize,
+                       CGSize(width: EditorMetrics.iconColumn, height: 24), "the room it takes in the layout")
+        XCTAssertEqual(HITHitTarget.outset(for: 30), 0, "nothing for a control that is large enough")
+    }
+    #endif
+
+    // MARK: Settings → Data's tiles (brief 99)
+
+    /// Library's six counts sit three across in two rows at every width: the narrowest iPhone's group (311 pt inside),
+    /// the Mac page at the 900 pt window (572 pt inside; it wrapped five and one there) and the page at its widest.
+    func testTheDataTilesAreThreeAcrossInTwoRows() throws {
+        let stats = DataStats(openTasks: 19, completedTasks: 0, overdueTasks: 3, groups: 5, labels: 4, filters: 0)
+        for width: CGFloat in [311, 572, 620] {
+            let rows = try tileRows(of: DataCountTiles(stats: stats), width: width)
+            XCTAssertEqual(rows, [3, 3], "tiles per row at \(width) pt")
+        }
+    }
+
+    // MARK: One section header (brief 99)
+
+    /// Browse's and every HITGroup's header are one component in the task lists' header type; its line keeps the old
+    /// header's 20 pt at the default size, so Settings' first screen keeps its height (SettingsTidyTests measures it).
+    func testTheSectionHeaderIsTheListsTypeAndKeepsItsLine() {
+        XCTAssertEqual(HITSectionHeader.minHeight, 20)
+        XCTAssertEqual(height(HITSectionHeader("Appearance")), HITSectionHeader.minHeight, accuracy: 0.5,
+                       "a 16 pt Inter line fits the old header's 20 pt")
+        // With its "+" (Browse's) it is the icon button's height, as Browse's header was with the same button.
+        XCTAssertGreaterThanOrEqual(height(HITSectionHeader("Groups", inset: 0, addLabel: "Add Group") {}), HITSectionHeader.minHeight)
+        XCTAssertEqual(HITGroup<EmptyView>.footerInset, HITSpacing.l, "the footer under the header, on the rows' edge")
+    }
+
+    // MARK: The system's margin (brief 99)
+
+    /// An iPhone screen follows the margin UIKit gives it (16 on most phones, 20 on the widest); the iPad, the Mac and
+    /// a screen not yet measured keep ListMetrics' fixed inset.
+    func testAListFollowsTheSystemsMarginOnlyInThePhoneShell() {
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 20, isPhoneShell: true), 20, "the Pro Max, the Duo's outer display")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 16, isPhoneShell: true), 16, "iPhone 17 and 16: nothing moves")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 20, isPhoneShell: false), ListMetrics.horizontalInset, "iPad")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: nil, isPhoneShell: true), ListMetrics.horizontalInset)
+        let insets = ListMetrics.rowInsets(compact: false, margin: 20)
+        XCTAssertEqual(insets.leading, 20)
+        XCTAssertEqual(insets.trailing, 20)
+        XCTAssertEqual(ListMetrics.rowInsets(compact: true), ListMetrics.rowInsets(compact: true, margin: ListMetrics.horizontalInset))
+    }
+
+    // MARK: Reminders → Summary time (brief 99)
+
+    /// The summary's time goes through our time field as a PickerTime and back to the stored minutes.
+    func testTheSummaryTimeRoundTripsThroughTheTimeField() {
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 8 * 60), PickerTime(hour: 8, minute: 0))
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 7 * 60 + 30), PickerTime(hour: 7, minute: 30))
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 24 * 60 + 5), PickerTime(hour: 23, minute: 59), "clamped")
+        XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime(hour: 21, minute: 15)), 21 * 60 + 15)
+        XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime.parse("7:30") ?? PickerTime(hour: 0, minute: 0)), 7 * 60 + 30)
+    }
+
+    #if os(iOS)
+    // MARK: Text sizes (brief 99)
+
+    /// At the largest ordinary text size a theme's name wraps under its swatch instead of truncating ("Tokyo Night"
+    /// did, at XL); at the default size every name is one line, so nothing moves.
+    func testAThemesNameWrapsRatherThanTruncates() {
+        let cell: CGFloat = 76
+        func height(_ palette: ThemePalette, _ size: DynamicTypeSize) -> CGFloat {
+            let button = ThemeSwatchButton(palette: palette, isSelected: false) {}
+                .frame(width: cell)
+                .environment(\.dynamicTypeSize, size)
+            return UIHostingController(rootView: button).sizeThatFits(in: CGSize(width: cell, height: 1000)).height
+        }
+        XCTAssertEqual(height(.tokyo, .large), height(.slate, .large), accuracy: 0.5, "one line at the default size")
+        XCTAssertGreaterThan(height(.tokyo, .xxxLarge), height(.slate, .xxxLarge) + 10, "two lines at xxxLarge, not cut off")
+        XCTAssertEqual(ThemeSwatchButton.nameLines, 2)
+    }
+
+    /// At the smallest text size no caption or meta line goes below 11 pt: each small role scaled by its text style the
+    /// way `Font.custom(_:size:relativeTo:)` scales it.
+    func testCaptionsAndMetaLinesStayAt11PtAtTheSmallestSize() {
+        let smallest = UITraitCollection(preferredContentSizeCategory: .extraSmall)
+        // HITType's small roles and the text style each scales with (HITTokens.swift). Relative to caption1 a 12 pt
+        // caption fell to 9.7 pt and the rows' 13 pt meta line to 10.7: they scale with caption2 now.
+        let roles: [(String, CGFloat, UIFont.TextStyle)] = [
+            ("caption", 12, .caption2), ("captionBold", 12, .caption2), ("caption2", 11, .caption2),
+            ("caption2Semibold", 11, .caption2), ("footnote", 13, .footnote),
+            ("taskMeta", HITType.taskMetaSize, .caption2), ("subheadline", 15, .subheadline),
+        ]
+        XCTAssertEqual(HITType.taskMetaStyle, .caption2)
+        for (name, size, style) in roles {
+            let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size, compatibleWith: smallest)
+            XCTAssertGreaterThanOrEqual(scaled, 11, "\(name): \(scaled) pt at the smallest size")
+        }
+    }
+    #endif
+
     // MARK: Helpers
+
+    /// How many separate fills a horizontal line crosses in each band of filled rows, top to bottom: the tiles per row
+    /// of a grid drawn on black (a gap of the grid's 8 pt splits two tiles; text inside a tile does not).
+    private func tileRows<V: View>(of view: V, width: CGFloat) throws -> [Int] {
+        let scale: CGFloat = 2
+        let renderer = ImageRenderer(content: view.frame(width: width).background(Color.black).preferredColorScheme(.dark))
+        renderer.scale = scale
+        let image = try XCTUnwrap(renderer.cgImage)
+        let w = image.width, h = image.height
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let context = try XCTUnwrap(CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                              space: CGColorSpaceCreateDeviceRGB(),
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        func filled(_ x: Int, _ y: Int) -> Bool {
+            let i = (y * w + x) * 4
+            return max(Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2])) > 12
+        }
+        // The bands of rows with any fill, then one line through each band's middle.
+        var bands: [(Int, Int)] = []
+        var start: Int?
+        for y in 0..<h {
+            let any = (0..<w).contains { filled($0, y) }
+            if any, start == nil { start = y }
+            if !any, let s = start { bands.append((s, y)); start = nil }
+        }
+        if let s = start { bands.append((s, h)) }
+        return bands.map { band in
+            let y = (band.0 + band.1) / 2
+            var runs = 0
+            var inside = false
+            for x in 0..<w {
+                let on = filled(x, y)
+                if on, !inside { runs += 1 }
+                inside = on
+            }
+            return runs
+        }
+    }
 
     private func height<V: View>(_ view: V) -> CGFloat {
         let sized = view.frame(width: 420)
