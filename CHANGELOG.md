@@ -29,7 +29,11 @@ notes after 0.9.0 (21), in five sessions at once. Versions bump by 0.0.1 per rel
 - Calendar events beside your tasks: turn on Settings → General → Calendar events and Today and Upcoming show your
   events from the calendars you pick, read-only. Events never leave the device; HITList never changes them. Off by
   default.
-MOTION_LINES
+- On iPhone the card for a new task moves with the keyboard: no jump when it asks Discard, and tapping the title to
+  keep typing brings the keyboard back. The Flipboard's switch card settles sooner.
+- On the Mac, task cards come down into place and leave a little quicker, the first date card in a window fades in
+  like the rest, "Add task" opens and closes smoothly, the sidebar's highlight glides to the row you pick and its
+  counts roll to their new number.
 - Siri can open the Flipboard ("Open Flipboard in HITList"); `hitlist://` links open a task or a screen.
 - The roadmap was rewritten: now, next, parked, shipped (`dev/ROADMAP.md`).
 
