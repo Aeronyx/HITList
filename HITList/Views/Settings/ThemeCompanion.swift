@@ -30,21 +30,29 @@ enum ThemeCompanion {
         var mirrored = false
     }
 
-    /// Each companion's own way of sitting, by character id. The supervisor tunes new companions' entries here.
+    /// Each companion's own way of sitting, by character id, in the grid's order (Slate, Graphite, Midnight, Moss;
+    /// Nord, Tokyo Night, Mocha, Rosé), so neighbours differ.
     static let seats: [String: Seat] = [
         // Slate: Nod sits on the card, legs over its edge, its bobble clear of the accent dot.
         "nod": Seat(placement: .onCard, along: 0.27),
+        // Graphite: Smudge asleep on the accent dot, its long legs folded away.
+        "smudge": Seat(placement: .asleepOnDot, along: 0.7),
         // Midnight: Quill lies along the top, its tail's inked tip up.
         "quill": Seat(placement: .alongTop, along: 0.62),
+        // Moss: Tuck on the card with its pot, left of the accent dot.
+        "tuck": Seat(placement: .onCard, along: 0.3),
         // Nord: Hush peeks over the top, ears and eyes, clear of the rounded corner.
         "hush": Seat(placement: .peeking, along: 0.4),
-        // Rosé: asleep on the accent dot.
-        "pip": Seat(placement: .asleepOnDot, along: 0.7),
+        // Tokyo Night: Glim on the top edge, its lantern hanging down inside the swatch.
+        "glim": Seat(placement: .onTop, along: 0.5),
+        // Mocha: Mallow on the card, a soft toy put down there.
+        "mallow": Seat(placement: .onCard, along: 0.3),
+        // Rosé: Posy on the top edge, as near to flying as it gets.
+        "posy": Seat(placement: .onTop, along: 0.55),
     ]
 
-    /// For a companion not in `seats` (tonight's new ones until the supervisor gives them their own): on the card, legs
-    /// over its edge, left of the accent dot. Inside the swatch, so an untuned newcomer never adds height to the grid
-    /// (every theme will have its own companion once briefs 85 and 87 to 89 merge).
+    /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of
+    /// the accent dot. Inside the swatch, so an untuned newcomer never adds height to the grid.
     static let defaultSeat = Seat(placement: .onCard, along: 0.3)
 
     static func seat(for character: CompanionCharacter) -> Seat { seat(forID: character.id) }

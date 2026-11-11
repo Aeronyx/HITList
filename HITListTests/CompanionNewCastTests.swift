@@ -68,10 +68,8 @@ final class CompanionNewCastTests: XCTestCase {
     func testMochaHasMallow() {
         XCTAssertEqual(CompanionCast.character(forTheme: "mocha", launch: .none).id, "mallow")
         XCTAssertEqual(CompanionCharacter.named("mallow")?.name, "Mallow")
-        // Graphite, Moss and Tokyo Night still have Nod.
-        for theme in ["graphite", "moss", "tokyo"] {
-            XCTAssertEqual(CompanionCast.character(forTheme: theme, launch: .none).id, "nod", theme)
-        }
+        // A theme with no companion of its own (one from a newer build) borrows Nod.
+        XCTAssertEqual(CompanionCast.character(forTheme: "a-theme-not-drawn-yet", launch: .none).id, "nod")
     }
 
     /// A soft toy of an animal nobody can name: fat and round, two stubby ear tufts, button eyes, a knitted band in the

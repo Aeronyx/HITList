@@ -542,11 +542,23 @@ final class SettingsTidyTests: XCTestCase {
         }
     }
 
-    func testTheFourCompanionsSitTheirOwnWayAndANewOneGetsTheDefault() {
+    func testTheCompanionsSitTheirOwnWayAndANewOneGetsTheDefault() {
         XCTAssertEqual(ThemeCompanion.seats["nod"]?.placement, .onCard)
         XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .alongTop)
         XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
-        XCTAssertEqual(ThemeCompanion.seats["pip"]?.placement, .asleepOnDot)
+        XCTAssertEqual(ThemeCompanion.seats["smudge"]?.placement, .asleepOnDot)
+        XCTAssertEqual(ThemeCompanion.seats["glim"]?.placement, .onTop)
+        XCTAssertNil(ThemeCompanion.seats["pip"], "Pip retired in 0.9.3")
+        // Every companion in the cast has a seat of its own, and no two neighbours in a row of four sit alike.
+        for character in CompanionCharacter.all {
+            XCTAssertNotNil(ThemeCompanion.seats[character.id], "\(character.name) has its own seat")
+        }
+        let order = ThemePalette.all.map { CompanionCast.byTheme[$0.id] }
+        for (i, id) in order.enumerated() where i % 4 != 0 {
+            guard let id, let before = order[i - 1] else { continue }
+            XCTAssertNotEqual(ThemeCompanion.seats[id]?.placement, ThemeCompanion.seats[before]?.placement,
+                              "\(id) and \(before) sit side by side")
+        }
         XCTAssertEqual(ThemeCompanion.seat(forID: "someone-new"), ThemeCompanion.defaultSeat)
         XCTAssertEqual(ThemeCompanion.defaultSeat.placement, .onCard, "inside the swatch: a newcomer adds no height")
         for character in CompanionCharacter.all {

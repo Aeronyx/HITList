@@ -8,7 +8,10 @@ import SwiftUI
 @MainActor
 final class CompanionSpriteTests: XCTestCase {
     func testEveryCompanionIsGoodData() {
-        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill", "hush", "posy", "mallow"])
+        // Every theme's own companion, once each (the cast grows as companions merge; `CompanionCast` maps them).
+        XCTAssertEqual(Set(CompanionCharacter.all.map(\.id)), Set(CompanionCast.byTheme.values))
+        XCTAssertEqual(CompanionCharacter.all.count, CompanionCast.byTheme.count, "no companion twice")
+        XCTAssertEqual(Array(CompanionCharacter.all.map(\.id).prefix(3)), ["nod", "quill", "hush"])
         for character in CompanionCharacter.all {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
