@@ -214,6 +214,7 @@
 		812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */; };
 		818B7609A1BA74F19A476E4F /* MobileShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C81CBED17342C9994FC47A6E /* MobileShell.swift */; };
 		819BC8DBBF310A714A544191 /* FilterDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E794A04C45093448EE7DE18B /* FilterDraft.swift */; };
+		8251BB931A5D154162EC3E3F /* Mallow.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD07B7B5284AF9BC93E97D20 /* Mallow.swift */; };
 		8277F66F7DAC7671A53DC2FF /* SchemaV3Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95FD3BD15A5E836DBD6E4B3 /* SchemaV3Models.swift */; };
 		835EB0225B2DC3FF9F63FAD1 /* MotionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F1534C71166CBA9B9773E90 /* MotionUITests.swift */; };
 		83D15E4184718C3C0AF8EB61 /* WeatherSettingsText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 641238A87206B3B7CBBFDCA5 /* WeatherSettingsText.swift */; };
@@ -807,6 +808,7 @@
 		CBA41DFD36958529902FFC2C /* DataSettingsGroups.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSettingsGroups.swift; sourceTree = "<group>"; };
 		CBCF524064D04B8A6FAF40DA /* SidebarSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarSearch.swift; sourceTree = "<group>"; };
 		CC94AAC22806CB55BB755C84 /* PopoutController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutController.swift; sourceTree = "<group>"; };
+		CD07B7B5284AF9BC93E97D20 /* Mallow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mallow.swift; sourceTree = "<group>"; };
 		CE006F20A6E672ED9142B85A /* HITToggleStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITToggleStyle.swift; sourceTree = "<group>"; };
 		CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdog.swift; sourceTree = "<group>"; };
 		CF922AE937BECF293EE28887 /* TaskPopoutTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopoutTitleTests.swift; sourceTree = "<group>"; };
@@ -1000,6 +1002,7 @@
 			isa = PBXGroup;
 			children = (
 				9C8FFF3EE152C6D82DAA7152 /* Hush.swift */,
+				CD07B7B5284AF9BC93E97D20 /* Mallow.swift */,
 				274607610BD862CCA9F02DE0 /* Nod.swift */,
 				BF2DC188DCC06E0B0C9C122F /* Posy.swift */,
 				2FF631693F1C48C03F264CB0 /* Quill.swift */,
@@ -2146,6 +2149,7 @@
 				17321C909FE8987289EB1395 /* MacSidebarRow.swift in Sources */,
 				C3146E8D50618E05A74AB4F2 /* MacToolbarChrome.swift in Sources */,
 				1319FFA3FBE71478A4F3121F /* MacWindowKeeper.swift in Sources */,
+				8251BB931A5D154162EC3E3F /* Mallow.swift in Sources */,
 				818B7609A1BA74F19A476E4F /* MobileShell.swift in Sources */,
 				32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */,
 				B88DCC9DB0698CADA1F3C03A /* ModelContainerFactory.swift in Sources */,
