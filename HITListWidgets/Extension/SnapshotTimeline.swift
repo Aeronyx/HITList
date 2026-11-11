@@ -42,14 +42,28 @@ enum WidgetSnapshotStore {
 struct SnapshotEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
+    /// The taps in the outbox when it was read (brief 81): their rows are drawn checked.
+    var requests: [WidgetRequest] = []
+}
+
+/// The widget's taps on their way (brief 81), read from the outbox beside the snapshot.
+enum WidgetOutboxStore {
+    static func read() -> [WidgetRequest] { WidgetIntentRoad.outbox?.read().requests ?? [] }
 }
 
 enum SnapshotTimeline {
-    /// Entries now and at each moment the content can change (`WidgetContent.changes`: midnights, resets, due times);
+    /// Entries now and at each moment the content can change (`WidgetContent.changes`: midnights, resets, due times),
+    /// or its quiet line can (`WidgetContent.noteChanges`: a tap's patience running out, the snapshot a day old);
     /// WidgetKit asks again after the last.
-    static func entries(_ snapshot: WidgetSnapshot?, now: Date = Date()) -> [SnapshotEntry] {
-        let moments = snapshot.map { WidgetContent.changes($0, after: now) } ?? []
-        return ([now] + moments).map { SnapshotEntry(date: $0, snapshot: snapshot) }
+    static func entries(_ snapshot: WidgetSnapshot?, requests: [WidgetRequest] = [], now: Date = Date()) -> [SnapshotEntry] {
+        var moments: [Date] = []
+        if let snapshot {
+            let drawn: WidgetSnapshot = WidgetContent.marks(snapshot, requests: requests, at: now).snapshot
+            let content: [Date] = WidgetContent.changes(drawn, after: now)
+            let notes: [Date] = WidgetContent.noteChanges(snapshot, requests: requests, after: now)
+            moments = Set(content + notes).sorted()
+        }
+        return ([now] + moments).map { SnapshotEntry(date: $0, snapshot: snapshot, requests: requests) }
     }
 
     static func timeline(now: Date = Date(), context: TimelineProviderContext? = nil, kind: String) -> Timeline<SnapshotEntry> {
@@ -58,7 +72,7 @@ enum SnapshotTimeline {
             Logger(subsystem: "com.trammells.hitlist", category: "widgets")
                 .notice("widget \(kind, privacy: .public) \(String(describing: context.family), privacy: .public): \(Int(context.displaySize.width))×\(Int(context.displaySize.height)) pt")
         }
-        let entries = entries(WidgetSnapshotStore.read(), now: now)
+        let entries = entries(WidgetSnapshotStore.read(), requests: WidgetOutboxStore.read(), now: now)
         // Without a snapshot there is nothing to change at; look again in an hour (the app's first write reloads sooner).
         let policy: TimelineReloadPolicy = entries.count > 1 ? .atEnd : .after(now.addingTimeInterval(3600))
         return Timeline(entries: entries, policy: policy)

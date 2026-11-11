@@ -9,8 +9,11 @@ struct TodayLockScreenView: View {
     let snapshot: WidgetSnapshot?
     let now: Date
     let family: WidgetFamily
+    /// The taps in the outbox (brief 81): a tapped row stays, checked, as on the Home Screen, until iCloud has it.
+    var requests: [WidgetRequest] = []
 
-    private var content: WidgetContent.Today? { snapshot.map { WidgetContent.today($0, at: now) } }
+    private var marks: WidgetContent.Marks? { snapshot.map { WidgetContent.marks($0, requests: requests, at: now) } }
+    private var content: WidgetContent.Today? { marks.map { WidgetContent.today($0.snapshot, at: now) } }
 
     var body: some View {
         Group {
@@ -56,8 +59,9 @@ struct TodayLockScreenView: View {
             if let content, !content.isEmpty {
                 ForEach(content.rows.prefix(2)) { task in
                     HStack(spacing: 5) {
-                        Image(systemName: "circle").font(.system(size: 10, weight: .semibold))
-                        Text(task.title).font(HITFont.inter(13, .regular)).lineLimit(1)
+                        let checked = marks?.isChecked(task.id) ?? false
+                        Image(systemName: checked ? "checkmark.circle.fill" : "circle").font(.system(size: 10, weight: .semibold))
+                        Text(task.title).font(HITFont.inter(13, .regular)).strikethrough(checked).lineLimit(1)
                         Spacer(minLength: 0)
                         if let due = task.due, task.hasTime, !task.isOverdue(now: now) {
                             Text(DueFormatter.timeText(for: due)).font(HITFont.inter(11, .medium)).opacity(0.7).fixedSize()

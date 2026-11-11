@@ -32,10 +32,10 @@ private struct TodayWidgetEntryView: View {
         let palette = ThemePalette.named(entry.snapshot?.themeID)
         switch family {
         case .accessoryCircular, .accessoryRectangular, .accessoryInline:
-            TodayLockScreenView(snapshot: entry.snapshot, now: entry.date, family: family)
+            TodayLockScreenView(snapshot: entry.snapshot, now: entry.date, family: family, requests: entry.requests)
                 .containerBackground(for: .widget) { Color.clear }
         default:
-            TodayWidgetView(snapshot: entry.snapshot, now: entry.date, family: family)
+            TodayWidgetView(snapshot: entry.snapshot, now: entry.date, family: family, requests: entry.requests)
                 .environment(\.widgetPalette, palette)
                 .widgetBackground(palette)
         }
@@ -54,7 +54,8 @@ struct SnapshotProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (SnapshotEntry) -> Void) {
         WidgetFonts.register()
         let now = Date()
-        completion(SnapshotEntry(date: now, snapshot: WidgetSnapshotStore.read() ?? WidgetSamples.snapshot(now: now)))
+        completion(SnapshotEntry(date: now, snapshot: WidgetSnapshotStore.read() ?? WidgetSamples.snapshot(now: now),
+                                 requests: WidgetOutboxStore.read()))
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
