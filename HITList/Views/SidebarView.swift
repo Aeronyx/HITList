@@ -243,6 +243,15 @@ struct SidebarView: View {
         .onChange(of: focusGuard?.releases) { _, _ in rowsFocused = true }
         // Escape in the empty search field: the keyboard comes back to the rows, so ↑ and ↓ work at once.
         .onChange(of: search?.letGoRequests) { _, _ in rowsFocused = true }
+        // A card or panel closed and left the keyboard with no view at all (Escape on quick add did, brief 94): the rows
+        // take it, so ↑ and ↓ work at once. Wherever else it went (the list it was opened from, a field), it stays.
+        .onChange(of: popouts?.state.showsAddButton) { _, shown in
+            guard shown == true else { return }
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                if let window = NSApp.keyWindow, window.firstResponder === window { rowsFocused = true }
+            }
+        }
         // `defaultFocus` alone left the keyboard with the detail column's list on 26.7.1 (↓ opened the first task):
         // once the window has laid out, the rows take it, unless a card the person opened already has it.
         .task {
