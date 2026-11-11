@@ -48,13 +48,15 @@ An hour in, George added (verbatim):
 > roadmap after Round 19 completes and to hopefully create all the other creatures before I wake, as you have plenty
 > of time. Don't rush anything, but please finish what you can by morning (~8am ET or 95% usage limit).
 
-So three more sessions draw the last three companions (`87-last-three-companions.md`), one each:
+So three more sessions draw the last three companions (`87-last-three-companions.md`), one each, and a ninth
+session starts the roadmap's next item (`90-share-extension.md`):
 
 | Brief | Session | Effort | Owns, in short |
 |---|---|---|---|
 | 87 | `graphite-companion` | max | Graphite's companion (seed: tall and thin, half-sketched) |
 | 88 | `moss-companion` | max | Moss's companion (seed: low and wide, carrying something that grows) |
 | 89 | `tokyo-companion` | max | Tokyo Night's companion (seed: a small thing with a light of its own) |
+| 90 | `share-extension` | xhigh | The roadmap's next item: "Add to HITList" from the share sheet, through an outbox the app drains; ships with 0.9.3 only if it is merged and its packaging proven by morning |
 
 Brief 84's engine commit (routines as data) was fast-forwarded onto master at 02:10 so these three draw routines
 in one pass, and brief 85 (Posy for Rosé, Mallow for Mocha) goes straight to its second pass. The Mac was
