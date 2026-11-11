@@ -345,4 +345,13 @@ final class MacChromeTests: XCTestCase {
         while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
     }
     #endif
+
+    #if os(macOS)
+    /// No header over nothing (brief 99): "Filters" shows once there is a saved filter; before that, Search's "Save as
+    /// filter…" makes the first one.
+    func testTheFiltersHeaderShowsOnlyOverSavedFilters() {
+        XCTAssertFalse(SidebarView.showsFiltersHeader(savedFilters: 0))
+        XCTAssertTrue(SidebarView.showsFiltersHeader(savedFilters: 1))
+    }
+    #endif
 }
