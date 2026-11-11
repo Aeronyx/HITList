@@ -159,6 +159,11 @@ struct ThemeSwatchGrid: Layout {
 /// One theme to pick: the swatch (with its companion, if any) and its name under it, pressed down a little while
 /// clicked. The companion is part of the picture, never of the button's words.
 struct ThemeSwatchButton: View {
+    /// A theme's name wraps onto a second line rather than truncating; a single word too long for its cell shrinks a
+    /// little instead (at the largest text size every name's longest word fits a 76 pt cell, "Midnight" 72 pt).
+    static let nameLines = 2
+    static let nameMinimumScale: CGFloat = 0.85
+
     let palette: ThemePalette
     let isSelected: Bool
     var side: CGFloat = ThemeSwatch.size
@@ -169,10 +174,14 @@ struct ThemeSwatchButton: View {
         Button(action: action) {
             VStack(spacing: HITSpacing.xs) {
                 ThemeSwatch(palette: palette, isSelected: isSelected, side: side, companion: companion)
+                // Two lines when the text size needs them (brief 99: "Tokyo Night" truncated under its swatch at XL);
+                // every name is one line at the default size, so nothing moves there.
                 Text(palette.name)
                     .font(isSelected ? HITType.caption2Semibold : HITType.caption2)
                     .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
-                    .lineLimit(1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(Self.nameLines)
+                    .minimumScaleFactor(Self.nameMinimumScale)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
