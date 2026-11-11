@@ -247,7 +247,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(WhatsNew.isBehind(version: AppInfo.version, build: AppInfo.build),
                        "add a What's New entry for \(AppInfo.versionLabel)")
         XCTAssertFalse(current.items.isEmpty)
-        XCTAssertEqual(current.label, "0.9.3", "this round's list")
+        XCTAssertEqual(current.label, "0.9.4", "this round's list")
         XCTAssertTrue(WhatsNew.isNewer("0.10.0", than: "0.9.1"))
         XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
     }
@@ -357,7 +357,7 @@ final class SettingsTidyTests: XCTestCase {
             "Account": ["Your name", "Delete profile", "iCloud account", "Sign out"],
             "Appearance": ["Reduce effects", "Compact rows", "Themes"],
             "General": ["Start screen", "Week starts on", "Show task count on the app icon", "Confirm before deleting",
-                        "Calendar events", "Keyboard shortcuts"],
+                        "Calendar events", "Keyboard shortcuts", "Quick add guide"],
             "Reminders": ["Notify at due time", "Default reminder", "Morning summary", "If reminders don't arrive",
                           "Send a test notification"],
             "Extras": ["Completion sound", "Haptics", "Companions", "Show companions", "Weather", "Sync bolt",

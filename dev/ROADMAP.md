@@ -5,49 +5,50 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.3 (round 19, 2026-11-11, overnight)
+## Now: 0.9.4 (round 20, 2026-11-11, afternoon)
 
 | Brief | What | Status |
 |---|---|---|
-| 82 `time-zones`, 92 `day-anchor-review` | A date with no time is the same calendar day in every zone (stored at 10:00 UTC on its day; only a date this device can vouch for is rewritten, after a backup); everything catches up when the zone or the day changes | merged, awaiting release |
-| 83 `location-weather` | Weather on by default; the location asked once at first launch; the place's time zone drives the companion's night and day | merged, awaiting release |
-| 84 `companion-routines`, 91 | Idle routines (a few seconds of life every 5 to 12 minutes), sky-bound gestures, snow that piles up, a hot-day sky; nothing drawn in the air | merged, awaiting release |
-| 85, 87, 88, 89 | A companion for every theme: Posy (Rosé, in Pip's place), Mallow (Mocha), Smudge (Graphite), Tuck (Moss), Glim (Tokyo Night) beside Nod, Quill and Hush | merged, awaiting release |
-| 86 `settings-tidy` | Settings as one short screen and pages, Appearance second, every option in one home; a companion on each theme's swatch | merged, awaiting release |
-| 90 `share-extension` | "Add to HITList" from the share sheet, through an outbox the app drains | merged, awaiting release |
-| 93 `qa-sweep` | Every screen on four devices looked at; seven plain defects fixed, the rest listed for George | merged, awaiting release |
-| 94 `accessibility` | VoiceOver wording for rows, tabs, switches, chips, cards and Settings; the Mac by keyboard; hit targets (the Mac's sync bolt); the system's audit as an on-demand UI test | merged, awaiting release; the audit passes on a fresh iPhone 17 simulator and runs on demand |
+| 95 `sync-truth` | The bolt is filled only within 30 s of a confirmation from iCloud itself (a small check every 15 s while a bolt can be seen); Check iCloud… compares this device with iCloud record by record and repairs nothing by itself | merged, awaiting release; why "Shave" was on the iPhone and not the Mac is still open (both logs in hand) |
+| 96 `flipboard-phone` | The empty Flipboard is one Add switch outline; a calmer Add a Switch card; drag a switch onto a Switchboard; Duplicate | merged, awaiting release |
+| 97 `repeat-picker` | The repeat menu worded for the task's day, Custom…, a Repeat button in the date picker; no system date picker left | merged, awaiting release |
+| 98 `quick-add-words` | "starting", several weekdays at once, the quick add guide | merged, awaiting release |
+| 99 `sweep-polish` | The Mac's "…" is the Settings button; the sweep's eighteen items | merged, awaiting release |
+| 100 `companions-alive` | An idle every 6 to 36 s, the first within seconds; every companion sits on the "+"; Tuck's eyes | merged, awaiting release |
+| 101 `phase`, 102 `rose-and-graphite` | Phase (Mocha), Button (Rosé), Gargle (Graphite) in place of Mallow, Posy and Smudge | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's answers to the sweep's findings** (`93-qa-sweep/FINDINGS.md` in the round's notes): the large title's
-   edge on the Pro Max and the Duo, the system date picker in Review Inbox and Upcoming's swipe, day headers written
-   four ways, empty states in four styles, "Done" with three looks, the Mac Settings page's name shown twice. Each is
-   a matter of taste or changes how a screen works, so none was touched.
-2. **Widgets, third pass**: a Control Center "Add task", calendar events in the Upcoming widget, an "Add task"
+1. **George's eye on round 20**: the three new creatures and Tuck's eyes at real size; whether a companion's pace
+   (something every 6 to 36 s) is right; whether the bolt is ever hollow or red when nothing is wrong (its pace and
+   its red after two minutes apart are the supervisor's numbers); the Mac's drag of a switch onto a Switchboard,
+   which nobody saw through to a drop.
+2. **What happened to "Shave"**, from the two logs George saved and from Check iCloud… on each device once 0.9.4 is
+   on them; then whatever the cause turns out to need.
+3. **Widgets, third pass**: a Control Center "Add task", calendar events in the Upcoming widget, an "Add task"
    widget.
-3. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
+4. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
    controls; whether the sidebar column floats (26) or sits flush (27) is still the system's. Owning it means our own
    split view and top bar. Decide after a friend's screenshot on macOS 27.2 (still owed).
-4. **Accessibility with a person, and the audit in the ordinary run.** Round 19 wrote the labels and the audit
-   (`TEST_RUNNER_HITLIST_AUDIT=1`; 9 tests pass on a fresh iPhone 17 simulator, every one of its 404 findings
-   excluded with a written reason). Wording and order need someone who uses VoiceOver; Full Keyboard Access on the
-   Mac was never switched on (toolbar buttons, the board's cards, Flipboard tiles and Settings controls are not
-   reachable by Tab without it); and the audit joins the ordinary UI run once it has passed at night and on a
-   second device size (its exclusions name positions on the screen).
-5. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1). A day a friend's 0.9.2
-   wrote in another zone shows as before until their device updates.
-6. **The share extension on a real Mac**: Safari's Share menu was never seen (macOS offers a new share extension
+5. **Accessibility with a person, and the audit in the ordinary run.** Round 19 wrote the labels and the audit
+   (`TEST_RUNNER_HITLIST_AUDIT=1`; it passed on a fresh iPhone 17 simulator, every finding excluded with a written
+   reason; round 20 moved many screens, so rerun it). Wording and order need someone who uses VoiceOver; Full
+   Keyboard Access on the Mac was never switched on; the audit joins the ordinary UI run once it has passed at
+   night and on a second device size.
+6. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1).
+7. **The share extension on a real Mac**: Safari's Share menu was never seen (macOS offers a new share extension
    only once it is switched on in System Settings); pickers for a Group and a date on the card.
-7. **The Mac's task list.** It is still the system's `List`: a completed row's gap closes in one frame and the
+8. **The Mac's task list.** It is still the system's `List`: a completed row's gap closes in one frame and the
    completion flash snaps, where the iPhone eases both (brief 75's audit). Drawing our own rows there, as the sidebar
    does since 0.9.0 (21), fixes both and removes the last system-drawn selection.
-8. **Companions in nested screens by theme**, as George described, and more skies if he wants them (wind, fog, a
-   cold snap).
-9. **A user's own companion.** Extras → Companions → "Choose your own…", a sprite sheet from Files, the way the
-   completion sound already takes a file. Characters other people own can live on someone's own device this way; the
-   app and this public repository ship only original ones.
-10. **The first-run day pass after the first frame**: it runs inside the app's start-up (6.8 s for 20,000 tasks;
+9. **Quick add's guide**: tapping an example opens quick add with it typed (the card has no entry point that starts
+   with text); the widgets' and the Duo's own shorter day forms follow the one formatter where they fit.
+10. **Companions in nested screens by theme**, as George described, and more skies if he wants them (wind, fog, a
+    cold snap); the Mac's companion idles only while HITList is the front app.
+11. **A user's own companion.** Extras → Companions → "Choose your own…", a sprite sheet from Files, the way the
+    completion sound already takes a file. Characters other people own can live on someone's own device this way; the
+    app and this public repository ship only original ones.
+12. **The first-run day pass after the first frame**: it runs inside the app's start-up (6.8 s for 20,000 tasks;
     real stores are small today), and an import that can restore the backup it takes.
 
 ## George's, no code needed
@@ -66,6 +67,10 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 ## Shipped
 
 Newest first; one line per release, details in `CHANGELOG.md`.
+
+- **0.9.3**, 2026-11-11: a companion for every theme with idle routines and the weather shown on the creature; the
+  location asked once; a date with no time kept on its day in every zone; Settings as one short screen and pages;
+  the share extension; a sweep of every screen and an accessibility pass.
 
 - **0.9.2**, 2026-11-11: companions that keep still, one per theme (four drawn), asleep at night, dressed for rain
   and snow through WeatherKit; widgets that check a task off and keep it ticked until iCloud has it.

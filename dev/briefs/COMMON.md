@@ -313,6 +313,50 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 20 record (2026-11-11, afternoon; sessions 95–102 merged for 0.9.4)
+All eight branches are merged on master (in this order: 98, 97, 95, 102, 101, 100, 96, 99). No schema change.
+- **95 `sync-truth`** (`claude/sync-truth-b7f2bc`): `BoltTruth` (filled only within 30 s of a confirmation, two lost
+  answers end it), `SyncBeat` (one small CloudKit read every 15 s while a bolt can be seen), `ICloudZoneIndex` and
+  `ICloudZoneReader` (the app's own record of what the Core Data zone holds: kind, id, change stamp, never a title),
+  `SyncComparison` (only here, only in iCloud, newer here, newer there), `SyncAudit` (Check iCloud…), `SyncWords`.
+  What it found about George's morning, from the Mac's unified log: the Mac's account was "temporarily unavailable"
+  from 21:28 on the 10th to 13:35 on the 11th and the bolt showed "Synced 18 hr ago", filled, twice. Why "Shave"
+  was on the iPhone and not the Mac was not settled without the iPhone's log; George saved both devices' logs at
+  18:15 (`build.noindex/logs/george-*-sync-log-2026-11-11.txt`, outside git) and the session was sent back to read
+  them (its findings, if any, are in `95-sync-truth/logs-timeline.md` in the notes folder).
+- **96 `flipboard-phone`** (`claude/flipboard-phone-25d3e0`): the empty board is the Add switch tile alone; the card
+  (one scale of type, a time chip, "Become a task when Overdue", "Flip 1 time", the preview rocker removed); a switch
+  dragged onto a Switchboard and off it; Duplicate; tile intervals on one line. The supervisor changed the Flipboard
+  tip's words to match.
+- **97 `repeat-picker`** (`claude/repeat-picker-968dae`): core's `RepeatChoice` (the menu's words) and `RepeatForm`
+  (Custom…), `RepeatMenuCard`, `RepeatCustomCard`, the Repeat button in `DatePickerCard`; `PickDatePopover` is gone.
+  Every rule's words begin "Every".
+- **98 `quick-add-words`** (`claude/quick-add-words-796569`): "starting", weekday lists, the guide (`Views/Help/*`).
+  At the merge the supervisor fixed what it found in `RecurrenceRule`: a several-day rule's week begins after its
+  longest rest (`cycleStart`), and its first occurrence is the soonest of its days whatever the interval.
+- **99 `sweep-polish`** (`claude/sweep-polish-61caeb`): 18 items, 24 commits; the "…" is a gear on the Mac and iPad
+  and its items sit under the view options; one day formatter; one section header; rows on the system's margin.
+- **100 `companions-alive`** (`claude/companions-alive-4301ff`): `idleGap` 6…36 s, `firstIdle` 2…6 s, `routineGap`
+  180…480 s, `Routine.little`, asleep breaths at the same pace; `CompanionSeat` (a base pixel carried down to the
+  host's curve, see-through as the character is) and `CompanionSeatTests` (every character, every still, every
+  host); idles for the five; Tuck's eyes; the lists' end clears the companion.
+- **101 `phase`** (`claude/phase-9da93e`): Phase, the `veil` ink ("v"), `CompanionCharacter.seeThrough` and
+  `opacity(_:)`. Mallow deleted.
+- **102 `rose-and-graphite`** (`claude/rose-and-graphite-e07fcb`): Button and Gargle, the `accentDark` ink ("r").
+  Posy and Smudge deleted.
+What worked: **concept sheets first.** Each character session sent three concepts within the hour; the supervisor
+looked at them at real size and sent two of three back (a grey mushroom with a skull's face; a gargoyle that read as
+a cat, then as pixel noise), and looked again at the stills in the app (Phase read as a drop until its hem lay over
+the button; Tuck's first new eyes were still hollow squares). A stop is needed to deliver such a note to a working
+session. What cost time: eight sessions saturated the Mac again once they all reached their suites (load near 1000,
+20 GB of swap); the seat test used a macOS-only view and broke the iOS test bundle on master until a sibling found
+it (build both platforms' test bundles before merging an early commit).
+Never seen running, for the hand-over: a real sign-out and the new bolt on Production; Low Power Mode; a large first
+read of the zone; a switch dragged through to a drop on the Mac; the Mac's summary-time field; the feedback card's
+Done; the iPad's moved menu items; the Duo's inner display; macOS 27.
+Side stores the sessions left in the Mac's app-group folder, for George to delete by hand: `HITList-s95a*`,
+`HITList-s96*`, `HITList-s99*` (and the files session 95's report lists under Application Support).
+
 ## Round 19 record (2026-11-11, overnight; sessions 82–90 and 92–94 merged for 0.9.3)
 Twelve sessions on three of George's turns, all Opus 5.5, supervised by a Fable 5.2 chat while George slept: 82
 `time-zones` (xhigh), 83 `location-weather` (high), 84 `companion-routines` (max), 85 `new-companions` (max), 86

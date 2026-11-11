@@ -20,6 +20,16 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.4", items: [
+            "The sync bolt is filled only when iCloud has confirmed, in the last 30 seconds, that this device and iCloud match. Otherwise it says what it is waiting for.",
+            "Settings → iCloud & data → Check iCloud shows what differs between this device and iCloud, task by task. It changes nothing unless you choose to.",
+            "Companions are alive: a blink, a glance or a little loop every few seconds, and they sit on the + instead of floating over it.",
+            "Three new companions: Button the mushroom on Rosé, Phase the see-through ghost on Mocha and Gargle the gargoyle pup on Graphite. Tuck's eyes shine.",
+            "Repeat has a menu worded for your task's day and a Custom… for anything else, and the date picker has a Repeat button.",
+            "Quick add understands \"every 3 days starting friday\" and \"vacuum tue thu sat\". See everything it knows in Settings → General → Quick add guide.",
+            "Flipboard: a calmer Add a Switch card, press and drag a switch onto a Switchboard, and Duplicate in a switch's menu.",
+            "On the Mac the top-right … is now the Settings button, and a screen-by-screen sweep lined up dozens of small things.",
+        ]),
         Entry(version: "0.9.3", items: [
             "Every theme has its own companion now: Nod, Smudge, Quill, Tuck, Hush, Glim, Mallow and Posy. Each sits on its theme's swatch in Settings.",
             "Companions come alive now and then: a few seconds of a routine of their own every several minutes, then quiet again.",
