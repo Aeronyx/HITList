@@ -24,7 +24,7 @@ struct MacAppearanceSection: View {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
             }
             .padding(.horizontal, HITSpacing.l)
-            .padding(.vertical, HITSpacing.m)
+            .padding(.bottom, HITSpacing.m)
 
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 Text(hovered == nil || hovered == store.palette ? "Preview · \(shown.name)" : "Preview · \(shown.name) (click to use)")
