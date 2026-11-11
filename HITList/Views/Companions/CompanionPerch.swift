@@ -193,7 +193,9 @@ struct CompanionFigure: View {
 /// the base is carried down to the host's edge in its own ink, so no background shows between them. What it adds is
 /// tucked behind the rim: one sprite pixel below each base pixel that has nothing hanging under it, clipped to above
 /// the host's shape (half a point into it, so the two edges meet without a seam). On the flat it is that half point;
-/// a base more than a pixel above the curve is the drawing's to fix (`CompanionSeatTests`).
+/// a base more than a pixel above the curve is the drawing's to fix (`CompanionSeatTests`). A see-through character's
+/// seat is as see-through as the pixel it goes under (`CompanionCharacter.opacity`), and a veil (Phase's hem, brief
+/// 101) gets none: a ghost's hem floats, and a solid bit under its points showed where the "+" curves away.
 struct CompanionSeat: View {
     let character: CompanionCharacter
     let pose: CompanionPose
@@ -212,7 +214,7 @@ struct CompanionSeat: View {
         var below = Set<Int>()
         for run in runs where run.y == edge + 1 { for x in run.x..<(run.x + run.length) { below.insert(x) } }
         var out: [(x: Int, ink: CompanionInk)] = []
-        for run in runs where run.y == edge {
+        for run in runs where run.y == edge && run.ink != .veil {
             for x in run.x..<(run.x + run.length) where !below.contains(x) {
                 let drawnX: Int = pose.mirrored ? character.width - 1 - x : x
                 out.append((drawnX, run.ink))
@@ -227,11 +229,14 @@ struct CompanionSeat: View {
         let base = Self.base(character, pose: pose)
         let host = CompanionPerch.surface(character, spot: spot).offsetBy(dx: 0, dy: Self.overlap)
         let top: CGFloat = CGFloat(character.seatRow) * p
+        let character = character
         Canvas { context, _ in
             context.clip(to: host, options: .inverse)
             for pixel in base {
                 let left: CGFloat = CGFloat(pixel.x) * p
-                context.fill(Path(CGRect(x: left, y: top, width: p, height: p)), with: .color(inks[pixel.ink]))
+                let alpha: Double = character.opacity(pixel.ink)
+                let color: Color = alpha < 1 ? inks[pixel.ink].opacity(alpha) : inks[pixel.ink]
+                context.fill(Path(CGRect(x: left, y: top, width: p, height: p)), with: .color(color))
             }
         }
         .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height + 1) * p)
