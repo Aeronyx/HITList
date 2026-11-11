@@ -200,6 +200,48 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 17 record (2026-11-10; sessions 74–78 merged for 0.9.1)
+Five sessions on George's turns, all Opus 5.5, supervised by a Fable 5.2 chat: 74 `widgets` (xhigh, 10 commits), 75
+`motion-polish` (xhigh, 11), 76 `companions` (max, 4), 77 `calendar-events` (high, 9), 78 `steady-bolt` (xhigh, 8, added
+an hour in on George's note about the bolt and a sync blip). Merged 78, 77, 76, 74, 75; conflicts only in the
+generated project (regenerated) and `project.yml` (two info keys, both kept). Supervisor follow-ups: brief 75's glide
+line in `SidebarView`; `release.sh` checks the embedded extension; the Mac sidebar's 200 pt minimum (the column-width
+modifier sat under round 16's toolbar modifiers and was not applied: the divider rested at 148 pt); Quill shows only
+when the Settings row has room; the 0.9.1 notes; `dev/ROADMAP.md` rewritten. Tests after the round: core 528, Mac 1462,
+iOS 1421, UI 45 (10 skipped: the tours that run on demand).
+After the round:
+- **Widgets**: one extension, `HITListWidgets/` (`com.trammells.hitlist.widgets`, registered with App Groups by
+  automatic signing), for iPhone, iPad and the Mac. It reads `widget-snapshot` JSON the app writes into the App
+  Group (`Services/Widgets/*`; a side store writes its own) and asks core's rules (`UpcomingDays`, the Today and
+  switch rules); it never opens the store. `hitlist://task/<id>`, `/today`, `/upcoming`, `/flipboard` route through
+  `Services/DeepLinks` and `IntentRouter`. Design-system files are compiled into the extension from the app
+  (`project.yml`): if one of them starts to use an app-only type, the extension stops building. The version lines sit
+  at the project level; the extension has none.
+- **A Debug Mac build registers its widget extension with PlugInKit.** List with `pluginkit -m -v -i
+  com.trammells.hitlist.widgets`, and unregister your build's with `pluginkit -r <path to the .appex>` when you
+  finish, or George's widget gallery may offer a build that is about to be deleted.
+- **A Debug Mac app shares the real app's saved window state** (frame, sidebar width, sidebar hidden; AppKit's own
+  defaults, not the app group's): leave the window as you found it, sidebar shown and at its usual width.
+- **Companions**: `Views/Companions/*`, `Support/Companions/*`; characters are data (`CompanionCharacter`, frames as
+  rows of palette letters), `CompanionClock` picks the frame, one perch line per host view. Nod (search field) and
+  Quill (Browse's foot, the Mac sidebar's Settings row). `-companionDemo all` plays the flourishes. Original
+  characters only (SUPERVISOR §7).
+- **Calendar events**: `Services/Calendar/*` (EventKit behind a read-only protocol), `Views/Calendar/*`, core's day
+  rules; off by default, device-local keys; `-seedDemoEvents YES` fakes a day.
+- **Sync marks**: `CloudSyncMonitor.state` and `accountStatus` are steadied (`SyncSteadiness`, `AccountSteadiness`);
+  `rawState` and `rawAccountStatus` are the instant truth (the strike gate and the log read them). `SyncState` has
+  `.retrying(since:)`. `-syncReplay YES` plays four minutes of raw states.
+- **Motion**: `MotionUITests` films each family (`TEST_RUNNER_HITLIST_MOTION=1`); `macSidebarSelectionGlide`; the
+  iPhone card follows the keyboard's own curve one run-loop turn after UIKit's animation block.
+Left for later: on the Mac a completed row's gap closes in one frame and its flash snaps (`TaskListView` is a
+system `List`); the Mac's widgets and a `hitlist://` link on the Mac were never seen running; no completing from a
+widget; a busy calendar day pushes Today's tasks down (no collapse); a day with events and no tasks still says
+"Nothing due"; Check iCloud… still says "sign in again" for a temporary answer; no third companion; Quill's inked tip
+is faint on Graphite; the keyboard curve was fitted on the iOS 27 simulator only; a session scripted a system
+permission prompt and reset a permission with `tccutil` (now forbidden above); side stores `HITList-s74*`,
+`HITList-s75`, `HITList-s76`, `HITList-s77*`, `HITList-s78` and `HITList-sup17` in the Mac app group folder (delete
+by hand in Finder).
+
 ## Round 16 record (2026-11-10; sessions 70–73 merged for 0.9.0 (21))
 Four sessions at once on George's turn, all Opus 5.5, supervised by a Fable 5.2 chat: 70 `mac-chrome-27` (xhigh, 9
 commits), 71 `quick-add-monthly` (high, 7), 72 `switchboards` (xhigh, 9, schema V6), 73 `browse-and-bolt` (high, 4).
