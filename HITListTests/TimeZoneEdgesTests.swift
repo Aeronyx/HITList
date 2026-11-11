@@ -42,11 +42,21 @@ final class TimeZoneEdgesTests: XCTestCase {
 
     private func day(_ date: Date?, in zone: Calendar) -> DayAnchor.Day? { date.map { DayAnchor.localDay(of: $0, calendar: zone) } }
 
+    /// Runs `body` with the process's zone set to `zone` (`Calendar.current` follows it), for the code that reads the
+    /// device's calendar itself (the Shared Tasks store); restored after, so the test means the same on any Mac and on CI.
+    private func inZone(_ zone: Calendar, _ body: () throws -> Void) rethrows {
+        let saved = NSTimeZone.default
+        NSTimeZone.default = zone.timeZone
+        defer { NSTimeZone.default = saved }
+        try body()
+    }
+
     // MARK: - JSON
 
     /// An export from a build before 0.9.3, written in Chicago (its days are Chicago's midnights), imported on a device
-    /// in Tokyo: the days are Chicago's, anchored. An export from this build carries 10:00 UTC for a day, which an older
-    /// build imports as that day.
+    /// in Tokyo: kept as they came (brief 92: Tokyo can't vouch for Chicago's midnights; they show there as Thursday and
+    /// Friday afternoons, their days). Back home in Chicago the pass anchors them. An export from this build carries
+    /// 10:00 UTC for a day, which an older build imports as that day.
     func testAnOlderExportImportsWithItsDaysAnchored() throws {
         let older = ModelContainerFactory.preview()
         let task = TaskItem(title: "Call Sam", dueDate: midnight(Self.thursday, in: Self.chicago))
@@ -62,6 +72,14 @@ final class TimeZoneEdgesTests: XCTestCase {
         try context.save()
         let tasks = try context.fetch(FetchDescriptor<TaskItem>())
         let imported = try XCTUnwrap(tasks.first { $0.title == "Call Sam" })
+        XCTAssertEqual(imported.dueDate, midnight(Self.thursday, in: Self.chicago), "kept as it came in Tokyo")
+        XCTAssertEqual(day(imported.dueDate, in: Self.tokyo), Self.thursday)
+        let suite = "TimeZoneEdgesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(DayAnchoring.firstRunVersion, forKey: DayAnchoring.firstRunKey())
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, defaults: defaults, syncLog: { _, _, _ in }),
+                       DayAnchoring.Count(dueDates: 1, deadlines: 1))
         XCTAssertEqual(imported.dueDate, DayAnchor.anchor(of: Self.thursday))
         XCTAssertEqual(imported.deadline, DayAnchor.anchor(of: Self.friday))
         XCTAssertEqual(tasks.first { $0.title == "Dentist" }?.dueDate, local(12, 9, in: Self.chicago))
@@ -136,45 +154,62 @@ final class TimeZoneEdgesTests: XCTestCase {
 
     // MARK: - Shared Tasks
 
-    /// A friend's day written in Tokyo by a build before 0.9.3 (Tokyo's midnight) is Thursday in Chicago: anchored when
-    /// its record arrives, and a merge with our copy finds nothing to write back to their record.
+    /// A day written here in Chicago is stored as its anchor, and the same day arriving in its old form (Chicago's midnight)
+    /// is the same value, so a merge writes nothing back. A friend's Friday written in Tokyo by a build before 0.9.3 (Tokyo's
+    /// midnight, Thursday 09:00 here) is kept as it came (brief 92: Chicago can't vouch for Tokyo's midnights): Chicago shows
+    /// it as 0.9.2 did, a merge with our copy writes nothing to their record, and the friend's own device in Tokyo anchors it
+    /// as Friday, which then reads as Friday here too.
     func testAFriendsDayFromTokyoIsThursdayInChicagoAndNeverRewrittenOnTheirRecord() throws {
-        let store = SharedTasksStore(persistence: .memory, clock: { [unowned self] in self.local(11, 12, in: Self.chicago) })
-        store.setMe("_me000000000000000000000000000000")
-        let list = try store.createList(title: "Groceries")
-        let mine = try store.addTask(to: list.id, title: "Oat milk", due: SharedDue(date: midnight(Self.thursday, in: Self.chicago), hasTime: false))
-        XCTAssertEqual(mine.due.value?.date, DayAnchor.anchor(of: Self.thursday), "a day written here is stored as its anchor")
+        try inZone(Self.chicago) {
+            let store = SharedTasksStore(persistence: .memory, clock: { [unowned self] in self.local(11, 12, in: Self.chicago) })
+            store.setMe("_me000000000000000000000000000000")
+            let list = try store.createList(title: "Groceries")
+            let mine = try store.addTask(to: list.id, title: "Oat milk", due: SharedDue(date: midnight(Self.thursday, in: Self.chicago), hasTime: false))
+            XCTAssertEqual(mine.due.value?.date, DayAnchor.anchor(of: Self.thursday), "a day written here is stored as its anchor")
 
-        let shared = try XCTUnwrap(store.list(list.id))
+            let shared = try XCTUnwrap(store.list(list.id))
 
-        // The same day in the old form at the same stamp (a build before 0.9.3 saved the record): the two forms of one
-        // day are one value, so the merge writes nothing back to the record.
-        var same = mine
-        same.due = Stamped(SharedDue(date: midnight(Self.thursday, in: Self.chicago), hasTime: false), at: mine.due.changedAt)
-        let sameFetched = try XCTUnwrap(SharedTasksRecords.task(from: SharedTasksRecords.taskRecord(same, in: shared)))
-        XCTAssertEqual(sameFetched.due.value?.date, DayAnchor.anchor(of: Self.thursday))
-        XCTAssertFalse(store.applyServerTask(sameFetched, listID: list.id, scope: list.scope, ownerName: list.ownerName),
-                       "nothing to write to a record only because a day came in its old form")
+            // The same day in the old form at the same stamp (a build before 0.9.3 saved the record): the two forms of one
+            // day are one value, so the merge writes nothing back to the record.
+            var same = mine
+            same.due = Stamped(SharedDue(date: midnight(Self.thursday, in: Self.chicago), hasTime: false), at: mine.due.changedAt)
+            let sameFetched = try XCTUnwrap(SharedTasksRecords.task(from: SharedTasksRecords.taskRecord(same, in: shared)))
+            XCTAssertEqual(sameFetched.due.value?.date, DayAnchor.anchor(of: Self.thursday))
+            XCTAssertFalse(store.applyServerTask(sameFetched, listID: list.id, scope: list.scope, ownerName: list.ownerName),
+                           "nothing to write to a record only because a day came in its old form")
 
-        // The friend's later change: a build before 0.9.3 in Tokyo set Friday (Tokyo's midnight, Thursday 09:00 here).
-        var theirs = mine
-        theirs.due = Stamped(SharedDue(date: midnight(Self.friday, in: Self.tokyo), hasTime: false), at: local(11, 13, in: Self.chicago))
-        let fetched = try XCTUnwrap(SharedTasksRecords.task(from: SharedTasksRecords.taskRecord(theirs, in: shared)))
-        XCTAssertEqual(fetched.due.value?.date, DayAnchor.anchor(of: Self.friday))
-        for zone in [Self.chicago, Self.losAngeles, Self.tokyo] {
-            XCTAssertEqual(day(fetched.due.value?.date, in: zone), Self.friday, zone.timeZone.identifier)
+            // The friend's later change: a build before 0.9.3 in Tokyo set Friday (Tokyo's midnight, Thursday 09:00 here).
+            var theirs = mine
+            let tokyoFriday = midnight(Self.friday, in: Self.tokyo)
+            theirs.due = Stamped(SharedDue(date: tokyoFriday, hasTime: false), at: local(11, 13, in: Self.chicago))
+            let fetched = try XCTUnwrap(SharedTasksRecords.task(from: SharedTasksRecords.taskRecord(theirs, in: shared)))
+            XCTAssertEqual(fetched.due.value?.date, tokyoFriday, "kept exactly as it came")
+            XCTAssertEqual(day(fetched.due.value?.date, in: Self.chicago), Self.thursday, "as 0.9.2 showed it here")
+            XCTAssertEqual(day(fetched.due.value?.date, in: Self.tokyo), Self.friday)
+            XCTAssertFalse(store.applyServerTask(fetched, listID: list.id, scope: list.scope, ownerName: list.ownerName),
+                           "the merged copy is the server's: nothing to write to the friend's record")
+            XCTAssertEqual(store.list(list.id)?.tasks.first?.due.value?.date, tokyoFriday)
+
+            // Their device, in Tokyo, vouches for its own midnight: Friday's anchor, Friday here too.
+            let atHome = SharedTasksStore.normalized(SharedDue(date: tokyoFriday, hasTime: false), calendar: Self.tokyo)
+            XCTAssertEqual(atHome.date, DayAnchor.anchor(of: Self.friday))
+            for zone in [Self.chicago, Self.losAngeles, Self.tokyo] {
+                XCTAssertEqual(day(atHome.date, in: zone), Self.friday, zone.timeZone.identifier)
+            }
+
+            // A timed shared task is a moment, kept to the millisecond.
+            let moment = local(12, 9, in: Self.chicago).addingTimeInterval(0.0004)
+            XCTAssertEqual(SharedTasksStore.normalized(SharedDue(date: moment, hasTime: true)).date, SharedClock.stamp(moment))
         }
-        XCTAssertFalse(store.applyServerTask(fetched, listID: list.id, scope: list.scope, ownerName: list.ownerName),
-                       "the merged copy is the server's: nothing to write to the friend's record")
-        XCTAssertEqual(store.list(list.id)?.tasks.first?.due.value?.date, DayAnchor.anchor(of: Self.friday))
-
-        // A timed shared task is a moment, kept to the millisecond.
-        let moment = local(12, 9, in: Self.chicago).addingTimeInterval(0.0004)
-        XCTAssertEqual(SharedTasksStore.normalized(SharedDue(date: moment, hasTime: true)).date, SharedClock.stamp(moment))
     }
 
-    /// The shared lists' file a build before 0.9.3 saved: its days come back anchored, their stamps unchanged.
+    /// The shared lists' file a build before 0.9.3 saved in Tokyo, reopened there: its days come back anchored, their
+    /// stamps unchanged.
     func testTheSharedListsFileFromAnOlderBuildLoadsAnchored() throws {
+        try inZone(Self.tokyo) { try sharedListsFileFromAnOlderBuildLoadsAnchored() }
+    }
+
+    private func sharedListsFileFromAnOlderBuildLoadsAnchored() throws {
         let folder = FileManager.default.temporaryDirectory.appending(path: "TimeZoneEdges-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }

@@ -523,6 +523,8 @@ final class SharedTasksStore {
     /// (brief 82, `DayAnchor`: 10:00 UTC on it), so a friend in Tokyo and you in Chicago see the same day. Every way a
     /// day comes in goes through here: an edit, a fetched record (`SharedTasksRecords.task(from:)`) and the saved file
     /// (`load`), so a merge never takes the two forms of one day for a change and writes to someone else's record.
+    /// Brief 92: only a midnight in this device's own zone is anchored (`DayAnchor.verdict`); a friend's day from another
+    /// zone keeps the form it came in, and shows here as it did before 0.9.3, until their device (in their zone) anchors it.
     nonisolated static func normalized(_ due: SharedDue) -> SharedDue { normalized(due, calendar: .current) }
 
     nonisolated static func normalized(_ due: SharedDue, calendar: Calendar) -> SharedDue {
