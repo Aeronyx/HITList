@@ -145,13 +145,18 @@ final class CompanionGlimTests: XCTestCase {
     }
 
     /// Nothing floats (brief 84, rule 6): on the "+" (a capsule whose top curves down at both ends) every pixel it
-    /// rests on lies on the flat of the button, less than a device pixel at 3x above it, in every still pose and in
-    /// every pose of its routines; only its tail and lantern hang over the edge. On the "+" it sits a pixel further in.
+    /// rests on lies on the flat of the button, the device row under it at 3x at least half covered, in every still
+    /// pose and in every pose of its routines; only its tail and lantern hang over the edge. The iPhone's glass "+"
+    /// curves like SwiftUI's continuous capsule, some 8 pt before a circle would (measured in the simulator at 3x:
+    /// a circle's geometry passed an inset of 1 that left a device row of background under the held lantern), so the
+    /// check takes whichever of the two falls away first, and on the "+" Glim sits three pixels further in.
     func testNothingItRestsOnFloatsOverThePlusShoulder() throws {
-        XCTAssertEqual(glim.plus.inset, 1)
+        XCTAssertEqual(glim.plus.inset, 3)
         XCTAssertEqual(glim.field.inset, 0)
         let size = FloatingAddButton.size
-        let radius: CGFloat = size.height / 2
+        let shapes = [Capsule(style: .continuous), Capsule(style: .circular)].map {
+            $0.path(in: CGRect(origin: .zero, size: size))
+        }
         let offset = CompanionPerch.offset(glim, spot: .addButton)
         let spriteWidth: CGFloat = CGFloat(glim.width) * CompanionCharacter.pointsPerPixel
         let left: CGFloat = size.width - spriteWidth + offset.width
@@ -169,11 +174,16 @@ final class CompanionGlimTests: XCTestCase {
                 let opaque = (0..<glim.height).filter { rows[$0][x] != CompanionInk.clear }
                 // It rests in this column when its lowest pixel is on the seat line and nothing hangs below it.
                 guard let lowest = opaque.last, lowest == glim.seatRow - 1 else { continue }
+                // Its last device pixel at 3x on each side, by the middle of that device pixel.
                 let from: CGFloat = left + CGFloat(x) * CompanionCharacter.pointsPerPixel
-                let to: CGFloat = from + CompanionCharacter.pointsPerPixel
-                let drop = max(capsuleDrop(at: from, width: size.width, radius: radius),
-                               capsuleDrop(at: to, width: size.width, radius: radius))
-                XCTAssertLessThan(drop, 1.0 / 3.0, "\(name) column \(x): \(drop) pt of background under it")
+                let first: CGFloat = from + 1.0 / 6.0
+                let last: CGFloat = from + CompanionCharacter.pointsPerPixel - 1.0 / 6.0
+                var drop: CGFloat = 0
+                for path in shapes {
+                    drop = max(drop, topEdge(of: path, at: first, height: size.height))
+                    drop = max(drop, topEdge(of: path, at: last, height: size.height))
+                }
+                XCTAssertLessThan(drop, 1.0 / 6.0, "\(name) column \(x): \(drop) pt of background under it")
             }
         }
         // By day only the tail and the lantern are below the seat line: nothing of the mouse sinks into the button.
@@ -217,20 +227,18 @@ final class CompanionGlimTests: XCTestCase {
         (glim.rows(frame) ?? []).joined().filter { $0 == "w" }.count
     }
 
-    /// How far below the capsule's flat top its top edge is at `x` (from its left edge), in points.
-    private func capsuleDrop(at x: CGFloat, width: CGFloat, radius: CGFloat) -> CGFloat {
-        let rightCentre: CGFloat = width - radius
-        let dx: CGFloat
-        if x > rightCentre {
-            dx = x - rightCentre
-        } else if x < radius {
-            dx = radius - x
-        } else {
-            return 0
+    /// How far below the shape's top its top edge is at `x`, in points: the first point inside it going down,
+    /// to a hundredth of a point.
+    private func topEdge(of path: Path, at x: CGFloat, height: CGFloat) -> CGFloat {
+        var outside: CGFloat = 0
+        var inside: CGFloat = height / 2
+        guard path.contains(CGPoint(x: x, y: inside)) else { return height }
+        if path.contains(CGPoint(x: x, y: outside)) { return 0 }
+        while inside - outside > 0.01 {
+            let mid: CGFloat = (inside + outside) / 2
+            if path.contains(CGPoint(x: x, y: mid)) { inside = mid } else { outside = mid }
         }
-        guard dx < radius else { return radius }
-        let squared: CGFloat = radius * radius - dx * dx
-        return radius - squared.squareRoot()
+        return inside
     }
 
     private struct Pixels {
