@@ -6,8 +6,8 @@ import Foundation
 ///
 /// - Never in a test host, a UI test, a screenshot run (`-seedDemoData`, `-seedDemoSky`, `-seedDemoWeatherAccess`) or
 ///   a Debug build, unless that Debug build was launched with `-askLocationAtLaunch YES` (a session's own simulator).
-/// - Never with Companions off (nobody needs the sky), with Weather switched off, once it has asked (or the switch
-///   has), or once the permission is answered either way.
+/// - Never with Companions off (nobody needs the sky), with Weather switched off, or once it has asked (or the switch
+///   has). A permission already answered without the flag is taken as the answer (`.answered`), with no prompt.
 /// - Not yet while the app is behind another, still launching, or something covers the first screen (a sheet, a
 ///   popover tip, a card, the keyboard): it waits and looks again.
 enum LaunchLocationQuestion {
@@ -35,6 +35,9 @@ enum LaunchLocationQuestion {
         case later
         /// Not in this run.
         case never
+        /// Nothing to ask: the permission is already answered (the asked flag was lost with the defaults, say), so
+        /// it is taken as the answer.
+        case answered
     }
 
     /// What a run is, fixed at launch: the build, its arguments, whether it hosts the unit tests.
@@ -73,7 +76,7 @@ enum LaunchLocationQuestion {
         if situation.build == .debug && !optedIn(situation.arguments) { return .never }
         guard situation.companionsOn, situation.weatherOn, !situation.asked else { return .never }
         guard situation.isInFront, situation.isScreenClear else { return .later }
-        guard access() == .notDetermined else { return .never }
+        guard access() == .notDetermined else { return .answered }
         return .ask
     }
 
