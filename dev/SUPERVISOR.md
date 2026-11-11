@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-17.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-18.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -270,8 +270,22 @@ Companions (pixel creatures in quiet corners) are original characters only: noth
 for, a character someone else owns ships in the app or sits in the repository (the supervisor's call, as with the
 Claude logo in round 12; a user's own sprite on their own device is the roadmap's answer). `dev/ROADMAP.md` is the
 supervisor's file; sessions do not add rows.
+From 2026-11-11 (round 18): data resilience over speed ("slow is fine, wrong is not"): a task checked on a widget
+stays there, checked, until its completion has reached iCloud. Whatever moves by itself is rare: a companion is
+still by default, makes a small gesture now and then, and its flourish is something you might miss for a day; a tap
+may play it, with a long refresh. One companion per colour theme, never two on a screen; on the Mac it lives on the
+search field, on iPhone and iPad by the "+"; asleep at night, dressed for the weather; no points or unlocks, ever.
 
-## 8. Where things stand (2026-11-10, round 17 merged)
+## 8. Where things stand (2026-11-11, round 18 running)
+
+**2026-11-11, 0.9.1 (22) released; round 18 briefed for 0.9.2 (Fable 5.2 supervisor).** George's notes on 0.9.1
+(`dev/briefs/ROUND-18.md`): the companions must be still by default and rare, one per theme in one place per
+platform, asleep at night and dressed for the weather, with two more critters; widgets must complete tasks and keep
+a checked row until iCloud has it. Briefs 79 `companion-cast` (max), 80 `weather` (high), 81 `widget-completion`
+(xhigh) run as three Opus sessions. 0.9.1's CI failure was a type-check timeout on the runner's older Swift, fixed.
+After the merge: archive and export with the new entitlements before the hand-over. The next brief number is 82.
+
+### Round 17 (kept for the record)
 
 **2026-11-10, round 17 merged for 0.9.1 (Fable 5.2 supervisor).** Briefs 74–78 are merged on master: widgets (the
 app's first extension), the motion audit and its repairs, two original pixel companions (Nod and Quill), calendar
