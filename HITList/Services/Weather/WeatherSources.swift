@@ -1,10 +1,10 @@
 import Foundation
 import CoreLocation
 
-// Brief 80: the sky for the companions. Where the person is (approximately) and what the sky is doing there, each
-// behind a protocol so the tests use fakes and a Debug run can use the demo (`-seedDemoSky rain`). The location goes
-// from one source straight into the other and is never stored, synced, logged or sent anywhere but to Apple's
-// WeatherKit request.
+// Briefs 80 and 83: the sky and the local time for the companions. Where the person is (approximately), what the sky
+// is doing there and which time zone it is in, each behind a protocol so the tests use fakes and a Debug run can use
+// the demo (`-seedDemoSky rain`). The location goes from one source straight into the others and is never stored,
+// synced, logged or sent anywhere but to Apple's WeatherKit request and Apple's reverse geocoder.
 
 /// Whether HITList may know roughly where the device is, while it is in use.
 enum WeatherAccess: Equatable, Sendable {
@@ -36,6 +36,14 @@ protocol WeatherConditionSource: AnyObject {
     func currentCondition(at location: CLLocation) async throws -> WeatherReading
     /// Apple's attribution for the data (the Apple Weather mark and the link to its data sources).
     func credit() async throws -> WeatherCredit
+}
+
+/// Which time zone a place is in (brief 83): Apple's reverse geocoder on a device, nil in the demo, a fake in tests.
+/// The companions keep that place's hours; nothing else in the app uses it.
+@MainActor
+protocol WeatherZoneSource: AnyObject {
+    /// The zone at `location`; nil when the answer carries none.
+    func timeZone(at location: CLLocation) async throws -> TimeZone?
 }
 
 /// One current-conditions answer.
