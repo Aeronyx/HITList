@@ -155,6 +155,18 @@ final class WeekdayListTests: XCTestCase {
         }
     }
 
+    /// Brief 97's report: the Repeat menu's "Every week on Wednesday", picked on a Wednesday, starts today, as
+    /// "every wednesday" typed does; the menu's own words, typed, must mean the same.
+    func testEveryWeekOnTodaysWeekdayStartsToday() {
+        for typed in ["every wednesday", "every week on wednesday", "every 2 weeks on wednesday", "weekly on wed",
+                      "every week on wed and fri"] {
+            let r = parser.parse("water plants \(typed)")
+            XCTAssertNotNil(r.recurrence, typed)
+            XCTAssertEqual(r.title, "water plants", typed)
+            assertDate(r.dueDate, 2026, 10, 21)
+        }
+    }
+
     // MARK: What stays as it is today
 
     func testDaysThatAreNotAListStayAsTheyAre() {
