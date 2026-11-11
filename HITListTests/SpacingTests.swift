@@ -163,11 +163,14 @@ final class SpacingTests: XCTestCase {
     /// way `Font.custom(_:size:relativeTo:)` scales it.
     func testCaptionsAndMetaLinesStayAt11PtAtTheSmallestSize() {
         let smallest = UITraitCollection(preferredContentSizeCategory: .extraSmall)
+        // HITType's small roles and the text style each scales with (HITTokens.swift). Relative to caption1 a 12 pt
+        // caption fell to 9.7 pt and the rows' 13 pt meta line to 10.7: they scale with caption2 now.
         let roles: [(String, CGFloat, UIFont.TextStyle)] = [
-            ("caption", 12, .caption1), ("captionBold", 12, .caption1), ("caption2", 11, .caption2),
+            ("caption", 12, .caption2), ("captionBold", 12, .caption2), ("caption2", 11, .caption2),
             ("caption2Semibold", 11, .caption2), ("footnote", 13, .footnote),
-            ("taskMeta", HITType.taskMetaSize, .caption1), ("subheadline", 15, .subheadline),
+            ("taskMeta", HITType.taskMetaSize, .caption2), ("subheadline", 15, .subheadline),
         ]
+        XCTAssertEqual(HITType.taskMetaStyle, .caption2)
         for (name, size, style) in roles {
             let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size, compatibleWith: smallest)
             XCTAssertGreaterThanOrEqual(scaled, 11, "\(name): \(scaled) pt at the smallest size")
