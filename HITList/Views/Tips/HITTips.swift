@@ -47,7 +47,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .flipboard: "A switch is a routine, green when it’s done and red when it’s due: flip it when you’ve done it."
         case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
         case .reviewSwipe: "Swipe right for Today, left to delete."
-        case .switchesStay: "Red switches no longer wait in Today; turn on Overdue becomes task to bring one back when it’s due."
+        case .switchesStay: "Red switches no longer wait in Today; turn on Become a task when Overdue to bring one back when it’s due."
         }
     }
 
