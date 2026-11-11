@@ -60,6 +60,40 @@ final class FlipboardPhoneUITests: XCTestCase {
         snapshot("3 The card with a time and a Switchboard")
     }
 
+    /// A fresh store: no Switchboard anywhere until the card's own picker offers one. New Switchboard… turns the card
+    /// into the Switchboard card; saved, the switch card comes back as it was typed, on the new board.
+    func testANewSwitchboardFromTheCardsPicker() throws {
+        app.launch()
+        openFlipboard()
+        let tile = app.buttons["addSwitchTile"]
+        XCTAssertTrue(tile.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["New Switchboard"].exists, "not a starting option")
+        tile.tap()
+        let name = element("switchName")
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeText("Take meds")
+        element("switchBoardMenu").tap()
+        let make = app.buttons["New Switchboard…"].firstMatch
+        XCTAssertTrue(make.waitForExistence(timeout: 3), "New Switchboard… in the picker")
+        make.tap()
+        let boardName = element("switchboardName")
+        XCTAssertTrue(boardName.waitForExistence(timeout: 5), "the Switchboard card in the switch card's place")
+        settle()
+        app.typeText("Before Bed")
+        snapshot("1 New Switchboard from the card")
+        app.buttons["switchboardSave"].tap()
+        XCTAssertTrue(element("switchBoardLine").waitForExistence(timeout: 5), "back, on the new board")
+        XCTAssertTrue((name.value as? String ?? "").contains("Take meds"), "the switch as it was typed")
+        settle()
+        snapshot("2 Back on the switch card, Before Bed chosen")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+        let header = app.buttons.matching(NSPredicate(format: "identifier == 'switchboardHeader' AND label == 'Before Bed'")).firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5), "the new board")
+        XCTAssertTrue(switchTile("Take meds").exists, "its switch")
+        snapshot("3 The board with its switch")
+    }
+
     // MARK: Helpers
 
     /// The time: the compact time control, whose tap opens a field in its place.

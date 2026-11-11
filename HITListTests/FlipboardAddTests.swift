@@ -1,5 +1,6 @@
 import XCTest
 import SwiftData
+import SwiftUI
 import HITListCore
 @testable import HITList
 
@@ -418,15 +419,92 @@ final class FlipboardAddTests: XCTestCase {
     }
 
     /// The quick choices are one strip: a press anywhere picks the choice under it, and a finger sliding along
-    /// it moves the choice with it.
+    /// it moves the choice with it. Each choice is as wide as the strip gives it (brief 96: no longer fifths).
     func testTheChoiceUnderAPointOnTheStrip() {
-        let width: CGFloat = 300, count = 5
-        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, width: width, count: count), 0)
-        XCTAssertEqual(IntervalChoiceStrip.index(at: 150, width: width, count: count), 2)
-        XCTAssertEqual(IntervalChoiceStrip.index(at: 299, width: width, count: count), 4)
-        XCTAssertEqual(IntervalChoiceStrip.index(at: -40, width: width, count: count), 0, "past the start: the first")
-        XCTAssertEqual(IntervalChoiceStrip.index(at: 420, width: width, count: count), 4, "past the end: the last")
-        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, width: 0, count: count), 0)
+        let widths: [CGFloat] = [50, 60, 70, 60, 60]
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, in: widths), 0)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 50, in: widths), 1, "a boundary belongs to the next")
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 150, in: widths), 2)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 299, in: widths), 4)
+        XCTAssertEqual(IntervalChoiceStrip.index(at: -40, in: widths), 0, "past the start: the first")
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 420, in: widths), 4, "past the end: the last")
+        XCTAssertEqual(IntervalChoiceStrip.index(at: 10, in: []), 0)
+    }
+
+    /// Brief 96 (George: "fonts are different sizes"): equal fifths shrank "2 weeks" and "Monthly" on an iPhone. Each
+    /// choice is as wide as its words, the room left shared out evenly; too narrow even for that, every choice narrows
+    /// by the same ratio, so they stay one size.
+    func testEveryChoiceKeepsItsWordsWhole() {
+        XCTAssertEqual(ChoiceStripLayout.widths(ideal: [10, 20, 30], total: 90), [20, 30, 40], "the room left, shared evenly")
+        XCTAssertEqual(ChoiceStripLayout.widths(ideal: [10, 30], total: 20), [5, 15], "too narrow: the same ratio for all")
+        XCTAssertEqual(ChoiceStripLayout.widths(ideal: [0, 0], total: 20), [10, 10])
+        XCTAssertEqual(ChoiceStripLayout.widths(ideal: [], total: 20), [])
+        // The five choices in Inter 15 semibold (59.2 pt for "2 weeks") fit an iPhone 16's card (325 pt of strip).
+        let iPhone = ChoiceStripLayout.widths(ideal: [35.7, 47.4, 52.9, 59.2, 58.7], total: 325)
+        XCTAssertEqual(iPhone.reduce(0, +), 325, accuracy: 0.01)
+        XCTAssertGreaterThan(iPhone[3] - 59.2, 12, "room either side of the widest choice's words")
+    }
+
+    // MARK: Brief 96: one scale of type, and the card's words
+
+    /// The card's type: the name at the card title's size, every label at the chips' size, a secondary line smaller.
+    func testTheCardHasOneScaleOfType() {
+        #if os(macOS)
+        XCTAssertEqual(SwitchCardType.nameSize, 15)
+        XCTAssertEqual(SwitchCardType.labelSize, 13)
+        XCTAssertEqual(SwitchCardType.secondarySize, 10)
+        #else
+        XCTAssertEqual(SwitchCardType.nameSize, 19)
+        XCTAssertEqual(SwitchCardType.labelSize, 15)
+        XCTAssertEqual(SwitchCardType.secondarySize, 12)
+        #endif
+        XCTAssertEqual(SwitchCardType.nameSize, HighlightTextStyle.fontSize, "the name field's own size")
+    }
+
+    /// George's words, exactly, on the switch card and the Switchboard card; one line, nothing under it.
+    func testBecomeATaskWhenOverdue() {
+        XCTAssertEqual(SwitchCard.overdueTitle, "Become a task when Overdue")
+        XCTAssertEqual(SwitchboardCard.overdueTitle, SwitchCard.overdueTitle)
+    }
+
+    /// The foot's count reads as what it is: "Flip 1 time", "Flip 3 times" (each time the switch is due).
+    func testTheFlipsCountSaysWhatItCounts() {
+        XCTAssertEqual(SwitchCard.flipsWords(1).before, "Flip")
+        XCTAssertEqual(SwitchCard.flipsWords(1).after, "time")
+        XCTAssertEqual(SwitchCard.flipsWords(3).after, "times")
+    }
+
+    /// The time control: Return with a time sets it; with nothing, takes the time away (a switch's) or keeps it (a
+    /// board's reset, which always has one); anything else asks again.
+    func testTheTimeControlReadsWhatIsTyped() {
+        let nine = PickerTime(hour: 21, minute: 0)
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "9pm", time: nil, allowsNone: true), .set(nine))
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: " 21:00 ", time: nil, allowsNone: true), .set(nine))
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "", time: nine, allowsNone: true), .set(nil), "emptied: no time")
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "", time: nil, allowsNone: true), .keep)
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "", time: nine, allowsNone: false), .keep, "a board always resets")
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "soon", time: nine, allowsNone: true), .invalid)
+        XCTAssertEqual(SwitchTimeChip.outcome(typing: "9:00 PM", time: nine, allowsNone: true), .keep, "unchanged")
+    }
+
+    /// The sweep measured the time 35.5 pt tall beside the Switchboard chip's 28 on the Mac: now the same height, and
+    /// as narrow as its words, not a bar across the card.
+    func testTheTimeIsTheSwitchboardChipsSize() {
+        let chip = Self.size(HITChipLabel("No Switchboard", systemImage: "square.grid.2x2"))
+        let empty = Self.size(SwitchTimeChip(time: nil) { _ in })
+        let timed = Self.size(SwitchTimeChip(time: PickerTime(hour: 21, minute: 0)) { _ in })
+        XCTAssertEqual(empty.height, chip.height, accuracy: 0.5)
+        XCTAssertEqual(timed.height, chip.height, accuracy: 0.5)
+        XCTAssertLessThan(empty.width, 120, "a chip, not a bar")
+    }
+
+    private static func size<V: View>(_ view: V) -> CGSize {
+        let sized = view.fixedSize()
+        #if os(macOS)
+        return NSHostingView(rootView: sized).fittingSize
+        #else
+        return UIHostingController(rootView: sized).sizeThatFits(in: CGSize(width: 400, height: 400))
+        #endif
     }
 
     // MARK: It feels good (item 4)

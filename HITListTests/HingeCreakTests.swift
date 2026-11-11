@@ -372,8 +372,9 @@ final class HingeCreakTests: XCTestCase {
             // The Flipboard's flip click and the charged bubble: the board's … → Flip Sound.
             "HITList/Views/Flipboard/FlipSound.swift",
         ])
+        // Brief 96 took the switch card's preview rocker away: only the board's switches play it now.
         XCTAssertEqual(files(sources, mentioning: ["FlipSound.play"]),
-                       ["HITList/Views/Flipboard/FlipSwitchTile.swift", "HITList/Views/Flipboard/FlipboardView.swift"],
+                       ["HITList/Views/Flipboard/FlipSwitchTile.swift"],
                        "only a flip someone made plays the flip")
     }
 
