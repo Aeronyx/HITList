@@ -274,15 +274,18 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
                 return calendar.date(byAdding: .day, value: 7 * interval, to: date)!
             }
             // Walk forward day by day; honor `interval` by only accepting weeks that are a
-            // multiple of `interval` away from the anchor week.
-            let anchorWeek = startOfWeek(date, calendar: calendar)
+            // multiple of `interval` away from the anchor week. The weeks are the rule's own
+            // (`cycleStart`), so "every other sat and sun" stays one weekend under a Sunday-first calendar.
+            let first = Self.cycleStart(of: weekdays, calendarFirst: calendar.firstWeekday)
+            let anchorWeek = startOfWeek(date, first: first, calendar: calendar)
             var candidate = date
             for _ in 0..<(7 * interval + 7) {
                 candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
                 let wd = calendar.component(.weekday, from: candidate)
                 guard weekdays.contains(wd) else { continue }
-                let week = startOfWeek(candidate, calendar: calendar)
-                let weeksApart = calendar.dateComponents([.weekOfYear], from: anchorWeek, to: week).weekOfYear ?? 0
+                let week = startOfWeek(candidate, first: first, calendar: calendar)
+                let daysApart = calendar.dateComponents([.day], from: anchorWeek, to: week).day ?? 0
+                let weeksApart = daysApart / 7
                 if weeksApart % interval == 0 { return candidate }
             }
             return calendar.date(byAdding: .day, value: 7 * interval, to: date)!
@@ -356,16 +359,45 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     public func firstOccurrence(onOrAfter date: Date, calendar: Calendar = .current) -> Date {
         if let place { return occurrence(of: place, after: date, inclusive: true, stride: 1, calendar: calendar) }
         guard frequency == .weekly, let weekdays, !weekdays.isEmpty else { return date }
-        let wd = calendar.component(.weekday, from: date)
-        if weekdays.contains(wd) { return date }
-        return nextOccurrence(after: date, calendar: calendar)
+        // The soonest of its days, whatever the interval, as for a place: "every other sat and sun" typed on a
+        // Wednesday starts this Saturday, and the every-other counts from that weekend.
+        var day = date
+        for _ in 0..<7 {
+            if weekdays.contains(calendar.component(.weekday, from: day)) { return day }
+            day = calendar.date(byAdding: .day, value: 1, to: day)!
+        }
+        return date
     }
 
-    private func startOfWeek(_ date: Date, calendar: Calendar) -> Date {
+    private func startOfWeek(_ date: Date, first: Int, calendar: Calendar) -> Date {
         let d = calendar.startOfDay(for: date)
         let wd = calendar.component(.weekday, from: d)
-        let diff = (wd - calendar.firstWeekday + 7) % 7
+        let diff = (wd - first + 7) % 7
         return calendar.date(byAdding: .day, value: -diff, to: d)!
+    }
+
+    /// The weekday (1 = Sunday ... 7 = Saturday) a several-day repeat's own week begins on: the day after its
+    /// longest rest, so days that sit together stay together whichever day the calendar's week starts on. "Every
+    /// other sat and sun" is a weekend (its week begins on Saturday), "every other fri and mon" a long weekend,
+    /// "every other tue and thu" a week from Tuesday. It only matters when the interval is 2 or more. A set with no
+    /// single longest rest (or one day alone) keeps the calendar's week. Found by brief 98: with a Sunday-first
+    /// calendar the weekend's Sunday fell in the off week.
+    static func cycleStart(of weekdays: Set<Int>, calendarFirst: Int) -> Int {
+        let days = weekdays.filter { (1...7).contains($0) }.sorted()
+        guard days.count > 1 else { return calendarFirst }
+        var longest = 0
+        var starts: [Int] = []
+        for (i, day) in days.enumerated() {
+            let next = days[(i + 1) % days.count]
+            let rest = (next - day + 7) % 7
+            if rest > longest {
+                longest = rest
+                starts = [next]
+            } else if rest == longest {
+                starts.append(next)
+            }
+        }
+        return starts.count == 1 ? starts[0] : calendarFirst
     }
 
     // MARK: Display
