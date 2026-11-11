@@ -386,6 +386,114 @@ final class SyncWatchdogTests: XCTestCase {
     /// A new device, a reinstall or a reset downloads every task in its first import, one event that can
     /// run for minutes with nothing wrong. At two minutes the state said "Sync paused: stuck" and offered a
     /// relaunch, which starts the download over. A store's first import now gets ten minutes.
+    // MARK: George's sync blip of 0.9.0 (21) (brief 78)
+
+    /// George's Mac, 2026-11-10, first launch of build 21 (seconds after 18:11:18.435, the first setup): setup, an
+    /// export, an import cut off by the account going "temporarily unavailable", a failed setup, the account back,
+    /// two setups, a 7.7 s import, an export, an import failing with badContainer; then six local saves from 18:13:48
+    /// that were never exported (CloudKit's mirroring stopped; George quit at 18:14:11 and relaunched).
+    private func georgesBlip(_ dog: inout SyncWatchdog) -> [SyncWatchdog.Finding] {
+        let s1 = UUID(), e1 = UUID(), i1 = UUID(), s2 = UUID(), s3 = UUID(), s4 = UUID(), i2 = UUID(), e2 = UUID(), i3 = UUID()
+        let signals: [SyncSignal] = [
+            .network(online: true, at: at(-0.001)), .account(available: true, description: "available", at: at(-0.002)),
+            started(s1, .setup, 0), ended(s1, .setup, from: 0, at: 0.066),
+            started(e1, .exporting, 0.116), ended(e1, .exporting, from: 0.116, at: 0.267),
+            started(i1, .importing, 0.283),
+            .account(available: false, description: "temporarily unavailable", at: at(7.19)),
+            ended(i1, .importing, from: 0.283, at: 9.845, succeeded: false, error: "iCloud needs you to sign in again"),
+            started(s2, .setup, 9.864), ended(s2, .setup, from: 9.864, at: 9.952, succeeded: false, error: "not signed in to iCloud"),
+            started(s3, .setup, 20.837), ended(s3, .setup, from: 20.837, at: 20.85),
+            started(s4, .setup, 20.866), ended(s4, .setup, from: 20.866, at: 20.876),
+            started(i2, .importing, 21.007),
+            .account(available: true, description: "available", at: at(21.308)),
+            ended(i2, .importing, from: 21.007, at: 28.664),
+            started(e2, .exporting, 28.681), ended(e2, .exporting, from: 28.681, at: 28.775),
+            started(i3, .importing, 28.9), ended(i3, .importing, from: 28.9, at: 29.218, succeeded: false, error: "app can't use iCloud"),
+            .localSave(at: at(150.434)), .localSave(at: at(150.434)), .localSave(at: at(150.434)),
+            .localSave(at: at(154.446)), .localSave(at: at(161.519)), .localSave(at: at(161.519)),
+        ]
+        var findings: [SyncWatchdog.Finding] = []
+        var stalls: [Date] = []
+        for signal in signals {
+            findings += dog.handle(signal)
+            if let stall = dog.stall(now: signalTime(signal)) { stalls.append(stall.since) }
+        }
+        XCTAssertEqual(stalls, [], "nothing in the blip itself looks stuck")
+        return findings
+    }
+
+    private func signalTime(_ signal: SyncSignal) -> Date {
+        switch signal {
+        case let .eventStarted(_, _, at), let .eventEnded(_, _, _, _, _, at), let .localSave(at), let .push(at),
+             let .activated(at, _), let .network(_, at), let .account(_, _, at), let .suspended(at), let .resumed(at):
+            return at
+        }
+    }
+
+    func testAfterGeorgesBlipTheSavesThatNeverExportedAreCalledStuckAfterTwoMinutes() throws {
+        var dog = makeWatchdog()
+        _ = georgesBlip(&dog)
+        XCTAssertEqual(dog.tick(at(155.434)).count, 1, "the 5-second rule's overdue export, as the log had at 18:13:52")
+        XCTAssertNil(dog.stall(now: at(270)), "under two minutes of waiting")
+        XCTAssertEqual(try XCTUnwrap(dog.nextDeadline(after: at(270))).timeIntervalSince(at(270.434)), 0, accuracy: 1e-6,
+                       "one timer, for the moment it becomes stuck")
+        let findings = dog.tick(at(270.434))
+        guard case let .exportStopped(saves, waited, _)? = findings.first, findings.count == 1 else {
+            return XCTFail("expected the export to be reported stopped, got \(findings)")
+        }
+        XCTAssertEqual(saves, 6)
+        XCTAssertEqual(waited, 120, accuracy: 0.01)
+        XCTAssertEqual(findings[0].level, .error)
+        XCTAssertEqual(findings[0].message(rules: dog.rules),
+                       "Export still not started 2 min after a local save, with nothing running: iCloud sync has stopped; relaunching starts it again")
+        XCTAssertEqual(dog.stall(now: at(270.434)), .quiet(since: at(150.434), saves: 6))
+        XCTAssertEqual(dog.stalledSince(now: at(270.434)), at(150.434))
+        XCTAssertEqual(dog.tick(at(400)), [], "reported once")
+    }
+
+    func testTheStuckRowSaysWhichKindOfStuck() {
+        let quiet = SyncStuckRow.detail(for: .quiet(since: at(0), saves: 6))
+        XCTAssertTrue(quiet.hasPrefix("iCloud sync stopped answering: 6 changes made since "), quiet)
+        XCTAssertTrue(quiet.contains("haven't been sent."), quiet)
+        XCTAssertTrue(SyncStuckRow.detail(for: .quiet(since: at(0), saves: 1)).contains("1 change made since"))
+        XCTAssertTrue(SyncStuckRow.detail(for: .busy(since: at(0))).hasPrefix("iCloud sync has been busy with one request since "))
+    }
+
+    func testAQuietStallEndsWhenTheExportFinallyComes() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.localSave(at: at(0)))
+        _ = dog.tick(at(5))
+        XCTAssertEqual(dog.stall(now: at(120)), .quiet(since: at(0), saves: 1))
+        _ = dog.handle(started(exportID, .exporting, 121))
+        XCTAssertNil(dog.stall(now: at(121)), "something is running again")
+        _ = dog.handle(ended(exportID, .exporting, from: 121, at: 121.2))
+        XCTAssertNil(dog.stall(now: at(122)))
+        XCTAssertEqual(dog.waitingSaves, 0)
+    }
+
+    func testOnlyTimeWithNothingRunningCountsTowardsAQuietStall() {
+        var dog = makeWatchdog()
+        _ = dog.handle(started(importID, .importing, 0))
+        _ = dog.handle(.localSave(at: at(1)))
+        _ = dog.handle(ended(importID, .importing, from: 0, at: 100))
+        XCTAssertNil(dog.stall(now: at(150)), "the export waited behind the import until 100 s")
+        XCTAssertEqual(dog.stall(now: at(220)), .quiet(since: at(1), saves: 1))
+    }
+
+    func testSavesWaitingWhileSyncCantHappenAreNeverAQuietStall() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.network(online: false, at: at(0)))
+        _ = dog.handle(.localSave(at: at(1)))
+        XCTAssertNil(dog.stall(now: at(600)), "offline: the export can't happen")
+        _ = dog.handle(.network(online: true, at: at(600)))
+        XCTAssertNil(dog.stall(now: at(700)), "the clock starts again when the network comes back")
+        XCTAssertEqual(dog.stall(now: at(720)), .quiet(since: at(1), saves: 1))
+        var importing = makeWatchdog()
+        _ = importing.handle(started(importID, .importing, 0))
+        _ = importing.handle(.localSave(at: at(1)))
+        XCTAssertNil(importing.stall(now: at(119)), "an import is running: the export waits its turn")
+    }
+
     func testAFirstImportGetsTenMinutesBeforeTheStateSaysStuck() {
         var dog = makeWatchdog(lastImportAt: nil)
         _ = dog.handle(started(importID, .importing, 0))

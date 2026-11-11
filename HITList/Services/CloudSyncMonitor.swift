@@ -75,8 +75,11 @@ final class CloudSyncMonitor {
     /// Its one timer, armed for the next deadline only.
     @ObservationIgnored private var watchdogTimer: Task<Void, Never>?
     /// The start of the oldest event still running after `SyncWatchdog.Rules.stalledAfter` while
-    /// nothing stood in its way; nil when nothing is stalled.
+    /// nothing stood in its way, or of the first save that waited that long for an export with nothing running;
+    /// nil when nothing is stalled.
     private(set) var stalledSince: Date?
+    /// Which of the two (`SyncWatchdog.Stall`), for Settings' "Sync is stuck" row.
+    private(set) var stall: SyncWatchdog.Stall?
     /// When the app last stopped being active, to tell a real return from a click into the window.
     @ObservationIgnored private var inactiveSince: Date?
 
@@ -346,9 +349,10 @@ final class CloudSyncMonitor {
         var findings = signal.map { watchdog.handle($0) } ?? []
         findings += watchdog.tick(now)
         if log { writeFindings(findings) }
-        let stalled = watchdog.stalledSince(now: now)
-        if stalled != stalledSince {
-            stalledSince = stalled
+        let found = watchdog.stall(now: now)
+        if found != stall { stall = found }
+        if found?.since != stalledSince {
+            stalledSince = found?.since
             stateChanged()
         }
         armWatchdog(after: now)
