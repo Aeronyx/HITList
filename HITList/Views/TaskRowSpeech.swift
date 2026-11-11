@@ -59,6 +59,15 @@ enum TaskRowSpeech {
     #endif
 }
 
+/// The priority written out ("P1") where colour alone told it, for Differentiate Without Colour (brief 94): an open
+/// task's P1 to P3; nothing for P4 (no priority) or a checked task, whose circle is grey anyway.
+enum PriorityWords {
+    static func shown(_ priority: Priority, isChecked: Bool) -> String? {
+        guard !isChecked, priority != .p4 else { return nil }
+        return "P\(priority.rawValue)"
+    }
+}
+
 extension View {
     /// A task row as one VoiceOver stop (`TaskRowSpeech`). `canToggle` false (a shared task you may only read) leaves
     /// the completing action out.

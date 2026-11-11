@@ -40,4 +40,12 @@ final class AccessibilityTests: XCTestCase {
         XCTAssertEqual(TaskRowSpeech.actionName(isChecked: false, isSwitch: true), "Flip switch")
         XCTAssertEqual(TaskRowSpeech.actionName(isChecked: true, isSwitch: true), "Mark incomplete")
     }
+
+    /// Under Differentiate Without Colour an open task's priority is written as well as coloured.
+    func testPriorityIsWrittenOnlyWhereColourAloneToldIt() {
+        XCTAssertEqual(PriorityWords.shown(.p1, isChecked: false), "P1")
+        XCTAssertEqual(PriorityWords.shown(.p3, isChecked: false), "P3")
+        XCTAssertNil(PriorityWords.shown(.p4, isChecked: false), "no priority, nothing to say")
+        XCTAssertNil(PriorityWords.shown(.p1, isChecked: true), "a checked circle is grey for every priority")
+    }
 }
