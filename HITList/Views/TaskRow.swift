@@ -395,7 +395,7 @@ struct MetaItem: View {
                 .frame(width: 12)
                 // Its text says it ("Today", the Group's name); VoiceOver read the dot as "Circle". An item with no
                 // text (the repeat and switch glyphs) is labelled where it is made, and keeps its image.
-                .accessibilityHidden(text != nil)
+                .accessibilityHidden(true, isEnabled: text != nil)
         }
     }
 }

@@ -115,7 +115,8 @@ struct PopoutHost: ViewModifier {
         return content
             // VoiceOver reads the open card alone: the screen under its backdrop is out of reach, as it is for a tap
             // (brief 94). The toasts drawn below stay reachable.
-            .accessibilityHidden(coversContent)
+            // `isEnabled`: `accessibilityHidden(false)` would un-hide whatever inside is hidden (the companion on the "+").
+            .accessibilityHidden(true, isEnabled: coversContent)
             // The Duo's editor column (`DuoEditorColumn`) is part of the shell.
             .environment(\.editorCarryOver, carryOver)
             .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
