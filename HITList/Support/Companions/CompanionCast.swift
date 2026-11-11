@@ -3,7 +3,7 @@ import Foundation
 extension CompanionCharacter {
     /// Every companion drawn so far.
     static let all: [CompanionCharacter] = [CompanionCharacter.nod, CompanionCharacter.quill, CompanionCharacter.hush,
-                                            CompanionCharacter.pip]
+                                            CompanionCharacter.pip, CompanionCharacter.tuck]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }
@@ -20,6 +20,7 @@ enum CompanionCast {
         "nord": "hush",
         // A pinecone of a creature with a rose-pink nose, for the theme named after a rose and a pine (brief 79).
         "rose": "pip",
+        "moss": "tuck",  // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
     ]
 
     /// The companion for the theme `themeID`.
