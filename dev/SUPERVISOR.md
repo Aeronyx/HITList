@@ -158,6 +158,14 @@ took 95 minutes instead of 30): six that build is the ceiling; tell drawing sess
 late. Merge a session's first coherent commit early when others depend on it (the companion engine, twice). When two
 or more sessions will hit the same test, fix it once on master and tell them.
 
+Lessons from round 20 (eight sessions, an afternoon): **ask a drawing session for concepts first and look at them
+at real size yourself**; three creatures made at the highest effort overnight had been called "not cute", and of the
+first concept sheets two of three needed sending back (then look again at the stills in the app: what reads at 8x
+does not read at 1x). Deliver such a note with `stop_session`, or it waits until the session's work is over. Eight
+sessions still saturate the Mac once they all reach their suites. Before merging a session's early commit, build
+both platforms' test bundles (a Mac-only view in a test broke the iOS bundle for three siblings). Put a newcomer's
+swatch seat and any shared format flag on master yourself, early, so siblings never edit the same table.
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -301,18 +309,41 @@ speaks of the companion's local time (tasks follow the device's zone; a guessed 
 a stored day is rewritten only when the device can vouch for it; the second row of swatches sits low so the
 iPhone's first screen fits.
 
-## 8. Where things stand (2026-11-11, round 19 merged)
+From 2026-11-11 (round 20, after 0.9.3): **a companion idles.** George watched one for a minute, saw nothing move
+and called them dead: a small gesture or a little loop of two to four moves every 6 to 36 seconds of showing time,
+the first within a few seconds of coming on screen, breathing at the same pace asleep; the longer routines every few
+minutes and the flourish stay rare. (This replaces round 18's "still by default" and round 19's long stillness.) A
+companion must be cute, by George's eye: Hush is the standard (one soft shape, large eyes with a glint; "soulless" is
+his word for eyes without one), and it must sit on the "+", never float above it or lie on its face. Rosé has a
+mushroom (Button), Mocha a see-through ghost named Phase, Graphite a gargoyle pup (Gargle); Posy, Mallow and Smudge
+retired. **The bolt is filled only while a sync was confirmed in the last 30 seconds of real time** ("never, ever"):
+the app asks iCloud while a bolt can be seen. The Mac's toolbar "…" is the Settings button. Quick add leaves
+"starting" out of a title and reads several weekdays as a weekly repeat. The Add a Switch toggle reads "Become a
+task when Overdue". About findings lists: George answers the few he cares about and expects the obvious ones done
+without asking ("if they really don't [have obvious answers] ask me directly in the chat"). When asked for files he
+saves them into the project folder and may say nothing in chat: look there. The supervisor's own choices that round,
+which George may reverse: the bolt's pace (15 s) and its red after two minutes apart; Check iCloud… repairs nothing by
+itself; day headers read "Nov 11 · Today · Wednesday"; the repeat menu keeps its seven choices before Custom…; the
+guide is a row in Browse, not a "?" beside the gear; Gargle rather than a redrawn Smudge.
 
-**2026-11-11, round 19 merged for 0.9.3 (Fable 5.2 supervisor), overnight while George slept.** Briefs 82 to 94
-are merged on master (`dev/briefs/ROUND-19.md` has George's four messages of the night): a companion for each of
-the eight themes with idle routines and the weather shown on the creature; the location asked once and weather on
-by default; a date with no time kept on its day in every zone (rewritten only where the device can vouch for it,
-after a backup, behind `DayAnchor.isEnabled`); Settings as one short screen and pages; the share extension; a
-second pair of eyes on the date change, a screen-by-screen sweep and an accessibility pass. No schema change. A
-Release archive and export of both platforms pass `release.sh`'s checks with the share extension inside. George
-releases with `scripts/release.sh --version 0.9.3 --quick`. Details, leftovers and what was never seen running are
-in COMMON's Round 19 record; the sweep's open questions for George are the roadmap's first item. The next brief
-number is 95.
+## 8. Where things stand (2026-11-11, round 20 merged)
+
+**2026-11-11, round 20 merged for 0.9.4 (Fable 5.2 supervisor), the afternoon after 0.9.3 (24) was released.** Briefs
+95 to 102 are merged on master (`dev/briefs/ROUND-20.md` has George's message): the bolt's 30-second rule with the
+app's own check of iCloud and a record-by-record Check iCloud…; companions that idle every few seconds and sit on
+the "+"; Button, Phase and Gargle in place of Posy, Mallow and Smudge; the repeat menu, Custom… and a Repeat button
+in the date picker; "starting", weekday lists and a quick add guide; the Flipboard's empty board, card, drag and
+Duplicate; the Mac's Settings button and the sweep's eighteen items. No schema change. George releases with
+`scripts/release.sh --version 0.9.4 --quick`. Open: why "Shave" was on the iPhone and not the Mac (both logs are in
+`build.noindex/logs/`; session 95 was sent back to read them). Details, leftovers and what was never seen running
+are in COMMON's Round 20 record. The next brief number is 103.
+
+### Round 19 (kept for the record)
+Briefs 82 to 94, overnight, for 0.9.3: a companion for each of the eight themes with idle routines and the weather
+shown on the creature; the location asked once and weather on by default; a date with no time kept on its day in
+every zone (rewritten only where the device can vouch for it, after a backup, behind `DayAnchor.isEnabled`); Settings
+as one short screen and pages; the share extension; a second pair of eyes on the date change, a screen-by-screen
+sweep and an accessibility pass. `dev/briefs/ROUND-19.md` has George's four messages of the night.
 
 ### Round 18 (kept for the record)
 

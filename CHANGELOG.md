@@ -5,6 +5,66 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.4
+
+George's notes on 0.9.3, worked through in an afternoon by eight sessions: a sync bolt that cannot claim more than
+it knows and a check that names what two devices disagree about, companions that are never still for long and sit
+on the button, three new creatures, a real repeat picker, more words for quick add and a guide to them, a calmer
+Flipboard on the phone, and the answers to the screen-by-screen sweep.
+
+- The sync bolt tells the truth. It is filled only while iCloud itself has confirmed, within the last 30 seconds,
+  that this device and iCloud hold the same things; HITList asks every 15 seconds while a bolt is on screen (a small
+  request, under half a megabyte an hour). When it is not filled, the bolt and Settings say what it is waiting for
+  ("Sending 2 changes to iCloud…", "Receiving 1 change…", "Last synced 3 min ago, checking…"); signed out, offline
+  and "iCloud needs you to sign in again" show within half a minute. On 0.9.3 a Mac whose Apple Account needed
+  verifying showed a filled bolt and "Synced" for eighteen hours.
+- Check iCloud… compares this device with iCloud, record by record, and names what is on one side and not the
+  other (Settings → iCloud & data → If something doesn't sync). It repairs nothing by itself: a task that is here
+  and not in iCloud was either never sent or was deleted elsewhere, and only you know which, so you choose Send to
+  iCloud or Remove from this device, after a backup. The sync log now records how many of each thing the store
+  holds at launch and at every account change, never a title.
+- Companions are alive. Every 6 to 36 seconds on screen a companion blinks, glances, swings a foot or plays a
+  little loop of two to four moves, the first within a few seconds of appearing; asleep it breathes at the same
+  pace. The longer routines come every three to eight minutes of showing time, and the flourish is as rare as
+  before. (On 0.9.3 a companion could sit for a minute and a half without moving.)
+- Companions sit on the "+". Each is drawn down to the button's curve, a check fails any pose that leaves a gap or
+  a flat base overhanging it, and the end of every list on iPhone scrolls clear of the companion.
+- Three new companions. Rosé has Button, a mushroom in the theme's own rose whose cap is its hat, its umbrella and
+  its bed. Mocha has Phase, a see-through ghost that rises out of the "+" with its wavy hem lying over the button;
+  a task row shows faintly through it. Graphite has Gargle, a gargoyle pup that lets a drop fall from its chin in
+  the rain and turns to stone to sleep. Posy, Mallow and Smudge have retired. Tuck's eyes are round and dark, with
+  a glint, and look where he looks.
+- Choosing a repeat. The Repeat menu speaks of your task's day ("Every week on Wednesday", "Every month on the
+  11th", "Every year on November 11"); Custom… makes any repeat quick add can type (every few days, weeks, months
+  or years; chosen weekdays; a day of the month, the last day, the second Wednesday; a date each year); the date
+  picker has a Repeat button, so a task gets a day and a repeat in one visit. A repeat picked for a task with no
+  date starts at its next occurrence. Review Inbox and Upcoming pick dates with HITList's own calendar, weeks
+  starting on your day.
+- Quick add. "every 3 days starting friday" starts on Friday and "starting" stays out of the title; several days
+  named together ("vacuum tue thu sat", "on tuesday thursday and saturday", "every mon, wed & fri") repeat every
+  week on those days; "every other sat and sun" keeps the weekend together whichever day your week starts on. A
+  guide shows what quick add understands, each example drawn by quick add itself: Browse → Quick add guide,
+  Settings → General → Quick add guide, Help ▸ Quick Add Guide on the Mac.
+- Flipboard. The empty Flipboard is a single "Add switch" outline, on every device. The Add a Switch card has one
+  scale of type, a small time chip beside the Switchboard's, "Become a task when Overdue" on one line, "Flip 1
+  time", and no unexplained switch (the red and green rocker was a preview that saved nothing). Press, hold and
+  drag a switch onto a Switchboard, or back off it. Duplicate a switch from its menu. A tile's interval sits on one
+  line across a row.
+- Mac and iPad: the top-right "…" is the Settings button; what it held (Review Inbox…, Edit Group…, Jump to today)
+  sits under the view options.
+- From the sweep: every list writes a day one way ("Nov 11 · Today · Wednesday"); "Done" is the same accent pill
+  everywhere; Browse's and Settings' section headings are one style; no line under a list's big title; on larger
+  iPhones rows share the title's left edge; Mac Settings names each section once; Settings → Data shows its counts
+  in two rows of three; What's New shows this version only; the sync log's All and Errors are a switch, not
+  buttons; the Mac board's month, day headings and cards share an edge; no empty Filters heading in the Mac
+  sidebar; the iPad's selected sidebar row is filled; theme names wrap at large text sizes and captions stay
+  readable at small ones; Reminders → Summary time is typed; the Mac editor's check circle is easier to click.
+
+For the record: no schema change, in SwiftData or in CloudKit. Never seen running: a real sign-out and the new
+bolt on Production, Low Power Mode, a large first read of iCloud; a switch dragged all the way to a drop on the
+Mac; the Mac's summary-time field (switching the summary on asks for notification permission); the Duo's inner
+display; macOS 27.
+
 ## 0.9.3 — build 24, 2026-11-11
 
 George's notes on 0.9.2, worked through in one night by sixteen sessions: a companion for every theme with a life
