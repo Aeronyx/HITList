@@ -308,6 +308,8 @@ public struct QuickAddParser: Sendable {
     static func matchRecurrence(_ words: [String], at i: Int) -> (RecurrenceRule, Int)? {
         // "every month on the 28th", "every first Monday", "every year on Mar 3" (QuickAddParser+Repeats)
         if let placed = matchPlacedRepeat(words, at: i) { return placed }
+        // "tue thu sat", "every mon, wed & fri", "every 2 weeks on tue and thu" (QuickAddParser+Weekdays)
+        if let days = matchWeekdayRepeat(words, at: i) { return days }
         let w = DateExpressionParser.normalize(words[i])
         switch w {
         case "daily": return (.daily, 1)
@@ -350,16 +352,6 @@ public struct QuickAddParser: Sendable {
             }
             return (RecurrenceRule(frequency: freq, interval: count), 3)
         }
-        // every mon, wed and fri
-        var days = Set<Int>()
-        var j = i + 1
-        while j < words.count {
-            let wj = DateExpressionParser.normalize(words[j])
-            if wj == "and" || wj == "&" { j += 1; continue }
-            guard let wd = DateExpressionParser.weekdayNames[wj] else { break }
-            days.insert(wd); j += 1
-        }
-        if !days.isEmpty { return (RecurrenceRule(frequency: .weekly, weekdays: days), j - i) }
         return nil
     }
 }
