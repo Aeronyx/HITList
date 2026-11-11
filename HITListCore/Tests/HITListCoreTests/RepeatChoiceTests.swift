@@ -230,6 +230,23 @@ final class RepeatChoiceTests: XCTestCase {
         for (rule, words) in cases { XCTAssertEqual(rule.displayText, words, rule.encoded) }
     }
 
+    /// The short words a narrow button falls back to: how often, without the day or place.
+    func testShortWords() {
+        let cases: [(RecurrenceRule, String)] = [
+            (.daily, "Every day"),
+            (RecurrenceRule(frequency: .daily, interval: 3), "Every 3 days"),
+            (.weekdays, "Every weekday"),
+            (RecurrenceRule(frequency: .weekly, interval: 2, weekdays: [2, 3, 4, 5, 6]), "Every 2 weeks"),
+            (RecurrenceRule(frequency: .weekly, weekdays: [3, 5, 7]), "Every week"),
+            (RecurrenceRule(frequency: .weekly, interval: 2, weekdays: [3, 5]), "Every 2 weeks"),
+            (RecurrenceRule(frequency: .monthly, place: .weekday(4, ordinal: 2)), "Every month"),
+            (RecurrenceRule(frequency: .monthly, interval: 3, place: .day(11)), "Every 3 months"),
+            (RecurrenceRule(frequency: .yearly, place: .date(month: 11, day: 11)), "Every year"),
+            (RecurrenceRule(frequency: .yearly, interval: 2), "Every 2 years"),
+        ]
+        for (rule, words) in cases { XCTAssertEqual(rule.shortText, words, rule.encoded) }
+    }
+
     /// The days of a weekly rule are listed from the first day of the week in Settings.
     func testRowWordsFollowTheWeeksFirstDay() {
         let sunMon = RecurrenceRule(frequency: .weekly, weekdays: [1, 2])

@@ -393,7 +393,7 @@ struct TaskPopout: View {
             }, recurrence: shown.recurrence, onRepeat: { rule in
                 openChip = nil
                 setRecurrence(rule)
-            })
+            }, onRepeatKept: { openChip = nil })
         }
         .accessibilityIdentifier("popoutDateRow")
     }

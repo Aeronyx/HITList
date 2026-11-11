@@ -67,6 +67,22 @@ extension EnvironmentValues {
         get { self[PickerFocusRequestKey.self] }
         set { self[PickerFocusRequestKey.self] = newValue }
     }
+
+    /// The open card's own Escape (the Mac's picker layer); nil on iPhone and iPad.
+    var pickerEscape: PickerEscape? {
+        get { self[PickerEscapeKey.self] }
+        set { self[PickerEscapeKey.self] = newValue }
+    }
+}
+
+/// What Escape does inside the open card (brief 97): while `action` is set (the date card's Repeat dropdown is open),
+/// Escape runs it instead of closing the card.
+@MainActor final class PickerEscape {
+    var action: (() -> Void)?
+}
+
+private struct PickerEscapeKey: EnvironmentKey {
+    static let defaultValue: PickerEscape? = nil
 }
 
 struct PickerCardChrome: ViewModifier {
@@ -301,8 +317,20 @@ final class PickerLayerModel {
     @ObservationIgnored var dismiss: (() -> Void)?
     /// Where the card was last placed, in the layer's coordinates (for click-outside).
     @ObservationIgnored var cardFrame: CGRect = .zero
+    /// The card's own Escape, asked first.
+    @ObservationIgnored let escape = PickerEscape()
 
     func dismissCard() { dismiss?() }
+
+    /// Escape: the card's own (a dropdown inside it) if it has one, else close the card.
+    func escapeCard() {
+        if let action = escape.action {
+            escape.action = nil
+            action()
+        } else {
+            dismissCard()
+        }
+    }
 }
 
 /// One per window: a transparent hosting view over the window's content that draws the open card. It
@@ -405,6 +433,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         self.ownerID = nil
         model.card = nil
         model.dismiss = nil
+        model.escape.action = nil
         model.cardFrame = .zero
         removeMonitor()
         restoreKeyboard()
@@ -451,7 +480,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         case .keyDown:
             let modifiers = event.modifierFlags.intersection([.command, .control, .option])
             if event.keyCode == Self.escapeKey, modifiers.isEmpty {
-                model.dismissCard()
+                model.escapeCard()
                 return nil
             }
             if event.keyCode == Self.tabKey, modifiers.isEmpty, !keyboardIsInCard {
@@ -512,6 +541,7 @@ struct PickerLayerRoot: View {
                     card
                         .pickerCardChrome(width: model.kind.width)
                         .environment(\.pickerFocusRequest, model.focusRequest)
+                        .environment(\.pickerEscape, model.escape)
                         .id(model.generation)
                         .transition(cardTransition)
                 }

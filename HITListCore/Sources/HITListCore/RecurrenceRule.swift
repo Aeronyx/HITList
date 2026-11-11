@@ -394,6 +394,20 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         }
     }
 
+    /// How often, without the day or place: "Every day", "Every weekday", "Every 2 weeks", "Every month", "Every
+    /// year". What a button too narrow for `displayText` says (the date card's Repeat button, brief 97).
+    public var shortText: String {
+        let n = interval
+        switch frequency {
+        case .daily: return n == 1 ? "Every day" : "Every \(n) days"
+        case .weekly:
+            if n == 1, weekdays == [2, 3, 4, 5, 6] { return "Every weekday" }
+            return n == 1 ? "Every week" : "Every \(n) weeks"
+        case .monthly: return n == 1 ? "Every month" : "Every \(n) months"
+        case .yearly: return n == 1 ? "Every year" : "Every \(n) years"
+        }
+    }
+
     /// "Every month on the 28th", "Every month on the last day", "Every month on the first Monday", "Every year on
     /// Mar 3"; with an interval "Every 3 months on the 10th", "Every 2 years on Mar 3". (Brief 71 said "Monthly on the
     /// 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3" until brief 97.)
