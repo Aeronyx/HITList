@@ -306,6 +306,8 @@ struct QuickAddPopout: View {
                        systemImage: chips.recurrence == nil ? "calendar" : "repeat",
                        tint: chips.dueDate == nil ? Theme.secondaryText : PopoutTint.date(chips.dueDate, now: now),
                        isSelected: chips.dueDate != nil, size: .compact,
+                       speech: ChipSpeech.date(chips.dueDate.map { DueFormatter.text(for: $0, hasTime: false, now: now) }
+                                               .map { chips.recurrence == nil ? $0 : "\($0), repeats" }),
                        // The board's card shows its day with a × (no date: the task goes undated).
                        onDismiss: style == .compact && chips.dueDate != nil ? { draft.setDate(nil, parser) } : nil,
                        action: { openChip = .date })
@@ -332,7 +334,8 @@ struct QuickAddPopout: View {
     private func priorityChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
         HITChip(chips.priority == .p4 ? "Priority" : chips.priority.shortName, systemImage: chips.priority.symbol,
                 tint: chips.priority == .p4 ? Theme.secondaryText : chips.priority.color,
-                isSelected: chips.priority != .p4, size: .compact, action: { openChip = .priority })
+                isSelected: chips.priority != .p4, size: .compact, speech: ChipSpeech.priority(chips.priority),
+                action: { openChip = .priority })
             .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
                 PriorityChipPopover(selection: chips.priority) { p in
                     draft.setPriority(p, parser)
@@ -404,7 +407,8 @@ struct QuickAddPopout: View {
     private func labelsChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
         HITChip(chips.labelNames.isEmpty ? "Labels" : chips.labelNames.map { "@" + $0 }.joined(separator: " "),
                 systemImage: "tag", tint: chips.labelNames.isEmpty ? Theme.secondaryText : PopoutTint.label,
-                isSelected: !chips.labelNames.isEmpty, size: .compact, action: { openChip = .labels })
+                isSelected: !chips.labelNames.isEmpty, size: .compact, speech: ChipSpeech.labels(chips.labelNames),
+                action: { openChip = .labels })
             .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
                 LabelsChipPopover(labels: labels, selected: chips.labelNames) { name in
                     draft.toggleLabel(name, parser)
@@ -418,6 +422,7 @@ struct QuickAddPopout: View {
                        systemImage: "scope",
                        tint: chips.deadline == nil ? Theme.secondaryText : PopoutTint.date(chips.deadline, now: now),
                        isSelected: chips.deadline != nil, size: .compact,
+                       speech: ChipSpeech.deadline(chips.deadline.map { DueFormatter.text(for: $0, hasTime: false, now: now) }),
                        onDismiss: chips.deadline == nil ? nil : { draft.setDeadline(nil) },
                        action: { openChip = .deadline })
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
@@ -432,7 +437,7 @@ struct QuickAddPopout: View {
     private func repeatChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
         HITChip(chips.recurrence?.displayText ?? "Repeat", systemImage: "repeat",
                 tint: chips.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
-                isSelected: chips.recurrence != nil, size: .compact,
+                isSelected: chips.recurrence != nil, size: .compact, speech: ChipSpeech.repeats(chips.recurrence?.displayText),
                 onDismiss: chips.recurrence == nil ? nil : { draft.setRecurrence(nil, parser) },
                 action: { openChip = .repeating })
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {

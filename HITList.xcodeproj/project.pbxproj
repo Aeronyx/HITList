@@ -236,6 +236,7 @@
 		8657C41CB79A77C4A9253FBE /* RemindersSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */; };
 		867074403180E4273CE90374 /* TaskActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC6B43A27F6D86FFFA01232F /* TaskActionsTests.swift */; };
 		86A12A8E5DEEFE48EFC6D33D /* SharedListsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D68A8A41947C06044085D892 /* SharedListsTests.swift */; };
+		86E9BF0847FA96D5FB1AB8F6 /* ChipSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E38E2077C814F4D9308FE21 /* ChipSpeech.swift */; };
 		87942B8922387B0FF3BDACE8 /* TaskPopoutTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF922AE937BECF293EE28887 /* TaskPopoutTitleTests.swift */; };
 		881A80EA905BB828E295375B /* SearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E13ACE44A63995095A971A36 /* SearchScreen.swift */; };
 		891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */; };
@@ -625,6 +626,7 @@
 		4DD387014332B38314461584 /* InboxText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxText.swift; sourceTree = "<group>"; };
 		4DF96EABAFDE73C7753F296E /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		4E15C0CED187F50576BBD250 /* WeatherUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherUITests.swift; sourceTree = "<group>"; };
+		4E38E2077C814F4D9308FE21 /* ChipSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChipSpeech.swift; sourceTree = "<group>"; };
 		4EC7B932C6B8D510FA4827B9 /* swish.caf */ = {isa = PBXFileReference; path = swish.caf; sourceTree = "<group>"; };
 		4F2C6F0B31F217723029B1AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4FAD190D4052B50EC215C22A /* HITHitArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITHitArea.swift; sourceTree = "<group>"; };
@@ -958,6 +960,7 @@
 		00AEE90E0FD17817958FFD1A /* Popouts */ = {
 			isa = PBXGroup;
 			children = (
+				4E38E2077C814F4D9308FE21 /* ChipSpeech.swift */,
 				061DFEE95EC7AB33E9B48DCB /* CompactQuickAddCard.swift */,
 				43685282BB59BB5A3F3DD659 /* KeyboardObserver.swift */,
 				CC94AAC22806CB55BB755C84 /* PopoutController.swift */,
@@ -2097,6 +2100,7 @@
 				6AE9210EC9B3C89F78042662 /* CalendarEventSource.swift in Sources */,
 				469E3F8A8F4D2D2920BC9390 /* CalendarEvents.swift in Sources */,
 				BFF005FD97C83745468C4B9B /* CalendarSettingsRows.swift in Sources */,
+				86E9BF0847FA96D5FB1AB8F6 /* ChipSpeech.swift in Sources */,
 				AEC25A82D0A695612C5C7305 /* ClaudeConnector.swift in Sources */,
 				75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */,
 				94381EF98D0CB9624B8BE072 /* ClaudeExport.swift in Sources */,
