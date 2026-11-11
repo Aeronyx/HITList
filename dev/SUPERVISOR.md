@@ -50,6 +50,9 @@ How George works with you:
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
   SDK) against 27.2 here: after every merge look at the run, because only it shows a type-check timeout or a
   27-only symbol (read the job's log with `gh api repos/Aeronyx/HITList/actions/jobs/<job id>/logs`).
+- **George's phone is an iPhone 16** (393 × 852 pt); the suites run on an iPhone 17 simulator (402 × 874). Do the
+  screenshot pass on an iPhone 16 simulator (`xcrun simctl create HITList-sup16 "iPhone 16"`): a screen that "fits an
+  iPhone 17" has 22 pt less room on his.
 - Simulator: iPhone 17, UDID `03F99117-3466-4810-A711-AF52514F6514`. Build with
   `xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug -destination
   'platform=iOS Simulator,id=03F99117-3466-4810-A711-AF52514F6514' -derivedDataPath build.noindex/sim
@@ -145,6 +148,15 @@ How George works with you:
 10. **Push master** (`git push origin master`) and send George the hand-over message: whether a CloudKit
     schema deploy is needed, the release commands, what to check on real devices (haptics, the Mac), the
     decisions sessions made that George might reverse, and session effort levels.
+
+Lessons from round 19 (twelve sessions overnight): **session notes do not wake you while any session you started
+is still working**: the notes arrive with your next turn, so keep a background `sleep 420` as a wake-up timer and
+read `list_sessions {"linked": true}` on each wake (ninety minutes were lost waiting for a UI suite). A message to a
+working session waits until its turn ends: `stop_session` first when it cannot wait (the stop needs its call
+repeated once with the input the tool prints). Twelve sessions saturate this Mac (load 800, swap full: the UI suite
+took 95 minutes instead of 30): six that build is the ceiling; tell drawing sessions to draw first and build once,
+late. Merge a session's first coherent commit early when others depend on it (the companion engine, twice). When two
+or more sessions will hit the same test, fix it once on master and tell them.
 
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
@@ -278,7 +290,18 @@ still by default, makes a small gesture now and then, and its flourish is someth
 may play it, with a long refresh. One companion per colour theme, never two on a screen; on the Mac it lives on the
 search field, on iPhone and iPad by the "+"; asleep at night, dressed for the weather; no points or unlocks, ever.
 
-## 8. Where things stand (2026-11-11, round 19 briefed)
+From 2026-11-11 (round 19): a companion comes alive now and then, a few seconds of a routine of its own every
+several minutes (as a game character does when left alone), between long stillness; the weather shows on the
+creature (a drip, a shake-off, snow that piles up, tired in the heat) and never as effects in the air around it;
+Weather is on by default and the location is asked once, at first launch; every theme has a companion of its own
+(Nod, Smudge, Quill, Tuck, Hush, Glim, Mallow, Posy; Pip retired), each on its theme's swatch in Settings; Settings
+is one short screen with Appearance second and a page per topic. Overnight review and hardening is welcome when
+George's usage allows it. The supervisor's own choices that night, which George may reverse: the location question
+speaks of the companion's local time (tasks follow the device's zone; a guessed zone must never move a due time);
+a stored day is rewritten only when the device can vouch for it; the second row of swatches sits low so the
+iPhone's first screen fits.
+
+## 8. Where things stand (2026-11-11, round 19 merged)
 
 **2026-11-11, 0.9.2 (23) released; round 19 briefed for 0.9.3 (Fable 5.2 supervisor), run overnight while George
 sleeps.** George's notes on 0.9.2 (`dev/briefs/ROUND-19.md`): idle routines for the companions instead of lone

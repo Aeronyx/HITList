@@ -5,6 +5,46 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.3
+
+George's notes on 0.9.2, worked through in one night by sixteen sessions: a companion for every theme with a life
+of its own, weather that shows on the creature, the location asked once, time zones done properly, a Settings you
+can find things in, and then a night of review: a second pair of eyes on the date change, a screen-by-screen
+sweep, and accessibility.
+
+- A companion for every theme. Slate has Nod, Graphite has Smudge (an owlet on legs far too long), Midnight has
+  Quill, Moss has Tuck (a snail whose shell is a flowerpot), Nord has Hush, Tokyo Night has Glim (a small mouse
+  whose tail ends in a lantern), Mocha has Mallow (a round soft toy in a knitted band) and Rosé has Posy (a piglet
+  with wings far too small for it). Pip has retired.
+- Companions come alive now and then. A companion is still most of the time, blinks or swings a foot every minute
+  or so, and every five to twelve minutes on screen does a few seconds of a routine that is its own (Smudge
+  doodles a heart with its foot and scribbles it out; Glim's lantern goes out and it shakes it alight). Never the
+  same routine twice running. The flourish is as rare as before; a tap plays a routine when the flourish isn't due.
+- The weather shows on the companion, and nothing is drawn in the air around it. In rain a drop gathers on what it
+  holds and it shakes itself dry; snow gathers on it, a dusting, then a cap, then a heap, until it shakes it off;
+  on a hot day (when it feels like 30 °C / 86 °F or more, by day) it wilts or finds its own shade; thunder makes
+  it start.
+- Quill rests on the "+" with its hindquarters down the button's shoulder, and no companion floats above what it
+  sits on.
+- Weather is on unless you switch it off (Settings → Extras → Weather), and HITList asks once, when you first open
+  it, to use your approximate location: "to keep your companion on local time and dressed for the weather where you
+  are". Say no and nothing else changes. Your tasks, reminders and lists follow your device's own time zone.
+- A task due on a day stays on that day wherever you are: flying west no longer shows it a day early. The first
+  time 0.9.3 opens it backs up your tasks, then updates how their days are stored; it only touches a date this
+  device can vouch for, and leaves anything else exactly as it was. Change time zone, or let midnight pass, and
+  Today, Upcoming, the Flipboard, the sidebar's counts, reminders, the badge and the widgets catch up by themselves.
+- Settings opens on one short screen: you, your themes (each with its companion on its swatch), then a row for
+  each page. Pages open inside Settings, every option lives in one place, and the two that erase something sit
+  last on their page. On the Mac the sections follow the same order, with Appearance second. "Account settings…"
+  opens Account, and the sync bolt opens iCloud & data.
+- Add to HITList from the share sheet: share a web page, a link or some text from Safari or any app on iPhone,
+  iPad and the Mac and it becomes a task. Type a date, p1 or #Group in the title as in quick add; the address and
+  the text you chose go in the notes. What you share is saved the moment you press Add and becomes a task the next
+  time HITList opens (at once on a Mac where HITList is running).
+- From the screen-by-screen sweep: Settings rows are all one height on the Mac; "+ Add task" lines up under the
+  tasks on the Mac and iPad; an empty Completed says "Nothing completed yet"; the Mac sidebar's Settings lines up
+  with the rows above it; Upcoming's "Overdue" is the same red as Today's.
+
 ## 0.9.2 — build 23, 2026-11-11
 
 George's notes on 0.9.1: companions that keep still, one for each theme; the weather for them; widgets that check a
