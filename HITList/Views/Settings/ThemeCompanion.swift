@@ -31,7 +31,8 @@ enum ThemeCompanion {
     }
 
     /// Each companion's own way of sitting, by character id, in the grid's order (Slate, Graphite, Midnight, Moss;
-    /// Nord, Tokyo Night, Mocha, Rosé), so neighbours differ.
+    /// Nord, Tokyo Night, Mocha, Rosé), so neighbours differ. The second row's sit low (inside the swatch, or a peek):
+    /// what rises there pushes the rows apart, and the iPhone's first screen has no room to spare.
     static let seats: [String: Seat] = [
         // Slate: Nod sits on the card, legs over its edge, its bobble clear of the accent dot.
         "nod": Seat(placement: .onCard, along: 0.27),
@@ -43,12 +44,12 @@ enum ThemeCompanion {
         "tuck": Seat(placement: .onCard, along: 0.3),
         // Nord: Hush peeks over the top, ears and eyes, clear of the rounded corner.
         "hush": Seat(placement: .peeking, along: 0.4),
-        // Tokyo Night: Glim on the top edge, its lantern hanging down inside the swatch.
-        "glim": Seat(placement: .onTop, along: 0.5),
-        // Mocha: Mallow on the card, a soft toy put down there.
-        "mallow": Seat(placement: .onCard, along: 0.3),
-        // Rosé: Posy on the top edge, as near to flying as it gets.
-        "posy": Seat(placement: .onTop, along: 0.55),
+        // Tokyo Night: Glim on the card, its lantern hanging over the card's edge.
+        "glim": Seat(placement: .onCard, along: 0.3),
+        // Mocha: Mallow asleep on the accent dot, a soft toy left on a cushion.
+        "mallow": Seat(placement: .asleepOnDot, along: 0.7),
+        // Rosé: Posy peeks over the top, ears and eyes, on the side away from Hush's.
+        "posy": Seat(placement: .peeking, along: 0.6),
     ]
 
     /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of
