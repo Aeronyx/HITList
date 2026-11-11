@@ -46,6 +46,8 @@ final class CalendarChange {
 
     private let center: NotificationCenter
     private let resetZone: () -> Void
+    /// The zone the app computes in: `Calendar.current`'s, which follows the process's default zone as well as the
+    /// system's (`TimeZone.current` may keep the system zone it first read).
     private let currentZone: () -> TimeZone
     private let clock: () -> Date
     private var observers: [NSObjectProtocol] = []
@@ -55,7 +57,7 @@ final class CalendarChange {
     private(set) var heard: [String] = []
 
     init(center: NotificationCenter = .default, resetZone: @escaping () -> Void = { NSTimeZone.resetSystemTimeZone() },
-         currentZone: @escaping () -> TimeZone = { TimeZone.current }, clock: @escaping () -> Date = { Date() }) {
+         currentZone: @escaping () -> TimeZone = { Calendar.current.timeZone }, clock: @escaping () -> Date = { Date() }) {
         self.center = center
         self.resetZone = resetZone
         self.currentZone = currentZone
