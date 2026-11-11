@@ -242,9 +242,9 @@ struct FlipboardView: View {
                 cell(for: task, tip: task.id == tipID ? tip : nil)
             }
             // The last cell adds a switch: a dashed outline of one, with a big +; on the Mac and iPad the card
-            // opens in its place.
-            if inlineCard == .add {
-                inlineCardView(.add)
+            // opens in its place (adding, or duplicating a loose switch).
+            if let request = inlineCard, cardPlace(request) == .some(nil) {
+                inlineCardView(request)
             } else {
                 AddSwitchTile { openCard(.add) }
                     .allowsHitTesting(!hasInlineCard)
@@ -269,10 +269,11 @@ struct FlipboardView: View {
                                   onDelete: { openBoardCard(.delete(board)) })
                     .allowsHitTesting(!hasInlineCard)
             }
-            if !switches.isEmpty || inlineCard == .addTo(board) {
+            let adding = inlineCard.flatMap { cardPlace($0) == .some(board.id) ? $0 : nil }
+            if !switches.isEmpty || adding != nil {
                 FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
                     ForEach(switches) { task in cell(for: task, tip: task.id == tipID ? tip : nil) }
-                    if inlineCard == .addTo(board) { inlineCardView(.addTo(board)) }
+                    if let adding { inlineCardView(adding) }
                 }
             } else {
                 FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
@@ -294,6 +295,7 @@ struct FlipboardView: View {
         } else {
             FlipSwitchTile(task: task, now: now, onEdit: { openCard(.edit(task)) },
                            onOpen: { open(task) }, onDelete: { delete(task) },
+                           onDuplicate: { openCard(.duplicate(task)) },
                            moves: SwitchDrop.moves(for: task, boards: boards),
                            onMove: { drop(task.id, onto: $0) },
                            onDragStart: { dragging = DraggedSwitch(id: task.id, board: boardID(of: task)) })
@@ -314,10 +316,11 @@ struct FlipboardView: View {
 
     /// The card in the grid, as wide as `cardSpan` columns.
     private func inlineCardView(_ request: SwitchCardRequest) -> some View {
-        SwitchCard(editing: request.task, style: .inline, board: request.board, isConfirmingDiscard: confirmingDiscard,
+        SwitchCard(editing: request.task, style: .inline, board: request.board, duplicating: request.source,
+                   isConfirmingDiscard: confirmingDiscard,
                    onClose: requestClose,
                    onSaved: { saved in
-                       if !request.isAdding { closeCard() }
+                       if !request.staysOpenAfterAdd { closeCard() }
                        land(saved)
                    },
                    onDraftChange: { cardContent.hasContent = $0 },
@@ -452,6 +455,18 @@ struct FlipboardView: View {
     /// shouldn't be a starting option"): once there is a switch to put on one, or a board already. The empty board is
     /// its Add a Switch tile alone; the switch card's Switchboard picker offers a new one whenever it is open.
     static func offersNewSwitchboard(switches: Int, boards: Int) -> Bool { switches > 0 || boards > 0 }
+
+    /// Where an adding card opens in the grid (Mac and iPad): at the end of the switches of the board it adds to, or
+    /// (`.some(nil)`) in place of the loose switches' + tile; nil for an edit, which opens in place of its switch. A
+    /// duplicate opens where its switch is.
+    private func cardPlace(_ request: SwitchCardRequest) -> UUID?? {
+        switch request {
+        case .add: .some(nil)
+        case .addTo(let board): .some(board.id)
+        case .duplicate(let task): .some(boardID(of: task))
+        case .edit: nil
+        }
+    }
 
     // MARK: Dragging a switch (brief 96)
 

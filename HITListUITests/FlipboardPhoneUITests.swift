@@ -145,6 +145,49 @@ final class FlipboardPhoneUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.6)
     }
 
+    // MARK: Duplicate (item 4)
+
+    /// Duplicate in a switch's menu: the card with its settings (Before Bed, 9:00 PM) and an empty name, the keyboard up;
+    /// × leaves nothing behind; a name and Add make a second switch beside the first.
+    func testDuplicateOpensTheCardWithTheSwitchsSettings() throws {
+        app.launchArguments += ["-seedDemoData"]
+        app.launch()
+        openFlipboard()
+        let meds = switchTile("Take meds")
+        XCTAssertTrue(meds.waitForExistence(timeout: 10))
+        if !meds.isHittable { app.swipeUp(velocity: .slow) }
+        meds.press(forDuration: 1.0)
+        let duplicate = app.buttons["Duplicate"]
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 3))
+        duplicate.tap()
+        let name = element("switchName")
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "the card")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "the keyboard up")
+        XCTAssertTrue(element("switchBoardLine").exists, "on Before Bed, as the original")
+        let time = element("switchTime")
+        XCTAssertTrue(time.exists && (time.label.contains("9:00") || time.label.contains("21:00")), "its time: \(time.label)")
+        XCTAssertTrue((name.value as? String ?? "").isEmpty || (name.value as? String) == "Switch name", "an empty name")
+        settle()
+        snapshot("1 Duplicate: the card filled in, the name empty")
+
+        // × with nothing typed: gone, nothing added.
+        app.buttons["switchClose"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == 'Take meds'")).count, 1)
+
+        meds.press(forDuration: 1.0)
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 3))
+        duplicate.tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.typeText("Take vitamins")
+        app.buttons["switchSave"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(switchTile("Take vitamins").waitForExistence(timeout: 5), "the copy")
+        XCTAssertTrue(switchTile("Take meds").exists, "the original")
+        XCTAssertTrue(boardLine(containing: "2 of 5").exists, "both on Before Bed")
+        snapshot("2 The copy beside the original")
+    }
+
     // MARK: Helpers
 
     private func boardHeader(_ name: String) -> XCUIElement {

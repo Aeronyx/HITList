@@ -388,6 +388,74 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertEqual(task.title, "Shave")
     }
 
+    // MARK: Duplicate (brief 96)
+
+    /// Duplicate: every setting of the switch, an empty name. Nothing to lose until a name is typed (a tap away just
+    /// closes), and nothing to save without one.
+    func testADuplicateHasEverySettingAndAnEmptyName() throws {
+        let task = try Flipboard.createSwitch(title: "Water the plants", rule: days(3), flipTarget: 2,
+                                              time: PickerTime(hour: 8, minute: 30), overdueBecomesTask: true, in: context)
+        let draft = SwitchDraft(duplicating: task)
+        XCTAssertEqual(draft.text, "")
+        let read = draft.reading(parser)
+        XCTAssertEqual(read.rule, days(3))
+        XCTAssertEqual(read.time, PickerTime(hour: 8, minute: 30))
+        XCTAssertEqual(draft.flips, 2)
+        XCTAssertTrue(draft.overdueBecomesTask)
+        XCTAssertNil(draft.boardID)
+        XCTAssertFalse(draft.hasContent(parser), "cancelling leaves nothing behind and asks nothing")
+        XCTAssertFalse(draft.canSave(parser), "nothing is saved without a name")
+    }
+
+    /// Confirmed with a name: a new switch with the same schedule, time, Switchboard, opt-in and flips; the original
+    /// untouched.
+    func testADuplicateSavesANewSwitchWithTheSameSettings() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let meds = try Flipboard.createSwitch(title: "Take meds", rule: .daily, flipTarget: 2, time: PickerTime(hour: 21, minute: 0),
+                                              board: bed, overdueBecomesTask: true, in: context)
+        var draft = SwitchDraft(duplicating: meds)
+        XCTAssertEqual(draft.boardID, bed.id)
+        draft.text = "Take vitamins"
+        XCTAssertTrue(draft.hasContent(parser), "a name typed is something to lose")
+        let copy = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertNotEqual(copy.id, meds.id)
+        XCTAssertEqual(copy.title, "Take vitamins")
+        XCTAssertEqual(copy.switchboard?.id, bed.id)
+        XCTAssertEqual(Flipboard.time(of: copy), PickerTime(hour: 21, minute: 0))
+        XCTAssertEqual(copy.recurrenceRule?.withoutTime, meds.recurrenceRule?.withoutTime)
+        XCTAssertTrue(copy.overdueBecomesTask)
+        XCTAssertEqual(copy.flipTarget, 2)
+        XCTAssertEqual(meds.title, "Take meds", "the original untouched")
+        XCTAssertEqual(Flipboard.switches(on: bed).count, 2)
+    }
+
+    /// A repeat the dial can't show ("every weekday") is copied as it is.
+    func testADuplicateKeepsARuleTheDialCannotShow() throws {
+        let weekdays = try XCTUnwrap(parser.parse("Stand-up every weekday").recurrence)
+        let task = try Flipboard.createSwitch(title: "Stand-up", rule: weekdays, in: context)
+        var draft = SwitchDraft(duplicating: task)
+        XCTAssertEqual(draft.reading(parser).rule, weekdays.withoutTime)
+        draft.text = "Lunch"
+        let copy = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertEqual(copy.recurrenceRule?.withoutTime, weekdays.withoutTime)
+    }
+
+    /// The card for a duplicate adds (no switch is being edited), opens with the original's board, and closes after
+    /// Add rather than staying open for another.
+    func testTheDuplicateRequest() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let task = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: bed, in: context)
+        let request = SwitchCardRequest.duplicate(task)
+        XCTAssertTrue(request.isAdding)
+        XCTAssertNil(request.task, "nothing is edited")
+        XCTAssertEqual(request.source?.id, task.id)
+        XCTAssertEqual(request.board?.id, bed.id)
+        XCTAssertFalse(request.staysOpenAfterAdd)
+        XCTAssertTrue(SwitchCardRequest.add.staysOpenAfterAdd)
+        XCTAssertTrue(SwitchCardRequest.addTo(bed).staysOpenAfterAdd)
+        XCTAssertNotEqual(request.id, SwitchCardRequest.edit(task).id)
+    }
+
     // MARK: Tactile controls (item 2)
 
     /// A drag on a dial moves one detent per `FlipDial.stepLength` along its stronger axis: right or up is more.

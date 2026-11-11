@@ -30,6 +30,8 @@ struct SwitchCard: View {
     var style: Style
     /// Adding: the Switchboard whose "+" opened the card (brief 72); nil for a loose switch.
     var board: Switchboard?
+    /// Duplicate (brief 96): the switch whose settings the new one starts with, its name left empty.
+    var duplicating: TaskItem?
     /// The card asks "Discard?" at its foot (after ×, Escape or a tap away with something to lose).
     var isConfirmingDiscard = false
     /// iPhone: the card is going; the keyboard goes down with it.
@@ -69,13 +71,15 @@ struct SwitchCard: View {
         ("Flip", count == 1 ? "time" : "times")
     }
 
-    init(editing: TaskItem?, style: Style, board: Switchboard? = nil, isConfirmingDiscard: Bool = false, isClosing: Bool = false,
+    init(editing: TaskItem?, style: Style, board: Switchboard? = nil, duplicating: TaskItem? = nil,
+         isConfirmingDiscard: Bool = false, isClosing: Bool = false,
          focusesName: Bool = true, onClose: @escaping () -> Void, onSaved: @escaping (TaskItem) -> Void,
          onDraftChange: @escaping (Bool) -> Void = { _ in }, onDiscard: @escaping () -> Void = {},
          onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
         self.style = style
         self.board = board
+        self.duplicating = duplicating
         self.isConfirmingDiscard = isConfirmingDiscard
         self.isClosing = isClosing
         self.focusesName = focusesName
@@ -84,7 +88,8 @@ struct SwitchCard: View {
         self.onDraftChange = onDraftChange
         self.onDiscard = onDiscard
         self.onKeepEditing = onKeepEditing
-        _draft = State(initialValue: editing.map(SwitchDraft.init) ?? SwitchDraft(boardID: board?.id))
+        _draft = State(initialValue: editing.map { SwitchDraft($0) } ?? duplicating.map { SwitchDraft(duplicating: $0) }
+                       ?? SwitchDraft(boardID: board?.id))
     }
 
     private var boards: [Switchboard] { Flipboard.ordered(allBoards) }
@@ -414,8 +419,9 @@ struct SwitchCard: View {
             #endif
             AccessibilityNotification.Announcement(editing == nil ? "Added \(task.title)" : "Saved \(task.title)").post()
             Task { await NotificationScheduler.reschedule(context: context) }
-            if editing == nil, style == .inline {
-                // The Mac and iPad card stays open, empty, for the next switch (as the board's Add task card).
+            if editing == nil, duplicating == nil, style == .inline {
+                // The Mac and iPad card stays open, empty, for the next switch (as the board's Add task card); a
+                // duplicate's closes once it is added.
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                     draft = SwitchDraft()
                     added = "Added ‘\(task.title)’"
