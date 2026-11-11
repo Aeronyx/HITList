@@ -6,6 +6,8 @@ import HITListCore
 /// Brief 88: Tuck, Moss's companion. A white snail whose shell is a clay flowerpot with a seedling growing in it (its
 /// leaves the theme's accent): mostly still, a blink or an eye stalk tipping out now and then, four routines of its own,
 /// the weather's own, a seedling that flowers as its flourish, and a foot that rests on what it sits on in both places.
+/// Brief 91: the weather shows on it: rain drips off its pot's rim and it shakes itself dry, snow piles up on its pot
+/// until it shrugs it off, and on a hot day it wilts with its seedling and finds the shade of its own pot.
 @MainActor
 final class CompanionTuckTests: XCTestCase {
     private let tuck = CompanionCharacter.tuck
@@ -37,16 +39,19 @@ final class CompanionTuckTests: XCTestCase {
         XCTAssertTrue(tuck.rows("rest")!.joined().contains("a"))
     }
 
-    /// Mostly still: two flickers (a blink, one eye stalk tipping out), the other gestures for its routines, each small
-    /// and under a second; a tap makes it flinch (eyes shut and pulled down a step), and woken it opens one eye.
+    /// Mostly still: two flickers (a blink, one eye stalk tipping out) and the weather's two (a drip off its pot's rim in
+    /// the rain, a pant on a hot day), the other gestures for its routines, each small beside the still it plays on and
+    /// under a second; a tap makes it flinch (eyes shut and pulled down a step), and woken it opens one eye.
     func testItsFlickersAndGesturesAreSmall() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
-            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), ["blink", "twitch"])
-            XCTAssertEqual(awake.gestures.map(\.name), ["blink", "twitch", "look", "lookUp", "leaf"])
+            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), ["blink", "twitch", "drip", "pant"])
+            XCTAssertEqual(awake.gestures.map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "drip", "pant"])
+            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, .rain, .heat])
             for gesture in awake.gestures + [awake.answer] {
+                let still = gesture.sky.map { awake.base(CompanionLook.Weather($0)) } ?? awake.rest
                 for tick in gesture.ticks {
-                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, awake.rest), 16, "\(place) \(gesture.name)")
+                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 16, "\(place) \(gesture.name)")
                 }
             }
             for gesture in awake.gestures {
@@ -82,25 +87,99 @@ final class CompanionTuckTests: XCTestCase {
             }
             XCTAssertEqual(posture.asleep.snow, "sleepSnow", "snow settles on its pot while it sleeps")
             XCTAssertNil(posture.asleep.rain, "asleep wins over rain")
+            XCTAssertEqual(posture.awake.heat, "heat")
+            XCTAssertNil(posture.asleep.heat, "a hot day is a day")
+            XCTAssertEqual(posture.awake.snowDeep, ["snowDeep1", "snowDeep2"])
+            XCTAssertEqual(posture.asleep.snowDeep, ["sleepSnowDeep1", "sleepSnowDeep2"], "by morning it is buried")
         }
     }
 
+    /// Snow piles up on its pot (brief 91): a dusting, a cap that half buries its seedling, a heap with one leaf tip
+    /// sticking out, the line it sits on the same at every depth. Its flickers and its eye-only routines play over the
+    /// pile; the snow's own flake too; it shrugs the heap off only from the deepest, and is back to the dusting.
+    func testSnowPilesUpOnItsPotAndItShrugsItOff() throws {
+        let awake = tuck.field.awake
+        XCTAssertEqual((0...3).map { awake.still(.snow, depth: $0) }, ["snow", "snowDeep1", "snowDeep2", "snowDeep2"])
+        // Deeper, its seedling disappears under the pile, a leaf tip still sticking out of the heap.
+        var leaf = Int.max
+        for still in ["snow", "snowDeep1", "snowDeep2"] {
+            let rows = try XCTUnwrap(tuck.rows(still))
+            let showing = rows.joined().filter { $0 == "a" }.count
+            XCTAssertLessThan(showing, leaf, "\(still): deeper")
+            leaf = showing
+            XCTAssertEqual(rows[(tuck.seatRow - 1)...], try XCTUnwrap(tuck.rows("snow"))[(tuck.seatRow - 1)...])
+        }
+        XCTAssertTrue((1...2).contains(leaf), "a leaf tip sticks out of the heap")
+        let routine = { (name: String) in try XCTUnwrap(awake.routines.first { $0.name == name }) }
+        let shrug = try routine("shrug")
+        XCTAssertTrue(shrug.shakesOff)
+        XCTAssertEqual(shrug.sky, .snow)
+        XCTAssertTrue(tuck.canDraw(shrug, in: .snow, mode: awake, depth: 2), "from the deepest pile")
+        XCTAssertFalse(tuck.canDraw(shrug, in: .snow, mode: awake, depth: 1), "not from a cap")
+        for depth in 0...2 {
+            XCTAssertTrue(tuck.canDraw(try routine("flake"), in: .snow, mode: awake, depth: depth), "a flake at \(depth)")
+            for name in ["tuck", "scan"] {
+                XCTAssertTrue(tuck.plays(try routine(name), in: .snow, mode: awake, depth: depth), "\(name) at \(depth)")
+            }
+            for gesture in awake.gestures where gesture.flicker && gesture.sky == nil {
+                XCTAssertTrue(tuck.canDraw(gesture, in: .snow, mode: awake, depth: depth), "\(gesture.name) at \(depth)")
+            }
+        }
+        // Its pot can't tip under a heap, nor its seedling wave from under it.
+        XCTAssertFalse(tuck.plays(try routine("wobble"), in: .snow, mode: awake, depth: 2))
+        XCTAssertFalse(tuck.plays(try routine("tend"), in: .snow, mode: awake, depth: 2))
+    }
+
+    /// A hot day (brief 91): its seedling wilts and so does it, eyes down a step and heavy-lidded; it pants; it tips its
+    /// pot forward over its head for shade. Its everyday routines rest until the heat goes; its flickers and its reply
+    /// to a tap are drawn for its tired eyes; no flourish from a heat still.
+    func testAHotDayWiltsItAndItFindsShade() throws {
+        let awake = tuck.field.awake
+        XCTAssertEqual(awake.base(.heat), "heat")
+        let rest = try XCTUnwrap(tuck.rows("rest")), heat = try XCTUnwrap(tuck.rows("heat"))
+        let leaves = { (rows: [String]) in rows.firstIndex { $0.contains("a") } ?? 0 }
+        XCTAssertGreaterThan(leaves(heat), leaves(rest), "its seedling wilts")
+        XCTAssertGreaterThan(try XCTUnwrap(Self.topRow(of: "l", in: heat, columns: 0..<10)),
+                             try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10)), "its eyes come down")
+        for name in ["blink", "twitch", "look", "flinch", "flinchPeek"] {
+            XCTAssertNotNil(tuck.index["\(name)@heat"], "\(name) drawn for its tired eyes")
+        }
+        let shade = try XCTUnwrap(awake.routines.first { $0.name == "shade" })
+        XCTAssertEqual(shade.sky, .heat)
+        XCTAssertTrue(tuck.canDraw(shade, in: .heat, mode: awake, depth: 0))
+        for routine in awake.routines where routine.sky == nil {
+            XCTAssertFalse(tuck.plays(routine, in: .heat, mode: awake), "\(routine.name) rests on a hot day")
+        }
+        let tipped = try XCTUnwrap(tuck.rows("tip2"))
+        XCTAssertNotEqual(tipped[9], heat[9], "the pot tipped forward over its head")
+    }
+
+    /// Nothing is drawn in the air (brief 91) but a single drop it touches: the drip is one drop under its pot's rim,
+    /// the shake starts with one drop falling into its leaf.
+    func testNothingInTheAirButOneDrop() {
+        for name in ["drip1", "drip3", "drip4"] { XCTAssertEqual(tuck.difference(name, "rain"), 1, name) }
+        XCTAssertEqual(tuck.difference("drip2", "rain"), 2, "a drop stretching")
+        XCTAssertEqual(tuck.difference("drop1", "rain"), 1, "the drop its leaf catches")
+    }
+
     /// Four routines of its own (it tends its seedling, tucks its eyes in, looks two ways at once, rights its tipping
-    /// pot), each three to seven seconds of four to nine moves, and the weather's own: a drink in the rain, a flake in
-    /// the snow, a start at thunder, a bask on a clear day. The everyday ones are drawn for rain and snow too.
+    /// pot), each three to seven seconds of four to nine moves, and the weather's own: a shake in the rain, a flake in
+    /// the snow, a start at thunder, a bask on a clear day, a shrug that sends the piled snow off, shade on a hot day.
+    /// The everyday ones are drawn for rain and snow too.
     func testItsRoutines() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
             let everyday = awake.routines.filter { $0.sky == nil }
             XCTAssertEqual(everyday.map(\.name), ["tend", "tuck", "scan", "wobble"])
-            XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear])
+            XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear, .snow, .heat])
+            XCTAssertEqual(awake.routines.filter(\.shakesOff).map(\.name), ["shrug"])
             for routine in awake.routines {
                 let seconds = tuck.duration(of: routine, mode: awake)
                 XCTAssertTrue(CompanionCharacter.routineLength.contains(seconds), "\(routine.name): \(seconds) s")
                 XCTAssertTrue(CompanionCharacter.routineMoves.contains(routine.moves), "\(routine.name): \(routine.moves)")
             }
             for routine in everyday {
-                for weather in CompanionLook.Weather.allCases {
+                for weather in [CompanionLook.Weather.plain, .rain, .snow] {
                     XCTAssertTrue(tuck.plays(routine, in: weather, mode: awake), "\(routine.name) in \(weather)")
                 }
             }
@@ -123,13 +202,17 @@ final class CompanionTuckTests: XCTestCase {
                 let sky: CompanionSky = routine.sky ?? .clouds
                 let look = CompanionLook(asleep: false, weather: .init(sky))
                 let act = CompanionAct(kind: .routine(i), start: start)
-                let stage = CompanionStage(since: .distantPast, place: place, look: look, act: act, sky: sky)
+                // A shake-off plays only from the deepest pile, and leaves the bare snow.
+                let depth = routine.shakesOff ? awake.deepest : 0
+                let stage = CompanionStage(since: .distantPast, place: place, look: look, act: act, sky: sky,
+                                           snowDepth: depth)
                 let end = clock.end(of: act, stage: stage)
                 let last = clock.pose(at: end.addingTimeInterval(-lastTick), stage: stage)
                 let still = clock.restPose(at: end, stage: stage)
                 XCTAssertEqual(last, still, "\(place) \(routine.name)")
                 let drawn = clock.frames(.routine(i), stage: stage).frames
                 XCTAssertGreaterThan(drawn.filter { $0 != still }.count, drawn.count / 2, "\(place) \(routine.name): it moves")
+                if routine.shakesOff { XCTAssertEqual(still.frame, tuck.index["snow"], "the heap is gone") }
             }
             for kind in [CompanionAct.Kind.answer, .flourish] {
                 let act = CompanionAct(kind: kind, start: start)
