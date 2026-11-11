@@ -46,8 +46,8 @@ sweep, and accessibility.
   is ("Date: Tomorrow", "Priority: P1"), an open card alone, and the Undo toast when it appears. Under Differentiate
   Without Colour a priority is written as well as coloured. Small iPhone controls take a press in the space around
   them. On the Mac the keyboard reaches the editor, and the toolbar's sync bolt takes a click anywhere on it (it
-  used to answer only on a 4 pt strip). The system's accessibility audit now runs on every main screen with the UI
-  tests.
+  used to answer only on a 4 pt strip). The system's accessibility audit can be run on every main screen, card
+  and Settings page (`TEST_RUNNER_HITLIST_AUDIT=1`).
 - From the screen-by-screen sweep: Settings rows are all one height on the Mac; "+ Add task" lines up under the
   tasks on the Mac and iPad; an empty Completed says "Nothing completed yet"; the Mac sidebar's Settings lines up
   with the rows above it; Upcoming's "Overdue" is the same red as Today's.
