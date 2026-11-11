@@ -251,8 +251,9 @@ struct BrowseView: View {
                 .accessibilityIdentifier("newFilterChip")
             }
         }
-        // Chips scroll past the cards' margins to the screen's edges, starting in line with the cards.
-        .scrollClipDisabled()
+        // Chips scroll past the cards' margins to the screen's edges, starting in line with the cards, and stop at the
+        // safe area (`ChipsReachTheSafeArea`).
+        .modifier(ChipsReachTheSafeArea())
         .accessibilityIdentifier("filterChips")
     }
 
@@ -497,6 +498,19 @@ private struct SearchResults: View {
             .slateList()
             .scrollDismissesKeyboard(.immediately)
         }
+    }
+}
+
+/// Browse's filter chips draw past their scroll view by the list's margin each side, to the safe area's edges: the
+/// screen's on most phones, as before, but never under a bar beside the screen (brief 99: on the Duo's outer display
+/// they scrolled under the trailing status bar). The list's margin is its cards' (the system's, `followsSystemListMargin`).
+private struct ChipsReachTheSafeArea: ViewModifier {
+    @Environment(\.listMargin) private var margin
+
+    func body(content: Content) -> some View {
+        content
+            .scrollClipDisabled()
+            .mask { Rectangle().padding(.horizontal, -margin) }
     }
 }
 #endif
