@@ -1,9 +1,37 @@
 # HITList changelog
 
-One section per release, newest first. Up to 0.9.0 (20) a release was a version: `scripts/release.sh --version X.Y.Z`
-refuses to run until the version has a section here, then stamps the heading with the build number and date. Since
-2026-11-10 the version stays 0.9.0 and a release is a new build of it: `scripts/release.sh --quick` refuses to run
-until the build has a section headed `## 0.9.0 (N)`, then stamps that heading with the date.
+One section per release, newest first. A release is a version: `scripts/release.sh --version X.Y.Z` refuses to run
+until the version has a section here, then stamps the heading with the build number and date. Versions go up by 0.0.1
+per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
+and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
+
+## 0.9.1
+
+Widgets, everything that moves, two pixel companions, calendar events and a sync bolt that keeps still: George's
+notes after 0.9.0 (21), in five sessions at once. Versions bump by 0.0.1 per release again.
+
+- Widgets on iPhone, iPad and the Mac. Today shows what's due and what's overdue, in Today's order, small, medium or
+  large. Upcoming shows this week (or the month) with a dot on each day that has tasks, and what's next. Flipboard
+  shows your switches green or red, the loose ones or one Switchboard you pick in the widget's settings. Tap a task to
+  open it, anywhere else to open its screen. On the iPhone's Lock Screen: today's count, the next two tasks, or
+  "3 tasks today" beside the date. Widgets can't complete a task yet.
+- The sync bolt keeps still. It says all is well and stays that way while syncs come and go, breathes slowly only
+  when a sync is taking a while, and shows trouble only once it has lasted. It no longer swaps and pulses on every
+  background sync; the strike and the slam still play when you're good to go.
+- A short iCloud hiccup, like the one after an update, no longer shows alarming words. If it lasts, HITList says
+  "iCloud isn't answering, HITList will keep trying"; if sync has stopped while changes wait, Settings says "Sync is
+  stuck" and the Mac offers Relaunch. An account blip no longer clears reminders, and the sync log ends a stretch of
+  trouble with "Sync recovered after …".
+- Two small pixel creatures live in quiet corners. Nod, in a nightcap with a glowing bobble, sits on the search field
+  with its legs swinging; Quill sleeps at the foot of Browse (on the Mac, beside Settings) with an ink-dipped tail.
+  Every few minutes one of them does something, if you happen to be looking. Settings → Extras → Companions turns
+  them off.
+- Calendar events beside your tasks: turn on Settings → General → Calendar events and Today and Upcoming show your
+  events from the calendars you pick, read-only. Events never leave the device; HITList never changes them. Off by
+  default.
+MOTION_LINES
+- Siri can open the Flipboard ("Open Flipboard in HITList"); `hitlist://` links open a task or a screen.
+- The roadmap was rewritten: now, next, parked, shipped (`dev/ROADMAP.md`).
 
 ## 0.9.0 (21) — 2026-11-10
 

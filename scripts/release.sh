@@ -206,6 +206,24 @@ for p in $PLATFORMS; do
   if [[ $p == macos ]]; then
     echo "$ENT" | grep -q "com.apple.security.app-sandbox</key><true" || fail "macOS build is not sandboxed"
   fi
+  # The widget extension (0.9.1, brief 74) ships inside the app: the app's version and build, its own app group
+  # (and sandbox on the Mac), and none of the app's iCloud or push keys.
+  if [[ $p == ios ]]; then
+    APPEX="$APP/PlugIns/HITListWidgets.appex"; APPEX_INFO="$APPEX/Info.plist"; APP_INFO="$APP/Info.plist"
+  else
+    APPEX="$APP/Contents/PlugIns/HITListWidgets.appex"; APPEX_INFO="$APPEX/Contents/Info.plist"; APP_INFO="$APP/Contents/Info.plist"
+  fi
+  [[ -d "$APPEX" ]] || fail "$p: the widget extension is missing from the app"
+  for key in CFBundleShortVersionString CFBundleVersion; do
+    [[ "$(/usr/libexec/PlistBuddy -c "Print :$key" "$APPEX_INFO")" == "$(/usr/libexec/PlistBuddy -c "Print :$key" "$APP_INFO")" ]] \
+      || fail "$p: the widget extension's $key differs from the app's"
+  done
+  XENT=$(codesign -d --entitlements :- "$APPEX" 2>/dev/null)
+  echo "$XENT" | grep -q "com.apple.security.application-groups" || fail "$p: the widget extension has no app group"
+  echo "$XENT" | grep -qE "icloud-container|aps-environment" && fail "$p: the widget extension carries iCloud or push keys"
+  if [[ $p == macos ]]; then
+    echo "$XENT" | grep -q "com.apple.security.app-sandbox</key><true" || fail "macOS widget extension is not sandboxed"
+  fi
   echo "ok: $(ls -la "$ARTIFACT" | awk '{print $5}') bytes"
 done
 
