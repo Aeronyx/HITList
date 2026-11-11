@@ -54,6 +54,8 @@ struct SyncSteadiness: Equatable {
     }
 
     let windows: Windows
+    /// The words `SyncState.derive` gives "temporarily unavailable" (iCloud asks to verify the Apple Account).
+    static let signInAgainReason = "iCloud needs you to sign in again"
     /// What the marks show; nil before the first raw state.
     private(set) var shown: SyncState?
     private(set) var shownSince: Date?
@@ -103,6 +105,15 @@ struct SyncSteadiness: Equatable {
         show(.synced(lastGood), at: now)
     }
 
+    /// The app is back in front after the process was suspended (iPhone, iPad; brief 95): a trouble clock that ran
+    /// while nothing could be checked starts again from now, so coming back never flashes trouble for having been away.
+    /// Trouble already shown stays until a good state replaces it.
+    mutating func resumed(at now: Date) {
+        if troubleSince != nil { troubleSince = now }
+        if syncingSince != nil { syncingSince = now }
+        settle(now)
+    }
+
     // MARK: Deciding
 
     /// What the marks should show at `now` if no dwell held them; nil means "keep what is shown".
@@ -134,7 +145,10 @@ struct SyncSteadiness: Equatable {
             return troubleFor >= windows.signedOut ? raw : nil
         case .error(let reason, let at):
             if reason == SyncState.stalledReason { return raw }
-            if troubleFor >= windows.errorWords || (SyncState.needsAction(reason) && troubleFor >= windows.error) {
+            // Brief 95: "verify your Apple Account" reaches the bolt within 30 s in its own words, as signed out does
+            // within 10 (George's 14-second blip of brief 78 still shows nothing).
+            let ownWords = SyncState.needsAction(reason) || reason == Self.signInAgainReason
+            if troubleFor >= windows.errorWords || (ownWords && troubleFor >= windows.error) {
                 return .error(reason, troubleSince ?? at)
             }
             return troubleFor >= windows.error ? .retrying(since: troubleSince ?? at) : nil
