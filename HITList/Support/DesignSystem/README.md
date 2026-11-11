@@ -117,6 +117,7 @@ every theme. Every text/surface pair passes WCAG AA (`ThemeTests`).
 | An editor sheet | `HITSheetChrome` with `HITSection`s inside |
 | A sheet whose pages open inside it (iPhone and iPad Settings) | `HITSheetPages`: the first screen under the bar, a page pushed in on `enter`/`exit` with "‹ back" in the bar, the edge swipe, Esc; never a second sheet |
 | Settings-style lists | `HITGroup` of `HITMenuRow`s |
+| A section's header over rows (Browse's "Groups +", a `HITGroup`'s title) | `HITSectionHeader`: the task lists' header type in grey, on the rows' edge, an optional "+"; one style everywhere (§7) |
 
 All of them: hover state on macOS, 35% opacity when `.disabled`, Reduce Motion respected.
 

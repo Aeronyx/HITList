@@ -142,9 +142,15 @@ struct HITGroup<Content: View>: View {
         self.content = content()
     }
 
+    /// The footer's sides: a row's padding, so it starts under the header and the rows' content.
+    static var footerInset: CGFloat { HITSpacing.l }
+
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous)
-        HITSection(title, footer: footer) {
+        // The header (`HITSectionHeader`, brief 99), the card, the footer, `HITSection`'s spacing apart. The header and
+        // the footer start on the rows' edge, a row's padding in from the card, as Browse's do.
+        VStack(alignment: .leading, spacing: HITSpacing.s) {
+            if let title { HITSectionHeader(title) }
             Group(subviews: content) { rows in
                 VStack(spacing: 0) {
                     ForEach(rows) { row in
@@ -158,7 +164,15 @@ struct HITGroup<Content: View>: View {
             .background(shape.fill(Theme.surface))
             .overlay(shape.strokeBorder(Theme.separator.opacity(0.6), lineWidth: 1))
             .clipShape(shape)
+            if let footer {
+                Text(footer)
+                    .font(HITType.caption)
+                    .foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, Self.footerInset)
+            }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
