@@ -84,7 +84,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions with routines so far (brief 84, items 2 to 4).
-    static let lively = ["nod", "quill"]
+    static let lively = ["nod", "quill", "hush"]
 
     /// Each has at least three everyday routines of its own in each place, and one for rain, one for snow and a start
     /// at thunder; every routine is a few seconds, four to nine moves, and is drawn in every look it can play in.
