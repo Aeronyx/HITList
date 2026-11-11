@@ -9,9 +9,9 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 
 | Brief | What | Status |
 |---|---|---|
-| 79 `companion-cast` | One companion per theme, in one place per platform (the Mac's search field, the "+" on iPhone); still by default, a rare flourish, asleep at night, dressed for rain and snow; two new critters (four of eight themes) | in progress |
-| 80 `weather` | The sky for the companions: WeatherKit behind an Extras switch, off by default | in progress |
-| 81 `widget-completion` | Complete a task or flip a switch from a widget; the row stays checked until iCloud has it; widgets refresh while the app is closed | in progress |
+| 79 `companion-cast` | One companion per theme, in one place per platform (the Mac's search field, the "+" on iPhone); still by default, a rare flourish, asleep at night, dressed for rain and snow; two new critters (four of eight themes) | merged, awaiting release |
+| 80 `weather` | The sky for the companions: WeatherKit behind an Extras switch, off by default | merged, awaiting release |
+| 81 `widget-completion` | Complete a task or flip a switch from a widget; the row stays checked until iCloud has it; widgets refresh while the app is closed | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 

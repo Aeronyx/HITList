@@ -226,6 +226,40 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 18 record (2026-11-11; sessions 79–81 merged for 0.9.2)
+Three sessions on George's turn, all Opus 5.5, supervised by a Fable 5.2 chat: 79 `companion-cast` (max, 9 commits),
+80 `weather` (high, 8), 81 `widget-completion` (xhigh, 12). Merged 80, 81, 79; one conflict, the generated project
+(regenerated). The supervisor committed `CompanionSky` (core) and `CompanionSkySource` (app) before the worktrees
+were cut, so 79 and 80 compiled apart and met there. Supervisor follow-ups: three fixes for the CI runner's Xcode
+26.6 (two type-check timeouts, and `IntentExecutionTargets`, which only the 27 SDK has: guarded with
+`compiler(>=6.4)`), the Companions footer's words, the 0.9.2 notes.
+After the round:
+- **Companions**: still by default (`CompanionSchedule`: a gesture every 45 to 120 s, the flourish after 45 min plus
+  a random stretch averaging 2 h 15 of showing time, kept in the app group's defaults; a tap plays it if none has
+  for 20 min); one per theme (`CompanionCast`: Slate Nod, Midnight Quill, Nord Hush, Rosé Pip, the rest Nod); one
+  place per platform (the Mac's search field; the "+" on iPhone and iPad, one line in `QuickAddEntry`); asleep 22:00
+  to 07:00; a still variation for rain or storm and for snow, read from `CompanionSkySource`. Debug: `-companion
+  hush`, `-companionHour 23`, `-companionPlay flourish`, `-companionSky rain`.
+- **Weather**: `Services/Weather/*` (`CompanionWeather`), WeatherKit behind Extras → Weather, off by default,
+  reduced-accuracy location, at most one request an hour and only while the app is in front. The app's
+  entitlements carry `com.apple.developer.weatherkit`; Apple's server answers only once George has ticked WeatherKit
+  under App Services for the App ID. Debug: `-seedDemoSky rain`, `-seedDemoWeatherAccess denied`.
+- **Widget taps**: `WidgetCompletionIntent` (in the app and the extension), `WidgetOutbox` (one file per tap in
+  the App Group, written before anything else; only the app removes them, a ledger stops a second apply),
+  `WidgetCompletionCenter` (the app applies through `TaskActions` and `Flipboard`, and the row leaves the snapshot
+  only after an export that started after the completion has finished), `WidgetRefresh` (background refresh on iOS,
+  an hourly settle on the Mac). On iPhone and iPad the intent runs in the app's process (`LiveActivityIntent`); on
+  the Mac in the extension, which rings `WidgetOutboxBell` for the running app. Debug: `HITLIST_WIDGET_SUFFIX`,
+  `-widgetExportDelay`, `-widgetTapProbe`.
+- **Building for the CI runner**: it has Xcode 26.6 (Swift 6.3, the macOS 26 SDK). A symbol that only the 27 SDK has
+  needs `#if compiler(>=6.4)`; arithmetic that mixes numeric conversions inside a closure needs one step per line.
+  Only a push shows it: the local `-warn-long-expression-type-checking` scan rated the line CI rejected as fast.
+Left for later: four themes still share Nod; the Duo's upright "+" (`IslandAddButton`) has no companion; a companion
+on screen across 22:00 stays awake until the app is left; no flourish in rain or snow; the Mac must be running for a
+widget tap to finish, and a real desktop widget tap, a real iCloud push to a widget and the background refresh were
+never seen running; shared-list tasks have no checkbox on the widget and the Lock Screen widget has no button; side
+stores `HITList-s79`, `HITList-s80`, `HITList-s81` and `HITList-sup18` in the Mac app group folder (delete by hand).
+
 ## Round 17 record (2026-11-10; sessions 74–78 merged for 0.9.1)
 Five sessions on George's turns, all Opus 5.5, supervised by a Fable 5.2 chat: 74 `widgets` (xhigh, 10 commits), 75
 `motion-polish` (xhigh, 11), 76 `companions` (max, 4), 77 `calendar-events` (high, 9), 78 `steady-bolt` (xhigh, 8, added

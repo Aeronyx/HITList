@@ -44,10 +44,12 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.1: core 528, Mac 1462, iOS 1421, and 45 UI tests
-  (`scripts/test.sh ui`, about 24 minutes on a fresh simulator; run it on the merged tree, not only per branch). CI
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.2: core 573, Mac 1529, iOS 1488, and about 60 UI tests
+  (`scripts/test.sh ui`, half an hour on a fresh simulator; run it on the merged tree, not only per branch). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
-  (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner's Xcode is older than local.
+  (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
+  SDK) against 27.2 here: after every merge look at the run, because only it shows a type-check timeout or a
+  27-only symbol (read the job's log with `gh api repos/Aeronyx/HITList/actions/jobs/<job id>/logs`).
 - Simulator: iPhone 17, UDID `03F99117-3466-4810-A711-AF52514F6514`. Build with
   `xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug -destination
   'platform=iOS Simulator,id=03F99117-3466-4810-A711-AF52514F6514' -derivedDataPath build.noindex/sim
@@ -276,7 +278,17 @@ still by default, makes a small gesture now and then, and its flourish is someth
 may play it, with a long refresh. One companion per colour theme, never two on a screen; on the Mac it lives on the
 search field, on iPhone and iPad by the "+"; asleep at night, dressed for the weather; no points or unlocks, ever.
 
-## 8. Where things stand (2026-11-11, round 18 running)
+## 8. Where things stand (2026-11-11, round 18 merged)
+
+**2026-11-11, round 18 merged for 0.9.2 (Fable 5.2 supervisor).** Briefs 79–81 are merged on master: four
+companions (Nod, Quill, Hush, Pip), one per theme and mostly still; the weather for them through WeatherKit, off by
+default; widgets that complete a task and keep it checked until iCloud has it. No schema change. A Release archive
+and export of both platforms pass `release.sh`'s checks with the WeatherKit entitlement. George releases with
+`scripts/release.sh --version 0.9.2 --quick`, and ticks WeatherKit under App Services for `com.trammells.hitlist` in
+the developer portal (no rebuild needed) for the weather to answer. Details and leftovers in COMMON's Round 18
+record. Next: George's feedback; the other four themes' companions. The next brief number is 82.
+
+### Round 18 as briefed (kept for the record)
 
 **2026-11-11, 0.9.1 (22) released; round 18 briefed for 0.9.2 (Fable 5.2 supervisor).** George's notes on 0.9.1
 (`dev/briefs/ROUND-18.md`): the companions must be still by default and rare, one per theme in one place per
