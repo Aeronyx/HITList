@@ -6,9 +6,10 @@ import AppKit
 
 /// "iCloud: Signed in · Synced 2 min ago" with its icon: the sync health line (`SyncHealth`), word for word
 /// what Settings → Account's status row says. Re-renders every 30 s so the relative time stays current while visible.
-/// When a sync finishes while it is on screen, the icon turns into a checkmark for a few seconds
-/// (`contentTransition(.symbolEffect(.replace))`; a plain swap under Reduce Motion), the text reads
-/// "Synced just now", and then it settles back to the usual icon.
+/// It reads the steadied state (`CloudSyncMonitor.state`), so it never strobes between "Syncing…" and "Synced"; it
+/// still says "Syncing…" when the bolt shows work. When work it showed ends in a good sync, the icon turns into a
+/// checkmark for a few seconds and the text reads "Synced just now", then it settles back (brief 78: once per visible
+/// stretch of work, not on every export). Every change crossfades; plain fades under Reduce Motion.
 struct SyncStatusLine: View {
     private var monitor: CloudSyncMonitor { .shared }
     @State private var confirming = false
@@ -21,24 +22,32 @@ struct SyncStatusLine: View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             Label {
                 Text(Self.text(account: account, sync: state, now: context.date))
+                    .contentTransition(.opacity)
             } icon: {
                 Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
-                    .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace))
+                    .contentTransition(reduceMotion ? .opacity : .symbolEffect(.replace))
             }
             .foregroundStyle(color(for: state))
         }
-        .onChange(of: monitor.lastChangeAt) { old, new in
-            guard SyncConfirmation.didAdvance(from: old, to: new) else { return }
+        .animation(BoltSteadyMotion.crossfadeAnimation, value: SyncSteadiness.kind(state))
+        .animation(BoltSteadyMotion.crossfadeAnimation, value: confirming)
+        .onChange(of: SyncSteadiness.kind(state)) { old, new in
+            guard Self.confirms(from: old, to: new) else { return }
             SyncConfirmation.log.info("Sync confirmed in Settings (\(monitor.lastChangePhase?.rawValue ?? "?", privacy: .public))")
             confirmTask?.cancel()
-            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirming = true }
+            confirming = true
             confirmTask = Task {
                 try? await Task.sleep(for: SyncConfirmation.checkmarkDuration)
                 guard !Task.isCancelled else { return }
-                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirming = false }
+                confirming = false
             }
         }
         .onDisappear { confirmTask?.cancel() }
+    }
+
+    /// The checkmark plays when the marks turn green after showing work or trouble, never on an ordinary sync.
+    static func confirms(from old: SyncSteadiness.Kind, to new: SyncSteadiness.Kind) -> Bool {
+        new == .synced && old != .synced && old != .localOnly
     }
 
     /// The line's text: `SyncHealth.line`, shared with `AccountStatusRow.title`.
@@ -298,19 +307,19 @@ struct BoltBreath: ViewModifier {
     }
 }
 
-/// The smallest possible sync confirmation: a 6 pt dot for the corner of a toolbar button. Green once
-/// everything has synced, grey while syncing or offline, orange when sync needs attention. It is a view
-/// of `CloudSyncMonitor.state` only; place it with `.overlay(alignment: .topTrailing)`.
-/// Each time a CloudKit import or export finishes (`CloudSyncMonitor.lastChangeAt` advances) it pulses
-/// once, scale 1 → 1.6 → 1 with `HITMotion.spring`; bursts merge, and Reduce Motion turns it off
-/// (`SyncConfirmation`). The scale is a render effect, so the dot's layout stays 6 pt.
+/// The smallest possible sync confirmation: a 6 pt dot for the corner of a toolbar button. Green while all is well,
+/// grey while work is the news or offline, orange once sync needs attention. It is a view of `CloudSyncMonitor.state`,
+/// steadied like the bolt (`SyncSteadiness`); place it with `.overlay(alignment: .topTrailing)`. Its colour crossfades.
+/// It pulses once, scale 1 → 1.6 → 1 with `HITMotion.spring`, only when the bolt plays its "you're good to go"
+/// (`BoltStrikeGate`: after launch, after a minute away, after a minute of trouble), never on an ordinary import or
+/// export, and never under Reduce Motion (brief 78). The scale is a render effect, so the dot's layout stays 6 pt.
 struct SyncIndicatorDot: View {
     static let size: CGFloat = 6
     static let pulseScale: CGFloat = 1.6
     private var monitor: CloudSyncMonitor { .shared }
     @State private var scale: CGFloat = 1
-    @State private var lastPulse: Date?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         let state = monitor.state
@@ -318,15 +327,25 @@ struct SyncIndicatorDot: View {
             .fill(Self.color(for: state))
             .frame(width: Self.size, height: Self.size)
             .scaleEffect(scale)
+            .animation(BoltSteadyMotion.crossfadeAnimation, value: Self.color(for: state))
             .accessibilityLabel(state.summary())
             .onChange(of: monitor.lastChangeAt) { old, new in
-                let now = Date()
-                guard SyncConfirmation.shouldPulse(from: old, to: new, lastPulse: lastPulse, now: now,
-                                                   reduceMotion: reduceMotion) else { return }
-                lastPulse = now
+                guard Self.pulses(for: SyncBolt.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive,
+                                                                     reduceMotion: reduceMotion)) else { return }
                 SyncConfirmation.log.info("Sync dot pulse (\(monitor.lastChangePhase?.rawValue ?? "?", privacy: .public))")
                 pulse()
             }
+    }
+
+    /// Pulses with the gate's strike only: no pulse for an ordinary sync, none for the Reduce Motion blink.
+    static func pulses(for strike: BoltStrikeGate.Strike) -> Bool { strike == .strike }
+
+    private var isActive: Bool {
+        #if os(macOS)
+        scenePhase == .active && NSApplication.shared.isActive
+        #else
+        scenePhase == .active
+        #endif
     }
 
     private func pulse() {

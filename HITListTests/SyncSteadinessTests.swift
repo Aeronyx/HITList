@@ -213,6 +213,38 @@ final class SyncSteadinessTests: XCTestCase {
         XCTAssertFalse(SyncBolt.breathes(.error("x", start)))
     }
 
+    // MARK: 5. The other live marks
+
+    func testTheDotPulsesOnlyWithTheGatesStrike() {
+        XCTAssertTrue(SyncIndicatorDot.pulses(for: .strike))
+        XCTAssertFalse(SyncIndicatorDot.pulses(for: .none), "an ordinary import or export")
+        XCTAssertFalse(SyncIndicatorDot.pulses(for: .blink), "Reduce Motion")
+        // What the gate answers for a launch burst: one strike, then nothing for every sync after it.
+        var gate = BoltStrikeGate()
+        var answers: [BoltStrikeGate.Strike] = []
+        var last: Date?
+        for t in [0.82, 1.75, 2.06, 2.45, 2.75, 8.14, 8.66, 9.88, 11.35, 12.53] {
+            answers.append(gate.advance(from: last, to: at(t), now: at(t), isActive: true, reduceMotion: false))
+            last = at(t)
+        }
+        XCTAssertEqual(answers.filter(SyncIndicatorDot.pulses).count, 1)
+    }
+
+    func testSettingsChecksOffOnlyWhenWorkItShowedEnds() {
+        XCTAssertTrue(SyncStatusLine.confirms(from: .syncing, to: .synced))
+        XCTAssertTrue(SyncStatusLine.confirms(from: .retrying, to: .synced))
+        XCTAssertTrue(SyncStatusLine.confirms(from: .offline, to: .synced))
+        XCTAssertFalse(SyncStatusLine.confirms(from: .synced, to: .synced), "an ordinary sync keeps the line still")
+        XCTAssertFalse(SyncStatusLine.confirms(from: .synced, to: .syncing))
+        XCTAssertFalse(SyncStatusLine.confirms(from: .localOnly, to: .synced))
+    }
+
+    func testTheLastChangeRowHoldsEachChangeTwoSeconds() {
+        XCTAssertEqual(LastSyncChange.wait(shownAt: nil, now: at(0)), 0, "the first shows at once")
+        XCTAssertEqual(LastSyncChange.wait(shownAt: at(0), now: at(0.5)), 1.5, accuracy: 1e-9)
+        XCTAssertEqual(LastSyncChange.wait(shownAt: at(0), now: at(3)), 0)
+    }
+
     // MARK: The account status Settings and the profile menu show
 
     func testGeorgesAccountBlipKeepsSignedIn() {
