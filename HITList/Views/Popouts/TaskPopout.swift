@@ -374,7 +374,7 @@ struct TaskPopout: View {
             if let rule = shown.recurrence {
                 HStack(spacing: 4) {
                     Image(systemName: "repeat").font(.system(size: 11, weight: .semibold))
-                    Text(rule.displayText).font(HITType.caption).lineLimit(1)
+                    Text(rule.rowText).font(HITType.caption).lineLimit(1)
                 }
                 .foregroundStyle(Theme.secondaryText)
             }
@@ -413,7 +413,7 @@ struct TaskPopout: View {
                 priorityPill(shown.priority)
                 reminderPill(shown)
                 labelsPill(shown.labelNames)
-                repeatPill(shown.recurrence)
+                repeatPill(shown.recurrence, day: shown.dueDate)
                 deadlinePill
                 locationPill
             }
@@ -511,16 +511,18 @@ struct TaskPopout: View {
             .accessibilityIdentifier("popoutLabelsChip")
     }
 
-    private func repeatPill(_ rule: RecurrenceRule?) -> some View {
-        HITChip(rule?.displayText ?? "Repeat", systemImage: "repeat",
+    /// The Repeat menu, worded for the task's day (today when it has none: a repeat picked then starts at its next
+    /// occurrence, as typing it would).
+    private func repeatPill(_ rule: RecurrenceRule?, day: Date?) -> some View {
+        HITChip(rule?.rowText ?? "Repeat", systemImage: "repeat",
                 tint: rule == nil ? Theme.secondaryText : PopoutTint.today,
-                isSelected: rule != nil, size: .compact, speech: ChipSpeech.repeats(rule?.displayText),
+                isSelected: rule != nil, size: .compact, speech: ChipSpeech.repeats(rule?.rowText),
                 action: { openChip = .repeating })
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
-                RepeatChipPopover(rule: rule) { rule in
+                RepeatChipCard(rule: rule, day: day ?? Date(), onPick: { rule in
                     openChip = nil
                     setRecurrence(rule)
-                }
+                }, onKeep: { openChip = nil })
             }
             .accessibilityIdentifier("popoutRepeatChip")
     }
