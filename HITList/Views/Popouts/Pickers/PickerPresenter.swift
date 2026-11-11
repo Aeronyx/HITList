@@ -233,7 +233,12 @@ final class PickerPortalView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { releaseLayer() } else { scheduleSync() }
+        guard let window else { releaseLayer(); return }
+        // The window's layer is made as soon as a chip that can open a card is on screen, not by the first card:
+        // a hosting view's first pass in a window draws without animating, and the first card of every window
+        // appeared in one frame (brief 75).
+        _ = PickerLayerHost.host(in: window)
+        scheduleSync()
     }
 
     override func setFrameOrigin(_ newOrigin: NSPoint) {
@@ -306,6 +311,8 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     /// Where the keyboard was before the card took it, to give it back on close.
     private weak var previousResponder: NSResponder?
     private var monitor: Any?
+    /// Added to (or moved to the front of) the window since the last card showed: its next pass is its first there.
+    private var isFreshlyAttached = false
 
     required init(rootView: PickerLayerRoot) {
         super.init(rootView: rootView)
@@ -328,6 +335,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
             if container.subviews.last !== existing, existing.model.card == nil {
                 existing.removeFromSuperview()
                 container.addSubview(existing, positioned: .above, relativeTo: nil)
+                existing.isFreshlyAttached = true
             }
             return existing
         }
@@ -335,6 +343,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         host.frame = container === contentView ? contentView.bounds : contentView.frame
         host.autoresizingMask = [.width, .height]
         container.addSubview(host, positioned: .above, relativeTo: nil)
+        host.isFreshlyAttached = true
         return host
     }
 
@@ -363,6 +372,14 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
     func show(owner: PickerPortalView, kind: PickerKind, anchor: CGRect, card: AnyView, dismiss: @escaping () -> Void) {
         refreshBounds()
         let isNew = model.card == nil || ownerID != ObjectIdentifier(owner) || model.kind != kind
+        if isNew, isFreshlyAttached {
+            // Just added to the window: let it draw once without the card, so the card animates in (`enter`)
+            // instead of appearing in one frame. The owner asks again on the next turn of the run loop.
+            isFreshlyAttached = false
+            DispatchQueue.main.async { [weak owner] in owner?.scheduleSync() }
+            return
+        }
+        isFreshlyAttached = false
         if isNew {
             if !keyboardIsInCard { previousResponder = Self.restorable(window?.firstResponder) }
             model.generation += 1
