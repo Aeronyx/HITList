@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import HITListCore
 
 // Briefs 80 and 83: the sky and the local time for the companions. Where the person is (approximately), what the sky
 // is doing there and which time zone it is in, each behind a protocol so the tests use fakes and a Debug run can use
@@ -52,6 +53,15 @@ struct WeatherReading: Equatable, Sendable {
     let condition: String
     /// When the conditions were observed.
     let date: Date
+    /// How warm it feels, in °C, and whether the sun is up: what makes a dry day a hot one (round 19). Nil in tests
+    /// and demos that only name a condition.
+    var apparentCelsius: Double? = nil
+    var isDaylight: Bool? = nil
+
+    /// What a companion makes of it.
+    var sky: CompanionSky {
+        CompanionSky(weatherCondition: condition, apparentCelsius: apparentCelsius, isDaylight: isDaylight)
+    }
 }
 
 /// Apple's required attribution, as WeatherKit's `WeatherAttribution` gives it.

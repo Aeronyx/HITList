@@ -362,7 +362,7 @@ final class CompanionWeather {
         zoneAt = found == nil ? nil : now
         skySource.setTimeZone(found)
         if let reading {
-            let observed = CompanionSky(weatherCondition: reading.condition)
+            let observed = reading.sky
             sky = observed
             observedAt = reading.date
             skySource.set(observed, at: reading.date)
