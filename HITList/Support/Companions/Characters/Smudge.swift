@@ -1384,11 +1384,11 @@ extension CompanionCharacter {
                 "..dmmllllllllllmmd..",
                 "..dmllllllllllllmd..",
                 "..dmllddllllddllmd..",
-                "..dmlllllwwlllllmd..",
-                "..ddmllllllllllmdd..",
-                "..dmdmllllllllmdmd..",
-                "m..dmdmmllllmmdmd...",
-                ".mmmmddmmmmmmdd.....",
+                ".mdmlllllwwlllllmd..",
+                "m.ddmllllllllllmdd..",
+                ".mdmdmllllllllmdmd..",
+                "..mdmdmmllllmmdmd...",
+                ".....ddmmmmmmdd.....",
             ]),
             Frame(name: "sleepFluff", rows: [
                 "....................",
@@ -1461,9 +1461,9 @@ extension CompanionCharacter {
         flourishFPS: 9,
         flourishTurns: false,
         field: Posture(awake: smudgeAwake, asleep: smudgeAsleep, flourish: smudgeFlourish),
-        // On the "+", 4 pixels further in, so both its feet stand on the flat of the capsule and not over its
-        // shoulder, where the top curves away.
-        plus: Posture(awake: smudgeAwake, asleep: smudgeAsleep, flourish: smudgeFlourish, inset: 4)
+        // On the "+", 7 pixels further in: both feet on the flat of its top, which the iPhone's glass "+" keeps
+        // for only about 20 pt of its 76 (measured on the iPhone 17 simulator); it stands on the middle of the "+".
+        plus: Posture(awake: smudgeAwake, asleep: smudgeAsleep, flourish: smudgeFlourish, inset: 7)
     )
 
     /// Awake, the same in both places: two flickers (a blink, its knees knocking), the small moves its routines use,

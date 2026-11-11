@@ -167,11 +167,12 @@ final class CompanionSmudgeTests: XCTestCase {
         XCTAssertGreaterThan(firstEye("rest"), firstEye("turn3"), "and comes back from the other")
     }
 
-    /// Nothing floats (briefs 84 and 87): in every frame, whatever is on its edge row stands on the flat of the "+" (a
-    /// capsule whose top curves away at both ends) and of the Mac's field, at the perch's own offsets. On the "+" it
-    /// stands four pixels further in than the usual spot, so its right foot is not over the shoulder.
+    /// Nothing floats (briefs 84 and 87): in every frame, whatever is on its edge row stands on the flat of the "+" and
+    /// of the Mac's field, at the perch's own offsets. The iPhone's glass "+" is flat for only its middle 20 pt or so
+    /// (measured on the iPhone 17 simulator; the iPad's plain oval, a circular capsule, for 26), so on the "+" Smudge
+    /// stands seven pixels further in than the usual spot, on the middle of it.
     func testBothFeetStandOnTheFlat() {
-        XCTAssertEqual(smudge.plus.inset, 4)
+        XCTAssertEqual(smudge.plus.inset, 7)
         XCTAssertEqual(smudge.field.inset, 0)
         let p = CompanionCharacter.pointsPerPixel
         let edgeRow = smudge.seatRow - 1
@@ -197,8 +198,10 @@ final class CompanionSmudgeTests: XCTestCase {
             return worst
         }
         let size = FloatingAddButton.size
-        let plus = worstDrop(width: size.width, curve: size.height / 2, spot: .addButton)
-        XCTAssertLessThan(plus.drop, 0.25, "on the +: \(plus.frame) is \(plus.drop) pt above it (under a pixel at 3x)")
+        let glass = worstDrop(width: size.width, curve: size.width / 2 - 10, spot: .addButton)
+        XCTAssertEqual(glass.drop, 0, accuracy: 0.0001, "on the glass + (flat for its middle 20 pt): \(glass.frame)")
+        let oval = worstDrop(width: size.width, curve: size.height / 2, spot: .addButton)
+        XCTAssertEqual(oval.drop, 0, accuracy: 0.0001, "on the iPad's plain + (a circular capsule): \(oval.frame)")
         // The field's corners are continuous (7 pt): their curve reaches about 1.53 times the radius in from the end.
         let field = worstDrop(width: 200, curve: 7 * 1.53, spot: .searchField)
         XCTAssertEqual(field.drop, 0, accuracy: 0.0001, "on the field: \(field.frame)")
