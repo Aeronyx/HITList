@@ -138,6 +138,7 @@
 		45ECCAFF0C36623DD6DDD8E8 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD12153261EC9FBC68657755 /* TaskListView.swift */; };
 		469E3F8A8F4D2D2920BC9390 /* CalendarEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3A0E27F4F6C6625C35C7C7 /* CalendarEvents.swift */; };
 		46E3CA552C5BA9E3EB324B94 /* MacSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88742D1EA977BE9D0D07677 /* MacSettingsSection.swift */; };
+		47418EC2D3EA32875DA220CA /* RepeatCustomCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EE91CEE19A3849BEA15DFAB /* RepeatCustomCard.swift */; };
 		47648F9130B6E30FA0E43B63 /* WidgetRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FB0DCF8D19A45748B8C08C /* WidgetRefresh.swift */; };
 		478C1FA711477C9F2DDDC17C /* AppearanceSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */; };
 		47BD085667FD840F097A05B4 /* HolidayAccent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */; };
@@ -607,6 +608,7 @@
 		1B25094CD0CFE92ECAF30B4A /* HighlightTextView+iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+iOS.swift"; sourceTree = "<group>"; };
 		1CAAC5533A1A8433446C4478 /* RepeatMenuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatMenuCard.swift; sourceTree = "<group>"; };
 		1D47EBD278801897E89A2D06 /* SharedTasksRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksRecords.swift; sourceTree = "<group>"; };
+		1EE91CEE19A3849BEA15DFAB /* RepeatCustomCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatCustomCard.swift; sourceTree = "<group>"; };
 		1EF80B50B96770FD7E915BE6 /* IntentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentStore.swift; sourceTree = "<group>"; };
 		1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPreferences.swift; sourceTree = "<group>"; };
 		20CA43020CE7832A00C1FA46 /* WidgetUpcomingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetUpcomingTests.swift; sourceTree = "<group>"; };
@@ -1752,6 +1754,7 @@
 				92811CBB96DCB3B993F65CEF /* PickerTime.swift */,
 				315D24154A9ABD69200C164B /* PickerTimeField.swift */,
 				33CC15F6A065400DDD7DE9FE /* ReminderPickerCard.swift */,
+				1EE91CEE19A3849BEA15DFAB /* RepeatCustomCard.swift */,
 				1CAAC5533A1A8433446C4478 /* RepeatMenuCard.swift */,
 			);
 			path = Pickers;
@@ -2451,6 +2454,7 @@
 				2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */,
 				B45177102F56678B6535528C /* ReminderPickerCard.swift in Sources */,
 				8657C41CB79A77C4A9253FBE /* RemindersSettingsSection.swift in Sources */,
+				47418EC2D3EA32875DA220CA /* RepeatCustomCard.swift in Sources */,
 				AA5A642F55C1CC5B04302DBF /* RepeatMenuCard.swift in Sources */,
 				6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */,
 				3823282AA34F38C7D2FBB63C /* SchemaV1Models.swift in Sources */,

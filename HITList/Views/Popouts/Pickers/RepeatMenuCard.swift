@@ -235,7 +235,8 @@ private struct RepeatMenuRowBody: View {
     }
 }
 
-/// The Repeat chip's card (the editor's pill, the quick-add card's chip): the menu.
+/// The Repeat chip's card (the editor's pill, the quick-add card's chip): the menu, and Custom… in its place when
+/// picked (Cancel goes back to the menu; Done sets the rule, as a pick does).
 struct RepeatChipCard: View {
     var rule: RecurrenceRule?
     /// The task's day, or today when it has none.
@@ -243,7 +244,27 @@ struct RepeatChipCard: View {
     var onPick: (RecurrenceRule?) -> Void
     var onKeep: () -> Void
 
+    @State private var showsCustom = false
+    @HITEffectsSetting private var effects
+
     var body: some View {
-        RepeatMenuList(rule: rule, day: day, onPick: onPick, onKeep: onKeep, onCustom: nil)
+        Group {
+            if showsCustom {
+                RepeatCustomCard(rule: rule, day: day, onCancel: { show(custom: false) }, onDone: done)
+                    .transition(.opacity)
+            } else {
+                RepeatMenuList(rule: rule, day: day, onPick: onPick, onKeep: onKeep, onCustom: { show(custom: true) })
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private func show(custom: Bool) {
+        withAnimation(effects.animation(.enter)) { showsCustom = custom }
+    }
+
+    /// Done on the rule in force (nothing changed) keeps it as it is, as picking its ticked line does.
+    private func done(_ picked: RecurrenceRule) {
+        if let rule, picked == rule, picked.encoded == rule.encoded { onKeep() } else { onPick(picked) }
     }
 }
