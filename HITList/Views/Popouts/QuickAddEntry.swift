@@ -183,6 +183,8 @@ struct InlineAddRow: View {
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var hasContent = false
+    /// The card is fading before the row gives its height back (`retire`).
+    @State private var isRetiring = false
     #if DEBUG
     @State private var confirmingDiscard = PopoutController.debugAsksDiscard
     #else
@@ -209,6 +211,8 @@ struct InlineAddRow: View {
                 // While the card asks, a click anywhere on it means keep editing (its buttons take their own).
                 .contentShape(Rectangle())
                 .onTapGesture { if confirmingDiscard { keepEditing() } }
+                .opacity(isRetiring ? 0 : 1)
+                .allowsHitTesting(!isRetiring)
                 .padding(.vertical, HITSpacing.xs)
             } else {
                 Button(action: open) {
@@ -238,7 +242,7 @@ struct InlineAddRow: View {
         // Without this the row takes the system grey, which stands out in the darker themes.
         .slateRow()
         .onChange(of: popouts.state.isInlineOpen(key)) { _, open in
-            if !open { confirmingDiscard = false; hasContent = false }
+            if !open { confirmingDiscard = false; hasContent = false; isRetiring = false }
         }
     }
 
@@ -246,7 +250,7 @@ struct InlineAddRow: View {
     private func requestClose() {
         switch BoardInlineAdd.close(hasContent: hasContent, confirmingDiscard: confirmingDiscard) {
         case .close:
-            popouts.closeInline(key)
+            retire()
         case .askDiscard:
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
         case .discard:
@@ -260,12 +264,25 @@ struct InlineAddRow: View {
 
     private func discard() {
         popouts.discardQuickAddDraft()
-        popouts.closeInline(key)
+        retire()
     }
 
+    /// Closes the card: it fades where it is (`exit`), then the row gives its height back and "Add task" fades in.
+    /// The list sizes its rows at once, so closing straight away cut the card off in a frame (brief 75).
+    private func retire() {
+        guard !isRetiring else { return }
+        withAnimation(HITMotion.exit(reduceMotion: reduceMotion)) { isRetiring = true }
+        let key = key, popouts = popouts, back = HITMotion.enter(reduceMotion: reduceMotion)
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(HITMotion.Role.exit.arrival))
+            withAnimation(back) { popouts.closeInline(key) }
+        }
+    }
+
+    /// The row becomes the card in place, on `enter` (it swapped in one frame until brief 75); it goes back on `exit`.
     private func open() {
         #if os(macOS)
-        popouts.openQuickAdd(context, placement: .inline(key))
+        withAnimation(HITMotion.enter(reduceMotion: reduceMotion)) { popouts.openQuickAdd(context, placement: .inline(key)) }
         #else
         popouts.openQuickAdd(context)
         #endif
