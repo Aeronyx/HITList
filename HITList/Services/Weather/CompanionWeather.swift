@@ -49,7 +49,7 @@ final class CompanionWeather {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var hourly: Task<Void, Never>?
     @ObservationIgnored private var inFlight = false
-    @ObservationIgnored private let forcedOn: Bool
+    @ObservationIgnored private let askedForTheRun: Bool
 
     /// The setting (`Preferences.companionWeather`).
     private(set) var isOn: Bool
@@ -67,19 +67,21 @@ final class CompanionWeather {
     /// - Parameters:
     ///   - location, weather: made on first use only, so a run with Weather off never creates either.
     ///   - onForTheRun: on whatever the setting says, without saving it (the demo, `-seedDemoSky`).
+    ///   - askedForTheRun: as if the person had been asked (the demo, which has no prompt).
     init(location: @escaping () -> any WeatherLocationSource,
          weather: @escaping () -> any WeatherConditionSource,
          sky: CompanionSkySource,
          defaults: UserDefaults = AppGroup.defaults,
          now: @escaping () -> Date = Date.init,
-         onForTheRun: Bool = false) {
+         onForTheRun: Bool = false,
+         askedForTheRun: Bool = false) {
         makeLocation = location
         makeWeather = weather
         skySource = sky
         self.defaults = defaults
         clock = now
         isOn = onForTheRun || (defaults.object(forKey: Preferences.companionWeather) as? Bool ?? Preferences.companionWeatherDefault)
-        forcedOn = onForTheRun
+        self.askedForTheRun = onForTheRun || askedForTheRun
     }
 
     /// Showing the weather: switched on and allowed.
@@ -89,7 +91,7 @@ final class CompanionWeather {
     var companionsOn: Bool { defaults.object(forKey: Preferences.companions) as? Bool ?? true }
 
     /// Whether the person has ever switched Weather on here (and so may have been asked).
-    var hasAsked: Bool { forcedOn || defaults.bool(forKey: Preferences.companionWeatherAsked) }
+    var hasAsked: Bool { askedForTheRun || defaults.bool(forKey: Preferences.companionWeatherAsked) }
 
     private var location: any WeatherLocationSource {
         if let locationSource { return locationSource }
@@ -125,6 +127,9 @@ final class CompanionWeather {
         observers.append(center.addObserver(forName: inactive, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.resignedActive() }
         })
+        // The demo has no location or network to wait for: its sky shows at once, even in a window opened behind
+        // others (`open -g`) for screenshots. A real run waits for the app to come forward.
+        if askedForTheRun { Task { await cameForward() } }
     }
 
     private func becameActive() {
@@ -264,8 +269,16 @@ final class CompanionWeather {
 
 extension CompanionWeather {
     /// Core Location and WeatherKit on a device; the demo under `-seedDemoSky` (Debug builds).
-    static func makeShared(arguments: [String] = CommandLine.arguments) -> CompanionWeather {
-        CompanionWeather(location: { CoreLocationSource() }, weather: { WeatherKitSource() }, sky: .shared)
+    static func makeShared(arguments: [String] = CommandLine.arguments, sky: CompanionSkySource = .shared,
+                           defaults: UserDefaults = AppGroup.defaults) -> CompanionWeather {
+        #if DEBUG
+        if let demo = DemoWeatherSource.requested(arguments: arguments) {
+            return CompanionWeather(location: { demo }, weather: { demo }, sky: sky, defaults: defaults,
+                                    onForTheRun: demo.permission == .allowed, askedForTheRun: true)
+        }
+        #endif
+        return CompanionWeather(location: { CoreLocationSource() }, weather: { WeatherKitSource() }, sky: sky,
+                                defaults: defaults)
     }
 }
 
