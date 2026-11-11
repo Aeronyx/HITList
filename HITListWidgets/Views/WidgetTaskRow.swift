@@ -5,11 +5,12 @@ import HITListCore
 /// A task in a widget, as the app's `TaskRow` draws it: the priority ring in the task's colour, the title, and under it
 /// the second line, here its time (or its date, for an overdue task) and its Group at the trailing end.
 ///
-/// Brief 81: the ring is a toggle (`WidgetCompletionIntent`) that checks the task off; the title still opens it. A
-/// widget's toggle is drawn in its new state the moment it is tapped, before the intent has run (on iPhone the system
-/// may first have to launch the app), so the check turns at once; the reload that follows draws the row as a tap on its
-/// way: the app's completed look (filled check, struck title) dimmed, its check no longer a toggle, until iCloud has the
-/// completion. A short row is grown to the minimum tap target (`WidgetLook.rowFrame`).
+/// Brief 81: the ring is a button (`WidgetCompletionIntent`) that checks the task off; the title still opens it. The
+/// system dims the tapped ring at once; the reload after the intent has written the tap down draws the row as a tap on
+/// its way: the app's completed look (filled check, struck title) dimmed, its check no longer a button, until iCloud has
+/// the completion. Not a `Toggle`: on the iOS 27 Home Screen a tapped widget toggle kept the widget frozen in its dimmed
+/// look while every later timeline (checked, then gone) went unseen. A short row is grown to the minimum tap target
+/// (`WidgetLook.rowFrame`).
 struct WidgetTaskRow: View {
     /// How much of the row a widget has room for.
     enum Style {
@@ -48,19 +49,20 @@ struct WidgetTaskRow: View {
         .privacySensitive()
     }
 
-    /// The ring (or the check), its column the toggle: as tall as the row, as wide as the ring and its gap.
+    /// The ring (or the check), its column the button: as tall as the row, as wide as the ring and its gap.
     @ViewBuilder
     private func check(frame: CGFloat, inset: CGFloat) -> some View {
+        let mark = WidgetCheckRing(priority: task.priority, checked: checked)
+            .padding(.top, inset)
+            .frame(width: WidgetLook.checkColumn, height: frame, alignment: .topLeading)
+            .contentShape(Rectangle())
         // A shared task completes in the shared store (brief 62), which the widget's road doesn't reach: it opens Today.
         if let widget, !checked, !task.isShared {
-            Toggle(isOn: false, intent: WidgetCompletionIntent(task: task, action: .complete, widget: widget)) {
-                Text("Complete \(task.title)")
-            }
-            .toggleStyle(WidgetCheckToggleStyle(priority: task.priority, height: frame, inset: inset))
-            .accessibilityLabel("Complete \(task.title)")
+            Button(intent: WidgetCompletionIntent(task: task, action: .complete, widget: widget)) { mark }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Complete \(task.title)")
         } else {
-            WidgetCheckToggleStyle.mark(priority: task.priority, checked: checked, height: frame, inset: inset)
-                .accessibilityLabel(checked ? "\(task.title), checked" : task.title)
+            mark.accessibilityLabel(checked ? "\(task.title), checked" : task.title)
         }
     }
 
@@ -115,25 +117,6 @@ struct WidgetTaskRow: View {
 
     /// The gap under it in a list spaced `spacing` (`WidgetLook.gap`).
     func gap(spacing: CGFloat) -> CGFloat { WidgetLook.gap(after: contentHeight, spacing: spacing) }
-}
-
-/// A row's check as a toggle (brief 81): off, the ring; on (the moment it is tapped, and while its tap is on its way),
-/// the app's filled check. Its frame is the toggle's target: the check's column, as tall as the row.
-struct WidgetCheckToggleStyle: ToggleStyle {
-    let priority: Int
-    let height: CGFloat
-    let inset: CGFloat
-
-    func makeBody(configuration: Configuration) -> some View {
-        Self.mark(priority: priority, checked: configuration.isOn, height: height, inset: inset)
-    }
-
-    static func mark(priority: Int, checked: Bool, height: CGFloat, inset: CGFloat) -> some View {
-        WidgetCheckRing(priority: priority, checked: checked)
-            .padding(.top, inset)
-            .frame(width: WidgetLook.checkColumn, height: height, alignment: .topLeading)
-            .contentShape(Rectangle())
-    }
 }
 
 /// The ring a row starts with: an open circle in the priority's colour, as the app's rows (`TaskRowCheckbox`); checked,
