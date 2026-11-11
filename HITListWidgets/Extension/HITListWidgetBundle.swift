@@ -7,5 +7,6 @@ import WidgetKit
 struct HITListWidgetBundle: WidgetBundle {
     var body: some Widget {
         TodayWidget()
+        UpcomingWidget()
     }
 }
