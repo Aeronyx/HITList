@@ -12,7 +12,7 @@ import HITListCore
 /// (`-companionSky rain` is the companions' own override in `CompanionSkySource`; it holds the sky whatever this
 /// service says.)
 @MainActor
-final class DemoWeatherSource: WeatherLocationSource, WeatherConditionSource {
+final class DemoWeatherSource: WeatherLocationSource, WeatherConditionSource, WeatherZoneSource {
     static let skyArgument = "-seedDemoSky"
     static let accessArgument = "-seedDemoWeatherAccess"
 
@@ -65,5 +65,8 @@ final class DemoWeatherSource: WeatherLocationSource, WeatherConditionSource {
     }
 
     func credit() async throws -> WeatherCredit { .fallback }
+
+    /// No place, so no zone of its own: the device's (`-companionZone` holds one for screenshots).
+    func timeZone(at location: CLLocation) async throws -> TimeZone? { nil }
 }
 #endif

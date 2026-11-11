@@ -3,19 +3,24 @@ import CoreLocation
 import HITListCore
 @testable import HITList
 
-/// Brief 80: the sky for the companions. Off by default and silent while off; asked once; one fix and one request
-/// when the app comes forward and the last observation is over an hour old; an observation over three hours old is
-/// `unknown`; failures are quiet and wait for the next time the app comes forward. A fake clock, fake sources.
+/// Briefs 80 and 83: the sky for the companions. On by default but silent until asked; silent while off; asked once;
+/// one fix and one request when the app comes forward and the last observation is over an hour old; an observation
+/// over three hours old is `unknown`; failures are quiet and wait for the next time the app comes forward. A fake
+/// clock, fake sources.
 @MainActor
 final class WeatherServiceTests: XCTestCase {
     private var defaults: UserDefaults!
     private var suite = ""
     private var location: FakeLocation!
     private var weather: FakeWeather!
+    private var zones: FakeZone!
     private var sky: CompanionSkySource!
     private var now = Date(timeIntervalSince1970: 1_800_000_000)
     private var madeLocation = 0
     private var madeWeather = 0
+    /// What is on screen for the first launch's question: in front and clear unless a test says otherwise.
+    private var inFront = true
+    private var screenClear = true
 
     override func setUp() {
         fresh()
@@ -26,9 +31,12 @@ final class WeatherServiceTests: XCTestCase {
         defaults = UserDefaults(suiteName: suite)
         location = FakeLocation()
         weather = FakeWeather()
+        zones = FakeZone()
         sky = CompanionSkySource(arguments: UserDefaults(suiteName: "WeatherServiceTests.noArguments")!)
         madeLocation = 0
         madeWeather = 0
+        inFront = true
+        screenClear = true
     }
 
     override func tearDown() {
@@ -39,10 +47,16 @@ final class WeatherServiceTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
-    private func service(onForTheRun: Bool = false) -> CompanionWeather {
+    /// A Release build by default, so the first launch's question may be asked; the tests pass `.debug` to check the
+    /// Debug rule.
+    private func service(onForTheRun: Bool = false, build: LaunchLocationQuestion.Build = .release,
+                         arguments: [String] = ["HITList"]) -> CompanionWeather {
         CompanionWeather(location: { [unowned self] in madeLocation += 1; return location },
                          weather: { [unowned self] in madeWeather += 1; return weather },
-                         sky: sky, defaults: defaults, now: { [unowned self] in now }, onForTheRun: onForTheRun)
+                         zone: { [unowned self] in zones },
+                         sky: sky, defaults: defaults, now: { [unowned self] in now }, onForTheRun: onForTheRun,
+                         launch: .init(build: build, arguments: arguments, isTestHost: false),
+                         screen: { [unowned self] in (inFront, screenClear) })
     }
 
     private func advance(minutes: Double) { now = now.addingTimeInterval(minutes * 60) }
@@ -57,19 +71,172 @@ final class WeatherServiceTests: XCTestCase {
         return service
     }
 
-    // MARK: - Off
+    // MARK: - On by default (brief 83), silent until asked
 
-    func testOffByDefaultMakesNoLocationOrWeatherCallAtAll() async {
+    func testOnByDefaultButSilentUntilAsked() async {
         let service = service()
-        XCTAssertFalse(service.isOn)
-        XCTAssertFalse(Preferences.companionWeatherDefault)
+        XCTAssertTrue(service.isOn, "a switch nobody touched is on")
+        XCTAssertTrue(Preferences.companionWeatherDefault)
+        XCTAssertNil(defaults.object(forKey: Preferences.companionWeather), "reading the default writes nothing")
+        XCTAssertFalse(service.hasAsked)
         await service.cameForward()
         service.refreshAccess()
         await service.loadCredit()
-        XCTAssertEqual(madeLocation, 0, "Core Location is never touched while off and never asked")
-        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched while off")
+        XCTAssertEqual(madeLocation, 0, "Core Location is never touched before the question")
+        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched before the question")
         XCTAssertEqual(sky.sky, .unknown)
         XCTAssertNil(service.credit)
+    }
+
+    /// Someone updating from 0.9.2: on stays on (and was asked), off stays off, untouched reads on and is still to be
+    /// asked. Nothing is rewritten.
+    func testUpdatingFrom092KeepsWhatThePersonChose() async {
+        struct Case { let stored: Bool?; let asked: Bool; let on: Bool }
+        let cases = [Case(stored: true, asked: true, on: true),     // switched on and allowed
+                     Case(stored: false, asked: true, on: false),   // switched on, then off (or refused)
+                     Case(stored: false, asked: false, on: false),  // off without ever being asked
+                     Case(stored: nil, asked: false, on: true)]     // never touched
+        for item in cases {
+            discard()
+            fresh()
+            if let stored = item.stored { defaults.set(stored, forKey: Preferences.companionWeather) }
+            if item.asked { defaults.set(true, forKey: Preferences.companionWeatherAsked) }
+            let service = service()
+            XCTAssertEqual(service.isOn, item.on, "stored \(String(describing: item.stored))")
+            XCTAssertEqual(service.hasAsked, item.asked)
+            XCTAssertEqual(defaults.object(forKey: Preferences.companionWeather) as? Bool, item.stored, "never rewritten")
+        }
+    }
+
+    // MARK: - The first launch's question (brief 83)
+
+    func testTheFirstLaunchAsksOnceAndAllowedStartsTheWeather() async {
+        location.answer = .allowed
+        weather.reading = WeatherReading(condition: "heavyRain", date: now)
+        let flagAtPrompt = defaults
+        location.onRequest = { XCTAssertTrue(flagAtPrompt!.bool(forKey: Preferences.companionWeatherAsked),
+                                             "marked asked before the prompt, so a killed launch never asks twice") }
+        let service = service()
+        let decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .ask)
+        XCTAssertEqual(location.requests, 1)
+        XCTAssertTrue(service.hasAsked)
+        XCTAssertTrue(service.isOn)
+        XCTAssertEqual(service.access, .allowed)
+        XCTAssertEqual(location.fixes, 1)
+        XCTAssertEqual(weather.requests, 1)
+        XCTAssertEqual(sky.sky, .rain, "allowed: the weather starts")
+        XCTAssertNil(defaults.object(forKey: Preferences.companionWeather), "the switch is still the default")
+
+        let again = await service.considerAskingAtLaunch()
+        XCTAssertEqual(again, .never)
+        let nextLaunch = self.service()
+        let next = await nextLaunch.considerAskingAtLaunch()
+        XCTAssertEqual(next, .never, "the second launch asks nothing")
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testRefusedAtTheFirstLaunchTurnsWeatherOffAndNeverAsksAgain() async {
+        for answer in [WeatherAccess.denied, .restricted] {
+            discard()
+            fresh()
+            location.answer = answer
+            let service = service()
+            let decision = await service.considerAskingAtLaunch()
+            XCTAssertEqual(decision, .ask)
+            XCTAssertFalse(service.isOn)
+            XCTAssertEqual(defaults.object(forKey: Preferences.companionWeather) as? Bool, false)
+            XCTAssertEqual(service.access, answer)
+            XCTAssertEqual(location.fixes, 0)
+            XCTAssertEqual(madeWeather, 0)
+            XCTAssertEqual(sky.sky, .unknown)
+
+            // Extras still knows why, and nothing asks again by itself.
+            let later = self.service()
+            later.refreshAccess()
+            XCTAssertEqual(later.access, answer)
+            let next = await later.considerAskingAtLaunch()
+            XCTAssertEqual(next, .never)
+            XCTAssertEqual(location.requests, 1)
+        }
+    }
+
+    func testTheQuestionWaitsForAClearScreenInFront() async {
+        let service = service()
+        inFront = false
+        var decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .later, "behind another app or still launching")
+        screenClear = false
+        inFront = true
+        decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .later, "a sheet, card or tip is showing")
+        XCTAssertEqual(location.requests, 0)
+        XCTAssertFalse(service.hasAsked)
+        XCTAssertEqual(madeLocation, 0, "not even the permission is read while waiting")
+        screenClear = true
+        decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .ask)
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testADebugBuildAsksAtLaunchOnlyWhenTold() async {
+        let quiet = service(build: .debug)
+        let decision = await quiet.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        XCTAssertEqual(madeLocation, 0, "Core Location untouched")
+        XCTAssertFalse(quiet.hasAsked)
+        let told = service(build: .debug, arguments: ["HITList", "-askLocationAtLaunch", "YES"])
+        let asked = await told.considerAskingAtLaunch()
+        XCTAssertEqual(asked, .ask)
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testCompanionsOffOrWeatherOffAsksNothingAtLaunch() async {
+        defaults.set(false, forKey: Preferences.companions)
+        var decision = await service().considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        defaults.set(true, forKey: Preferences.companions)
+        defaults.set(false, forKey: Preferences.companionWeather)
+        decision = await service().considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        XCTAssertEqual(madeLocation, 0)
+    }
+
+    /// The permission was already given (the asked flag lost with the defaults, say): nothing is asked, it is taken
+    /// as the answer, and the weather starts.
+    func testAPermissionAlreadyGivenIsTakenAsTheAnswer() async {
+        location.status = .allowed
+        weather.reading = WeatherReading(condition: "snow", date: now)
+        let service = service()
+        let decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .answered)
+        XCTAssertEqual(location.requests, 0, "no prompt")
+        XCTAssertTrue(service.hasAsked)
+        XCTAssertTrue(service.isOn)
+        XCTAssertEqual(sky.sky, .snow)
+
+        discard()
+        fresh()
+        location.status = .denied
+        let refused = self.service()
+        let again = await refused.considerAskingAtLaunch()
+        XCTAssertEqual(again, .answered)
+        XCTAssertEqual(location.requests, 0)
+        XCTAssertEqual(refused.access, .denied, "Extras can say why")
+        XCTAssertEqual(sky.sky, .unknown)
+    }
+
+    func testSwitchedOffMakesNoCallAtAll() async {
+        defaults.set(false, forKey: Preferences.companionWeather)
+        defaults.set(true, forKey: Preferences.companionWeatherAsked)
+        location.status = .allowed
+        let service = service()
+        XCTAssertFalse(service.isOn)
+        await service.cameForward()
+        await service.loadCredit()
+        XCTAssertEqual(location.fixes, 0)
+        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched while off")
+        XCTAssertEqual(sky.sky, .unknown)
     }
 
     func testSwitchingOffClearsTheSkyAndStopsEveryCall() async {
@@ -263,6 +430,108 @@ final class WeatherServiceTests: XCTestCase {
         XCTAssertTrue(line.contains("WeatherDaemon.WDSJWTAuthenticatorServiceListener.Errors 2"), line)
     }
 
+    // MARK: - The place's time zone (brief 83)
+
+    func testEachFixGivesTheCompanionsClockThePlacesZone() async {
+        let tokyo = TimeZone(identifier: "Asia/Tokyo")!
+        zones.answer = tokyo
+        let service = await onWithRain()
+        XCTAssertEqual(zones.requests, 1, "one geocode for the fix")
+        XCTAssertEqual(service.zone, tokyo)
+        XCTAssertEqual(sky.timeZone, tokyo)
+        XCTAssertEqual(sky.zone, tokyo, "the companions keep Tokyo's hours")
+        XCTAssertEqual(zones.lastLocation?.coordinate.latitude, 51.5, "the same approximate fix the weather used")
+    }
+
+    func testOneGeocodePerFixAndNoneWithoutOne() async {
+        let service = await onWithRain()
+        advance(minutes: 59)
+        await service.cameForward()
+        XCTAssertEqual(zones.requests, 1, "no fix within the hour, no geocode")
+        advance(minutes: 2)
+        await service.cameForward()
+        XCTAssertEqual(location.fixes, 2)
+        XCTAssertEqual(zones.requests, 2)
+
+        location.error = FakeError.offline
+        advance(minutes: 61)
+        await service.cameForward()
+        XCTAssertEqual(zones.requests, 2, "no fix: nothing to geocode")
+    }
+
+    func testAZoneThatCannotBeFoundIsNilAndTheDevicesZoneRules() async {
+        zones.answer = TimeZone(identifier: "Asia/Tokyo")!
+        let service = await onWithRain()
+        XCTAssertNotNil(sky.timeZone)
+        zones.error = FakeError.offline
+        advance(minutes: 61)
+        await service.cameForward()
+        XCTAssertNil(service.zone)
+        XCTAssertNil(sky.timeZone, "unknown is nil, never a guess")
+        XCTAssertEqual(sky.zone, .current)
+        XCTAssertEqual(sky.sky, .rain, "the sky does not depend on the zone")
+    }
+
+    func testTheZoneArrivesEvenWhenTheWeatherFails() async {
+        zones.answer = TimeZone(identifier: "Europe/Paris")!
+        location.answer = .allowed
+        weather.error = FakeError.noCapability
+        let service = service()
+        await service.setOn(true)
+        XCTAssertEqual(sky.sky, .unknown)
+        XCTAssertEqual(sky.timeZone, zones.answer)
+        // Three hours on with no fix since: the zone is stale too.
+        location.error = FakeError.offline
+        advance(minutes: 181)
+        await service.cameForward()
+        XCTAssertNil(sky.timeZone)
+    }
+
+    func testTheZoneIsClearedWhenWeatherGoesOffIsRefusedOrGoesStale() async {
+        zones.answer = TimeZone(identifier: "America/Denver")!
+        var service = await onWithRain()
+        await service.setOn(false)
+        XCTAssertNil(sky.timeZone, "switched off")
+        XCTAssertNil(service.zone)
+
+        service = await onWithRain()
+        XCTAssertNotNil(sky.timeZone)
+        location.status = .denied
+        advance(minutes: 5)
+        await service.cameForward()
+        XCTAssertNil(sky.timeZone, "permission withdrawn")
+
+        location.status = .allowed
+        service = await onWithRain()
+        XCTAssertNotNil(sky.timeZone)
+        defaults.set(false, forKey: Preferences.companions)
+        await service.companionsChanged()
+        XCTAssertNil(sky.timeZone, "Companions off")
+
+        defaults.set(true, forKey: Preferences.companions)
+        service = await onWithRain()
+        XCTAssertNotNil(sky.timeZone)
+        weather.error = FakeError.offline
+        zones.error = FakeError.offline
+        advance(minutes: 181)
+        await service.cameForward()
+        XCTAssertNil(sky.timeZone, "stale with the sky")
+        XCTAssertEqual(sky.sky, .unknown)
+    }
+
+    func testAZoneThatArrivesAfterSwitchingOffIsNotApplied() async {
+        zones.answer = TimeZone(identifier: "Asia/Tokyo")!
+        location.answer = .allowed
+        weather.holds = true
+        let service = service()
+        async let on = service.setOn(true)
+        for _ in 0..<100 where weather.held == nil { await Task.yield() }
+        await service.setOn(false)
+        weather.release()
+        _ = await on
+        XCTAssertNil(sky.timeZone)
+    }
+
     // MARK: - Attribution
 
     func testAttributionIsAskedForOnlyWhileOn() async {
@@ -290,6 +559,8 @@ private final class FakeLocation: WeatherLocationSource {
     /// What the prompt is answered with.
     var answer: WeatherAccess = .allowed
     var error: Error?
+    /// Called as the prompt would show.
+    var onRequest: () -> Void = {}
     private(set) var requests = 0
     private(set) var fixes = 0
     private(set) var accessReads = 0
@@ -301,6 +572,7 @@ private final class FakeLocation: WeatherLocationSource {
 
     func requestAccess() async -> WeatherAccess {
         requests += 1
+        onRequest()
         status = answer
         return status
     }
@@ -309,6 +581,21 @@ private final class FakeLocation: WeatherLocationSource {
         fixes += 1
         if let error { throw error }
         return CLLocation(latitude: 51.5, longitude: -0.12)
+    }
+}
+
+@MainActor
+private final class FakeZone: WeatherZoneSource {
+    var answer: TimeZone? = TimeZone(identifier: "Europe/London")
+    var error: Error?
+    private(set) var requests = 0
+    private(set) var lastLocation: CLLocation?
+
+    func timeZone(at location: CLLocation) async throws -> TimeZone? {
+        requests += 1
+        lastLocation = location
+        if let error { throw error }
+        return answer
     }
 }
 
