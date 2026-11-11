@@ -13,6 +13,9 @@ import AppKit
 final class ShareViewController: UIViewController {
     private let model = ShareSheetModel()
 
+    // iOS presents a share extension in a sheet of its own and ignores the controller's `modalPresentationStyle`
+    // (`.overFullScreen` was tried on the iOS 27 simulator, 2026-11-11): the card's backdrop fills that sheet.
+
     override func viewDidLoad() {
         super.viewDidLoad()
         ShareFonts.register()

@@ -80,6 +80,10 @@ final class ShareInbox {
         inbox.observe(bellSuffix: suffix)
         inbox.writeContext()
         inbox.drain()
+        #if DEBUG && os(macOS)
+        ShareDebug.presentIfRequested()
+        ShareDebug.writeAsTheExtensionWouldIfRequested(outbox: outbox)
+        #endif
     }
 
     private func observe(bellSuffix: String?) {
