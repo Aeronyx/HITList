@@ -237,22 +237,6 @@ private struct WeatherSettingsRows: View {
     }
 }
 
-/// The Weather row's words, apart so tests can read them.
-enum WeatherSettingsText {
-    static let about = "Your companion dresses for the weather where you are."
-
-    static func subtitle(for access: WeatherAccess) -> String {
-        switch access {
-        case .denied: "HITList isn't allowed to use your location. Allow it below."
-        case .restricted: "Location is restricted on this device."
-        case .notDetermined, .allowed: about
-        }
-    }
-
-    /// Where the switch is, under the system's settings (the row above it opens them).
-    static let settingsPath = "Privacy & Security → Location Services → HITList"
-}
-
 /// Apple's attribution for the weather (WeatherKit requires it wherever its data is used): the Apple Weather mark
 /// and a link to the data sources, in the footer's small secondary type. The mark is Apple's own image for a dark
 /// background, loaded from Apple while Weather is on; until it arrives (or if it never does) the service's name.

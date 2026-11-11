@@ -66,6 +66,37 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 19 (2026-11-11; briefs 82–86 in parallel, all five at once; `ROUND-19.md` says why)
+0.9.2 (23) is released; this round is **0.9.3**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is asleep while you work: nobody answers a
+question or a system dialog tonight, so decide by your brief and George's principles below, and write down what you
+decided. **No schema change this round**: a fix that needs one stops and reports.
+- Ownership: 82 `time-zones` (xhigh) core's date, ordering and grouping files, a new anchor, `Services/Dates/*`, the
+  date-writing lines of `TaskActions`, the "calendar changed" triggers, the Shared Tasks and JSON date lines. 83
+  `location-weather` (high) `Services/Weather/*` (with `WeatherSettingsText.swift`), the weather's start-up lines in
+  `HITListApp`, the location purpose string in `project.yml`, the privacy page. 84 `companion-routines` (max)
+  `Support/Companions/*` and `Views/Companions/*` except what 85 and the supervisor own, `Nod`, `Quill`, `Hush`. 85
+  `new-companions` (max) new character files, `Pip.swift` (deleted), `CompanionCast.swift`, the lines that name Pip
+  in the companions' tests. 86 `settings-tidy` (xhigh) `SettingsView`, `Views/Settings/*`, `Settings/Mac/*`,
+  `DelightSettingsSection`, a new `ThemeCompanion.swift`, the Settings tests and the Settings lines of UI tests.
+  Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's
+  New pin, the models' shape, `CompanionSky.swift` and `CompanionSkySource.swift` (the supervisor's: where briefs 83
+  and 84 meet; it now carries the place's time zone as well as the sky).
+- **A Debug build never asks for the location by itself** (brief 83 keeps it so): if a system dialog appears on the
+  Mac anyway, leave it, say so in the report and carry on with what does not need it.
+- **Five sessions build at once.** Use your own derived data folder inside your worktree (`build.noindex/…`), your
+  own simulator (`HITList-NN`), your own side store (`HITLIST_STORE_SUFFIX=sNN`), and expect builds to be slow.
+  Delete the simulator and quit your Debug Mac app when you finish.
+- Everything in Round 18's and Round 17's blocks below still holds: the CI runner's older Swift (keep mixed
+  `Int`/`Double`/`CGFloat` expressions short, one step per line; guard 27-only symbols with `#if compiler(>=6.4)`),
+  data resilience over speed, whatever moves by itself is rare, no session answers a system dialog or changes a
+  system permission, UI tests in a file of your own on a fresh simulator, `dev/ROADMAP.md` is the supervisor's,
+  touch only your own lines of `project.yml`, leave the Debug Mac app's window as you found it, unregister your
+  Debug build's widget extension (`pluginkit -r`) when you finish.
+- **Do not run a test that reads the wall clock without injecting it** (round 18: a UI test failed only after
+  midnight). Tonight's sessions run across midnight and across a day boundary: a test that passes at 23:00 and
+  fails at 01:00 is a bug in the test.
+
 ## Round 18 (2026-11-11; briefs 79–81 in parallel, all three at once; `ROUND-18.md` says why)
 0.9.1 (22) is released; this round is **0.9.2**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. **No schema change this round**: a fix that needs one
