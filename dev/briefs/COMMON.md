@@ -315,6 +315,13 @@ After the round:
   tasks through `TaskActions.create`). On the Mac it must be switched on once in System Settings → General → Login
   Items & Extensions → Sharing; Safari's real Share menu there was never seen. `TEST_RUNNER_HITLIST_SHARE=1` runs
   its UI test.
+- **Accessibility**: a task row is one VoiceOver stop with completing as an action (`TaskRowSpeech`; `-voiceOverRows
+  YES` shows rows that way to tests), the iPhone's tabs are a tab bar, a switch says off or on, chips say what they
+  are, an open card is read alone, the Undo toast is announced; the Mac's keyboard reaches the editor; the toolbar's
+  sync bolt and its pill are one toolbar item so the whole bolt takes a click. `AccessibilityAuditUITests` runs the
+  system's audit on every screen, on demand (`TEST_RUNNER_HITLIST_AUDIT=1`): at the merge it still failed on text
+  sizes in the editor and unlabelled pieces of the Flipboard's cards, and session 94 was still settling its
+  exclusions (anything it committed after is on `claude/accessibility-ab4778`). Debug: `-dumpAccessibility YES`.
 - **Left for George** (the sweep's `FINDINGS.md`, with pictures): the large title 4 pt right of its rows on the Pro
   Max and the Duo, the system date picker in Review Inbox and Upcoming's swipe, day headers written four ways,
   "Done" with three looks, empty states in four styles, the Mac Settings page's name shown twice, the companion on
