@@ -140,12 +140,16 @@ final class CalendarEventsUITests: XCTestCase {
         _ = button.wait(for: \.isSelected, toEqual: true, timeout: 5)
     }
 
+    /// Settings → General, where Calendar events lives (brief 86: a page of Settings' first screen).
     private func openSettings() {
         tab("inbox")
         app.buttons["browseButton"].firstMatch.tap()
         let gear = app.buttons["settingsButton"].firstMatch
         XCTAssertTrue(gear.waitForExistence(timeout: 5))
         gear.tap()
+        let general = app.descendants(matching: .any)["settings-page-general"].firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 5))
+        general.tap()
     }
 
     private func closeSettings() {

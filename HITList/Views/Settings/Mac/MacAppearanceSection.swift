@@ -1,9 +1,9 @@
 import SwiftUI
 import HITListCore
 
-/// Settings → Appearance on the Mac: the themes as 56 pt swatches (ringed in their own accent) in a grid
-/// that wraps at narrow widths, a live preview card, Reduce effects and Compact rows. Picking a theme
-/// applies at once to the whole window (`ThemeStore`); hovering a swatch previews it in the card first.
+/// Settings → Appearance on the Mac: the themes as 64 pt swatches (ringed in their own accent, each with its own
+/// companion) in two rows of four, a live preview card, Reduce effects and Compact rows. Picking a theme applies at
+/// once to the whole window (`ThemeStore`); hovering a swatch previews it in the card first.
 struct MacAppearanceSection: View {
     @AppStorage(Preferences.reduceEffects, store: AppGroup.defaults) private var reduceEffects = false
     @AppStorage(Preferences.compactRows, store: AppGroup.defaults) private var compactRows = Preferences.compactRowsDefault
@@ -11,27 +11,20 @@ struct MacAppearanceSection: View {
     @State private var hovered: ThemePalette?
     private let store = ThemeStore.shared
 
-    static let swatchSide: CGFloat = 56
+    static let swatchSide: CGFloat = 64
 
     var body: some View {
         let shown = hovered ?? store.palette
         HITGroup("Theme") {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: Self.swatchSide + 18), spacing: HITSpacing.s)],
-                      alignment: .leading, spacing: HITSpacing.m) {
-                ForEach(ThemePalette.all) { palette in
-                    ThemeSwatchButton(palette: palette, isSelected: palette.id == store.palette.id, side: Self.swatchSide) {
-                        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
-                    }
-                    .onHover { inside in
-                        withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) {
-                            if inside { hovered = palette } else if hovered == palette { hovered = nil }
-                        }
-                    }
+            ThemeSwatchRow(selection: store.palette, side: Self.swatchSide, onHover: { palette, inside in
+                withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) {
+                    if inside { hovered = palette } else if hovered == palette { hovered = nil }
                 }
+            }) { palette in
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
             }
             .padding(.horizontal, HITSpacing.l)
-            .padding(.vertical, HITSpacing.m)
-            .accessibilityElement(children: .contain)
+            .padding(.bottom, HITSpacing.m)
 
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 Text(hovered == nil || hovered == store.palette ? "Preview · \(shown.name)" : "Preview · \(shown.name) (click to use)")
@@ -49,7 +42,7 @@ struct MacAppearanceSection: View {
                 .toggleStyle(.hit)
                 .hitRowPadding()
             Toggle(isOn: $compactRows) {
-                HITMenuRowLabel("Compact rows", subtitle: "Tighter task rows, more on screen. Arrives in the task lists with the next row update.",
+                HITMenuRowLabel("Compact rows", subtitle: "Tighter task rows, more on screen",
                                 systemImage: "rectangle.compress.vertical")
             }
             .toggleStyle(.hit)
@@ -188,8 +181,8 @@ struct ThemePreviewCard: View {
 }
 
 extension Preferences {
-    /// Tighter task rows. Stored by Settings → Appearance on the Mac; `TaskRow` doesn't read it yet
-    /// (pending: TaskRow had no owner in round 6). The preview card already shows the compact spacing.
+    /// Tighter task rows. Stored by Settings → Appearance on the Mac; the task lists read it (`TaskRow`,
+    /// `ListMetrics`), and the preview card shows the compact spacing.
     static let compactRows = "pref.compactRows"
     static let compactRowsDefault = false
 }
