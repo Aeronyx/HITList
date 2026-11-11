@@ -81,9 +81,9 @@ final class SweepPolishUITests: XCTestCase {
         XCUIDevice.shared.orientation = .landscapeLeft
         defer { XCUIDevice.shared.orientation = .portrait }
         app.launch()
+        try XCTSkipIf(app.buttons["tab-today"].waitForExistence(timeout: 15), "the iPhone's tabs: no sidebar")
         let inbox = app.staticTexts["Inbox"].firstMatch
         XCTAssertTrue(inbox.waitForExistence(timeout: 30), "the sidebar")
-        try XCTSkipIf(app.buttons["tab-today"].exists, "the iPhone's tabs: no sidebar")
         pause(1)
         // The sidebar's row, read before the tap (after it, "Today" is also the list's large title): its cell when the
         // sidebar exposes one, else the band round its title across the sidebar's column.
