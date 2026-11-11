@@ -302,12 +302,13 @@ struct TaskListView: View {
                             showSharing = true
                         }
                     } else if groups.isEmpty, events.isEmpty, isCompact {
-                        // iPhone: one quiet grey line; the "+" is right there.
+                        // iPhone: one quiet grey line; the "+" is right there. It starts where the rows and headers
+                        // do, under the title.
                         Text(emptyTitle)
                             .font(HITType.subheadline)
                             .foregroundStyle(Theme.secondaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, HITSpacing.xl)
+                            .padding(.horizontal, ListMetrics.horizontalInset)
                             .padding(.top, HITSpacing.l)
                             .frame(maxHeight: .infinity, alignment: .top)
                     } else if groups.isEmpty, events.isEmpty {
