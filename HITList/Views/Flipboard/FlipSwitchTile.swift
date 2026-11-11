@@ -38,6 +38,8 @@ struct FlipSwitchTile: View {
     var onMove: (SwitchDrop.Target) -> Void = { _ in }
     /// A drag of this switch is beginning (the board lights only the places that would take it).
     var onDragStart: () -> Void = {}
+    /// The drag has ended, dropped or not (iOS 27 and macOS 26, `SwitchDragEndWatch`): nothing stays lit.
+    var onDragEnd: () -> Void = {}
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -105,6 +107,7 @@ struct FlipSwitchTile: View {
             onDragStart()
             return SwitchDrag.provider(for: task)
         }
+        .modifier(SwitchDragEndWatch(onEnd: onDragEnd))
         .contextMenu { menuButtons }
         #if os(macOS)
         .popover(isPresented: $showMenuPanel, arrowEdge: .trailing) {

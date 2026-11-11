@@ -298,7 +298,14 @@ struct FlipboardView: View {
                            onDuplicate: { openCard(.duplicate(task)) },
                            moves: SwitchDrop.moves(for: task, boards: boards),
                            onMove: { drop(task.id, onto: $0) },
-                           onDragStart: { dragging = DraggedSwitch(id: task.id, board: boardID(of: task)) })
+                           onDragStart: {
+                               dropTarget = nil
+                               dragging = DraggedSwitch(id: task.id, board: boardID(of: task))
+                           },
+                           onDragEnd: {
+                               dragging = nil
+                               dropTarget = nil
+                           })
                 .hitTip(tip)
                 .modifier(SwitchLanding(mark: landing?.id == task.id ? landing : nil))
                 .allowsHitTesting(!hasInlineCard)

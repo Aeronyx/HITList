@@ -134,3 +134,27 @@ struct SwitchDropHighlight: View {
             .accessibilityHidden(true)
     }
 }
+
+/// Where the system tells a drag's source that its session ended (iOS 27, macOS 26), the board is told, so a board
+/// lit by a drag that ended without a drop never stays lit (seen once under a slow, synthesized drag: no exit and no
+/// drop came). Elsewhere, nothing: the next drag clears it.
+struct SwitchDragEndWatch: ViewModifier {
+    var onEnd: () -> Void
+
+    func body(content: Content) -> some View {
+        #if compiler(>=6.4)
+        if #available(iOS 27, macOS 26, *) {
+            content.onDragSessionUpdated { session in
+                switch session.phase {
+                case .ended(_), .dataTransferCompleted: onEnd()
+                default: break
+                }
+            }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
+}
