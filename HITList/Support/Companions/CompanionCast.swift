@@ -3,7 +3,7 @@ import Foundation
 extension CompanionCharacter {
     /// Every companion drawn so far.
     static let all: [CompanionCharacter] = [CompanionCharacter.nod, CompanionCharacter.quill, CompanionCharacter.hush,
-                                            CompanionCharacter.pip]
+                                            CompanionCharacter.pip, CompanionCharacter.smudge]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }
@@ -15,6 +15,7 @@ enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
         "slate": "nod",
+        "graphite": "smudge",
         "midnight": "quill",
         // Its own ears keep it warm, and its nose is cold: Nord's ice-blue accent (brief 79).
         "nord": "hush",
