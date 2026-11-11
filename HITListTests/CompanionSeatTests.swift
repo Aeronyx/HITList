@@ -47,7 +47,7 @@ final class CompanionSeatTests: XCTestCase {
     static let hostTop: CGFloat = 44
 
     static func hostSize(_ host: Host) -> CGSize {
-        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: SidebarSearchField.height)
+        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: SeatFieldHost.height)
     }
 
     static func sceneSize(_ host: Host) -> CGSize {
@@ -110,7 +110,7 @@ final class CompanionSeatTests: XCTestCase {
                     Capsule(style: .continuous).fill(Color(hex: palette.hex.accent))
                 }
             case .searchField:
-                let shape = RoundedRectangle(cornerRadius: SidebarSearchField.radius, style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: SeatFieldHost.radius, style: .continuous)
                 shape.fill(Color(hex: palette.hex.elevated))
                     .overlay(shape.strokeBorder(Color(hex: palette.hex.separator).opacity(0.5), lineWidth: 1))
             }
@@ -484,4 +484,16 @@ final class CompanionSeatTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, nil)
         XCTAssertTrue(CGImageDestinationFinalize(destination))
     }
+}
+
+/// The Mac's search field (`SidebarSearchField`) is compiled only on the Mac; the iOS bundle draws the same host from
+/// the same two numbers, so the check runs on both.
+private enum SeatFieldHost {
+    #if os(macOS)
+    static let height = SidebarSearchField.height
+    static let radius = SidebarSearchField.radius
+    #else
+    static let height: CGFloat = 28
+    static let radius: CGFloat = 7
+    #endif
 }
