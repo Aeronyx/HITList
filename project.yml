@@ -35,6 +35,9 @@ targets:
           # platforms load by PostScript name. The variable files, the other cuts and Noto Sans, never in the
           # bundle, left the repo in 0.7.0 (git history has them: fonts.google.com/specimen/Inter).
           - "**/.DS_Store"
+      # The widgets' views (brief 74) are compiled into the app too, so the hosted tests render every widget
+      # offscreen at its exact size (`HITListTests/Widget*Tests.swift`). The extension's own files stay out.
+      - path: HITListWidgets/Views
     scheme:
       testTargets: [HITListTests]
     dependencies:
