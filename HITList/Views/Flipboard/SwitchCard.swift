@@ -277,6 +277,8 @@ struct SwitchCard: View {
         HStack(spacing: HITSpacing.s) {
             SwitchTimeChip(time: read.time) { time in
                 withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.setTime(time, parser) }
+            } onStart: {
+                nameFocused = false
             } onFinish: {
                 nameFocused = true
             }

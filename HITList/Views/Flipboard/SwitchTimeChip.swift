@@ -14,6 +14,8 @@ struct SwitchTimeChip: View {
     var speechName = "Time"
     /// The time typed (nil: taken away).
     var onCommit: (PickerTime?) -> Void
+    /// The field opened: the card's name lets go of the keyboard (its focus binding would take it straight back).
+    var onStart: () -> Void = {}
     /// The field closed after Return: the card gives its name the keyboard back.
     var onFinish: () -> Void = {}
 
@@ -112,6 +114,7 @@ struct SwitchTimeChip: View {
     private func startEditing() {
         text = ""
         isInvalid = false
+        onStart()
         isEditing = true
     }
 
