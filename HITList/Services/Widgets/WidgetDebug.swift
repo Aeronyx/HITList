@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SwiftData
 import HITListCore
 
 /// Debug only (brief 81): what lets a session see a widget's tap go all the way through on its own simulator or Mac
@@ -38,6 +39,38 @@ enum WidgetDebug {
         }
         let seconds = defaults.double(forKey: exportDelayKey)
         return seconds > 0 ? seconds : nil
+    }
+}
+
+extension WidgetDebug {
+    /// `-widgetTapProbe` (a side store only): three seconds after launch, writes a tap on Today's first row into the
+    /// outbox as the widget extension would, and nothing else (no drain), so the app picks it up only when something
+    /// rings: on the Mac, `notifyutil -p <WidgetOutboxBell name>` from a shell, the extension's own Darwin notification.
+    /// What a session can show of the Mac's road without a widget on the desktop.
+    @MainActor
+    static func probeTapIfRequested(outbox: WidgetOutbox, container: ModelContainer,
+                                    arguments: [String] = ProcessInfo.processInfo.arguments,
+                                    suffix: String? = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"]) {
+        guard arguments.contains("-widgetTapProbe"), let suffix, !suffix.isEmpty,
+              suffix != SyncStoreGuard.developmentSuffix else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            let now = Date()
+            let open = (try? container.mainContext.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted })))?
+                .filter { !$0.isSubtask } ?? []
+            let today = TaskOrdering.today(open, now: now)
+            guard let task = (today.overdue + today.today).first(where: { !Flipboard.isMember($0) }),
+                  var request = WidgetCompletionIntent(task: WidgetSnapshotBuilder.task(task, weekStart: Preferences.weekStartWeekday()),
+                                                       action: .complete, widget: "today").request(at: now)
+            else { return }
+            request.recordedBy = "the Debug probe in \(WidgetIntentRoad.processDescription), standing in for the extension"
+            do {
+                try outbox.record(request)
+                CloudSyncMonitor.shared.write(.note, "Widget: Debug probe wrote a tap on ‘\(task.title)’ into the outbox, as the extension would; it waits for the bell (\(WidgetOutboxBell.name(suffix: suffix)))")
+            } catch {
+                CloudSyncMonitor.shared.write(.note, "Widget: Debug probe couldn't write its tap: \(error.localizedDescription)", level: .error)
+            }
+        }
     }
 }
 

@@ -118,6 +118,9 @@ final class WidgetCompletionCenter {
         shared = center
         center.observe(bellSuffix: suffix)
         center.drain()
+        #if DEBUG
+        WidgetDebug.probeTapIfRequested(outbox: outbox, container: container)
+        #endif
     }
 
     private func observe(bellSuffix: String?) {
