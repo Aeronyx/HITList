@@ -57,6 +57,10 @@ final class WidgetCompletionCenter {
     private let log: (String, SyncLogEntry.Level) -> Void
     /// iOS: keeps the app awake in the background while a tap waits for its export (`UIApplication` background task).
     var holdAwake: (_ waiting: Bool) -> Void = { _ in }
+    /// Debug (`-widgetExportDelay`): drain again this long after a pass that left a tap waiting, since no export event
+    /// will come to do it.
+    var recheck: Duration?
+    private var recheckTask: Task<Void, Never>?
 
     private(set) var ledger: WidgetLedger
     /// Requests already logged as waiting (a store that hasn't imported), so a drain on every event doesn't repeat it.
@@ -92,13 +96,24 @@ final class WidgetCompletionCenter {
         let suffix = ProcessInfo.processInfo.environment["HITLIST_STORE_SUFFIX"]
         guard let outbox = WidgetOutbox(container: group, suffix: suffix) else { return }
         let monitor = CloudSyncMonitor.shared
+        var sync: WidgetSyncFacts = monitor
+        #if DEBUG
+        let delay = WidgetDebug.exportDelay()
+        if let delay { sync = DelayedExports(delay: delay) }
+        #endif
         let center = WidgetCompletionCenter(
             outbox: outbox, ledgerURL: group.appending(path: WidgetLedger.fileName(suffix: suffix)), container: container,
-            sync: monitor,
+            sync: sync,
             snapshot: { _ in WidgetSnapshotWriter.shared.writeNow() },
             log: { line, level in monitor.write(.note, line, level: level) })
         #if os(iOS)
         center.holdAwake = BackgroundHold.shared.set
+        #endif
+        #if DEBUG
+        if let delay {
+            center.recheck = .seconds(delay + 0.3)
+            monitor.write(.note, "Widget: Debug, a pretend export finishes \(delay) s after each tap's save (-widgetExportDelay)")
+        }
         #endif
         shared = center
         center.observe(bellSuffix: suffix)
@@ -225,6 +240,7 @@ final class WidgetCompletionCenter {
                 break
             }
         }
+        scheduleRecheck()
         guard changed || !leaving.isEmpty else { return }
         ledger.prune(now: now)
         saveLedger()
@@ -236,6 +252,15 @@ final class WidgetCompletionCenter {
             wake(id)
         }
         holdAwake(!ledger.live.isEmpty)
+    }
+
+    private func scheduleRecheck() {
+        guard let recheck, recheckTask == nil, ledger.live.contains(where: { $0.stage == .waiting }) else { return }
+        recheckTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: recheck)
+            self?.recheckTask = nil
+            self?.drain()
+        }
     }
 
     private func task(_ id: UUID) -> TaskItem? {

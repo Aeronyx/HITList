@@ -15,6 +15,9 @@ struct HITListApp: App {
     #endif
 
     init() {
+        #if DEBUG
+        WidgetDebug.adoptBakedSideStore() // brief 81: a launch for a widget's tap opens the session's side store, sync off
+        #endif
         HITFont.installPlatformAppearance()
         // Unit tests run hosted in the app; keep them off the real store and CloudKit.
         isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
