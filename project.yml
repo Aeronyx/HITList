@@ -44,6 +44,8 @@ targets:
       - package: HITListCore
       # The widgets (brief 74): HITList.app/PlugIns/HITListWidgets.appex (Contents/PlugIns on the Mac).
       - target: HITListWidgets
+      # "Add to HITList" from the share sheet (brief 90): HITList.app/PlugIns/HITListShare.appex (Contents/PlugIns on the Mac).
+      - target: HITListShare
       # Linked explicitly on purpose: on macOS 26 the App Sandbox only grants cloudd access when
       # CloudKit.framework is linked, and SwiftData alone loads it lazily (Apple forums 835400).
       - sdk: CloudKit.framework
@@ -194,6 +196,71 @@ targets:
         "HITLIST_APP_GROUP[sdk=macosx*]": UC8N98H3RT.com.trammells.hitlist
         # Debug only: a build made with HITLIST_WIDGET_SUFFIX=<name> reads that side store's snapshot
         # (HITLIST_STORE_SUFFIX=<name>), so a session sees its own demo week in real widgets. Release ignores it.
+        HITLIST_WIDGET_SUFFIX: ""
+  # "Add to HITList" from any app's share sheet (brief 90): a web page (its address and title), a link, selected or
+  # plain text; one item, never images or files (the activation rule in its Info.plist). Like the widgets it never
+  # opens the store (it mirrors to CloudKit; a second process must not touch it): Add writes a request into the App
+  # Group's share outbox (HITListCore's ShareOutbox) and rings the app, which makes the task by quick add's road
+  # (`Services/Share/ShareInbox`). It reads only the context the app writes beside it (theme, week start, Groups and
+  # labels by name). Sandboxed on both platforms, no network, no iCloud. The design system's files are compiled in, not
+  # copied. Its version is the app's, through $(…) in its Info.plist; it sets none of its own.
+  HITListShare:
+    type: app-extension
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - path: HITListShare
+        excludes:
+          - "*.entitlements"
+          - "Info.plist"
+          - "*.js"
+          - "**/.DS_Store"
+      # Safari on iPhone and iPad runs it on the page to hand over its address, title and selected text.
+      - path: HITListShare/ShareJavaScript.js
+        buildPhase: resources
+      # Shared with the app, compiled into both (never copied): the palettes, Inter and the type roles, the due and
+      # priority colours, the buttons and the field, and the share road (outbox, ledger, bell).
+      - HITList/Support/Theme.swift
+      - HITList/Support/Preferences.swift
+      - HITList/Support/Formatting.swift
+      - HITList/Support/DesignSystem/HITTokens.swift
+      - HITList/Support/DesignSystem/HITButtonStyle.swift
+      - HITList/Support/DesignSystem/HITField.swift
+      - HITList/Services/Share/ShareBell.swift
+      - path: HITList/Resources/Fonts/Inter/static
+        buildPhase: resources
+      # The app's privacy manifest: the extension reads its own UserDefaults (the compiled-in ThemeStore), a
+      # required-reason API, and App Store Connect looks for a manifest in each bundle.
+      - path: HITList/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - package: HITListCore
+    entitlements:
+      # iOS form. macOS uses the team-prefixed group in HITListShare-macOS.entitlements, as the app and the widgets do
+      # (see AppGroup.swift for why). The outbox, the ledger and the context are all it touches.
+      path: HITListShare/HITListShare.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups: [group.com.trammells.hitlist]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.trammells.hitlist.share
+        PRODUCT_NAME: HITListShare
+        INFOPLIST_FILE: HITListShare/Info.plist
+        "CODE_SIGN_ENTITLEMENTS[sdk=macosx*]": HITListShare/HITListShare-macOS.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
+        ENABLE_HARDENED_RUNTIME: YES
+        DEAD_CODE_STRIPPING: YES
+        SKIP_INSTALL: YES
+        # The group it writes into, in its Info.plist (`HITListAppGroup`); ShareExtensionTests checks it equals the
+        # app's `AppGroup.id` on each platform.
+        HITLIST_APP_GROUP: group.com.trammells.hitlist
+        "HITLIST_APP_GROUP[sdk=macosx*]": UC8N98H3RT.com.trammells.hitlist
+        # Debug only, as the widgets': a build made with HITLIST_WIDGET_SUFFIX=<name> writes into that side store's outbox
+        # (HITLIST_STORE_SUFFIX=<name>). A Debug build without one writes the Development store's, as a Debug app opens it.
+        # Release ignores it and writes the real store's.
         HITLIST_WIDGET_SUFFIX: ""
   # The Claude connector's MCP server (brief 43): a sandboxed command-line tool that Claude Desktop and
   # Claude Code start over stdio. It holds only the app group and talks to the running app through the
