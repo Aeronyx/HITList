@@ -437,6 +437,7 @@ struct TaskListView: View {
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sharingSheet(isPresented: $showSharing)
         .onReceive(clock) { now = $0 }
+        .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day regroups Today and Overdue at once
         .onAppear {
             CompletionFeedback.shared.prepare()
             sharedRows.start()
