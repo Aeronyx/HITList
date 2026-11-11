@@ -33,9 +33,9 @@ final class TimeZoneAuditTests: XCTestCase {
         return [parts.year!, parts.month!, parts.day!]
     }
 
-    /// What the store keeps for a date with no time written in `written`'s zone. Before brief 82: the value as the
-    /// writer made it, a midnight in the writer's zone.
-    func stored(_ value: Date, written: Calendar) -> Date { value }
+    /// What the store keeps for a date with no time written in `written`'s zone: its day's anchor (`DayAnchor`), as the
+    /// app's one place rewrites it when the context saves. Before brief 82 it kept the writer's local midnight.
+    func stored(_ value: Date, written: Calendar) -> Date { DayAnchor.rewrite(value, calendar: written) ?? value }
 
     /// "thu" typed on Wednesday 2026-11-11 at noon in `calendar`: the parser's due date for Thursday the 12th.
     func typedThursday(in calendar: Calendar) -> Date {
@@ -45,12 +45,11 @@ final class TimeZoneAuditTests: XCTestCase {
         return parsed.dueDate!
     }
 
-    // MARK: - A day is a day (rule 1): these fail before brief 82
+    // MARK: - A day is a day (rule 1): these failed before brief 82
 
     /// "Due Thursday" typed anywhere is Thursday everywhere: the day it falls on, Today's section on Thursday, Upcoming's
     /// day and the Date sort's section.
     func testADayWithNoTimeIsTheSameCalendarDayInEveryZone() {
-        XCTExpectFailure("Before brief 82 a day is stored as the writer's local midnight: a day early to the west")
         for written in Self.zones {
             let value = stored(typedThursday(in: written), written: written)
             for read in Self.zones {
@@ -68,7 +67,6 @@ final class TimeZoneAuditTests: XCTestCase {
 
     /// A deadline is a day too (the card's and the editor's pickers store the picked day's start).
     func testADeadlineIsTheSameCalendarDayInEveryZone() {
-        XCTExpectFailure("Before brief 82 a deadline is stored as the writer's local midnight")
         for written in Self.zones {
             let picked = Self.local(2026, 11, 13, 12, in: written)
             let deadline = stored(written.startOfDay(for: picked), written: written)
@@ -81,7 +79,6 @@ final class TimeZoneAuditTests: XCTestCase {
 
     /// A daily date-only repeat completed abroad rolls on to the next calendar day, never to the day it already was.
     func testADateOnlyRepeatRollsOnByCalendarDaysAfterAFlight() {
-        XCTExpectFailure("Before brief 82 the roll-over starts from a local midnight read a day early to the west")
         for written in Self.zones {
             let due = stored(typedThursday(in: written), written: written)
             for read in Self.zones {
@@ -96,7 +93,6 @@ final class TimeZoneAuditTests: XCTestCase {
 
     /// The Flipboard: a loose switch flipped today is still flipped (green) after the zone changes.
     func testALooseSwitchFlippedTodayIsStillFlippedAfterTheZoneChanges() {
-        XCTExpectFailure("Before brief 82 a flip stores tomorrow's local midnight, which is today to the west")
         for written in Self.zones {
             // Flipped on Wednesday evening: due again Thursday (the start of the next day, as `Flipboard` writes it).
             let flippedAt = Self.local(2026, 11, 11, 19, in: written)
@@ -114,7 +110,6 @@ final class TimeZoneAuditTests: XCTestCase {
     /// A Switchboard resets at its hour where the person is, once: a switch done on Wednesday evening stays done until
     /// Thursday's 04:00 there, and is due again from it.
     func testASwitchboardResetsAtItsHourWhereThePersonIs() {
-        XCTExpectFailure("Before brief 82 the board day after a flip is a local midnight, which is the same day to the west")
         let board = SwitchboardSchedule(cadence: .daily, resetMinutes: 4 * 60)
         for written in Self.zones {
             let flippedAt = Self.local(2026, 11, 11, 19, in: written)
@@ -193,7 +188,7 @@ final class TimeZoneAuditTests: XCTestCase {
             let now = Self.local(2026, 11, 12, 0, 5, in: zone)
             let titles: ([PlainTask]) -> [String] = { $0.map(\.filterTitle) }
             XCTAssertEqual(titles(TaskOrdering.sorted(tasks, now: now, calendar: zone)), ["all day", "early", "late"], id)
-            XCTAssertEqual(titles(tasks.sorted(by: TaskOrdering.priorityThenDue)), ["all day", "early", "late"], id)
+            XCTAssertEqual(titles(tasks.sorted { TaskOrdering.priorityThenDue($0, $1, calendar: zone) }), ["all day", "early", "late"], id)
             XCTAssertEqual(titles(FilterQuery.defaultSort(tasks, now: now, calendar: zone)), ["all day", "early", "late"], id)
             XCTAssertEqual(titles(TaskOrdering.today(tasks, now: now, calendar: zone).today), ["all day", "early", "late"], id)
             let upcoming = UpcomingDays.days(tasks, now: now, dayCount: 3, calendar: zone)
