@@ -551,8 +551,10 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(ThemeCompanion.seats["gargle"]?.placement, .peeking)
         XCTAssertEqual(ThemeCompanion.seats["button"]?.placement, .onCard)
         XCTAssertNil(ThemeCompanion.seats["pip"], "Pip retired in 0.9.3")
-        XCTAssertNil(ThemeCompanion.seats["smudge"], "Smudge and Posy retired in 0.9.4")
+        XCTAssertNil(ThemeCompanion.seats["smudge"], "Smudge, Posy and Mallow retired in 0.9.4")
         XCTAssertNil(ThemeCompanion.seats["posy"])
+        XCTAssertNil(ThemeCompanion.seats["mallow"])
+        XCTAssertEqual(ThemeCompanion.seats["phase"]?.placement, .asleepOnDot)
         // Every companion in the cast has a seat of its own, and no two neighbours in a row of four sit alike.
         for character in CompanionCharacter.all {
             XCTAssertNotNil(ThemeCompanion.seats[character.id], "\(character.name) has its own seat")
