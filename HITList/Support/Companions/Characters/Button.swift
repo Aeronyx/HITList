@@ -1281,6 +1281,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeek", rows: [
                 "....................",
                 "....................",
+                "....................",
                 "......rrrrrrrr......",
                 "....rrllaaaaaarr....",
                 "...rlaaaaaaaaaaar...",
@@ -1291,7 +1292,6 @@ extension CompanionCharacter {
                 "raaaaaaaaaaaaaaaaaar",
                 "rraaaaaaaaaaaaaaaarr",
                 ".rrrrrrrrrrrrrrrrrr.",
-                "...mllllllllllllm...",
                 "...mllllllllllllm...",
                 "..mlkkkkllllkkkklm..",
                 "..mllllllllllkkllm..",
@@ -1303,6 +1303,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeekLook", rows: [
                 "....................",
                 "....................",
+                "....................",
                 "......rrrrrrrr......",
                 "....rrllaaaaaarr....",
                 "...rlaaaaaaaaaaar...",
@@ -1313,7 +1314,6 @@ extension CompanionCharacter {
                 "raaaaaaaaaaaaaaaaaar",
                 "rraaaaaaaaaaaaaaaarr",
                 ".rrrrrrrrrrrrrrrrrr.",
-                "...mlllllllllkklm...",
                 "...mllllllllklkkm...",
                 "..mlkkkkllllkkkklm..",
                 "..mllllllllllkkllm..",
@@ -1369,6 +1369,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeek@sleepSnow", rows: [
                 "....................",
                 "....................",
+                "....................",
                 "......lrllrlrl......",
                 "....rlllaalaaarr....",
                 "...rlaaaaaaaaaaar...",
@@ -1379,7 +1380,6 @@ extension CompanionCharacter {
                 "raaaaaaaaaaaaaaaaaar",
                 "rraaaaaaaaaaaaaaaarr",
                 ".rrrrrrrrrrrrrrrrrr.",
-                "...mllllllllllllm...",
                 "...mllllllllllllm...",
                 "..mlkkkkllllkkkklm..",
                 "..mllllllllllkkllm..",
@@ -1391,6 +1391,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeekLook@sleepSnow", rows: [
                 "....................",
                 "....................",
+                "....................",
                 "......lrllrlrl......",
                 "....rlllaalaaarr....",
                 "...rlaaaaaaaaaaar...",
@@ -1401,7 +1402,6 @@ extension CompanionCharacter {
                 "raaaaaaaaaaaaaaaaaar",
                 "rraaaaaaaaaaaaaaaarr",
                 ".rrrrrrrrrrrrrrrrrr.",
-                "...mlllllllllkklm...",
                 "...mllllllllklkkm...",
                 "..mlkkkkllllkkkklm..",
                 "..mllllllllllkkllm..",
@@ -1591,7 +1591,7 @@ extension CompanionCharacter {
             Gesture(name: "drip", ticks: Self.ticks(("drip1", 3), ("drip2", 1), ("drip3", 1)), flicker: true, sky: .rain),
             Gesture(name: "sweat", ticks: Self.ticks(("sweat1", 3), ("sweat2", 2)), flicker: true, sky: .heat),
         ],
-        answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 4), ("blink", 1), ("lookUp", 2), ("happy", 3))),
+        answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 4), ("blink", 1), ("lookUp", 2), ("wink", 3))),
         routines: buttonRoutines)
 
     /// Asleep, the cap pulled down over its eyes: every gesture is a breath, a murmur, a boot twitching (brief 100).
