@@ -5,7 +5,7 @@ permalink: /privacy/
 
 # HITList Privacy Policy
 
-Effective 2026-11-10.
+Effective 2026-11-11.
 
 ## Who we are
 
@@ -66,6 +66,18 @@ changes or deletes an event. The events are read on the device each time they ar
 they are not saved with your tasks, synced through iCloud, put in backups or exports, shown in Spotlight or
 Siri, or given to Claude. Switching it off stops the reading; you can also withdraw access in your device's
 settings under Privacy & Security → Calendars.
+
+## Weather for your companion (optional, off unless you turn it on)
+
+If you switch on Settings → Extras → Weather, HITList asks to use your location while the app is in use, and only
+an approximate one (about the size of a town). When the app comes to the front, at most once an hour, it gets
+that approximate location from your device and asks Apple Weather (WeatherKit) whether it is raining, snowing,
+stormy, cloudy or clear there, so your companion can dress for it. That request is made by Apple's own framework
+and handled by Apple under [Apple's Privacy Policy](https://www.apple.com/legal/privacy/). HITList shows no forecast
+or temperature, and the location is never stored, synced through iCloud, logged, put in backups or exports, or
+sent anywhere else; the answer is kept in memory only and forgotten after three hours. Switched off, or without
+permission, HITList makes no location or weather request at all. You can also withdraw the permission in your
+device's settings under Privacy & Security → Location Services → HITList.
 
 ## Notifications
 
