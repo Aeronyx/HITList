@@ -5,8 +5,6 @@ import SwiftUI
 /// What's new inline (this version's list, earlier versions behind a disclosure row) instead of a sheet.
 struct MacAboutSection: View {
     @Environment(\.openURL) private var openURL
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showEarlier = false
 
     var body: some View {
         HITGroup("About") {
@@ -25,28 +23,7 @@ struct MacAboutSection: View {
             PrivacyPolicyRow()
         }
 
-        if let current = WhatsNew.current {
-            HITGroup("What's new in \(current.label)") {
-                WhatsNewItems(entry: current)
-            }
-            .accessibilityIdentifier("settings-whats-new-inline")
-
-            let earlier = Array(WhatsNew.entries.dropFirst())
-            if !earlier.isEmpty {
-                HITGroup {
-                    HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
-                               value: earlier.map(\.label).joined(separator: ", "),
-                               accessory: .expand(isExpanded: showEarlier)) {
-                        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
-                    }
-                }
-                if showEarlier {
-                    ForEach(earlier) { entry in
-                        HITGroup("Version \(entry.label)") { WhatsNewItems(entry: entry) }
-                    }
-                }
-            }
-        }
+        WhatsNewGroups()
     }
 }
 

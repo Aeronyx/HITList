@@ -2,16 +2,17 @@ import SwiftUI
 import SwiftData
 
 /// Settings → iCloud Sync: the status line, the CloudKit environment, Details, Check iCloud…, and on
-/// the iPhone the Sync log (a sheet; the Mac page shows the log inline, `SyncLogSection`). Shared by the
-/// iPhone sheet and the Mac page's iCloud section, which adds the "Last change" row (`showsLastChange`).
+/// the iPhone the Sync log (a page of its own, `SettingsPage.syncLog`; the Mac page shows the log inline,
+/// `SyncLogSection`). Shared by the iPhone sheet and the Mac page's iCloud section, which adds the "Last change"
+/// row (`showsLastChange`).
 struct ICloudSyncGroup: View {
     var showsLastChange = false
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.hitPages) private var pages
     @State private var showSyncDetails = false
     @State private var isCheckingICloud = false
     @State private var iCloudCheck: ICloudCheck?
-    @State private var showSyncLog = false
 
     static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows."
 
@@ -29,7 +30,7 @@ struct ICloudSyncGroup: View {
             }
             SyncEnvironmentRow()
             #if os(iOS)
-            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { showSyncLog = true }
+            HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { pages(SettingsPage.syncLog) }
                 .accessibilityIdentifier("settings-sync-log-row")
             #endif
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
@@ -56,9 +57,6 @@ struct ICloudSyncGroup: View {
                     .textSelection(.enabled)
                     .accessibilityIdentifier("settings-check-icloud-result")
             }
-        }
-        .sheet(isPresented: $showSyncLog) {
-            SyncLogSheet().slateSheet()
         }
     }
 
@@ -194,6 +192,17 @@ struct SyncEnvironmentRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("CloudKit environment: \(environment.summary). \(Self.subtitle(account: account))")
             .accessibilityIdentifier("settings-sync-environment")
+    }
+}
+
+/// Settings → iCloud & data on iPhone and iPad: sync, backups, export and import, then the one that throws
+/// something away. (The Mac splits it into its iCloud and Data sections.)
+struct ICloudDataPage: View {
+    var body: some View {
+        ICloudSyncGroup()
+        BackupsGroup()
+        ExportImportGroup()
+        ResetLocalCacheGroup()
     }
 }
 
