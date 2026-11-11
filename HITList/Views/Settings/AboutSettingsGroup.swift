@@ -39,14 +39,21 @@ struct SendFeedbackRow: View {
 }
 
 /// What's New as groups: this version's list, then the earlier versions behind a disclosure row. About → What's New
-/// on iPhone and iPad, and inline in the Mac's About section.
+/// on iPhone and iPad (a page titled What's New, so its first group says "Version 0.9.3"), and inline in the Mac's
+/// About section ("What's new in 0.9.3", with the earlier versions listed on their row, which has the room).
 struct WhatsNewGroups: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showEarlier = false
 
+    #if os(macOS)
+    private static let inline = true
+    #else
+    private static let inline = false
+    #endif
+
     var body: some View {
         if let current = WhatsNew.current {
-            HITGroup("What's new in \(current.label)") {
+            HITGroup(Self.inline ? "What's new in \(current.label)" : "Version \(current.label)") {
                 WhatsNewItems(entry: current)
             }
             .accessibilityIdentifier("settings-whats-new-inline")
@@ -55,7 +62,7 @@ struct WhatsNewGroups: View {
             if !earlier.isEmpty {
                 HITGroup {
                     HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
-                               value: earlier.map(\.label).joined(separator: ", "),
+                               value: Self.inline ? earlier.map(\.label).joined(separator: ", ") : nil,
                                accessory: .expand(isExpanded: showEarlier)) {
                         withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
                     }
@@ -76,7 +83,7 @@ struct PrivacyPolicyRow: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        HITMenuRow("Privacy policy", subtitle: "HITList collects nothing; your data stays in your iCloud",
+        HITMenuRow("Privacy policy", subtitle: "HITList collects nothing",
                    systemImage: "hand.raised", accessory: .chevron) {
             openURL(AboutInfo.privacyPolicyURL)
         }

@@ -101,13 +101,13 @@ struct DelightSettingsSection: View {
 
     #if os(iOS)
     static let completingFooter = "Your own sound can be up to 2 seconds long. Sounds follow the silent switch and never pause your music."
-    static let companionsSubtitle = "A small creature by the +, one for each theme"
+    static let companionsSubtitle = "One for each theme, by the +"
     #else
     static let completingFooter = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad."
-    static let companionsSubtitle = "A small creature on the search field, one for each theme"
+    static let companionsSubtitle = "One for each theme, on the search field"
     #endif
-    static let companionsFooter = "Mostly it sits still, and it sleeps at night. Reduce Motion keeps it still."
-    static let holidaySubtitle = "Snow, fireworks, hearts and more on the holidays"
+    static let companionsFooter = "A small creature keeps you company. Mostly it sits still, and it sleeps at night; Reduce Motion keeps it still."
+    static let holidaySubtitle = "Snow, fireworks, hearts and more"
     static let rareSurprisesSubtitle = "Once in a long while, someone drops by"
     static let effectsFooter = "Reduce Motion turns off holiday touches and rare surprises."
 

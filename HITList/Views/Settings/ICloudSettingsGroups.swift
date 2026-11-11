@@ -232,11 +232,11 @@ struct ResetLocalCacheGroup: View {
     @State private var showReopenAlert = false
 
     /// Under the reset row: what it does and what it costs.
-    static let subtitle = "Downloads everything again; changes not synced yet are lost"
+    static let subtitle = "Downloads it all again; unsynced changes are lost"
 
     var body: some View {
         HITGroup {
-            HITMenuRow("Reset local cache and re-download…", subtitle: Self.subtitle, systemImage: "arrow.counterclockwise",
+            HITMenuRow("Reset local cache…", subtitle: Self.subtitle, systemImage: "arrow.counterclockwise",
                        role: .destructive, accessory: .none) { confirmReset = true }
                 .disabled(!LocalCacheReset.isAvailable)
                 .accessibilityIdentifier("settings-reset-cache")

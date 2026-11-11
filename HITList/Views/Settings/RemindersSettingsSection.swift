@@ -40,7 +40,7 @@ struct RemindersSettingsSection: View {
         // No header: the page's title says Reminders.
         HITGroup(footer: footer) {
             Toggle(isOn: $notificationsEnabled) {
-                HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a specific time get a notification.",
+                HITMenuRowLabel("Notify at due time", subtitle: "Only tasks with a time",
                                 systemImage: "bell")
             }
             .toggleStyle(.hit)
@@ -53,7 +53,7 @@ struct RemindersSettingsSection: View {
                 }
             }
 
-            HITMenuRow("Default reminder", subtitle: "For timed tasks without a ! offset of their own.",
+            HITMenuRow("Default reminder", subtitle: "For timed tasks without a !",
                        systemImage: "bell.badge", trailing: {
                 Menu {
                     Picker("Default reminder", selection: $defaultOffset) {
@@ -74,7 +74,7 @@ struct RemindersSettingsSection: View {
 
             Toggle(isOn: $morningSummary) {
                 HITMenuRowLabel("Morning summary",
-                                subtitle: "One notification a day: today's and overdue tasks. Skipped when nothing is due.",
+                                subtitle: "Today's and overdue tasks, once a day",
                                 systemImage: "sun.horizon")
             }
             .toggleStyle(.hit)
@@ -122,7 +122,7 @@ struct RemindersSettingsSection: View {
         }
     }
 
-    private let footer = "Reminders are scheduled on each device from the tasks it has synced."
+    private let footer = "Reminders are scheduled on each device from the tasks it has synced. The summary skips a day with nothing due."
     static let troubleTitle = "If reminders don't arrive"
 
     private func refresh() async {
