@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-18.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-19.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -278,7 +278,19 @@ still by default, makes a small gesture now and then, and its flourish is someth
 may play it, with a long refresh. One companion per colour theme, never two on a screen; on the Mac it lives on the
 search field, on iPhone and iPad by the "+"; asleep at night, dressed for the weather; no points or unlocks, ever.
 
-## 8. Where things stand (2026-11-11, round 18 merged)
+## 8. Where things stand (2026-11-11, round 19 briefed)
+
+**2026-11-11, 0.9.2 (23) released; round 19 briefed for 0.9.3 (Fable 5.2 supervisor), run overnight while George
+sleeps.** George's notes on 0.9.2 (`dev/briefs/ROUND-19.md`): idle routines for the companions instead of lone
+gestures, weather that moves, a new companion for Rosé (Pip goes), the plushy sketch as a fifth companion, Quill
+resting on the "+"; the location asked at first launch with weather on by default; time zones handled properly;
+Settings tidied with Appearance near the top and a small companion on each theme. Briefs 82 `time-zones` (xhigh),
+83 `location-weather` (high), 84 `companion-routines` (max), 85 `new-companions` (max, with a second pass after 84
+and 86 merge), 86 `settings-tidy` (xhigh) run as five Opus sessions. Brief 82 rewrites date-only values to a
+zone-proof form behind one switch: tell George in the hand-over. After the merge: archive and export, the UI suite,
+the screenshot pass. The next brief number is 87.
+
+### Round 18 (kept for the record)
 
 **2026-11-11, round 18 merged for 0.9.2 (Fable 5.2 supervisor).** Briefs 79–81 are merged on master: four
 companions (Nod, Quill, Hush, Pip), one per theme and mostly still; the weather for them through WeatherKit, off by

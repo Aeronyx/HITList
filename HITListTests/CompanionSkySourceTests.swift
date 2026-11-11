@@ -18,6 +18,18 @@ final class CompanionSkySourceTests: XCTestCase {
         XCTAssertNil(source.observedAt)
     }
 
+    func testTheZoneIsTheDevicesUntilTheServiceKnowsBetter() {
+        let source = CompanionSkySource(arguments: UserDefaults(suiteName: "CompanionSkySourceTests.empty")!)
+        XCTAssertNil(source.timeZone)
+        XCTAssertEqual(source.zone, TimeZone.current)
+        let tokyo = TimeZone(identifier: "Asia/Tokyo")!
+        source.setTimeZone(tokyo)
+        XCTAssertEqual(source.zone, tokyo)
+        source.clear()
+        XCTAssertNil(source.timeZone, "switching weather off forgets where the person is")
+        XCTAssertEqual(source.zone, TimeZone.current)
+    }
+
     func testEverySkyHasAStableName() {
         XCTAssertEqual(CompanionSky.allCases.map(\.rawValue), ["unknown", "clear", "clouds", "rain", "snow", "storm"])
     }
