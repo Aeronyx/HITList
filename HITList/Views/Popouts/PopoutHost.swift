@@ -685,12 +685,13 @@ struct PanelBackdrop<Content: View>: View {
     static var width: CGFloat { 560 }
     /// The panel's top edge, as a fraction of the window's height.
     static var topFraction: CGFloat { 0.18 }
-    /// How far the dim reaches past the window's edges, so the arrival's scale never shows its edge.
+    /// How far the dim reaches past the window's sides and bottom, so the arrival's drop never shows its edge. Not the
+    /// top: the toolbar band above must stay undimmed, as it is at rest.
     static var dimOverscan: CGFloat { 40 }
 
-    /// The panel's arrival and departure (brief 75): it fades as it grows the last 2% of its size from its top
-    /// edge (`PanelTransition`), so it settles in under the toolbar rather than just appearing; in with `enter`, out
-    /// with `exit` (both were a 200 ms fade on `enter`, the close no quicker than the open). Under Reduce Motion a
+    /// The panel's arrival and departure (brief 75): it fades as it comes down 6 pt into place (`PanelTransition`),
+    /// so it settles in under the toolbar rather than just appearing, and goes back up as it leaves; in with `enter`,
+    /// out with `exit` (both were a 200 ms fade on `enter`, the close no quicker than the open). Under Reduce Motion a
     /// fade alone, on the roles' calm stand-ins.
     static func transition(reduceMotion: Bool) -> AnyTransition {
         let look = AnyTransition(PanelTransition(calm: reduceMotion))
@@ -702,7 +703,8 @@ struct PanelBackdrop<Content: View>: View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 Color.black.opacity(0.45)
-                    .padding(-Self.dimOverscan)
+                    .padding(EdgeInsets(top: 0, leading: -Self.dimOverscan, bottom: -Self.dimOverscan,
+                                        trailing: -Self.dimOverscan))
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onDismiss)
                 content
@@ -717,21 +719,22 @@ struct PanelBackdrop<Content: View>: View {
     }
 }
 
-/// `PanelBackdrop.transition`: the backdrop and its panel fade together while they grow the last 2% from the panel's
-/// top edge. The dim reaches past the window (`dimOverscan`), so only the panel visibly changes size.
+/// `PanelBackdrop.transition`: the backdrop and its panel fade together while they come down `drop` points into
+/// place (and go back up as they leave). A scale was tried first and dropped: under it the editor's row of pills came to
+/// rest 2.5 pt further scrolled than on master. The dim reaches past the window's sides and bottom (`dimOverscan`).
 struct PanelTransition: Transition {
-    /// The scale before the panel has arrived and after it has gone.
-    static let arrivalScale: CGFloat = 0.98
+    /// How far above its place the panel starts, and leaves to.
+    static let drop: CGFloat = 6
     var calm: Bool
 
     func body(content: Content, phase: TransitionPhase) -> some View {
         content
             .opacity(phase.isIdentity ? 1 : 0)
-            .scaleEffect(Self.scale(phase: phase, calm: calm), anchor: UnitPoint(x: 0.5, y: PanelBackdrop<EmptyView>.topFraction))
+            .offset(y: Self.offset(phase: phase, calm: calm))
     }
 
-    static func scale(phase: TransitionPhase, calm: Bool) -> CGFloat {
-        phase.isIdentity || calm ? 1 : arrivalScale
+    static func offset(phase: TransitionPhase, calm: Bool) -> CGFloat {
+        phase.isIdentity || calm ? 0 : -drop
     }
 }
 
