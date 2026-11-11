@@ -12,11 +12,12 @@ import AppKit
 /// The sky for the companions (brief 80): what the weather is doing roughly where the person is, told to
 /// `CompanionSkySource` and to nothing else. No forecast, no temperature, no weather on screen.
 ///
-/// - **Off by default, asked once.** Settings → Extras → Weather. Switching it on asks for location while in use, at
-///   reduced accuracy. Off, never asked, refused or restricted, or with Companions off: the sky is `unknown` and the
-///   app makes no location or weather call. Until the person has switched it on once, Core Location is never touched
-///   (the location source is made lazily); after that, Settings reads the permission (no prompt, no fix) to say why
-///   it is off.
+/// - **On by default, asked once** (brief 83). Settings → Extras → Weather is on for everyone who never switched it
+///   off (a key never written reads on). The system's question (location while in use, reduced accuracy) comes once,
+///   at the first launch (`LaunchLocationQuestion`), or from the switch for someone who refused and switches it on
+///   again. Off, never asked, refused or restricted, or with Companions off: the sky is `unknown` and the app makes no
+///   location or weather call. Until the question has been asked, Core Location is never touched (the location
+///   source is made lazily); after that, Settings reads the permission (no prompt, no fix) to say why it is off.
 /// - **Cheap.** One reduced-accuracy fix and one current-conditions request when the app comes to the front and the
 ///   last observation is older than an hour (and once an hour while it stays in front); never in the background,
 ///   never while hidden. The last sky is kept in memory only; an observation older than three hours is `unknown`.
@@ -51,7 +52,7 @@ final class CompanionWeather {
     @ObservationIgnored private var inFlight = false
     @ObservationIgnored private let askedForTheRun: Bool
 
-    /// The setting (`Preferences.companionWeather`).
+    /// The setting (`Preferences.companionWeather`): on unless someone switched it off.
     private(set) var isOn: Bool
     /// The permission as last read; `.notDetermined` until the person has switched Weather on once.
     private(set) var access: WeatherAccess = .notDetermined
@@ -67,6 +68,7 @@ final class CompanionWeather {
     /// - Parameters:
     ///   - location, weather: made on first use only, so a run with Weather off never creates either.
     ///   - onForTheRun: on whatever the setting says, without saving it (the demo, `-seedDemoSky`).
+    ///   - offForTheRun: off whatever the setting says, without saving it (the refused demo, as after a refusal).
     ///   - askedForTheRun: as if the person had been asked (the demo, which has no prompt).
     init(location: @escaping () -> any WeatherLocationSource,
          weather: @escaping () -> any WeatherConditionSource,
@@ -74,14 +76,16 @@ final class CompanionWeather {
          defaults: UserDefaults = AppGroup.defaults,
          now: @escaping () -> Date = Date.init,
          onForTheRun: Bool = false,
+         offForTheRun: Bool = false,
          askedForTheRun: Bool = false) {
         makeLocation = location
         makeWeather = weather
         skySource = sky
         self.defaults = defaults
         clock = now
-        isOn = onForTheRun || (defaults.object(forKey: Preferences.companionWeather) as? Bool ?? Preferences.companionWeatherDefault)
-        self.askedForTheRun = onForTheRun || askedForTheRun
+        let stored = defaults.object(forKey: Preferences.companionWeather) as? Bool ?? Preferences.companionWeatherDefault
+        isOn = onForTheRun || (!offForTheRun && stored)
+        self.askedForTheRun = onForTheRun || offForTheRun || askedForTheRun
     }
 
     /// Showing the weather: switched on and allowed.
@@ -90,7 +94,7 @@ final class CompanionWeather {
     /// Companions themselves (Settings → Extras → Companions, on by default): with them off nobody needs the sky.
     var companionsOn: Bool { defaults.object(forKey: Preferences.companions) as? Bool ?? true }
 
-    /// Whether the person has ever switched Weather on here (and so may have been asked).
+    /// Whether the system's question may have been shown here: by the switch, or at a launch.
     var hasAsked: Bool { askedForTheRun || defaults.bool(forKey: Preferences.companionWeatherAsked) }
 
     private var location: any WeatherLocationSource {
@@ -155,7 +159,8 @@ final class CompanionWeather {
     func cameForward() async {
         let now = clock()
         expireIfStale(now: now)
-        guard isOn, companionsOn else {
+        // Never asked: nothing to read and nothing to ask for (the question is the launch's, or the switch's).
+        guard isOn, companionsOn, hasAsked else {
             forget()
             return
         }
@@ -275,7 +280,8 @@ extension CompanionWeather {
         #if DEBUG
         if let demo = DemoWeatherSource.requested(arguments: arguments) {
             return CompanionWeather(location: { demo }, weather: { demo }, sky: sky, defaults: defaults,
-                                    onForTheRun: demo.permission == .allowed, askedForTheRun: true)
+                                    onForTheRun: demo.permission == .allowed, offForTheRun: demo.permission != .allowed,
+                                    askedForTheRun: true)
         }
         #endif
         return CompanionWeather(location: { CoreLocationSource() }, weather: { WeatherKitSource() }, sky: sky,
@@ -284,11 +290,13 @@ extension CompanionWeather {
 }
 
 extension Preferences {
-    /// Settings → Extras → Weather (brief 80): the companion dresses for the weather. Off by default; device-local,
-    /// like every preference (the permission is the device's).
+    /// Settings → Extras → Weather (briefs 80, 83): the companion keeps local time and dresses for the weather. On
+    /// by default since 0.9.3: a key never written reads on, so someone who switched it off in 0.9.2 keeps it off and
+    /// everyone else is asked once at their next launch. Device-local, like every preference (the permission is the
+    /// device's).
     static let companionWeather = "pref.companionWeather.enabled"
-    static let companionWeatherDefault = false
-    /// Set the first time Weather is switched on (when the system may have asked); until then Core Location is
-    /// never touched, not even to read the permission.
+    static let companionWeatherDefault = true
+    /// Set when the system's question may have been shown (the switch, or the first launch's question), before it
+    /// is; until then Core Location is never touched, not even to read the permission.
     static let companionWeatherAsked = "pref.companionWeather.asked"
 }
