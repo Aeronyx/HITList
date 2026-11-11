@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import HITListCore
 @testable import HITList
 
 /// Briefs 76 and 79: every companion is good data (sizes, inks, small short gestures, flourishes that start and end
@@ -82,6 +83,37 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
+    /// The companions with routines so far (brief 84, items 2 to 4).
+    static let lively = ["nod"]
+
+    /// Each has at least three everyday routines of its own in each place, and one for rain, one for snow and a start
+    /// at thunder; every routine is a few seconds, four to nine moves, and is drawn in every look it can play in.
+    func testEachHasRoutinesOfItsOwn() {
+        for character in CompanionCharacter.all where Self.lively.contains(character.id) {
+            for place in CompanionPlace.allCases {
+                let mode = character.posture(place).awake
+                let at = "\(character.id) \(place)"
+                let everyday = mode.routines.filter { $0.sky == nil }
+                XCTAssertGreaterThanOrEqual(everyday.count, 3, "\(at): three routines of its own")
+                for sky in [CompanionSky.rain, .snow, .storm] {
+                    XCTAssertTrue(mode.routines.contains { $0.sky == sky }, "\(at): a routine for \(sky)")
+                }
+                for routine in mode.routines {
+                    let seconds = character.duration(of: routine, mode: mode)
+                    XCTAssertTrue((3...7).contains(seconds), "\(at) \(routine.name): \(seconds) s")
+                    XCTAssertTrue((4...9).contains(routine.moves), "\(at) \(routine.name): \(routine.moves) moves")
+                }
+                // Every everyday routine plays in plain weather; each weather has at least one that plays in it.
+                for weather in [CompanionLook.Weather.rain, .snow] {
+                    XCTAssertTrue(everyday.contains { character.plays($0, in: weather, mode: mode) }, "\(at): one in \(weather)")
+                }
+                XCTAssertFalse(mode.flickers.count == mode.gestures.count && mode.gestures.count > 2,
+                               "\(at): its flickers are marked, so a glance or a sniff plays only in routines")
+            }
+            XCTAssertTrue(character.posture(.field).asleep.routines.isEmpty, "\(character.id): no routines asleep")
+        }
+    }
+
     func testNodsNightAndWeather() {
         let nod = CompanionCharacter.nod
         XCTAssertEqual(nod.field.asleep.rest, "sleep")
@@ -89,7 +121,8 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "glance"])
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance"])
+        XCTAssertEqual(nod.field.awake.flickers, [0, 1, 2], "a blink or one swing of a leg; the glance plays in routines")
         XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
