@@ -243,7 +243,7 @@ final class RecurrenceRuleTests: XCTestCase {
     func testDisplayText() {
         XCTAssertEqual(RecurrenceRule.daily.displayText, "Every day")
         XCTAssertEqual(RecurrenceRule.weekdays.displayText, "Every weekday")
-        XCTAssertEqual(RecurrenceRule(frequency: .weekly, weekdays: [2, 4, 6]).displayText, "Every Mon, Wed, Fri")
+        XCTAssertEqual(RecurrenceRule(frequency: .weekly, weekdays: [2, 4, 6]).displayText, "Every Mon, Wed and Fri")
         XCTAssertEqual(RecurrenceRule(frequency: .monthly, interval: 3).displayText, "Every 3 months")
     }
 }

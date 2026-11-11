@@ -324,7 +324,7 @@ struct QuickAddPopout: View {
                         draft.setReminderOffset(nil, parser)
                     }
                 }, recurrence: chips.recurrence, onRepeat: { rule in
-                    draft.setRecurrence(rule, parser)
+                    draft.setRecurrence(rule, parser, keepingDay: chips.dueDate)
                     done()
                 })
             }
@@ -435,19 +435,21 @@ struct QuickAddPopout: View {
             .accessibilityIdentifier("quickAddDeadlineChip")
     }
 
+    /// The Repeat menu, worded for the card's day (today when it has none); picking keeps the day the card shows.
     private func repeatChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        HITChip(chips.recurrence?.displayText ?? "Repeat", systemImage: "repeat",
+        HITChip(chips.recurrence?.rowText ?? "Repeat", systemImage: "repeat",
                 tint: chips.recurrence == nil ? Theme.secondaryText : PopoutTint.today,
-                isSelected: chips.recurrence != nil, size: .compact, speech: ChipSpeech.repeats(chips.recurrence?.displayText),
+                isSelected: chips.recurrence != nil, size: .compact, speech: ChipSpeech.repeats(chips.recurrence?.rowText),
                 onDismiss: chips.recurrence == nil ? nil : { draft.setRecurrence(nil, parser) },
                 action: { openChip = .repeating })
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
-                RepeatChipPopover(rule: chips.recurrence) { rule in
-                    draft.setRecurrence(rule, parser)
+                RepeatChipCard(rule: chips.recurrence, day: chips.dueDate ?? parser.dateParser.now, onPick: { rule in
+                    draft.setRecurrence(rule, parser, keepingDay: chips.dueDate)
                     if rule == nil { draft.extras.remove(.repeating) }
                     done()
-                }
+                }, onKeep: { done() })
             }
+            .accessibilityIdentifier("quickAddRepeatChip")
     }
 
     private func projectTint(_ name: String?) -> Color {

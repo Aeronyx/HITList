@@ -370,8 +370,15 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
 
     // MARK: Display
 
-    public var displayText: String {
-        let shortDays = [1: "Sun", 2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat"]
+    /// The row's words for the rule, its days listed from Sunday: `displayText(weekStart:)`.
+    public var displayText: String { displayText(weekStart: 1) }
+
+    /// What a row, a chip and the Repeat menu call the rule (brief 97: every one begins "Every", as the menu's
+    /// choices do): "Every day", "Every 3 days", "Every weekday", "Every Tue, Thu and Sat", "Every 2 weeks on Tue
+    /// and Thu", "Every month", "Every month on the 28th", "Every month on the last day", "Every month on the second
+    /// Wednesday", "Every year on Mar 3". A weekly rule's days are listed from `weekStart` (1 = Sunday ... 7 =
+    /// Saturday), the first day of the week in Settings.
+    public func displayText(weekStart: Int) -> String {
         if let place { return Self.words(for: place, interval: interval) }
         switch frequency {
         case .daily: return interval == 1 ? "Every day" : "Every \(interval) days"
@@ -380,31 +387,23 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         case .weekly:
             if let weekdays, !weekdays.isEmpty {
                 if weekdays == [2, 3, 4, 5, 6] { return interval == 1 ? "Every weekday" : "Every \(interval) weeks on weekdays" }
-                let names = weekdays.sorted().compactMap { shortDays[$0] }.joined(separator: ", ")
+                let names = RepeatWords.list(RepeatWords.ordered(weekdays, weekStart: weekStart).map { RepeatWords.shortWeekdays[$0 - 1] })
                 return interval == 1 ? "Every \(names)" : "Every \(interval) weeks on \(names)"
             }
             return interval == 1 ? "Every week" : "Every \(interval) weeks"
         }
     }
 
-    /// "Monthly on the 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3"; with an
-    /// interval "Every 3 months on the 10th", "Every 2 months on the first Monday", "Every 2 years on Mar 3".
+    /// "Every month on the 28th", "Every month on the last day", "Every month on the first Monday", "Every year on
+    /// Mar 3"; with an interval "Every 3 months on the 10th", "Every 2 years on Mar 3". (Brief 71 said "Monthly on the
+    /// 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3" until brief 97.)
     private static func words(for place: Place, interval n: Int) -> String {
-        let weekdays = [1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday"]
-        let ordinals = [1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", -1: "last"]
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+        let head: String
         switch place {
-        case .day(let day):
-            return n == 1 ? "Monthly on the \(ordinal(day))" : "Every \(n) months on the \(ordinal(day))"
-        case .lastDay:
-            return n == 1 ? "Last day of the month" : "Every \(n) months on the last day"
-        case .weekday(let weekday, let ordinal):
-            let which = "\(ordinals[ordinal] ?? "") \(weekdays[weekday] ?? "")"
-            return n == 1 ? which.prefix(1).uppercased() + which.dropFirst() + " of the month" : "Every \(n) months on the \(which)"
-        case .date(let month, let day):
-            let date = "\(months[month - 1]) \(day)"
-            return n == 1 ? "Yearly on \(date)" : "Every \(n) years on \(date)"
+        case .day, .lastDay, .weekday: head = n == 1 ? "Every month" : "Every \(n) months"
+        case .date: head = n == 1 ? "Every year" : "Every \(n) years"
         }
+        return head + " " + RepeatWords.on(place, shortMonth: true)
     }
 
     /// "1st", "2nd", "3rd", "4th", "11th", "22nd".

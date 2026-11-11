@@ -33,89 +33,45 @@ enum PopoutTint {
 
 // MARK: - Repeat
 
-/// The repeat presets offered everywhere.
-enum RepeatPresets {
-    static let all: [(title: String, rule: RecurrenceRule)] = [
-        ("Every day", .daily),
-        ("Every weekday", .weekdays),
-        ("Every week", .weekly),
-        ("Every 2 weeks", RecurrenceRule(frequency: .weekly, interval: 2)),
-        ("Every month", .monthly),
-        ("Every 3 months", RecurrenceRule(frequency: .monthly, interval: 3)),
-        ("Every year", .yearly),
-    ]
+// The Repeat menu and its card are `RepeatMenuList` and `RepeatChipCard` (Pickers/RepeatMenuCard.swift), worded for
+// the task's day by core's `RepeatChoice` (brief 97).
 
-    /// The preset `rule` is, if any. A rule with a place ("Monthly on the 28th", brief 71) is none of them.
-    static func preset(for rule: RecurrenceRule?) -> (title: String, rule: RecurrenceRule)? {
-        guard let rule else { return nil }
-        return all.first { $0.rule == rule }
-    }
-
-    /// The row the Repeat card shows for a rule it has no preset for ("Monthly on the 28th", "Every Mon, Wed"),
-    /// ticked as the current choice; nil when the rule is a preset or there is none. The row picks nothing: the
-    /// card cannot write every rule back (the quick-add card would turn "every month on the 28th" into "every
-    /// month"), so it leaves the rule alone unless another is picked.
-    static func currentRow(for rule: RecurrenceRule?) -> String? {
-        guard let rule, preset(for: rule) == nil else { return nil }
-        return rule.displayText
-    }
+/// The rule as a row says it, its days from the first day of the week in Settings: "Every Mon and Sun".
+extension RecurrenceRule {
+    var rowText: String { displayText(weekStart: Preferences.weekStartWeekday()) }
 }
 
-/// A chip-styled menu of repeat presets, for the date popover.
+/// The date card's Repeat chip (a system menu until brief 97's item 3 draws it), worded for the card's day.
 struct RepeatMenu: View {
     var rule: RecurrenceRule?
+    var day: Date
     var onPick: (RecurrenceRule?) -> Void
 
     var body: some View {
+        let ticked = RepeatChoice.matching(rule, on: day)?.kind
         Menu {
-            if let current = RepeatPresets.currentRow(for: rule) {
-                Button {} label: { Label(current, systemImage: "checkmark") }.disabled(true)
+            if let rule, ticked == nil {
+                Button {} label: { Label(rule.rowText, systemImage: "checkmark") }.disabled(true)
                 Divider()
             }
-            ForEach(RepeatPresets.all, id: \.title) { preset in
-                Button(preset.title) { onPick(preset.rule) }
+            ForEach(RepeatChoice.all(for: day)) { choice in
+                if ticked == choice.kind {
+                    Button {} label: { Label(choice.title, systemImage: "checkmark") }
+                } else {
+                    Button(choice.title) { onPick(choice.rule) }
+                }
             }
             if rule != nil {
                 Divider()
-                Button("Don’t repeat", role: .destructive) { onPick(nil) }
+                Button("Don’t repeat") { onPick(nil) }
             }
         } label: {
-            HITChipLabel(rule?.displayText ?? "Repeat", systemImage: "repeat", tint: PopoutTint.today, isSelected: rule != nil)
+            HITChipLabel(rule?.rowText ?? "Repeat", systemImage: "repeat", tint: PopoutTint.today, isSelected: rule != nil)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
-    }
-}
-
-/// The repeat presets as rows, for the task popout's Repeat chip.
-struct RepeatChipPopover: View {
-    var rule: RecurrenceRule?
-    var onPick: (RecurrenceRule?) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("Repeat").font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
-                .padding(.horizontal, HITSpacing.m)
-                .padding(.top, HITSpacing.s)
-                .padding(.bottom, HITSpacing.xs)
-            ForEach(RepeatPresets.all, id: \.title) { preset in
-                HITMenuRow(preset.title, systemImage: preset.rule == rule ? "checkmark" : "repeat",
-                           iconTint: preset.rule == rule ? Theme.accent : Theme.secondaryText, accessory: .none) {
-                    onPick(preset.rule)
-                }
-            }
-            if let current = RepeatPresets.currentRow(for: rule) {
-                HITMenuRow(current, systemImage: "checkmark", iconTint: Theme.accent, accessory: .none, action: nil)
-                    .accessibilityAddTraits(.isSelected)
-            }
-            if rule != nil {
-                Rectangle().fill(Theme.separator).frame(height: 1)
-                HITMenuRow("Don’t repeat", systemImage: "xmark", role: .destructive, accessory: .none) { onPick(nil) }
-            }
-        }
-        .padding(.vertical, HITSpacing.xs)
     }
 }
 

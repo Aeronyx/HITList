@@ -335,9 +335,20 @@ struct QuickAddDraft: Equatable, Codable {
         }
     }
 
-    mutating func setRecurrence(_ rule: RecurrenceRule?, _ parser: QuickAddParser) {
+    /// Writes the repeat's words (`RecurrenceRule.typedWords`), replacing a typed one; nil removes it. With
+    /// `keepingDay` (the day the card showed, typed or the list's), a repeat whose words alone would start it on
+    /// another day ("every week" typed in an Upcoming day's row starts today) writes that day too, so the task
+    /// keeps the day the menu was worded for (brief 97). A card with no day takes the repeat's next occurrence,
+    /// as typing it does.
+    mutating func setRecurrence(_ rule: RecurrenceRule?, _ parser: QuickAddParser, keepingDay: Date? = nil) {
         text = removing([.recurrence], parser)
-        if let rule { append(QuickAddTokens.recurrence(rule)); dateCleared = false }
+        guard let rule else { return }
+        append(QuickAddTokens.recurrence(rule))
+        dateCleared = false
+        let calendar = parser.dateParser.calendar
+        if let keepingDay, let due = result(parser).dueDate, !calendar.isDate(due, inSameDayAs: keepingDay) {
+            setDate(keepingDay, parser)
+        }
     }
 
     /// Accepts an autocomplete suggestion: a title replaces the text, anything else the last word.
@@ -441,22 +452,11 @@ enum QuickAddTokens {
 
     static func label(_ name: String) -> String { "@" + quoted(name) }
 
-    /// "every day", "every 2 weeks", "every mon and thu", "every weekday".
+    /// "every day", "every 2 weeks", "every mon and thu", "every weekday", "every month on the 11th", "every year on
+    /// nov 11" (core's `typedWords`, which read back as the rule). A rule quick add cannot type (days of their own
+    /// two or more weeks apart) is written as its interval alone.
     static func recurrence(_ rule: RecurrenceRule) -> String {
-        let n = rule.interval
-        switch rule.frequency {
-        case .daily: return n == 1 ? "every day" : "every \(n) days"
-        case .monthly: return n == 1 ? "every month" : "every \(n) months"
-        case .yearly: return n == 1 ? "every year" : "every \(n) years"
-        case .weekly:
-            if let days = rule.weekdays, !days.isEmpty, n == 1 {
-                if days == [2, 3, 4, 5, 6] { return "every weekday" }
-                let names = [1: "sun", 2: "mon", 3: "tue", 4: "wed", 5: "thu", 6: "fri", 7: "sat"]
-                let list = days.sorted().compactMap { names[$0] }
-                return "every " + (list.count == 1 ? list[0] : list.dropLast().joined(separator: ", ") + " and " + list.last!)
-            }
-            return n == 1 ? "every week" : "every \(n) weeks"
-        }
+        rule.typedWords ?? (rule.interval == 1 ? "every week" : "every \(rule.interval) weeks")
     }
 
     private static func quoted(_ name: String) -> String {

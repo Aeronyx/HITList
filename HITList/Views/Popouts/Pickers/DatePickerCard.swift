@@ -68,7 +68,7 @@ struct DatePickerCard: View {
                             .frame(maxWidth: .infinity)
                     }
                     if let onRepeat {
-                        RepeatMenu(rule: recurrence, onPick: onRepeat)
+                        RepeatMenu(rule: recurrence, day: selected ?? now, onPick: onRepeat)
                     }
                 }
                 .padding(.horizontal, HITSpacing.m)
