@@ -111,7 +111,7 @@ every theme. Every text/surface pair passes WCAG AA (`ThemeTests`).
 | Date, priority, project, label, reminder tokens | `HITChip`, several in `HITChipRow` (wraps) |
 | A chip as a `Menu` label | `HITChipLabel` |
 | Text input | `HITField` (single or `axis: .vertical`); a `TextField` you can't replace: `.textFieldStyle(HITTextFieldStyle())` |
-| 2-4 exclusive options (P1-P4, date presets) | `HITSegmented` + `HITSegment` |
+| 2-4 exclusive options (P1-P4, date presets, a filter) | `HITSegmented` + `HITSegment`; `size: .small` (28 pt in all) beside small buttons |
 | Colour choice | `HITColorDots(selection: $hex)` |
 | A day (due date, deadline) | `HITCalendar` (never the system `DatePicker`) |
 | An editor sheet | `HITSheetChrome` with `HITSection`s inside |
