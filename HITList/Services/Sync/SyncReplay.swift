@@ -160,7 +160,7 @@ final class SyncReplayPlayer {
         guard Self.isRequested, task == nil else { return }
         let start = Date().addingTimeInterval(Self.delay)
         state = SyncReplay.position(at: -1, start: start).state
-        CloudSyncMonitor.shared.replayStateChanged()
+        CloudSyncMonitor.shared.replayStarted()
         // A Debug Mac app recorded from behind other windows would otherwise be napped and play its steps late.
         let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical],
                                                              reason: "Sync replay keeps its timing")

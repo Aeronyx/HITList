@@ -402,6 +402,9 @@ final class CloudSyncMonitor {
     /// check half a second after it ends, always made, since a real sign-out must not wait a minute.
     private func accountChangeNotified() {
         accountChangeCount += 1
+        // The burst's own check comes half a second after it ends; a retry waiting for its turn isn't needed.
+        accountRetry?.cancel()
+        accountRetry = nil
         if accountChangeCount == 1 { write(.account, "CKAccountChanged received", level: .notice) }
         accountChangeBurst.schedule { [weak self] in
             guard let self else { return }
@@ -415,6 +418,41 @@ final class CloudSyncMonitor {
 
     @ObservationIgnored private let accountChangeBurst = Debouncer(delay: .milliseconds(500))
     @ObservationIgnored private var accountChangeCount = 0
+
+    /// After iCloud answers "temporarily unavailable" or "could not determine", HITList asks again after each of these
+    /// (seconds), then stops until something else asks (a CKAccountChanged burst, coming back to the app, a good sync):
+    /// CloudKit doesn't promise another CKAccountChanged when the account comes back (brief 78), and until it is asked
+    /// again the sync state keeps saying the account is unavailable. A few bounded retries, not polling.
+    static let accountRetryDelays: [TimeInterval] = [15, 60, 300]
+
+    /// The delay before retry number `attempt` (0-based), or nil once they are used up.
+    nonisolated static func accountRetryDelay(attempt: Int) -> TimeInterval? {
+        accountRetryDelays.indices.contains(attempt) ? accountRetryDelays[attempt] : nil
+    }
+
+    @ObservationIgnored private var accountRetry: Task<Void, Never>?
+    @ObservationIgnored private var accountRetryAttempt = 0
+
+    /// Schedules the next bounded retry while the answer is a blip; any definite answer ends the retries.
+    private func scheduleAccountRetry(after status: CKAccountStatus) {
+        guard AccountSteadiness.isBlip(status) else {
+            accountRetry?.cancel()
+            accountRetry = nil
+            accountRetryAttempt = 0
+            return
+        }
+        guard accountRetry == nil, let delay = Self.accountRetryDelay(attempt: accountRetryAttempt) else { return }
+        accountRetryAttempt += 1
+        let attempt = accountRetryAttempt
+        accountRetry = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.accountRetry = nil
+            self.write(.account, "Asking iCloud for the account again (\(attempt) of \(Self.accountRetryDelays.count))",
+                       fields: ["after": SyncLogFormat.duration(delay), "last": Self.describe(status)])
+            self.refreshAccountStatus(force: true)
+        }
+    }
 
     /// After a reset the old store's sync times no longer describe this store; the watchdog forgets them
     /// too, so the re-import counts as a first import (`SyncWatchdog.Rules.firstImportStalledAfter`).
@@ -446,12 +484,21 @@ final class CloudSyncMonitor {
     /// `SyncReplayPlayer` (Debug only): the account status the replay is at, for what reads it (the profile menu's
     /// iCloud line). Nothing else runs: no account check, no notice, no hygiene.
     func replayAccount(_ status: CKAccountStatus) {
-        accountStatus = status
+        let now = Date()
         rawAccountStatus = status
+        accountSteadiness.observe(status, at: now)
+        applyShownAccount(now)
     }
 
     /// `SyncReplayPlayer` (Debug only): the replayed raw state moved on.
     func replayStateChanged() {
+        stateChanged()
+    }
+
+    /// `SyncReplayPlayer` (Debug only): the replay begins as a launch would, so the marks start afresh from its first
+    /// state rather than from the Debug run's own (local only, with sync off).
+    func replayStarted() {
+        steadiness = SyncSteadiness()
         stateChanged()
     }
     #endif
@@ -469,9 +516,9 @@ final class CloudSyncMonitor {
     }
 
     private func accountStatusChanged(to status: CKAccountStatus, container: CKContainer) {
+        let now = Date()
         // The previous launch's status counts too: signing out while the app was closed is still a sign-out.
-        let previous = accountStatus ?? accountWatch.lastStatus
-        accountStatus = status
+        let previous = rawAccountStatus ?? accountWatch.lastStatus
         rawAccountStatus = status
         // The sync log (mirrored to os.Logger) records the status once per change.
         if loggedAccount != status {
@@ -483,15 +530,13 @@ final class CloudSyncMonitor {
         }
         // Signed out, restricted or "sign in again" means nothing can sync; "could not determine" doesn't say.
         let blocking: [CKAccountStatus] = [.noAccount, .restricted, .temporarilyUnavailable]
-        watch(.account(available: !blocking.contains(status), description: Self.describe(status), at: Date()))
-        if status == .available { signedOutDismissed = false }
-        setNotice(accountWatch.update(status: status, shown: accountNotice, signedOutDismissed: signedOutDismissed))
+        watch(.account(available: !blocking.contains(status), description: Self.describe(status), at: now))
+        // What the screen shows and what acts on a change follow the steadied status (brief 78): a blip in which the
+        // account comes back the same shows nothing and runs nothing.
+        accountSteadiness.observe(status, at: now)
+        applyShownAccount(now)
+        scheduleAccountRetry(after: status)
         stateChanged()
-        if status != .available, status != .couldNotDetermine, status != .temporarilyUnavailable { accountKey = nil }
-        // Signed out (now, or while the app was closed): the reminders name tasks the purge took away.
-        if status == .noAccount, previous == .available {
-            Task { await AccountSwitch.handleSignOut() }
-        }
         guard status == .available else { return }
         container.fetchUserRecordID { [weak self] id, error in
             Task { @MainActor in
@@ -503,6 +548,40 @@ final class CloudSyncMonitor {
                 }
                 self.accountIdentified(self.accountWatch.identify(userRecordName: name))
             }
+        }
+    }
+
+    /// Publishes the steadied account status (`accountStatus`) and runs what its change asks for (`AccountWatch.change`:
+    /// the signed-out banner, the sign-out clean-up, forgetting the account for this session). Sleeps until the
+    /// steadiness's next deadline, when a status waiting out its window shows.
+    private func applyShownAccount(_ now: Date) {
+        accountSteadyTimer?.cancel()
+        accountSteadyTimer = nil
+        if let next = accountSteadiness.nextDeadline(after: now) {
+            let delay = max(0.01, next.timeIntervalSince(now)) + 0.02
+            accountSteadyTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled, let self else { return }
+                let now = Date()
+                self.accountSteadiness.tick(now)
+                self.applyShownAccount(now)
+                self.stateChanged()
+            }
+        }
+        guard let shown = accountSteadiness.shown, shown != accountStatus else { return }
+        let previous = accountStatus ?? accountWatch.lastStatus
+        // A change of what Settings shows during the session (the launch's first answer is logged above).
+        if let before = accountStatus {
+            write(.account, "Settings shows the account as \(Self.describe(shown)) (was \(Self.describe(before)))", level: .notice)
+        }
+        accountStatus = shown
+        if shown == .available { signedOutDismissed = false }
+        let change = accountWatch.change(from: previous, to: shown, shown: accountNotice, signedOutDismissed: signedOutDismissed)
+        setNotice(change.notice)
+        if change.forgetsAccount { accountKey = nil }
+        // Signed out (now, or while the app was closed): the reminders name tasks the purge took away.
+        if change.signsOut {
+            Task { await AccountSwitch.handleSignOut() }
         }
     }
 
@@ -814,7 +893,7 @@ final class CloudSyncMonitor {
             lastErrorAt = now
             fields.merge(SyncLogFormat.errorFields(error)) { $1 }
             write(.event, "\(type.title) failed after \(duration): \(reason)",
-                  level: Self.isExpected(failureReason: reason, account: accountStatus) ? .notice : .error, fields: fields)
+                  level: Self.isExpected(failureReason: reason, account: rawAccountStatus) ? .notice : .error, fields: fields)
             if event.type == .import { importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .failed) }
         } else {
             switch event.type {
@@ -834,6 +913,11 @@ final class CloudSyncMonitor {
                 lastChangePhase = phase
             }
             write(.event, "\(type.title) finished in \(duration)", fields: fields)
+            // A good sync while iCloud last said the account was unavailable: it is back, so ask (at most every 10 s).
+            if let account = rawAccountStatus, AccountSteadiness.isBlip(account),
+               lastAccountCheck.map({ now.timeIntervalSince($0) >= 10 }) ?? true {
+                refreshAccountStatus(force: true)
+            }
             if event.type == .import {
                 NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil)
                 importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .succeeded)
