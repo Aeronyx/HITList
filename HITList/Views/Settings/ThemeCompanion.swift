@@ -17,7 +17,7 @@ enum ThemeCompanion {
         case peeking
         /// Asleep on the accent dot (its "+" pose at night), what hangs down over the dot.
         case asleepOnDot
-        /// On the swatch's top edge, legs over the edge (its "+" pose): for a companion the table doesn't know.
+        /// On the swatch's top edge, legs over the edge (its "+" pose).
         case onTop
     }
 
@@ -42,8 +42,10 @@ enum ThemeCompanion {
         "pip": Seat(placement: .asleepOnDot, along: 0.7),
     ]
 
-    /// For a companion not in `seats` (a new one): on the top edge, legs over, towards the trailing corner.
-    static let defaultSeat = Seat(placement: .onTop, along: 0.68)
+    /// For a companion not in `seats` (tonight's new ones until the supervisor gives them their own): on the card, legs
+    /// over its edge, left of the accent dot. Inside the swatch, so an untuned newcomer never adds height to the grid
+    /// (every theme will have its own companion once briefs 85 and 87 to 89 merge).
+    static let defaultSeat = Seat(placement: .onCard, along: 0.3)
 
     static func seat(for character: CompanionCharacter) -> Seat { seat(forID: character.id) }
 
