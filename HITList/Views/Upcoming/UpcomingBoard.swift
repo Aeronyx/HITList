@@ -305,14 +305,19 @@ struct UpcomingBoard: View {
     private func columnHeader(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let day = column.day {
-                Text(UpcomingFormat.boardHeader(for: day, now: now, calendar: calendar))
-                    .foregroundStyle(day == today ? Theme.accent : HITColor.text)
-                    .lineLimit(1)
+                DayHeadingLine(full: AttributedString(UpcomingFormat.header(for: day, now: now, calendar: calendar)),
+                               short: AttributedString(UpcomingFormat.header(for: day, now: now, shortWeekday: true,
+                                                                             calendar: calendar))) {
+                    if column.count > 0 {
+                        Text("\(column.count)").foregroundStyle(Theme.secondaryText)
+                    }
+                }
+                .foregroundStyle(day == today ? Theme.accent : HITColor.text)
             } else {
                 Text("Overdue").foregroundStyle(HITColor.dueOverdue)
-            }
-            if column.count > 0 {
-                Text("\(column.count)").foregroundStyle(Theme.secondaryText)
+                if column.count > 0 {
+                    Text("\(column.count)").foregroundStyle(Theme.secondaryText)
+                }
             }
             Spacer(minLength: HITSpacing.s)
             if column.day == nil {
