@@ -17,6 +17,9 @@ final class WeatherServiceTests: XCTestCase {
     private var now = Date(timeIntervalSince1970: 1_800_000_000)
     private var madeLocation = 0
     private var madeWeather = 0
+    /// What is on screen for the first launch's question: in front and clear unless a test says otherwise.
+    private var inFront = true
+    private var screenClear = true
 
     override func setUp() {
         fresh()
@@ -30,6 +33,8 @@ final class WeatherServiceTests: XCTestCase {
         sky = CompanionSkySource(arguments: UserDefaults(suiteName: "WeatherServiceTests.noArguments")!)
         madeLocation = 0
         madeWeather = 0
+        inFront = true
+        screenClear = true
     }
 
     override func tearDown() {
@@ -40,10 +45,15 @@ final class WeatherServiceTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
-    private func service(onForTheRun: Bool = false) -> CompanionWeather {
+    /// A Release build by default, so the first launch's question may be asked; the tests pass `.debug` to check the
+    /// Debug rule.
+    private func service(onForTheRun: Bool = false, build: LaunchLocationQuestion.Build = .release,
+                         arguments: [String] = ["HITList"]) -> CompanionWeather {
         CompanionWeather(location: { [unowned self] in madeLocation += 1; return location },
                          weather: { [unowned self] in madeWeather += 1; return weather },
-                         sky: sky, defaults: defaults, now: { [unowned self] in now }, onForTheRun: onForTheRun)
+                         sky: sky, defaults: defaults, now: { [unowned self] in now }, onForTheRun: onForTheRun,
+                         launch: .init(build: build, arguments: arguments, isTestHost: false),
+                         screen: { [unowned self] in (inFront, screenClear) })
     }
 
     private func advance(minutes: Double) { now = now.addingTimeInterval(minutes * 60) }
@@ -93,6 +103,100 @@ final class WeatherServiceTests: XCTestCase {
             XCTAssertEqual(service.hasAsked, item.asked)
             XCTAssertEqual(defaults.object(forKey: Preferences.companionWeather) as? Bool, item.stored, "never rewritten")
         }
+    }
+
+    // MARK: - The first launch's question (brief 83)
+
+    func testTheFirstLaunchAsksOnceAndAllowedStartsTheWeather() async {
+        location.answer = .allowed
+        weather.reading = WeatherReading(condition: "heavyRain", date: now)
+        let flagAtPrompt = defaults
+        location.onRequest = { XCTAssertTrue(flagAtPrompt!.bool(forKey: Preferences.companionWeatherAsked),
+                                             "marked asked before the prompt, so a killed launch never asks twice") }
+        let service = service()
+        let decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .ask)
+        XCTAssertEqual(location.requests, 1)
+        XCTAssertTrue(service.hasAsked)
+        XCTAssertTrue(service.isOn)
+        XCTAssertEqual(service.access, .allowed)
+        XCTAssertEqual(location.fixes, 1)
+        XCTAssertEqual(weather.requests, 1)
+        XCTAssertEqual(sky.sky, .rain, "allowed: the weather starts")
+        XCTAssertNil(defaults.object(forKey: Preferences.companionWeather), "the switch is still the default")
+
+        let again = await service.considerAskingAtLaunch()
+        XCTAssertEqual(again, .never)
+        let nextLaunch = self.service()
+        let next = await nextLaunch.considerAskingAtLaunch()
+        XCTAssertEqual(next, .never, "the second launch asks nothing")
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testRefusedAtTheFirstLaunchTurnsWeatherOffAndNeverAsksAgain() async {
+        for answer in [WeatherAccess.denied, .restricted] {
+            discard()
+            fresh()
+            location.answer = answer
+            let service = service()
+            let decision = await service.considerAskingAtLaunch()
+            XCTAssertEqual(decision, .ask)
+            XCTAssertFalse(service.isOn)
+            XCTAssertEqual(defaults.object(forKey: Preferences.companionWeather) as? Bool, false)
+            XCTAssertEqual(service.access, answer)
+            XCTAssertEqual(location.fixes, 0)
+            XCTAssertEqual(madeWeather, 0)
+            XCTAssertEqual(sky.sky, .unknown)
+
+            // Extras still knows why, and nothing asks again by itself.
+            let later = self.service()
+            later.refreshAccess()
+            XCTAssertEqual(later.access, answer)
+            let next = await later.considerAskingAtLaunch()
+            XCTAssertEqual(next, .never)
+            XCTAssertEqual(location.requests, 1)
+        }
+    }
+
+    func testTheQuestionWaitsForAClearScreenInFront() async {
+        let service = service()
+        inFront = false
+        var decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .later, "behind another app or still launching")
+        screenClear = false
+        inFront = true
+        decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .later, "a sheet, card or tip is showing")
+        XCTAssertEqual(location.requests, 0)
+        XCTAssertFalse(service.hasAsked)
+        XCTAssertEqual(madeLocation, 0, "not even the permission is read while waiting")
+        screenClear = true
+        decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .ask)
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testADebugBuildAsksAtLaunchOnlyWhenTold() async {
+        let quiet = service(build: .debug)
+        let decision = await quiet.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        XCTAssertEqual(madeLocation, 0, "Core Location untouched")
+        XCTAssertFalse(quiet.hasAsked)
+        let told = service(build: .debug, arguments: ["HITList", "-askLocationAtLaunch", "YES"])
+        let asked = await told.considerAskingAtLaunch()
+        XCTAssertEqual(asked, .ask)
+        XCTAssertEqual(location.requests, 1)
+    }
+
+    func testCompanionsOffOrWeatherOffAsksNothingAtLaunch() async {
+        defaults.set(false, forKey: Preferences.companions)
+        var decision = await service().considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        defaults.set(true, forKey: Preferences.companions)
+        defaults.set(false, forKey: Preferences.companionWeather)
+        decision = await service().considerAskingAtLaunch()
+        XCTAssertEqual(decision, .never)
+        XCTAssertEqual(madeLocation, 0)
     }
 
     func testSwitchedOffMakesNoCallAtAll() async {
@@ -326,6 +430,8 @@ private final class FakeLocation: WeatherLocationSource {
     /// What the prompt is answered with.
     var answer: WeatherAccess = .allowed
     var error: Error?
+    /// Called as the prompt would show.
+    var onRequest: () -> Void = {}
     private(set) var requests = 0
     private(set) var fixes = 0
     private(set) var accessReads = 0
@@ -337,6 +443,7 @@ private final class FakeLocation: WeatherLocationSource {
 
     func requestAccess() async -> WeatherAccess {
         requests += 1
+        onRequest()
         status = answer
         return status
     }
