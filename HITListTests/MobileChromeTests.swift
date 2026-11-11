@@ -139,7 +139,7 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(HITType.taskTitleTracking, -0.3, "build 13's tracking, which the Duo kept at 17")
         XCTAssertEqual(HITType.taskMetaSize, 13)
         XCTAssertEqual(HITType.taskTitle, HITFont.inter(17, .regular, relativeTo: .body))
-        XCTAssertEqual(HITType.taskMeta, HITFont.inter(13, .regular, relativeTo: .caption))
+        XCTAssertEqual(HITType.taskMeta, HITFont.inter(13, .regular, relativeTo: .caption2)) // brief 99: scales with caption2
         #endif
         for placement in [IslandPlacement.bottom, .side(.leading), .side(.trailing)] {
             XCTAssertEqual(HITType.taskTitle(for: placement), HITType.taskTitle)
