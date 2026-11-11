@@ -51,8 +51,10 @@ final class CompanionSpriteTests: XCTestCase {
                         let at = "\(character.id) \(place) \(label) \(gesture.name)"
                         // Asleep, a stir may be the whole of it dipping a pixel (Nod nods) once in several minutes.
                         let most = label == "asleep" ? 110 : 16
+                        // A gesture with a sky is drawn whole for that sky's still (brief 91): small beside it.
+                        let still = gesture.sky.map { mode.base(CompanionLook.Weather($0)) } ?? mode.rest
                         for tick in gesture.ticks {
-                            XCTAssertLessThanOrEqual(character.difference(tick.frame, mode.rest), most, at)
+                            XCTAssertLessThanOrEqual(character.difference(tick.frame, still), most, at)
                         }
                     }
                     for gesture in mode.gestures {
