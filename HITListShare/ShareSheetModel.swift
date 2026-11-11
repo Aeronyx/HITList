@@ -24,7 +24,8 @@ final class ShareSheetModel {
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "share")
 
-    private(set) var phase: Phase = .reading
+    // Set by `show` and `add`; the render tests set it to draw each phase.
+    var phase: Phase = .reading
     private(set) var content = SharedContent(address: nil, pageTitle: nil, text: nil)
     private(set) var title = ""
     /// The prefilled title's own phrases, where they sit, carried through the person's edits: they stay words.
@@ -43,9 +44,14 @@ final class ShareSheetModel {
     var lingering: Duration = .seconds(1.4)
     var watching: Duration = .seconds(1.6)
 
-    init(context: ShareContext? = ShareStore.context(), suffix: String? = ShareStore.suffix) {
+    /// Where the outbox and the app's ledger are: the App Group's container (a folder of the test's own in the tests).
+    private let folder: URL?
+
+    init(context: ShareContext? = ShareStore.context(), suffix: String? = ShareStore.suffix,
+         folder: URL? = AppGroup.containerURL) {
         self.context = context
         self.suffix = suffix
+        self.folder = folder
     }
 
     /// The parser as the app will make it, as of now (the app reads it again as of the moment Add was pressed).
@@ -102,7 +108,7 @@ final class ShareSheetModel {
         guard canAdd else { return }
         let request = request()
         let destination = request.plan(parser).destination
-        guard let outbox = ShareRoad.outbox(suffix: suffix) else {
+        guard let outbox = ShareOutbox(container: folder, suffix: suffix) else {
             failure = "HITList couldn't reach its shared folder, so nothing was saved. Copy the text and add it in HITList."
             Self.log.error("share not recorded: no App Group \(AppGroup.id, privacy: .public)")
             return
@@ -123,7 +129,7 @@ final class ShareSheetModel {
 
     /// Watches the app's ledger a moment: if the running app made the task, the line says so. Then the sheet closes.
     private func watchAndClose(_ id: UUID, destination: ShareDestination) async {
-        let ledgerURL = ShareRoad.ledgerURL(suffix: suffix)
+        let ledgerURL = folder?.appending(path: ShareLedger.fileName(suffix: suffix))
         let clock = ContinuousClock()
         let deadline = clock.now.advanced(by: watching)
         while clock.now < deadline {

@@ -38,6 +38,11 @@ targets:
       # The widgets' views (brief 74) are compiled into the app too, so the hosted tests render every widget
       # offscreen at its exact size (`HITListTests/Widget*Tests.swift`). The extension's own files stay out.
       - path: HITListWidgets/Views
+      # The share sheet's card and its model (brief 90), compiled into the app too so the hosted tests draw the card in
+      # every phase (`ShareCardRenderTests`). The extension's own host, reader and view controllers stay out.
+      - HITListShare/ShareCard.swift
+      - HITListShare/ShareSheetModel.swift
+      - HITListShare/ShareStore.swift
     scheme:
       testTargets: [HITListTests]
     dependencies:
