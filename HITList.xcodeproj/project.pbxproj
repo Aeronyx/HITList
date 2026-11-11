@@ -73,6 +73,7 @@
 		327B06BE2D01D16EC7DD8FB7 /* Inter_18pt-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */; };
 		32DDB8571AB99E53852B406A /* MobileTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 179EC0133891B8DCC4B358ED /* MobileTabBar.swift */; };
 		32EC8697D3216ABF194E6387 /* ProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC03BAE77E261B696BF81D54 /* ProfileStore.swift */; };
+		3319072BC0D35DEAC13DB9AB /* TodayLockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6042493D03477BA21A1D7765 /* TodayLockScreenViews.swift */; };
 		348542A3EA0C03CA7BF3E6D0 /* HITMenuRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DC5CAB524A97500619271F4 /* HITMenuRow.swift */; };
 		34A1DB62423E3AE56B8ECE09 /* WidgetSnapshotBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097EF1A12059B02DAB71F295 /* WidgetSnapshotBuilder.swift */; };
 		37F57898A0F935B769FE7584 /* ReminderDateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66FCF891D85A9FDB9278F2D6 /* ReminderDateTests.swift */; };
@@ -130,6 +131,7 @@
 		5530F11C224FC2EB6213122B /* HITChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52D4DEDC8BFB16C07252D16 /* HITChip.swift */; };
 		55EFAE67092E0D44A0F98359 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */; };
 		568C83634B96CF001EECAC60 /* LaunchTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52725DE5DA67990BB8D51CD6 /* LaunchTiming.swift */; };
+		5697D0CE9649C88130610563 /* TodayLockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6042493D03477BA21A1D7765 /* TodayLockScreenViews.swift */; };
 		56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */; };
 		5720041FAE6A032A7066DF4D /* DatePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */; };
 		5849B1C50CCFC964844E2ACB /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543B0A056452AA86090ECAD8 /* InboxView.swift */; };
@@ -279,6 +281,7 @@
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
 		C09211C77F010492FDC5B15F /* InboxText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD387014332B38314461584 /* InboxText.swift */; };
 		C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */; };
+		C243C97E8528AE9E0A2FF696 /* WidgetLockScreenTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A022D881A6398F52064D473 /* WidgetLockScreenTests.swift */; };
 		C3146E8D50618E05A74AB4F2 /* MacToolbarChrome.swift in Sources */ = {isa = PBXBuildFile; fileRef = F937FFA18F7912D2028638D3 /* MacToolbarChrome.swift */; };
 		C5EA9C5C8300AC4BFFDBE6D7 /* flip.caf in Resources */ = {isa = PBXBuildFile; fileRef = 46C5F20012A7AE765F02805B /* flip.caf */; };
 		C79282257284897B4665B800 /* WidgetFlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06F7D8D087BD4C3F57FC9F45 /* WidgetFlipboardTests.swift */; };
@@ -473,6 +476,7 @@
 		288443055725713733FD3685 /* ClaudeConnectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnectorTests.swift; sourceTree = "<group>"; };
 		29800AE3317F5D97333D1CDF /* HITMaterial.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMaterial.swift; sourceTree = "<group>"; };
 		298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenuUITests.swift; sourceTree = "<group>"; };
+		2A022D881A6398F52064D473 /* WidgetLockScreenTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetLockScreenTests.swift; sourceTree = "<group>"; };
 		2B58B86B080E75A9F4828B71 /* SharedTasksRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksRules.swift; sourceTree = "<group>"; };
 		2B628E6843BB58819E0920AB /* DuoLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoLayout.swift; sourceTree = "<group>"; };
 		2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
@@ -550,6 +554,7 @@
 		5E0F881764310827D1A610F1 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactQuickAddTests.swift; sourceTree = "<group>"; };
 		5F5A1903316EBA0994A9F66C /* SharingSceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingSceneDelegate.swift; sourceTree = "<group>"; };
+		6042493D03477BA21A1D7765 /* TodayLockScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayLockScreenViews.swift; sourceTree = "<group>"; };
 		6371FB0617E5C6B42D5FA759 /* VerticalBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalBar.swift; sourceTree = "<group>"; };
 		655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEntity.swift; sourceTree = "<group>"; };
 		659074BDF3973B67D923222D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
@@ -886,6 +891,7 @@
 			isa = PBXGroup;
 			children = (
 				D44BD633BB89C054A005326A /* FlipboardWidgetView.swift */,
+				6042493D03477BA21A1D7765 /* TodayLockScreenViews.swift */,
 				57E547415BCBD0B870811056 /* TodayWidgetView.swift */,
 				B5FFF6E39DFE4F4680579077 /* UpcomingWidgetView.swift */,
 				D2C524777B8CA68EDF5DAAA4 /* WidgetLook.swift */,
@@ -1261,6 +1267,7 @@
 				797B27167B378527AA6974A1 /* WidgetAppGroupTests.swift */,
 				4C0C12F7850B1B3F41432001 /* WidgetDeepLinkTests.swift */,
 				06F7D8D087BD4C3F57FC9F45 /* WidgetFlipboardTests.swift */,
+				2A022D881A6398F52064D473 /* WidgetLockScreenTests.swift */,
 				669670811BCE08D934276B4E /* WidgetRenderTests.swift */,
 				C646F9ABEFD94CE72865AA78 /* WidgetSnapshotWriterTests.swift */,
 				7A0C8DEFBDA26535C47BC4E6 /* WidgetTodayTests.swift */,
@@ -1764,6 +1771,7 @@
 				8D89A72DC04A51ED1EC851D6 /* Preferences.swift in Sources */,
 				0947491B7E208ED711487158 /* SnapshotTimeline.swift in Sources */,
 				E2559F9D69A6998DF2216586 /* Theme.swift in Sources */,
+				3319072BC0D35DEAC13DB9AB /* TodayLockScreenViews.swift in Sources */,
 				05DF610A8883650C22456ADE /* TodayWidget.swift in Sources */,
 				3AA5F21798FE8C6F79C6D66A /* TodayWidgetView.swift in Sources */,
 				975E9728DB4A9CD6823BF569 /* UpcomingWidget.swift in Sources */,
@@ -1990,6 +1998,7 @@
 				DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */,
 				429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */,
 				67A3A49DBD40647EC332A341 /* TitlePhrases.swift in Sources */,
+				5697D0CE9649C88130610563 /* TodayLockScreenViews.swift in Sources */,
 				85E3E278D179F9BE1945F24E /* TodayTasksIntent.swift in Sources */,
 				D9CA52DD51B58886AF2C50FB /* TodayWidgetView.swift in Sources */,
 				D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */,
@@ -2089,6 +2098,7 @@
 				B7D7932389623A7D6EA9BE41 /* WidgetAppGroupTests.swift in Sources */,
 				2E5CE89ADD351A5D1FBE95A6 /* WidgetDeepLinkTests.swift in Sources */,
 				C79282257284897B4665B800 /* WidgetFlipboardTests.swift in Sources */,
+				C243C97E8528AE9E0A2FF696 /* WidgetLockScreenTests.swift in Sources */,
 				B0BC21382CAD45DC29FC675F /* WidgetRenderTests.swift in Sources */,
 				9BBC494A329759ECFCF6D8E9 /* WidgetSnapshotWriterTests.swift in Sources */,
 				90CC9F55764A248D24E8FAAE /* WidgetTodayTests.swift in Sources */,

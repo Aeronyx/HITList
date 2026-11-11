@@ -12,8 +12,16 @@ struct TodayWidget: Widget {
         }
         .configurationDisplayName("Today")
         .description("What's due today and what's overdue, in Today's order.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(Self.families)
     }
+
+    #if os(iOS)
+    /// The Lock Screen's three as well (brief 74, item 7).
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge,
+                                           .accessoryCircular, .accessoryRectangular, .accessoryInline]
+    #else
+    static let families: [WidgetFamily] = [.systemSmall, .systemMedium, .systemLarge]
+    #endif
 }
 
 private struct TodayWidgetEntryView: View {
@@ -22,9 +30,15 @@ private struct TodayWidgetEntryView: View {
 
     var body: some View {
         let palette = ThemePalette.named(entry.snapshot?.themeID)
-        TodayWidgetView(snapshot: entry.snapshot, now: entry.date, family: family)
-            .environment(\.widgetPalette, palette)
-            .widgetBackground(palette)
+        switch family {
+        case .accessoryCircular, .accessoryRectangular, .accessoryInline:
+            TodayLockScreenView(snapshot: entry.snapshot, now: entry.date, family: family)
+                .containerBackground(for: .widget) { Color.clear }
+        default:
+            TodayWidgetView(snapshot: entry.snapshot, now: entry.date, family: family)
+                .environment(\.widgetPalette, palette)
+                .widgetBackground(palette)
+        }
     }
 }
 
