@@ -42,11 +42,135 @@ enum ListMetrics {
     static let headerBottom: CGFloat = 6
     #endif
 
-    static func rowInsets(compact: Bool) -> EdgeInsets {
-        EdgeInsets(top: compact ? compactRowTopInset : rowTopInset, leading: horizontalInset,
-                   bottom: compact ? compactRowBottomInset : rowBottomInset, trailing: horizontalInset)
+    /// `margin`: from the row's edges to its content, `horizontalInset` unless the screen follows the system's margin
+    /// (`followsSystemListMargin`, iPhone).
+    static func rowInsets(compact: Bool, margin: CGFloat = horizontalInset) -> EdgeInsets {
+        EdgeInsets(top: compact ? compactRowTopInset : rowTopInset, leading: margin,
+                   bottom: compact ? compactRowBottomInset : rowBottomInset, trailing: margin)
     }
 }
+
+// MARK: - The system's margin (brief 99)
+
+extension EnvironmentValues {
+    /// A task list's side margin: rows, headers and the empty line start this far in. `ListMetrics.horizontalInset`
+    /// everywhere except an iPhone screen that follows the system's margin (`followsSystemListMargin`).
+    @Entry var listMargin: CGFloat = ListMetrics.horizontalInset
+}
+
+extension View {
+    /// A list screen's rows, headers and empty line share the large title's left edge (brief 99): on iPhone the system
+    /// draws the title at its layout margin, 16 pt on most phones (iPhone 17, George's iPhone 16: nothing moves) and
+    /// 20 on the widest (the Pro Max, the Duo's outer display), where our fixed 16 left the title 4 pt right of
+    /// everything under it. Measured from UIKit (the screen's `systemMinimumLayoutMargins`); the iPad and the Mac keep
+    /// `ListMetrics`' fixed inset.
+    func followsSystemListMargin() -> some View { modifier(SystemListMargin()) }
+
+    /// A task row's insets on the list's margin.
+    func listRowInsetsOnMargin(compact: Bool) -> some View { modifier(ListRowInsetsOnMargin(compact: compact)) }
+
+    /// Horizontal padding of the list's margin: headers, the empty line, a strip under the title.
+    func listMarginPadding() -> some View { modifier(ListMarginPadding()) }
+}
+
+private struct ListRowInsetsOnMargin: ViewModifier {
+    let compact: Bool
+    @Environment(\.listMargin) private var margin
+
+    func body(content: Content) -> some View {
+        content.listRowInsets(ListMetrics.rowInsets(compact: compact, margin: margin))
+    }
+}
+
+private struct ListMarginPadding: ViewModifier {
+    @Environment(\.listMargin) private var margin
+
+    func body(content: Content) -> some View { content.padding(.horizontal, margin) }
+}
+
+/// The margin to follow: the system's where it is measured (an iPhone in the phone shell), else the fixed inset.
+enum SystemListMarginRule {
+    static func margin(measured: CGFloat?, isPhoneShell: Bool) -> CGFloat {
+        guard isPhoneShell, let measured, measured > 0 else { return ListMetrics.horizontalInset }
+        return measured
+    }
+}
+
+private struct SystemListMargin: ViewModifier {
+    @State private var measured: CGFloat?
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    #endif
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        let isPhoneShell = UIDevice.current.userInterfaceIdiom == .phone && sizeClass == .compact
+        content
+            .environment(\.listMargin, SystemListMarginRule.margin(measured: measured, isPhoneShell: isPhoneShell))
+            .background {
+                if isPhoneShell {
+                    SystemMarginReader { if $0 != measured { measured = $0 } }
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
+        #else
+        content
+        #endif
+    }
+}
+
+#if os(iOS)
+/// Reports the leading layout margin UIKit gives this screen (the one its navigation bar draws the large title at),
+/// whenever it is laid out or its traits change.
+private struct SystemMarginReader: UIViewRepresentable {
+    let report: (CGFloat) -> Void
+
+    func makeUIView(context: Context) -> Reader {
+        let view = Reader()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: Reader, context: Context) {
+        view.report = report
+        view.measureSoon()
+    }
+
+    final class Reader: UIView {
+        var report: ((CGFloat) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            measureSoon()
+        }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            measureSoon()
+        }
+
+        func measureSoon() {
+            DispatchQueue.main.async { [weak self] in MainActor.assumeIsolated { self?.measure() } }
+        }
+
+        private func measure() {
+            guard window != nil, let controller = nearestController() else { return }
+            let screen = controller.navigationController ?? controller
+            report?(screen.systemMinimumLayoutMargins.leading)
+        }
+
+        private func nearestController() -> UIViewController? {
+            var responder: UIResponder? = self
+            while let current = responder {
+                if let controller = current as? UIViewController { return controller }
+                responder = current.next
+            }
+            return nil
+        }
+    }
+}
+#endif
 
 extension View {
     /// A task list's section header: "Overdue", "Nov 1, Sunday", "Priority 1". `HITType.listSectionHeader`
@@ -60,6 +184,7 @@ extension View {
 
 private struct TaskSectionHeaderStyle: ViewModifier {
     let color: Color
+    @Environment(\.listMargin) private var margin
 
     func body(content: Content) -> some View {
         content
@@ -68,7 +193,7 @@ private struct TaskSectionHeaderStyle: ViewModifier {
             .textCase(nil)
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, ListMetrics.horizontalInset)
+            .padding(.horizontal, margin)
             .padding(.top, ListMetrics.headerTop)
             .padding(.bottom, ListMetrics.headerBottom)
             .background(Theme.background)

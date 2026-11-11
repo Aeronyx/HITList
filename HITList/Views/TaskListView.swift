@@ -318,7 +318,7 @@ struct TaskListView: View {
                             .font(HITType.subheadline)
                             .foregroundStyle(Theme.secondaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, ListMetrics.horizontalInset)
+                            .listMarginPadding()
                             .padding(.top, HITSpacing.l)
                             .frame(maxHeight: .infinity, alignment: .top)
                     } else if groups.isEmpty, events.isEmpty {
@@ -407,6 +407,8 @@ struct TaskListView: View {
         }
         .quickAddEntry(addContext, showsButton: selection != .completed && (!isSharedTasks || SharedTasksCenter.shared.isOn))
         .background(Theme.background)
+        // Rows, headers and the empty line on the large title's edge (brief 99).
+        .followsSystemListMargin()
         .navigationTitle(title)
         #if os(iOS)
         // Every list's name once, as the system large title (brief 61): a Group's too, with no header under it.

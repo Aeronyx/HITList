@@ -47,7 +47,7 @@ struct WeekStripView: View {
                     .accessibilityLabel("Next week")
             }
             .buttonStyle(.borderless)
-            .padding(.horizontal, 16)
+            .listMarginPadding() // the rows' and the large title's edge (brief 99)
 
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 0) {

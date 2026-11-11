@@ -113,6 +113,8 @@ struct UpcomingView: View {
         }
         .quickAddEntry(.upcoming)
         .background(Theme.background)
+        // Rows, headers and the week strip's month on the large title's edge (brief 99).
+        .followsSystemListMargin()
         .navigationTitle("Upcoming")
         .screenChrome {
             ViewOptionsMenu {
@@ -465,7 +467,7 @@ struct UpcomingView: View {
                     .id(AddRowID(day: day))
                     .selectionDisabled()
                     .listRowSeparator(.hidden)
-                    .listRowInsets(ListMetrics.rowInsets(compact: false))
+                    .listRowInsetsOnMargin(compact: false)
                     .listRowBackground(Theme.background)
             }
         } else {
@@ -755,7 +757,7 @@ private struct DayHeaderStyle: ViewModifier {
         content
             .font(HITType.listSectionHeader)
             .textCase(nil)
-            .padding(.horizontal, ListMetrics.horizontalInset)
+            .listMarginPadding()
             .padding(.top, ListMetrics.headerTop)
             .padding(.bottom, ListMetrics.headerBottom)
             .frame(maxWidth: .infinity, alignment: .leading)
