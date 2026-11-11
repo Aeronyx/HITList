@@ -69,7 +69,16 @@ struct SidebarView: View {
         // The gear at the foot of the sidebar opens Settings in this window's detail column.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
-                .overlay(alignment: CompanionPerch.alignment(.sidebarFoot)) { CompanionPerch(.sidebarFoot) }
+                // Quill lies at the row's right end. In a column too narrow for the label and Quill, the label wins.
+                .overlay {
+                    GeometryReader { row in
+                        if row.size.width >= Self.settingsRowWidthForCompanion {
+                            Color.clear
+                                .overlay(alignment: CompanionPerch.alignment(.sidebarFoot)) { CompanionPerch(.sidebarFoot) }
+                        }
+                    }
+                    .allowsHitTesting(false)
+                }
         }
         #endif
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
@@ -362,6 +371,9 @@ struct SidebarView: View {
         .task { sharedRows.start() }
     }
     #endif
+
+    /// The narrowest Settings row that holds "Settings" and the companion beside it without touching.
+    static let settingsRowWidthForCompanion: CGFloat = 176
 
     /// From the sidebar's leading edge to the account button's fill, the same as the Settings button at the
     /// foot, so the avatar lines up with the gear.

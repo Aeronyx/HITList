@@ -156,13 +156,17 @@ private struct SplitContent: View {
                 // Partly open with the crease top to bottom, the sidebar ends where it starts (brief 50).
                 sidebar.navigationSplitViewColumnWidth(DuoColumns.sidebarWidth(width: geometry.width, crease: geometry.crease))
             } else {
-                sidebar.navigationSplitViewColumnWidth(min: 200, ideal: 240)
+                sidebar
                     #if os(macOS)
                     // Our sidebar toggle above the sidebar, where the system's was (brief 70); the system's sat in a
                     // glass circle on 27.2.
                     .toolbar(removing: .sidebarToggle)
                     .toolbar { sidebarToggleItem }
                     #endif
+                    // Last, on the column's outermost view: under the toolbar modifiers the minimum was not
+                    // applied, and the divider could be dragged to 148 pt, where the profile's name, "Shared Tasks"
+                    // and "Settings" no longer fit (round 17's screenshot pass).
+                    .navigationSplitViewColumnWidth(min: 200, ideal: 240)
             }
         } detail: {
             if duo {
