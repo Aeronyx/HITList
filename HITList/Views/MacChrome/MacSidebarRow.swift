@@ -168,10 +168,12 @@ struct MacSidebarRow<Icon: View, Trailing: View>: View {
     }
 }
 
-/// A row's count, in the list's tabular digits; brighter on the selected row.
+/// A row's count, in the list's tabular digits; brighter on the selected row. A new number rolls in over the old
+/// (`standard`, brief 75) rather than replacing it in one frame; under Reduce Motion it just changes.
 struct MacSidebarCount: View {
     let count: Int
     @Environment(\.macSidebarRowSelected) private var isSelected
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(_ count: Int) { self.count = count }
 
@@ -180,6 +182,8 @@ struct MacSidebarCount: View {
             Text("\(count)")
                 .font(MacSidebarStyle.countFont)
                 .foregroundStyle(isSelected ? MacSidebarStyle.selectedForeground.opacity(0.7) : MacSidebarStyle.count)
+                .contentTransition(.numericText(value: Double(count)))
+                .animation(HITMotion.standard(reduceMotion: reduceMotion), value: count)
         }
     }
 }
