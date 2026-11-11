@@ -155,8 +155,8 @@ struct SettingsProfileRow: View {
     let action: () -> Void
     @Query private var profiles: [Profile]
 
-    /// The avatar's side: one row of a page row's height plus a little, so the name reads as the screen's top.
-    static let avatarSize: CGFloat = 40
+    /// The avatar's side: as tall as the name and the line under it.
+    static let avatarSize: CGFloat = 36
 
     private var profile: Profile? { ProfileStore.shown(profiles) }
 

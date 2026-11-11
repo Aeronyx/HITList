@@ -15,11 +15,12 @@ struct AppearanceSettingsSection: View {
 
     var body: some View {
         HITGroup(Self.title) {
+            // The grid keeps its own top (`ThemeSwatchGrid`), so a companion above the first row costs less room.
             ThemeSwatchRow(selection: store.palette) { palette in
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
             }
             .padding(.horizontal, HITSpacing.l)
-            .padding(.vertical, HITSpacing.m)
+            .padding(.bottom, HITSpacing.m)
             Toggle(isOn: $reduceEffects) {
                 HITMenuRowLabel("Reduce effects", subtitle: Self.reduceEffectsSubtitle, systemImage: "sparkles")
             }
@@ -70,12 +71,23 @@ struct ThemeSwatchRise: LayoutValueKey {
 
 /// A grid of equal cells on whole points: each cell's width is whole and leaves an even margin round
 /// `cellContentWidth` (so a swatch centred in it starts on a whole point), the grid is centred within a point, every
-/// row starts on a whole point, and each row keeps the room its companions reach above it (`ThemeSwatchRise`).
+/// row starts on a whole point, and each row keeps the room its companions reach above it (`ThemeSwatchRise`): above
+/// the first row on top of `companionTop` (`top` when nothing rises there), between rows out of `rowSpacing` first.
 struct ThemeSwatchGrid: Layout {
     var columns: Int
     var spacing: CGFloat
     var rowSpacing: CGFloat
     var cellContentWidth: CGFloat
+    /// Above the first row when nothing rises from it, and when something does (plus what rises).
+    var top: CGFloat = HITSpacing.m
+    var companionTop: CGFloat = HITSpacing.s
+
+    /// From the end of the row above (or the grid's top) to a row's cells.
+    static func gap(before row: Int, rise: CGFloat, rowSpacing: CGFloat, top: CGFloat, companionTop: CGFloat) -> CGFloat {
+        let rise = rise.rounded(.up)
+        if row == 0 { return rise > 0 ? companionTop + rise : top }
+        return max(rowSpacing, rise)
+    }
 
     /// The cell width for `width`: whole, at least the content, with an even margin round the content.
     static func cellWidth(for width: CGFloat, columns: Int, spacing: CGFloat, content: CGFloat) -> CGFloat {
@@ -104,8 +116,7 @@ struct ThemeSwatchGrid: Layout {
             let row = subviews[start..<min(start + columns, subviews.count)]
             let rise: CGFloat = row.map { $0[ThemeSwatchRise.self] }.max() ?? 0
             let tallest: CGFloat = row.map { $0.sizeThatFits(ProposedViewSize(width: cache.cell, height: nil)).height }.max() ?? 0
-            if start > 0 { y += rowSpacing }
-            y += rise.rounded(.up)
+            y += Self.gap(before: start / columns, rise: rise, rowSpacing: rowSpacing, top: top, companionTop: companionTop)
             let height = tallest.rounded(.up)
             cache.rows.append((y, height))
             y += height

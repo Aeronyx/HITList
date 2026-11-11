@@ -45,7 +45,9 @@ enum ThemeCompanion {
     /// For a companion not in `seats` (a new one): on the top edge, legs over, towards the trailing corner.
     static let defaultSeat = Seat(placement: .onTop, along: 0.68)
 
-    static func seat(for character: CompanionCharacter) -> Seat { seats[character.id] ?? defaultSeat }
+    static func seat(for character: CompanionCharacter) -> Seat { seat(forID: character.id) }
+
+    static func seat(forID id: String) -> Seat { seats[id] ?? defaultSeat }
 
     /// The companion `palette`'s swatch shows: the theme's own. Nil when the theme only borrows one another theme
     /// owns (every theme without a companion of its own gets Nod: only Slate, Nod's theme, shows it). Launch
