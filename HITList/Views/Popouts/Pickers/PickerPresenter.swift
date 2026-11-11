@@ -22,11 +22,23 @@ enum PickerKind: Hashable, CaseIterable {
     /// Every card fits well inside the 560 pt panel.
     var width: CGFloat {
         switch self {
+        // iPhone and iPad: Custom… opens in the date card's place, and its Daily · Weekly · Monthly · Yearly need
+        // 360 at the phone's control size (brief 97).
+        #if os(macOS)
         case .date, .deadline: 320
+        #else
+        case .date, .deadline: 360
+        #endif
         case .reminder: 300
         case .location: 300
         case .priority, .group, .labels: 280
-        case .repeating: 260
+        // The Repeat menu's longest choices ("Every 2 weeks on Wednesday") and Custom's Daily · Weekly · Monthly ·
+        // Yearly, whole at each platform's control size (brief 97).
+        #if os(macOS)
+        case .repeating: 320
+        #else
+        case .repeating: 360
+        #endif
         }
     }
 }
@@ -61,6 +73,22 @@ extension EnvironmentValues {
         get { self[PickerFocusRequestKey.self] }
         set { self[PickerFocusRequestKey.self] = newValue }
     }
+
+    /// The open card's own Escape (the Mac's picker layer); nil on iPhone and iPad.
+    var pickerEscape: PickerEscape? {
+        get { self[PickerEscapeKey.self] }
+        set { self[PickerEscapeKey.self] = newValue }
+    }
+}
+
+/// What Escape does inside the open card (brief 97): while `action` is set (the date card's Repeat dropdown is open),
+/// Escape runs it instead of closing the card.
+@MainActor final class PickerEscape {
+    var action: (() -> Void)?
+}
+
+private struct PickerEscapeKey: EnvironmentKey {
+    static let defaultValue: PickerEscape? = nil
 }
 
 struct PickerCardChrome: ViewModifier {
@@ -87,7 +115,9 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
     let card: () -> Card
 
     func body(content: Content) -> some View {
-        content.popover(isPresented: $isPresented) {
+        content
+            .background(PickerChipReveal(isPresented: isPresented))
+            .popover(isPresented: $isPresented) {
             card()
                 .frame(width: kind.width)
                 .background(Theme.surface)
@@ -101,6 +131,34 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 
 private struct PickerOverlayModifier: ViewModifier {
     func body(content: Content) -> some View { content }
+}
+
+/// Brings a chip into sight as its card opens, as on the Mac (brief 65): the quick-add card's Repeat chip, revealed by
+/// "+" → Repeat at the end of the sideways row, opened its popover off the screen's edge (brief 97, iPhone 17).
+private struct PickerChipReveal: UIViewRepresentable {
+    let isPresented: Bool
+
+    func makeUIView(context: Context) -> PickerChipRevealView { PickerChipRevealView() }
+
+    func updateUIView(_ view: PickerChipRevealView, context: Context) {
+        guard isPresented != view.wasPresented else { return }
+        view.wasPresented = isPresented
+        if isPresented { view.reveal() }
+    }
+}
+
+final class PickerChipRevealView: UIView {
+    var wasPresented = false
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { false }
+
+    /// Scrolls the nearest enclosing scroll view just far enough to show the whole chip, with a little room.
+    func reveal() {
+        var view = superview
+        while let candidate = view, !(candidate is UIScrollView) { view = candidate.superview }
+        guard let scroll = view as? UIScrollView, window != nil else { return }
+        scroll.scrollRectToVisible(convert(bounds, to: scroll).insetBy(dx: -PickerPlacement.margin, dy: 0), animated: false)
+    }
 }
 #endif
 
@@ -295,8 +353,20 @@ final class PickerLayerModel {
     @ObservationIgnored var dismiss: (() -> Void)?
     /// Where the card was last placed, in the layer's coordinates (for click-outside).
     @ObservationIgnored var cardFrame: CGRect = .zero
+    /// The card's own Escape, asked first.
+    @ObservationIgnored let escape = PickerEscape()
 
     func dismissCard() { dismiss?() }
+
+    /// Escape: the card's own (a dropdown inside it) if it has one, else close the card.
+    func escapeCard() {
+        if let action = escape.action {
+            escape.action = nil
+            action()
+        } else {
+            dismissCard()
+        }
+    }
 }
 
 /// One per window: a transparent hosting view over the window's content that draws the open card. It
@@ -399,6 +469,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         self.ownerID = nil
         model.card = nil
         model.dismiss = nil
+        model.escape.action = nil
         model.cardFrame = .zero
         removeMonitor()
         restoreKeyboard()
@@ -445,7 +516,7 @@ final class PickerLayerHost: NSHostingView<PickerLayerRoot> {
         case .keyDown:
             let modifiers = event.modifierFlags.intersection([.command, .control, .option])
             if event.keyCode == Self.escapeKey, modifiers.isEmpty {
-                model.dismissCard()
+                model.escapeCard()
                 return nil
             }
             if event.keyCode == Self.tabKey, modifiers.isEmpty, !keyboardIsInCard {
@@ -506,6 +577,7 @@ struct PickerLayerRoot: View {
                     card
                         .pickerCardChrome(width: model.kind.width)
                         .environment(\.pickerFocusRequest, model.focusRequest)
+                        .environment(\.pickerEscape, model.escape)
                         .id(model.generation)
                         .transition(cardTransition)
                 }
