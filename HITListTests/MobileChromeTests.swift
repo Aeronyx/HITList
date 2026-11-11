@@ -241,14 +241,17 @@ final class MobileChromeTests: XCTestCase {
         XCTAssertEqual(SyncBolt.look(for: .offline).color, Theme.secondaryText)
     }
 
-    func testScreenMenuRendersForEveryTab() {
+    /// The Mac's and iPad's second toolbar control is the gear that opens Settings (brief 99), iPhone's gear on Browse in
+    /// symbol, words and identifier; a screen's own items render in the view options instead.
+    func testSettingsGearRendersAndEveryScreensItemsRenderInTheViewOptions() {
+        let gear = SettingsGearButton {}.frame(width: 60, height: 60).preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: gear).cgImage, "the gear didn't render")
         for tab in MobileTab.allCases {
-            let view = ScreenMenu(onSettings: {}) {
-                Button(tab.title) {}
-            }
-            .frame(width: 200, height: 60)
-            .preferredColorScheme(.dark)
-            XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(tab.title) menu didn't render")
+            let view = ViewOptionsMenu { Toggle("Show completed", isOn: .constant(true)) }
+                .environment(\.screenMenuItems, AnyView(Button(tab.title) {}))
+                .frame(width: 200, height: 60)
+                .preferredColorScheme(.dark)
+            XCTAssertNotNil(ImageRenderer(content: view).cgImage, "\(tab.title)'s view options didn't render")
         }
     }
 
