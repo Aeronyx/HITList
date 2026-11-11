@@ -171,6 +171,7 @@
 		5452E3B9A01580AD2F3947F3 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = F186832AD84DA7CDA6A34C6E /* main.swift */; };
 		548AA92042E74504EBE5C6DE /* HolidayEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FD507EEBD7A6AAD5F22146C /* HolidayEffects.swift */; };
 		5530F11C224FC2EB6213122B /* HITChip.swift in Sources */ = {isa = PBXBuildFile; fileRef = C52D4DEDC8BFB16C07252D16 /* HITChip.swift */; };
+		55A94E38CAB5FFAAFB6A87E1 /* CompanionSeatTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D72A13F12084A1FA3FE9855 /* CompanionSeatTests.swift */; };
 		55EFAE67092E0D44A0F98359 /* SyncLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */; };
 		568C83634B96CF001EECAC60 /* LaunchTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52725DE5DA67990BB8D51CD6 /* LaunchTiming.swift */; };
 		5697D0CE9649C88130610563 /* TodayLockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6042493D03477BA21A1D7765 /* TodayLockScreenViews.swift */; };
@@ -817,6 +818,7 @@
 		8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListApp.swift; sourceTree = "<group>"; };
 		8D132D283F9A84163755B240 /* ShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareStore.swift; sourceTree = "<group>"; };
 		8D4CC6ADB283D58BA2318C98 /* LocationQuestionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationQuestionUITests.swift; sourceTree = "<group>"; };
+		8D72A13F12084A1FA3FE9855 /* CompanionSeatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionSeatTests.swift; sourceTree = "<group>"; };
 		8DC5CAB524A97500619271F4 /* HITMenuRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMenuRow.swift; sourceTree = "<group>"; };
 		8E1C338682C3B105BCFBFB49 /* WidgetCompletionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCompletionIntent.swift; sourceTree = "<group>"; };
 		8E560EB0588544BDE7C47FAB /* HolidayEffectsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HolidayEffectsTests.swift; sourceTree = "<group>"; };
@@ -1544,6 +1546,7 @@
 				40E19A8110C433322A8B61BA /* CompanionGargleTests.swift */,
 				2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */,
 				D3665C703381B79FA72B1388 /* CompanionNewCastTests.swift */,
+				8D72A13F12084A1FA3FE9855 /* CompanionSeatTests.swift */,
 				BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */,
 				4AC8F4B56B5871C0BE8977E4 /* CompanionSpriteTests.swift */,
 				FAB3AEA421D4EA60E679B7DA /* CompanionTuckTests.swift */,
@@ -2601,6 +2604,7 @@
 				1EF8F087699CD428EB04059E /* CompanionGargleTests.swift in Sources */,
 				6051A713FB5D533FBE49DFB3 /* CompanionGlimTests.swift in Sources */,
 				E5A22304670D4E821F8346F9 /* CompanionNewCastTests.swift in Sources */,
+				55A94E38CAB5FFAAFB6A87E1 /* CompanionSeatTests.swift in Sources */,
 				E9F3DA77C75DEC0674B2C526 /* CompanionSkySourceTests.swift in Sources */,
 				4C3E594F18816DAA10A08509 /* CompanionSpriteTests.swift in Sources */,
 				C6D28E9ABA63C1FAAC5952F8 /* CompanionTuckTests.swift in Sources */,
