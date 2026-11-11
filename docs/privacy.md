@@ -67,17 +67,25 @@ they are not saved with your tasks, synced through iCloud, put in backups or exp
 Siri, or given to Claude. Switching it off stops the reading; you can also withdraw access in your device's
 settings under Privacy & Security → Calendars.
 
-## Weather for your companion (optional, off unless you turn it on)
+## Your companion's local time and weather (optional, asked once)
 
-If you switch on Settings → Extras → Weather, HITList asks to use your location while the app is in use, and only
-an approximate one (about the size of a town). When the app comes to the front, at most once an hour, it gets
-that approximate location from your device and asks Apple Weather (WeatherKit) whether it is raining, snowing,
-stormy, cloudy or clear there, so your companion can dress for it. That request is made by Apple's own framework
-and handled by Apple under [Apple's Privacy Policy](https://www.apple.com/legal/privacy/). HITList shows no forecast
-or temperature, and the location is never stored, synced through iCloud, logged, put in backups or exports, or
-sent anywhere else; the answer is kept in memory only and forgotten after three hours. Switched off, or without
-permission, HITList makes no location or weather request at all. You can also withdraw the permission in your
-device's settings under Privacy & Security → Location Services → HITList.
+The first time you open HITList, it asks once to use your location while the app is in use, and only an
+approximate one (about the size of a town). It uses it for two things only: to keep your companion on local time
+where you are, and to dress it for the weather there. If you choose Don't Allow, nothing else changes, HITList
+does not ask again, and your companion keeps your device's time without weather.
+
+When the app comes to the front, at most once an hour, HITList gets that approximate location from your device
+and makes two requests with it, both handled by Apple under [Apple's Privacy
+Policy](https://www.apple.com/legal/privacy/): it asks Apple Weather (WeatherKit) whether it is raining, snowing,
+stormy, cloudy or clear there, and it asks Apple's map service (the reverse geocoder in MapKit) which time zone
+that place is in. HITList shows no forecast, temperature or place name. The location is never stored, synced
+through iCloud, logged, put in backups or exports, or sent anywhere else; the sky and the time zone are kept in
+memory only and forgotten after three hours. Your tasks, reminders and lists always follow your device's own time
+zone, never this one.
+
+Settings → Extras → Weather switches it off, and with it off, without permission, or with Companions off, HITList
+makes no location, weather or map request at all. You can also withdraw the permission in your device's settings
+under Privacy & Security → Location Services → HITList.
 
 ## Notifications
 

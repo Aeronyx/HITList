@@ -35,7 +35,9 @@ struct HITListApp: App {
         CloudSyncMonitor.shared.containerReady(container)
         IntentStore.register(container) // Siri and Shortcuts write through this one container (brief 46).
         HITTips.configure() // first-run tips, once, on this store's own datastore (brief 52).
-        CompanionWeather.shared.start() // brief 80: the companions' sky, when the app comes forward (off by default)
+        // Briefs 80, 83: the companions' sky and local time when the app comes forward, and the location question
+        // once, after the first screen has settled in front (never in a Debug build without -askLocationAtLaunch YES).
+        CompanionWeather.shared.start()
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
         DateServices.start(container: container) // brief 82: one day in every zone, and catching up when the zone or day changes
