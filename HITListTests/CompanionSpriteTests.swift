@@ -115,8 +115,8 @@ final class CompanionSpriteTests: XCTestCase {
                 for weather in [CompanionLook.Weather.rain, .snow] {
                     XCTAssertTrue(everyday.contains { character.plays($0, in: weather, mode: mode) }, "\(at): one in \(weather)")
                 }
-                XCTAssertFalse(mode.flickers.count == mode.gestures.count && mode.gestures.count > 2,
-                               "\(at): its flickers are marked, so a glance or a sniff plays only in routines")
+                // Brief 100: an idle every few seconds, so five flickers of every sky at least.
+                XCTAssertGreaterThanOrEqual(mode.flickers.filter { mode.gestures[$0].sky == nil }.count, 5, "\(at): its idles")
             }
             XCTAssertTrue(character.posture(.field).asleep.routines.isEmpty, "\(character.id): no routines asleep")
         }
@@ -225,9 +225,10 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance", "rimDrip", "sweat"])
-        XCTAssertEqual(nod.field.awake.flickers, [0, 1, 2, 4, 5], "a blink or one swing of a leg (and the weather's drip and sweat); the glance plays in routines")
-        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway"])
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance", "lookLeft", "lookRight",
+                                                              "lampFlicker", "rimDrip", "sweat"])
+        XCTAssertEqual(nod.field.awake.flickers, Array(0...8), "brief 100: every one an idle, the weather's drip and sweat too")
+        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "kick"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
         XCTAssertEqual(rest[13][17], "w")
@@ -292,7 +293,7 @@ final class CompanionSpriteTests: XCTestCase {
         let slow = C.Gesture(name: "slow", ticks: C.ticks(("rest", 9)))
         let cut = C.Gesture(name: "cut", ticks: C.ticks(("cut", 1)))
         let gone = C.Gesture(name: "gone", ticks: C.ticks(("gone", 1)))
-        let mode = C.Mode(rest: "rest", rain: "wet", gestures: [slow, cut], answer: gone)
+        let mode = C.Mode(rest: "rest", rain: "wet", gestures: [slow, gone], answer: cut)
         let asleep = C.Mode(rest: "rest", gestures: [], answer: gone)
         let posture = C.Posture(awake: mode, asleep: asleep, flourish: C.ticks(("rest", 3), ("gone", 1)))
         let bad = C(id: "bad", name: "Bad", width: 3, height: 2, seatRow: 3,

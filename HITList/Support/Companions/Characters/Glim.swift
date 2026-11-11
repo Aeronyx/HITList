@@ -2117,6 +2117,29 @@ extension CompanionCharacter {
                 "...............dggd.",
                 "................dd..",
             ]),
+        // Brief 100: asleep, a breath: its head lifts a pixel.
+        Frame(name: "sleepBreath", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddllllllddd.......",
+                ".ddlllllllldd.......",
+                ".dlldlllldddd.......",
+                ".dlllllllggggd......",
+                "..dlllddlgwwgm......",
+                "...dlllllgwwgm......",
+                "...dllddllggmm......",
+                "....................",
+                "....................",
+                "....................",
+                "....................",
+                "....................",
+        ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -2134,12 +2157,14 @@ extension CompanionCharacter {
         heat: "heat",
         snowDeep: ["snowCap", "snowHeap"],
         gestures: [
-            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2)), flicker: true),
+            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
             Gesture(name: "flicker", weight: 2, ticks: Self.ticks(("dim", 1), ("rest", 1), ("dim", 1)), flicker: true),
-            Gesture(name: "glance", ticks: Self.ticks(("glance", 4))),
-            Gesture(name: "lookDown", ticks: Self.ticks(("lookDown", 4))),
-            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 1), ("rest", 1), ("sniff", 1))),
-            Gesture(name: "ear", ticks: Self.ticks(("ear", 2))),
+            // Brief 100: its glances, a sniff and an ear are idles of their own too.
+            Gesture(name: "glance", ticks: Self.ticks(("glance", 4)), flicker: true),
+            Gesture(name: "lookDown", ticks: Self.ticks(("lookDown", 4)), flicker: true),
+            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 1), ("rest", 1), ("sniff", 1)), flicker: true),
+            Gesture(name: "ear", ticks: Self.ticks(("ear", 2)), flicker: true),
+            Gesture(name: "lookUp", ticks: Self.ticks(("lookUp", 4)), flicker: true),
             Gesture(name: "drop", weight: 2, ticks: Self.ticks(("rainDrip1", 3), ("rainDrip2", 1)), flicker: true, sky: .rain),
             Gesture(name: "sweat", weight: 2, ticks: Self.ticks(("heatSweat1", 2), ("heatSweat2", 1), ("heatSweat3", 1)), flicker: true, sky: .heat),
         ],
@@ -2147,6 +2172,12 @@ extension CompanionCharacter {
             Self.ticks(("lookUp", 2), ("lookUpDim", 1), ("lookUp", 1), ("lookUpDim", 1), ("lookUp", 3), ("blink", 1),
                 ("lookUp", 1))),
         routines: [
+            // Brief 100, its little loops: a look about, a sniff and an ear, a look down at its light as it flickers,
+            // a look up and over.
+            Routine(name: "lookAbout", little: true, steps: [.gesture("glance"), .hold(1), .gesture("lookDown"), .gesture("blink"), .hold(1)]),
+            Routine(name: "whiskers", little: true, steps: [.gesture("sniff"), .gesture("ear"), .hold(1), .gesture("blink"), .hold(1)]),
+            Routine(name: "lightCheck", little: true, steps: [.play(("lookDown", 3)), .gesture("flicker"), .hold(1), .gesture("blink"), .hold(1)]),
+            Routine(name: "upAndOver", little: true, steps: [.play(("lookUp", 3)), .hold(1), .play(("lookLeft", 3)), .gesture("blink"), .hold(1)]),
             Routine(name: "swing", steps: [
                 .gesture("glance"), .play(("swingL", 2), ("rest", 1), ("swingR", 2), ("rest", 1)),
                 .play(("swingL", 2), ("rest", 1), ("swingR", 2), ("rest", 1)), .play(("swingL", 1), ("rest", 2)),
@@ -2205,6 +2236,7 @@ extension CompanionCharacter {
         gestures: [
             Gesture(name: "dream", weight: 2, ticks: Self.ticks(("sleepDream", 3))),
             Gesture(name: "ear", ticks: Self.ticks(("sleepEar", 2))),
+            Gesture(name: "breath", weight: 2, ticks: Self.ticks(("sleepBreath", 6))),
         ],
         answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekLook", 5), ("sleepPeek", 2))))
 

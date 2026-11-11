@@ -651,11 +651,12 @@ struct CompanionCharacter: Identifiable {
                 if duration(mode.answer.ticks, fps: gestureFPS) > Self.longestAnswer {
                     out.append("\(id) \(at) \(mode.answer.name): longer than \(Self.longestAnswer) s")
                 }
-                // A gesture drawn over a weather frame only takes the pixels it changes: they must not be pixels the
-                // weather changes too, or the prop would be cut through.
+                // A gesture drawn over a weather frame only takes the pixels it changes; where they are pixels the
+                // weather changes too it would cut through the prop, so it doesn't play in that weather (brief 100:
+                // `canDraw`). The reply to a tap must play in every weather, so it may not.
                 for base in [mode.rain, mode.snow, mode.heat].compactMap({ $0 }) where base != mode.rest {
                     guard let r = rows(mode.rest), let b = rows(base) else { continue }
-                    for tick in mode.everyTick where index["\(tick.frame)@\(base)"] == nil && tick.frame != mode.rest {
+                    for tick in mode.answer.ticks where index["\(tick.frame)@\(base)"] == nil && tick.frame != mode.rest {
                         guard let g = rows(tick.frame) else { continue }
                         if Self.overlap(gesture: g, rest: r, base: b) > 0 {
                             out.append("\(id) \(at): \(tick.frame) changes pixels that \(base) changes")
