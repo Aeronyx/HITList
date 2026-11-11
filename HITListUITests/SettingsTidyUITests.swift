@@ -242,12 +242,7 @@ final class SettingsTidyUITests: XCTestCase {
             if app.screenshot().pngRepresentation == before { break }
             shot("\(name) \(part)")
         }
-        // Back to the top, so the next page's back control is where it always is.
-        for _ in 0..<6 {
-            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
-            from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: 600)))
-        }
-        pause(0.5)
+        // No drag back down: at a page's top a downward drag would pull the sheet away. The bar stays put anyway.
     }
 
     private func pause(_ seconds: TimeInterval = 0.8) {
