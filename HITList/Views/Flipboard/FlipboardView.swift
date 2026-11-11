@@ -591,60 +591,6 @@ enum FlipboardLayout {
     }
 }
 
-/// The card's little preview (brief 69): the switch's rocker, small and green, with a charger's lamps over it.
-/// A tap flips it, with the board's own click and bump, and back again; nothing is saved. It lives here, where the
-/// sheet's preview did, beside the board that owns the flip sound (`HingeCreakTests` lists the files that play it).
-struct SwitchPreviewRocker: View {
-    let flips: Int
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isGreen = true
-
-    static let size = CGSize(width: 30, height: 44)
-
-    /// A light over the rocker: the tile's pill, small.
-    private static let pillSize = CGSize(width: 6, height: 3)
-
-    var body: some View {
-        RockerSwitch(tilt: isGreen ? 1 : -1, size: Self.size)
-            // Over the rocker, outside the layout: the card's controls never move as the count changes. One
-            // light per flip, each popping in as the count goes up (the tile's charger lights, small).
-            .overlay(alignment: .topTrailing) {
-                if flips > 1 {
-                    HStack(spacing: 2) {
-                        ForEach(0..<flips, id: \.self) { _ in
-                            FlipPill(tint: isGreen ? FlipLightStyle.green : nil, level: FlipLightStyle.countedLevel,
-                                     ember: isGreen ? 0 : FlipLightStyle.ember)
-                                .frame(width: Self.pillSize.width, height: Self.pillSize.height)
-                                .transition(.scale(scale: 0.2).combined(with: .opacity))
-                        }
-                    }
-                    .fixedSize()
-                    .offset(y: -(Self.pillSize.height + 6))
-                    .transition(.scale(scale: 0.6, anchor: .bottomTrailing).combined(with: .opacity))
-                }
-            }
-            .animation(HITMotion.emphasis(reduceMotion: reduceMotion), value: flips)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: flip)
-            .onAppear { FlipHaptic.prepare() }
-            .accessibilityElement(children: .ignore)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel("Preview switch")
-            .accessibilityValue(isGreen ? "Green" : "Red")
-            .accessibilityAction { flip() }
-            .accessibilityIdentifier("switchPreview")
-    }
-
-    private func flip() {
-        FlipHaptic.play()
-        FlipSound.play()
-        withAnimation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.52)) {
-            isGreen.toggle()
-        }
-    }
-}
-
 /// The grid's last tile, and the whole of an empty board (brief 96): the outline of a switch drawn with a dashed
 /// hairline (the plate, a smaller dashed rocker in it) and a large accent "+", in the tiles' 18 pt shape, the size of a
 /// real switch whether switches stand beside it or not. Tapping it opens the switch card in its place (brief 69).

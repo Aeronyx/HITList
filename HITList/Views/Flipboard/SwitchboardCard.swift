@@ -3,10 +3,11 @@ import SwiftData
 import HITListCore
 
 /// Adding or editing a Switchboard (brief 72): a small card like the switch card, never a sheet. The name, Daily or
-/// Weekly (`HITSegmented`), when it resets (the editor's time row; 04:00 for a new board), the reset day of a weekly
-/// board, "Overdue becomes task" for every switch on it, and, editing, Delete Switchboard…, whose question (keep its
-/// switches on the main board, or delete them too) sits inside the card. In the grid on the Mac and iPad, over the
-/// board on iPhone (`FloatingSwitchCard`), exactly as the switch card is.
+/// Weekly (`HITSegmented`), when it resets (the switch card's time chip; 04:00 for a new board), the reset day of a
+/// weekly board, "Become a task when Overdue" for every switch on it, and, editing, Delete Switchboard…, whose question
+/// (keep its switches on the main board, or delete them too) sits inside the card. In the grid on the Mac and iPad,
+/// over the board on iPhone (`FloatingSwitchCard`), exactly as the switch card is, and in the switch card's place when
+/// its Switchboard chip's New Switchboard… opens it. The switch card's type (`SwitchCardType`).
 struct SwitchboardCard: View {
     /// The board being edited; nil adds one.
     let editing: Switchboard?
@@ -15,6 +16,9 @@ struct SwitchboardCard: View {
     var asksToDelete = false
     var isConfirmingDiscard = false
     var isClosing = false
+    /// The Discard question; nil: "Discard this Switchboard?" or "Discard changes?". Opened from the switch card, the
+    /// question is about the switch (Discard throws both away).
+    var discardQuestion: String? = nil
     var onClose: () -> Void
     var onSaved: (Switchboard) -> Void
     /// The board was deleted (its switches kept or deleted as asked).
@@ -30,8 +34,12 @@ struct SwitchboardCard: View {
     @State private var errorMessage: String?
     @FocusState private var nameFocused: Bool
 
+    /// The toggle's words: the switch card's (George's, brief 96).
+    static let overdueTitle = SwitchCard.overdueTitle
+
     init(editing: Switchboard?, style: SwitchCard.Style, asksToDelete: Bool = false, isConfirmingDiscard: Bool = false,
-         isClosing: Bool = false, onClose: @escaping () -> Void, onSaved: @escaping (Switchboard) -> Void,
+         isClosing: Bool = false, discardQuestion: String? = nil, onClose: @escaping () -> Void,
+         onSaved: @escaping (Switchboard) -> Void,
          onDeleted: @escaping () -> Void = {}, onDraftChange: @escaping (Bool) -> Void = { _ in },
          onDiscard: @escaping () -> Void = {}, onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
@@ -39,6 +47,7 @@ struct SwitchboardCard: View {
         self.asksToDelete = asksToDelete
         self.isConfirmingDiscard = isConfirmingDiscard
         self.isClosing = isClosing
+        self.discardQuestion = discardQuestion
         self.onClose = onClose
         self.onSaved = onSaved
         self.onDeleted = onDeleted
@@ -63,7 +72,7 @@ struct SwitchboardCard: View {
                 resetRow
                 overdueRow
                 if let errorMessage {
-                    Text(errorMessage).font(HITType.caption).foregroundStyle(HITColor.danger)
+                    Text(errorMessage).font(SwitchCardType.secondary).foregroundStyle(HITColor.danger)
                 }
                 footer
             }
@@ -74,7 +83,7 @@ struct SwitchboardCard: View {
                 }, onDelete: delete(keepingSwitches:))
                 .transition(.opacity)
             } else if isConfirmingDiscard {
-                SwitchDiscardRow(question: editing == nil ? "Discard this Switchboard?" : "Discard changes?",
+                SwitchDiscardRow(question: discardQuestion ?? (editing == nil ? "Discard this Switchboard?" : "Discard changes?"),
                                  padding: padding, onKeepEditing: onKeepEditing, onDiscard: onDiscard)
                     .transition(.opacity)
             }
@@ -85,8 +94,16 @@ struct SwitchboardCard: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("switchboardCard")
         .onAppear {
-            if editing == nil { nameFocused = true }
             onDraftChange(draft.hasContent)
+        }
+        // A new board's name has the keyboard as the card shows (asked again a moment later: on the Mac the click or
+        // the menu that opened it can keep the first ask from landing).
+        .task {
+            guard editing == nil else { return }
+            for delay in [0, 60, 150] {
+                guard (try? await Task.sleep(for: .milliseconds(delay))) != nil else { return }
+                if !nameFocused { nameFocused = true }
+            }
         }
         #if os(macOS)
         .onExitCommand(perform: onClose)
@@ -105,7 +122,7 @@ struct SwitchboardCard: View {
             Text("Switchboard name").foregroundStyle(Theme.secondaryText)
         }
         .textFieldStyle(.plain)
-        .font(HITType.taskName)
+        .font(SwitchCardType.name)
         .foregroundStyle(HITColor.text)
         .focused($nameFocused)
         .onSubmit(save)
@@ -113,22 +130,24 @@ struct SwitchboardCard: View {
         .accessibilityIdentifier("switchboardName")
     }
 
-    /// "Resets at ‹04:00›", and on a weekly board "on ‹Monday›".
+    /// "Resets at ‹4:00 AM›", and on a weekly board "on ‹Monday›": chips of one size, the time typed into its chip.
     private var resetRow: some View {
         HStack(spacing: HITSpacing.s) {
             Text("Resets at")
-                .font(HITType.body)
+                .font(SwitchCardType.label)
                 .foregroundStyle(Theme.secondaryText)
                 .fixedSize()
-            PickerTimeField(time: draft.resetTime, placeholder: "04:00") { time in
-                // A board always has a day; no time is midnight.
-                draft.resetTime = time ?? PickerTime(hour: 0, minute: 0)
+            SwitchTimeChip(time: draft.resetTime, placeholder: "4:00 AM", allowsNone: false, speechName: "Resets at") { time in
+                // A board always has a day: there is always a reset time.
+                if let time { draft.resetTime = time }
+            } onFinish: {
+                nameFocused = true
             }
-            .frame(maxWidth: 150)
             .accessibilityIdentifier("switchboardResetTime")
             if draft.cadence == .weekly { weekdayMenu }
             Spacer(minLength: 0)
         }
+        .frame(minHeight: FlipDial.size.height)
     }
 
     private var weekdayMenu: some View {
@@ -159,19 +178,17 @@ struct SwitchboardCard: View {
         return Calendar.current.standaloneWeekdaySymbols[weekday - 1]
     }
 
+    /// One line, the switch card's words (brief 96); what it means is said to VoiceOver and the pointer.
     private var overdueRow: some View {
         Toggle(isOn: $draft.overdueBecomesTask) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Overdue becomes task")
-                    .font(HITType.body)
-                    .foregroundStyle(HITColor.text)
-                Text("Every switch on it waits in Today once it’s due")
-                    .font(HITType.caption)
-                    .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(2)
-            }
+            Text(Self.overdueTitle)
+                .font(SwitchCardType.label)
+                .foregroundStyle(HITColor.text)
+                .lineLimit(1)
         }
         .toggleStyle(.hit)
+        .help("Every switch on it waits in Today once it’s due")
+        .accessibilityHint("Every switch on it waits in Today once it’s due")
         .accessibilityIdentifier("switchboardOverdueToggle")
     }
 
@@ -243,12 +260,12 @@ struct SwitchboardDeleteRow: View {
             Rectangle().fill(Theme.separator).frame(height: 1)
             VStack(alignment: .leading, spacing: HITSpacing.s) {
                 Text("Delete ‘\(board.name)’?")
-                    .font(HITType.body)
+                    .font(SwitchCardType.label)
                     .foregroundStyle(HITColor.text)
                 if count > 0 {
                     Text(count == 1 ? "Its switch can stay on the Flipboard, or be deleted with it on all your devices."
                          : "Its \(count) switches can stay on the Flipboard, or be deleted with it on all your devices.")
-                        .font(HITType.caption)
+                        .font(SwitchCardType.secondary)
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
