@@ -107,6 +107,7 @@ struct FloatingAddButton: View {
                 .buttonStyle(FloatingAddPressStyle())
                 .accessibilityLabel("Add task")
                 .accessibilityIdentifier("quickAddButton")
+                .overlay(alignment: CompanionPerch.alignment(.addButton)) { CompanionPerch(.addButton) }
                 .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
