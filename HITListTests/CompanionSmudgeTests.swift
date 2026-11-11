@@ -66,8 +66,11 @@ final class CompanionSmudgeTests: XCTestCase {
                 let change = smudge.difference(weather, posture.awake.rest)
                 XCTAssertTrue((4...120).contains(change), "\(at) \(weather): \(change) pixels")
             }
-            let flickers = posture.awake.flickers.map { posture.awake.gestures[$0].name }
-            XCTAssertEqual(flickers, ["blink", "knock"], "\(at): a blink and its knees knocking")
+            let flickers = posture.awake.flickers.map { posture.awake.gestures[$0] }
+            let everyday = flickers.filter { $0.sky == nil }.map(\.name)
+            XCTAssertEqual(everyday, ["blink", "knock"], "\(at): a blink, its knees knocking")
+            let skies = flickers.filter { $0.sky != nil }.map(\.name)
+            XCTAssertEqual(skies, ["rimDrip", "fan"], "\(at): the rain's and the heat's")
             XCTAssertGreaterThanOrEqual(posture.awake.gestures.count, 5, at)
             XCTAssertEqual(posture.asleep.gestures.map(\.name), ["dream", "settle"], at)
             XCTAssertNotEqual(posture.asleep.answer.ticks, posture.awake.answer.ticks, "\(at): woken, not just looking")
@@ -82,15 +85,16 @@ final class CompanionSmudgeTests: XCTestCase {
         XCTAssertTrue(smudge.rows("snow")![1].contains("l"), "snow on its head")
     }
 
-    /// Brief 84: routines of its own (five), and one for rain, snow, thunder and a clear day, each four to nine moves
-    /// in three to seven seconds; the same in both places, none asleep. The everyday ones that leave its raised wing
-    /// and the snow on its head alone play in that weather too.
+    /// Brief 84: routines of its own (five), and the weather's (rain, snow twice, thunder, a clear day, heat), each
+    /// four to nine moves in three to seven seconds; the same in both places, none asleep. The everyday ones that leave
+    /// its raised wing and the snow on its head alone play in that weather too.
     func testItsRoutines() {
         let awake = smudge.field.awake
         let everyday = awake.routines.filter { $0.sky == nil }.map(\.name)
         XCTAssertEqual(everyday, ["heron", "tilts", "peer", "doodle", "preen"])
-        XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear])
-        XCTAssertEqual(awake.routines.filter { $0.sky != nil }.map(\.name), ["shakeOff", "coldFeet", "thunder", "bask"])
+        XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear, .snow, .heat])
+        XCTAssertEqual(awake.routines.filter { $0.sky != nil }.map(\.name),
+                       ["shakeOff", "coldFeet", "thunder", "bask", "shakeSnow", "flop"])
         XCTAssertEqual(smudge.plus.awake.routines.map(\.name), awake.routines.map(\.name), "the same on the +")
         XCTAssertTrue(smudge.field.asleep.routines.isEmpty)
         XCTAssertTrue(smudge.plus.asleep.routines.isEmpty)
@@ -144,6 +148,57 @@ final class CompanionSmudgeTests: XCTestCase {
             }
             XCTAssertLessThanOrEqual(alone, 1, "\(frame.name): a single drop or flake at most")
         }
+    }
+
+    /// Brief 91, the weather on it. Rain: a drop gathers under its wing's tip and falls (a flicker of the rain's own).
+    /// Snow piles up on its head, a cap and then a heap (a drift on the sleeping owlet), on the same line it stands
+    /// on, and every small move still plays at every depth; `shakeSnow` sends the heap off from the deepest pile only
+    /// and leaves the dusting. Heat: its wings droop away from its body, its eyes are half lidded, its beak is open;
+    /// its eye moves are drawn for it; it fans itself, and `flop` holds a wing up for shade until it gives up.
+    func testTheWeatherShowsOnIt() throws {
+        let awake = smudge.field.awake, asleep = smudge.field.asleep
+        let drip = try XCTUnwrap(awake.gesture(named: "rimDrip"))
+        XCTAssertEqual(drip.sky, .rain)
+        XCTAssertTrue(drip.flicker)
+        XCTAssertTrue(smudge.rows("rimDrop1")![2].hasPrefix(".l"), "a drop under the wing's tip")
+        // The pile.
+        XCTAssertEqual(awake.snowDeep, ["snowCap", "snowHeap"])
+        XCTAssertEqual(asleep.snowDeep, ["sleepSnowCap", "sleepSnowHeap"])
+        func snowOnTop(_ frame: String) -> Int { smudge.rows(frame)!.prefix(10).joined().filter { $0 == "l" }.count }
+        XCTAssertLessThan(snowOnTop("snow") - snowOnTop("rest"), snowOnTop("snowCap") - snowOnTop("rest"))
+        XCTAssertLessThan(snowOnTop("snowCap"), snowOnTop("snowHeap"), "deeper and deeper")
+        for gesture in awake.gestures where gesture.sky == nil {
+            for depth in 0...awake.deepest {
+                let drawable = smudge.canDraw(gesture, in: .snow, mode: awake, depth: depth)
+                XCTAssertTrue(drawable, "\(gesture.name) at depth \(depth)")
+            }
+        }
+        let shake = try XCTUnwrap(awake.routines.first { $0.name == "shakeSnow" })
+        XCTAssertTrue(shake.shakesOff)
+        XCTAssertEqual(shake.sky, .snow)
+        XCTAssertTrue(smudge.canDraw(shake, in: .snow, mode: awake, depth: awake.deepest), "from the heap")
+        XCTAssertFalse(smudge.canDraw(shake, in: .snow, mode: awake, depth: 1), "only from the deepest pile")
+        XCTAssertEqual(awake.ticks(of: shake).last?.tick.frame, "snow", "it leaves the dusting")
+        // The heat.
+        XCTAssertEqual(awake.heat, "heat")
+        let heat = smudge.rows("heat")!.map(Array.init)
+        XCTAssertEqual(heat[9][9], "k", "its beak open: it pants")
+        XCTAssertEqual(heat[6][7], "d", "a lid over each eye")
+        XCTAssertNotEqual(smudge.rows("heat")![11], smudge.rows("rest")![11], "its wings held away from its body")
+        for name in ["blink", "glance", "glanceL", "lookUp", "lookDown", "tilt", "tiltR"] {
+            XCTAssertNotNil(smudge.index["\(name)@heat"], "\(name) drawn for the heat")
+        }
+        for gesture in awake.gestures where gesture.sky == nil {
+            XCTAssertTrue(smudge.canDraw(gesture, in: .heat, mode: awake, depth: 0), "\(gesture.name) in the heat")
+        }
+        let fan = try XCTUnwrap(awake.gesture(named: "fan"))
+        XCTAssertEqual(fan.sky, .heat)
+        XCTAssertTrue(fan.flicker)
+        let flop = try XCTUnwrap(awake.routines.first { $0.name == "flop" })
+        XCTAssertEqual(flop.sky, .heat)
+        XCTAssertTrue(smudge.canDraw(flop, in: .heat, mode: awake, depth: 0))
+        let frames = Set(awake.ticks(of: flop).map(\.tick.frame))
+        XCTAssertTrue(frames.isSuperset(of: ["parasol", "heatSag2"]), "a wing held up for shade, flopped over its eyes")
     }
 
     /// The doodle as the clock plays it: a toe tap, the leg out, a heart drawn in two strokes, seen, scribbled out, the
