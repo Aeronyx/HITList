@@ -81,6 +81,12 @@ schema change this round**: a fix that needs one stops and reports.
   added an hour into the round on George's note) the sync marks and what feeds them: `SyncState`, `SyncStatusViews`,
   `CloudSyncMonitor`, `AccountWatch`, `Services/Sync/*`, the iCloud settings groups and the sync log view. Nobody: `scripts/`,
   `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's New pin, the models.
+- **Never answer a system dialog and never change a system permission.** A permission prompt (Calendars,
+  Notifications, Accessibility, "would like to access data from other apps"), a crash notice or any other system
+  alert on the Mac is George's to answer: do not click it, script it (AppleScript, Accessibility, `tccutil`) or
+  dismiss it. Test a prompt on your own simulator only; on the Mac, describe what you needed and stop. (Round 17: a
+  session scripted the Mac's calendar prompt, hit a crash notice's button instead, and reset HITList's calendar
+  permission with `tccutil`.)
 - **`dev/ROADMAP.md` is the supervisor's.** Do not add a row; your report is the record. (Every earlier brief asked
   for a row, and the rows conflicted at every merge.)
 - **UI tests go in a file of your own** (`HITListUITests/<Yours>UITests.swift`), and run on a fresh simulator.
