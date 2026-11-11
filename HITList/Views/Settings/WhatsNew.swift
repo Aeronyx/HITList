@@ -20,6 +20,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.1", items: [
+            "Widgets for your Home Screen, Lock Screen and Mac desktop: Today, Upcoming with a little calendar, and the Flipboard's switches. Tap a task to open it.",
+            "The sync bolt keeps still while all is well, and a short iCloud hiccup no longer shows alarming words. If sync ever stops, Settings says so and the Mac offers Relaunch.",
+            "Meet Nod and Quill, two small pixel creatures: one sits on the search field, one sleeps at the foot of Browse (on the Mac, beside Settings). Settings → Extras → Companions turns them off.",
+            "Calendar events beside your tasks in Today and Upcoming, read-only: turn on Settings → General → Calendar events.",
+            "Smoother motion: the new-task card moves with the keyboard, Mac cards come down into place, and the Mac sidebar's highlight glides to the row you pick.",
+        ]),
         Entry(version: "0.9.0", build: 21, items: [
             "Switches are routines now: they stay on the Flipboard and never show up in Today. Turn on \"Overdue becomes task\" on a switch to have it wait in Today once it's due.",
             "Switchboards group switches into routines like \"Before Bed\": tap New Switchboard at the foot of the Flipboard. Each resets daily or weekly at its own time, 4 AM unless you change it.",

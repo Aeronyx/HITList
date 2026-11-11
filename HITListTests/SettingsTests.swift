@@ -247,7 +247,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(WhatsNew.isBehind(version: AppInfo.version, build: AppInfo.build),
                        "add a What's New entry for \(AppInfo.versionLabel)")
         XCTAssertFalse(current.items.isEmpty)
-        XCTAssertEqual(current.label, "0.9.0 (21)", "this round's list")
+        XCTAssertEqual(current.label, "0.9.1", "this round's list")
         XCTAssertTrue(WhatsNew.isNewer("0.10.0", than: "0.9.1"))
         XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
     }
