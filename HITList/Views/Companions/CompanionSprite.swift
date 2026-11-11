@@ -10,6 +10,8 @@ struct CompanionInks: Equatable {
     /// How far the dark tone and the glow lean into the background.
     static let darkMix = 0.52
     static let glowMix = 0.5
+    /// How far the accent's shade leans into the background (brief 102).
+    static let accentDarkMix = 0.42
 
     init(palette: ThemePalette) {
         let h = palette.hex
@@ -21,6 +23,7 @@ struct CompanionInks: Equatable {
             (.accent, h.accent),
             (.warm, h.bolt),
             (.glow, Self.mix(h.bolt, h.background, Self.glowMix)),
+            (.accentDark, Self.mix(h.accent, h.background, Self.accentDarkMix)),
         ]
         hex = Dictionary(uniqueKeysWithValues: pairs)
         colors = Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, Color(hex: $0.1)) })
