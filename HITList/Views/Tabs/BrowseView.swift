@@ -48,6 +48,7 @@ struct BrowseView: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
+                .overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }
                 .padding(.horizontal, HITSpacing.l)
                 .padding(.top, HITSpacing.xs)
                 .padding(.bottom, HITSpacing.s)
