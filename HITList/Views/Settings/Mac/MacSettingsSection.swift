@@ -26,7 +26,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
     var caption: String {
         switch self {
         case .account: "Name, picture, iCloud"
-        case .general: "Week, badge, calendar, shortcuts"
+        case .general: "Week, badge, shortcuts"
         case .iCloud: "Sync status and checks"
         case .reminders: "Alerts and summary"
         case .completing: "Sound, haptics, holidays"
