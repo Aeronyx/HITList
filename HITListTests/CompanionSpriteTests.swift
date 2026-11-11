@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import HITListCore
 @testable import HITList
 
 /// Briefs 76 and 79: every companion is good data (sizes, inks, small short gestures, flourishes that start and end
@@ -87,6 +88,87 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
+    /// The companions with routines so far (brief 84, items 2 to 4).
+    static let lively = ["nod", "quill", "hush"]
+
+    /// Each has at least three everyday routines of its own in each place, and one for rain, one for snow and a start
+    /// at thunder; every routine is a few seconds, four to nine moves, and is drawn in every look it can play in.
+    func testEachHasRoutinesOfItsOwn() {
+        for character in CompanionCharacter.all where Self.lively.contains(character.id) {
+            for place in CompanionPlace.allCases {
+                let mode = character.posture(place).awake
+                let at = "\(character.id) \(place)"
+                let everyday = mode.routines.filter { $0.sky == nil }
+                XCTAssertGreaterThanOrEqual(everyday.count, 3, "\(at): three routines of its own")
+                for sky in [CompanionSky.rain, .snow, .storm] {
+                    XCTAssertTrue(mode.routines.contains { $0.sky == sky }, "\(at): a routine for \(sky)")
+                }
+                for routine in mode.routines {
+                    let seconds = character.duration(of: routine, mode: mode)
+                    XCTAssertTrue((3...7).contains(seconds), "\(at) \(routine.name): \(seconds) s")
+                    XCTAssertTrue((4...9).contains(routine.moves), "\(at) \(routine.name): \(routine.moves) moves")
+                }
+                // Every everyday routine plays in plain weather; each weather has at least one that plays in it.
+                for weather in [CompanionLook.Weather.rain, .snow] {
+                    XCTAssertTrue(everyday.contains { character.plays($0, in: weather, mode: mode) }, "\(at): one in \(weather)")
+                }
+                XCTAssertFalse(mode.flickers.count == mode.gestures.count && mode.gestures.count > 2,
+                               "\(at): its flickers are marked, so a glance or a sniff plays only in routines")
+            }
+            XCTAssertTrue(character.posture(.field).asleep.routines.isEmpty, "\(character.id): no routines asleep")
+        }
+    }
+
+    /// Brief 84, "nothing floats": on the "+" (a capsule whose top curves away under a companion's right side),
+    /// every column of a still pose that rests on the edge line reaches down to the curve, in every look. Over the
+    /// flat and the start of the curve no more than half a point of background shows under it (under 2 device pixels
+    /// at 3x, inside the edge's own antialiasing); where the shoulder is steep, a 2 pt pixel stair leaves at most a
+    /// point at its corner. On the field (flat) every resting column sits on the line by construction.
+    func testNothingFloatsOnThePlus() {
+        let size = FloatingAddButton.size
+        let radius: CGFloat = size.height / 2
+        func top(_ x: CGFloat) -> CGFloat {
+            let left: CGFloat = radius
+            let right: CGFloat = size.width - radius
+            guard x < left || x > right else { return 0 }
+            let centre: CGFloat = x < left ? left : right
+            let dx: CGFloat = x - centre
+            let under: CGFloat = max(0, radius * radius - dx * dx)
+            return radius - under.squareRoot()
+        }
+        let p = CompanionCharacter.pointsPerPixel
+        for character in CompanionCharacter.all where Self.lively.contains(character.id) {
+            let offset = CompanionPerch.offset(character, spot: .addButton)
+            let spriteWidth: CGFloat = CGFloat(character.width) * p
+            let boxLeft: CGFloat = size.width - spriteWidth + offset.width
+            let posture = character.plus
+            var stills: [String] = []
+            for mode in [posture.awake, posture.asleep] {
+                stills.append(mode.rest)
+                if let rain = mode.rain { stills.append(rain) }
+                if let snow = mode.snow { stills.append(snow) }
+            }
+            for name in stills {
+                let rows = character.rows(name)!.map(Array.init)
+                let seat = character.seatRow
+                for c in 0..<character.width where rows[seat - 1][c] != CompanionInk.clear {
+                    var y = seat - 1
+                    while y + 1 < rows.count, rows[y + 1][c] != CompanionInk.clear { y += 1 }
+                    let bottom: CGFloat = CGFloat(y + 1 - seat) * p
+                    let x0: CGFloat = boxLeft + CGFloat(c) * p
+                    var lowest: CGFloat = 0
+                    for k in 0...8 {
+                        let step: CGFloat = CGFloat(k) * p / 8
+                        lowest = max(lowest, top(x0 + step))
+                    }
+                    let gap: CGFloat = lowest - bottom
+                    let allowed: CGFloat = x0 + p <= 60 ? 0.56 : 1.01
+                    XCTAssertLessThanOrEqual(gap, allowed, "\(character.id) \(name) column \(c): \(gap) pt of background under it")
+                }
+            }
+        }
+    }
+
     func testNodsNightAndWeather() {
         let nod = CompanionCharacter.nod
         XCTAssertEqual(nod.field.asleep.rest, "sleep")
@@ -94,7 +176,8 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "glance"])
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance"])
+        XCTAssertEqual(nod.field.awake.flickers, [0, 1, 2], "a blink or one swing of a leg; the glance plays in routines")
         XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
@@ -112,19 +195,28 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(quill.field.awake.rest, "loaf", "lying on the Mac's field")
         XCTAssertEqual(quill.plus.awake.rest, "sit", "sitting up on the +")
         XCTAssertEqual(quill.field.asleep.rest, "curl")
-        XCTAssertEqual(quill.plus.asleep.rest, "curl")
+        XCTAssertEqual(quill.plus.asleep.rest, "drape", "on the +, curled with its hindquarters down the shoulder")
         // Awake by day: its eyes are open (the curl's are shut).
         for frame in ["loaf", "sit"] {
             XCTAssertTrue(quill.rows(frame)!.joined().contains("k"), "\(frame): eyes open")
         }
         XCTAssertFalse(quill.rows("curl")!.joined().contains("k"), "the curl: eyes shut")
+        XCTAssertFalse(quill.rows("drape")!.joined().contains("k"), "the drape: eyes shut")
         XCTAssertGreaterThan(quill.difference("curl", "loaf"), 40, "night is not its day pose")
-        // The flourish still stretches and turns: from each day pose and back to it, the other way round.
-        for place in CompanionPlace.allCases {
-            let ticks = quill.posture(place).flourish
-            XCTAssertTrue(ticks.contains { $0.frame == "stretchDeep" })
-            XCTAssertEqual(ticks.last, .init(frame: quill.posture(place).awake.rest, mirrored: true))
+        // The flourish still stretches: on the field it turns and settles the other way round; on the "+" it comes
+        // back the way it was, its hindquarters on the shoulder (brief 84).
+        XCTAssertTrue(quill.field.flourish.contains { $0.frame == "stretchDeep" })
+        XCTAssertEqual(quill.field.flourish.last, .init(frame: "loaf", mirrored: true))
+        XCTAssertTrue(quill.turns(.field))
+        XCTAssertTrue(quill.plus.flourish.contains { $0.frame == "stretchDeepPlus" })
+        XCTAssertEqual(quill.plus.flourish.last, .init(frame: "sit"))
+        XCTAssertFalse(quill.turns(.plus))
+        XCTAssertFalse(quill.plus.flourish.contains(where: \.mirrored))
+        // What lies over the "+"'s shoulder hangs below the edge there: the drape's hindquarters, the standing back feet.
+        for frame in ["drape", "standPlus", "stretchDeepPlus"] {
+            XCTAssertTrue(quill.rows(frame)![quill.seatRow...].joined().contains { $0 != "." }, frame)
         }
+        XCTAssertFalse(quill.rows("loaf")![quill.seatRow...].joined().contains { $0 != "." }, "on the field nothing hangs")
         // In the rain it holds its tail over its head; its tip still twitches there (drawn by hand).
         XCTAssertNotNil(quill.index["loafTip@loafRain"])
         XCTAssertNotNil(quill.index["sitTip@sitRain"])

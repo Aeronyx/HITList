@@ -19,6 +19,10 @@ import AppKit
 /// budget is showing time, spent only while a companion that could play it is on screen, and saved whenever it stops
 /// being spent, so quitting and reopening never brings one sooner.
 ///
+/// Snow piles up on it (brief 91): every 8 to 14 minutes of showing time in the snow its still frame is one frame
+/// deeper (`Mode.snowDeep`), kept in memory, until a shake-off; it starts again when the sky leaves snow, at a new
+/// launch and when night and day change over.
+///
 /// Awake or asleep, and the weather, are decided while nobody is looking: when a companion comes on screen, and
 /// when the app goes to the background or comes back. Night and day are read in the zone where the person is
 /// (`CompanionSkySource.shared.zone`). A companion on screen across 22:00 falls asleep the next time the app is left,
@@ -75,6 +79,11 @@ final class CompanionDirector {
     @ObservationIgnored private(set) var lastRoutine: Date?
     /// "nod.swingAbout": the last routine played, never the next one.
     @ObservationIgnored private(set) var lastRoutineName: String?
+    // Brief 91, snow piling up, per companion and in memory only: how deep (and in which look) it piled when it last
+    // left the screen, and the showing time left before it grows another frame, spent since when.
+    @ObservationIgnored private var pile: [String: (depth: Int, asleep: Bool)] = [:]
+    @ObservationIgnored private var snowLeft: [String: TimeInterval] = [:]
+    @ObservationIgnored private var snowSince: [String: Date] = [:]
 
     init(seed: UInt64 = .random(in: .min ... .max), launch: CompanionLaunchOptions = .current, observeSystem: Bool = true,
          cast: [CompanionCharacter] = CompanionCharacter.all, defaults: UserDefaults? = AppGroup.defaults,
@@ -120,8 +129,17 @@ final class CompanionDirector {
         calm[id] = isCalm
         if stages[id] == nil {
             let dress = dress(at: now)
-            stages[id] = CompanionStage(since: now, place: place, look: dress.look, turned: turned[id] ?? false,
-                                        sky: dress.sky)
+            var stage = CompanionStage(since: now, place: place, look: dress.look, turned: turned[id] ?? false,
+                                       sky: dress.sky)
+            // The snow it had gathered, if it is still snowing and night and day haven't changed over.
+            if let kept = pile[id], dress.look.weather == .snow, kept.asleep == dress.look.asleep {
+                stage.snowDepth = kept.depth
+            } else {
+                pile[id] = nil
+                snowLeft[id] = nil
+            }
+            stages[id] = stage
+            forceSnowDepth(id)
             activeSince[id] = now
             scheduleGesture(id, after: now, first: true)
         }
@@ -137,6 +155,8 @@ final class CompanionDirector {
         instances[id] = nil
         if let stage = stages[id], let character = character(id) {
             turned[id] = clock(for: character).facing(at: now, stage: stage)
+            let depth = clock(for: character).snowDepth(at: now, stage: stage)
+            pile[id] = stage.look.weather == .snow ? (depth, stage.look.asleep) : nil
         }
         stages[id] = nil
         activeSince[id] = nil
@@ -159,12 +179,16 @@ final class CompanionDirector {
     /// played for three, else a small reply now and then.
     func tap(_ id: String, now: Date = .now) {
         guard let character = character(id), let stage = stages[id] else { return }
-        let acting = clock(for: character).isActing(at: now, stage: stage)
+        let clock = clock(for: character)
+        let acting = clock.isActing(at: now, stage: stage)
         let pick = pickRoutine(id, now: now)
-        let reply = CompanionSchedule.tapReply(now: now, onScreen: isAppActive, look: stage.look, acting: acting,
+        var reply = CompanionSchedule.tapReply(now: now, onScreen: isAppActive, look: stage.look, acting: acting,
                                                still: still[id] ?? true, calm: calm[id] ?? true, lowPower: isLowPower,
                                                lastFlourish: lastFlourish, lastAnswer: lastAnswer[id],
-                                               lastRoutine: lastRoutine, routines: pick != nil)
+                                               lastRoutine: lastRoutine, routines: pick != nil,
+                                               plainStill: plainStill(id, stage: stage))
+        // A reply that would cut through a pile of snow isn't played.
+        if reply == .answer, !clock.canDraw(.answer, stage: stage) { reply = .nothing }
         switch reply {
         case .flourish: playFlourish(id, now: now)
         case .routine:
@@ -216,23 +240,40 @@ final class CompanionDirector {
         let mode = character.posture(stage.place).awake
         var everyday: [Int] = []
         var weather: [Int] = []
-        let skies: [CompanionSky]
-        switch stage.sky {
-        case .rain: skies = [.rain]
-        case .storm: skies = [.storm, .rain]
-        case .snow: skies = [.snow]
-        case .clear: skies = [.clear]
-        case .heat: skies = [.heat]
-        case .clouds, .unknown: skies = []
-        }
+        let depth = stage.snowDepth
         for (i, routine) in mode.routines.enumerated() {
             if let sky = routine.sky {
-                if skies.contains(sky) { weather.append(i) }
-            } else if character.plays(routine, in: stage.look.weather, mode: mode) {
+                guard CompanionSchedule.belongs(sky, under: stage.sky) else { continue }
+                if character.canDraw(routine, in: stage.look.weather, mode: mode, depth: depth) { weather.append(i) }
+            } else if character.plays(routine, in: stage.look.weather, mode: mode, depth: depth) {
                 everyday.append(i)
             }
         }
         return (everyday, weather)
+    }
+
+    /// The flickers it may play now (asleep: its stirs), as indices into the mode's gestures: the everyday ones and
+    /// the sky's own, each only if it can be drawn over the still frame as it is (a pile of snow).
+    func flickerPools(_ id: String) -> (everyday: [Int], weather: [Int]) {
+        guard let character = character(id), let stage = stages[id] else { return ([], []) }
+        let mode = character.posture(stage.place).mode(stage.look)
+        let choices = stage.look.asleep ? Array(mode.gestures.indices) : mode.flickers
+        var everyday: [Int] = []
+        var weather: [Int] = []
+        for i in choices {
+            let gesture = mode.gestures[i]
+            if let sky = gesture.sky, !CompanionSchedule.belongs(sky, under: stage.sky) { continue }
+            guard character.canDraw(gesture, in: stage.look.weather, mode: mode, depth: stage.snowDepth) else { continue }
+            if gesture.sky == nil { everyday.append(i) } else { weather.append(i) }
+        }
+        return (everyday, weather)
+    }
+
+    /// Whether the still frame is the plain `rest`, so the flourish can start and end on it (brief 91).
+    private func plainStill(_ id: String, stage: CompanionStage) -> Bool {
+        guard let character = character(id) else { return false }
+        let mode = character.posture(stage.place).mode(stage.look)
+        return mode.still(stage.look.weather, depth: stage.snowDepth) == mode.rest
     }
 
     /// The next routine for `id` (never the one that played last), or nil.
@@ -276,7 +317,8 @@ final class CompanionDirector {
     }
 
     private func canFlourish(_ id: String, stage: CompanionStage) -> Bool {
-        !stage.look.asleep && stage.look.weather == .plain && !(still[id] ?? true) && !(calm[id] ?? true) && !isLowPower
+        guard !stage.look.asleep, stage.look.flourishes, plainStill(id, stage: stage) else { return false }
+        return !(still[id] ?? true) && !(calm[id] ?? true) && !isLowPower
     }
 
     /// Awake, motion and effects allowed, and a routine to play.
@@ -292,13 +334,21 @@ final class CompanionDirector {
         settleActs(now: now)
         let soon = now.addingTimeInterval(0.05)
         for id in stages.keys.sorted() {
-            guard let character = character(id), let stage = stages[id], !(still[id] ?? true) else { continue }
+            guard let character = character(id), var stage = stages[id], !(still[id] ?? true) else { continue }
             let clock = clock(for: character)
             let acting = clock.isActing(at: now, stage: stage)
+            // The snow piles one frame deeper, between acts.
+            if !acting, let moment = snowMoment(id), moment <= soon {
+                settleSnow(id, now: now)
+                stage.snowDepth += 1
+                stages[id] = stage
+                snowLeft[id] = CompanionSchedule.snowBudget(unit: unit())
+                startSnow(id, now: now)
+            }
             if let moment = flourishMoment(id), moment <= soon,
                CompanionSchedule.mayFlourish(now: now, look: stage.look, onScreenSince: activeSince[id], acting: acting,
                                              still: still[id] ?? true, calm: calm[id] ?? true, lowPower: isLowPower,
-                                             lastFlourish: lastFlourish) {
+                                             lastFlourish: lastFlourish, plainStill: plainStill(id, stage: stage)) {
                 playFlourish(id, now: now)
                 continue
             }
@@ -359,10 +409,13 @@ final class CompanionDirector {
             // weather), and round again.
             let pools = routinePools(id)
             let routines = pools.everyday + pools.weather
-            let turn = recent[id, default: []].count % (mode.gestures.count + routines.count + 2)
+            let playable = mode.gestures.indices.filter { i in
+                mode.gestures[i].sky.map { CompanionSchedule.belongs($0, under: stage.sky) } ?? true
+            }
+            let turn = recent[id, default: []].count % (playable.count + routines.count + 2)
             recent[id, default: []].append(turn)
-            let afterGestures = turn - mode.gestures.count
-            if turn < mode.gestures.count { start(id, .gesture(turn), now: now) }
+            let afterGestures = turn - playable.count
+            if turn < playable.count { start(id, .gesture(playable[turn]), now: now) }
             else if afterGestures < routines.count { playRoutine(id, routines[afterGestures], now: now); return }
             else if afterGestures == routines.count { start(id, .answer, now: now) }
             else if canFlourish(id, stage: stage) { playFlourish(id, now: now); return }
@@ -370,8 +423,11 @@ final class CompanionDirector {
             scheduleGesture(id, after: now)
             return
         case .gestures?, nil:
-            // A flicker (asleep: a stir), by weight, never the same three times running.
-            let choices = stage.look.asleep ? Array(mode.gestures.indices) : mode.flickers
+            // A flicker (asleep: a stir), by weight, never the same three times running; while a sky holds, about
+            // every other one is the sky's own (a drip, a bead of sweat).
+            let pools = flickerPools(id)
+            let own = !pools.weather.isEmpty && (pools.everyday.isEmpty || unit() < CompanionSchedule.skyFlickerShare)
+            let choices = own ? pools.weather : pools.everyday
             guard !choices.isEmpty else { scheduleGesture(id, after: now); return }
             let weights = choices.map { mode.gestures[$0].weight }
             let played = recent[id, default: []].compactMap { choices.firstIndex(of: $0) }
@@ -394,8 +450,17 @@ final class CompanionDirector {
             let end = clock.end(of: act, stage: stage)
             guard now >= end.addingTimeInterval(-0.01) else { continue }
             stage.turned = clock.facing(at: max(now, end), stage: stage)
+            let depth = clock.snowDepth(at: max(now, end), stage: stage)
+            if depth != stage.snowDepth {
+                // Shaken off: the pile starts again from the bare snow.
+                settleSnow(id, now: now)
+                snowLeft[id] = CompanionSchedule.snowBudget(unit: unit())
+            }
+            stage.snowDepth = depth
             stage.act = nil
             stages[id] = stage
+            forceSnowDepth(id)
+            startSnow(id, now: now)
         }
     }
 
@@ -470,6 +535,7 @@ final class CompanionDirector {
             if let g = nextGesture[id] { moments.append(g) }
             if let f = flourishMoment(id) { moments.append(f) }
             if let r = routineMoment(id) { moments.append(r) }
+            if let p = snowMoment(id) { moments.append(p) }
             // The end of the act playing, to put it away.
             if let stage = stages[id], let act = stage.act, let character = character(id) {
                 moments.append(clock(for: character).end(of: act, stage: stage))
@@ -484,6 +550,51 @@ final class CompanionDirector {
             guard !Task.isCancelled else { return }
             self?.fire()
         }
+    }
+
+    // MARK: - Snow piling up (brief 91)
+
+    /// Whether the snow may pile deeper on `id` now: on screen, the app in front, motion allowed, snowing, not as deep
+    /// as it goes, and not held by `-companionSnowDepth`.
+    private func piles(_ id: String) -> Bool {
+        guard isAppActive, launch.snowDepth == nil, !(still[id] ?? true), let stage = stages[id],
+              stage.look.weather == .snow, let character = character(id) else { return false }
+        return stage.snowDepth < character.posture(stage.place).mode(stage.look).deepest
+    }
+
+    /// When the pile grows next, after the act playing.
+    private func snowMoment(_ id: String) -> Date? {
+        guard let since = snowSince[id], let left = snowLeft[id], let stage = stages[id] else { return nil }
+        var moment = since.addingTimeInterval(left)
+        if let act = stage.act, let character = character(id) {
+            moment = max(moment, clock(for: character).end(of: act, stage: stage))
+        }
+        return moment
+    }
+
+    private func settleSnow(_ id: String, now: Date) {
+        guard let since = snowSince[id] else { return }
+        let spent: TimeInterval = max(0, now.timeIntervalSince(since))
+        let left: TimeInterval = (snowLeft[id] ?? 0) - spent
+        snowLeft[id] = max(0, left)
+        snowSince[id] = nil
+    }
+
+    private func startSnow(_ id: String, now: Date) {
+        if piles(id) {
+            if snowLeft[id] == nil { snowLeft[id] = CompanionSchedule.snowBudget(unit: unit()) }
+            if snowSince[id] == nil { snowSince[id] = now }
+        } else {
+            settleSnow(id, now: now)
+        }
+    }
+
+    /// `-companionSnowDepth` (Debug): the pile held at that depth whenever it snows, and back to it after a shake-off.
+    private func forceSnowDepth(_ id: String) {
+        guard let forced = launch.snowDepth, var stage = stages[id], stage.look.weather == .snow,
+              let character = character(id) else { return }
+        stage.snowDepth = min(forced, character.posture(stage.place).mode(stage.look).deepest)
+        stages[id] = stage
     }
 
     // MARK: - The kept clocks
@@ -502,6 +613,7 @@ final class CompanionDirector {
 
     /// Takes the showing time since each budget began to be spent off it, and saves.
     private func settleBudgets(now: Date) {
+        for id in Array(snowSince.keys) { settleSnow(id, now: now) }
         guard spendingSince != nil || routineSpendingSince != nil else { return }
         if let since = spendingSince {
             let spent: TimeInterval = max(0, now.timeIntervalSince(since))
@@ -519,6 +631,8 @@ final class CompanionDirector {
     }
 
     private func startSpending(now: Date) {
+        for id in stages.keys { startSnow(id, now: now) }
+        for id in snowSince.keys where stages[id] == nil { settleSnow(id, now: now) }
         let flourish = spendsFlourish
         let routine = spendsRoutine
         if (!flourish && spendingSince != nil) || (!routine && routineSpendingSince != nil) { settleBudgets(now: now) }
@@ -548,10 +662,17 @@ final class CompanionDirector {
             guard stage.look != fresh.look || stage.sky != fresh.sky else { continue }
             let changed = stage.look != fresh.look
             stage.turned = clock(for: character).facing(at: now, stage: stage)
+            if changed {
+                // Out of the snow, or night and day changed over: the pile starts again.
+                stage.snowDepth = 0
+                snowLeft[id] = nil
+                snowSince[id] = nil
+            }
             stage.look = fresh.look
             stage.sky = fresh.sky
             stage.act = nil
             stages[id] = stage
+            forceSnowDepth(id)
             if changed {
                 recent[id] = []
                 scheduleGesture(id, after: now)
