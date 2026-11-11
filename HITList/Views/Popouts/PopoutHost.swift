@@ -102,11 +102,21 @@ struct PopoutHost: ViewModifier {
     /// The Mac's panel style; iPad gets it too.
     private var usesPanel: Bool { style.panelQuickAdd }
 
+    /// A card or panel is up over the screen, behind its backdrop.
+    private var coversContent: Bool {
+        let state = popouts.state
+        return state.isFloatingQuickAddOpen || (style.editor == .panel && (state.isTaskOpen || state.isSharedTaskOpen))
+    }
+
     @Environment(\.modelContext) private var context
 
     func body(content: Content) -> some View {
         latestStyle.style = style
         return content
+            // VoiceOver reads the open card alone: the screen under its backdrop is out of reach, as it is for a tap
+            // (brief 94). The toasts drawn below stay reachable.
+            // `isEnabled`: `accessibilityHidden(false)` would un-hide whatever inside is hidden (the companion on the "+").
+            .accessibilityHidden(true, isEnabled: coversContent)
             // The Duo's editor column (`DuoEditorColumn`) is part of the shell.
             .environment(\.editorCarryOver, carryOver)
             .overlay(alignment: style.cornerToasts ? .bottomTrailing : .bottomLeading) {
@@ -405,6 +415,9 @@ struct PopoutHost: ViewModifier {
                     .frame(maxWidth: style.ovalMaxWidth)
                     .padding(.horizontal, Self.ovalInset)
                     .padding(.bottom, Self.ovalInset + aboveKeyboard)
+                    // VoiceOver's scrub (two fingers, a Z) closes the card as a tap on the backdrop does.
+                    .accessibilityElement(children: .contain)
+                    .accessibilityAction(.escape) { if confirmingDiscard { resumeDraft() } else { requestClose() } }
                     .opacity(closing ? 0 : 1)
                     .offset(y: closing && !reduceMotion ? 10 : 0)
                     .allowsHitTesting(!closing)
@@ -850,6 +863,14 @@ private struct ListCompletionToast: ViewModifier {
                 }
             }
             .onChange(of: message, initial: true) { _, _ in handOver() }
+            // VoiceOver hears the toast as it appears or counts on ("2 completed"), as it hears the popout's (brief 94):
+            // the row it was on has gone, so nothing else would say Undo is there.
+            .onChange(of: message) { _, new in
+                guard let new else { return }
+                var words = AttributedString(new)
+                words.accessibilitySpeechAnnouncementPriority = .high
+                AccessibilityNotification.Announcement(words).post()
+            }
             .onChange(of: drawnByHost) { _, _ in handOver() }
             // iPhone: the host took the toast down while this list still shows it, which only a swipe
             // does (an expiry or an undo clears the message first).

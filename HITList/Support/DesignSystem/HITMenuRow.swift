@@ -101,7 +101,8 @@ struct HITMenuRowLabel: View {
     var body: some View {
         HStack(spacing: HITSpacing.m) {
             if let systemImage {
-                Image(systemName: systemImage)
+                // Its words say it; VoiceOver stopped on the icon first ("Home", "Calendar") (brief 94).
+                Image(systemName: systemImage).accessibilityHidden(true)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(iconTint)
                     .frame(width: HITRowMetrics.iconColumn, height: HITRowMetrics.iconHeight)
@@ -117,6 +118,8 @@ struct HITMenuRowLabel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // The title and its subtitle are one VoiceOver stop ("Start screen, Applies the next time HITList opens").
+            .accessibilityElement(children: .combine)
         }
     }
 }

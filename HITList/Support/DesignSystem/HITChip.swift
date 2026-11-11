@@ -27,16 +27,20 @@ struct HITChip: View {
     var tint: Color?
     var isSelected = false
     var size: Size = .regular
+    /// What VoiceOver says for the chip when its title alone would not say what it is ("Date: Tomorrow" for a chip
+    /// that reads "Tomorrow"); nil reads the title. The × keeps its own "Remove …".
+    var speech: String?
     var action: (() -> Void)?
     var onDismiss: (() -> Void)?
 
     init(_ title: String, systemImage: String? = nil, tint: Color? = nil, isSelected: Bool = false,
-         size: Size = .regular, onDismiss: (() -> Void)? = nil, action: (() -> Void)? = nil) {
+         size: Size = .regular, speech: String? = nil, onDismiss: (() -> Void)? = nil, action: (() -> Void)? = nil) {
         self.title = title
         self.systemImage = systemImage
         self.tint = tint
         self.isSelected = isSelected
         self.size = size
+        self.speech = speech
         self.onDismiss = onDismiss
         self.action = action
     }
@@ -48,8 +52,14 @@ struct HITChip: View {
     var body: some View {
         HStack(spacing: 0) {
             if let action {
-                Button(action: action) { content }
-                    .buttonStyle(HITChipPressStyle())
+                if let speech {
+                    Button(action: action) { content }
+                        .buttonStyle(HITChipPressStyle())
+                        .accessibilityLabel(speech)
+                } else {
+                    Button(action: action) { content }
+                        .buttonStyle(HITChipPressStyle())
+                }
             } else {
                 content
             }

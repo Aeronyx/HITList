@@ -155,6 +155,9 @@ private struct DatePresetTile: View {
                     .foregroundStyle(look.label)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
+                    // Five tiles of a fixed 40 pt share the card's width: one size up, "Tomorrow" and "Next week" were
+                    // cut ("Tomorr…"). They keep the default size from there, as the tab island's names do (brief 94).
+                    .dynamicTypeSize(...DynamicTypeSize.large)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 40)

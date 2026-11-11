@@ -49,6 +49,9 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
     /// How far the top page has been dragged towards the trailing edge by the edge swipe.
     @State private var dragOffset: CGFloat = 0
     @State private var isDragging = false
+    /// VoiceOver's place: on the bar's title when a page opens or closes (brief 94), so it starts at the top of
+    /// the page it is on rather than wherever the last page left it.
+    @AccessibilityFocusState private var titleFocused: Bool
 
     /// From the leading edge, where a drag takes the page back (the cards start 16 pt in; this stays in the gutter).
     static var edgeWidth: CGFloat { 20 }
@@ -99,7 +102,9 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
             screen { root }
                 .offset(x: offset(level: 0, top: top, width: width))
                 .allowsHitTesting(top == 0)
-                .accessibilityHidden(top != 0)
+                // `isEnabled`, never `accessibilityHidden(false)`: false un-hides everything inside (brief 94: the edge
+                // strip below, hidden, was an unnamed VoiceOver stop on every page).
+                .accessibilityHidden(true, isEnabled: top != 0)
             ForEach(entries, id: \.self) { entry in
                 screen { destination(entry.page) }
                     .overlay(alignment: .leading) {
@@ -115,7 +120,7 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
                     }
                     .offset(x: offset(level: entry.level, top: top, width: width))
                     .allowsHitTesting(entry.level == top)
-                    .accessibilityHidden(entry.level != top)
+                    .accessibilityHidden(true, isEnabled: entry.level != top)
                     .accessibilityAction(.escape) { back() }
                     .transition(slides ? .move(edge: .trailing) : .opacity)
                     .zIndex(Double(entry.level))
@@ -205,6 +210,7 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
                 .lineLimit(1)
                 .padding(.horizontal, 104)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($titleFocused)
                 .id(path.count)
                 .transition(.opacity)
             HStack {
@@ -229,6 +235,13 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
             }
         }
         .animation(effects.animation(.standard), value: path.count)
+        // Once the page has arrived (`enter` is 200 ms), VoiceOver moves to its title.
+        .onChange(of: path.count) {
+            Task {
+                try? await Task.sleep(for: .milliseconds(250))
+                titleFocused = true
+            }
+        }
         // No leading padding: the ghost back control carries its own 16 pt, so its chevron starts on the cards' left
         // edge, 16 pt in, as the content does.
         .padding(.trailing, HITSpacing.l)

@@ -23,6 +23,9 @@ struct TaskRow: View {
     /// Beside the upright island (the Duo's outer display) the title and meta line are a step larger.
     @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
+    /// Settings → Accessibility → Display → Differentiate Without Colour: the priority, otherwise only the check
+    /// circle's colour, is written on the second line too (brief 94).
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     /// A recurring task never becomes completed (its date advances), so the row also counts as checked
     /// while its completion animates.
@@ -58,6 +61,9 @@ struct TaskRow: View {
             Spacer(minLength: 0)
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
+        .taskRowSpeech(label: task.title, value: TaskRowSpeech.value(speechParts),
+                       actionName: TaskRowSpeech.actionName(isChecked: isChecked, isSwitch: isSwitch),
+                       toggle: onToggleCompletion)
         .contextMenu {
             Menu("Priority") {
                 ForEach(Priority.allCases, id: \.self) { p in
@@ -81,6 +87,26 @@ struct TaskRow: View {
                 if let popouts { popouts.requestDelete(task, perform: delete) } else { delete() }
             } label: { Label("Delete", systemImage: "trash") }
         }
+    }
+
+    /// What the row shows, for VoiceOver (`TaskRowSpeech`): the day or time as the meta line has it.
+    private var speechParts: TaskRowSpeech.Parts {
+        var parts = TaskRowSpeech.Parts(completed: task.isCompleted, isSwitch: isSwitch, priority: task.priorityValue)
+        if !isSwitch, let due = task.dueDate {
+            if !hidesDay {
+                parts.due = DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now)
+            } else if task.hasDueTime {
+                parts.due = DueFormatter.timeText(for: due)
+            }
+            parts.overdue = DueFormatter.isOverdue(due, hasTime: task.hasDueTime, isCompleted: task.isCompleted, now: now)
+            parts.repeats = task.recurrence != nil
+        }
+        parts.reminder = Self.reminderText(for: task, now: now)
+        parts.checklist = task.subtaskProgress
+        parts.labels = task.labelList.map(\.name)
+        if showProject { parts.group = task.project?.name }
+        parts.notes = task.notes.isEmpty ? nil : TaskLimits.firstLine(of: task.notes)
+        return parts
     }
 
     // MARK: The meta line
@@ -146,6 +172,9 @@ struct TaskRow: View {
             ForEach(task.labelList) { label in
                 MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
             }
+        }
+        if differentiateWithoutColor, let priority = PriorityWords.shown(task.priorityValue, isChecked: isChecked) {
+            MetaItem(priority, systemImage: "flag.fill", tint: task.priorityValue.color)
         }
     }
 
@@ -364,6 +393,9 @@ struct MetaItem: View {
             Image(systemName: systemImage)
                 .font(.system(size: iconSize, weight: TaskRowMetrics.metaIconWeight))
                 .frame(width: 12)
+                // Its text says it ("Today", the Group's name); VoiceOver read the dot as "Circle". An item with no
+                // text (the repeat and switch glyphs) is labelled where it is made, and keeps its image.
+                .accessibilityHidden(true, isEnabled: text != nil)
         }
     }
 }

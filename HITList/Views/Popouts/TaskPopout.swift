@@ -155,6 +155,8 @@ struct TaskPopout: View {
         }
         #if os(macOS)
         .onExitCommand(perform: requestClose)
+        // Tab from the list behind the panel comes into the title (brief 94).
+        .background(PanelTabKey { titleFocused = true })
         #endif
     }
 
@@ -437,7 +439,8 @@ struct TaskPopout: View {
     private func priorityPill(_ priority: Priority) -> some View {
         HITChip(priority == .p4 ? "Priority" : priority.shortName, systemImage: priority.symbol,
                 tint: priority == .p4 ? Theme.secondaryText : priority.color,
-                isSelected: priority != .p4, size: .compact, action: { openChip = .priority })
+                isSelected: priority != .p4, size: .compact, speech: ChipSpeech.priority(priority),
+                action: { openChip = .priority })
             .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
                 PriorityChipPopover(selection: priority) { p in
                     openChip = nil
@@ -480,7 +483,8 @@ struct TaskPopout: View {
                     setReminderMoment(pick)
                 })
             }
-            .accessibilityLabel("Reminder: \(title)")
+            // "Reminder: none" rather than "Reminder: Reminder" while the chip shows only its name (brief 94).
+            .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
             .accessibilityIdentifier("popoutReminderChip")
     }
 
@@ -499,7 +503,8 @@ struct TaskPopout: View {
     private func labelsPill(_ names: [String]) -> some View {
         HITChip(names.isEmpty ? "Labels" : names.map { "@" + $0 }.joined(separator: " "),
                 systemImage: "tag", tint: names.isEmpty ? Theme.secondaryText : PopoutTint.label,
-                isSelected: !names.isEmpty, size: .compact, action: { openChip = .labels })
+                isSelected: !names.isEmpty, size: .compact, speech: ChipSpeech.labels(names),
+                action: { openChip = .labels })
             .pickerAnchor(.labels, isPresented: chipBinding(.labels)) {
                 LabelsChipPopover(labels: labels, selected: names, onToggle: toggleLabel)
             }
@@ -509,7 +514,8 @@ struct TaskPopout: View {
     private func repeatPill(_ rule: RecurrenceRule?) -> some View {
         HITChip(rule?.displayText ?? "Repeat", systemImage: "repeat",
                 tint: rule == nil ? Theme.secondaryText : PopoutTint.today,
-                isSelected: rule != nil, size: .compact, action: { openChip = .repeating })
+                isSelected: rule != nil, size: .compact, speech: ChipSpeech.repeats(rule?.displayText),
+                action: { openChip = .repeating })
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
                 RepeatChipPopover(rule: rule) { rule in
                     openChip = nil
@@ -526,6 +532,7 @@ struct TaskPopout: View {
                        systemImage: "scope",
                        tint: deadline == nil ? Theme.secondaryText : PopoutTint.date(deadline, now: now),
                        isSelected: deadline != nil, size: .compact,
+                       speech: ChipSpeech.deadline(deadline.map { DueFormatter.text(for: $0, hasTime: false, now: now) }),
                        onDismiss: deadline == nil ? nil : { setDeadline(nil) },
                        action: { openChip = .deadline })
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
@@ -541,6 +548,7 @@ struct TaskPopout: View {
         let name = task.locationName
         return HITChip(name ?? "Location", systemImage: "mappin.and.ellipse",
                        tint: name == nil ? Theme.secondaryText : Theme.accent, isSelected: name != nil, size: .compact,
+                       speech: ChipSpeech.location(name),
                        onDismiss: name == nil ? nil : { setLocation(nil) },
                        action: { openChip = .location })
             .pickerAnchor(.location, isPresented: chipBinding(.location)) {

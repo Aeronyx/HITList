@@ -122,7 +122,9 @@ struct SyncBolt: View {
     static let size: CGFloat = 11 * 1.15
     /// Its tap frame, grown by the same 15% (was 14 × 20) so the glyph keeps the same margins.
     static let frame = CGSize(width: 16, height: 23)
-    /// How far right of its toolbar slot the bolt is drawn.
+    /// How far right of its toolbar slot the bolt is drawn on iPhone and iPad. On the Mac it shares the pill's toolbar
+    /// item and sits `ToolbarPillMetrics.boltSpacing` from it instead (brief 94: an offset drawing outside its item
+    /// took clicks only on the strip still inside it).
     static let nudge: CGFloat = 12
     /// A sync older than this reads as "hasn't synced in a while".
     static let staleAfter: TimeInterval = 24 * 60 * 60
@@ -154,9 +156,11 @@ struct SyncBolt: View {
                     .modifier(BoltMotions(player: player, color: look.color))
                     .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
+                    #if os(iOS)
                     // Drawn a little to the right of its toolbar slot, so it sits nearer the two controls
                     // than the toolbar's own item spacing would put it (George, build 9).
                     .offset(x: Self.nudge)
+                    #endif
             }
             .buttonStyle(.plain)
             .accessibilityLabel(state.summary(now: tick.date))

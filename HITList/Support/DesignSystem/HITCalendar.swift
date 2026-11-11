@@ -132,9 +132,13 @@ struct HITCalendar: View {
                     .fill(month == todayMonth ? Theme.secondaryText.opacity(0.5) : Theme.accent)
                     .frame(width: 7, height: 7)
                     .frame(width: 18, height: 24)
+                    // Taller into the empty space above and below (brief 94); not wider: ‹ and › are beside it. Written out
+                    // rather than `hitOutset`, which the widget extension (it compiles this file) does not have.
+                    .padding(.vertical, 6)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .padding(.vertical, -6)
             .accessibilityLabel("This month")
             .help("Today")
             Button { step(1) } label: { Image(systemName: "chevron.right") }
