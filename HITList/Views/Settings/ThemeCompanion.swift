@@ -55,8 +55,9 @@ enum ThemeCompanion {
         "gargle": Seat(placement: .peeking, along: 0.35),
         // Mocha: Phase asleep in the accent dot, sunk to its eyes, its point flopped over like a nightcap.
         "phase": Seat(placement: .asleepOnDot, along: 0.7),
-        // Rosé: Button peeks over the top, cap and eyes, on the side away from Hush's.
-        "button": Seat(placement: .peeking, along: 0.6),
+        // Rosé: Button sits on the card under its cap (peeking, its tall cap rose 13 pt and the iPhone's first
+        // screen no longer fit).
+        "button": Seat(placement: .onCard, along: 0.3),
     ]
 
     /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of
