@@ -109,7 +109,8 @@ struct FlipSwitchTile: View {
         .onChange(of: charge) { noteLamps(firstAppearance: false) }
     }
 
-    private var accessibilityValue: String { side == .red ? "Red, \(caption)" : "Green, \(caption)" }
+    /// "Take meds, off, Due 9:00" (brief 94): a switch is off until it is flipped.
+    private var accessibilityValue: String { side == .red ? "off, \(caption)" : "on, \(caption)" }
     private var accessibilityHint: String {
         if side == .red { return target > 1 ? "Counts one flip" : "Flips the switch back to green" }
         if clock.board != nil { return "Done for now" }
