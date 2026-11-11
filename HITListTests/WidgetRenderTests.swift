@@ -60,11 +60,15 @@ enum WidgetRenders {
     static let seeded = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 10, hour: 10))!
 
     static func demoSnapshot(themeID: String = "slate") throws -> WidgetSnapshot {
+        // A context doesn't retain its container, and Swift may release a local after its last use: keep the container
+        // alive until the snapshot is built, or a fetch inside can trap.
         let container = ModelContainerFactory.preview()
-        TaskActions.seedDemoDataIfRequested(in: container.mainContext, arguments: ["-seedDemoData"],
-                                            storeName: "HITList-render.store", now: seeded)
-        return try WidgetSnapshotBuilder.build(from: container.mainContext, shared: [], themeID: themeID, weekStart: 2,
-                                               now: seeded)
+        return try withExtendedLifetime(container) {
+            TaskActions.seedDemoDataIfRequested(in: container.mainContext, arguments: ["-seedDemoData"],
+                                                storeName: "HITList-render.store", now: seeded)
+            return try WidgetSnapshotBuilder.build(from: container.mainContext, shared: [], themeID: themeID,
+                                                   weekStart: 2, now: seeded)
+        }
     }
 
     /// One widget at its size, as a cell of a contact sheet.
