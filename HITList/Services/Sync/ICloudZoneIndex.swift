@@ -52,6 +52,9 @@ struct ICloudZoneIndex: Codable, Equatable {
         var isFullRead = false
         /// The zone doesn't exist in iCloud.
         var zoneMissing = false
+        /// The fetch reached the zone's end. False for a read cut short (a timeout, a dropped network) that still brought
+        /// records and a token to go on from: the first read of a large zone then finishes over several beats.
+        var reachedEnd = true
     }
 
     mutating func apply(_ changes: ZoneChanges, at now: Date) {
@@ -64,11 +67,15 @@ struct ICloudZoneIndex: Codable, Equatable {
             return
         }
         zoneMissing = false
-        if changes.isFullRead { entries = [:] }
+        if changes.isFullRead {
+            entries = [:]
+            complete = false
+        }
         for (name, entry) in changes.changed { entries[name] = entry }
         for name in changes.deleted { entries[name] = nil }
         zoneToken = changes.token
-        if changes.isFullRead {
+        // A whole read, or the last part of a first read that was cut short, makes the index complete.
+        if changes.reachedEnd, changes.isFullRead || !complete {
             complete = true
             lastFullRead = now
         }

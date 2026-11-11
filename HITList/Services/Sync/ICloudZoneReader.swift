@@ -158,6 +158,16 @@ struct ICloudZoneReader: ICloudZoneReading {
             }
         }
         if case .success = result { progress(counter.value) }
+        // Cut short with records and a token to go on from (a large zone on a slow network): keep what came, so the next
+        // beat goes on from there rather than starting over.
+        if case .failure = result {
+            var partial = box.value
+            if let reached = partial.token, reached != token, !partial.changed.isEmpty || !partial.deleted.isEmpty {
+                partial.token = reached
+                partial.reachedEnd = false
+                return .success(partial)
+            }
+        }
         return result
     }
 
