@@ -53,6 +53,7 @@ struct SidebarSearchField: View {
         .background(shape.fill(Theme.elevated))
         .overlay(shape.strokeBorder(isFocused ? Theme.accent.opacity(0.9) : Theme.separator.opacity(0.5),
                                     lineWidth: isFocused ? HITFieldChrome.ringWidth : 1))
+        .overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }
         .animation(HITMotion.quick(reduceMotion: reduceMotion), value: isFocused)
         // Let go, then take the keyboard on the next turn: when the sidebar's list has taken the keyboard, the focus
         // state can still read true, and setting it to true again would do nothing.
