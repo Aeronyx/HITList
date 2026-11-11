@@ -353,19 +353,21 @@ final class SettingsTidyTests: XCTestCase {
     /// Rule 5: each path a What's New line names ("Settings → Extras → Weather") is a page and a row in it.
     func testWhatsNewPathsNameRealHomes() throws {
         let homes: [String: Set<String>] = [
-            "Account": ["Your name", "Delete profile"],
+            // Rows and the groups that hold them, by the names the pages show.
+            "Account": ["Your name", "Delete profile", "iCloud account", "Sign out"],
             "Appearance": ["Reduce effects", "Compact rows", "Themes"],
             "General": ["Start screen", "Week starts on", "Show task count on the app icon", "Confirm before deleting",
                         "Calendar events", "Keyboard shortcuts"],
-            "Reminders": ["Notify at due time", "Default reminder", "Morning summary"],
-            "Extras": ["Completion sound", "Haptics", "Companions", "Weather", "Sync bolt", "Holiday touches",
-                       "Rare surprises", "Creaky hinge"],
-            "iCloud": ["Sync log", "Check iCloud", "Reset local cache"],
-            "iCloud & data": ["Sync log", "Check iCloud", "Reset local cache", "Backups", "Export JSON", "Import JSON",
-                              "Delete all data from iCloud"],
+            "Reminders": ["Notify at due time", "Default reminder", "Morning summary", "If reminders don't arrive",
+                          "Send a test notification"],
+            "Extras": ["Completion sound", "Haptics", "Companions", "Show companions", "Weather", "Sync bolt",
+                       "Holiday touches", "Rare surprises", "Creaky hinge", "Completing a task", "Effects"],
+            "iCloud": ["Sync", "Sync log", "Check iCloud", "Reset local cache", "If something doesn't sync"],
+            "iCloud & data": ["Sync", "Sync log", "Check iCloud", "Reset local cache", "Backups", "Export JSON",
+                              "Import JSON", "Delete all data from iCloud", "If something doesn't sync"],
             "Data": ["Backups", "Export JSON", "Import JSON", "Delete all data from iCloud"],
             "Claude": ["Claude integration"],
-            "About": ["Show tips again", "What's New", "Privacy policy"],
+            "About": ["Show tips again", "What's New", "Privacy policy", "Send Beta Feedback", "Copy diagnostics"],
         ]
         let pageNames = Set(SettingsPage.allCases.map(\.title) + MacSettingsSection.allCases.map(\.title) + ["Appearance"])
         let current = try XCTUnwrap(WhatsNew.current)
