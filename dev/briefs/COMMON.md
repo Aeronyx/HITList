@@ -82,6 +82,11 @@ decided. **No schema change this round**: a fix that needs one stops and reports
   Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's
   New pin, the models' shape, `CompanionSky.swift` and `CompanionSkySource.swift` (the supervisor's: where briefs 83
   and 84 meet; it now carries the place's time zone as well as the sky).
+- Added at 02:10: 87 `graphite-companion`, 88 `moss-companion`, 89 `tokyo-companion` (max each; one brief,
+  `87-last-three-companions.md`): one new character file each, two lines each in `CompanionCast.swift`, a test file
+  each. Brief 85's companions are Posy (Rosé) and Mallow (Mocha). Brief 84's engine commit is on master.
+- **The Mac is saturated tonight** (eight sessions, swap full): no baseline suite runs for the three companion
+  sessions; everyone else, prefer `-only-testing` while you iterate and run the full suites once, at the end.
 - **A Debug build never asks for the location by itself** (brief 83 keeps it so): if a system dialog appears on the
   Mac anyway, leave it, say so in the report and carry on with what does not need it.
 - **Five sessions build at once.** Use your own derived data folder inside your worktree (`build.noindex/…`), your
