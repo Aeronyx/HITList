@@ -29,12 +29,20 @@ struct WeekStripView: View {
                     .font(HITType.headline)
                     .contentTransition(.numericText())
                 Spacer()
-                Button { show(week: shownWeek - 1) } label: { Image(systemName: "chevron.left") }
+                // Each takes a press across the gaps beside it and down to the days (brief 94: 13 x 17 pt targets).
+                Button { show(week: shownWeek - 1) } label: {
+                    Image(systemName: "chevron.left").hitOutset(horizontal: 12, vertical: 6)
+                }
+                    .hitOutsetLayout(horizontal: 12, vertical: 6)
                     .disabled(shownWeek <= weeks.lowerBound)
                     .accessibilityLabel("Previous week")
-                Button("Today") { show(week: 0); onSelect(today) }
+                Button { show(week: 0); onSelect(today) } label: { Text("Today").hitOutset(vertical: 6) }
+                    .hitOutsetLayout(vertical: 6)
                     .font(HITType.subheadlineMedium)
-                Button { show(week: shownWeek + 1) } label: { Image(systemName: "chevron.right") }
+                Button { show(week: shownWeek + 1) } label: {
+                    Image(systemName: "chevron.right").hitOutset(horizontal: 12, vertical: 6)
+                }
+                    .hitOutsetLayout(horizontal: 12, vertical: 6)
                     .disabled(shownWeek >= weeks.upperBound)
                     .accessibilityLabel("Next week")
             }
