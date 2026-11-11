@@ -73,7 +73,9 @@ targets:
         CFBundleShortVersionString: "0.9.1"
         CFBundleVersion: "22"
         LSApplicationCategoryType: public.app-category.productivity
-        UIBackgroundModes: [remote-notification]
+        # Brief 81: fetch for the widgets' background refresh (WidgetRefresh), beside the silent pushes.
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.trammells.hitlist.widget-refresh]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
