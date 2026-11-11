@@ -258,6 +258,7 @@
 		A2088F01F506B5FFB9EDF7A4 /* Inter_18pt-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4232FDAE8D59CD8804FC62FC /* Inter_18pt-Regular.ttf */; };
 		A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80FC29DB1F9289C32B262576 /* SyncLogTests.swift */; };
 		A3EC8F0CC8B0442E99A48CE4 /* HighlightRun.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14255A51748F8F42EA94CDCF /* HighlightRun.swift */; };
+		A3FC90456C59EAA24675644D /* CompanionSkySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = F10B33DD1B597CC1368CA95B /* CompanionSkySource.swift */; };
 		A400CBB35842FB32F63D2714 /* ClaudeIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02156329220ED375142192B8 /* ClaudeIntegration.swift */; };
 		A4151807F7AE079F0DC16D39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		A423D0432076CC1FF04FC787 /* SharedTasksCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443183B5EE4B7772E52AF465 /* SharedTasksCenter.swift */; };
@@ -367,6 +368,7 @@
 		E8B78F8F8B858A38DA4721D8 /* AccountSwitchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66D3EBF11AEEB13847A0856 /* AccountSwitchTests.swift */; };
 		E95577674FCA941401D4111D /* WidgetUpcomingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CA43020CE7832A00C1FA46 /* WidgetUpcomingTests.swift */; };
 		E9ACC03BBB596564B446D1E8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
+		E9F3DA77C75DEC0674B2C526 /* CompanionSkySourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */; };
 		E9F91069D04695E89BCEBE1D /* HingeCreakSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BB614B969D4D6C82FE7EE /* HingeCreakSynth.swift */; };
 		EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */; };
 		EC2045D33D746F7D258FDE5A /* HITCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */; };
@@ -733,6 +735,7 @@
 		BCD1883288948D9C8624C512 /* SharedTasksComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksComponents.swift; sourceTree = "<group>"; };
 		BCEA3CCC681372C04E433275 /* ListRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListRulesTests.swift; sourceTree = "<group>"; };
 		BD4A928ACFD0598859CD1BB7 /* SharedTasksMerge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksMerge.swift; sourceTree = "<group>"; };
+		BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionSkySourceTests.swift; sourceTree = "<group>"; };
 		BD69DA3D48DE01A521546D67 /* UpcomingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingView.swift; sourceTree = "<group>"; };
 		BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenHighlightField.swift; sourceTree = "<group>"; };
 		BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardTests.swift; sourceTree = "<group>"; };
@@ -813,6 +816,7 @@
 		EFB0F6B260E707986FB5A77C /* SharedTaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTaskPopout.swift; sourceTree = "<group>"; };
 		F022363E433ED53A9ACAC2F0 /* CalendarEventsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventsUITests.swift; sourceTree = "<group>"; };
 		F042F45B4C75FB641635ECA0 /* SharedRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRow.swift; sourceTree = "<group>"; };
+		F10B33DD1B597CC1368CA95B /* CompanionSkySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionSkySource.swift; sourceTree = "<group>"; };
 		F186832AD84DA7CDA6A34C6E /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		F1AC953B97F6563715FF6460 /* SyncAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncAppDelegate.swift; sourceTree = "<group>"; };
 		F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITCalendar.swift; sourceTree = "<group>"; };
@@ -1305,6 +1309,7 @@
 				F2383CCF0E885DBE6A113EF3 /* CloudKitSchemaTests.swift */,
 				5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */,
 				453738DB09EEE9FAE6BD7859 /* CompanionClockTests.swift */,
+				BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */,
 				4AC8F4B56B5871C0BE8977E4 /* CompanionSpriteTests.swift */,
 				3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */,
 				38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */,
@@ -1547,6 +1552,7 @@
 				545918A6DC1F63DDA774EB2D /* CompanionClock.swift */,
 				84BA75B32715E4CC319201B2 /* CompanionDirector.swift */,
 				0AF2EA158533BAD33E2AE682 /* CompanionSchedule.swift */,
+				F10B33DD1B597CC1368CA95B /* CompanionSkySource.swift */,
 				25871571111CA5C3DE51CD1C /* Characters */,
 			);
 			path = Companions;
@@ -1955,6 +1961,7 @@
 				0D2B8E1D4C4A93150CD9B06E /* CompanionDirector.swift in Sources */,
 				BAF56EF764B66D617C08BAB3 /* CompanionPerch.swift in Sources */,
 				A0EA112606998D3F586821AC /* CompanionSchedule.swift in Sources */,
+				A3FC90456C59EAA24675644D /* CompanionSkySource.swift in Sources */,
 				7B68FF6AF35272771504B85E /* CompanionSprite.swift in Sources */,
 				134B5A3A98A846A82E02C4D9 /* CompanionTimeline.swift in Sources */,
 				D6D05DC0F3BE0D8FEDCE58DD /* CompletionAnimator.swift in Sources */,
@@ -2193,6 +2200,7 @@
 				DADDAC552653674841536C86 /* CloudKitSchemaTests.swift in Sources */,
 				FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */,
 				F1E57121A758A7BE8F241ADF /* CompanionClockTests.swift in Sources */,
+				E9F3DA77C75DEC0674B2C526 /* CompanionSkySourceTests.swift in Sources */,
 				4C3E594F18816DAA10A08509 /* CompanionSpriteTests.swift in Sources */,
 				20CF31C4714CB5F315804F7A /* CompletionAnimatorTests.swift in Sources */,
 				4A5A32F96EDD564B3FC09DE9 /* CompletionFeedbackTests.swift in Sources */,

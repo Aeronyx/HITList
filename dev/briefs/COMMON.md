@@ -66,6 +66,32 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 18 (2026-11-11; briefs 79–81 in parallel, all three at once; `ROUND-18.md` says why)
+0.9.1 (22) is released; this round is **0.9.2**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. **No schema change this round**: a fix that needs one
+stops and reports.
+- Ownership: 79 `companion-cast` (max) `Views/Companions/*`, `Support/Companions/*` (not `CompanionSkySource.swift`),
+  the perch lines in `SidebarSearchField`, `BrowseView`, `SidebarView` and where the iPhone "+" is drawn. 80 `weather`
+  (high) new `Services/Weather/*`, a core file for the sky table, `DelightSettingsSection` (the Extras rows and their
+  words), the app's entitlements and one usage string in `project.yml`, the privacy page. 81 `widget-completion`
+  (xhigh) `HITListWidgets/*`, `Services/Widgets/*`, core's widget files and a new outbox, `Services/Intents/*`, the
+  background-work lines of `HITListApp` and `SyncAppDelegate`, a read-only addition to `CloudSyncMonitor`,
+  `project.yml` (background identifiers, files in both targets). Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`,
+  `CHANGELOG.md`, `WhatsNew.swift`, the `SettingsTests` What's New pin, the models, `CompanionSky.swift` and
+  `CompanionSkySource.swift` (the supervisor's: where briefs 79 and 80 meet).
+- **The CI runner's Swift is older than yours** (Xcode 26.x on `macos-26` against 27.2 here): 0.9.1's CI failed on
+  one long arithmetic expression inside a closure ("unable to type-check this expression in reasonable time"). Keep
+  expressions that mix `Int`, `Double` and `CGFloat` conversions short: one step per line, explicit types.
+- **George's principle for anything that syncs (2026-11-11): data resilience over speed.** Slow is fine, wrong is
+  not; never show a change as finished before it is safe.
+- **George's principle for anything that moves by itself: rare.** People live in this app for hours; whatever
+  animates constantly becomes a nuisance. Still by default, a small movement now and then, a flourish you might
+  miss.
+- Everything in Round 17's block below still holds: no session answers a system dialog or changes a system
+  permission; UI tests in a file of your own, on a fresh simulator; `dev/ROADMAP.md` is the supervisor's; two
+  briefs edit `project.yml`, each its own lines; leave the Debug Mac app's window as you found it; unregister your
+  Debug build's widget extension (`pluginkit -r`) when you finish.
+
 ## Round 17 (2026-11-10; briefs 74–78 in parallel; `ROUND-17.md` says why)
 0.9.0 (21) is released; this round is **0.9.1** (each release bumps the version by 0.0.1 again). Sessions are Opus
 5.5 (commits end `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. **No

@@ -33,8 +33,14 @@ struct CompanionInks: Equatable {
     /// `a` toward `b` by `t`, as "#RRGGBB".
     static func mix(_ a: String, _ b: String, _ t: Double) -> String {
         let x = rgb(a), y = rgb(b)
-        let c = (0..<3).map { Int((Double(x[$0]) + (Double(y[$0]) - Double(x[$0])) * t).rounded()) }
-        return String(format: "#%02X%02X%02X", c[0], c[1], c[2])
+        // One step per line: the CI runner's older Swift gave up type-checking this as a single expression.
+        func channel(_ i: Int) -> Int {
+            let from = Double(x[i])
+            let to = Double(y[i])
+            let mixed: Double = from + (to - from) * t
+            return Int(mixed.rounded())
+        }
+        return String(format: "#%02X%02X%02X", channel(0), channel(1), channel(2))
     }
 
     static func rgb(_ hex: String) -> [Int] {
