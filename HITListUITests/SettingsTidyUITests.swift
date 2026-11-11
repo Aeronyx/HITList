@@ -111,20 +111,22 @@ final class SettingsTidyUITests: XCTestCase {
         let account = element("profile-menu-account")
         XCTAssertTrue(account.waitForExistence(timeout: 5))
         account.tap()
-        XCTAssertTrue(element("settings-profile").waitForExistence(timeout: 5), "Account settings… opens Settings")
-        open("settings-profile")
-        XCTAssertTrue(element("settings-account-name").waitForExistence(timeout: 5), "and Account is one tap away")
+        // Straight on the Account page (the supervisor's follow-up to brief 86); Back leads to the first screen.
+        XCTAssertTrue(element("settings-account-name").waitForExistence(timeout: 5), "Account settings… opens Account")
+        back()
+        XCTAssertTrue(element("settings-profile").waitForExistence(timeout: 5), "and Back is Settings' first screen")
         app.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(element("settings-profile").waitForNonExistence(timeout: 5))
+        pause(0.6)
 
-        // The sync bolt, on a tab's own screen: Settings, with iCloud & data on the first screen.
+        // The sync bolt, on a tab's own screen: Settings, straight on iCloud & data.
         tab("today")
         let bolt = app.buttons["syncBolt"].firstMatch
         XCTAssertTrue(bolt.waitForExistence(timeout: 5))
         bolt.tap()
-        XCTAssertTrue(element("settings-profile").waitForExistence(timeout: 5), "the bolt opens Settings")
-        open("settings-page-iCloud")
-        XCTAssertTrue(element("settings-check-icloud").waitForExistence(timeout: 5), "iCloud & data, one tap from the bolt")
+        XCTAssertTrue(element("settings-check-icloud").waitForExistence(timeout: 5), "the bolt opens iCloud & data")
+        back()
+        XCTAssertTrue(element("settings-profile").waitForExistence(timeout: 5), "and Back is Settings' first screen")
         app.buttons["Done"].firstMatch.tap()
     }
 
