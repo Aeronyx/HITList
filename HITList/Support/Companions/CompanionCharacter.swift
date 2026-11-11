@@ -1,6 +1,28 @@
 import Foundation
 import HITListCore
 
+// HOW A COMPANION COMES ALIVE (brief 84): a character is data; this is all a new one needs.
+// - Frames: rows of `CompanionInk` letters, every frame the character's size. A Mode (awake or asleep, per place) names
+//   its still `rest` frame, optional `rain` and `snow` variations, its `gestures`, the `answer` to a tap and, awake,
+//   its `routines`. The Posture holds both modes and the rare `flourish` (12 to 24 ticks, rest to rest).
+// - Flickers: mark the smallest gestures (one blink, one swing of a foot) `flicker: true`. One plays every 40 to 110 s.
+//   Unmarked gestures play only inside routines. A mode that marks none plays every gesture as a flicker (as before).
+// - Routines: `Routine(name:, steps:)`, played every 5 to 12 minutes of showing time, never the same twice running.
+//   Steps, in order, at the character's `gestureFPS` (8: one tick is 1/8 s):
+//     .gesture("blink")              one of this mode's gestures, by name
+//     .hold(4)                       the still frame (dressed for the weather) for 4 ticks: a held beat
+//     .play(("scoot1", 2), ("rest", 1))   frames of its own, each for a number of ticks ("rest" is the still frame)
+//   Four to nine moves (every step but a hold), 3 to 7 seconds in all; the first and last frames a step from the
+//   still frame, so nothing pops. The rest frame comes back when it ends. Draw the in-between frames a move needs.
+// - Weather: an everyday routine (no `sky`) also plays in rain or snow when its frames leave the weather's pixels alone
+//   (or a frame named "frame@weather" is drawn, as for gestures); otherwise only in plain weather. A routine with
+//   `sky: .rain`, `.snow`, `.storm` or `.clear` plays only under that sky (storm also takes the rain ones), about every
+//   other routine while it holds; its own frames are drawn whole, prop and all (a few drops may fall inside the box).
+// - Places: `Posture(inset:)` moves the companion that many sprite pixels further in from the host's trailing edge;
+//   `Posture(turns: false)` keeps a flourish that turns round (`flourishTurns`) facing the same way in that place.
+// - A character with no routines and no flicker marks is still valid: flickers and the flourish, as before.
+// `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
+
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
 /// each to the palette in use, so the creatures belong to the slate window and change with the eight themes.
 enum CompanionInk: Character, CaseIterable {
@@ -74,12 +96,57 @@ struct CompanionCharacter: Identifiable {
         var mirrored = false
     }
 
-    /// A small thing it does now and then (a blink, one swing of a leg, an ear tip), under a second: its ticks
-    /// play in order, then the mode's rest frame is back.
+    /// A small thing it does (a blink, one swing of a leg, an ear tip), under a second: its ticks play in order, then
+    /// the mode's rest frame is back. A `flicker` is one of the smallest, played on its own now and then; the others
+    /// play inside routines (a mode with no flicker marked plays all of them on their own, as before brief 84).
     struct Gesture {
         let name: String
         var weight = 1
         let ticks: [Tick]
+        var flicker = false
+    }
+
+    /// A few seconds of life (brief 84): four to nine small moves in quick succession with held beats between, from
+    /// the still frame back to it. See the top of this file.
+    struct Routine {
+        enum Step {
+            /// One of the mode's gestures, by name.
+            case gesture(String)
+            /// The still frame, dressed for the weather, for this many ticks.
+            case hold(Int)
+            /// Frames of its own, in order ("rest" or the mode's rest frame is the still frame).
+            case frames([Tick])
+
+            /// `.play(("scoot", 2), ("rest", 1))`: frames of its own, each for a number of ticks.
+            static func play(_ holds: (String, Int)...) -> Step {
+                var out: [Tick] = []
+                for (frame, count) in holds {
+                    out.append(contentsOf: Array(repeating: Tick(frame: frame), count: count))
+                }
+                return .frames(out)
+            }
+
+            var isHold: Bool {
+                if case .hold = self { return true }
+                return false
+            }
+        }
+
+        let name: String
+        /// The sky it belongs to (`.rain`, `.snow`, `.storm`, `.clear`); nil for an everyday routine.
+        var sky: CompanionSky?
+        var weight = 1
+        let steps: [Step]
+
+        init(name: String, sky: CompanionSky? = nil, weight: Int = 1, steps: [Step]) {
+            self.name = name
+            self.sky = sky
+            self.weight = weight
+            self.steps = steps
+        }
+
+        /// How many moves it makes (every step but a hold).
+        var moves: Int { steps.filter { !$0.isHold }.count }
     }
 
     /// Awake or asleep in one place: the still frame, its weather variations, the gestures (asleep: a stir), and
@@ -90,12 +157,43 @@ struct CompanionCharacter: Identifiable {
         var snow: String?
         let gestures: [Gesture]
         let answer: Gesture
+        /// Awake only: its routines (brief 84). Asleep a companion has none.
+        var routines: [Routine] = []
 
         /// Every tick of its gestures and its answer, in order.
         var everyTick: [Tick] {
             var out: [Tick] = []
             for gesture in gestures { out.append(contentsOf: gesture.ticks) }
             out.append(contentsOf: answer.ticks)
+            return out
+        }
+
+        /// The gestures that play on their own: the ones marked `flicker`, or all of them when none is marked.
+        var flickers: [Int] {
+            let marked = gestures.indices.filter { gestures[$0].flicker }
+            return marked.isEmpty ? Array(gestures.indices) : marked
+        }
+
+        func gesture(named name: String) -> Gesture? { gestures.first { $0.name == name } }
+
+        /// A routine's ticks, flattened: a gesture's ticks, a hold's rest frames, its own frames. Each tick says
+        /// whether it is drawn whole (a weather routine's own frames, prop and all) rather than over the still frame.
+        func ticks(of routine: Routine) -> [(tick: Tick, whole: Bool)] {
+            var out: [(tick: Tick, whole: Bool)] = []
+            for step in routine.steps {
+                switch step {
+                case .gesture(let name):
+                    for tick in gesture(named: name)?.ticks ?? [] { out.append((tick, false)) }
+                case .hold(let count):
+                    for _ in 0..<max(0, count) { out.append((Tick(frame: rest), false)) }
+                case .frames(let ticks):
+                    for tick in ticks {
+                        let still = tick.frame == "rest" || tick.frame == rest
+                        let frame = still ? rest : tick.frame
+                        out.append((Tick(frame: frame, mirrored: tick.mirrored), routine.sky != nil && !still))
+                    }
+                }
+            }
             return out
         }
 
@@ -113,8 +211,14 @@ struct CompanionCharacter: Identifiable {
     struct Posture {
         let awake: Mode
         let asleep: Mode
-        /// Starts on `awake.rest` and ends there (turned round when `flourishTurns`).
+        /// Starts on `awake.rest` and ends there (turned round when it `turns`).
         let flourish: [Tick]
+        /// Sprite pixels further in from the host's trailing edge than the place's usual spot (brief 84: so what it
+        /// sits on lies on the flat of the "+", not over its shoulder).
+        var inset = 0
+        /// Whether the flourish turns it round here; nil: the character's `flourishTurns`. Quill keeps facing the
+        /// same way on the "+", where its hindquarters are drawn down the button's right shoulder.
+        var turns: Bool?
 
         func mode(_ look: CompanionLook) -> Mode { look.asleep ? asleep : awake }
     }
@@ -134,6 +238,12 @@ struct CompanionCharacter: Identifiable {
     /// Longest a gesture may take, and a reply to a tap (one eye opening, a look, closing again).
     static let longestGesture: TimeInterval = 1
     static let longestAnswer: TimeInterval = 2
+    /// A routine's length (brief 84): a few seconds, so it reads as a burst and not a loop.
+    static let routineLength: ClosedRange<TimeInterval> = 3...7
+    /// A routine's moves (every step but a hold).
+    static let routineMoves: ClosedRange<Int> = 4...9
+    /// At most this many pixels from the still frame on a routine's first and last frames, so nothing pops.
+    static let routineEdge = 16
 
     let id: String
     /// Its name in the app's words.
@@ -179,8 +289,14 @@ struct CompanionCharacter: Identifiable {
         let rows = Dictionary(frames.map { ($0.name, $0.rows) }, uniquingKeysWith: { a, _ in a })
         for posture in [field, plus] {
             for mode in [posture.awake, posture.asleep] {
+                // Everything drawn over the still frame: the gestures, the answer, and the routines' frames that
+                // are not drawn whole.
+                var over = mode.everyTick
+                for routine in mode.routines {
+                    for entry in mode.ticks(of: routine) where !entry.whole { over.append(entry.tick) }
+                }
                 for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
-                    for tick in mode.everyTick {
+                    for tick in over where tick.frame != mode.rest {
                         let key = "\(tick.frame)@\(base)"
                         guard composites[key] == nil else { continue }
                         // A frame of that name, drawn by hand, wins over the composite (Nod's nod in the snow).
@@ -201,6 +317,37 @@ struct CompanionCharacter: Identifiable {
         case .field: field
         case .plus: plus
         }
+    }
+
+    /// Whether its flourish turns it round in `place`.
+    func turns(_ place: CompanionPlace) -> Bool { posture(place).turns ?? flourishTurns }
+
+    /// Whether an everyday routine can be drawn in `weather`: in plain weather always; in rain or snow when none of
+    /// its frames changes a pixel the weather's frame changes (or a "frame@weather" is drawn for it).
+    func plays(_ routine: Routine, in weather: CompanionLook.Weather, mode: Mode) -> Bool {
+        guard routine.sky == nil else { return false }
+        let base = mode.base(weather)
+        guard base != mode.rest else { return true }
+        guard let r = rows(mode.rest), let b = rows(base) else { return false }
+        for entry in mode.ticks(of: routine) where entry.tick.frame != mode.rest {
+            if index["\(entry.tick.frame)@\(base)"] != nil { continue }
+            guard let g = rows(entry.tick.frame) else { return false }
+            if Self.overlap(gesture: g, rest: r, base: b) > 0 { return false }
+        }
+        return true
+    }
+
+    /// The frame a routine starts from and returns to: the still frame for its sky (a rain routine's is the rain pose).
+    func routineBase(_ routine: Routine, mode: Mode) -> String {
+        switch routine.sky {
+        case .rain?, .storm?: mode.rain ?? mode.rest
+        case .snow?: mode.snow ?? mode.rest
+        default: mode.rest
+        }
+    }
+
+    func duration(of routine: Routine, mode: Mode) -> TimeInterval {
+        Double(mode.ticks(of: routine).count) / gestureFPS
     }
 
     /// The index in `drawn` of a frame, or of a gesture's frame over `base` when that isn't the mode's rest frame.
@@ -326,11 +473,15 @@ struct CompanionCharacter: Identifiable {
                     }
                 }
             }
+            if !posture.asleep.routines.isEmpty { out.append("\(id) \(place.rawValue) asleep: routines while asleep") }
+            if posture.inset < 0 || posture.inset > width { out.append("\(id) \(place.rawValue): inset \(posture.inset)") }
+            out.append(contentsOf: routineProblems(posture.awake, at: "\(id) \(place.rawValue)"))
             for tick in posture.flourish { exists(tick.frame, "\(place.rawValue) flourish") }
             let rest = posture.awake.rest
+            let turns = turns(place)
             if posture.flourish.first != Tick(frame: rest) { out.append("\(id) \(place.rawValue) flourish doesn't start on \(rest)") }
-            if posture.flourish.last != Tick(frame: rest, mirrored: flourishTurns) {
-                out.append("\(id) \(place.rawValue) flourish doesn't end on \(rest)\(flourishTurns ? " turned round" : "")")
+            if posture.flourish.last != Tick(frame: rest, mirrored: turns) {
+                out.append("\(id) \(place.rawValue) flourish doesn't end on \(rest)\(turns ? " turned round" : "")")
             }
             if !(12...24).contains(posture.flourish.count) {
                 out.append("\(id) \(place.rawValue): flourish of \(posture.flourish.count) frames, not 12…24")
@@ -345,6 +496,9 @@ struct CompanionCharacter: Identifiable {
                 if let rain = mode.rain { used.insert(rain) }
                 if let snow = mode.snow { used.insert(snow) }
                 for tick in mode.everyTick { used.insert(tick.frame) }
+                for routine in mode.routines {
+                    for entry in mode.ticks(of: routine) { used.insert(entry.tick.frame) }
+                }
             }
             for tick in posture.flourish { used.insert(tick.frame) }
         }
@@ -359,6 +513,51 @@ struct CompanionCharacter: Identifiable {
             out.append("\(id): both an accent and a warm detail")
         }
         if !(1...height).contains(seatRow) { out.append("\(id): seat row \(seatRow) outside the sprite") }
+        return out
+    }
+
+    /// What is wrong with a mode's routines: unknown frames or gestures, a length or a number of moves outside the
+    /// brief's, a first or last frame that pops, two of one name.
+    private func routineProblems(_ mode: Mode, at place: String) -> [String] {
+        var out: [String] = []
+        var names = Set<String>()
+        for routine in mode.routines {
+            let at = "\(place) routine \(routine.name)"
+            if !names.insert(routine.name).inserted { out.append("\(place): two routines named \(routine.name)") }
+            if let sky = routine.sky, ![.rain, .snow, .storm, .clear].contains(sky) {
+                out.append("\(at): no routine belongs to a \(sky.rawValue) sky")
+            }
+            if routine.weight < 1 { out.append("\(at): weight \(routine.weight)") }
+            for step in routine.steps {
+                switch step {
+                case .gesture(let name) where mode.gesture(named: name) == nil:
+                    out.append("\(at): no gesture \(name)")
+                case .hold(let count) where count < 1:
+                    out.append("\(at): a hold of \(count)")
+                case .frames(let ticks):
+                    if ticks.isEmpty { out.append("\(at): a step with no frames") }
+                    for tick in ticks where tick.frame != "rest" && index[tick.frame] == nil {
+                        out.append("\(at): no frame \(tick.frame)")
+                    }
+                    if ticks.contains(where: \.mirrored) { out.append("\(at): mirrored ticks") }
+                default: break
+                }
+            }
+            let seconds = duration(of: routine, mode: mode)
+            if !Self.routineLength.contains(seconds) {
+                out.append("\(at): \(seconds) s, not \(Self.routineLength.lowerBound)…\(Self.routineLength.upperBound)")
+            }
+            if !Self.routineMoves.contains(routine.moves) {
+                out.append("\(at): \(routine.moves) moves, not \(Self.routineMoves.lowerBound)…\(Self.routineMoves.upperBound)")
+            }
+            let ticks = mode.ticks(of: routine)
+            let base = routineBase(routine, mode: mode)
+            for entry in [ticks.first, ticks.last].compactMap({ $0 }) where entry.tick.frame != mode.rest {
+                let reference = entry.whole ? base : mode.rest
+                let change = difference(entry.tick.frame, reference)
+                if change > Self.routineEdge { out.append("\(at): starts or ends \(change) pixels from \(reference)") }
+            }
+        }
         return out
     }
 
