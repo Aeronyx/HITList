@@ -62,6 +62,27 @@ final class CompanionsUITests: XCTestCase {
         }
     }
 
+    /// Settings → Extras has the Companions switch, on, beside Rare surprises; off, they're gone from Browse.
+    func testTheExtrasSwitch() throws {
+        app.launch()
+        openBrowse()
+        scrollToEnd()
+        let settings = app.buttons["browse-settings-row"].firstMatch
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let toggle = app.descendants(matching: .any)["companionsToggle"].firstMatch
+        for _ in 0..<10 where !(toggle.exists && toggle.isHittable) { app.swipeUp() }
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "Extras has a Companions switch")
+        XCTAssertTrue(app.staticTexts["Rare surprises"].exists)
+        snapshot("Extras with Companions")
+        toggle.tap()
+        Thread.sleep(forTimeInterval: 0.5)
+        snapshot("Companions off")
+        app.buttons["Done"].firstMatch.tap()
+        Thread.sleep(forTimeInterval: 1)
+        snapshot("Browse's end without Quill")
+    }
+
     // MARK: - Helpers
 
     private func searchField() -> XCUIElement {
