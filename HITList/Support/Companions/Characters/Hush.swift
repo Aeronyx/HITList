@@ -1647,6 +1647,29 @@ extension CompanionCharacter {
                 "ddd..............ddd",
                 ".d................d.",
             ]),
+        // Brief 100: asleep, a breath: its round head swells a pixel.
+        Frame(name: "sleepBreath", rows: [
+                "....................",
+                "....................",
+                "....................",
+                ".......dmmmmd.......",
+                ".....dmmmmmmmmd.....",
+                "....dmmllllllmmd....",
+                "....dmmllllllmmd....",
+                "...ddmllllllllmdd...",
+                "..dmdmllllllllmdmd..",
+                "..dmdmddllllddmdmd..",
+                "..dmdmllllllllmdmd..",
+                "..dmdmlllaalllmdmd..",
+                "..dmd.mllllllm.dmd..",
+                "...dmdmmmmmmmmdmd...",
+                "....dmmdmmmmdmmd....",
+                ".....ddmmddmmdd.....",
+                "......dddddddd......",
+                "....................",
+                "....................",
+                "....................",
+        ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -1656,11 +1679,14 @@ extension CompanionCharacter {
                         rain: "rain",
                         snow: "snow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
                             Gesture(name: "ear", weight: 2, ticks: Self.ticks(("earFlick", 3)), flicker: true),
-                            Gesture(name: "earRight", ticks: Self.ticks(("earFlickR", 3)), flicker: true),
-                            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 2))),
-                            Gesture(name: "glance", ticks: Self.ticks(("glance", 5))),
+                            Gesture(name: "earRight", weight: 2, ticks: Self.ticks(("earFlickR", 3)), flicker: true),
+                            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 2)), flicker: true),
+                            Gesture(name: "glance", ticks: Self.ticks(("glance", 5)), flicker: true),
+                            // Brief 100: a look up, a look aside.
+                            Gesture(name: "lookUp", ticks: Self.ticks(("lookUp", 4)), flicker: true),
+                            Gesture(name: "eyesRight", ticks: Self.ticks(("eyesRight", 4)), flicker: true),
                             // Brief 91: a drop gathers on the hood's rim and falls; it pants on a hot day.
                             Gesture(name: "rimDrip", ticks: Self.ticks(("hRimA", 2), ("hRimB", 2)), flicker: true, sky: .rain),
                             Gesture(name: "pant", ticks: Self.ticks(("hPant", 2), ("hot", 1), ("hPant", 2)), flicker: true, sky: .heat),
@@ -1674,6 +1700,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "sniff", ticks: Self.ticks(("sleepSniff", 2))),
                              Gesture(name: "ear", ticks: Self.ticks(("sleepEar", 3))),
+                             Gesture(name: "breath", weight: 2, ticks: Self.ticks(("sleepBreath", 6))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekLook", 5), ("sleepPeek", 2)))),
             flourish:
@@ -1683,11 +1710,14 @@ extension CompanionCharacter {
                         rain: "rain",
                         snow: "snow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
                             Gesture(name: "ear", weight: 2, ticks: Self.ticks(("earFlick", 3)), flicker: true),
-                            Gesture(name: "earRight", ticks: Self.ticks(("earFlickR", 3)), flicker: true),
-                            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 2))),
-                            Gesture(name: "glance", ticks: Self.ticks(("glance", 5))),
+                            Gesture(name: "earRight", weight: 2, ticks: Self.ticks(("earFlickR", 3)), flicker: true),
+                            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 2)), flicker: true),
+                            Gesture(name: "glance", ticks: Self.ticks(("glance", 5)), flicker: true),
+                            // Brief 100: a look up, a look aside.
+                            Gesture(name: "lookUp", ticks: Self.ticks(("lookUp", 4)), flicker: true),
+                            Gesture(name: "eyesRight", ticks: Self.ticks(("eyesRight", 4)), flicker: true),
                             // Brief 91: a drop gathers on the hood's rim and falls; it pants on a hot day.
                             Gesture(name: "rimDrip", ticks: Self.ticks(("hRimA", 2), ("hRimB", 2)), flicker: true, sky: .rain),
                             Gesture(name: "pant", ticks: Self.ticks(("hPant", 2), ("hot", 1), ("hPant", 2)), flicker: true, sky: .heat),
@@ -1701,6 +1731,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "sniff", ticks: Self.ticks(("sleepSniff", 2))),
                              Gesture(name: "ear", ticks: Self.ticks(("sleepEar", 3))),
+                             Gesture(name: "breath", weight: 2, ticks: Self.ticks(("sleepBreath", 6))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekLook", 5), ("sleepPeek", 2)))),
             flourish:
@@ -1717,6 +1748,12 @@ extension CompanionCharacter {
     /// open) it fans its face with its ears and lets them flop wide; thunder makes its ears stand up inside the hood; in
     /// sunshine it spreads its ears out and shuts its eyes.
     static let hushRoutines: [Routine] = [
+        // Brief 100, its little loops: one ear and then the other, three quick sniffs, a look about, a look down its
+        // own nose.
+        Routine(name: "earPair", little: true, steps: [.gesture("ear"), .gesture("earRight"), .hold(1), .gesture("blink"), .hold(1)]),
+        Routine(name: "sniffs", little: true, steps: [.play(("sniffL", 2)), .play(("sniffR", 2)), .gesture("sniff"), .hold(1)]),
+        Routine(name: "lookAbout", little: true, steps: [.play(("glance", 3)), .hold(1), .play(("eyesRight", 3)), .gesture("blink"), .hold(1)]),
+        Routine(name: "nose", little: true, steps: [.play(("crossEyed", 3)), .hold(1), .gesture("blink"), .gesture("sniff"), .hold(1)]),
         Routine(name: "earSwing", steps: [
             .gesture("ear"), .hold(1), .gesture("earRight"), .hold(1), .gesture("ear"), .hold(1), .gesture("earRight"), .hold(2), .play(("earsBoth", 3)), .hold(4), .gesture("blink"), .hold(6)]),
         Routine(name: "listen", steps: [

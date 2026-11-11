@@ -221,6 +221,7 @@
 		6DD1C8088F425E2C7D82BA4D /* PopoutController.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC94AAC22806CB55BB755C84 /* PopoutController.swift */; };
 		6E126C1C3B20F8929ADFA702 /* RepeatPhraseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C804B5C6535C564D0506E66B /* RepeatPhraseTests.swift */; };
 		6E95212E9D02E6D5271BB1D8 /* RockerSwitch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103542F81B4DB4B92AE55D74 /* RockerSwitch.swift */; };
+		6EE7CA916E1687ADDBCE09A3 /* CompanionIdleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C25E0404FA31551A56F9A8C /* CompanionIdleTests.swift */; };
 		6FDFC3B7371EA9984ACC9C98 /* IntentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EF80B50B96770FD7E915BE6 /* IntentStore.swift */; };
 		6FF1D4BE49986AAA87BB32D1 /* SwitchControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0136AA4680A0A96E23E44E40 /* SwitchControls.swift */; };
 		705247E7210CEC1E36EEA25B /* SpotlightSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08307D13E7B5E46A5D8DB81E /* SpotlightSync.swift */; };
@@ -627,6 +628,7 @@
 		2B628E6843BB58819E0920AB /* DuoLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoLayout.swift; sourceTree = "<group>"; };
 		2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
 		2BFD4802AA2A6EAF451AB270 /* HITListUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HITListUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C25E0404FA31551A56F9A8C /* CompanionIdleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionIdleTests.swift; sourceTree = "<group>"; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeCompanion.swift; sourceTree = "<group>"; };
 		2E600A506E7434AD07AF144F /* DateServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateServices.swift; sourceTree = "<group>"; };
@@ -1541,6 +1543,7 @@
 				453738DB09EEE9FAE6BD7859 /* CompanionClockTests.swift */,
 				B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */,
 				2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */,
+				2C25E0404FA31551A56F9A8C /* CompanionIdleTests.swift */,
 				D3665C703381B79FA72B1388 /* CompanionNewCastTests.swift */,
 				8D72A13F12084A1FA3FE9855 /* CompanionSeatTests.swift */,
 				BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */,
@@ -2598,6 +2601,7 @@
 				F1E57121A758A7BE8F241ADF /* CompanionClockTests.swift in Sources */,
 				812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */,
 				6051A713FB5D533FBE49DFB3 /* CompanionGlimTests.swift in Sources */,
+				6EE7CA916E1687ADDBCE09A3 /* CompanionIdleTests.swift in Sources */,
 				E5A22304670D4E821F8346F9 /* CompanionNewCastTests.swift in Sources */,
 				55A94E38CAB5FFAAFB6A87E1 /* CompanionSeatTests.swift in Sources */,
 				E9F3DA77C75DEC0674B2C526 /* CompanionSkySourceTests.swift in Sources */,

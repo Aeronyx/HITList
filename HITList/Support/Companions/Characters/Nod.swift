@@ -1954,6 +1954,29 @@ extension CompanionCharacter {
                 "......md..md........",
                 "......ll..ll........",
             ]),
+        // Brief 100: both legs twitch in its sleep (bothKick, carried onto the sleeping pose).
+        Frame(name: "sleepKick", rows: [
+                "....................",
+                "....................",
+                "....................",
+                ".......ddddd........",
+                ".....dddddddddd.....",
+                "....dmmdddddddddd...",
+                "....dmddddddddddd...",
+                "...mmmmmmmmmmmm.dd..",
+                "...mlllllllllllm.d..",
+                "..mllllllllllllm.d..",
+                "..mllllllllllllm.d..",
+                "..mllllllllllllm.d..",
+                "..mllllllllllllm.d..",
+                "...mlddllllddlm..g..",
+                "....mmllllllmm..gwg.",
+                "....dmmmmmmmmd...g..",
+                "...lmddddddddml.....",
+                "......md..md........",
+                "......ll..ll........",
+                "....................",
+        ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -1963,10 +1986,15 @@ extension CompanionCharacter {
                         rain: "rain",
                         snow: "snow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
                             Gesture(name: "swing", weight: 2, ticks: Self.ticks(("leftKick", 3)), flicker: true),
-                            Gesture(name: "swingRight", ticks: Self.ticks(("rightKick", 3)), flicker: true),
-                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5))),
+                            Gesture(name: "swingRight", weight: 2, ticks: Self.ticks(("rightKick", 3)), flicker: true),
+                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5)), flicker: true),
+                            // Brief 100: enough idles that a minute doesn't repeat: a look to each side, its lamp
+                            // flickering.
+                            Gesture(name: "lookLeft", ticks: Self.ticks(("lookLeft", 4)), flicker: true),
+                            Gesture(name: "lookRight", ticks: Self.ticks(("lookRight", 4)), flicker: true),
+                            Gesture(name: "lampFlicker", ticks: Self.ticks(("lampDim", 1), ("rest", 1), ("lampDim", 1)), flicker: true),
                             // Brief 91: a drop gathers on the umbrella's rim and falls; a bead of sweat on a hot day.
                             Gesture(name: "rimDrip", ticks: Self.ticks(("rimA", 2), ("rimB", 2), ("rimC", 1)), flicker: true, sky: .rain),
                             Gesture(name: "sweat", ticks: Self.ticks(("sweatA", 2), ("sweatB", 3)), flicker: true, sky: .heat),
@@ -1980,6 +2008,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "nod", weight: 2, ticks: Self.ticks(("sleepNod", 4))),
                              Gesture(name: "sway", ticks: Self.ticks(("sleepSway", 3))),
+                             Gesture(name: "kick", ticks: Self.ticks(("sleepKick", 3))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekUp", 5), ("sleepPeek", 2))),
                          snowDeep: ["sleepSnow2", "sleepSnow3"]),
@@ -1990,10 +2019,15 @@ extension CompanionCharacter {
                         rain: "rain",
                         snow: "snow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
                             Gesture(name: "swing", weight: 2, ticks: Self.ticks(("leftKick", 3)), flicker: true),
-                            Gesture(name: "swingRight", ticks: Self.ticks(("rightKick", 3)), flicker: true),
-                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5))),
+                            Gesture(name: "swingRight", weight: 2, ticks: Self.ticks(("rightKick", 3)), flicker: true),
+                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5)), flicker: true),
+                            // Brief 100: enough idles that a minute doesn't repeat: a look to each side, its lamp
+                            // flickering.
+                            Gesture(name: "lookLeft", ticks: Self.ticks(("lookLeft", 4)), flicker: true),
+                            Gesture(name: "lookRight", ticks: Self.ticks(("lookRight", 4)), flicker: true),
+                            Gesture(name: "lampFlicker", ticks: Self.ticks(("lampDim", 1), ("rest", 1), ("lampDim", 1)), flicker: true),
                             // Brief 91: a drop gathers on the umbrella's rim and falls; a bead of sweat on a hot day.
                             Gesture(name: "rimDrip", ticks: Self.ticks(("rimA", 2), ("rimB", 2), ("rimC", 1)), flicker: true, sky: .rain),
                             Gesture(name: "sweat", ticks: Self.ticks(("sweatA", 2), ("sweatB", 3)), flicker: true, sky: .heat),
@@ -2007,6 +2041,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "nod", weight: 2, ticks: Self.ticks(("sleepNod", 4))),
                              Gesture(name: "sway", ticks: Self.ticks(("sleepSway", 3))),
+                             Gesture(name: "kick", ticks: Self.ticks(("sleepKick", 3))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekUp", 5), ("sleepPeek", 2))),
                          snowDeep: ["sleepSnow2", "sleepSnow3"]),
@@ -2043,6 +2078,12 @@ extension CompanionCharacter {
             .gesture("sweat"), .hold(1), .play(("fanOut", 2)), .hold(1), .play(("fanOut", 2)), .hold(1), .play(("fanOut", 2)), .hold(2), .play(("pant", 2), ("hot", 1), ("pant", 2)), .hold(2), .play(("capDown", 9)), .hold(3), .gesture("blink"), .hold(2)]),
         Routine(name: "thunder", sky: .storm, steps: [
             .play(("startle", 3)), .play(("wide", 3)), .play(("shiverL", 1), ("shiverR", 1), ("shiverL", 1), ("shiverR", 1)), .play(("wide", 2)), .play(("stormLook", 5)), .hold(3), .gesture("blink"), .hold(3), .gesture("swing"), .hold(6)]),
+        // Brief 100, its little loops (an idle now and then, a second or two): its legs swing out of step, a blink and
+        // a swing, a look round, a tap to brighten its lamp.
+        Routine(name: "kickKick", little: true, steps: [.gesture("swing"), .gesture("swingRight"), .hold(1), .gesture("swing"), .hold(1)]),
+        Routine(name: "blinkSwing", little: true, steps: [.gesture("blink"), .hold(2), .gesture("swing"), .gesture("swingRight"), .hold(1)]),
+        Routine(name: "lookRound", little: true, steps: [.play(("lookLeft", 3)), .hold(1), .play(("lookRight", 3)), .gesture("blink"), .hold(1)]),
+        Routine(name: "lampTap", little: true, steps: [.play(("lampDim", 3)), .play(("tap", 2)), .play(("glowUp", 2)), .hold(1)]),
         Routine(name: "bask", sky: .clear, steps: [
             .play(("lampDim", 2)), .play(("baskA", 4)), .play(("baskL", 3)), .play(("baskA", 2)), .play(("baskR", 3)), .play(("baskA", 4)), .play(("lampDim", 3)), .hold(4), .gesture("blink"), .hold(4)]),
     ]

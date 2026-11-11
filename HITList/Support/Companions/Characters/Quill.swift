@@ -2814,6 +2814,52 @@ extension CompanionCharacter {
                 "....................",
                 "....................",
             ]),
+        // Brief 100: curled asleep, the tail tip flicks out (loafTipOut, carried onto the curl).
+        Frame(name: "curlTipOut", rows: [
+                "....................",
+                "....................",
+                "............mll.....",
+                "...........mllll....",
+                "..........ad..lll...",
+                "...............llm..",
+                "...............llm..",
+                "..........lllllllm..",
+                ".ll....ll.lmmmmmllm.",
+                "lmll..lmllmmmmmmmlm.",
+                "lmmmmmmmmdmmmmmmmmmd",
+                "mmmmmmmmmmdmmmmmmmmd",
+                "mddmmmddmmdmmmmmmmd.",
+                "mmmmdmmmmdmmmmmmmmd.",
+                ".mmlllmmdmmmmmmmmd..",
+                "..lllldddddddddddd..",
+                "....................",
+                "....................",
+                "....................",
+                "....................",
+        ]),
+        // Brief 100: draped asleep on the "+", a front paw twitches out.
+        Frame(name: "drapePaw", rows: [
+                "....................",
+                "....................",
+                "............mll.....",
+                "...........mllll....",
+                "...........ad.lll...",
+                "...........a...llm..",
+                "...............llm..",
+                "..........lll..llm..",
+                ".ll....ll.lmmllllm..",
+                "lmll..lmllmmmmmllm..",
+                "lmmmmmmmmdmmmmmmlmm.",
+                "mmmmmmmmmmdmmmmmmlmd",
+                "mddmmmddmmdmmmmmmlmd",
+                "mmmmdmmmmdmmmmmmmmmd",
+                ".mmlllmmdmmmmmmmmmmd",
+                ".lllldddddddmmmmmmd.",
+                ".........ddddddmmmd.",
+                "..............dddmd.",
+                "................ddd.",
+                ".................dd.",
+        ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -2823,9 +2869,13 @@ extension CompanionCharacter {
                         rain: "loafRain",
                         snow: "loafSnow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("loafBlink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("loafBlink", 2)), flicker: true),
                             Gesture(name: "ear", weight: 2, ticks: Self.ticks(("loafEar", 2)), flicker: true),
-                            Gesture(name: "tip", ticks: Self.ticks(("loafTip", 3))),
+                            Gesture(name: "tip", weight: 2, ticks: Self.ticks(("loafTip", 3)), flicker: true),
+                            // Brief 100: a cat's own idles: the slow blink, the tail's tip curling out, a look at it.
+                            Gesture(name: "slowBlink", ticks: Self.ticks(("loafHalf", 2), ("loafBlink", 3), ("loafHalf", 2)), flicker: true),
+                            Gesture(name: "tipOut", ticks: Self.ticks(("loafTipOut", 3)), flicker: true),
+                            Gesture(name: "lookTail", ticks: Self.ticks(("loafLookTail", 4)), flicker: true),
                             // Brief 91: a drop gathers at the inked tip of the tail it holds overhead and falls on its
                             // head; on a hot day it pants under the sunshade of its tail.
                             Gesture(name: "tipDrip", ticks: Self.ticks(("lDripA", 2), ("lDripB", 2)), flicker: true, sky: .rain),
@@ -2840,6 +2890,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "ear", ticks: Self.ticks(("curlEar", 2))),
                              Gesture(name: "tip", ticks: Self.ticks(("curlTip", 3))),
+                             Gesture(name: "tipOut", ticks: Self.ticks(("curlTipOut", 3))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("curlPeek", 3), ("curlPeekSide", 5), ("curlPeek", 2)))),
             flourish:
@@ -2852,9 +2903,13 @@ extension CompanionCharacter {
                         rain: "sitRain",
                         snow: "sitSnow",
                         gestures: [
-                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("sitBlink", 2)), flicker: true),
+                            Gesture(name: "blink", weight: 4, ticks: Self.ticks(("sitBlink", 2)), flicker: true),
                             Gesture(name: "ear", weight: 2, ticks: Self.ticks(("sitEar", 2)), flicker: true),
-                            Gesture(name: "tip", ticks: Self.ticks(("sitTip", 3))),
+                            Gesture(name: "tip", weight: 2, ticks: Self.ticks(("sitTip", 3)), flicker: true),
+                            // Brief 100: a cat's own idles: the slow blink, the tail's tip curling out, a look at it.
+                            Gesture(name: "slowBlink", ticks: Self.ticks(("sitHalf", 2), ("sitBlink", 3), ("sitHalf", 2)), flicker: true),
+                            Gesture(name: "tipOut", ticks: Self.ticks(("sitTipOut", 3)), flicker: true),
+                            Gesture(name: "lookTail", ticks: Self.ticks(("sitLookTail", 4)), flicker: true),
                             // Brief 91: a drop gathers at the inked tip of the tail it holds overhead and falls on its
                             // head; on a hot day it pants under the sunshade of its tail.
                             Gesture(name: "tipDrip", ticks: Self.ticks(("sDripA", 2), ("sDripB", 2)), flicker: true, sky: .rain),
@@ -2869,6 +2924,7 @@ extension CompanionCharacter {
                          gestures: [
                              Gesture(name: "ear", ticks: Self.ticks(("drapeEar", 2))),
                              Gesture(name: "tip", ticks: Self.ticks(("drapeTip", 3))),
+                             Gesture(name: "paw", ticks: Self.ticks(("drapePaw", 3))),
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("drapePeek", 3), ("drapePeekSide", 5), ("drapePeek", 2)))),
             flourish:
@@ -2890,6 +2946,12 @@ extension CompanionCharacter {
             .play(("loafTipOut", 2), ("loafTipUp", 2), ("loafTip", 2)), .hold(1), .play(("loafTipOut", 2), ("loafTipUp", 1), ("loafTip", 2)), .hold(2), .play(("loafLookTail", 5)), .play(("loafHalf", 2), ("loafBlink", 3), ("loafHalf", 2)), .hold(5)]),
         Routine(name: "tuck", steps: [
             .play(("loafKneadL", 2)), .hold(1), .play(("loafKneadR", 2)), .hold(1), .play(("loafKneadL", 2)), .hold(1), .play(("loafTuckPaw", 2), ("loafTuck", 3)), .play(("loafTuckHalf", 3), ("loafTuckBlink", 4), ("loafTuckHalf", 2)), .play(("loafTuck", 2), ("loafTuckPaw", 2)), .hold(5)]),
+        // Brief 100, its little loops: the tail tip twice and a blink, an ear twice, a look at the tail as it curls, a
+        // knead of the paws.
+        Routine(name: "tipTip", little: true, steps: [.gesture("tip"), .hold(2), .gesture("tip"), .gesture("blink"), .hold(1)]),
+        Routine(name: "earEar", little: true, steps: [.gesture("ear"), .hold(2), .gesture("ear"), .gesture("blink"), .hold(1)]),
+        Routine(name: "tailWatch", little: true, steps: [.play(("loafLookTail", 3)), .play(("loafTipUp", 2)), .play(("loafTipOut", 2)), .gesture("blink"), .hold(1)]),
+        Routine(name: "knead", little: true, steps: [.play(("loafKneadL", 2)), .play(("loafKneadR", 2)), .play(("loafKneadL", 2)), .play(("loafKneadR", 2)), .hold(1)]),
         Routine(name: "drip", sky: .rain, weight: 2, steps: [
             .play(("lrA", 2), ("lrB", 2)), .play(("lrC", 2)), .play(("lrD", 2), ("lrE", 1)), .play(("lrHit", 3)), .play(("lShakeL", 1), ("lShakeR", 1), ("lShakeL", 1), ("lShakeR", 1)), .hold(2), .play(("lrPeek", 3)), .hold(3), .gesture("blink"), .hold(4)]),
         Routine(name: "shakeOff", sky: .snow, shakesOff: true, steps: [
@@ -2910,6 +2972,12 @@ extension CompanionCharacter {
             .play(("sitTipOut", 2), ("sitTipUp", 2), ("sitTip", 2)), .hold(1), .play(("sitTipOut", 2), ("sitTipUp", 1), ("sitTip", 2)), .hold(2), .play(("sitLookTail", 5)), .play(("sitHalf", 2), ("sitBlink", 3), ("sitHalf", 2)), .hold(5)]),
         Routine(name: "groom", steps: [
             .play(("sitPawUp", 3)), .play(("sitLick", 2)), .play(("sitPawUp", 1)), .play(("sitLick", 2)), .play(("sitPawUp", 2)), .hold(3), .gesture("ear"), .hold(2), .gesture("blink"), .hold(5)]),
+        // Brief 100, its little loops: the tail tip twice and a blink, an ear twice, a look at the tail as it curls, a
+        // lick of a paw.
+        Routine(name: "tipTip", little: true, steps: [.gesture("tip"), .hold(2), .gesture("tip"), .gesture("blink"), .hold(1)]),
+        Routine(name: "earEar", little: true, steps: [.gesture("ear"), .hold(2), .gesture("ear"), .gesture("blink"), .hold(1)]),
+        Routine(name: "tailWatch", little: true, steps: [.play(("sitLookTail", 3)), .play(("sitTipUp", 2)), .play(("sitTipOut", 2)), .gesture("blink"), .hold(1)]),
+        Routine(name: "lick", little: true, steps: [.play(("sitPawUp", 2)), .play(("sitLick", 3)), .play(("sitPawUp", 2)), .hold(1)]),
         Routine(name: "drip", sky: .rain, weight: 2, steps: [
             .play(("prA", 2), ("prB", 2)), .play(("prC", 2), ("prD", 1)), .play(("prE", 1)), .play(("prHit", 3)), .play(("sShakeL", 1), ("sShakeR", 1), ("sShakeL", 1), ("sShakeR", 1)), .hold(2), .play(("prPeek", 3)), .hold(3), .gesture("blink"), .hold(4)]),
         Routine(name: "shakeOff", sky: .snow, shakesOff: true, steps: [

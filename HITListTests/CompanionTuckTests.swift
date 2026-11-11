@@ -45,9 +45,10 @@ final class CompanionTuckTests: XCTestCase {
     func testItsFlickersAndGesturesAreSmall() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
-            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), ["blink", "twitch", "drip", "pant"])
-            XCTAssertEqual(awake.gestures.map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "drip", "pant"])
-            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, .rain, .heat])
+            // Brief 100: every gesture an idle now, and a look back at its seedling.
+            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "lookBack", "drip", "pant"])
+            XCTAssertEqual(awake.gestures.map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "lookBack", "drip", "pant"])
+            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, nil, .rain, .heat])
             for gesture in awake.gestures + [awake.answer] {
                 let still = gesture.sky.map { awake.base(CompanionLook.Weather($0)) } ?? awake.rest
                 for tick in gesture.ticks {
@@ -59,7 +60,7 @@ final class CompanionTuckTests: XCTestCase {
             }
             XCTAssertEqual(awake.answer.name, "flinch")
             let asleep = tuck.posture(place).asleep
-            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf"])
+            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf", "breath"])
             XCTAssertEqual(asleep.answer.name, "wake")
             XCTAssertNotEqual(asleep.answer.ticks, awake.answer.ticks, "woken, not just looking")
         }
@@ -121,8 +122,12 @@ final class CompanionTuckTests: XCTestCase {
             for name in ["tuck", "scan"] {
                 XCTAssertTrue(tuck.plays(try routine(name), in: .snow, mode: awake, depth: depth), "\(name) at \(depth)")
             }
+            // Its eyes' flickers play over the pile; the leaf and the look back at the seedling wait until it is bare.
             for gesture in awake.gestures where gesture.flicker && gesture.sky == nil {
-                XCTAssertTrue(tuck.canDraw(gesture, in: .snow, mode: awake, depth: depth), "\(gesture.name) at \(depth)")
+                let overThePile = ["blink", "twitch", "look", "lookUp"].contains(gesture.name)
+                if overThePile || depth == 0 {
+                    XCTAssertTrue(tuck.canDraw(gesture, in: .snow, mode: awake, depth: depth), "\(gesture.name) at \(depth)")
+                }
             }
         }
         // Its pot can't tip under a heap, nor its seedling wave from under it.
@@ -147,7 +152,7 @@ final class CompanionTuckTests: XCTestCase {
         let shade = try XCTUnwrap(awake.routines.first { $0.name == "shade" })
         XCTAssertEqual(shade.sky, .heat)
         XCTAssertTrue(tuck.canDraw(shade, in: .heat, mode: awake, depth: 0))
-        for routine in awake.routines where routine.sky == nil {
+        for routine in awake.routines where routine.sky == nil && !routine.little {
             XCTAssertFalse(tuck.plays(routine, in: .heat, mode: awake), "\(routine.name) rests on a hot day")
         }
         let tipped = try XCTUnwrap(tuck.rows("tip2"))
@@ -169,11 +174,12 @@ final class CompanionTuckTests: XCTestCase {
     func testItsRoutines() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
-            let everyday = awake.routines.filter { $0.sky == nil }
+            let everyday = awake.routines.filter { $0.sky == nil && !$0.little }
             XCTAssertEqual(everyday.map(\.name), ["tend", "tuck", "scan", "wobble"])
+            XCTAssertEqual(awake.routines.filter(\.little).map(\.name), ["twitchTwitch", "lookBoth", "seedling"], "brief 100")
             XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear, .snow, .heat])
             XCTAssertEqual(awake.routines.filter(\.shakesOff).map(\.name), ["shrug"])
-            for routine in awake.routines {
+            for routine in awake.routines where !routine.little {
                 let seconds = tuck.duration(of: routine, mode: awake)
                 XCTAssertTrue(CompanionCharacter.routineLength.contains(seconds), "\(routine.name): \(seconds) s")
                 XCTAssertTrue(CompanionCharacter.routineMoves.contains(routine.moves), "\(routine.name): \(routine.moves)")
