@@ -102,6 +102,19 @@ final class SpacingTests: XCTestCase {
         }
     }
 
+    // MARK: One section header (brief 99)
+
+    /// Browse's and every HITGroup's header are one component in the task lists' header type; its line keeps the old
+    /// header's 20 pt at the default size, so Settings' first screen keeps its height (SettingsTidyTests measures it).
+    func testTheSectionHeaderIsTheListsTypeAndKeepsItsLine() {
+        XCTAssertEqual(HITSectionHeader.minHeight, 20)
+        XCTAssertEqual(height(HITSectionHeader("Appearance")), HITSectionHeader.minHeight, accuracy: 0.5,
+                       "a 16 pt Inter line fits the old header's 20 pt")
+        XCTAssertEqual(height(HITSectionHeader("Groups", inset: 0, addLabel: "Add Group") {}), HITSectionHeader.minHeight,
+                       accuracy: 0.5, "with its +")
+        XCTAssertEqual(HITGroup<EmptyView>.footerInset, HITSpacing.l, "the footer under the header, on the rows' edge")
+    }
+
     // MARK: Reminders → Summary time (brief 99)
 
     /// The summary's time goes through our time field as a PickerTime and back to the stored minutes.

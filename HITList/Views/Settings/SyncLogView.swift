@@ -176,12 +176,20 @@ struct SyncLogRow: View {
     }
 }
 
-/// The Mac page's iCloud section: the log in a titled section, 150 rows at a time.
+/// The Mac page's iCloud section: the log under the page's one section header (`HITSectionHeader`, brief 99, as the
+/// groups above it have), 150 rows at a time, its footer on the rows' edge as theirs are.
 struct SyncLogSection: View {
     var body: some View {
-        HITSection("Sync log", footer: SyncLogText.footer) {
+        VStack(alignment: .leading, spacing: HITSpacing.s) {
+            HITSectionHeader("Sync log")
             SyncLogView(rowLimit: 150)
+            Text(SyncLogText.footer)
+                .font(HITType.caption)
+                .foregroundStyle(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, HITGroup<EmptyView>.footerInset)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

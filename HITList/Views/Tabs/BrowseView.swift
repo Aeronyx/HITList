@@ -158,7 +158,8 @@ struct BrowseView: View {
                 }
                 .accessibilityIdentifier("browse-shared-tasks")
             } header: {
-                SidebarSectionHeader(title: "Groups") { creatingProject = true }
+                // The lists' one header (brief 99); the list puts it on the rows' edge.
+                HITSectionHeader("Groups", inset: 0, addLabel: "Add Group") { creatingProject = true }
             } footer: {
                 guidance(GroupGuidance.group)
             }
@@ -178,7 +179,8 @@ struct BrowseView: View {
                     .modifier(SwipeToDelete(item: .label(label.id)) { delete(label) })
                 }
             } header: {
-                SidebarSectionHeader(title: "Labels") { creatingLabel = true }
+                // The lists' one header (brief 99); the list puts it on the rows' edge.
+                HITSectionHeader("Labels", inset: 0, addLabel: "Add Label") { creatingLabel = true }
             } footer: {
                 guidance(GroupGuidance.label)
             }
