@@ -9,8 +9,10 @@ import UIKit
 import AppKit
 #endif
 
-/// The sky for the companions (brief 80): what the weather is doing roughly where the person is, told to
-/// `CompanionSkySource` and to nothing else. No forecast, no temperature, no weather on screen.
+/// The sky and the local time for the companions (briefs 80, 83): what the weather is doing roughly where the person
+/// is and which time zone that place is in, told to `CompanionSkySource` and to nothing else. No forecast, no
+/// temperature, no place or weather on screen; tasks, reminders and lists never read the zone (they follow the
+/// device's).
 ///
 /// - **On by default, asked once** (brief 83). Settings → Extras → Weather is on for everyone who never switched it
 ///   off (a key never written reads on). The system's question (location while in use, reduced accuracy) comes once,
@@ -18,15 +20,16 @@ import AppKit
 ///   again. Off, never asked, refused or restricted, or with Companions off: the sky is `unknown` and the app makes no
 ///   location or weather call. Until the question has been asked, Core Location is never touched (the location
 ///   source is made lazily); after that, Settings reads the permission (no prompt, no fix) to say why it is off.
-/// - **Cheap.** One reduced-accuracy fix and one current-conditions request when the app comes to the front and the
-///   last observation is older than an hour (and once an hour while it stays in front); never in the background,
-///   never while hidden. The last sky is kept in memory only; an observation older than three hours is `unknown`.
+/// - **Cheap.** One reduced-accuracy fix, one current-conditions request and one reverse geocode (for the zone) when
+///   the app comes to the front and the last observation is older than an hour (and once an hour while it stays in
+///   front); never in the background, never while hidden. The last sky and zone are kept in memory only; an
+///   observation older than three hours is `unknown`, and a zone older than three hours is nil.
 /// - **Fail quiet.** No capability, no network, a WeatherKit error, no fix: the sky is `unknown` (or keeps an
 ///   observation still under three hours old), one line in the unified log (category `weather`), no alert, and no
 ///   retry until the app next comes forward.
 ///
-/// The location goes from Core Location into WeatherKit's request and is dropped: it is never stored, synced, logged
-/// or sent anywhere else.
+/// The location goes from Core Location into WeatherKit's request and Apple's geocoder and is dropped: it is never
+/// stored, synced, logged or sent anywhere else.
 @MainActor
 @Observable
 final class CompanionWeather {
@@ -41,6 +44,8 @@ final class CompanionWeather {
 
     @ObservationIgnored private let makeLocation: () -> any WeatherLocationSource
     @ObservationIgnored private let makeWeather: () -> any WeatherConditionSource
+    @ObservationIgnored private let makeZone: () -> any WeatherZoneSource
+    @ObservationIgnored private var zoneSource: (any WeatherZoneSource)?
     @ObservationIgnored private var locationSource: (any WeatherLocationSource)?
     @ObservationIgnored private var weatherSource: (any WeatherConditionSource)?
     @ObservationIgnored private let skySource: CompanionSkySource
@@ -71,18 +76,23 @@ final class CompanionWeather {
     /// The last observation's sky and time, in memory only.
     private(set) var sky: CompanionSky = .unknown
     private(set) var observedAt: Date?
+    /// The time zone of the last fix's place, in memory only; nil when unknown. `zoneAt` is when it was found.
+    private(set) var zone: TimeZone?
+    @ObservationIgnored private var zoneAt: Date?
     /// Location fixes and weather requests made this run (the tests count them).
     private(set) var fixes = 0
     private(set) var requests = 0
+    private(set) var geocodes = 0
 
     /// - Parameters:
-    ///   - location, weather: made on first use only, so a run with Weather off never creates either.
+    ///   - location, weather, zone: made on first use only, so a run with Weather off never creates any.
     ///   - onForTheRun: on whatever the setting says, without saving it (the demo, `-seedDemoSky`).
     ///   - offForTheRun: off whatever the setting says, without saving it (the refused demo, as after a refusal).
     ///   - askedForTheRun: as if the person had been asked (the demo, which has no prompt).
     ///   - launch, screen: the run and what is on screen, for the first launch's question (`LaunchLocationQuestion`).
     init(location: @escaping () -> any WeatherLocationSource,
          weather: @escaping () -> any WeatherConditionSource,
+         zone: @escaping () -> any WeatherZoneSource,
          sky: CompanionSkySource,
          defaults: UserDefaults = AppGroup.defaults,
          now: @escaping () -> Date = Date.init,
@@ -95,6 +105,7 @@ final class CompanionWeather {
          }) {
         makeLocation = location
         makeWeather = weather
+        makeZone = zone
         skySource = sky
         self.defaults = defaults
         clock = now
@@ -125,6 +136,13 @@ final class CompanionWeather {
         if let weatherSource { return weatherSource }
         let made = makeWeather()
         weatherSource = made
+        return made
+    }
+
+    private var zones: any WeatherZoneSource {
+        if let zoneSource { return zoneSource }
+        let made = makeZone()
+        zoneSource = made
         return made
     }
 
@@ -309,42 +327,83 @@ final class CompanionWeather {
 
     // MARK: - Observing
 
-    /// One fix and one request. A failure keeps an observation still under three hours old and is not retried
-    /// until the app next comes forward.
+    /// One fix, one weather request and one geocode for the zone. A failure keeps an observation still under three
+    /// hours old and is not retried until the app next comes forward; a zone that cannot be found is nil.
     private func observe() async {
         guard !inFlight else { return }
         inFlight = true
         defer { inFlight = false }
+        let place: CLLocation
         do {
             fixes += 1
-            let place = try await location.approximateLocation()
+            place = try await location.approximateLocation()
+        } catch {
+            Self.log.error("Weather unavailable: \(Self.describe(error), privacy: .public)")
+            expireIfStale(now: clock())
+            return
+        }
+        var reading: WeatherReading?
+        do {
             requests += 1
-            let reading = try await weather.currentCondition(at: place)
-            // Switched off (or permission lost) while the answer was on its way: it is not the sky.
-            guard isOn, access == .allowed, companionsOn else { return }
+            reading = try await weather.currentCondition(at: place)
+        } catch {
+            Self.log.error("Weather unavailable: \(Self.describe(error), privacy: .public)")
+        }
+        let found = await findZone(at: place)
+        // Switched off (or permission lost) while the answers were on their way: they are not the sky.
+        guard isOn, access == .allowed, companionsOn else { return }
+        let now = clock()
+        zone = found
+        zoneAt = found == nil ? nil : now
+        skySource.setTimeZone(found)
+        if let reading {
             let observed = CompanionSky(weatherCondition: reading.condition)
             sky = observed
             observedAt = reading.date
             skySource.set(observed, at: reading.date)
             Self.log.info("Weather observed: \(observed.rawValue, privacy: .public) (\(reading.condition, privacy: .public))")
-            expireIfStale(now: clock())
+        }
+        expireIfStale(now: now)
+    }
+
+    /// The fix's time zone, by Apple's geocoder; nil (one log line) when it cannot be found. The zone's name says
+    /// roughly where the device is, so only a Debug build writes it to the log.
+    private func findZone(at place: CLLocation) async -> TimeZone? {
+        geocodes += 1
+        do {
+            let found = try await zones.timeZone(at: place)
+            #if DEBUG
+            Self.log.info("Weather zone: \(found?.identifier ?? "none", privacy: .public)")
+            #else
+            Self.log.info("Weather zone: \(found == nil ? "none" : found == TimeZone.current ? "the device's" : "another", privacy: .public)")
+            #endif
+            return found
         } catch {
-            Self.log.error("Weather unavailable: \(Self.describe(error), privacy: .public)")
-            expireIfStale(now: clock())
+            Self.log.error("Weather zone unavailable: \(Self.describe(error), privacy: .public)")
+            return nil
         }
     }
 
-    /// An observation older than three hours is `unknown`.
+    /// An observation older than three hours is `unknown`; a zone older than three hours is nil.
     private func expireIfStale(now: Date) {
-        guard let observedAt, now.timeIntervalSince(observedAt) >= Self.staleAfter else { return }
-        forget()
+        if let observedAt, now.timeIntervalSince(observedAt) >= Self.staleAfter {
+            forget()
+            return
+        }
+        if let zoneAt, now.timeIntervalSince(zoneAt) >= Self.staleAfter {
+            zone = nil
+            self.zoneAt = nil
+            skySource.setTimeZone(nil)
+        }
     }
 
-    /// The sky is `unknown`: off, not allowed, stale.
+    /// The sky is `unknown` and the zone nil: off, not allowed, stale.
     private func forget() {
         sky = .unknown
         observedAt = nil
-        if skySource.sky != .unknown { skySource.clear() }
+        zone = nil
+        zoneAt = nil
+        if skySource.sky != .unknown || skySource.timeZone != nil { skySource.clear() }
     }
 
     /// An error in one line, without anything that could say where the device is.
@@ -355,18 +414,18 @@ final class CompanionWeather {
 }
 
 extension CompanionWeather {
-    /// Core Location and WeatherKit on a device; the demo under `-seedDemoSky` (Debug builds).
+    /// Core Location, WeatherKit and Apple's geocoder on a device; the demo under `-seedDemoSky` (Debug builds).
     static func makeShared(arguments: [String] = CommandLine.arguments, sky: CompanionSkySource = .shared,
                            defaults: UserDefaults = AppGroup.defaults) -> CompanionWeather {
         #if DEBUG
         if let demo = DemoWeatherSource.requested(arguments: arguments) {
-            return CompanionWeather(location: { demo }, weather: { demo }, sky: sky, defaults: defaults,
+            return CompanionWeather(location: { demo }, weather: { demo }, zone: { demo }, sky: sky, defaults: defaults,
                                     onForTheRun: demo.permission == .allowed, offForTheRun: demo.permission != .allowed,
                                     askedForTheRun: true)
         }
         #endif
-        return CompanionWeather(location: { CoreLocationSource() }, weather: { WeatherKitSource() }, sky: sky,
-                                defaults: defaults)
+        return CompanionWeather(location: { CoreLocationSource() }, weather: { WeatherKitSource() },
+                                zone: { GeocoderZoneSource() }, sky: sky, defaults: defaults)
     }
 }
 
