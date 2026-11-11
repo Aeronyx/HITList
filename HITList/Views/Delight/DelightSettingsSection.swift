@@ -88,7 +88,7 @@ struct DelightSettingsSection: View {
     private let footer = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad. " + Self.holidayFooter
     #endif
     private static let holidayFooter = "Holiday touches: snow dust around Christmas, fireworks on July 4th and New Year, hearts, leaves, bats and more around the holidays. Rare surprises: once in a long while, someone drops by. Reduce Motion turns both off. " + companionsFooter
-    private static let companionsFooter = "Companions: a small creature keeps you company, one for each theme, by the search field on the Mac and by the + on iPhone. Mostly it sits still. Reduce Motion keeps it still."
+    private static let companionsFooter = "Companions: a small creature keeps you company, one for each theme, by the search field on the Mac and by the + on iPhone and iPad. Mostly it sits still, and it sleeps at night. Reduce Motion keeps it still."
 
     /// Holiday touches, with today's holiday (if any) as its icon and subtitle, so the row shows what it does.
     private var holidayTouchesRow: some View {
