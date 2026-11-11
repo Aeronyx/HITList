@@ -1064,7 +1064,7 @@ final class FlipboardWordsTests: XCTestCase {
         XCTAssertEqual(FlipboardTips.kind(for: [after, before]), .switchesStay)
         XCTAssertEqual(FlipboardTips.kind(for: [after]), .flipboard)
         XCTAssertNil(FlipboardTips.kind(for: []))
-        XCTAssertTrue(HITTipKind.switchesStay.message.contains("Overdue becomes task"))
+        XCTAssertTrue(HITTipKind.switchesStay.message.contains("Become a task when Overdue"), "the card's own words")
         XCTAssertTrue(HITTip(.switchesStay, generation: 0).waitsUntilSettled)
     }
 
