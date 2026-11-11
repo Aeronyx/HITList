@@ -47,6 +47,7 @@ struct HITListApp: App {
         }
         NotificationScheduler.bootstrap(container: container)
         ClaudeConnector.start(container: container)  // brief 43: the Mac's Claude connector, if allowed
+        WidgetSnapshotWriter.start(container: container) // brief 74: the widgets' snapshot, after every change
     }
 
     var body: some Scene {
@@ -56,6 +57,7 @@ struct HITListApp: App {
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
                 .font(HITType.body)
+                .deepLinkRouting() // brief 74: hitlist:// links from the widgets, through IntentRouter
                 #if os(macOS)
                 // Closing the window hides it, so the Dock icon brings it back at once (`MacWindowKeeper`).
                 .keepsWindowOnClose()

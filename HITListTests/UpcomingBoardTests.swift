@@ -19,9 +19,15 @@ final class UpcomingBoardTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        // A view hosted in a window here (`testTheInlineCardRendersInItsColumn`) can keep its `@Query` past the test;
+        // its context doesn't retain the container, so the next save anywhere would make it refetch through a dead
+        // one and trap (brief 74's tests were the first saves after this class). Keep the containers alive.
+        Self.kept.append(container)
         container = nil
         context = nil
     }
+
+    private static var kept: [ModelContainer] = []
 
     private var now: Date { Date() }
     private var today: Date { cal.startOfDay(for: now) }
