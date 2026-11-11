@@ -112,6 +112,8 @@ struct SharedTaskListRow: View {
     @Environment(\.taskMetaWraps) private var metaWraps
     @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
+    /// The priority written out under Differentiate Without Colour, as `TaskRow` (brief 94).
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     private var task: SharedTask { row.task }
     private var priority: Priority { Priority(clamping: task.priority.value) }
@@ -206,6 +208,9 @@ struct SharedTaskListRow: View {
             } else if due.hasTime {
                 MetaItem(DueFormatter.timeText(for: due.date), systemImage: "clock", tint: tint)
             }
+        }
+        if differentiateWithoutColor, let words = PriorityWords.shown(priority, isChecked: isChecked) {
+            MetaItem(words, systemImage: "flag.fill", tint: priority.color)
         }
     }
 

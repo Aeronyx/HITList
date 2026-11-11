@@ -23,6 +23,9 @@ struct TaskRow: View {
     /// Beside the upright island (the Duo's outer display) the title and meta line are a step larger.
     @Environment(\.listIslandPlacement) private var islandPlacement
     @HITEffectsSetting private var effects
+    /// Settings → Accessibility → Display → Differentiate Without Colour: the priority, otherwise only the check
+    /// circle's colour, is written on the second line too (brief 94).
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     /// A recurring task never becomes completed (its date advances), so the row also counts as checked
     /// while its completion animates.
@@ -169,6 +172,9 @@ struct TaskRow: View {
             ForEach(task.labelList) { label in
                 MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
             }
+        }
+        if differentiateWithoutColor, let priority = PriorityWords.shown(task.priorityValue, isChecked: isChecked) {
+            MetaItem(priority, systemImage: "flag.fill", tint: task.priorityValue.color)
         }
     }
 
