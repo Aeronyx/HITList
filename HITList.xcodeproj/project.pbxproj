@@ -139,6 +139,7 @@
 		50966C1D4A63EBAC1A08B11D /* UpcomingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD69DA3D48DE01A521546D67 /* UpcomingView.swift */; };
 		529B38250A5BE6884DB35AC8 /* SyncWatchdogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */; };
 		5337069D6AEDE324310DF7B7 /* HingeCreakTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD26146BF575D41B26881463 /* HingeCreakTests.swift */; };
+		538D796070A75FD434C28755 /* ThemeCompanion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */; };
 		539A93532A78AA32DB03790F /* swish.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4EC7B932C6B8D510FA4827B9 /* swish.caf */; };
 		53AFB864E5B8882A0E9F2086 /* SharingSceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F5A1903316EBA0994A9F66C /* SharingSceneDelegate.swift */; };
 		53FEB8C0A1250F7D59BD7AF1 /* AboutSettingsGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */; };
@@ -546,6 +547,7 @@
 		2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
 		2BFD4802AA2A6EAF451AB270 /* HITListUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HITListUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeCompanion.swift; sourceTree = "<group>"; };
 		2FF631693F1C48C03F264CB0 /* Quill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quill.swift; sourceTree = "<group>"; };
 		30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingBoardTests.swift; sourceTree = "<group>"; };
 		315D24154A9ABD69200C164B /* PickerTimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTimeField.swift; sourceTree = "<group>"; };
@@ -1500,6 +1502,7 @@
 				B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */,
 				1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */,
 				1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */,
+				2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */,
 				40F12A1583CCBDCFBE2646D5 /* WhatsNew.swift */,
 				66A1BEC88DB9CB6DBD543778 /* Mac */,
 			);
@@ -2249,6 +2252,7 @@
 				E65A49FA2E12370CFA77B9D5 /* TaskRescheduling.swift in Sources */,
 				DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */,
 				429D39EA4FE5A033FA6E78B2 /* Theme.swift in Sources */,
+				538D796070A75FD434C28755 /* ThemeCompanion.swift in Sources */,
 				67A3A49DBD40647EC332A341 /* TitlePhrases.swift in Sources */,
 				5697D0CE9649C88130610563 /* TodayLockScreenViews.swift in Sources */,
 				85E3E278D179F9BE1945F24E /* TodayTasksIntent.swift in Sources */,
