@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import HITListCore
 @testable import HITList
 
 /// Brief 85: Rosé's companion again, Posy (a piglet with wings far too small for it) in place of Pip, and round 18's
@@ -117,6 +118,46 @@ final class CompanionNewCastTests: XCTestCase {
         XCTAssertTrue(mallow.rows("snow")![3].contains("l"))
     }
 
+    // MARK: - Routines (brief 84's format)
+
+    /// Each comes alive now and then in its own way: two flickers (a blink, an ear), routines of its own drawing (at
+    /// least three for every day, one each for rain, snow, a storm and a clear sky), none asleep.
+    func testFlickersAndRoutinesOfTheirOwn() {
+        for character in [CompanionCharacter.posy] {
+            for place in CompanionPlace.allCases {
+                let posture = character.posture(place)
+                let awake = posture.awake
+                let at = "\(character.id) \(place)"
+                XCTAssertEqual(awake.flickers.map { awake.gestures[$0].name }, ["blink", "ear"], "\(at): two flickers")
+                XCTAssertGreaterThanOrEqual(awake.routines.filter { $0.sky == nil }.count, 3, at)
+                for sky in [CompanionSky.rain, .snow, .storm, .clear] {
+                    XCTAssertEqual(awake.routines.filter { $0.sky == sky }.count, 1, "\(at): one for \(sky)")
+                }
+                XCTAssertTrue(posture.asleep.routines.isEmpty, at)
+                for routine in awake.routines {
+                    let seconds = character.duration(of: routine, mode: awake)
+                    XCTAssertTrue((3...7).contains(seconds), "\(at) \(routine.name): \(seconds) s")
+                    XCTAssertTrue((4...9).contains(routine.moves), "\(at) \(routine.name): \(routine.moves) moves")
+                    XCTAssertTrue(hasOwnFrames(routine), "\(at) \(routine.name): drawn, not gestures played again")
+                }
+            }
+        }
+        XCTAssertEqual(CompanionCharacter.posy.field.awake.routines.map(\.name),
+                       ["practice", "snuffle", "earflop", "raindrop", "snowflake", "thunder", "sunshine"])
+    }
+
+    /// The weather routines are drawn whole, prop and all: Posy keeps its wings over its head through the raindrop,
+    /// Mallow its headscarf through the drop and the thunder. Posy's practice hop leaves the edge by a pixel only.
+    func testTheWeatherRoutinesKeepTheirProps() {
+        let posy = CompanionCharacter.posy
+        for frame in ["rainLookUp", "rainDrop2", "rainWince", "rainFlap", "stormCower"] {
+            XCTAssertTrue(posy.rows(frame)![0..<5].joined().contains("l"), "\(frame): its wings over its head")
+        }
+        let hop = posy.rows("hopUp")!
+        XCTAssertTrue(hop[posy.seatRow].contains("d"), "its trotters still at the edge")
+        XCTAssertTrue(hop[(posy.seatRow + 1)...].allSatisfy { row in row.allSatisfy { $0 == CompanionInk.clear } })
+    }
+
     // MARK: - In place
 
     /// Nothing floats (brief 85). The "+" is a capsule: its top edge curves down towards both ends, and a companion
@@ -155,6 +196,14 @@ final class CompanionNewCastTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Whether a routine has frames of its own (not only gestures and holds).
+    private func hasOwnFrames(_ routine: CompanionCharacter.Routine) -> Bool {
+        for step in routine.steps {
+            if case .frames(let ticks) = step, ticks.contains(where: { $0.frame != "rest" }) { return true }
+        }
+        return false
+    }
 
     /// For each column of `frame` whose lowest pixel lies on the row just above the edge, how far the "+"'s top has
     /// dropped away under that column's outer side, in points.
