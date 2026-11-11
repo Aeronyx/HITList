@@ -168,7 +168,8 @@ final class SyncReplayPlayer {
             defer { ProcessInfo.processInfo.endActivity(activity) }
             for (index, step) in SyncReplay.script.enumerated() {
                 let wait = start.addingTimeInterval(step.at).timeIntervalSinceNow
-                if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                // A tight tolerance: a long sleep's default leeway put a step 1.7 s late on the Mac.
+                if wait > 0 { try? await Task.sleep(for: .seconds(wait), tolerance: .milliseconds(5)) }
                 let position = SyncReplay.position(at: step.at, start: start)
                 Self.log.notice("Sync replay: +\(step.at, format: .fixed(precision: 2), privacy: .public) s \(step.note, privacy: .public) (step \(index))")
                 if let account = step.account { CloudSyncMonitor.shared.replayAccount(account) }

@@ -567,7 +567,7 @@ final class CloudSyncMonitor {
         if let next = accountSteadiness.nextDeadline(after: now) {
             let delay = max(0.01, next.timeIntervalSince(now)) + 0.02
             accountSteadyTimer = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(delay))
+                try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(50))
                 guard !Task.isCancelled, let self else { return }
                 let now = Date()
                 self.accountSteadiness.tick(now)
@@ -839,7 +839,8 @@ final class CloudSyncMonitor {
         }
         let delay = max(0.01, next.timeIntervalSince(now)) + 0.02
         steadyTimer = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(delay))
+            // A window's end is a promise ("shows after 30 s"): keep the system's timer leeway small.
+            try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(50))
             guard !Task.isCancelled, let self else { return }
             let now = Date()
             self.steadiness.tick(now)
