@@ -65,6 +65,8 @@ struct BrowseView: View {
             }
         }
         .background(Theme.background)
+        // Search results' rows on the field's and the large title's edge (brief 99); the cards keep the system's insets.
+        .followsSystemListMargin()
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
         .toolbar { profileItem }

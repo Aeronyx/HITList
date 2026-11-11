@@ -115,6 +115,21 @@ final class SpacingTests: XCTestCase {
         XCTAssertEqual(HITGroup<EmptyView>.footerInset, HITSpacing.l, "the footer under the header, on the rows' edge")
     }
 
+    // MARK: The system's margin (brief 99)
+
+    /// An iPhone screen follows the margin UIKit gives it (16 on most phones, 20 on the widest); the iPad, the Mac and
+    /// a screen not yet measured keep ListMetrics' fixed inset.
+    func testAListFollowsTheSystemsMarginOnlyInThePhoneShell() {
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 20, isPhoneShell: true), 20, "the Pro Max, the Duo's outer display")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 16, isPhoneShell: true), 16, "iPhone 17 and 16: nothing moves")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: 20, isPhoneShell: false), ListMetrics.horizontalInset, "iPad")
+        XCTAssertEqual(SystemListMarginRule.margin(measured: nil, isPhoneShell: true), ListMetrics.horizontalInset)
+        let insets = ListMetrics.rowInsets(compact: false, margin: 20)
+        XCTAssertEqual(insets.leading, 20)
+        XCTAssertEqual(insets.trailing, 20)
+        XCTAssertEqual(ListMetrics.rowInsets(compact: true), ListMetrics.rowInsets(compact: true, margin: ListMetrics.horizontalInset))
+    }
+
     // MARK: Reminders → Summary time (brief 99)
 
     /// The summary's time goes through our time field as a PickerTime and back to the stored minutes.

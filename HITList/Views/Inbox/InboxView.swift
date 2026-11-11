@@ -92,6 +92,8 @@ struct InboxView: View {
         }
         .quickAddEntry(.inbox)
         .background(Theme.background)
+        // Rows and headers on the large title's edge (brief 99).
+        .followsSystemListMargin()
         .navigationTitle("Inbox")
         #if os(iOS)
         // The name once, as the system large title (brief 61); the count is on Browse's Inbox row and the
