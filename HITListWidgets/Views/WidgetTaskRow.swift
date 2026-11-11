@@ -3,8 +3,11 @@ import WidgetKit
 import HITListCore
 
 /// A task in a widget, as the app's `TaskRow` draws it: the priority ring in the task's colour, the title, and under it
-/// the second line, here its time (or its date, for an overdue task) and its Group at the trailing end. The ring is its
-/// own view (`WidgetCheckRing`), so it can become a completion button later without the row changing.
+/// the second line, here its time (or its date, for an overdue task) and its Group at the trailing end.
+///
+/// Brief 81: the ring is a button (`WidgetCompletionIntent`) that checks the task off; the title still opens it. A row
+/// whose tap is on its way is drawn checked, the app's completed look (filled check, struck title) dimmed, and its check
+/// does nothing until iCloud has the completion. A short row is grown to the minimum tap target (`WidgetLook.rowFrame`).
 struct WidgetTaskRow: View {
     /// How much of the row a widget has room for.
     enum Style {
@@ -21,33 +24,71 @@ struct WidgetTaskRow: View {
     /// Under a header that names the day (Today's): the time alone, or nothing for an all-day task.
     var hidesDay = true
     var style = Style.full
+    /// A tap on this row is on its way (`WidgetContent.Marks`).
+    var checked = false
+    /// The widget whose row this is ("today", "upcoming"): its check is a button. Nil draws the check only (the hosted
+    /// tests' renders, which can't draw a button).
+    var widget: String? = nil
+    /// Where a tap on the title goes; nil: the widget's own link.
+    var link: URL? = nil
     @Environment(\.widgetPalette) private var palette
 
     var body: some View {
-        HStack(alignment: .top, spacing: WidgetLook.ringGap) {
-            WidgetCheckRing(priority: task.priority)
-            VStack(alignment: .leading, spacing: WidgetLook.lineGap) {
-                HStack(spacing: HITSpacing.s) {
-                    Text(task.title)
-                        .font(WidgetLook.rowTitle)
-                        .tracking(HITType.taskTitleTracking)
-                        .foregroundStyle(palette.text)
-                        .lineLimit(1)
-                    if style == .titleAndTime {
-                        Spacer(minLength: 0)
-                        WidgetWhen(task: task, now: now, hidesDay: hidesDay, short: true).fixedSize()
-                    }
-                }
-                .frame(height: WidgetLook.rowTitleLine)
-                if style == .full, Self.hasMeta(task, hidesDay: hidesDay, now: now) {
-                    WidgetMetaLine(task: task, now: now, hidesDay: hidesDay)
-                        .frame(height: WidgetLook.rowMetaLine)
+        let content = contentHeight
+        let frame = WidgetLook.rowFrame(content)
+        let inset = (frame - content) / 2
+        HStack(alignment: .top, spacing: 0) {
+            check(frame: frame, inset: inset)
+            linked(details.padding(.top, inset).frame(maxWidth: .infinity, minHeight: frame, alignment: .topLeading))
+        }
+        .frame(height: frame, alignment: .top)
+        .opacity(checked ? WidgetLook.pendingOpacity : 1)
+        .privacySensitive()
+    }
+
+    /// The ring (or the check), its column the button: as tall as the row, as wide as the ring and its gap.
+    @ViewBuilder
+    private func check(frame: CGFloat, inset: CGFloat) -> some View {
+        let mark = WidgetCheckRing(priority: task.priority, checked: checked)
+            .padding(.top, inset)
+            .frame(width: WidgetLook.checkColumn, height: frame, alignment: .topLeading)
+            .contentShape(Rectangle())
+        // A shared task completes in the shared store (brief 62), which the widget's road doesn't reach: it opens Today.
+        if let widget, !checked, !task.isShared {
+            Button(intent: WidgetCompletionIntent(task: task, action: .complete, widget: widget)) { mark }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Complete \(task.title)")
+        } else {
+            mark.accessibilityLabel(checked ? "\(task.title), checked" : task.title)
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: WidgetLook.lineGap) {
+            HStack(spacing: HITSpacing.s) {
+                Text(task.title)
+                    .font(WidgetLook.rowTitle)
+                    .tracking(HITType.taskTitleTracking)
+                    .foregroundStyle(checked ? palette.secondaryText : palette.text)
+                    .strikethrough(checked, color: palette.secondaryText)
+                    .lineLimit(1)
+                if style == .titleAndTime {
+                    Spacer(minLength: 0)
+                    WidgetWhen(task: task, now: now, hidesDay: hidesDay, short: true).fixedSize()
                 }
             }
-            Spacer(minLength: 0)
+            .frame(height: WidgetLook.rowTitleLine)
+            if style == .full, Self.hasMeta(task, hidesDay: hidesDay, now: now) {
+                WidgetMetaLine(task: task, now: now, hidesDay: hidesDay)
+                    .frame(height: WidgetLook.rowMetaLine)
+            }
         }
-        .privacySensitive()
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func linked(_ view: some View) -> some View {
+        if let link { Link(destination: link) { view } } else { view }
     }
 
     /// Whether the row has a second line: a time, a date it doesn't share with its header, a repeat, a switch, a Group.
@@ -62,25 +103,61 @@ struct WidgetTaskRow: View {
         FlipboardSwitch.side(of: task, now: now) == .red
     }
 
-    func height() -> CGFloat {
+    /// The content's own height: the title line, and the second line when it has one.
+    var contentHeight: CGFloat {
         WidgetLook.rowHeight(hasMeta: style == .full && Self.hasMeta(task, hidesDay: hidesDay, now: now))
     }
+
+    /// The row's height in a list: its content, grown to the minimum target.
+    func height() -> CGFloat { WidgetLook.rowFrame(contentHeight) }
+
+    /// The gap under it in a list spaced `spacing` (`WidgetLook.gap`).
+    func gap(spacing: CGFloat) -> CGFloat { WidgetLook.gap(after: contentHeight, spacing: spacing) }
 }
 
-/// The ring a row starts with: an open circle in the priority's colour, as the app's rows (`TaskRowCheckbox`). P4's
-/// `Color.secondary` all but disappears on a widget's background, so it takes the palette's secondary text instead.
+/// The ring a row starts with: an open circle in the priority's colour, as the app's rows (`TaskRowCheckbox`); checked,
+/// the app's filled check. P4's `Color.secondary` all but disappears on a widget's background, so it takes the palette's
+/// secondary text instead.
 struct WidgetCheckRing: View {
     let priority: Int
+    var checked = false
     @Environment(\.widgetPalette) private var palette
 
     var body: some View {
         let value = Priority(clamping: priority)
-        Image(systemName: "circle")
+        Image(systemName: checked ? "checkmark.circle.fill" : "circle")
             .font(.system(size: WidgetLook.ringSize, weight: WidgetLook.ringWeight))
             .foregroundStyle(value == .p4 ? palette.secondaryText : value.color)
             .widgetAccentable()
             .frame(width: WidgetLook.ringSize + 2, height: WidgetLook.rowTitleLine)
             .accessibilityHidden(true)
+    }
+}
+
+/// The widget's quiet line (brief 81): a tap waiting for the app or for iCloud, or a snapshot more than a day old. Never
+/// an alarm: secondary text, the size of a section's header.
+struct WidgetQuietLine: View {
+    let note: WidgetContent.Note
+    let now: Date
+    @Environment(\.widgetPalette) private var palette
+
+    static let height: CGFloat = 14
+
+    var body: some View {
+        Text(Self.text(note, now: now))
+            .font(WidgetLook.section)
+            .foregroundStyle(palette.secondaryText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .frame(height: Self.height)
+    }
+
+    static func text(_ note: WidgetContent.Note, now: Date) -> String {
+        switch note {
+        case .openApp: "Open HITList to finish"
+        case .waitingForICloud: "Waiting for iCloud"
+        case .asOf(let written): WidgetContent.asOfText(written, now: now)
+        }
     }
 }
 
