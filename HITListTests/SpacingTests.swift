@@ -68,7 +68,58 @@ final class SpacingTests: XCTestCase {
     }
     #endif
 
+    // MARK: Settings → Data's tiles (brief 99)
+
+    /// Library's six counts sit three across in two rows at every width: the narrowest iPhone's group (311 pt inside),
+    /// the Mac page at the 900 pt window (572 pt inside; it wrapped five and one there) and the page at its widest.
+    func testTheDataTilesAreThreeAcrossInTwoRows() throws {
+        let stats = DataStats(openTasks: 19, completedTasks: 0, overdueTasks: 3, groups: 5, labels: 4, filters: 0)
+        for width: CGFloat in [311, 572, 620] {
+            let rows = try tileRows(of: DataCountTiles(stats: stats), width: width)
+            XCTAssertEqual(rows, [3, 3], "tiles per row at \(width) pt")
+        }
+    }
+
     // MARK: Helpers
+
+    /// How many separate fills a horizontal line crosses in each band of filled rows, top to bottom: the tiles per row
+    /// of a grid drawn on black (a gap of the grid's 8 pt splits two tiles; text inside a tile does not).
+    private func tileRows<V: View>(of view: V, width: CGFloat) throws -> [Int] {
+        let scale: CGFloat = 2
+        let renderer = ImageRenderer(content: view.frame(width: width).background(Color.black).preferredColorScheme(.dark))
+        renderer.scale = scale
+        let image = try XCTUnwrap(renderer.cgImage)
+        let w = image.width, h = image.height
+        var pixels = [UInt8](repeating: 0, count: w * h * 4)
+        let context = try XCTUnwrap(CGContext(data: &pixels, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                              space: CGColorSpaceCreateDeviceRGB(),
+                                              bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        func filled(_ x: Int, _ y: Int) -> Bool {
+            let i = (y * w + x) * 4
+            return max(Int(pixels[i]), Int(pixels[i + 1]), Int(pixels[i + 2])) > 12
+        }
+        // The bands of rows with any fill, then one line through each band's middle.
+        var bands: [(Int, Int)] = []
+        var start: Int?
+        for y in 0..<h {
+            let any = (0..<w).contains { filled($0, y) }
+            if any, start == nil { start = y }
+            if !any, let s = start { bands.append((s, y)); start = nil }
+        }
+        if let s = start { bands.append((s, h)) }
+        return bands.map { band in
+            let y = (band.0 + band.1) / 2
+            var runs = 0
+            var inside = false
+            for x in 0..<w {
+                let on = filled(x, y)
+                if on, !inside { runs += 1 }
+                inside = on
+            }
+            return runs
+        }
+    }
 
     private func height<V: View>(_ view: V) -> CGFloat {
         let sized = view.frame(width: 420)
