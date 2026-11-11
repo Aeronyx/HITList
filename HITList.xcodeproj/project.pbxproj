@@ -114,6 +114,7 @@
 		45ECCAFF0C36623DD6DDD8E8 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD12153261EC9FBC68657755 /* TaskListView.swift */; };
 		469E3F8A8F4D2D2920BC9390 /* CalendarEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D3A0E27F4F6C6625C35C7C7 /* CalendarEvents.swift */; };
 		46E3CA552C5BA9E3EB324B94 /* MacSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C88742D1EA977BE9D0D07677 /* MacSettingsSection.swift */; };
+		47648F9130B6E30FA0E43B63 /* WidgetRefresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4FB0DCF8D19A45748B8C08C /* WidgetRefresh.swift */; };
 		478C1FA711477C9F2DDDC17C /* AppearanceSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */; };
 		47BD085667FD840F097A05B4 /* HolidayAccent.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAD451DCD5AC6B49B94C0607 /* HolidayAccent.swift */; };
 		4887CE8432BD8382222B7F9A /* SchemaV5Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3DF8FADE739784FAFE5D568 /* SchemaV5Models.swift */; };
@@ -788,6 +789,7 @@
 		D3DF87F469E151C325CD9969 /* SyncPush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPush.swift; sourceTree = "<group>"; };
 		D3F271CF4C29FF5387DC56B8 /* PickerPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPlacement.swift; sourceTree = "<group>"; };
 		D44BD633BB89C054A005326A /* FlipboardWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardWidgetView.swift; sourceTree = "<group>"; };
+		D4FB0DCF8D19A45748B8C08C /* WidgetRefresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetRefresh.swift; sourceTree = "<group>"; };
 		D566EAC440EFF36E4BB83427 /* DuoDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoDebug.swift; sourceTree = "<group>"; };
 		D5F4EFFF4EA0167D686BDF26 /* AppInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppInfoTests.swift; sourceTree = "<group>"; };
 		D68A8A41947C06044085D892 /* SharedListsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedListsTests.swift; sourceTree = "<group>"; };
@@ -1525,6 +1527,7 @@
 			children = (
 				F5D751C9825869AFD8CC37B2 /* WidgetCompletionCenter.swift */,
 				665FF2BFFB9E4E0A69D46391 /* WidgetDebug.swift */,
+				D4FB0DCF8D19A45748B8C08C /* WidgetRefresh.swift */,
 				097EF1A12059B02DAB71F295 /* WidgetSnapshotBuilder.swift */,
 				F8584438E0E1CC9F13D693F8 /* WidgetSnapshotWriter.swift */,
 			);
@@ -2201,6 +2204,7 @@
 				1F0DF291DE2319844AF6B3CA /* WidgetDebug.swift in Sources */,
 				EE73EA0962B9BB9A9153C892 /* WidgetIntentRoad.swift in Sources */,
 				9854084C4F0716263A778898 /* WidgetLook.swift in Sources */,
+				47648F9130B6E30FA0E43B63 /* WidgetRefresh.swift in Sources */,
 				9389AECD2F6D6541F34B7928 /* WidgetSamples.swift in Sources */,
 				34A1DB62423E3AE56B8ECE09 /* WidgetSnapshotBuilder.swift in Sources */,
 				AEB9B218DC8E7A3495EDBFE5 /* WidgetSnapshotWriter.swift in Sources */,
