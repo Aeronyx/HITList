@@ -175,4 +175,107 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         XCTAssertEqual(bits(try stored(task.id).dueDate), bits(rolled))
         XCTAssertEqual(shown(try stored(task.id).dueDate), Self.day(2026, 11, 11))
     }
+
+    // MARK: - The one place: repeats rolling on
+
+    /// The rules brief 92 names, each completed in New York at noon on Nov 11, 2026 from an anchor before the autumn change
+    /// (Nov 1). The next day is the rule's, stored as that day's anchor. `RecurrenceRule` steps a date keeping its time of
+    /// day, and an anchor's is 06:00 EDT: stepped past Nov 1 it is 06:00 EST, 11:00 UTC, which the one place can't vouch
+    /// for, so it stayed unanchored (and before brief 92's first finding, was stored a day late).
+    static let rollCases: [(String, RecurrenceRule, DayAnchor.Day, DayAnchor.Day)] = [
+        ("every day", .daily, day(2026, 10, 30), day(2026, 11, 11)),
+        ("every week", .weekly, day(2026, 10, 28), day(2026, 11, 11)),
+        ("every Wednesday", RecurrenceRule(frequency: .weekly, weekdays: [4]), day(2026, 10, 28), day(2026, 11, 11)),
+        ("every weekday", .weekdays, day(2026, 10, 30), day(2026, 11, 11)),
+        ("every month on the 15th", RecurrenceRule(frequency: .monthly, anchorDay: 15), day(2026, 10, 15), day(2026, 11, 15)),
+        ("every month from the 31st", RecurrenceRule(frequency: .monthly, anchorDay: 31), day(2026, 10, 31), day(2026, 11, 30)),
+        ("every first Monday", RecurrenceRule(frequency: .monthly, place: .weekday(2, ordinal: 1)), day(2026, 10, 5),
+         day(2026, 12, 7)),
+        ("every year on Feb 29", RecurrenceRule(frequency: .yearly, anchorDay: 29, place: .date(month: 2, day: 29)),
+         day(2024, 2, 29), day(2027, 2, 28)),
+    ]
+
+    func testCompletingARepeatAcrossTheAutumnChangeStoresTheNextDaysAnchor() throws {
+        watch(in: Self.newYork)
+        let noon = TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork)
+        for (name, rule, from, expected) in Self.rollCases {
+            let task = TaskItem(title: name, dueDate: DayAnchor.anchor(of: from), recurrence: rule)
+            context.insert(task)
+            try context.save()
+            TaskActions.toggleCompletion(task, in: context, now: noon)
+            let kept = try stored(task.id)
+            XCTAssertFalse(kept.isCompleted, name)
+            XCTAssertEqual(shown(kept.dueDate), expected, "\(name): the rule's day")
+            XCTAssertEqual(kept.dueDate, DayAnchor.anchor(of: expected), "\(name): stored as that day's anchor")
+        }
+    }
+
+    /// A monthly repeat on the 15th, completed twice across the change, keeps the 15th (its rule's day of the month never
+    /// moves), and a timed daily repeat keeps its 09:00 where the person is, untouched by the one place.
+    func testARepeatKeepsItsDayOfTheMonthAndATimedOneItsHour() throws {
+        watch(in: Self.newYork)
+        let monthly = TaskItem(title: "Rent", dueDate: DayAnchor.anchor(of: Self.day(2026, 10, 15)),
+                               recurrence: RecurrenceRule(frequency: .monthly, anchorDay: 15))
+        let nine = TimeZoneStoreTests.local(2026, 10, 30, 9, in: Self.newYork)
+        let timed = TaskItem(title: "Pills", dueDate: nine, hasDueTime: true, recurrence: RecurrenceRule.daily.withTime(hour: 9, minute: 0))
+        context.insert(monthly)
+        context.insert(timed)
+        try context.save()
+        TaskActions.toggleCompletion(monthly, in: context, now: TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork))
+        TaskActions.toggleCompletion(monthly, in: context, now: TimeZoneStoreTests.local(2026, 11, 16, 12, in: Self.newYork))
+        XCTAssertEqual(try stored(monthly.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 12, 15)))
+        XCTAssertEqual(try stored(monthly.id).recurrenceRule?.anchorDay, 15)
+        TaskActions.toggleCompletion(timed, in: context, now: TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork))
+        XCTAssertEqual(try stored(timed.id).dueDate, TimeZoneStoreTests.local(2026, 11, 11, 9, in: Self.newYork),
+                       "the first 09:00 on a day not yet past (today's), in EST: 14:00 UTC, not 13:00")
+    }
+
+    /// Undo of a completion (the toast, the Completed list) puts a repeating day back where it was, byte for byte.
+    func testUndoingACompletionPutsTheDayBack() throws {
+        watch(in: Self.newYork)
+        let before = DayAnchor.anchor(of: Self.day(2026, 10, 30))
+        let task = TaskItem(title: "Stretch", dueDate: before, recurrence: .daily)
+        context.insert(task)
+        try context.save()
+        TaskActions.toggleCompletion(task, in: context, now: TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork))
+        TaskActions.reschedule(task, to: before, keepTime: false, in: context)
+        XCTAssertEqual(bits(try stored(task.id).dueDate), bits(before))
+    }
+
+    // MARK: - The one place: picking a day
+
+    /// Upcoming's Pick Date hands back the picked day at the time of day of the date it opened on (a graphical DatePicker
+    /// keeps the time): a task due Jul 1, 2027 (its anchor, 06:00 EDT) picked onto Dec 1, 2027 arrives as Dec 1 at 06:00
+    /// EST, 11:00 UTC. It is stored as Dec 1's anchor. The other way (Dec 1 onto Jul 1) lands at 05:00 EDT, 09:00 UTC.
+    func testPickingADayForAnAnchoredTaskStoresThePickedDaysAnchor() throws {
+        watch(in: Self.newYork)
+        for (from, to) in [(Self.day(2027, 7, 1), Self.day(2027, 12, 1)), (Self.day(2027, 12, 1), Self.day(2027, 7, 1))] {
+            let task = TaskItem(title: "Renew passport", dueDate: DayAnchor.anchor(of: from))
+            context.insert(task)
+            try context.save()
+            let opened = try XCTUnwrap(task.dueDate)
+            let clock = Self.newYork.dateComponents([.hour, .minute, .second], from: opened)
+            let pickedDay = TimeZoneStoreTests.local(to.year, to.month, to.day, in: Self.newYork)
+            let picked = try XCTUnwrap(Self.newYork.date(bySettingHour: clock.hour!, minute: clock.minute!, second: clock.second!,
+                                                         of: pickedDay))
+            XCTAssertFalse(DayAnchor.isAnchor(picked), "\(from) → \(to): the picker's value is no anchor")
+            TaskActions.reschedule(task, to: picked, in: context)
+            XCTAssertEqual(try stored(task.id).dueDate, DayAnchor.anchor(of: to), "\(from) → \(to)")
+        }
+    }
+
+    /// A date with a time is never touched: a reschedule keeps a timed task's 09:00 on the new day, and the reminder's
+    /// Snooze moves it to exactly an hour from now (`keepTime: false`).
+    func testReschedulingATimedTaskKeepsItsTimeAndASnoozeItsMoment() throws {
+        watch(in: Self.newYork)
+        let task = TaskItem(title: "Dentist", dueDate: TimeZoneStoreTests.local(2026, 11, 12, 9, in: Self.newYork), hasDueTime: true)
+        context.insert(task)
+        try context.save()
+        TaskActions.reschedule(task, to: TimeZoneStoreTests.local(2026, 11, 20, in: Self.newYork), in: context)
+        XCTAssertEqual(try stored(task.id).dueDate, TimeZoneStoreTests.local(2026, 11, 20, 9, in: Self.newYork))
+        let snoozedTo = TimeZoneStoreTests.local(2026, 11, 20, 9, 2, in: Self.newYork).addingTimeInterval(3600 + 0.25)
+        TaskActions.reschedule(task, to: snoozedTo, keepTime: false, in: context)
+        XCTAssertEqual(bits(try stored(task.id).dueDate), bits(snoozedTo))
+        XCTAssertTrue(try stored(task.id).hasDueTime)
+    }
 }

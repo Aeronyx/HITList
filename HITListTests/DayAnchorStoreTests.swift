@@ -69,11 +69,12 @@ final class DayAnchorStoreTests: XCTestCase {
         XCTAssertFalse(context.hasChanges, "the rewrite is part of the save, not a change left over")
     }
 
-    /// An edit to a task already in the store (a reschedule from a row's menu) is anchored too.
+    /// An edit to a task already in the store (a reschedule from a row's menu) is anchored too. The device is in Chicago:
+    /// the hook and `TaskActions` both read its calendar.
     func testTheOnePlaceAnchorsAnEdit() throws {
         let task = try olderBuildTask("Call Sam", due: nil)
         hook = DayAnchoring.SaveHook(container: container, calendar: { Self.chicago })
-        TaskActions.reschedule(task, to: midnight(Self.friday, in: Self.chicago), in: context)
+        TaskActions.reschedule(task, to: midnight(Self.friday, in: Self.chicago), calendar: Self.chicago, in: context)
         try context.save()
         XCTAssertEqual(try stored(task.id).dueDate, DayAnchor.anchor(of: Self.friday))
     }
