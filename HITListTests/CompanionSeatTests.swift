@@ -47,7 +47,7 @@ final class CompanionSeatTests: XCTestCase {
     static let hostTop: CGFloat = 44
 
     static func hostSize(_ host: Host) -> CGSize {
-        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: SeatFieldHost.height)
+        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: CompanionPerch.fieldHeight)
     }
 
     static func sceneSize(_ host: Host) -> CGSize {
@@ -110,7 +110,7 @@ final class CompanionSeatTests: XCTestCase {
                     Capsule(style: .continuous).fill(Color(hex: palette.hex.accent))
                 }
             case .searchField:
-                let shape = RoundedRectangle(cornerRadius: SeatFieldHost.radius, style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: CompanionPerch.fieldRadius, style: .continuous)
                 shape.fill(Color(hex: palette.hex.elevated))
                     .overlay(shape.strokeBorder(Color(hex: palette.hex.separator).opacity(0.5), lineWidth: 1))
             }
@@ -396,6 +396,10 @@ final class CompanionSeatTests: XCTestCase {
         let spriteWidth: CGFloat = CGFloat(nod.width) * p
         XCTAssertEqual(surface.maxX, spriteWidth - offset.width, accuracy: 0.001)
         XCTAssertEqual(surface.width, FloatingAddButton.size.width, accuracy: 0.001)
+        #if os(macOS)
+        XCTAssertEqual(CompanionPerch.fieldHeight, SidebarSearchField.height, "the seat's field is the Mac's")
+        XCTAssertEqual(CompanionPerch.fieldRadius, SidebarSearchField.radius)
+        #endif
     }
 
     // MARK: - Sheets
@@ -487,14 +491,26 @@ final class CompanionSeatTests: XCTestCase {
     }
 }
 
-/// The Mac's search field (`SidebarSearchField`) is compiled only on the Mac; the iOS bundle draws the same host from
-/// the same two numbers, so the check runs on both.
-private enum SeatFieldHost {
-    #if os(macOS)
-    static let height = SidebarSearchField.height
-    static let radius = SidebarSearchField.radius
-    #else
-    static let height: CGFloat = 28
-    static let radius: CGFloat = 7
-    #endif
+/// Brief 100, item 4: on iPhone the last row of a list scrolls clear of the "+" and of the companion on it: the lists'
+/// bottom margin grows by how far the companion stands above the button.
+@MainActor
+final class CompanionListMarginTests: XCTestCase {
+    func testEveryCompanionsClearance() {
+        for character in CompanionCharacter.all {
+            let clearance = CompanionPerch.clearance(character)
+            let p = CompanionCharacter.pointsPerPixel
+            XCTAssertGreaterThan(clearance, 0, character.id)
+            XCTAssertLessThanOrEqual(clearance, CGFloat(character.seatRow) * p, character.id)
+            // Every still's top is under it.
+            for mode in [character.plus.awake, character.plus.asleep] {
+                for still in mode.stills {
+                    let rows = character.rows(still)!
+                    let top = rows.firstIndex { $0.contains { $0 != CompanionInk.clear } }!
+                    XCTAssertLessThanOrEqual(CGFloat(character.seatRow - top) * p, clearance, "\(character.id) \(still)")
+                }
+            }
+        }
+        // Tuck stands 16 pixels above the "+" (its seedling's tip, row 4 of 20).
+        XCTAssertEqual(CompanionPerch.clearance(.tuck), 32)
+    }
 }

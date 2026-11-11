@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import HITListCore
 #if os(iOS)
 import UIKit
@@ -130,6 +131,9 @@ final class CompanionDirector {
         instances[id, default: 0] += 1
         still[id] = isStill
         calm[id] = isCalm
+        #if DEBUG
+        if runsTimer, stages[id] == nil { Self.log.info("Companion \(id, privacy: .public) on screen") }
+        #endif
         if stages[id] == nil {
             let dress = dress(at: now)
             var stage = CompanionStage(since: now, place: place, look: dress.look, turned: turned[id] ?? false,
@@ -501,7 +505,28 @@ final class CompanionDirector {
         stage.turned = clock(for: character).facing(at: now, stage: stage)
         stage.act = CompanionAct(kind: kind, start: now)
         stages[id] = stage
+        #if DEBUG
+        // Brief 100: what played and when, so a recording can be checked against the app's own clock
+        // (`/usr/bin/log show --info --predicate 'subsystem == "com.trammells.hitlist" AND category == "companions"'`).
+        if runsTimer {
+            let mode = character.posture(stage.place).mode(stage.look)
+            let name: String
+            switch kind {
+            case .gesture(let i): name = mode.gestures.indices.contains(i) ? mode.gestures[i].name : "gesture \(i)"
+            case .routine(let i):
+                let routine = mode.routines.indices.contains(i) ? mode.routines[i] : nil
+                name = (routine?.little == true ? "loop " : "routine ") + (routine?.name ?? "\(i)")
+            case .answer: name = "reply"
+            case .flourish: name = "flourish"
+            }
+            Self.log.info("Companion \(id, privacy: .public) plays \(name, privacy: .public)")
+        }
+        #endif
     }
+
+    #if DEBUG
+    private static let log = Logger(subsystem: "com.trammells.hitlist", category: "companions")
+    #endif
 
     private func playFlourish(_ id: String, now: Date) {
         guard let character = character(id), let stage = stages[id] else { return }

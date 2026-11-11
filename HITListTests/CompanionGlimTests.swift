@@ -50,9 +50,11 @@ final class CompanionGlimTests: XCTestCase {
     func testItsFlickersAreABlinkAndItsLight() throws {
         for place in CompanionPlace.allCases {
             let mode = glim.posture(place).awake
-            XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name }, ["blink", "flicker", "drop", "sweat"], "\(place)")
+            // Brief 100: its glances, sniff and ear are idles too.
+            XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name },
+                           ["blink", "flicker", "glance", "lookDown", "sniff", "ear", "lookUp", "drop", "sweat"], "\(place)")
             let skies = mode.gestures.filter(\.flicker).map { $0.sky?.rawValue ?? "every sky" }
-            XCTAssertEqual(skies, ["every sky", "every sky", "rain", "heat"], "\(place)")
+            XCTAssertEqual(skies, Array(repeating: "every sky", count: 7) + ["rain", "heat"], "\(place)")
             XCTAssertGreaterThanOrEqual(mode.gestures.count, 5, "\(place): five gestures or more")
         }
         // The flicker changes only the lantern's own warm pixels: the light dims, nothing else moves.
@@ -74,13 +76,13 @@ final class CompanionGlimTests: XCTestCase {
     func testItsRoutinesAreItsOwn() throws {
         for place in CompanionPlace.allCases {
             let mode = glim.posture(place).awake
-            let everyday = mode.routines.filter { $0.sky == nil }.map(\.name)
+            let everyday = mode.routines.filter { $0.sky == nil && !$0.little }.map(\.name)
             XCTAssertEqual(everyday, ["swing", "checkLight", "warmPaws", "wash", "sniffAir"], "\(place)")
             XCTAssertEqual(mode.routines.filter { $0.sky == .rain }.map(\.name), ["drip"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .snow }.map(\.name), ["melt", "shakeOff"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .storm }.map(\.name), ["thunder"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .heat }.map(\.name), ["shade"])
-            for routine in mode.routines {
+            for routine in mode.routines where !routine.little {
                 let seconds = glim.duration(of: routine, mode: mode)
                 XCTAssertTrue((3...7).contains(seconds), "\(routine.name): \(seconds) s")
                 XCTAssertTrue((4...9).contains(routine.moves), "\(routine.name): \(routine.moves) moves")

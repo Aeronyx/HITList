@@ -62,7 +62,7 @@ struct MobileShell: View {
             // Lists scroll under the chrome and show through the gaps around the island; the margin
             // keeps their last row reachable. (A safeAreaInset on the stack did not reach the lists
             // inside it on iOS 26: Browse's last row ended behind the island.)
-            .contentMargins(.bottom, placement.listBottomMargin, for: .automatic)
+            .companionListMargin(placement.listBottomMargin, besideThePlus: !placement.isSide)
             .modifier(SideMargin(edge: placement == .side(.leading) ? .leading : .trailing,
                                  length: placement.listSideMargin(columnWidth: barColumnWidth(placement))))
             chrome(placement)

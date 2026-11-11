@@ -64,6 +64,11 @@ struct CompanionPerch: View {
         }
     }
 
+    /// The Mac sidebar's search field as the seat sees it (`SidebarSearchField.height` and `.radius`, which only the
+    /// Mac compiles; `CompanionSeatTests` checks they agree).
+    static let fieldHeight: CGFloat = 28
+    static let fieldRadius: CGFloat = 7
+
     /// The host's shape (brief 100), in the sprite's own coordinates (its top-left at 0, 0): the "+" is a 76 × 50
     /// capsule (the iPhone's glass curves as a continuous one, the iPad's plain oval as a circular one; this is where
     /// both are, so a seat reaches the lower of the two); the Mac's field a continuous rounded rectangle 28 pt tall
@@ -80,9 +85,8 @@ struct CompanionPerch: View {
             return continuous.intersection(Capsule(style: .circular).path(in: rect))
         case .searchField:
             let width: CGFloat = 600
-            let height: CGFloat = 28
-            let rect = CGRect(x: -width - left, y: -offset.height, width: width, height: height)
-            return RoundedRectangle(cornerRadius: 7, style: .continuous).path(in: rect)
+            let rect = CGRect(x: -width - left, y: -offset.height, width: width, height: fieldHeight)
+            return RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).path(in: rect)
         }
     }
 
@@ -132,6 +136,43 @@ private struct CompanionLife: View {
         .onDisappear { director.disappear(character.id) }
         .onChange(of: still) { _, new in director.setMotion(character.id, still: new, calm: calm) }
         .onChange(of: calm) { _, new in director.setMotion(character.id, still: still, calm: new) }
+    }
+}
+
+extension CompanionPerch {
+    /// Brief 100: how far the companion on the "+" stands above the button's top edge, at its tallest still (awake
+    /// or asleep, in any weather), so the end of a list can be scrolled clear of it.
+    static func clearance(_ character: CompanionCharacter) -> CGFloat {
+        let posture = character.plus
+        var tallest = 0
+        for mode in [posture.awake, posture.asleep] {
+            for still in mode.stills {
+                guard let rows = character.rows(still) else { continue }
+                guard let top = rows.firstIndex(where: { $0.contains { $0 != CompanionInk.clear } }) else { continue }
+                tallest = max(tallest, character.seatRow - top)
+            }
+        }
+        return CGFloat(tallest) * CompanionCharacter.pointsPerPixel
+    }
+}
+
+extension View {
+    /// The lists' bottom margin (brief 100): `base`, grown by what the companion on the "+" shows above it while
+    /// companions are on, so the last row of every scrolling screen comes clear of the "+" and of the companion.
+    func companionListMargin(_ base: CGFloat, besideThePlus: Bool) -> some View {
+        modifier(CompanionListMargin(base: base, besideThePlus: besideThePlus))
+    }
+}
+
+private struct CompanionListMargin: ViewModifier {
+    let base: CGFloat
+    let besideThePlus: Bool
+    @AppStorage(Preferences.companions, store: AppGroup.defaults) private var enabled = true
+
+    func body(content: Content) -> some View {
+        // `CompanionCast.current` reads the theme, so a theme change brings the new companion's height.
+        let extra: CGFloat = besideThePlus && enabled ? CompanionPerch.clearance(CompanionCast.current) : 0
+        content.contentMargins(.bottom, base + extra, for: .automatic)
     }
 }
 
