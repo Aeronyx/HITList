@@ -51,6 +51,9 @@ enum CompanionInk: Character, CaseIterable {
     case warm = "w"
     /// The warm light dimmed into the background: its glow.
     case glow = "g"
+    /// The accent darkened into the background, as `dark` is to `mid`: the shade under a cap drawn in the accent
+    /// (round 20, brief 102: Button's rose cap; that character draws in the accent, not one detail of it).
+    case accentDark = "r"
 
     /// Clear.
     static let clear: Character = "."

@@ -274,15 +274,18 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
                 return calendar.date(byAdding: .day, value: 7 * interval, to: date)!
             }
             // Walk forward day by day; honor `interval` by only accepting weeks that are a
-            // multiple of `interval` away from the anchor week.
-            let anchorWeek = startOfWeek(date, calendar: calendar)
+            // multiple of `interval` away from the anchor week. The weeks are the rule's own
+            // (`cycleStart`), so "every other sat and sun" stays one weekend under a Sunday-first calendar.
+            let first = Self.cycleStart(of: weekdays, calendarFirst: calendar.firstWeekday)
+            let anchorWeek = startOfWeek(date, first: first, calendar: calendar)
             var candidate = date
             for _ in 0..<(7 * interval + 7) {
                 candidate = calendar.date(byAdding: .day, value: 1, to: candidate)!
                 let wd = calendar.component(.weekday, from: candidate)
                 guard weekdays.contains(wd) else { continue }
-                let week = startOfWeek(candidate, calendar: calendar)
-                let weeksApart = calendar.dateComponents([.weekOfYear], from: anchorWeek, to: week).weekOfYear ?? 0
+                let week = startOfWeek(candidate, first: first, calendar: calendar)
+                let daysApart = calendar.dateComponents([.day], from: anchorWeek, to: week).day ?? 0
+                let weeksApart = daysApart / 7
                 if weeksApart % interval == 0 { return candidate }
             }
             return calendar.date(byAdding: .day, value: 7 * interval, to: date)!
@@ -356,22 +359,58 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
     public func firstOccurrence(onOrAfter date: Date, calendar: Calendar = .current) -> Date {
         if let place { return occurrence(of: place, after: date, inclusive: true, stride: 1, calendar: calendar) }
         guard frequency == .weekly, let weekdays, !weekdays.isEmpty else { return date }
-        let wd = calendar.component(.weekday, from: date)
-        if weekdays.contains(wd) { return date }
-        return nextOccurrence(after: date, calendar: calendar)
+        // The soonest of its days, whatever the interval, as for a place: "every other sat and sun" typed on a
+        // Wednesday starts this Saturday, and the every-other counts from that weekend.
+        var day = date
+        for _ in 0..<7 {
+            if weekdays.contains(calendar.component(.weekday, from: day)) { return day }
+            day = calendar.date(byAdding: .day, value: 1, to: day)!
+        }
+        return date
     }
 
-    private func startOfWeek(_ date: Date, calendar: Calendar) -> Date {
+    private func startOfWeek(_ date: Date, first: Int, calendar: Calendar) -> Date {
         let d = calendar.startOfDay(for: date)
         let wd = calendar.component(.weekday, from: d)
-        let diff = (wd - calendar.firstWeekday + 7) % 7
+        let diff = (wd - first + 7) % 7
         return calendar.date(byAdding: .day, value: -diff, to: d)!
+    }
+
+    /// The weekday (1 = Sunday ... 7 = Saturday) a several-day repeat's own week begins on: the day after its
+    /// longest rest, so days that sit together stay together whichever day the calendar's week starts on. "Every
+    /// other sat and sun" is a weekend (its week begins on Saturday), "every other fri and mon" a long weekend,
+    /// "every other tue and thu" a week from Tuesday. It only matters when the interval is 2 or more. A set with no
+    /// single longest rest (or one day alone) keeps the calendar's week. Found by brief 98: with a Sunday-first
+    /// calendar the weekend's Sunday fell in the off week.
+    static func cycleStart(of weekdays: Set<Int>, calendarFirst: Int) -> Int {
+        let days = weekdays.filter { (1...7).contains($0) }.sorted()
+        guard days.count > 1 else { return calendarFirst }
+        var longest = 0
+        var starts: [Int] = []
+        for (i, day) in days.enumerated() {
+            let next = days[(i + 1) % days.count]
+            let rest = (next - day + 7) % 7
+            if rest > longest {
+                longest = rest
+                starts = [next]
+            } else if rest == longest {
+                starts.append(next)
+            }
+        }
+        return starts.count == 1 ? starts[0] : calendarFirst
     }
 
     // MARK: Display
 
-    public var displayText: String {
-        let shortDays = [1: "Sun", 2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat"]
+    /// The row's words for the rule, its days listed from Sunday: `displayText(weekStart:)`.
+    public var displayText: String { displayText(weekStart: 1) }
+
+    /// What a row, a chip and the Repeat menu call the rule (brief 97: every one begins "Every", as the menu's
+    /// choices do): "Every day", "Every 3 days", "Every weekday", "Every Tue, Thu and Sat", "Every 2 weeks on Tue
+    /// and Thu", "Every month", "Every month on the 28th", "Every month on the last day", "Every month on the second
+    /// Wednesday", "Every year on Mar 3". A weekly rule's days are listed from `weekStart` (1 = Sunday ... 7 =
+    /// Saturday), the first day of the week in Settings.
+    public func displayText(weekStart: Int) -> String {
         if let place { return Self.words(for: place, interval: interval) }
         switch frequency {
         case .daily: return interval == 1 ? "Every day" : "Every \(interval) days"
@@ -380,31 +419,37 @@ public struct RecurrenceRule: Codable, Hashable, Sendable {
         case .weekly:
             if let weekdays, !weekdays.isEmpty {
                 if weekdays == [2, 3, 4, 5, 6] { return interval == 1 ? "Every weekday" : "Every \(interval) weeks on weekdays" }
-                let names = weekdays.sorted().compactMap { shortDays[$0] }.joined(separator: ", ")
+                let names = RepeatWords.list(RepeatWords.ordered(weekdays, weekStart: weekStart).map { RepeatWords.shortWeekdays[$0 - 1] })
                 return interval == 1 ? "Every \(names)" : "Every \(interval) weeks on \(names)"
             }
             return interval == 1 ? "Every week" : "Every \(interval) weeks"
         }
     }
 
-    /// "Monthly on the 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3"; with an
-    /// interval "Every 3 months on the 10th", "Every 2 months on the first Monday", "Every 2 years on Mar 3".
-    private static func words(for place: Place, interval n: Int) -> String {
-        let weekdays = [1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday", 5: "Thursday", 6: "Friday", 7: "Saturday"]
-        let ordinals = [1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", -1: "last"]
-        let months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-        switch place {
-        case .day(let day):
-            return n == 1 ? "Monthly on the \(ordinal(day))" : "Every \(n) months on the \(ordinal(day))"
-        case .lastDay:
-            return n == 1 ? "Last day of the month" : "Every \(n) months on the last day"
-        case .weekday(let weekday, let ordinal):
-            let which = "\(ordinals[ordinal] ?? "") \(weekdays[weekday] ?? "")"
-            return n == 1 ? which.prefix(1).uppercased() + which.dropFirst() + " of the month" : "Every \(n) months on the \(which)"
-        case .date(let month, let day):
-            let date = "\(months[month - 1]) \(day)"
-            return n == 1 ? "Yearly on \(date)" : "Every \(n) years on \(date)"
+    /// How often, without the day or place: "Every day", "Every weekday", "Every 2 weeks", "Every month", "Every
+    /// year". What a button too narrow for `displayText` says (the date card's Repeat button, brief 97).
+    public var shortText: String {
+        let n = interval
+        switch frequency {
+        case .daily: return n == 1 ? "Every day" : "Every \(n) days"
+        case .weekly:
+            if n == 1, weekdays == [2, 3, 4, 5, 6] { return "Every weekday" }
+            return n == 1 ? "Every week" : "Every \(n) weeks"
+        case .monthly: return n == 1 ? "Every month" : "Every \(n) months"
+        case .yearly: return n == 1 ? "Every year" : "Every \(n) years"
         }
+    }
+
+    /// "Every month on the 28th", "Every month on the last day", "Every month on the first Monday", "Every year on
+    /// Mar 3"; with an interval "Every 3 months on the 10th", "Every 2 years on Mar 3". (Brief 71 said "Monthly on the
+    /// 28th", "Last day of the month", "First Monday of the month", "Yearly on Mar 3" until brief 97.)
+    private static func words(for place: Place, interval n: Int) -> String {
+        let head: String
+        switch place {
+        case .day, .lastDay, .weekday: head = n == 1 ? "Every month" : "Every \(n) months"
+        case .date: head = n == 1 ? "Every year" : "Every \(n) years"
+        }
+        return head + " " + RepeatWords.on(place, shortMonth: true)
     }
 
     /// "1st", "2nd", "3rd", "4th", "11th", "22nd".

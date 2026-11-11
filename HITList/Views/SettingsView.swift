@@ -46,8 +46,8 @@ struct SettingsSheetRequest: Identifiable {
 /// with iCloud & data in two (the Mac shows the sync log inline, which would make one page too long).
 enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     case account, general, reminders, extras, iCloud, claude, about
-    /// Second level: iCloud & data → Sync log, About → What's New.
-    case syncLog, whatsNew
+    /// Second level: iCloud & data → Sync log, About → What's New, General → the quick add guide (brief 98).
+    case syncLog, whatsNew, quickAddGuide
 
     var id: String { rawValue }
 
@@ -65,6 +65,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .about: "About"
         case .syncLog: "Sync log"
         case .whatsNew: "What's New"
+        case .quickAddGuide: QuickAddGuide.pageTitle
         }
     }
 
@@ -88,6 +89,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .about: "Version, what's new, privacy, feedback"
         case .syncLog: "Everything sync did on this device"
         case .whatsNew: "This version's changes"
+        case .quickAddGuide: QuickAddGuide.rowSubtitle
         }
     }
 
@@ -103,6 +105,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         case .about: MacSettingsSection.about.systemImage
         case .syncLog: "list.bullet.rectangle"
         case .whatsNew: "sparkles"
+        case .quickAddGuide: QuickAddGuide.systemImage
         }
     }
 
@@ -110,7 +113,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     var tint: Color {
         switch self {
         case .account: MacSettingsSection.account.tint
-        case .general: MacSettingsSection.general.tint
+        case .general, .quickAddGuide: MacSettingsSection.general.tint
         case .reminders: MacSettingsSection.reminders.tint
         case .extras: MacSettingsSection.completing.tint
         case .iCloud, .syncLog: MacSettingsSection.iCloud.tint
@@ -135,6 +138,7 @@ struct SettingsPageContent: View {
         case .about: AboutSettingsGroup()
         case .syncLog: SyncLogPage()
         case .whatsNew: WhatsNewGroups()
+        case .quickAddGuide: QuickAddGuidePage()
         }
     }
 }

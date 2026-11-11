@@ -3,67 +3,14 @@ import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Brief 85: Rosé's companion again, Posy (a piglet with wings far too small for it) in place of Pip, and round 18's
-/// plushy sketch made fatter and rounder, Mallow (Mocha's). What each is, its party trick, and that it sits on the
-/// "+" without floating over the capsule's curved ends. Every frame is also checked by `CompanionSpriteTests` (good
+/// Brief 85: round 18's plushy sketch made fatter and rounder, Mallow (Mocha's). (Brief 85's Rosé companion, Posy, gave way
+/// to Button in round 20: `CompanionButtonTests`.) What it is, its party trick, and that it sits on the "+" without
+/// floating over the capsule's curved ends. Every frame is also checked by `CompanionSpriteTests` (good
 /// data, small gestures, crisp pixels, all eight palettes).
 @MainActor
 final class CompanionNewCastTests: XCTestCase {
     /// The companions this brief drew.
-    static let new = [CompanionCharacter.posy, CompanionCharacter.mallow]
-
-    func testRoseHasPosyAndPipIsGone() {
-        XCTAssertEqual(CompanionCast.character(forTheme: "rose", launch: .none).id, "posy")
-        XCTAssertEqual(CompanionCharacter.named("posy")?.name, "Posy")
-        XCTAssertNil(CompanionCharacter.named("pip"))
-        XCTAssertFalse(CompanionCast.byTheme.values.contains("pip"))
-        // An old `-companion pip` falls back to the theme's.
-        let old = CompanionLaunchOptions(arguments: ["-companion", "pip"])
-        XCTAssertEqual(CompanionCast.character(forTheme: "rose", launch: old).id, "posy")
-    }
-
-    func testPosyIsAPigletWithWingsTooSmallForIt() {
-        let posy = CompanionCharacter.posy
-        XCTAssertEqual(posy.inks, [.ink, .dark, .mid, .light, .accent], "one accent detail: its snout")
-        XCTAssertEqual(posy.seatRow, 18, "its trotters hang over the edge from row 18")
-        let rest = posy.rows("rest")!
-        XCTAssertEqual(rest.joined().filter { $0 == "a" }.count, 12, "the snout")
-        XCTAssertEqual(rest[14].filter { $0 == "k" }.count, 2, "two nostrils")
-        XCTAssertTrue(rest[posy.seatRow...].joined().contains("d"), "its trotters over the edge")
-        // A wing out at each side.
-        XCTAssertEqual(rest[14].first, "l")
-        XCTAssertEqual(rest[14].last, "l")
-        XCTAssertEqual(posy.field.awake.gestures.map(\.name), ["blink", "sniff", "ear", "flutter", "glance", "drip", "pant"])
-    }
-
-    /// Its flourish: it flies, all of three pixels, and lands back where it sat.
-    func testPosyTriesToFly() {
-        let posy = CompanionCharacter.posy
-        for place in CompanionPlace.allCases {
-            let frames = posy.posture(place).flourish.map(\.frame)
-            let airborne = frames.filter { frame in
-                posy.rows(frame)![posy.seatRow...].allSatisfy { row in row.allSatisfy { $0 == CompanionInk.clear } }
-            }
-            XCTAssertGreaterThanOrEqual(airborne.count, 5, "\(place): off the edge for a moment")
-            XCTAssertTrue(frames.contains("plop"), "\(place): and back down")
-        }
-        XCTAssertFalse(posy.flourishTurns, "it lands where it was")
-    }
-
-    func testPosyAsleepAndInTheWeather() {
-        let posy = CompanionCharacter.posy
-        let rest = posy.rows("rest")!
-        // Asleep its eyes are shut: only its nostrils are dark. It dreams of flying (its wings twitch).
-        XCTAssertEqual(posy.rows("sleep")!.joined().filter { $0 == "k" }.count, 2)
-        XCTAssertEqual(posy.field.asleep.gestures.first?.name, "dream")
-        XCTAssertNil(posy.field.asleep.rain, "asleep wins over rain")
-        // Rain: its wings held over its head (nothing up there by day), not at its sides.
-        XCTAssertTrue(posy.rows("rain")![0..<4].joined().contains("l"))
-        XCTAssertFalse(rest[0..<4].joined().contains("l"))
-        XCTAssertNotEqual(posy.rows("rain")![14].first, "l")
-        // Snow on its ears.
-        XCTAssertTrue(posy.rows("snow")![3].contains("l"))
-    }
+    static let new = [CompanionCharacter.mallow]
 
     func testMochaHasMallow() {
         XCTAssertEqual(CompanionCast.character(forTheme: "mocha", launch: .none).id, "mallow")
@@ -144,26 +91,16 @@ final class CompanionNewCastTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(CompanionCharacter.posy.field.awake.routines.map(\.name),
-                       ["practice", "snuffle", "earflop", "wetshake", "shakeoff", "thunder", "sunshine", "fan"])
         XCTAssertEqual(CompanionCharacter.mallow.field.awake.routines.map(\.name),
                        ["band", "wobble", "doze", "tufts", "wetshake", "shiver", "shakeoff", "thunder", "sunshine", "siesta"])
     }
 
-    /// The weather routines are drawn whole, prop and all: Posy keeps its wings over its head through the raindrop,
-    /// Mallow its headscarf through the drop and the thunder. Posy's practice hop leaves the edge by a pixel only.
+    /// The weather routines are drawn whole, prop and all: Mallow keeps its headscarf through the drop and the thunder.
     func testTheWeatherRoutinesKeepTheirProps() {
-        let posy = CompanionCharacter.posy
-        for frame in ["rainLookUp", "rainRunoff1", "rainWince", "rainFlap", "stormCower"] {
-            XCTAssertTrue(posy.rows(frame)![0..<5].joined().contains("l"), "\(frame): its wings over its head")
-        }
         let mallow = CompanionCharacter.mallow
         for frame in ["rainLookUp", "rainBlinkUp", "rainShakeL", "stormCover"] {
             for row in mallow.rows(frame)![4...5] { XCTAssertTrue(row.contains("w"), "\(frame): its headscarf") }
         }
-        let hop = posy.rows("hopUp")!
-        XCTAssertTrue(hop[posy.seatRow].contains("d"), "its trotters still at the edge")
-        XCTAssertTrue(hop[(posy.seatRow + 1)...].allSatisfy { row in row.allSatisfy { $0 == CompanionInk.clear } })
     }
 
     // MARK: - The weather on the creature (brief 91)
@@ -210,14 +147,9 @@ final class CompanionNewCastTests: XCTestCase {
         }
     }
 
-    /// Heat: a still of its own, one heat flicker and one heat routine. Posy wilts with its tongue out and fans itself
-    /// with its useless wings; Mallow sags like a marshmallow in the sun, its band slipped, and takes a siesta.
+    /// Heat: a still of its own, one heat flicker and one heat routine. Mallow sags like a marshmallow in the sun, its
+    /// band slipped, and takes a siesta.
     func testTheHeatWiltsThem() {
-        let posy = CompanionCharacter.posy
-        XCTAssertEqual(posy.plus.awake.heat, "heat")
-        XCTAssertGreaterThan(posy.rows("heat")!.joined().filter { $0 == "a" }.count,
-                             posy.rows("rest")!.joined().filter { $0 == "a" }.count, "its tongue out")
-        XCTAssertEqual(posy.plus.awake.routines.first { $0.sky == .heat }?.name, "fan")
         let mallow = CompanionCharacter.mallow
         XCTAssertEqual(mallow.plus.awake.heat, "heat")
         XCTAssertTrue(mallow.rows("heat")![15].contains("w"), "its band slipped down")

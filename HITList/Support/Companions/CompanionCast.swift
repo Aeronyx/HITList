@@ -4,28 +4,28 @@ extension CompanionCharacter {
     /// Every companion, in the themes' order.
     static let all: [CompanionCharacter] = [
         CompanionCharacter.nod,
-        CompanionCharacter.smudge,
+        CompanionCharacter.gargle,
         CompanionCharacter.quill,
         CompanionCharacter.tuck,
         CompanionCharacter.hush,
         CompanionCharacter.glim,
         CompanionCharacter.mallow,
-        CompanionCharacter.posy,
+        CompanionCharacter.button,
     ]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }
 
 /// One companion per colour theme (briefs 79, 85 and 87 to 89), and only that one shows: Slate has Nod (the default),
-/// Graphite Smudge, Midnight Quill, Moss Tuck, Nord Hush, Tokyo Night Glim, Mocha Mallow, Rosé Posy. A theme from a
+/// Graphite Gargle, Midnight Quill, Moss Tuck, Nord Hush, Tokyo Night Glim, Mocha Mallow, Rosé Button. A theme from a
 /// newer build, with no companion drawn here, borrows Nod. There are no points, unlocks or collecting of any kind:
 /// the theme alone decides. Debug: `-companion quill` picks one whatever the theme.
 enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
         "slate": "nod",
-        // An owlet on legs far too long, drawn in pencil greys with a paper-white face (brief 87).
-        "graphite": "smudge",
+        // A gargoyle pup in stone greys, crouched on the "+" as its elders crouch on a parapet (brief 102).
+        "graphite": "gargle",
         "midnight": "quill",
         // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
         "moss": "tuck",
@@ -35,8 +35,8 @@ enum CompanionCast {
         "tokyo": "glim",
         // Round 18's plushy sketch, fatter and rounder, in a knitted band: a marshmallow for a mocha (brief 85).
         "mocha": "mallow",
-        // A piglet with wings too small for it and a snout in the theme's rose pink, for George's favourite (brief 85).
-        "rose": "posy",
+        // A button mushroom in the theme's own rose, its cap its hat, umbrella and bed, for George's favourite (brief 102).
+        "rose": "button",
     ]
 
     /// The companion for the theme `themeID`.

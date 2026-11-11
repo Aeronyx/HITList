@@ -4,12 +4,12 @@ import OSLog
 import AppKit
 #endif
 
-/// "iCloud: Signed in · Synced 2 min ago" with its icon: the sync health line (`SyncHealth`), word for word
-/// what Settings → Account's status row says. Re-renders every 30 s so the relative time stays current while visible.
-/// It reads the steadied state (`CloudSyncMonitor.state`), so it never strobes between "Syncing…" and "Synced"; it
-/// still says "Syncing…" when the bolt shows work. When work it showed ends in a good sync, the icon turns into a
-/// checkmark for a few seconds and the text reads "Synced just now", then it settles back (brief 78: once per visible
-/// stretch of work, not on every export). Every change crossfades; plain fades under Reduce Motion.
+/// "iCloud: Signed in · Up to date, checked 12 s ago" with its icon: the sync health line (`SyncHealth`), word for word
+/// what Settings → Account's status row says. Re-renders every second while the bolt is filled, so "checked 12 s ago"
+/// counts (brief 95), and every 30 s otherwise. It reads the state every mark draws (`CloudSyncMonitor.state`: steadied,
+/// then held to the truth), so it never claims more than the bolt. When work it showed ends in a good sync, the icon
+/// turns into a checkmark for a few seconds, then it settles back (brief 78: once per visible stretch of work, not on
+/// every export). Every change crossfades; plain fades under Reduce Motion.
 struct SyncStatusLine: View {
     private var monitor: CloudSyncMonitor { .shared }
     @State private var confirming = false
@@ -18,10 +18,9 @@ struct SyncStatusLine: View {
 
     var body: some View {
         let state = monitor.state
-        let account = AccountState.current
-        TimelineView(.periodic(from: .now, by: 30)) { context in
+        TimelineView(.periodic(from: .now, by: state.isSynced ? 1 : 30)) { context in
             Label {
-                Text(Self.text(account: account, sync: state, now: context.date))
+                Text(SyncHealth.current.line(now: context.date, precise: true))
                     .contentTransition(.opacity)
             } icon: {
                 Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
@@ -103,14 +102,16 @@ struct AccountChangeBanner: View {
 
 /// Sync status as one small bolt in the toolbar's empty space, on every screen and platform. It says "status is
 /// green" and then keeps still (brief 78): it draws `CloudSyncMonitor.state`, the raw state steadied over time
-/// (`SyncSteadiness`), not every export and import. Its shape is the message: a filled bolt while all is well, a
-/// hollow bolt breathing slowly when work is the news (a sync that keeps trying, the first after a long time,
-/// "will keep trying"), a struck-through bolt once trouble has stayed (offline, signed out, restricted, an error,
-/// local only) or when it has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a pastel that
-/// sits apart from the accent; struck-through states go grey, errors and sign-out red. Every change crossfades
-/// (`BoltSteadyMotion`), plain fades under Reduce Motion. Tapping it opens Settings.
+/// (`SyncSteadiness`), not every export and import, and held to the truth (brief 95, `BoltTruth`): filled only within
+/// 30 s of a beat in which iCloud itself answered and nothing waited either way. Its shape is the message: a filled
+/// bolt while that holds, a hollow bolt breathing slowly while it checks or works (George's "flashing": the first
+/// answer after a launch or a return, a change on its way, a sync that keeps trying), a struck-through bolt once
+/// trouble has stayed (offline, signed out, restricted, an error, this device and iCloud apart, local only) or when it
+/// has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a pastel that sits apart from the
+/// accent; struck-through states go grey, errors and sign-out red. Every change crossfades (`BoltSteadyMotion`), plain
+/// fades under Reduce Motion. Its label says the same as Settings (`SyncWords`). Tapping it opens Settings.
 ///
-/// It plays once as a "you're good to go": on the first good sync after the app opens, after it comes back from
+/// It plays once as a "you're good to go": on the first confirmation after the app opens, after it comes back from
 /// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
 /// ordinary syncs, never in the background; a short blink under Reduce Motion. What plays is the style chosen in
 /// Settings → Extras → Sync bolt (`BoltStyle`): the slam (brief 68, `BoltSlamMotion`: a hop while it spins once like a
@@ -163,13 +164,14 @@ struct SyncBolt: View {
                     #endif
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(state.summary(now: tick.date))
+            .accessibilityLabel(Self.words(for: state, now: tick.date))
             .accessibilityIdentifier("syncBolt")
-            .help(state.summary(now: tick.date))
+            .help(Self.words(for: state, now: tick.date))
         }
         // Every list screen draws the bolt, so its first appearance is the launch's first list frame.
         .onAppear { LaunchTiming.firstFrame() }
-        .onChange(of: monitor.lastChangeAt) { old, new in strikeIfDue(from: old, to: new) }
+        // Brief 95: "good to go" is a confirmation from iCloud itself, so the strike plays as the bolt fills.
+        .onChange(of: monitor.confirmedAt) { old, new in strikeIfDue(from: old, to: new) }
         // What arms the next strike: coming back to the front after a while, and sync trouble that lasted.
         .onChange(of: scenePhase) { _, _ in Self.strikeGate.appActive(isActive, now: Date()) }
         #if os(macOS)
@@ -180,8 +182,9 @@ struct SyncBolt: View {
             Self.strikeGate.appActive(isActive, now: Date())
         }
         #endif
-        // The gate counts trouble from the raw state, exactly as before the marks were steadied.
-        .onChange(of: monitor.rawState.isHealthyForStrike, initial: true) { _, healthy in
+        // The gate counts trouble from the raw state, exactly as before the marks were steadied, and from what only the
+        // beats can call trouble (brief 95: this device and iCloud apart, iCloud not answering).
+        .onChange(of: monitor.rawState.isHealthyForStrike && monitor.state.isHealthyForStrike, initial: true) { _, healthy in
             Self.strikeGate.syncState(healthy: healthy, now: Date())
         }
         #if DEBUG
@@ -189,6 +192,16 @@ struct SyncBolt: View {
         .onAppear { SyncReplayPlayer.shared.startIfRequested() }
         .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
         #endif
+    }
+
+    /// The bolt's label and tooltip: the monitor's words for the state it draws (`SyncWords`), or the state's own in the
+    /// Debug strike demo.
+    @MainActor
+    static func words(for state: SyncState, now: Date) -> String {
+        #if DEBUG
+        if BoltStrikeDemo.isRequested { return state.summary(now: now) }
+        #endif
+        return CloudSyncMonitor.shared.statusWords(now: now)
     }
 
     /// The working look breathes: work that is the news, and "will keep trying".
@@ -332,8 +345,8 @@ struct SyncIndicatorDot: View {
             .frame(width: Self.size, height: Self.size)
             .scaleEffect(scale)
             .animation(BoltSteadyMotion.crossfadeAnimation, value: Self.color(for: state))
-            .accessibilityLabel(state.summary())
-            .onChange(of: monitor.lastChangeAt) { old, new in
+            .accessibilityLabel(monitor.statusWords())
+            .onChange(of: monitor.confirmedAt) { old, new in
                 guard Self.pulses(for: SyncBolt.strikeGate.advance(from: old, to: new, now: Date(), isActive: isActive,
                                                                      reduceMotion: reduceMotion)) else { return }
                 SyncConfirmation.log.info("Sync dot pulse (\(monitor.lastChangePhase?.rawValue ?? "?", privacy: .public))")
