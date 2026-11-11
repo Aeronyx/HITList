@@ -3,8 +3,8 @@ import UniformTypeIdentifiers
 
 /// Settings → iCloud → Sync log (brief 25, item 5): the sync log's entries newest first, errors in red,
 /// a filter (All / Errors), "Copy log", and "Share…" (iPhone) or "Save…" (Mac) of the full text. The
-/// iPhone shows it in a sheet (`SyncLogSheet`); the Mac page shows it inline in its iCloud section,
-/// fewer rows at a time. New entries appear as they are recorded.
+/// iPhone shows it as a page inside the Settings sheet (`SyncLogPage`); the Mac page shows it inline in its iCloud
+/// section, fewer rows at a time. New entries appear as they are recorded.
 struct SyncLogView: View {
     enum Filter: String, CaseIterable, Identifiable {
         case all = "All", errors = "Errors"
@@ -171,20 +171,6 @@ struct SyncLogRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// The iPhone's sheet: Done, the environment line, then the log.
-struct SyncLogSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        HITSheetChrome("Sync log", primaryTitle: "Done", cancelTitle: nil, background: Theme.background,
-                       onPrimary: { dismiss() }) {
-            HITSection(footer: SyncLogText.footer) {
-                SyncLogView()
-            }
-        }
     }
 }
 

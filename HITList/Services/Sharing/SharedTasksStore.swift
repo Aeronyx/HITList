@@ -1,4 +1,5 @@
 import Foundation
+import HITListCore
 import Observation
 import OSLog
 
@@ -518,7 +519,30 @@ final class SharedTasksStore {
 
     nonisolated static func clampPriority(_ p: Int) -> Int { min(4, max(1, p)) }
 
-    nonisolated static func normalized(_ due: SharedDue) -> SharedDue { SharedDue(date: SharedClock.stamp(due.date), hasTime: due.hasTime) }
+    /// A due date as the store keeps it: a moment to the millisecond, as CloudKit keeps it; a day as its anchor
+    /// (brief 82, `DayAnchor`: 10:00 UTC on it), so a friend in Tokyo and you in Chicago see the same day. Every way a
+    /// day comes in goes through here: an edit, a fetched record (`SharedTasksRecords.task(from:)`) and the saved file
+    /// (`load`), so a merge never takes the two forms of one day for a change and writes to someone else's record.
+    nonisolated static func normalized(_ due: SharedDue) -> SharedDue { normalized(due, calendar: .current) }
+
+    nonisolated static func normalized(_ due: SharedDue, calendar: Calendar) -> SharedDue {
+        guard !due.hasTime, let anchor = DayAnchor.rewrite(due.date, calendar: calendar) else {
+            return SharedDue(date: SharedClock.stamp(due.date), hasTime: due.hasTime)
+        }
+        return SharedDue(date: anchor, hasTime: false)
+    }
+
+    /// `state` with every task's day anchored (`normalized`), its stamps unchanged: the file a build before 0.9.3 saved.
+    nonisolated static func anchoringDays(_ state: SharedTasksState, calendar: Calendar = .current) -> SharedTasksState {
+        var state = state
+        for i in state.lists.indices {
+            for t in state.lists[i].tasks.indices {
+                guard let due = state.lists[i].tasks[t].due.value else { continue }
+                state.lists[i].tasks[t].due.value = normalized(due, calendar: calendar)
+            }
+        }
+        return state
+    }
 
     private func queue(_ change: Change) { commit([change]) }
 
@@ -558,7 +582,7 @@ final class SharedTasksStore {
     static func load(from url: URL) -> (state: SharedTasksState, problem: String?) {
         guard FileManager.default.fileExists(atPath: url.path) else { return (SharedTasksState(), nil) }
         do {
-            return (try JSONDecoder().decode(SharedTasksState.self, from: Data(contentsOf: url)), nil)
+            return (anchoringDays(try JSONDecoder().decode(SharedTasksState.self, from: Data(contentsOf: url))), nil)
         } catch {
             let base = url.deletingPathExtension().lastPathComponent
             let aside = url.deletingLastPathComponent().appending(path: "\(base)-unreadable-\(Int(Date().timeIntervalSince1970)).json")

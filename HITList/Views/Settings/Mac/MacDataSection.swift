@@ -50,13 +50,16 @@ struct DataStats: Equatable {
 
 }
 
-/// Settings → Data on the Mac: the counts and the store, then Export & Import and Backups (moved here
-/// from their own sections).
+/// Settings → Data on the Mac: the counts and the store, Backups, Export & Import, then, last and apart, Delete all
+/// data from iCloud (the iPhone keeps it with Reset local cache at the foot of iCloud & data).
 struct MacDataSection: View {
     var body: some View {
         DataLibraryGroup()
-        ExportImportGroup()
         BackupsGroup()
+        ExportImportGroup()
+        HITGroup {
+            DeleteAllFromICloudRows()
+        }
     }
 }
 

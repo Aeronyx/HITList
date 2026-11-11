@@ -106,7 +106,7 @@ final class SharedEditorTests: XCTestCase {
         XCTAssertEqual(Calendar.current.dateComponents([.hour, .minute], from: due.date), DateComponents(hour: 17, minute: 30))
         XCTAssertTrue(Calendar.current.isDate(due.date, inSameDayAs: day))
         try rows.clearTime(XCTUnwrap(rows.row(task.id)))
-        XCTAssertEqual(store.list(list.id)?.task(task.id)?.due.value, SharedDue(date: day, hasTime: false))
+        XCTAssertEqual(store.list(list.id)?.task(task.id)?.due.value, SharedTasksStore.normalized(SharedDue(date: day, hasTime: false)))
         try rows.setTime(XCTUnwrap(rows.row(task.id)), hour: 9, minute: 0)
         try rows.reschedule(XCTUnwrap(rows.row(task.id)), to: nil)
         XCTAssertNil(store.list(list.id)?.task(task.id)?.due.value)
@@ -126,7 +126,7 @@ final class SharedEditorTests: XCTestCase {
         XCTAssertEqual(copy.title.value, "Book the cabin")
         XCTAssertEqual(copy.notes.value, "Lake")
         XCTAssertEqual(copy.priority.value, 2)
-        XCTAssertEqual(copy.due.value, SharedDue(date: day, hasTime: false))
+        XCTAssertEqual(copy.due.value, SharedTasksStore.normalized(SharedDue(date: day, hasTime: false)))
         XCTAssertEqual(moved.listID, other.id)
         XCTAssertEqual(try rows.move(XCTUnwrap(rows.row(moved.id)), to: other.id).id, moved.id, "already there: nothing moves")
     }

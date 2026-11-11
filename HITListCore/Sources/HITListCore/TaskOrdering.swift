@@ -24,16 +24,31 @@ public enum TaskOrdering {
 
     // MARK: - Order
 
-    /// Priority (P1 first), then due date and time ascending with undated last, then creation order.
-    public static func priorityThenDue<T: FilterableTask>(_ a: T, _ b: T) -> Bool {
+    /// Priority (P1 first), then due date and time ascending with undated last, then creation order. A date with no
+    /// time counts from the start of its day in `calendar` (`dueOrderKey`), so it comes before the day's timed tasks.
+    public static func priorityThenDue<T: FilterableTask>(_ a: T, _ b: T, calendar: Calendar) -> Bool {
         if a.filterPriority != b.filterPriority { return a.filterPriority < b.filterPriority }
-        switch (a.filterDueDate, b.filterDueDate) {
+        switch (dueOrderKey(a, calendar: calendar), dueOrderKey(b, calendar: calendar)) {
         case let (da?, db?) where da != db: return da < db
         case (nil, .some): return false
         case (.some, nil): return true
         default: break
         }
         return createdThenTitle(a, b)
+    }
+
+    /// `priorityThenDue(_:_:calendar:)` in the device's calendar.
+    public static func priorityThenDue<T: FilterableTask>(_ a: T, _ b: T) -> Bool {
+        priorityThenDue(a, b, calendar: .current)
+    }
+
+    /// When a task falls due as the lists order it (brief 82): a timed task at its moment; a date with no time at the
+    /// start of its day here. A day is stored at 10:00 UTC (`DayAnchor`), which is 04:00 in Chicago and 19:00 in Tokyo,
+    /// and an older build's day at a local midnight; both sort as the day's first moment, before its timed tasks, as
+    /// every day did before 0.9.3.
+    public static func dueOrderKey<T: FilterableTask>(_ task: T, calendar: Calendar) -> Date? {
+        guard let due = task.filterDueDate else { return nil }
+        return task.filterHasDueTime ? due : calendar.startOfDay(for: due)
     }
 
     /// The last tiebreak of every list: the order tasks were added in, older first (George, 2026-11-03:
@@ -48,7 +63,7 @@ public enum TaskOrdering {
     /// `tasks` in `priorityThenDue` order, each by the date it is listed under (a switch listed as today's: today).
     public static func sorted<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current) -> [T] {
         tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }
-            .sorted(by: priorityThenDue)
+            .sorted { priorityThenDue($0, $1, calendar: calendar) }
             .map(\.base)
     }
 

@@ -128,7 +128,7 @@ enum SharedTasksRecords {
         typealias F = SharedTasksSchema.TaskField
         guard let id = SharedTasksSchema.taskID(fromRecordName: record.recordID.recordName) else { return nil }
         let due: SharedDue? = int(record, F.hasDueDate) == 1
-            ? date(record, F.dueDate).map { SharedDue(date: $0, hasTime: int(record, F.hasDueTime) == 1) } : nil
+            ? date(record, F.dueDate).map { SharedTasksStore.normalized(SharedDue(date: $0, hasTime: int(record, F.hasDueTime) == 1)) } : nil
         let completion: SharedCompletion? = int(record, F.isCompleted) == 1
             ? SharedCompletion(at: date(record, F.completedAt) ?? SharedClock.unset, by: string(record, F.completedBy) ?? "",
                                byName: string(record, F.completedByName) ?? "")

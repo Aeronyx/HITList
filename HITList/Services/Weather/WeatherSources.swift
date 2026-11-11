@@ -1,10 +1,11 @@
 import Foundation
 import CoreLocation
+import HITListCore
 
-// Brief 80: the sky for the companions. Where the person is (approximately) and what the sky is doing there, each
-// behind a protocol so the tests use fakes and a Debug run can use the demo (`-seedDemoSky rain`). The location goes
-// from one source straight into the other and is never stored, synced, logged or sent anywhere but to Apple's
-// WeatherKit request.
+// Briefs 80 and 83: the sky and the local time for the companions. Where the person is (approximately), what the sky
+// is doing there and which time zone it is in, each behind a protocol so the tests use fakes and a Debug run can use
+// the demo (`-seedDemoSky rain`). The location goes from one source straight into the others and is never stored,
+// synced, logged or sent anywhere but to Apple's WeatherKit request and Apple's reverse geocoder.
 
 /// Whether HITList may know roughly where the device is, while it is in use.
 enum WeatherAccess: Equatable, Sendable {
@@ -38,12 +39,29 @@ protocol WeatherConditionSource: AnyObject {
     func credit() async throws -> WeatherCredit
 }
 
+/// Which time zone a place is in (brief 83): Apple's reverse geocoder on a device, nil in the demo, a fake in tests.
+/// The companions keep that place's hours; nothing else in the app uses it.
+@MainActor
+protocol WeatherZoneSource: AnyObject {
+    /// The zone at `location`; nil when the answer carries none.
+    func timeZone(at location: CLLocation) async throws -> TimeZone?
+}
+
 /// One current-conditions answer.
 struct WeatherReading: Equatable, Sendable {
     /// WeatherKit's `WeatherCondition` raw value ("heavyRain"); core's table turns it into a `CompanionSky`.
     let condition: String
     /// When the conditions were observed.
     let date: Date
+    /// How warm it feels, in °C, and whether the sun is up: what makes a dry day a hot one (round 19). Nil in tests
+    /// and demos that only name a condition.
+    var apparentCelsius: Double? = nil
+    var isDaylight: Bool? = nil
+
+    /// What a companion makes of it.
+    var sky: CompanionSky {
+        CompanionSky(weatherCondition: condition, apparentCelsius: apparentCelsius, isDaylight: isDaylight)
+    }
 }
 
 /// Apple's required attribution, as WeatherKit's `WeatherAttribution` gives it.

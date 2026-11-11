@@ -105,36 +105,35 @@ enum NotificationScheduler {
         center.delegate = responder
         center.setNotificationCategories([NotificationResponder.category, NotificationResponder.summaryCategory])
 
+        CalendarChange.shared.start()
         observers = observeTriggers { scheduleReschedule(reason: $0) }
         scheduleReschedule(reason: "launch")
     }
 
     /// What makes the pending set stale, with the reason each is logged under: another device's change (an
     /// import), any change made here (a local save: a task added, completed, deleted, moved or edited from
-    /// any list, row menu, popout or the Flipboard, so no call site can forget), and the clock. The 2 s
-    /// debounce folds a burst (typing a title saves on every keystroke) into one pass.
+    /// any list, row menu, popout or the Flipboard, so no call site can forget), and the calendar: the zone, the
+    /// clock, the day, iOS's significant time change (brief 82: the app's one source, `CalendarChange`, which
+    /// re-reads the zone first and logs under the system's reason). The 2 s debounce folds a burst (typing a
+    /// title saves on every keystroke) into one pass.
     @MainActor
     static var triggers: [(name: Notification.Name, reason: String)] {
-        var triggers: [(name: Notification.Name, reason: String)] = [
+        [
             (.cloudKitImportSucceeded, "import"),
             (ModelContext.didSave, "local change"),
-            (.NSSystemTimeZoneDidChange, "time zone"),
-            (.NSSystemClockDidChange, "clock"),
-            (.NSCalendarDayChanged, "day changed"),
+            (CalendarChange.didChange, "calendar changed"),
         ]
-        #if os(iOS)
-        triggers.append((UIApplication.significantTimeChangeNotification, "significant time change"))
-        #endif
-        return triggers
     }
 
-    /// Calls `handle` with a trigger's reason each time one is posted in `center`, on the main actor.
+    /// Calls `handle` with a trigger's reason each time one is posted in `center`, on the main actor. A calendar
+    /// change says which (`CalendarChange.reasonKey`: "time zone", "day changed", ...).
     @MainActor
     static func observeTriggers(in center: NotificationCenter = .default,
                                 _ handle: @escaping @MainActor (String) -> Void) -> [NSObjectProtocol] {
         triggers.map { trigger in
-            center.addObserver(forName: trigger.name, object: nil, queue: .main) { _ in
-                MainActor.assumeIsolated { handle(trigger.reason) }
+            center.addObserver(forName: trigger.name, object: nil, queue: .main) { note in
+                let reason = note.userInfo?[CalendarChange.reasonKey] as? String ?? trigger.reason
+                MainActor.assumeIsolated { handle(reason) }
             }
         }
     }
@@ -143,7 +142,6 @@ enum NotificationScheduler {
     @MainActor
     private static func scheduleReschedule(reason: String) {
         guard let container else { return }
-        if reason == "time zone" { NSTimeZone.resetSystemTimeZone() }
         debouncedReasons.insert(reason)
         beginBackgroundGrace()
         debouncer.schedule {

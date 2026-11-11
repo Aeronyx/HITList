@@ -1,52 +1,32 @@
 import SwiftUI
 
-/// Settings → About on the Mac: version and build date, Copy diagnostics, the Changelog on GitHub, Show
-/// tips again, then
-/// What's new inline (this version's list, earlier versions behind a disclosure row) instead of a sheet.
+/// Settings → About on the Mac: the version and build date, the Changelog on GitHub, the privacy policy, Show tips
+/// again, then Send Beta Feedback… with Copy diagnostics beside it, and What's New inline (this version's list, earlier
+/// versions behind a disclosure row) instead of a page. No header: the page's title says About.
 struct MacAboutSection: View {
     @Environment(\.openURL) private var openURL
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showEarlier = false
 
     var body: some View {
-        HITGroup("About") {
+        HITGroup {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
             HITMenuRow("Built", systemImage: "hammer", value: AboutInfo.buildDate().map(AboutInfo.buildDateText) ?? "Unknown")
                 .accessibilityIdentifier("settings-build-date")
-            CopyDiagnosticsRow()
             HITMenuRow("Changelog", subtitle: "Every version's notes, on GitHub", systemImage: "list.bullet.rectangle",
                        accessory: .chevron) {
                 openURL(AboutInfo.changelogURL(version: AppInfo.version))
             }
             .help(AboutInfo.changelogURL(version: AppInfo.version).absoluteString)
             .accessibilityIdentifier("settings-changelog")
-            ShowTipsAgainRow()
             PrivacyPolicyRow()
+            ShowTipsAgainRow()
+        }
+        HITGroup {
+            SendFeedbackRow()
+            CopyDiagnosticsRow()
         }
 
-        if let current = WhatsNew.current {
-            HITGroup("What's new in \(current.label)") {
-                WhatsNewItems(entry: current)
-            }
-            .accessibilityIdentifier("settings-whats-new-inline")
-
-            let earlier = Array(WhatsNew.entries.dropFirst())
-            if !earlier.isEmpty {
-                HITGroup {
-                    HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
-                               value: earlier.map(\.label).joined(separator: ", "),
-                               accessory: .expand(isExpanded: showEarlier)) {
-                        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
-                    }
-                }
-                if showEarlier {
-                    ForEach(earlier) { entry in
-                        HITGroup("Version \(entry.label)") { WhatsNewItems(entry: entry) }
-                    }
-                }
-            }
-        }
+        WhatsNewGroups()
     }
 }
 

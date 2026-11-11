@@ -2,7 +2,8 @@ import SwiftUI
 import SwiftData
 
 /// Settings → General: where the iPhone opens, the first day of the week, the app icon badge, whether
-/// deleting asks first, and calendar events (brief 77). Keys in `SettingsPreferences.swift`.
+/// deleting asks first, and calendar events (brief 77). Keys in `SettingsPreferences.swift`. No header: the page's
+/// title says General (the Mac adds the keyboard shortcuts under it).
 struct GeneralSettingsSection: View {
     @Environment(\.modelContext) private var context
 
@@ -12,10 +13,10 @@ struct GeneralSettingsSection: View {
     @AppStorage(Preferences.confirmDelete, store: AppGroup.defaults) private var confirmDelete = Preferences.confirmDeleteDefault
 
     var body: some View {
-        HITGroup("General", footer: footer) {
+        HITGroup {
             #if os(iOS)
             // `trailing:` spelled out: a bare trailing closure picks HITMenuRow's action initializer.
-            HITMenuRow("Start screen", systemImage: "house", trailing: {
+            HITMenuRow("Start screen", subtitle: Self.startScreenNote, systemImage: "house", trailing: {
                 Menu {
                     // Read through startTabValue so a stored "browse" (no longer a tab) ticks Today.
                     Picker("Start screen", selection: Binding(get: { Preferences.startTabValue(startTab).rawValue },
@@ -72,9 +73,6 @@ struct GeneralSettingsSection: View {
         }
     }
 
-    #if os(iOS)
-    private let footer = "The start screen applies the next time HITList opens."
-    #else
-    private let footer: String? = nil
-    #endif
+    /// Under Start screen (it was the group's footer).
+    static let startScreenNote = "Applies the next time HITList opens"
 }
