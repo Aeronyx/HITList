@@ -89,13 +89,17 @@ final class LocationQuestionUITests: XCTestCase {
         return alert
     }
 
-    /// Settings → Extras → Weather, the switch in the middle of the screen (the path brief 86 may change).
+    /// Settings → Extras → Weather, the switch in the middle of the screen (Extras is a page of Settings' first
+    /// screen since brief 86).
     private func openExtras() {
         app.buttons["tab-inbox"].tap()
         app.buttons["browseButton"].firstMatch.tap()
         let gear = app.buttons["settingsButton"].firstMatch
         XCTAssertTrue(gear.waitForExistence(timeout: 5))
         gear.tap()
+        let extras = app.descendants(matching: .any)["settings-page-extras"].firstMatch
+        XCTAssertTrue(extras.waitForExistence(timeout: 5))
+        extras.tap()
         for _ in 0..<10 where !(weatherToggle.exists && weatherToggle.isHittable) { app.swipeUp() }
         XCTAssertTrue(weatherToggle.exists, "Extras has a Weather switch")
         let middle = app.frame.height * 0.45

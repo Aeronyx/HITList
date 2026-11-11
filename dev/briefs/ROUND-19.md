@@ -63,6 +63,22 @@ in one pass, and brief 85 (Posy for Rosé, Mallow for Mocha) goes straight to it
 saturated by then (five builds, swap full), so the three draw with brief 85's scripts and build once, late. The
 next roadmap items wait for the round's merge and a freer machine.
 
+At 03:05 George asked for the weather to show on the creature (`91-weather-on-the-creature.md`: drips, a
+shake-off, snow that piles up, a hot day; nothing in the air), and at 03:35, going to bed (verbatim):
+
+> Thanks, the companions seem almost complete and we still have so much time and usage left! I'm heading to bed
+> for real now, but after you finish reviewing Round 19 and the testing suites, please continue reviewing,
+> improving, and hardening HITList until ~8am ET, 85% of my usage limit, or you have truly completed everything
+> worth working on without my feedback.
+
+So three review-and-hardening sessions run beside the round:
+
+| Brief | Session | Effort | Owns, in short |
+|---|---|---|---|
+| 92 | `day-anchor-review` | max | A second pair of eyes on brief 82's rewrite of stored dates: try to break it before it runs on real data |
+| 93 | `qa-sweep` | xhigh | Every screen on iPhone, iPad, the Duo and the Mac looked at as George would; plain defects fixed, matters of taste listed |
+| 94 | `accessibility` | xhigh | The system's accessibility audit on every screen, VoiceOver wording, the keyboard on the Mac, hit targets (the Mac's sync bolt takes clicks on a 4 pt strip) |
+
 ## The supervisor's decisions (George: "work freely")
 - **The creature in George's crop** is an unshipped sketch from round 18's companion session (Nord's inks, Hush's
   face). Found nowhere in the shipped frames; transcribed into brief 85 from the crop. It becomes the fifth
