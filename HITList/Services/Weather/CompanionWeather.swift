@@ -51,6 +51,16 @@ final class CompanionWeather {
     @ObservationIgnored private var hourly: Task<Void, Never>?
     @ObservationIgnored private var inFlight = false
     @ObservationIgnored private let askedForTheRun: Bool
+    @ObservationIgnored private let run: LaunchLocationQuestion.Run
+    @ObservationIgnored private let screen: @MainActor () -> (inFront: Bool, clear: Bool)
+    @ObservationIgnored private var question: Task<Void, Never>?
+    /// The first launch's question is settled for this run (asked, or not to be asked).
+    @ObservationIgnored private var questionSettled = false
+
+    /// After the first scene is active, the first screen settles this long before the question may show.
+    static let questionSettle: Duration = .seconds(2)
+    /// While something covers the first screen, it looks again this often.
+    static let questionRetry: Duration = .milliseconds(1500)
 
     /// The setting (`Preferences.companionWeather`): on unless someone switched it off.
     private(set) var isOn: Bool
@@ -70,6 +80,7 @@ final class CompanionWeather {
     ///   - onForTheRun: on whatever the setting says, without saving it (the demo, `-seedDemoSky`).
     ///   - offForTheRun: off whatever the setting says, without saving it (the refused demo, as after a refusal).
     ///   - askedForTheRun: as if the person had been asked (the demo, which has no prompt).
+    ///   - launch, screen: the run and what is on screen, for the first launch's question (`LaunchLocationQuestion`).
     init(location: @escaping () -> any WeatherLocationSource,
          weather: @escaping () -> any WeatherConditionSource,
          sky: CompanionSkySource,
@@ -77,7 +88,11 @@ final class CompanionWeather {
          now: @escaping () -> Date = Date.init,
          onForTheRun: Bool = false,
          offForTheRun: Bool = false,
-         askedForTheRun: Bool = false) {
+         askedForTheRun: Bool = false,
+         launch: LaunchLocationQuestion.Run = .current,
+         screen: @escaping @MainActor () -> (inFront: Bool, clear: Bool) = { @MainActor in
+             (LaunchScreenProbe.isInFront(), LaunchScreenProbe.isScreenClear())
+         }) {
         makeLocation = location
         makeWeather = weather
         skySource = sky
@@ -86,6 +101,8 @@ final class CompanionWeather {
         let stored = defaults.object(forKey: Preferences.companionWeather) as? Bool ?? Preferences.companionWeatherDefault
         isOn = onForTheRun || (!offForTheRun && stored)
         self.askedForTheRun = onForTheRun || offForTheRun || askedForTheRun
+        run = launch
+        self.screen = screen
     }
 
     /// Showing the weather: switched on and allowed.
@@ -138,6 +155,7 @@ final class CompanionWeather {
 
     private func becameActive() {
         Task { await cameForward() }
+        askAtLaunchWhenSettled()
         // While the app stays in front (a Mac can for a whole day), the same rule once an hour.
         hourly?.cancel()
         hourly = Task { [weak self] in
@@ -152,6 +170,69 @@ final class CompanionWeather {
     private func resignedActive() {
         hourly?.cancel()
         hourly = nil
+        question?.cancel()
+        question = nil
+    }
+
+    // MARK: - The first launch's question (brief 83)
+
+    /// The app is in front: once its first screen has settled, ask if `LaunchLocationQuestion` says so, looking
+    /// again while something covers the screen. Going to the background stops looking until it comes back.
+    private func askAtLaunchWhenSettled() {
+        guard !questionSettled, question == nil else { return }
+        question = Task { [weak self] in
+            try? await Task.sleep(for: Self.questionSettle)
+            while !Task.isCancelled {
+                guard let self else { return }
+                let decision = await self.considerAskingAtLaunch()
+                guard decision == .later else { break }
+                try? await Task.sleep(for: Self.questionRetry)
+            }
+            self?.question = nil
+        }
+    }
+
+    /// Looks once: asks now if everything says so (and then starts the weather, or switches it off if refused).
+    /// `.later` while the app is behind or its screen is covered; `.never` for the rest of the run.
+    @discardableResult
+    func considerAskingAtLaunch() async -> LaunchLocationQuestion.Decision {
+        guard !questionSettled else { return .never }
+        let shown = screen()
+        let situation = LaunchLocationQuestion.Situation(build: run.build, arguments: run.arguments,
+                                                         isTestHost: run.isTestHost, companionsOn: companionsOn,
+                                                         weatherOn: isOn, asked: hasAsked,
+                                                         isInFront: shown.inFront, isScreenClear: shown.clear)
+        let decision = LaunchLocationQuestion.decide(situation) { location.access() }
+        switch decision {
+        case .later: return .later
+        case .never:
+            questionSettled = true
+            return .never
+        case .ask:
+            questionSettled = true
+            await askAtLaunch()
+            return .ask
+        }
+    }
+
+    /// The system's question, once. Marked asked before it shows, so a launch killed meanwhile never asks twice.
+    /// Allowed: the weather starts. Refused: the switch goes off (as when refused from the switch) and Extras says
+    /// why, with the way to the system's settings.
+    private func askAtLaunch() async {
+        defaults.set(true, forKey: Preferences.companionWeatherAsked)
+        Self.log.info("Location question at launch: asking")
+        let answer = await location.requestAccess()
+        access = answer
+        Self.log.info("Location question at launch: \(String(describing: answer), privacy: .public)")
+        guard answer == .allowed else {
+            if answer.isRefused {
+                isOn = false
+                defaults.set(false, forKey: Preferences.companionWeather)
+            }
+            forget()
+            return
+        }
+        await cameForward()
     }
 
     /// The app came to the front (or has stayed there another hour): ask for the sky if the last observation is
