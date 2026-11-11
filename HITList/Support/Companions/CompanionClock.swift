@@ -10,7 +10,7 @@ struct CompanionPose: Equatable {
 /// One thing a companion does: a small gesture (by its index in the mode's `gestures`), a routine (by its index in
 /// the mode's `routines`), the reply to a tap, or the rare flourish, from `start`.
 struct CompanionAct: Equatable {
-    enum Kind: Equatable {
+    enum Kind: Hashable {
         case gesture(Int)
         case routine(Int)
         case answer

@@ -18,30 +18,40 @@ extension Preferences {
     static let companionLastRoutineName = "delight.companions.lastRoutineName"
 }
 
-/// The rules of a companion's day (briefs 79 and 84), pure so tests can pin them. Still by default. A flicker (one
-/// blink, one swing of a foot) every 40 to 110 seconds, never the same one three times running. A routine (a few
-/// seconds of small moves) after 5 to 12 minutes of showing time since the last, never the same one twice running;
-/// while a sky holds, its own routine takes about every other one. The flourish is rare: about once in three hours of
-/// its screen showing with the app in front, never within 45 minutes of the last one. A tap may play the flourish
-/// when none has played for 20 minutes, else a routine when none has played for three, else a small reply at most
-/// once every ten seconds. Asleep from 22:00 to 07:00 where the person is, with a stir every few minutes and nothing
-/// more. Reduce Motion: nothing moves. Reduce Effects and Low Power Mode: flickers only.
+/// The rules of a companion's day (briefs 79, 84 and 100), pure so tests can pin them. Never a dead minute: an idle
+/// every 6 to 36 seconds of showing time, awake or asleep, the first 2 to 6 seconds after it comes on screen. An
+/// idle is one flicker (a blink, one swing of a foot; about two in three) or one little loop (a blink and two swings,
+/// a second or two; about one in three), never the same one twice running, by weight (the plainest, a blink, the
+/// heaviest); while a sky holds, about every other one is the sky's own. Asleep the idles are its breaths, a twitch, a
+/// murmur: flickers only. A routine (a few seconds of small moves) after 3 to 8 minutes of showing time since the
+/// last, never the same one twice running, never a little loop; while a sky holds, its own routine takes about every
+/// other one. The flourish is rare: about once in three hours of its screen showing with the app in front, never
+/// within 45 minutes of the last one. A tap may play the flourish when none has played for 20 minutes, else a
+/// routine when none has played for three, else a small reply at most once every ten seconds. Asleep from 22:00 to
+/// 07:00 where the person is. Reduce Motion: nothing moves. Reduce Effects and Low Power Mode: idles only.
 enum CompanionSchedule {
-    /// Between one flicker and the next, awake. (Brief 84; was one gesture every 45 to 120 s.)
-    static let flickerGap: ClosedRange<TimeInterval> = 40...110
-    /// Showing time between one routine and the next (brief 84), at random.
-    static let routineGap: ClosedRange<TimeInterval> = 300...720
+    /// Showing time between one idle and the next, awake or asleep (brief 100): from the end of one to the start of
+    /// the next, so no still stretch is longer than its upper bound.
+    static let idleGap: ClosedRange<TimeInterval> = 6...36
+    /// The first idle after a companion comes on screen (launch, back to the app, its tab, a sheet closing).
+    static let firstIdle: ClosedRange<TimeInterval> = 2...6
+    /// Showing time between one routine and the next (briefs 84 and 100), at random.
+    static let routineGap: ClosedRange<TimeInterval> = 180...480
+    /// The chance that an idle is a little loop rather than a flicker, when it has both to choose from.
+    static let littleShare = 1.0 / 3
     /// A tap plays a routine only if none has played for this long (and the flourish isn't the tap's).
     static let tapRoutineRest: TimeInterval = 3 * 60
     /// While a sky holds, the chance that the next routine is the sky's own when the last one wasn't (and that it
     /// is again when it was, if the sky has another): about every other routine is the sky's.
     static let skyShare = 0.8
-    /// While a sky holds, the chance that a flicker is one of the sky's own (a drip, a bead of sweat), brief 91.
+    /// While a sky holds, about this share of the idles are the sky's own (a drip, a bead of sweat), briefs 91 and 100…
     static let skyFlickerShare = 0.5
+    /// …by leaning: after an idle that wasn't the sky's, the next one is with this chance, and after one that was,
+    /// with one minus it. So a sky with two idles of its own takes half of them, and a sky with only one (which can't
+    /// come twice running) still takes about four in ten.
+    static let skyIdleLean = 0.75
     /// Showing time in the snow before the pile grows one frame deeper (brief 91), at random.
     static let snowGap: ClosedRange<TimeInterval> = 480...840
-    /// Between stirs, asleep.
-    static let stirGap: ClosedRange<TimeInterval> = 360...900
     /// No flourish sooner than this after the last one (tapped or not), on this device.
     static let flourishFloor: TimeInterval = 45 * 60
     /// After the floor, the showing time until the next flourish is random with this mean (memoryless), so the
@@ -64,11 +74,16 @@ enum CompanionSchedule {
 
     static func isNight(hour: Int) -> Bool { hour >= nightStart || hour < nightEnd }
 
-    /// The gap before the next flicker (awake) or stir (asleep), from a number in 0..<1.
-    static func gap(asleep: Bool, unit: Double) -> TimeInterval {
-        let range: ClosedRange<TimeInterval> = asleep ? stirGap : flickerGap
+    /// The still time before the next idle, from a number in 0..<1: anywhere in `idleGap`.
+    static func idleGap(unit: Double) -> TimeInterval { within(idleGap, unit: unit) }
+
+    /// The still time before the first idle on coming on screen, from a number in 0..<1: anywhere in `firstIdle`.
+    static func firstIdle(unit: Double) -> TimeInterval { within(firstIdle, unit: unit) }
+
+    private static func within(_ range: ClosedRange<TimeInterval>, unit: Double) -> TimeInterval {
+        let u: Double = min(max(unit, 0), 1)
         let span: TimeInterval = range.upperBound - range.lowerBound
-        let extra: TimeInterval = span * unit
+        let extra: TimeInterval = span * u
         return range.lowerBound + extra
     }
 
@@ -127,31 +142,61 @@ enum CompanionSchedule {
         return pool.last
     }
 
-    /// Which gesture comes next, by weight, from a number in 0..<1: never the same one three times running.
-    /// - Parameter recent: the gestures played so far, oldest first.
-    static func pickGesture(weights: [Int], recent: [Int], unit: Double) -> Int {
-        guard weights.count > 1 else { return 0 }
-        var allowed = Array(weights.indices)
-        if recent.count >= 2, recent[recent.count - 1] == recent[recent.count - 2] {
-            allowed.removeAll { $0 == recent[recent.count - 1] }
+    /// One idle a companion could play (brief 100): a flicker (an index into the mode's gestures) or a little loop
+    /// (an index into its routines).
+    enum Idle: Hashable {
+        case flicker(Int)
+        case little(Int)
+
+        var isLittle: Bool {
+            if case .little = self { return true }
+            return false
+        }
+    }
+
+    /// An idle it may play now, its weight, and whether it is the sky's own.
+    struct IdleChoice: Equatable {
+        let idle: Idle
+        var weight = 1
+        var own = false
+    }
+
+    /// Which idle comes next, never `last` (unless it is all there is): one of the sky's own about every other time
+    /// while it has any (`sky` against `skyIdleLean`), a little loop about one time in three when there are both
+    /// (`kind` < `littleShare`), then by weight (`pick`). Nil when there is nothing to play.
+    static func pickIdle(_ choices: [IdleChoice], last: Idle?, sky: Double, kind: Double, pick: Double) -> Idle? {
+        guard !choices.isEmpty else { return nil }
+        var left = choices.filter { $0.idle != last }
+        if left.isEmpty { left = choices }
+        let own = left.filter(\.own)
+        let ordinary = left.filter { !$0.own }
+        let lastWasOwn = choices.first { $0.idle == last }?.own ?? false
+        let lean: Double = lastWasOwn ? 1 - skyIdleLean : skyIdleLean
+        let pool: [IdleChoice]
+        if own.isEmpty { pool = ordinary } else if ordinary.isEmpty { pool = own } else { pool = sky < lean ? own : ordinary }
+        let loops = pool.filter(\.idle.isLittle)
+        let flickers = pool.filter { !$0.idle.isLittle }
+        let kindPool: [IdleChoice]
+        if loops.isEmpty { kindPool = flickers } else if flickers.isEmpty { kindPool = loops } else {
+            kindPool = kind < littleShare ? loops : flickers
         }
         var total = 0
-        for i in allowed { total += max(1, weights[i]) }
-        let u: Double = min(max(unit, 0), 0.999_999)
+        for choice in kindPool { total += max(1, choice.weight) }
+        let u: Double = min(max(pick, 0), 0.999_999)
         let scaled: Double = Double(total) * u
-        var pick: Int = Int(scaled)
-        for i in allowed {
-            let w = max(1, weights[i])
-            if pick < w { return i }
-            pick -= w
+        var rank: Int = Int(scaled)
+        for choice in kindPool {
+            let w = max(1, choice.weight)
+            if rank < w { return choice.idle }
+            rank -= w
         }
-        return allowed.last ?? 0
+        return kindPool.last?.idle
     }
 
     /// Whether the flourish may play now on its own.
     /// - Parameters:
     ///   - onScreenSince: when its screen appeared or the app came back, whichever is later (nil while not on screen).
-    ///   - calm: Reduce Effects (gestures, no flourish); `still`: Reduce Motion (nothing moves).
+    ///   - calm: Reduce Effects (idles, no flourish); `still`: Reduce Motion (nothing moves).
     ///   - plainStill: the still frame is the plain `rest` (brief 91: a hot day without a heat still is one), so
     ///     the flourish can start and end on it.
     static func mayFlourish(now: Date, look: CompanionLook, onScreenSince: Date?, acting: Bool, still: Bool,
@@ -175,7 +220,7 @@ enum CompanionSchedule {
     }
 
     /// - Parameters:
-    ///   - routines: whether it has a routine it could play now (a character with none answers instead).
+    ///   - routines: whether it has a routine (not a little loop) it could play now (a character with none answers).
     static func tapReply(now: Date, onScreen: Bool, look: CompanionLook, acting: Bool, still: Bool, calm: Bool,
                          lowPower: Bool, lastFlourish: Date?, lastAnswer: Date?, lastRoutine: Date? = nil,
                          routines: Bool = false, plainStill: Bool = true) -> TapReply {
@@ -202,9 +247,12 @@ enum CompanionSchedule {
 /// - `-companionHour 23`: the hour the night rule reads (23 is asleep, 12 awake).
 /// - `-companionPlay flourish` (or `gestures`, `answer`, `all`, or one gesture's name): plays it a few seconds after
 ///   the companion appears and again every few seconds, and keeps going while the app is in the background, so a
-///   window can be recorded. `all` takes turns through every gesture, every routine it may play now, the reply and
-///   the flourish. `-companionPlay routine` takes turns through the routines it may play now (the everyday ones and
-///   the sky's), `-companionPlay routine:<name>` plays that one again and again. `-companionDemo` is the old name.
+///   window can be recorded. `gestures` picks the idles as the real schedule does (flickers and little loops), every
+///   few seconds. `all` takes turns through every gesture, every routine and little loop it may play now, the reply
+///   and the flourish. `-companionPlay routine` takes turns through the routines and loops it may play now (the
+///   everyday ones and the sky's), `-companionPlay routine:<name>` plays that one (a little loop too) again and again.
+///   `-companionDemo` is the old name. Without any of these the real schedule is quick enough to film: an idle every
+///   6 to 36 seconds.
 /// `-companionSky rain` and `-companionZone Asia/Tokyo` (`CompanionSkySource`'s own) force the sky and the zone;
 /// `-companionSnowDepth 2` piles the snow that deep (beside `-companionSky snow`).
 struct CompanionLaunchOptions: Equatable {

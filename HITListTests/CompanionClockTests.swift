@@ -138,7 +138,54 @@ final class CompanionClockTests: XCTestCase {
             id: "weathered", name: "Weathered", width: 4, height: 4, seatRow: 3, frames: weatherFrames, gestureFPS: 8,
             flourishFPS: 9, flourishTurns: false, field: weatheredPosture, plus: weatheredPosture)
 
-        static let all: [CompanionCharacter] = [stayer, turner, dancer, weathered]
+        // Brief 100: one that idles. Three flickers (a blink, the heaviest, a wag and a glance), three little loops
+        // (blink-wag-wag, glance-glance-blink, a double blink) and one long routine; asleep a breath and a stir.
+        static let idlerFrames: [CompanionCharacter.Frame] = frames + routineFrames.filter { $0.name == "lean" } + [
+            .init(name: "glance", rows: ["....", "mkml", "mlld", "d..d"]),
+            .init(name: "breath", rows: ["....", "....", "mmmm", "dd.d"]),
+        ]
+        static let idlerAwake: CompanionCharacter.Mode = CompanionCharacter.Mode(
+            rest: "rest", rain: "rain", snow: "snow",
+            gestures: [
+                .init(name: "blink", weight: 3, ticks: CompanionCharacter.ticks(("blink", 2)), flicker: true),
+                .init(name: "wag", ticks: CompanionCharacter.ticks(("wag", 3)), flicker: true),
+                .init(name: "glance", ticks: CompanionCharacter.ticks(("glance", 4)), flicker: true),
+                .init(name: "both", ticks: CompanionCharacter.ticks(("both", 2))),
+            ],
+            answer: .init(name: "look", ticks: CompanionCharacter.ticks(("blink", 4))),
+            routines: [
+                routines[0],
+                Routine(name: "blinkSwing", little: true, steps: [.gesture("blink"), .hold(2), .gesture("wag"), .gesture("wag")]),
+                Routine(name: "glances", little: true, steps: [.gesture("glance"), .hold(2), .gesture("glance"), .hold(1),
+                                                              .gesture("blink")]),
+                Routine(name: "twice", little: true, steps: [.gesture("blink"), .hold(1), .gesture("blink")]),
+            ])
+        static let idlerAsleep: CompanionCharacter.Mode = CompanionCharacter.Mode(
+            rest: "sleep", snow: "sleepSnow",
+            gestures: [.init(name: "stir", ticks: CompanionCharacter.ticks(("stir", 3))),
+                       .init(name: "breath", weight: 2, ticks: CompanionCharacter.ticks(("breath", 4)))],
+            answer: .init(name: "wake", ticks: CompanionCharacter.ticks(("peek", 8))))
+        static let idlerPosture = CompanionCharacter.Posture(
+            awake: idlerAwake, asleep: idlerAsleep, flourish: CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1)))
+        static let idler: CompanionCharacter = CompanionCharacter(
+            id: "idler", name: "Idler", width: 4, height: 4, seatRow: 3, frames: idlerFrames, gestureFPS: 8,
+            flourishFPS: 9, flourishTurns: false, field: idlerPosture, plus: idlerPosture)
+
+        // Brief 100: the least a character can be: one flicker, no loops, no routines.
+        static let lonerPosture = CompanionCharacter.Posture(
+            awake: CompanionCharacter.Mode(
+                rest: "rest", gestures: [.init(name: "blink", ticks: CompanionCharacter.ticks(("blink", 2)), flicker: true)],
+                answer: .init(name: "look", ticks: CompanionCharacter.ticks(("blink", 4)))),
+            asleep: CompanionCharacter.Mode(
+                rest: "sleep", gestures: [.init(name: "stir", ticks: CompanionCharacter.ticks(("stir", 3)))],
+                answer: .init(name: "wake", ticks: CompanionCharacter.ticks(("peek", 8)))),
+            flourish: CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1)))
+        static let loner: CompanionCharacter = CompanionCharacter(
+            id: "loner", name: "Loner", width: 4, height: 4, seatRow: 3,
+            frames: frames.filter { ["rest", "blink", "hop", "sleep", "stir", "peek"].contains($0.name) }, gestureFPS: 8,
+            flourishFPS: 9, flourishTurns: false, field: lonerPosture, plus: lonerPosture)
+
+        static let all: [CompanionCharacter] = [stayer, turner, dancer, weathered, idler, loner]
     }
 
     private func stage(_ act: CompanionAct? = nil, look: CompanionLook = .day, turned: Bool = false,
@@ -273,14 +320,19 @@ final class CompanionClockTests: XCTestCase {
     }
 
     func testTheGaps() {
+        XCTAssertEqual(CompanionSchedule.idleGap, 6...36, "brief 100's contract")
+        XCTAssertEqual(CompanionSchedule.firstIdle, 2...6)
+        XCTAssertEqual(CompanionSchedule.routineGap, 180...480)
         for i in 0..<500 {
             let u = CompanionRandom.unit(9, i)
-            XCTAssertTrue((40...110).contains(CompanionSchedule.gap(asleep: false, unit: u)), "a flicker every 40 to 110 s")
-            XCTAssertTrue((360...900).contains(CompanionSchedule.gap(asleep: true, unit: u)), "a stir every six to fifteen minutes")
-            XCTAssertTrue((300...720).contains(CompanionSchedule.routineBudget(unit: u)), "a routine every 5 to 12 minutes")
+            XCTAssertTrue((6...36).contains(CompanionSchedule.idleGap(unit: u)), "an idle every 6 to 36 s")
+            XCTAssertTrue((2...6).contains(CompanionSchedule.firstIdle(unit: u)), "the first 2 to 6 s in")
+            XCTAssertTrue((180...480).contains(CompanionSchedule.routineBudget(unit: u)), "a routine every 3 to 8 minutes")
         }
-        XCTAssertEqual(CompanionSchedule.routineBudget(unit: 0), 300)
-        XCTAssertEqual(CompanionSchedule.routineBudget(unit: 1), 720)
+        XCTAssertEqual(CompanionSchedule.idleGap(unit: 0), 6)
+        XCTAssertEqual(CompanionSchedule.idleGap(unit: 1), 36)
+        XCTAssertEqual(CompanionSchedule.routineBudget(unit: 0), 180)
+        XCTAssertEqual(CompanionSchedule.routineBudget(unit: 1), 480)
     }
 
     func testTheFlourishsBudgetAveragesThreeHoursAndNeverUnderFortyFive() {
@@ -294,18 +346,44 @@ final class CompanionClockTests: XCTestCase {
         XCTAssertEqual(CompanionSchedule.flourishBudget(unit: 0), 45 * 60)
     }
 
-    func testNeverTheSameGestureThreeTimesRunning() {
-        var recent: [Int] = []
-        var counts = [0, 0, 0]
-        for i in 0..<3_000 {
-            let pick = CompanionSchedule.pickGesture(weights: [5, 1, 1], recent: recent, unit: CompanionRandom.unit(4, i))
-            if recent.count >= 2 { XCTAssertFalse(recent.suffix(2) == [pick, pick], "three \(pick)s running at \(i)") }
-            recent.append(pick)
-            counts[pick] += 1
+    /// Brief 100: never the same idle twice running (unless it is all there is), a little loop about one in three,
+    /// by weight within a kind, the sky's own about every other.
+    func testPickingAnIdle() {
+        typealias Choice = CompanionSchedule.IdleChoice
+        let choices: [Choice] = [.init(idle: .flicker(0), weight: 5), .init(idle: .flicker(1)), .init(idle: .flicker(2)),
+                                 .init(idle: .little(0)), .init(idle: .little(1))]
+        var last: CompanionSchedule.Idle?
+        var counts: [CompanionSchedule.Idle: Int] = [:]
+        for i in 0..<6_000 {
+            let pick = CompanionSchedule.pickIdle(choices, last: last, sky: CompanionRandom.unit(1, i),
+                                                  kind: CompanionRandom.unit(2, i), pick: CompanionRandom.unit(3, i))!
+            XCTAssertNotEqual(pick, last, "the same \(pick) twice running at \(i)")
+            counts[pick, default: 0] += 1
+            last = pick
         }
-        XCTAssertGreaterThan(counts[0], counts[1] * 2, "by weight")
-        XCTAssertGreaterThan(counts[2], 0)
-        XCTAssertEqual(CompanionSchedule.pickGesture(weights: [3], recent: [0, 0], unit: 0.5), 0, "one gesture is all it has")
+        let loops: Int = (counts[.little(0)] ?? 0) + (counts[.little(1)] ?? 0)
+        XCTAssertEqual(Double(loops) / 6_000, 1.0 / 3, accuracy: 0.03, "a little loop about one in three")
+        XCTAssertGreaterThan(counts[.flicker(0)]!, counts[.flicker(1)]! * 2, "the heaviest flicker the most common")
+        XCTAssertGreaterThan(counts[.flicker(2)]!, 0)
+        // One is all it has: that one, again and again; nothing: nothing.
+        XCTAssertEqual(CompanionSchedule.pickIdle([.init(idle: .flicker(3))], last: .flicker(3), sky: 0.5, kind: 0.1, pick: 0.5),
+                       .flicker(3))
+        XCTAssertNil(CompanionSchedule.pickIdle([], last: nil, sky: 0, kind: 0, pick: 0))
+        // Only loops, or only flickers: the kind it has.
+        XCTAssertEqual(CompanionSchedule.pickIdle([.init(idle: .little(2))], last: nil, sky: 0.9, kind: 0.9, pick: 0.9), .little(2))
+        // The sky's own: half with two of its own, about four in ten with only one (it can't come twice running).
+        for (own, share) in [([Choice(idle: .flicker(5), own: true), Choice(idle: .little(5), own: true)], 0.5),
+                             ([Choice(idle: .flicker(5), own: true)], 0.43)] as [([Choice], Double)] {
+            var count = 0
+            var previous: CompanionSchedule.Idle?
+            for i in 0..<6_000 {
+                let pick = CompanionSchedule.pickIdle(choices + own, last: previous, sky: CompanionRandom.unit(4, i),
+                                                      kind: CompanionRandom.unit(5, i), pick: CompanionRandom.unit(6, i))!
+                if own.contains(where: { $0.idle == pick }) { count += 1 }
+                previous = pick
+            }
+            XCTAssertEqual(Double(count) / 6_000, share, accuracy: 0.03, "\(own.count) of its own")
+        }
     }
 
     func testTheRulesForAFlourish() {
@@ -468,6 +546,26 @@ final class CompanionClockTests: XCTestCase {
                          "no frame nowhere", "routine pop: starts or ends", "no routine belongs to a clouds sky"] {
             XCTAssertTrue(problems.contains(expected), "missing: \(expected)\n\(problems)")
         }
+        // Brief 100: a little loop is two to four moves in at most 2.5 s, and never a shake-off.
+        let loops = [
+            C.Routine(name: "one", little: true, steps: [.gesture("blink"), .hold(2)]),
+            C.Routine(name: "many", little: true, steps: [.gesture("blink"), .gesture("blink"), .gesture("blink"),
+                                                          .gesture("blink"), .gesture("blink")]),
+            C.Routine(name: "slow", little: true, steps: [.gesture("blink"), .hold(20), .gesture("blink")]),
+            C.Routine(name: "shaky", sky: .snow, shakesOff: true, little: true, steps: [.gesture("blink"), .gesture("blink")]),
+            C.Routine(name: "fine", little: true, steps: [.gesture("blink"), .hold(2), .gesture("blink"), .gesture("blink")]),
+        ]
+        let small = C.Posture(awake: C.Mode(rest: "rest", gestures: [blink], answer: blink, routines: loops),
+                              asleep: C.Mode(rest: "rest", gestures: [blink], answer: blink), flourish: flourish)
+        let little = C(id: "little", name: "Little", width: 8, height: 5, seatRow: 4, frames: bad.frames, gestureFPS: 8,
+                       flourishFPS: 9, flourishTurns: false, field: small, plus: small)
+        let found = little.problems.joined(separator: "\n")
+        for expected in ["routine one: 1 moves, not 2…4 for a little loop", "routine many: 5 moves",
+                         "routine slow: 3.0 s, a little loop longer than 2.5 s", "routine shaky: a little loop can't shake"] {
+            XCTAssertTrue(found.contains(expected), "missing: \(expected)\n\(found)")
+        }
+        XCTAssertFalse(found.contains("routine fine"), found)
+        XCTAssertFalse(found.contains("not 3.0…7.0"), "a little loop isn't held to a routine's length:\n\(found)")
     }
 
     // MARK: - The weather on the creature (brief 91)
