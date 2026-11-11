@@ -359,10 +359,19 @@ enum DayAnchoring {
     /// The import pass itself: anchors, saves, logs (unified log `dates`, one sync-log line when anything changed; the
     /// days it leaves as stored are in both, and alone in the unified log when nothing changed, as every import repeats
     /// them).
+    ///
+    /// No backup, no pass, here too (brief 92): until this build's first-run pass has run on this store (behind its
+    /// backup), the import pass would be the first whole-store rewrite, without one, so it waits and rewrites nothing. The
+    /// save hook still anchors what each save writes; the next launch backs up and runs the first pass.
     @MainActor
     @discardableResult
     static func importPass(in context: ModelContext, calendar: Calendar = .current, enabled: Bool = isEnabled,
+                           defaults: UserDefaults = AppGroup.defaults, firstRunKey key: String = firstRunKey(),
                            syncLog: ProfileStore.Log = syncLog) -> Count? {
+        guard defaults.integer(forKey: key) >= firstRunVersion else {
+            if enabled { log.info("Import pass waits: this build's first-run day pass hasn't run on this store yet") }
+            return Count()
+        }
         do {
             let count = try pass(in: context, calendar: calendar, enabled: enabled)
             if count.total > 0 {
