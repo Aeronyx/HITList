@@ -11,7 +11,9 @@ final class CompanionSpriteTests: XCTestCase {
         // Every theme's own companion, once each (the cast grows as companions merge; `CompanionCast` maps them).
         XCTAssertEqual(Set(CompanionCharacter.all.map(\.id)), Set(CompanionCast.byTheme.values))
         XCTAssertEqual(CompanionCharacter.all.count, CompanionCast.byTheme.count, "no companion twice")
-        XCTAssertEqual(Array(CompanionCharacter.all.map(\.id).prefix(3)), ["nod", "quill", "hush"])
+        XCTAssertEqual(CompanionCharacter.all.map(\.id), ThemePalette.all.compactMap { CompanionCast.byTheme[$0.id] },
+                       "in the themes' order")
+        XCTAssertEqual(CompanionCharacter.all.first?.id, "nod", "Slate's, the default")
         for character in CompanionCharacter.all {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
