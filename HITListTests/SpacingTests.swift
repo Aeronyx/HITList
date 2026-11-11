@@ -99,6 +99,17 @@ final class SpacingTests: XCTestCase {
         }
     }
 
+    // MARK: Reminders → Summary time (brief 99)
+
+    /// The summary's time goes through our time field as a PickerTime and back to the stored minutes.
+    func testTheSummaryTimeRoundTripsThroughTheTimeField() {
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 8 * 60), PickerTime(hour: 8, minute: 0))
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 7 * 60 + 30), PickerTime(hour: 7, minute: 30))
+        XCTAssertEqual(RemindersSettingsSection.summaryTime(minutes: 24 * 60 + 5), PickerTime(hour: 23, minute: 59), "clamped")
+        XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime(hour: 21, minute: 15)), 21 * 60 + 15)
+        XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime.parse("7:30") ?? PickerTime(hour: 0, minute: 0)), 7 * 60 + 30)
+    }
+
     // MARK: Helpers
 
     /// How many separate fills a horizontal line crosses in each band of filled rows, top to bottom: the tiles per row
