@@ -432,6 +432,15 @@ struct FlipSwitchFace<Rocker: View>: View {
     }
 }
 
+extension FlipSwitchFace where Rocker == RockerSwitch {
+    /// A plain red switch with a one-line name: what the Add a Switch tile measures itself by (brief 96), so it is a
+    /// switch's size wherever it stands. Every switch is laid out alike, so any name gives the same size.
+    static var standIn: FlipSwitchFace<RockerSwitch> {
+        FlipSwitchFace(title: "Switch", ruleText: "every week", target: 1, lamps: 0, side: .red, isOverdue: false,
+                       fraction: 0, caption: "Flip to start", reduceMotion: true) { RockerSwitch(tilt: -1) }
+    }
+}
+
 /// One action in a switch's menu, shown as a context-menu button and, on the Mac, as a row in the
 /// long-press popover.
 struct FlipMenuItem: Identifiable {

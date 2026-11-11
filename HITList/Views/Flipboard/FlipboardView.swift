@@ -127,63 +127,50 @@ struct FlipboardView: View {
         // The tip sits on the first switch on the screen.
         let tipID = loose.first?.id ?? onBoards.lazy.compactMap(\.first?.id).first
         let tip = tip(for: switches)
-        SwiftUI.Group {
-            if switches.isEmpty && boards.isEmpty && !hasInlineCard {
-                ContentUnavailableView {
-                    Label("No Switches Yet", systemImage: "switch.2")
-                } description: {
-                    Text(Self.emptyMessage)
-                } actions: {
-                    Button("Add a Switch") { openCard(.add) }
-                        .buttonStyle(.hitPrimary)
-                    Button("New Switchboard") { openBoardCard(.new) }
-                        .buttonStyle(.hitGhost)
+        let offersBoard = Self.offersNewSwitchboard(switches: switches.count, boards: boards.count)
+        // Empty, the board is its Add a Switch tile alone, in a first switch's place and size (brief 96: no
+        // paragraphs, no New Switchboard until there is a switch to put on one).
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Self.sectionSpacing) {
+                    looseGrid(loose, tip: tip, tipID: tipID)
+                    ForEach(Array(zip(boards, onBoards)), id: \.0.id) { board, onBoard in
+                        section(board, switches: onBoard, tip: tip, tipID: tipID)
+                    }
+                    if boardCard == .new {
+                        inlineBoardCard(.new)
+                    } else if offersBoard {
+                        // The way to a first Switchboard that everyone can see: on iPhone the menu's New
+                        // Switchboard… sits behind a long press on the sound button.
+                        NewSwitchboardRow { openBoardCard(.new) }
+                            .allowsHitTesting(!hasInlineCard)
+                    }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: Self.sectionSpacing) {
-                            looseGrid(loose, tip: tip, tipID: tipID)
-                            ForEach(Array(zip(boards, onBoards)), id: \.0.id) { board, onBoard in
-                                section(board, switches: onBoard, tip: tip, tipID: tipID)
-                            }
-                            if boardCard == .new {
-                                inlineBoardCard(.new)
-                            } else {
-                                // The way to a first Switchboard that everyone can see: on iPhone the menu's New
-                                // Switchboard… sits behind a long press on the sound button.
-                                NewSwitchboardRow { openBoardCard(.new) }
-                                    .allowsHitTesting(!hasInlineCard)
-                            }
-                        }
-                        .padding(16)
-                        .animation(.snappy(duration: 0.35), value: switches.map(\.id))
-                        .animation(.snappy(duration: 0.35), value: boards.map(\.id))
-                    }
-                    // While a card is open in place, a click anywhere off it is a click away: the tiles stop taking
-                    // clicks (no switch flips by accident) and the click reaches the board. A click in the card's
-                    // name reaches it too (the text view is AppKit's or UIKit's and claims no SwiftUI gesture), so a
-                    // click inside the card's frame only ever means keep editing.
-                    .gesture(SpatialTapGesture(coordinateSpace: .named(Self.boardSpace)).onEnded { tap in
-                        if cardFrame.contains(tap.location) {
-                            if confirmingDiscard { keepEditing() }
-                        } else {
-                            clickAway()
-                        }
-                    }, including: hasInlineCard ? .all : .subviews)
-                    .coordinateSpace(.named(Self.boardSpace))
-                    // iPhone: the new switch may sort above the fold; bring it into view as it settles.
-                    .onChange(of: landing) { _, mark in
-                        guard cardFloats, let mark else { return }
-                        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: .center) }
-                    }
-                    .onChange(of: inlineCard?.id ?? boardCard?.id) { _, id in
-                        guard let id else { return }
-                        Task { @MainActor in
-                            withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
-                        }
-                    }
+                .padding(16)
+                .animation(.snappy(duration: 0.35), value: switches.map(\.id))
+                .animation(.snappy(duration: 0.35), value: boards.map(\.id))
+            }
+            // While a card is open in place, a click anywhere off it is a click away: the tiles stop taking
+            // clicks (no switch flips by accident) and the click reaches the board. A click in the card's
+            // name reaches it too (the text view is AppKit's or UIKit's and claims no SwiftUI gesture), so a
+            // click inside the card's frame only ever means keep editing.
+            .gesture(SpatialTapGesture(coordinateSpace: .named(Self.boardSpace)).onEnded { tap in
+                if cardFrame.contains(tap.location) {
+                    if confirmingDiscard { keepEditing() }
+                } else {
+                    clickAway()
+                }
+            }, including: hasInlineCard ? .all : .subviews)
+            .coordinateSpace(.named(Self.boardSpace))
+            // iPhone: the new switch may sort above the fold; bring it into view as it settles.
+            .onChange(of: landing) { _, mark in
+                guard cardFloats, let mark else { return }
+                withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: .center) }
+            }
+            .onChange(of: inlineCard?.id ?? boardCard?.id) { _, id in
+                guard let id else { return }
+                Task { @MainActor in
+                    withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: .center) }
                 }
             }
         }
@@ -205,7 +192,9 @@ struct FlipboardView: View {
             .accessibilityIdentifier("flipSound")
         } menu: {
             Button { openCard(.add) } label: { Label("Add Switch…", systemImage: "plus") }
-            Button { openBoardCard(.new) } label: { Label("New Switchboard…", systemImage: "square.grid.2x2") }
+            if offersBoard {
+                Button { openBoardCard(.new) } label: { Label("New Switchboard…", systemImage: "square.grid.2x2") }
+            }
         }
         // A switch or a board deleted elsewhere (another device, Siri) while its card is open: the card goes with it.
         .onChange(of: switches.map(\.id)) { _, ids in
@@ -448,9 +437,10 @@ struct FlipboardView: View {
         withTransaction(transaction, change)
     }
 
-    /// The empty board's rule, in one sentence (briefs 59 and 72), then how to add a switch.
-    static let emptyRule = "A switch is a routine, not a task: it stays on the Flipboard, green when it’s done and red when it’s due, and never lands in Today unless you turn on Overdue becomes task."
-    static let emptyMessage = emptyRule + "\n\nTap + to add one, group them into Switchboards like “Before Bed”, or open any task and choose Add to Flipboard."
+    /// Whether the board offers a new Switchboard, at its foot and in its menu (brief 96, George: "New Switchboard
+    /// shouldn't be a starting option"): once there is a switch to put on one, or a board already. The empty board is
+    /// its Add a Switch tile alone; the switch card's Switchboard picker offers a new one whenever it is open.
+    static func offersNewSwitchboard(switches: Int, boards: Int) -> Bool { switches > 0 || boards > 0 }
 
     /// Opens the task popout (`selectedTask` is `PopoutController.selection`).
     private func open(_ task: TaskItem) { selectedTask = task }
@@ -655,9 +645,9 @@ struct SwitchPreviewRocker: View {
     }
 }
 
-/// The grid's last tile: the outline of a switch drawn with a dashed hairline (the plate, a smaller dashed
-/// rocker in it) and a large accent "+", in the tiles' 18 pt shape. Tapping it opens the switch card in its place
-/// (brief 69).
+/// The grid's last tile, and the whole of an empty board (brief 96): the outline of a switch drawn with a dashed
+/// hairline (the plate, a smaller dashed rocker in it) and a large accent "+", in the tiles' 18 pt shape, the size of a
+/// real switch whether switches stand beside it or not. Tapping it opens the switch card in its place (brief 69).
 struct AddSwitchTile: View {
     var action: () -> Void
     @State private var hovered = false
@@ -666,29 +656,35 @@ struct AddSwitchTile: View {
     var body: some View {
         let plate = RoundedRectangle(cornerRadius: 18, style: .continuous)
         Button(action: action) {
-            ZStack {
-                plate.strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
-                    .foregroundStyle(hovered ? Theme.accent.opacity(0.9) : Theme.separator)
-                VStack(spacing: 10) {
-                    // The rocker: a small dashed capsule, standing in for the switch itself.
-                    Capsule(style: .continuous)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [4, 4]))
-                        .frame(width: 34, height: 56)
-                        .foregroundStyle(hovered ? Theme.accent.opacity(0.7) : Theme.separator)
-                        .overlay {
-                            Image(systemName: "plus")
-                                .font(.system(size: 26, weight: .bold))
-                                .foregroundStyle(Theme.accent)
+            // A switch's face, unseen, gives the tile its size: alone on an empty board it is a first switch's size
+            // and place, never a smaller box (beside switches the grid gives every tile the tallest's height anyway).
+            FlipSwitchFace.standIn
+                .hidden()
+                .accessibilityHidden(true)
+                .overlay {
+                    ZStack {
+                        plate.strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                            .foregroundStyle(hovered ? Theme.accent.opacity(0.9) : Theme.separator)
+                        VStack(spacing: 10) {
+                            // The rocker: a small dashed capsule, standing in for the switch itself.
+                            Capsule(style: .continuous)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [4, 4]))
+                                .frame(width: 34, height: 56)
+                                .foregroundStyle(hovered ? Theme.accent.opacity(0.7) : Theme.separator)
+                                .overlay {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 26, weight: .bold))
+                                        .foregroundStyle(Theme.accent)
+                                }
+                            Text("Add switch")
+                                .font(HITType.caption)
+                                .foregroundStyle(Theme.secondaryText)
                         }
-                    Text("Add switch")
-                        .font(HITType.caption)
-                        .foregroundStyle(Theme.secondaryText)
+                    }
                 }
-                .padding(.vertical, 22)
-            }
-            // As tall as the switches beside it (`FlipboardLayout.frames` gives every tile one height).
-            .frame(maxWidth: .infinity, minHeight: 150, maxHeight: .infinity)
-            .contentShape(plate)
+                // As tall as the switches beside it (`FlipboardLayout.frames` gives every tile one height).
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .contentShape(plate)
         }
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
