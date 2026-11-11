@@ -1,18 +1,17 @@
 import Foundation
 
-// Generated from the companion design sheets (brief 76); edit the frames here, `CompanionSpriteTests` checks them.
+// Generated from the companion design sheets (briefs 76 and 79); edit the frames here, `CompanionSpriteTests` checks them.
 // Inks: . clear  k ink  d dark  m mid  l light  a accent  w warm  g glow (see `CompanionInk`).
 
 extension CompanionCharacter {
-    /// Quill: a round-eared creature asleep in a curl, its tail rising into a question mark whose tip looks dipped
-    /// in ink (the theme's accent). Idle: a slow breath; now and then an ear or the inked tip twitches. Rare: it
-    /// lifts its head, yawns, gets up into a long stretch with its tail straight up, turns round and curls up again
-    /// facing the other way.
+    /// Quill: a round-eared creature, its tail rising into a question mark whose tip looks dipped in ink
+    /// (the theme's accent).
     static let quill = CompanionCharacter(
         id: "quill",
+        name: "Quill",
         width: 20,
         height: 16,
-        footing: .floor,
+        seatRow: 16,
         frames: [
             Frame(name: "rest", rows: [
                 "....................",
@@ -24,24 +23,6 @@ extension CompanionCharacter {
                 "...............llm..",
                 "..........lllllllm..",
                 ".ll....ll.lmmmmmllm.",
-                "lmll..lmllmmmmmmmlm.",
-                "lmmmmmmmmdmmmmmmmmmd",
-                "mmmmmmmmmmdmmmmmmmmd",
-                "mddmmmddmmdmmmmmmmd.",
-                "mmmmdmmmmdmmmmmmmmd.",
-                ".mmlllmmdmmmmmmmmd..",
-                "..lllldddddddddddd..",
-            ]),
-            Frame(name: "breatheIn", rows: [
-                "....................",
-                "............mll.....",
-                "...........mllll....",
-                "...........ad.lll...",
-                "...........a...llm..",
-                "...............llm..",
-                "..........lllllllm..",
-                "..........lmmmmmllm.",
-                ".ll....ll.mmmmmmmlm.",
                 "lmll..lmllmmmmmmmlm.",
                 "lmmmmmmmmdmmmmmmmmmd",
                 "mmmmmmmmmmdmmmmmmmmd",
@@ -231,21 +212,40 @@ extension CompanionCharacter {
                 ".....ll....ll.......",
             ]),
         ],
-        idleFPS: 5,
-        idle: [
-            Loop(name: "breath", weight: 10, ticks:
-                     Self.ticks(("rest", 8), ("breatheIn", 8))),
-            Loop(name: "ear", weight: 1, ticks:
-                     Self.ticks(("rest", 8), ("breatheIn", 3), ("earFlick", 1), ("breatheIn", 4))),
-            Loop(name: "tip", weight: 1, ticks:
-                     Self.ticks(("rest", 3), ("tipFlick", 2), ("rest", 3), ("breatheIn", 8))),
-        ],
+        gestureFPS: 8,
         flourishFPS: 9,
-        flourish:
-            Self.ticks(("rest", 1), ("earFlick", 1), ("headUp", 2), ("yawn", 2), ("headUp", 1), ("awake", 1),
-                       ("crouch", 1), ("stand", 1), ("stretch", 1), ("stretchDeep", 3), ("stretch", 1),
-                       ("stand", 1), ("front", 2)) +
-            Self.ticks(mirrored: true, ("stand", 1), ("crouch", 1), ("awake", 1), ("headUp", 1), ("rest", 1)),
-        flourishTurns: true
+        flourishTurns: true,
+        field: Posture(
+            awake: Mode(rest: "rest",
+                        gestures: [
+                            Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2))),
+                            Gesture(name: "tip", ticks: Self.ticks(("tipFlick", 3))),
+                        ],
+                        answer: Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2)))),
+            asleep: Mode(rest: "rest",
+                         gestures: [
+                             Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2))),
+                             Gesture(name: "tip", ticks: Self.ticks(("tipFlick", 3))),
+                         ],
+                         answer: Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2)))),
+            flourish:
+                Self.ticks(("rest", 1), ("earFlick", 1), ("headUp", 2), ("yawn", 2), ("headUp", 1), ("awake", 1), ("crouch", 1), ("stand", 1), ("stretch", 1), ("stretchDeep", 3), ("stretch", 1), ("stand", 1), ("front", 2)) +
+                Self.ticks(mirrored: true, ("stand", 1), ("crouch", 1), ("awake", 1), ("headUp", 1), ("rest", 1))),
+        plus: Posture(
+            awake: Mode(rest: "rest",
+                        gestures: [
+                            Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2))),
+                            Gesture(name: "tip", ticks: Self.ticks(("tipFlick", 3))),
+                        ],
+                        answer: Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2)))),
+            asleep: Mode(rest: "rest",
+                         gestures: [
+                             Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2))),
+                             Gesture(name: "tip", ticks: Self.ticks(("tipFlick", 3))),
+                         ],
+                         answer: Gesture(name: "ear", ticks: Self.ticks(("earFlick", 2)))),
+            flourish:
+                Self.ticks(("rest", 1), ("earFlick", 1), ("headUp", 2), ("yawn", 2), ("headUp", 1), ("awake", 1), ("crouch", 1), ("stand", 1), ("stretch", 1), ("stretchDeep", 3), ("stretch", 1), ("stand", 1), ("front", 2)) +
+                Self.ticks(mirrored: true, ("stand", 1), ("crouch", 1), ("awake", 1), ("headUp", 1), ("rest", 1)))
     )
 }

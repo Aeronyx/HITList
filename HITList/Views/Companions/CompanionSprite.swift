@@ -63,7 +63,7 @@ struct CompanionSprite: View {
         let inks = inks ?? CompanionInks(palette: Theme.palette)
         let p = pixel
         let width = character.width
-        let runs = character.runs[pose.frame]
+        let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
         let mirrored = pose.mirrored
         Canvas { context, _ in
             for run in runs {
@@ -79,16 +79,17 @@ struct CompanionSprite: View {
 }
 
 extension CompanionCharacter {
-    /// The opaque pixels of the rest frame (mirrored when asked), as a shape, for taps: only rows above `belowRow`
-    /// (Nod's legs hang over the field, and a tap there is the field's).
-    func tapShape(mirrored: Bool, belowRow: Int? = nil) -> Path {
+    /// The opaque pixels of a pose's runs (mirrored when asked), as a shape, for taps: only rows above `belowRow`
+    /// (what hangs over the field or the "+" is theirs to tap).
+    static func tapShape(runs: [Run], width: Int, mirrored: Bool, belowRow: Int? = nil) -> Path {
         var path = Path()
-        let p = Self.pointsPerPixel
-        for run in runs[restFrame] where belowRow.map({ run.y < $0 }) ?? true {
+        let p = pointsPerPixel
+        for run in runs where belowRow.map({ run.y < $0 }) ?? true {
             let x = mirrored ? width - run.x - run.length : run.x
-            // A pixel's worth of slack around the body, so a fingertip finds it.
-            path.addRect(CGRect(x: CGFloat(x) * p - p, y: CGFloat(run.y) * p - p,
-                                width: CGFloat(run.length + 2) * p, height: p * 3))
+            // A pixel's worth of slack around the body, so a fingertip finds it; none below the edge.
+            let top: CGFloat = CGFloat(run.y) * p - p
+            let bottom: CGFloat = min(CGFloat(run.y + 2) * p, CGFloat(belowRow ?? Int.max) * p)
+            path.addRect(CGRect(x: CGFloat(x) * p - p, y: top, width: CGFloat(run.length + 2) * p, height: bottom - top))
         }
         return path
     }

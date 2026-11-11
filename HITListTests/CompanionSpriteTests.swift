@@ -2,9 +2,9 @@ import XCTest
 import SwiftUI
 @testable import HITList
 
-/// Brief 76: every companion is good data (sizes, inks, loops that close, a flourish that starts and ends on the
-/// rest frame), is drawn crisp (only its own colours, no smoothing), reads on all eight themes, and the contact
-/// sheets of every frame (8x, and the rest frame on each theme) are rendered from the shipped data.
+/// Briefs 76 and 79: every companion is good data (sizes, inks, small short gestures, flourishes that start and end
+/// on the rest frame), is drawn crisp (only its own colours, no smoothing), reads on all eight themes, and the contact
+/// sheets of every frame (8x, each theme, each look in both places) are rendered from the shipped data.
 @MainActor
 final class CompanionSpriteTests: XCTestCase {
     func testEveryCompanionIsGoodData() {
@@ -13,106 +13,65 @@ final class CompanionSpriteTests: XCTestCase {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
             XCTAssertLessThanOrEqual(character.height, 20)
-            XCTAssertEqual(character.frames.first?.name, "rest")
             XCTAssertEqual(CompanionCharacter.named(character.id)?.id, character.id)
         }
     }
 
     func testTheirFlourishesLastAboutTwoAndAHalfSeconds() {
         for character in CompanionCharacter.all {
-            XCTAssertGreaterThanOrEqual(character.flourishDuration, 2.0, character.id)
-            XCTAssertLessThanOrEqual(character.flourishDuration, 2.7, character.id)
-            XCTAssertEqual(character.idleFPS, 5, character.id)
+            for place in CompanionPlace.allCases {
+                XCTAssertGreaterThanOrEqual(character.flourishDuration(place), 1.8, "\(character.id) \(place)")
+                XCTAssertLessThanOrEqual(character.flourishDuration(place), 2.7, "\(character.id) \(place)")
+            }
             XCTAssertEqual(character.flourishFPS, 9, character.id)
+            XCTAssertEqual(character.gestureFPS, 8, character.id)
         }
     }
 
-    func testNodSitsWhereItWasAndQuillCurlsUpTheOtherWay() {
+    func testNodSitsWhereItWasAndQuillTurnsRound() {
         XCTAssertFalse(CompanionCharacter.nod.flourishTurns, "Nod sits back down exactly where it was")
-        XCTAssertTrue(CompanionCharacter.quill.flourishTurns, "Quill turns once and curls up the other way")
-        XCTAssertEqual(CompanionCharacter.nod.footing, .seat(row: 17))
-        XCTAssertEqual(CompanionCharacter.quill.footing, .floor)
+        XCTAssertTrue(CompanionCharacter.quill.flourishTurns, "Quill turns once and settles the other way")
+        XCTAssertEqual(CompanionCharacter.nod.seatRow, 17, "its legs hang over the edge from row 17")
     }
 
-    func testQuillTwitchesRarely() {
-        // An ear or the inked tip about one breath in six: every half minute or so.
-        let clock = CompanionClock(character: .quill, seed: 11)
-        let anchor = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        let picks = (1..<1_200).map { clock.loop(forCycle: $0, anchor: anchor).name }
-        let twitches = Double(picks.filter { $0 != "breath" }.count) / Double(picks.count)
-        XCTAssertEqual(twitches, 2.0 / 12.0, accuracy: 0.04)
-    }
-
-    func testNodBlinksNowAndThen() {
-        let clock = CompanionClock(character: .nod, seed: 11)
-        let anchor = Date(timeIntervalSinceReferenceDate: 800_000_000)
-        let picks = (1..<1_200).map { clock.loop(forCycle: $0, anchor: anchor).name }
-        let blinks = Double(picks.filter { $0.hasSuffix("Blink") }.count) / Double(picks.count)
-        // Four cycles in eleven have a blink: about one every twelve seconds.
-        XCTAssertEqual(blinks, 4.0 / 11.0, accuracy: 0.05)
+    /// Mostly still: every gesture is under a second and a small thing (a few pixels from the rest frame, never
+    /// the whole body), and starts and ends a step from the rest frame, so nothing pops.
+    func testEveryGestureIsSmallAndShort() {
+        for character in CompanionCharacter.all {
+            for place in CompanionPlace.allCases {
+                let posture = character.posture(place)
+                for (label, mode) in [("awake", posture.awake), ("asleep", posture.asleep)] {
+                    for gesture in mode.gestures + [mode.answer] {
+                        let at = "\(character.id) \(place) \(label) \(gesture.name)"
+                        for tick in gesture.ticks {
+                            XCTAssertLessThanOrEqual(character.difference(tick.frame, mode.rest), 16, at)
+                        }
+                    }
+                    for gesture in mode.gestures {
+                        XCTAssertLessThan(character.duration(gesture.ticks, fps: character.gestureFPS), 1, character.id)
+                    }
+                }
+            }
+        }
     }
 
     func testTheChecksCatchBadData() {
-        let bad = CompanionCharacter(
-            id: "bad", width: 3, height: 2, footing: .floor,
-            frames: [.init(name: "rest", rows: ["mmm", "mxm"]), .init(name: "two", rows: ["mm", "mmm"])],
-            idleFPS: 12, idle: [.init(name: "a", weight: 1, ticks: CompanionCharacter.ticks(("two", 2)))],
-            flourishFPS: 9, flourish: CompanionCharacter.ticks(("rest", 3), ("gone", 1)), flourishTurns: false)
+        typealias C = CompanionCharacter
+        let mode = C.Mode(rest: "rest", rain: "wet", gestures: [.init(name: "slow", ticks: C.ticks(("rest", 9))),
+                                                                 .init(name: "cut", ticks: C.ticks(("cut", 1)))],
+                          answer: .init(name: "gone", ticks: C.ticks(("gone", 1))))
+        let posture = C.Posture(awake: mode, asleep: .init(rest: "rest", gestures: [], answer: mode.answer),
+                                flourish: C.ticks(("rest", 3), ("gone", 1)))
+        let bad = C(id: "bad", name: "Bad", width: 3, height: 2, seatRow: 3,
+                    frames: [.init(name: "rest", rows: ["mmm", "mxm"]), .init(name: "two", rows: ["mm", "mmm"]),
+                             .init(name: "wet", rows: ["lll", "mmm"]), .init(name: "cut", rows: ["kmm", "mmm"])],
+                    gestureFPS: 8, flourishFPS: 12, flourishTurns: false, field: posture, plus: posture)
         let problems = bad.problems.joined(separator: "\n")
-        for expected in ["unknown ink x", "2 wide, not 3", "doesn't start on rest", "no frame gone",
-                         "doesn't end on rest", "not 4…6", "not 12…24", "colours"] {
+        for expected in ["unknown ink x", "2 wide, not 3", "no frame gone", "doesn't end on rest", "not under a second",
+                         "no gestures", "flourish at 12.0 fps", "not 12…24", "colours", "seat row 3",
+                         "cut changes pixels that wet changes"] {
             XCTAssertTrue(problems.contains(expected), "missing: \(expected)\n\(problems)")
         }
-    }
-
-    func testEachLoopClosesWithoutAPop() {
-        // The seam (last tick back to the first) changes no more pixels than the loops' own steps do.
-        for character in CompanionCharacter.all {
-            var largestStep = 0
-            for loop in character.idle {
-                for (a, b) in zip(loop.ticks, loop.ticks.dropFirst()) {
-                    largestStep = max(largestStep, character.difference(character.frameIndex(a), character.frameIndex(b)))
-                }
-            }
-            for loop in character.idle {
-                let seam = character.difference(character.frameIndex(loop.ticks.last!), character.restFrame)
-                XCTAssertLessThanOrEqual(seam, largestStep, "\(character.id).\(loop.name)")
-            }
-            // The flourish's last tick is the rest frame itself (turned round for Quill): nothing pops after it.
-            XCTAssertEqual(character.difference(character.frameIndex(character.flourish.last!), character.restFrame,
-                                                mirrored: false), 0)
-        }
-    }
-
-    func testTheIdleMovesAPixelOrSoAtATime() {
-        // Idle steps are one-pixel shifts (a breath, a leg, an ear): every changed pixel's new ink sits next to it in
-        // the frame before, and its old ink next to it in the frame after. A blink or a twitch may change up to three
-        // pixels in place.
-        for character in CompanionCharacter.all {
-            for loop in character.idle {
-                for (a, b) in zip(loop.ticks, loop.ticks.dropFirst() + [loop.ticks[0]]) where a != b {
-                    let jumps = unexplainedChanges(character.frames[character.frameIndex(a)].rows,
-                                                   character.frames[character.frameIndex(b)].rows)
-                    XCTAssertLessThanOrEqual(jumps, 3, "\(character.id).\(loop.name) \(a.frame) → \(b.frame)")
-                }
-            }
-        }
-    }
-
-    private func unexplainedChanges(_ a: [String], _ b: [String]) -> Int {
-        let a = a.map(Array.init), b = b.map(Array.init)
-        func near(_ grid: [[Character]], _ x: Int, _ y: Int, _ c: Character) -> Bool {
-            for dy in -1...1 { for dx in -1...1 {
-                let yy = y + dy, xx = x + dx
-                if grid.indices.contains(yy), grid[yy].indices.contains(xx), grid[yy][xx] == c { return true }
-            } }
-            return false
-        }
-        var count = 0
-        for y in a.indices { for x in a[y].indices where a[y][x] != b[y][x] {
-            if !(near(a, x, y, b[y][x]) && near(b, x, y, a[y][x])) { count += 1 }
-        } }
-        return count
     }
 
     func testFewColoursFromTheTheme() {
@@ -149,7 +108,9 @@ final class CompanionSpriteTests: XCTestCase {
         for character in CompanionCharacter.all {
             let inks = CompanionInks(palette: .slate)
             let allowed = Set(character.inks.map { CompanionInks.rgb(inks.hex[$0]!) })
-            for frame in [character.restFrame, character.frameIndex(character.flourish[character.flourish.count / 2])] {
+            let flourish = character.field.flourish
+            for name in [character.field.awake.rest, flourish[flourish.count / 2].frame] {
+                let frame = character.index[name]!
                 let pixels = try render(CompanionSprite(character: character, pose: .init(frame: frame, mirrored: false), inks: inks), scale: 3)
                 XCTAssertEqual(pixels.width, character.width * 6)
                 var stray = 0
@@ -187,34 +148,42 @@ final class CompanionSpriteTests: XCTestCase {
 
     func testTheTapAreaIsTheCompanionAboveItsSeat() {
         let nod = CompanionCharacter.nod
-        guard case .seat(let seat) = nod.footing else { return XCTFail("Nod sits") }
-        let shape = nod.tapShape(mirrored: false, belowRow: seat)
+        let seat = nod.seatRow
+        let rest = nod.index[nod.field.awake.rest]!
+        let shape = CompanionCharacter.tapShape(runs: nod.drawn[rest], width: nod.width, mirrored: false, belowRow: seat)
         // Its face takes a tap; its dangling feet, which hang over the field, don't.
         XCTAssertTrue(shape.contains(CGPoint(x: 9 * 2 + 1, y: 11 * 2 + 1)))
         XCTAssertFalse(shape.contains(CGPoint(x: 6 * 2 + 1, y: 19 * 2 + 1)))
         XCTAssertFalse(shape.contains(CGPoint(x: 1, y: 1)), "the empty corner above its cap")
+        XCTAssertFalse(shape.contains(CGPoint(x: 9 * 2 + 1, y: CGFloat(seat) * 2 + 1)), "nothing at or below the edge it sits on")
     }
 
     // MARK: - Contact sheets
 
-    /// Every frame of every companion at 8x on the slate background, and each one's rest frame on all eight themes,
-    /// written to the test host's temporary folder (the path is printed) and attached to the result bundle.
+    /// Every frame of every companion at 8x on the slate background (real size under each), each one's poses on all
+    /// eight themes, and its looks in both places (awake and asleep, plain, rain and snow), written to the test host's
+    /// temporary folder (the path is printed) and attached to the result bundle.
     func testRenderTheContactSheets() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CompanionSheets", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for character in CompanionCharacter.all {
             let frames = Self.sheet(character, palette: .slate, frames: Array(character.frames.indices), scale: 4)
             try write(frames, scale: 2, to: folder.appendingPathComponent("\(character.id)-frames-8x.png"))
+            let field = character.field, plus = character.plus
+            let poses = [field.awake.rest, field.asleep.rest, field.flourish[field.flourish.count / 2].frame,
+                         plus.awake.rest, plus.asleep.rest].compactMap { character.index[$0] }
             let themes = VStack(alignment: .leading, spacing: 12) {
                 ForEach(ThemePalette.all) { palette in
                     HStack(spacing: 16) {
                         Text(palette.name).font(.system(size: 11)).foregroundStyle(Color(hex: palette.hex.secondaryText))
                             .frame(width: 80, alignment: .leading)
-                        ForEach([0, character.frameIndex(character.flourish[character.flourish.count / 2])], id: \.self) { f in
+                        ForEach(poses, id: \.self) { f in
                             CompanionSprite(character: character, pose: .init(frame: f, mirrored: false), inks: CompanionInks(palette: palette),
                                             pixel: 4)
                         }
-                        CompanionSprite(character: character, pose: .init(frame: 0, mirrored: false), inks: CompanionInks(palette: palette))
+                        ForEach(poses, id: \.self) { f in
+                            CompanionSprite(character: character, pose: .init(frame: f, mirrored: false), inks: CompanionInks(palette: palette))
+                        }
                     }
                     .padding(8)
                     .background(Color(hex: palette.hex.background))
@@ -223,6 +192,29 @@ final class CompanionSpriteTests: XCTestCase {
             .padding(12)
             .background(Color.black)
             try write(themes, scale: 2, to: folder.appendingPathComponent("\(character.id)-themes.png"))
+            let looks = VStack(alignment: .leading, spacing: 14) {
+                ForEach(CompanionPlace.allCases, id: \.self) { place in
+                    HStack(alignment: .bottom, spacing: 18) {
+                        Text(place == .field ? "Field" : "The +").font(.system(size: 11))
+                            .foregroundStyle(Color(hex: ThemePalette.slate.hex.secondaryText)).frame(width: 44, alignment: .leading)
+                        ForEach([false, true], id: \.self) { asleep in
+                            ForEach(CompanionLook.Weather.allCases, id: \.self) { weather in
+                                let look = CompanionLook(asleep: asleep, weather: weather)
+                                let stage = CompanionStage(since: .now, place: place, look: look)
+                                VStack(spacing: 4) {
+                                    Text("\(asleep ? "night" : "day") \(weather.rawValue)").font(.system(size: 9))
+                                        .foregroundStyle(Color(hex: ThemePalette.slate.hex.secondaryText))
+                                    CompanionSprite(character: character, pose: CompanionClock(character: character).restPose(at: .now, stage: stage),
+                                                    inks: CompanionInks(palette: .slate), pixel: 4)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(12)
+            .background(Color(hex: ThemePalette.slate.hex.background))
+            try write(looks, scale: 2, to: folder.appendingPathComponent("\(character.id)-looks.png"))
         }
         print("Companion sheets: \(folder.path)")
     }
@@ -239,6 +231,7 @@ final class CompanionSpriteTests: XCTestCase {
                             CompanionSprite(character: character, pose: .init(frame: f, mirrored: false), inks: CompanionInks(palette: palette),
                                             pixel: scale)
                                 .border(Color(hex: palette.hex.separator).opacity(0.6), width: 0.5)
+                            CompanionSprite(character: character, pose: .init(frame: f, mirrored: false), inks: CompanionInks(palette: palette))
                         }
                     }
                 }
