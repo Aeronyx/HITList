@@ -722,13 +722,15 @@ public struct FilterQuery: Sendable, Equatable {
     /// each task by the date it is listed under (a switch listed as today's: today) unless `flipboardRule` is false.
     public static func defaultSort<T: FilterableTask>(_ tasks: [T], now: Date = Date(), calendar: Calendar = .current,
                                                       flipboardRule: Bool = true) -> [T] {
-        guard flipboardRule else { return dueThenPriority(tasks) }
-        return dueThenPriority(tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }).map(\.base)
+        guard flipboardRule else { return dueThenPriority(tasks, calendar: calendar) }
+        return dueThenPriority(tasks.map { FlipboardSwitch.listed($0, now: now, calendar: calendar) }, calendar: calendar)
+            .map(\.base)
     }
 
-    private static func dueThenPriority<T: FilterableTask>(_ tasks: [T]) -> [T] {
+    /// A date with no time sorts from the start of its day (`TaskOrdering.dueOrderKey`, brief 82).
+    private static func dueThenPriority<T: FilterableTask>(_ tasks: [T], calendar: Calendar) -> [T] {
         tasks.sorted { a, b in
-            switch (a.filterDueDate, b.filterDueDate) {
+            switch (TaskOrdering.dueOrderKey(a, calendar: calendar), TaskOrdering.dueOrderKey(b, calendar: calendar)) {
             case let (da?, db?) where da != db: return da < db
             case (nil, .some): return false
             case (.some, nil): return true
