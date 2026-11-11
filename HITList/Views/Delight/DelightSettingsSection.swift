@@ -2,6 +2,9 @@ import SwiftUI
 import AVFoundation
 import UniformTypeIdentifiers
 import HITListCore
+#if os(iOS)
+import UIKit
+#endif
 
 /// Settings → Extras (George, 2026-11-05: "Delight" is called "Extras"): completion sound, haptics, holiday
 /// touches and rare surprises, a `HITGroup` for SettingsView's page and the Mac page's Extras section.
@@ -62,6 +65,7 @@ struct DelightSettingsSection: View {
                 .toggleStyle(.hit)
                 .hitRowPadding()
                 .accessibilityIdentifier("companionsToggle")
+            WeatherSettingsRows(companionsOn: companions)
             HingeCreakSettingsRow()
         }
         .onChange(of: sound) { _, new in CompletionSound.select(new, in: AppGroup.defaults) }
@@ -84,11 +88,7 @@ struct DelightSettingsSection: View {
     private let footer = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad. " + Self.holidayFooter
     #endif
     private static let holidayFooter = "Holiday touches: snow dust around Christmas, fireworks on July 4th and New Year, hearts, leaves, bats and more around the holidays. Rare surprises: once in a long while, someone drops by. Reduce Motion turns both off. " + companionsFooter
-    #if os(iOS)
-    private static let companionsFooter = "Companions: Nod sits on Browse's search field and Quill sleeps at the bottom of Browse. Every few minutes one of them does something, if you happen to be looking. Reduce Motion keeps them still."
-    #else
-    private static let companionsFooter = "Companions: Nod sits on the sidebar's search field and Quill sleeps beside Settings. Every few minutes one of them does something, if you happen to be looking. Reduce Motion keeps them still."
-    #endif
+    private static let companionsFooter = "Companions: a small creature keeps you company, one for each theme, by the search field on the Mac and by the + on iPhone. Mostly it sits still. Reduce Motion keeps it still."
 
     /// Holiday touches, with today's holiday (if any) as its icon and subtitle, so the row shows what it does.
     private var holidayTouchesRow: some View {
@@ -158,6 +158,148 @@ struct DelightSettingsSection: View {
         CustomSoundStore().remove()
         customName = nil
         if sound == .custom { sound = CompletionSound.fallback }
+    }
+}
+
+/// Extras → Weather (brief 80), under Companions: the companion dresses for the weather where the person is. Rows
+/// for the Extras `HITGroup` (direct children, so the group draws its hairlines between them).
+///
+/// - Off: the toggle alone. Switching it on asks for location while in use, approximate (the system's prompt, once).
+/// - Refused or restricted: the toggle stays off, its subtitle says so, and a row opens the system's settings, as
+///   Calendar events does.
+/// - On: Apple's attribution under it (the Apple Weather mark and the link to its data sources), small and quiet.
+/// - Companions off: the toggle is disabled (and the service makes no call).
+private struct WeatherSettingsRows: View {
+    let companionsOn: Bool
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var weather: CompanionWeather { CompanionWeather.shared }
+    /// The switch as drawn: flips at once, then back if location is refused.
+    @State private var isOn = CompanionWeather.shared.isOn
+
+    var body: some View {
+        Toggle(isOn: Binding(get: { isOn }, set: { switchTo($0) })) {
+            HITMenuRowLabel("Weather", subtitle: WeatherSettingsText.subtitle(for: weather.access), systemImage: "cloud.sun.rain")
+        }
+        .toggleStyle(.hit)
+        .hitRowPadding()
+        .disabled(!companionsOn)
+        .opacity(companionsOn ? 1 : HITButtonStyle.Appearance.disabledOpacity)
+        .accessibilityIdentifier("settings-weather")
+        .onAppear {
+            weather.refreshAccess()
+            isOn = weather.isOn
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Back from the system's settings: the permission may have changed.
+            if phase == .active {
+                weather.refreshAccess()
+                isOn = weather.isOn
+            }
+        }
+        .onChange(of: companionsOn) { _, _ in
+            Task { await weather.companionsChanged() }
+        }
+        if weather.access.isRefused && companionsOn {
+            HITMenuRow("Open system settings", subtitle: WeatherSettingsText.settingsPath, systemImage: "gearshape",
+                       accessory: .chevron) {
+                openSystemSettings()
+            }
+            .accessibilityIdentifier("settings-weather-open-settings")
+        }
+        if weather.isShowing && companionsOn {
+            WeatherAttributionRow(credit: weather.credit ?? .fallback)
+                .task { await weather.loadCredit() }
+        }
+    }
+
+    private func switchTo(_ on: Bool) {
+        isOn = on
+        Task {
+            let result = await weather.setOn(on)
+            withAnimation(HITMotion.emphasis(reduceMotion: reduceMotion)) { isOn = result }
+        }
+    }
+
+    private func openSystemSettings() {
+        #if os(iOS)
+        // The app's own page in Settings, where its Location permission is.
+        let url = URL(string: UIApplication.openSettingsURLString)
+        #else
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices")
+        #endif
+        if let url { openURL(url) }
+    }
+}
+
+/// The Weather row's words, apart so tests can read them.
+enum WeatherSettingsText {
+    static let about = "Your companion dresses for the weather where you are."
+
+    static func subtitle(for access: WeatherAccess) -> String {
+        switch access {
+        case .denied: "HITList isn't allowed to use your location. Allow it below."
+        case .restricted: "Location is restricted on this device."
+        case .notDetermined, .allowed: about
+        }
+    }
+
+    /// Where the switch is, under the system's settings (the row above it opens them).
+    static let settingsPath = "Privacy & Security → Location Services → HITList"
+}
+
+/// Apple's attribution for the weather (WeatherKit requires it wherever its data is used): the Apple Weather mark
+/// and a link to the data sources, in the footer's small secondary type. The mark is Apple's own image for a dark
+/// background, loaded from Apple while Weather is on; until it arrives (or if it never does) the service's name.
+private struct WeatherAttributionRow: View {
+    let credit: WeatherCredit
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: HITSpacing.s) {
+            mark
+            Text("·")
+                .font(HITType.caption)
+                .foregroundStyle(Theme.secondaryText)
+            Button("Data sources") { openURL(credit.legalURL) }
+                .buttonStyle(.plain)
+                .font(HITType.caption)
+                .foregroundStyle(Theme.secondaryText)
+                .underline()
+                .accessibilityIdentifier("settings-weather-sources")
+            Spacer(minLength: 0)
+        }
+        // Lined up with the row titles above it (the icon column is 22 pt wide).
+        .padding(.leading, HITSpacing.l + 22 + HITSpacing.m)
+        .padding(.trailing, HITSpacing.l)
+        .padding(.vertical, HITSpacing.s)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("settings-weather-attribution")
+    }
+
+    @ViewBuilder private var mark: some View {
+        if let url = credit.markURL {
+            AsyncImage(url: url) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFit()
+                } else {
+                    name
+                }
+            }
+            .frame(height: 12)
+            .accessibilityLabel(credit.serviceName)
+        } else {
+            name
+        }
+    }
+
+    /// " Weather" in the system font, the only one that draws Apple's logo.
+    private var name: some View {
+        Text(credit.serviceName)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Theme.secondaryText)
+            .fixedSize()
     }
 }
 
