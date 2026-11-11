@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 final class CompanionSpriteTests: XCTestCase {
     func testEveryCompanionIsGoodData() {
-        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill", "hush", "pip"])
+        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill", "hush", "posy"])
         for character in CompanionCharacter.all {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
@@ -58,7 +58,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
-    static let dressed = ["nod", "quill", "hush", "pip"]
+    static let dressed = ["nod", "quill", "hush", "posy"]
 
     /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
     /// three small gestures and a stir in each place.
@@ -141,29 +141,6 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertFalse(hush.flourishTurns)
     }
 
-    func testPipIsAPineconeAsleepAndClosesUpInTheRain() {
-        let pip = CompanionCharacter.pip
-        XCTAssertEqual(CompanionCast.character(forTheme: "rose", launch: .none).id, "pip")
-        XCTAssertEqual(pip.seatRow, 16, "its tail hangs over the edge from row 16")
-        // By day its face (an eye, the rose-pink nose) peeks out; asleep only the tip of its nose does.
-        XCTAssertTrue(pip.rows("rest")!.joined().contains("k"))
-        XCTAssertFalse(pip.rows("sleep")!.joined().contains("k"), "asleep it is just a pinecone")
-        XCTAssertEqual(pip.rows("sleep")!.joined().filter { $0 == "a" }.count, 1, "the tip of its nose")
-        // In the rain its scales close: no highlight left on them.
-        func scaleLights(_ frame: String) -> Int {
-            var count = 0
-            for row in pip.rows(frame)!.prefix(11) {
-                for c in row where c == "l" { count += 1 }
-            }
-            return count
-        }
-        XCTAssertGreaterThan(scaleLights("rest"), 4)
-        XCTAssertEqual(scaleLights("rain"), 0)
-        // Its flourish lets a winged seed fall past the edge in front of it.
-        XCTAssertTrue(pip.field.flourish.contains { $0.frame == "seed6" })
-        XCTAssertTrue(pip.rows("seed6")![pip.seatRow...].joined().contains("l"), "the seed below the edge")
-    }
-
     func testTheChecksCatchBadData() {
         typealias C = CompanionCharacter
         let slow = C.Gesture(name: "slow", ticks: C.ticks(("rest", 9)))
@@ -188,7 +165,6 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(CompanionCharacter.nod.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         XCTAssertEqual(CompanionCharacter.quill.inks, [.ink, .dark, .mid, .light, .accent])
         XCTAssertEqual(CompanionCharacter.hush.inks, [.ink, .dark, .mid, .light, .accent])
-        XCTAssertEqual(CompanionCharacter.pip.inks, [.ink, .dark, .mid, .light, .accent])
         let slate = CompanionInks(palette: .slate)
         XCTAssertEqual(slate.hex[.ink], ThemePalette.slate.hex.background)
         XCTAssertEqual(slate.hex[.mid], ThemePalette.slate.hex.secondaryText)
