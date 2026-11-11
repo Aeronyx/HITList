@@ -16,25 +16,20 @@ struct CompanionPerch: View {
         case searchField
         /// The iPhone's and iPad's floating "+".
         case addButton
-        /// Brief 76's places at the foot of Browse and of the Mac sidebar: one companion at a time now, so they draw
-        /// nothing until their host lines go (brief 79, item 2).
-        case browseFoot, sidebarFoot
 
         var place: CompanionPlace {
             switch self {
             case .searchField: .field
-            case .addButton, .browseFoot, .sidebarFoot: .plus
+            case .addButton: .plus
             }
         }
-
-        var isRetired: Bool { self == .browseFoot || self == .sidebarFoot }
 
         /// From the host's trailing edge to the right edge of the companion's resting pose, in points (whole
         /// points, so every pixel stays crisp). Its seat row lies on the host's top edge.
         var trailing: CGFloat {
             switch self {
             case .searchField: 14
-            case .addButton, .browseFoot, .sidebarFoot: 8
+            case .addButton: 8
             }
         }
     }
@@ -51,7 +46,7 @@ struct CompanionPerch: View {
     static func alignment(_ spot: Spot) -> Alignment { .topTrailing }
 
     var body: some View {
-        if enabled, !spot.isRetired {
+        if enabled {
             let character = CompanionCast.current
             CompanionLife(character: character, place: spot.place, still: effects.reduceMotion,
                           calm: effects.reduceEffects)
@@ -119,10 +114,3 @@ private struct TapArea: Shape {
         CompanionCharacter.tapShape(runs: runs, width: width, mirrored: mirrored, belowRow: seatRow)
     }
 }
-
-#if os(iOS)
-/// Brief 76's room above Browse's last card for Quill; nothing now (brief 79, item 2 removes its host line).
-struct CompanionShelf: View {
-    var body: some View { EmptyView() }
-}
-#endif
