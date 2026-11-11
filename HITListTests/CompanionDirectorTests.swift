@@ -99,6 +99,21 @@ final class CompanionDirectorTests: XCTestCase {
         XCTAssertEqual(Set(gestures.map { "\($0.kind)" }).count, 3, "all three gestures come up")
     }
 
+    func testAnActIsPutAwayWhenItEndsSoTheStillPictureIsDrawn() {
+        let d = director()
+        d.appear("turner", place: .field, still: false, calm: false, now: time(12))
+        d.tap("turner", now: time(12, 0, second: 5))
+        let clock = CompanionClock(character: Cast.turner)
+        let stage = d.stages["turner"]!
+        let end = clock.end(of: stage.act!, stage: stage)
+        XCTAssertEqual(d.nextMoment, end, "the timer wakes when the act ends")
+        d.fire(now: end)
+        XCTAssertNil(d.stages["turner"]?.act, "put away")
+        XCTAssertEqual(d.stages["turner"]?.turned, true, "its turn kept")
+        XCTAssertTrue(d.isWaiting, "and the next gesture still waited for")
+        XCTAssertGreaterThan(d.nextMoment!, end)
+    }
+
     // MARK: - The flourish
 
     /// Someone who lives in the app (twelve hours a day, a month) sees one about every three hours of use, never two

@@ -199,8 +199,10 @@ final class CompanionDirector {
         !stage.look.asleep && stage.look.weather == .plain && !(still[id] ?? true) && !(calm[id] ?? true) && !isLowPower
     }
 
-    /// The timer's turn: the flourish if its moment has come and it may play, else the next gesture or stir.
+    /// The timer's turn: finished acts put away, then the flourish if its moment has come and it may play, else the
+    /// next gesture or stir.
     func fire(now: Date = .now) {
+        settleActs(now: now)
         for id in stages.keys.sorted() {
             guard let character = character(id), let stage = stages[id], !(still[id] ?? true) else { continue }
             let clock = clock(for: character)
@@ -255,6 +257,21 @@ final class CompanionDirector {
         scheduleGesture(id, after: now)
     }
 
+    /// Puts away the acts that have ended: the turn folded into the facing, the act cleared, so each perch goes back
+    /// to its still picture. (A `TimelineView` did not draw its schedule's last entry, the return to rest: a blink
+    /// stayed shut until something else redrew it. Clearing the act redraws it for certain.)
+    private func settleActs(now: Date) {
+        for id in stages.keys {
+            guard var stage = stages[id], let act = stage.act, let character = character(id) else { continue }
+            let clock = clock(for: character)
+            let end = clock.end(of: act, stage: stage)
+            guard now >= end.addingTimeInterval(-0.01) else { continue }
+            stage.turned = clock.facing(at: max(now, end), stage: stage)
+            stage.act = nil
+            stages[id] = stage
+        }
+    }
+
     /// Starts an act, folding a finished turn into the facing.
     private func start(_ id: String, _ kind: CompanionAct.Kind, now: Date) {
         guard let character = character(id), var stage = stages[id] else { return }
@@ -295,6 +312,10 @@ final class CompanionDirector {
         for id in stages.keys where !(still[id] ?? true) {
             if let g = nextGesture[id] { moments.append(g) }
             if let f = flourishMoment(id) { moments.append(f) }
+            // The end of the act playing, to put it away.
+            if let stage = stages[id], let act = stage.act, let character = character(id) {
+                moments.append(clock(for: character).end(of: act, stage: stage))
+            }
         }
         guard let next = moments.min(), next.timeIntervalSince(now) <= CompanionSchedule.horizon else { return }
         nextMoment = next
