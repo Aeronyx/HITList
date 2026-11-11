@@ -135,6 +135,43 @@ private struct CompanionLife: View {
     }
 }
 
+extension CompanionPerch {
+    /// Brief 100: how far the companion on the "+" stands above the button's top edge, at its tallest still (awake
+    /// or asleep, in any weather), so the end of a list can be scrolled clear of it.
+    static func clearance(_ character: CompanionCharacter) -> CGFloat {
+        let posture = character.plus
+        var tallest = 0
+        for mode in [posture.awake, posture.asleep] {
+            for still in mode.stills {
+                guard let rows = character.rows(still) else { continue }
+                guard let top = rows.firstIndex(where: { $0.contains { $0 != CompanionInk.clear } }) else { continue }
+                tallest = max(tallest, character.seatRow - top)
+            }
+        }
+        return CGFloat(tallest) * CompanionCharacter.pointsPerPixel
+    }
+}
+
+extension View {
+    /// The lists' bottom margin (brief 100): `base`, grown by what the companion on the "+" shows above it while
+    /// companions are on, so the last row of every scrolling screen comes clear of the "+" and of the companion.
+    func companionListMargin(_ base: CGFloat, besideThePlus: Bool) -> some View {
+        modifier(CompanionListMargin(base: base, besideThePlus: besideThePlus))
+    }
+}
+
+private struct CompanionListMargin: ViewModifier {
+    let base: CGFloat
+    let besideThePlus: Bool
+    @AppStorage(Preferences.companions, store: AppGroup.defaults) private var enabled = true
+
+    func body(content: Content) -> some View {
+        // `CompanionCast.current` reads the theme, so a theme change brings the new companion's height.
+        let extra: CGFloat = besideThePlus && enabled ? CompanionPerch.clearance(CompanionCast.current) : 0
+        content.contentMargins(.bottom, base + extra, for: .automatic)
+    }
+}
+
 /// A companion as it sits on its host: the sprite, and its seat under it.
 struct CompanionFigure: View {
     let character: CompanionCharacter
