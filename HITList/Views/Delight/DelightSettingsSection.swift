@@ -179,14 +179,22 @@ private struct WeatherSettingsRows: View {
     @State private var isOn = CompanionWeather.shared.isOn
 
     var body: some View {
-        Toggle(isOn: Binding(get: { isOn }, set: { switchTo($0) })) {
-            HITMenuRowLabel("Weather", subtitle: WeatherSettingsText.subtitle(for: weather.access), systemImage: "cloud.sun.rain")
+        // One child of the group with its attribution, so no hairline cuts the credit from the switch.
+        VStack(spacing: 0) {
+            Toggle(isOn: Binding(get: { isOn }, set: { switchTo($0) })) {
+                HITMenuRowLabel("Weather", subtitle: WeatherSettingsText.subtitle(for: weather.access), systemImage: "cloud.sun.rain")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .disabled(!companionsOn)
+            .opacity(companionsOn ? 1 : HITButtonStyle.Appearance.disabledOpacity)
+            .accessibilityIdentifier("settings-weather")
+            if weather.isShowing && companionsOn {
+                WeatherAttributionRow(credit: weather.credit ?? .fallback)
+                    .padding(.top, -HITSpacing.s)
+                    .task { await weather.loadCredit() }
+            }
         }
-        .toggleStyle(.hit)
-        .hitRowPadding()
-        .disabled(!companionsOn)
-        .opacity(companionsOn ? 1 : HITButtonStyle.Appearance.disabledOpacity)
-        .accessibilityIdentifier("settings-weather")
         .onAppear {
             weather.refreshAccess()
             isOn = weather.isOn
@@ -207,10 +215,6 @@ private struct WeatherSettingsRows: View {
                 openSystemSettings()
             }
             .accessibilityIdentifier("settings-weather-open-settings")
-        }
-        if weather.isShowing && companionsOn {
-            WeatherAttributionRow(credit: weather.credit ?? .fallback)
-                .task { await weather.loadCredit() }
         }
     }
 
