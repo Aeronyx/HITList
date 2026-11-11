@@ -162,6 +162,7 @@
 		5DAA5C7FC987D7BDBE50BDBA /* WeatherDemoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D33301AFC5A1DD9651A8298 /* WeatherDemoTests.swift */; };
 		5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F60C6F513F313FF1FA69B1E8 /* GroupSections.swift */; };
 		5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C0ADAE5BCAACCF9A39248AD /* NotificationPlanTests.swift */; };
+		6051A713FB5D533FBE49DFB3 /* CompanionGlimTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */; };
 		608C4039A4C1816B43354830 /* SettingsRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184C37C143DA7F89F0707031 /* SettingsRouter.swift */; };
 		61010CF79682849CCDD460E9 /* GroupReorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090C52CC3478D18601777A88 /* GroupReorder.swift */; };
 		61831C0E8289C22D284E4030 /* SidebarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081EE4B9DD813C95B28A4AFB /* SidebarSearchField.swift */; };
@@ -424,6 +425,7 @@
 		FD81E5A1EE7DD1D62094AFCE /* DuoSplit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430C53233DBC58D5311A9305 /* DuoSplit.swift */; };
 		FDC09C8B23A45F514ED8793F /* SharedRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ADFFB2A9A1BF3CD82513AE1 /* SharedRowsTests.swift */; };
 		FEAFB01EBF34321D0AD75748 /* HighlightTextView+iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B25094CD0CFE92ECAF30B4A /* HighlightTextView+iOS.swift */; };
+		FFB0BD24677F63220119C379 /* Glim.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7BA6964F4C2729E8DA2F89F /* Glim.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -530,6 +532,7 @@
 		224C2F464763820373F1988F /* CompletionDelightHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionDelightHook.swift; sourceTree = "<group>"; };
 		2396DF976859CE0B43B5E43A /* AddTaskIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddTaskIntent.swift; sourceTree = "<group>"; };
 		23CAD2EDCFBEA1E9A68CFB34 /* SharingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharingSheet.swift; sourceTree = "<group>"; };
+		2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionGlimTests.swift; sourceTree = "<group>"; };
 		24410C4333F1AD0524BF08A4 /* WidgetCompletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCompletionTests.swift; sourceTree = "<group>"; };
 		25F2FC8195B6F10B5CC95FC8 /* WeatherConditionTableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherConditionTableTests.swift; sourceTree = "<group>"; };
 		264E61502149B4014A7C48D0 /* QuickAddDraft+SwitchBackOn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QuickAddDraft+SwitchBackOn.swift"; sourceTree = "<group>"; };
@@ -764,6 +767,7 @@
 		B6A8FD3E80D2B70455F4FF69 /* HingeCreak.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HingeCreak.swift; sourceTree = "<group>"; };
 		B7433290494D95848705DE1E /* ModelContainerFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelContainerFactory.swift; sourceTree = "<group>"; };
 		B74AEDD0E7B1F0DA8B217FBB /* CompanionPerch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionPerch.swift; sourceTree = "<group>"; };
+		B7BA6964F4C2729E8DA2F89F /* Glim.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Glim.swift; sourceTree = "<group>"; };
 		B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionDirectorTests.swift; sourceTree = "<group>"; };
 		B8F6B86A1DE4B35411DA72E5 /* HITTips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTips.swift; sourceTree = "<group>"; };
 		B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksDebug.swift; sourceTree = "<group>"; };
@@ -997,6 +1001,7 @@
 		25871571111CA5C3DE51CD1C /* Characters */ = {
 			isa = PBXGroup;
 			children = (
+				B7BA6964F4C2729E8DA2F89F /* Glim.swift */,
 				9C8FFF3EE152C6D82DAA7152 /* Hush.swift */,
 				274607610BD862CCA9F02DE0 /* Nod.swift */,
 				C7FB699131F08C1D5479D114 /* Pip.swift */,
@@ -1372,6 +1377,7 @@
 				5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */,
 				453738DB09EEE9FAE6BD7859 /* CompanionClockTests.swift */,
 				B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */,
+				2438805586B98D1E351F4ADB /* CompanionGlimTests.swift */,
 				BD4CA9C2FF2FBC13C9720425 /* CompanionSkySourceTests.swift */,
 				4AC8F4B56B5871C0BE8977E4 /* CompanionSpriteTests.swift */,
 				3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */,
@@ -2089,6 +2095,7 @@
 				135CE7433CB33D20AC6A9A3A /* FloatingSwitchCard.swift in Sources */,
 				0D2AA2ED4D0924CA4F26A882 /* Formatting.swift in Sources */,
 				66BFE88D57678C74BE6195D8 /* GeneralSettingsSection.swift in Sources */,
+				FFB0BD24677F63220119C379 /* Glim.swift in Sources */,
 				847A356E9BE3F4C9D2CDF905 /* GroupDeletion.swift in Sources */,
 				61010CF79682849CCDD460E9 /* GroupReorder.swift in Sources */,
 				5E33F0503C4E9C8D321595C0 /* GroupSections.swift in Sources */,
@@ -2292,6 +2299,7 @@
 				FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */,
 				F1E57121A758A7BE8F241ADF /* CompanionClockTests.swift in Sources */,
 				812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */,
+				6051A713FB5D533FBE49DFB3 /* CompanionGlimTests.swift in Sources */,
 				E9F3DA77C75DEC0674B2C526 /* CompanionSkySourceTests.swift in Sources */,
 				4C3E594F18816DAA10A08509 /* CompanionSpriteTests.swift in Sources */,
 				20CF31C4714CB5F315804F7A /* CompletionAnimatorTests.swift in Sources */,
