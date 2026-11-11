@@ -143,6 +143,9 @@ targets:
       - HITList/Support/DesignSystem/HITCalendar.swift
       - HITList/Support/DesignSystem/HITButtonStyle.swift
       - HITList/Services/DeepLinks/DeepLink.swift
+      # Brief 81: a row's check and a red pill's flip. The intent is the same type in both targets, so the system can
+      # run it in the app (iPhone, iPad) or here (the Mac); each target has its own WidgetIntentRoad.
+      - HITList/Services/Intents/WidgetCompletionIntent.swift
       # The six Inter cuts the app ships, registered by the extension's own Info.plist.
       - path: HITList/Resources/Fonts/Inter/static
         buildPhase: resources

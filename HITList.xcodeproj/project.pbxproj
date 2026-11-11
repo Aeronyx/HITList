@@ -63,6 +63,7 @@
 		277AD3B42C5742E0F45ABC92 /* MacSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53515B8CC6A5FF8A70336C46 /* MacSearchTests.swift */; };
 		27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 528485A27E1D787530779DBE /* LocalCacheReset.swift */; };
 		28501DADE2F939236C1A902B /* ClaudeConnectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 288443055725713733FD3685 /* ClaudeConnectorTests.swift */; };
+		298E3902AFDE1BC3C14487D5 /* WidgetIntentRoad.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8190E42B5309E1C5C25DC886 /* WidgetIntentRoad.swift */; };
 		29DBD082850E4F48EC9CB314 /* CompletionToastState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 520369BF71B18D8B0D28327F /* CompletionToastState.swift */; };
 		2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */; };
 		2ADB84FE1F7461037DC27A2A /* SharedTasksRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D47EBD278801897E89A2D06 /* SharedTasksRecords.swift */; };
@@ -144,6 +145,7 @@
 		56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */; };
 		5720041FAE6A032A7066DF4D /* DatePickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D0F661F6CF7CD1D43D7A17 /* DatePickerCard.swift */; };
 		5849B1C50CCFC964844E2ACB /* InboxView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 543B0A056452AA86090ECAD8 /* InboxView.swift */; };
+		58D44424AD9990A8E9EEE0C6 /* WidgetCompletionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1C338682C3B105BCFBFB49 /* WidgetCompletionIntent.swift */; };
 		5A5CE0DE4959F30FC7D935F5 /* HITListCore in Frameworks */ = {isa = PBXBuildFile; productRef = E099AC003DAF2AA166D3C1F1 /* HITListCore */; };
 		5AB1564F606D8B7271F6E8F6 /* Inter_18pt-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BDBD761482A5F9B84F96433A /* Inter_18pt-Medium.ttf */; };
 		5BCC5EB9F77215035E7E5B67 /* FlipboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA06D7A2ABE609BA8A486817 /* FlipboardRules.swift */; };
@@ -231,6 +233,7 @@
 		9580397F7D4ADFFD9422A015 /* QuickAddDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89FB7DFA88325495B19AB6A9 /* QuickAddDraft.swift */; };
 		9599623378F7FC2A7CFD9EA5 /* SyncReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C16A74F5E02178CD99C092C /* SyncReplay.swift */; };
 		9622AC3103C8A5D90F4414D7 /* NotificationResponder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A515A0FB0330D66094FD9E5B /* NotificationResponder.swift */; };
+		962DC11FCDB53FA33925F52F /* WidgetCompletionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1C338682C3B105BCFBFB49 /* WidgetCompletionIntent.swift */; };
 		96A7F3481E3A44A7FEF532CF /* FlipboardWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44BD633BB89C054A005326A /* FlipboardWidgetView.swift */; };
 		9741D29817F3B0B673F3A520 /* CalendarEventsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8D3387F2A9DE9AFDD95FCC7 /* CalendarEventsTests.swift */; };
 		975E9728DB4A9CD6823BF569 /* UpcomingWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3451EE4C9CA375501D13F549 /* UpcomingWidget.swift */; };
@@ -379,6 +382,7 @@
 		EDBEC249FA6239C0F6E4A5B8 /* UpcomingScheduleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */; };
 		EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */; };
 		EE4CDE8C463A7D82AA0E4020 /* VerticalBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6371FB0617E5C6B42D5FA759 /* VerticalBar.swift */; };
+		EE73EA0962B9BB9A9153C892 /* WidgetIntentRoad.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE771CCFC4D6BC32F488D238 /* WidgetIntentRoad.swift */; };
 		EFE641180B1826E940580ED8 /* InboxProcessQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D205E4007ED3FF4C43D51EE /* InboxProcessQueueTests.swift */; };
 		EFF74DC0B928EAD8ABFF10AD /* AccountWatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B6221D6E84D66A82C0D17 /* AccountWatch.swift */; };
 		F08B3E77DEE13635559AA7E3 /* CompletionRowBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */; };
@@ -653,6 +657,7 @@
 		800D283FA57FFEF42C028679 /* FlipboardWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardWidget.swift; sourceTree = "<group>"; };
 		8029EE45AC3F45957AC8CFEA /* BoltMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoltMotionTests.swift; sourceTree = "<group>"; };
 		80FC29DB1F9289C32B262576 /* SyncLogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLogTests.swift; sourceTree = "<group>"; };
+		8190E42B5309E1C5C25DC886 /* WidgetIntentRoad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetIntentRoad.swift; sourceTree = "<group>"; };
 		81F00D1A134DBD9CE50D06F4 /* AccountSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSwitch.swift; sourceTree = "<group>"; };
 		8211DD022544770EB7DD0656 /* AboutSettingsGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutSettingsGroup.swift; sourceTree = "<group>"; };
 		825B734C651EF77EF1FA1410 /* FontTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontTests.swift; sourceTree = "<group>"; };
@@ -678,6 +683,7 @@
 		8CD698A5F08AB63F32AEBED2 /* SyncRecovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncRecovery.swift; sourceTree = "<group>"; };
 		8D05CBD7325605B6D1A94CF1 /* HITListApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListApp.swift; sourceTree = "<group>"; };
 		8DC5CAB524A97500619271F4 /* HITMenuRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITMenuRow.swift; sourceTree = "<group>"; };
+		8E1C338682C3B105BCFBFB49 /* WidgetCompletionIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCompletionIntent.swift; sourceTree = "<group>"; };
 		8E560EB0588544BDE7C47FAB /* HolidayEffectsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HolidayEffectsTests.swift; sourceTree = "<group>"; };
 		8F1AF8AEB973F5A44EDE7CD8 /* ReleasePolishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleasePolishTests.swift; sourceTree = "<group>"; };
 		8F762856AE6FEDA572D8741B /* SharedEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedEditorTests.swift; sourceTree = "<group>"; };
@@ -811,6 +817,7 @@
 		EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreResetTests.swift; sourceTree = "<group>"; };
 		ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoLayoutTests.swift; sourceTree = "<group>"; };
 		EE17DD5FAB155B22D645C06D /* TodayTasksIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayTasksIntent.swift; sourceTree = "<group>"; };
+		EE771CCFC4D6BC32F488D238 /* WidgetIntentRoad.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetIntentRoad.swift; sourceTree = "<group>"; };
 		EE7D144EABFA55D287380F2D /* MorningSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MorningSummary.swift; sourceTree = "<group>"; };
 		EE874329A609F401C90AEE96 /* ScreenTourUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenTourUITests.swift; sourceTree = "<group>"; };
 		EFB0F6B260E707986FB5A77C /* SharedTaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTaskPopout.swift; sourceTree = "<group>"; };
@@ -1576,6 +1583,8 @@
 				3F67BFA78B2D6749106DD883 /* ScreenIntents.swift */,
 				655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */,
 				EE17DD5FAB155B22D645C06D /* TodayTasksIntent.swift */,
+				8E1C338682C3B105BCFBFB49 /* WidgetCompletionIntent.swift */,
+				EE771CCFC4D6BC32F488D238 /* WidgetIntentRoad.swift */,
 			);
 			path = Intents;
 			sourceTree = "<group>";
@@ -1642,6 +1651,7 @@
 				8A5AC71FCF2DFE6F33277614 /* TodayWidget.swift */,
 				3451EE4C9CA375501D13F549 /* UpcomingWidget.swift */,
 				6B913CB4E59C18F8AEF313C3 /* WidgetHost.swift */,
+				8190E42B5309E1C5C25DC886 /* WidgetIntentRoad.swift */,
 			);
 			path = Extension;
 			sourceTree = "<group>";
@@ -1918,7 +1928,9 @@
 				3AA5F21798FE8C6F79C6D66A /* TodayWidgetView.swift in Sources */,
 				975E9728DB4A9CD6823BF569 /* UpcomingWidget.swift in Sources */,
 				0D929669793C13C94C009EFF /* UpcomingWidgetView.swift in Sources */,
+				58D44424AD9990A8E9EEE0C6 /* WidgetCompletionIntent.swift in Sources */,
 				7C289FC970F23FA0AFFC3B7E /* WidgetHost.swift in Sources */,
+				298E3902AFDE1BC3C14487D5 /* WidgetIntentRoad.swift in Sources */,
 				4B750AD0778719EB373860E7 /* WidgetLook.swift in Sources */,
 				ED6B1298109822601EAA627C /* WidgetSamples.swift in Sources */,
 				D9D6A5DE04D75E2ACA0BB3FF /* WidgetTaskRow.swift in Sources */,
@@ -2172,6 +2184,8 @@
 				5CEA7596FCE12E6310304FF1 /* WeekStripView.swift in Sources */,
 				69A4CC554774E422023A8E61 /* WhatsNew.swift in Sources */,
 				180AF814EDD1B6BAC0F70795 /* WhatsNewPopout.swift in Sources */,
+				962DC11FCDB53FA33925F52F /* WidgetCompletionIntent.swift in Sources */,
+				EE73EA0962B9BB9A9153C892 /* WidgetIntentRoad.swift in Sources */,
 				9854084C4F0716263A778898 /* WidgetLook.swift in Sources */,
 				9389AECD2F6D6541F34B7928 /* WidgetSamples.swift in Sources */,
 				34A1DB62423E3AE56B8ECE09 /* WidgetSnapshotBuilder.swift in Sources */,
