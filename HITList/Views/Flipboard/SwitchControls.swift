@@ -24,7 +24,9 @@ enum SwitchDetent {
 /// The switch card's quick choices (brief 69): Daily, 3 days, Weekly, 2 weeks, Monthly in one capsule track, the
 /// chosen one under a highlight that slides between them. It is one control: a press anywhere picks the choice
 /// under the finger (or pointer), and sliding along the strip carries the highlight with it, a detent at each
-/// choice. None is lit for an interval that isn't one of them.
+/// choice. None is lit for an interval that isn't one of them. Each choice is as wide as its words with the room left
+/// shared out (`ChoiceStripLayout`), so all five keep the chips' one size (brief 96: equal fifths shrank "2 weeks" and
+/// "Monthly" on an iPhone).
 struct IntervalChoiceStrip: View {
     /// The lit choice; nil when the interval is none of them.
     let selected: FlipInterval.Choice?
@@ -32,33 +34,39 @@ struct IntervalChoiceStrip: View {
 
     @Namespace private var highlight
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var width: CGFloat = 0
+    /// Each choice's width, as laid out, by its index: what a press is picked by.
+    @State private var widths: [Int: CGFloat] = [:]
     /// The choice under a press, while the press lasts (it sinks a touch).
     @State private var pressed: Int?
 
     private static let choices = FlipInterval.quickChoices
     private static let inset: CGFloat = 2
 
-    /// Which of `count` equal segments `x` falls in, clamped to the strip.
-    static func index(at x: CGFloat, width: CGFloat, count: Int) -> Int {
-        guard width > 0, count > 0 else { return 0 }
-        return min(count - 1, max(0, Int((x / width) * CGFloat(count))))
+    /// Which choice `x` falls in, given each one's width from the strip's leading edge; clamped to the strip.
+    static func index(at x: CGFloat, in widths: [CGFloat]) -> Int {
+        guard !widths.isEmpty else { return 0 }
+        var end: CGFloat = 0
+        for (index, width) in widths.enumerated() {
+            end += width
+            if x < end { return index }
+        }
+        return widths.count - 1
     }
 
     var body: some View {
-        HStack(spacing: 0) {
+        ChoiceStripLayout {
             ForEach(Array(Self.choices.enumerated()), id: \.element.id) { index, choice in
                 segment(choice, index: index)
             }
         }
         .padding(Self.inset)
         .background(Capsule().fill(Theme.elevated))
-        .onGeometryChange(for: CGFloat.self) { $0.size.width - 2 * Self.inset } action: { width = $0 }
         .contentShape(Capsule())
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { drag in
-                    let index = Self.index(at: drag.location.x - Self.inset, width: width, count: Self.choices.count)
+                    let laidOut = Self.choices.indices.map { widths[$0] ?? 0 }
+                    let index = Self.index(at: drag.location.x - Self.inset, in: laidOut)
                     if pressed != index {
                         withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { pressed = index }
                     }
@@ -79,8 +87,8 @@ struct IntervalChoiceStrip: View {
             .font(HITType.control)
             .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
             .lineLimit(1)
+            // Only when the card is too narrow for every choice's words, and then each by the same ratio.
             .minimumScaleFactor(0.75)
-            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .background {
@@ -91,8 +99,9 @@ struct IntervalChoiceStrip: View {
                         .matchedGeometryEffect(id: "choice", in: highlight)
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { widths[index] = $0 }
             .scaleEffect(pressed == index && !reduceMotion ? 0.95 : 1)
-            // Its fifth of the strip, which is what a press picks it by: the audit read the words alone, 18 pt tall.
+            // Its part of the strip, which is what a press picks it by: the audit read the words alone, 18 pt tall.
             .contentShape(.accessibility, Rectangle())
             .accessibilityElement()
             .accessibilityLabel(choice.title)
@@ -105,6 +114,38 @@ struct IntervalChoiceStrip: View {
         guard choice != selected else { return }
         SwitchDetent.tick()
         withAnimation(HITMotion.emphasis(reduceMotion: reduceMotion)) { onChoose(choice) }
+    }
+}
+
+/// The quick choices' row (brief 96): each choice as wide as its words, and the room left shared out evenly, so the
+/// highlight sits around every one with the same room either side of its words; too narrow even for the words, each
+/// narrows by the same ratio. Rows fill the height given (the strip's 30 pt).
+struct ChoiceStripLayout: Layout {
+    /// Each choice's width in `total`, from its words' widths.
+    static func widths(ideal: [CGFloat], total: CGFloat) -> [CGFloat] {
+        guard !ideal.isEmpty else { return [] }
+        let count = CGFloat(ideal.count)
+        let sum = ideal.reduce(0, +)
+        guard sum > 0 else { return ideal.map { _ in total / count } }
+        guard total >= sum else { return ideal.map { $0 * total / sum } }
+        let spare = (total - sum) / count
+        return ideal.map { $0 + spare }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let words = sizes.map(\.width).reduce(0, +)
+        return CGSize(width: proposal.width ?? words, height: sizes.map(\.height).max() ?? 0)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, Self.widths(ideal: ideal, total: bounds.width)) {
+            subview.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width
+        }
     }
 }
 
@@ -145,7 +186,7 @@ struct FlipDial: View {
         HStack(spacing: 0) {
             chevron("chevron.left", delta: -1, enabled: value > range.lowerBound)
             Text("\(value)")
-                .font(HITType.body.monospacedDigit().weight(.semibold))
+                .font(SwitchCardType.value)
                 .foregroundStyle(HITColor.text)
                 .contentTransition(.numericText(value: Double(value)))
                 .animation(HITMotion.quick(reduceMotion: reduceMotion), value: value)

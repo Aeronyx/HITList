@@ -1,13 +1,17 @@
 import SwiftUI
 import SwiftData
 import HITListCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// Adding or editing a switch (brief 69, George on 0.8.1: "Adding switches should have cute popouts that look
 /// and feel like the 'Add task' card on the Upcoming page in the Mac app"). A small card: the name, focused at
 /// once, read with the quick-add grammar so a typed "every 3 days" lights up and sets the interval and a typed
 /// "9pm" the time; the quick choices; the interval's number and unit (on a Switchboard, "Daily, with Before Bed"
-/// in their place); the time (the editor's time row), the Switchboard and "Overdue becomes task" (brief 72); the
-/// flips per interval; × and the Confirm pill.
+/// in their place); the time and the Switchboard as two chips side by side, and "Become a task when Overdue" (briefs 72
+/// and 96); "Flip ‹1› time", × and the Confirm pill. One scale of type (`SwitchCardType`). The Switchboard chip's
+/// New Switchboard… turns the card into the Switchboard card and back, the switch kept as it was typed.
 ///
 /// On the Mac and iPad it opens in the grid, in place of the + tile (or of the switch it edits), as wide as
 /// two tiles (`FlipboardGrid`). On iPhone it rises from the bottom over the dimmed board, above the keyboard,
@@ -26,6 +30,8 @@ struct SwitchCard: View {
     var style: Style
     /// Adding: the Switchboard whose "+" opened the card (brief 72); nil for a loose switch.
     var board: Switchboard?
+    /// Duplicate (brief 96): the switch whose settings the new one starts with, its name left empty.
+    var duplicating: TaskItem?
     /// The card asks "Discard?" at its foot (after ×, Escape or a tap away with something to lose).
     var isConfirmingDiscard = false
     /// iPhone: the card is going; the keyboard goes down with it.
@@ -51,14 +57,29 @@ struct SwitchCard: View {
     /// The Mac's card stays open after Add for the next switch; its empty name says what was added.
     @State private var added: String?
     @State private var addedGeneration = 0
+    /// New Switchboard… from the Switchboard chip: the card shows the Switchboard card until it is saved or closed.
+    @State private var makingBoard = false
+    /// The Switchboard card's own "something to lose" while it shows (its name typed).
+    @State private var boardHasContent = false
 
-    init(editing: TaskItem?, style: Style, board: Switchboard? = nil, isConfirmingDiscard: Bool = false, isClosing: Bool = false,
+    /// The toggle's words (George's, exactly; brief 96). One line, nothing under it.
+    static let overdueTitle = "Become a task when Overdue"
+
+    /// The foot's count, around its dial: "Flip ‹1› time", "Flip ‹3› times": how many flips turn the switch green each
+    /// time it is due (a charger takes more than one).
+    static func flipsWords(_ count: Int) -> (before: String, after: String) {
+        ("Flip", count == 1 ? "time" : "times")
+    }
+
+    init(editing: TaskItem?, style: Style, board: Switchboard? = nil, duplicating: TaskItem? = nil,
+         isConfirmingDiscard: Bool = false, isClosing: Bool = false,
          focusesName: Bool = true, onClose: @escaping () -> Void, onSaved: @escaping (TaskItem) -> Void,
          onDraftChange: @escaping (Bool) -> Void = { _ in }, onDiscard: @escaping () -> Void = {},
          onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
         self.style = style
         self.board = board
+        self.duplicating = duplicating
         self.isConfirmingDiscard = isConfirmingDiscard
         self.isClosing = isClosing
         self.focusesName = focusesName
@@ -67,7 +88,8 @@ struct SwitchCard: View {
         self.onDraftChange = onDraftChange
         self.onDiscard = onDiscard
         self.onKeepEditing = onKeepEditing
-        _draft = State(initialValue: editing.map(SwitchDraft.init) ?? SwitchDraft(boardID: board?.id))
+        _draft = State(initialValue: editing.map { SwitchDraft($0) } ?? duplicating.map { SwitchDraft(duplicating: $0) }
+                       ?? SwitchDraft(boardID: board?.id))
     }
 
     private var boards: [Switchboard] { Flipboard.ordered(allBoards) }
@@ -81,9 +103,39 @@ struct SwitchCard: View {
     private var parser: QuickAddParser { QuickAddParser(weekStart: Preferences.weekStartWeekday()) }
 
     var body: some View {
+        if makingBoard {
+            // The Switchboard card, in this card's place: saved, it comes back with the new board chosen; × goes back.
+            SwitchboardCard(editing: nil, style: style, isConfirmingDiscard: isConfirmingDiscard, isClosing: isClosing,
+                            discardQuestion: editing == nil ? "Discard this switch?" : "Discard changes?",
+                            onClose: { leaveBoardPage(chosen: nil) },
+                            onSaved: { board in leaveBoardPage(chosen: board) },
+                            onDraftChange: { has in
+                                boardHasContent = has
+                                onDraftChange(has || draft.hasContent(parser))
+                            },
+                            onDiscard: onDiscard, onKeepEditing: onKeepEditing)
+                .transition(.opacity)
+        } else {
+            switchCard
+                .transition(.opacity)
+        }
+    }
+
+    /// Back from the Switchboard card: with the board just made chosen (and the name given the keyboard again).
+    private func leaveBoardPage(chosen board: Switchboard?) {
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
+            if let board { draft.boardID = board.id }
+            makingBoard = false
+        }
+        boardHasContent = false
+        onDraftChange(draft.hasContent(parser))
+        nameFocused = true
+    }
+
+    private var switchCard: some View {
         let parser = parser
         let read = draft.reading(parser)
-        VStack(alignment: .leading, spacing: 0) {
+        return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: HITSpacing.m) {
                 nameField(read)
                 if let chosenBoard {
@@ -97,7 +149,7 @@ struct SwitchCard: View {
                 timeAndBoardRow(read, parser: parser)
                 overdueRow
                 if let errorMessage {
-                    Text(errorMessage).font(HITType.caption).foregroundStyle(HITColor.danger)
+                    Text(errorMessage).font(SwitchCardType.secondary).foregroundStyle(HITColor.danger)
                 }
                 footer(canSave: !read.title.isEmpty)
             }
@@ -142,6 +194,14 @@ struct SwitchCard: View {
         #endif
     }
 
+    /// Nothing on iPhone and iPad, where the keyboard passes straight to the Switchboard card's name; on the Mac the
+    /// name's text view lets go first so the next one can take it.
+    static func dropKeyboardOnTheMac() {
+        #if os(macOS)
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        #endif
+    }
+
     #if os(macOS)
     /// The name has the keyboard the moment the card shows, with no click (as the board's Add task card,
     /// brief 39): the focus asked for on appear can be lost to the click that opened the card, so it is asked
@@ -180,56 +240,68 @@ struct SwitchCard: View {
         let interval = read.interval ?? FlipInterval(count: 1, unit: .weeks)
         return HStack(spacing: HITSpacing.s) {
             Text("Every")
-                .font(HITType.body)
+                .font(SwitchCardType.label)
                 .foregroundStyle(Theme.secondaryText)
+                .frame(width: SwitchCardType.leadWidth, alignment: .leading)
             FlipDial(value: interval.count, range: FlipInterval.range, accessibilityName: "Every") { delta in
                 draft.step(delta, parser)
             }
             .accessibilityIdentifier("switchIntervalDial")
             unitMenu(interval, parser: parser)
-            Spacer(minLength: HITSpacing.s)
-            // How it will look: tap it to try the flip.
-            SwitchPreviewRocker(flips: draft.flips)
+            Spacer(minLength: 0)
         }
     }
 
     /// On a Switchboard, in place of the quick choices and the dial: "Daily, with Before Bed" (the board's cadence is
-    /// the interval) and the preview rocker.
+    /// the interval).
     private func boardRow(_ board: Switchboard) -> some View {
         HStack(spacing: HITSpacing.s) {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.secondaryText)
             Text(SwitchDraft.boardLine(board))
-                .font(HITType.body)
+                .font(SwitchCardType.label)
                 .foregroundStyle(HITColor.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: HITSpacing.s)
-            SwitchPreviewRocker(flips: draft.flips)
+            Spacer(minLength: 0)
         }
+        .frame(minHeight: FlipDial.size.height)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("switchBoardLine")
     }
 
-    /// The switch's time (the editor's time row: "9pm", "21:00", "noon", then Return) and, once there are any, its
-    /// Switchboard.
+    /// The switch's time and its Switchboard: two chips of one size side by side (brief 96), the time typed into its
+    /// chip ("9pm", "21:00", "noon", then Return).
     private func timeAndBoardRow(_ read: SwitchDraft.Reading, parser: QuickAddParser) -> some View {
         HStack(spacing: HITSpacing.s) {
-            PickerTimeField(time: read.time, placeholder: "Add time") { time in
+            SwitchTimeChip(time: read.time) { time in
                 withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.setTime(time, parser) }
+            } onStart: {
+                nameFocused = false
+            } onFinish: {
+                nameFocused = true
             }
-            .frame(maxWidth: .infinity)
-            .accessibilityIdentifier("switchTime")
-            if !boards.isEmpty { boardMenu }
+            boardMenu
+            Spacer(minLength: 0)
         }
     }
 
+    /// No Switchboard, the boards, and New Switchboard… (brief 96: the way to a first board from the card itself).
     private var boardMenu: some View {
         Menu {
             boardChoice("No Switchboard", id: nil)
+            if !boards.isEmpty {
+                Divider()
+                ForEach(boards) { board in boardChoice(board.name, id: board.id) }
+            }
             Divider()
-            ForEach(boards) { board in boardChoice(board.name, id: board.id) }
+            Button {
+                SwitchCard.dropKeyboardOnTheMac()
+                withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { makingBoard = true }
+            } label: {
+                Label("New Switchboard…", systemImage: "plus")
+            }
         } label: {
             HITChipLabel(chosenBoard?.name ?? "No Switchboard", systemImage: "square.grid.2x2", isSelected: chosenBoard != nil)
         }
@@ -251,36 +323,41 @@ struct SwitchCard: View {
         }
     }
 
-    /// "Overdue becomes task" (brief 72): off, the switch is never a task; on, it waits in Today once it is due. A
-    /// Switchboard with the toggle on opts every switch on it in, which the row says.
+    /// "Become a task when Overdue" (briefs 72 and 96): off, the switch is never a task; on, it waits in Today once it
+    /// is due. One line: a Switchboard with its own toggle on opts every switch on it in, and the row shows on and
+    /// dimmed, saying why to VoiceOver and the pointer.
     private var overdueRow: some View {
         let boardOptIn = chosenBoard?.overdueBecomesTask ?? false
         let isOn = Binding(get: { draft.overdueBecomesTask || boardOptIn }, set: { draft.overdueBecomesTask = $0 })
+        let why = "On for every switch on \(chosenBoard?.name ?? "its Switchboard")"
         return Toggle(isOn: isOn) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Overdue becomes task")
-                    .font(HITType.body)
-                    .foregroundStyle(HITColor.text)
-                Text(boardOptIn ? "On for all of \(chosenBoard?.name ?? "its Switchboard")" : "Waits in Today once it’s due")
-                    .font(HITType.caption)
-                    .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(1)
-            }
+            Text(Self.overdueTitle)
+                .font(SwitchCardType.label)
+                .foregroundStyle(HITColor.text)
+                .lineLimit(1)
         }
         .toggleStyle(.hit)
         .disabled(boardOptIn)
+        .help(boardOptIn ? why : "Waits in Today once it’s due")
+        .accessibilityHint(boardOptIn ? why : "Waits in Today once it’s due")
         .accessibilityIdentifier("switchOverdueToggle")
     }
 
-    /// "‹1› flip": flips per interval, at the foot's leading side.
+    /// "Flip ‹1› time": how many flips turn it green each time it is due, at the foot's leading side, its dial under
+    /// the interval's (the leading words share a width).
     private var flipsControl: some View {
-        HStack(spacing: HITSpacing.s) {
-            FlipDial(value: draft.flips, range: 1...Flipboard.maxFlipTarget, accessibilityName: "Flips per interval") { delta in
+        let words = Self.flipsWords(draft.flips)
+        return HStack(spacing: HITSpacing.s) {
+            Text(words.before)
+                .font(SwitchCardType.label)
+                .foregroundStyle(Theme.secondaryText)
+                .frame(width: SwitchCardType.leadWidth, alignment: .leading)
+            FlipDial(value: draft.flips, range: 1...Flipboard.maxFlipTarget, accessibilityName: "Flips each time") { delta in
                 draft.setFlips(draft.flips + delta)
             }
             .accessibilityIdentifier("switchFlipsDial")
-            Text(draft.flips == 1 ? "flip" : "flips")
-                .font(HITType.body)
+            Text(words.after)
+                .font(SwitchCardType.label)
                 .foregroundStyle(Theme.secondaryText)
                 .fixedSize()
         }
@@ -294,7 +371,7 @@ struct SwitchCard: View {
         } label: {
             HStack(spacing: 3) {
                 Text(interval.unit.word(interval.count))
-                    .font(HITType.body)
+                    .font(SwitchCardType.label)
                     .foregroundStyle(HITColor.text)
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 9, weight: .semibold))
@@ -344,8 +421,9 @@ struct SwitchCard: View {
             #endif
             AccessibilityNotification.Announcement(editing == nil ? "Added \(task.title)" : "Saved \(task.title)").post()
             Task { await NotificationScheduler.reschedule(context: context) }
-            if editing == nil, style == .inline {
-                // The Mac and iPad card stays open, empty, for the next switch (as the board's Add task card).
+            if editing == nil, duplicating == nil, style == .inline {
+                // The Mac and iPad card stays open, empty, for the next switch (as the board's Add task card); a
+                // duplicate's closes once it is added.
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
                     draft = SwitchDraft()
                     added = "Added ‘\(task.title)’"
@@ -420,7 +498,7 @@ struct SwitchDiscardRow: View {
 
     private var questionText: some View {
         Text(question)
-            .font(HITType.body)
+            .font(SwitchCardType.label)
             .foregroundStyle(HITColor.text)
             .lineLimit(1)
             .fixedSize()
@@ -435,4 +513,41 @@ struct SwitchDiscardRow: View {
             .buttonStyle(HITButtonStyle(.destructive, size: .small))
             .accessibilityIdentifier("switchDiscard")
     }
+}
+
+/// The cards' one scale of type (brief 96, George: "fonts are different sizes"): the name at the card title's size,
+/// every label, value and chip at the chips' size, and a secondary line one size down. The switch card and the
+/// Switchboard card share it.
+///
+/// | Text | iPhone and iPad | Mac |
+/// |---|---|---|
+/// | The name | Inter 19 bold | Inter 15 bold |
+/// | Labels: "Every", "days", "Become a task when Overdue", "Flip … times", "Daily, with Before Bed", "Resets at" | Inter 15 | Inter 13 |
+/// | Values: the dials' numbers | Inter 15 semibold | Inter 13 semibold |
+/// | Chips and the quick choices (`HITType.control`) | Inter 15 semibold | Inter 13 medium |
+/// | Secondary: an error, the delete question's explanation | Inter 12 | Inter 10 |
+enum SwitchCardType {
+    #if os(macOS)
+    static let nameSize: CGFloat = 15
+    static let labelSize: CGFloat = 13
+    static let secondarySize: CGFloat = 10
+    private static let scale: Font.TextStyle = .body
+    #else
+    static let nameSize: CGFloat = 19
+    static let labelSize: CGFloat = 15
+    static let secondarySize: CGFloat = 12
+    private static let scale: Font.TextStyle = .subheadline
+    #endif
+
+    /// The switch's or the Switchboard's name: quick add's title (`HITType.taskName`).
+    static let name = HITType.taskName
+    static let label = HITFont.inter(labelSize, .regular, relativeTo: scale)
+    static let value = HITFont.inter(labelSize, .semibold, relativeTo: scale).monospacedDigit()
+    static let secondary = HITType.caption
+    /// "Every" and "Flip" are one width, so the interval's dial and the flips' dial stand one above the other.
+    #if os(macOS)
+    static let leadWidth: CGFloat = 36
+    #else
+    static let leadWidth: CGFloat = 42
+    #endif
 }
