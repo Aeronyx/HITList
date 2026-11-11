@@ -189,6 +189,12 @@ final class CompanionSpriteTests: XCTestCase {
                     XCTAssertGreaterThan(more, less, "\(at) \(deep): deeper than \(previous)")
                     previous = deep
                 }
+                // Every gesture of a sky's own shows on it: a frame unlike that sky's still.
+                for gesture in mode.gestures where gesture.sky != nil {
+                    let still = mode.base(CompanionLook.Weather(gesture.sky!))
+                    XCTAssertTrue(gesture.ticks.contains { character.difference($0.frame, still) > 0 },
+                                  "\(at) \(gesture.name): it shows")
+                }
                 // The shake-off can play from the deepest pile, and only there.
                 let shake = mode.routines.first { $0.shakesOff }!
                 XCTAssertTrue(character.canDraw(shake, in: .snow, mode: mode, depth: mode.deepest), at)
