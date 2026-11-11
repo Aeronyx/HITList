@@ -299,6 +299,7 @@ final class CloudSyncMonitor {
         // The first state the marks show: only now is it known whether this launch syncs at all.
         stateChanged()
         updateBeats()
+        logStoreCounts("at launch")
     }
 
     private func recordLaunch() {
@@ -620,6 +621,11 @@ final class CloudSyncMonitor {
                                : "iCloud account: \(Self.describe(status))"
             write(.account, text, level: changed || status != .available ? .notice : .info)
             loggedAccount = status
+            // Brief 95: what the store holds as the account changes, and again after the import that follows.
+            if changed {
+                logStoreCounts("as the account turned \(Self.describe(status))")
+                countAfterNextImport = "after the first import since the account turned \(Self.describe(status))"
+            }
         }
         // Signed out, restricted or "sign in again" means nothing can sync; "could not determine" doesn't say.
         let blocking: [CKAccountStatus] = [.noAccount, .restricted, .temporarilyUnavailable]
@@ -1189,6 +1195,26 @@ final class CloudSyncMonitor {
         if !verdict.filled { beat.beatSoon() }
     }
 
+    // MARK: - Evidence (brief 95, Part 2)
+
+    /// The first import after the account's status changed also gets the store's counts.
+    @ObservationIgnored private var countAfterNextImport: String?
+
+    /// Writes how many records of each kind this device's store holds, and why now: at launch, at each change of the
+    /// account's status, and after the first import that follows one. A purge at a sign-out, or an import after a
+    /// sign-in that brought back less than was there, then shows in the sync log by itself (George's two devices of
+    /// 2026-11-11 could not say). Counts only, read on a context of its own.
+    private func logStoreCounts(_ why: String) {
+        guard let container, !ModelContainerFactory.isRunningInMemory else { return }
+        Task { @MainActor [weak self] in
+            guard let snapshot = try? await StoreInventory.read(container) else { return }
+            var counts: [String: SyncComparison.Count] = [:]
+            for record in snapshot.records { counts[record.entity, default: SyncComparison.Count()].here += 1 }
+            let text = SyncComparison.countsText(counts, side: \.here)
+            self?.write(.note, "This device's store holds \(text) (\(why))", fields: ["records": "\(snapshot.records.count)"])
+        }
+    }
+
     private func setNotice(_ notice: AccountWatch.Notice?) {
         guard notice != accountNotice else { return }
         write(.account, "Account banner: \(notice.map { "\($0)" } ?? "hidden")", level: .notice)
@@ -1275,6 +1301,10 @@ final class CloudSyncMonitor {
             // next beat compares again, at once while the bolt isn't filled.
             if event.type == .import { storeChangedForBeats() }
             if event.type == .export, !verdict.filled { beat.beatSoon() }
+            if event.type == .import, let why = countAfterNextImport {
+                countAfterNextImport = nil
+                logStoreCounts(why)
+            }
             if event.type == .import {
                 NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil)
                 importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .succeeded)
