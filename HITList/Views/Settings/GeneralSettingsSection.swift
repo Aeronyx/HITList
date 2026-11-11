@@ -71,6 +71,8 @@ struct GeneralSettingsSection: View {
             // Calendar events beside the tasks (brief 77): off by default.
             CalendarSettingsRows()
         }
+        // Brief 98: the quick add guide, a page on iPhone and iPad, shown below the row on the Mac.
+        QuickAddGuideSettingsRow()
     }
 
     /// Under Start screen (it was the group's footer).

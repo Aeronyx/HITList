@@ -188,8 +188,9 @@ struct BrowseView: View {
                     switch row {
                     case .completed:
                         link(.completed) { BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.accent) }
-                    case .settings:
-                        Button { settingsRequest = SettingsSheetRequest() } label: {
+                    case .settings, .quickAddGuide:
+                        // Brief 98: the quick add guide is a page of the Settings sheet, opened straight on it.
+                        Button { settingsRequest = SettingsSheetRequest(page: row == .quickAddGuide ? .quickAddGuide : nil) } label: {
                             HStack {
                                 BrowseRow(title: row.title, symbol: row.symbol, tint: Theme.secondaryText)
                                 Image(systemName: "chevron.right")
@@ -200,7 +201,7 @@ struct BrowseView: View {
                         }
                         .buttonStyle(.plain)
                         .slateRow()
-                        .accessibilityIdentifier("browse-settings-row")
+                        .accessibilityIdentifier(row == .quickAddGuide ? "browse-quick-add-guide" : "browse-settings-row")
                     }
                 }
             }
@@ -290,12 +291,13 @@ struct BrowseView: View {
 
     /// The last section's rows, in order.
     enum LastRow: Hashable {
-        case completed, settings
+        case completed, settings, quickAddGuide
 
         var title: String {
             switch self {
             case .completed: "Completed"
             case .settings: "Settings"
+            case .quickAddGuide: QuickAddGuide.rowTitle
             }
         }
 
@@ -303,11 +305,14 @@ struct BrowseView: View {
             switch self {
             case .completed: "checkmark.circle"
             case .settings: "gearshape"
+            case .quickAddGuide: QuickAddGuide.systemImage
             }
         }
     }
 
-    static let lastRows: [LastRow] = [.completed, .settings]
+    /// The quick add guide under Settings (brief 98): a "?" beside the gear did not fit, the bar folded the gear and
+    /// itself into a "…" on an iPhone 17.
+    static let lastRows: [LastRow] = [.completed, .settings, .quickAddGuide]
 
     private func link<Label: View>(_ item: SidebarItem, @ViewBuilder label: () -> Label) -> some View {
         NavigationLink(value: item) { label() }
