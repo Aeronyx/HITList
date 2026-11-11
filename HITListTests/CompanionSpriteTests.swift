@@ -163,7 +163,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions the weather shows on so far (brief 91).
-    static let weathered = ["nod"]
+    static let weathered = ["nod", "quill"]
 
     /// Brief 91, for each: in the rain a drip that is its own (a flicker), and a rain routine; snow that piles at least
     /// two frames deeper and a routine that shakes it off; a hot-day still, a heat flicker and a heat routine. Nothing
