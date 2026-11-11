@@ -19,6 +19,8 @@ struct MacSettingsPage: View {
 
     /// The window's title while Settings shows: the visible pane's name.
     static func windowTitle(for section: MacSettingsSection) -> String { section.title }
+    /// Whether the toolbar draws that title too: no, the page's large header names the section (brief 99).
+    static let showsToolbarTitle = false
 
     var body: some View {
         ScrollView {
@@ -38,6 +40,9 @@ struct MacSettingsPage: View {
         .background(Theme.background)
         .foregroundStyle(HITColor.text)
         .navigationTitle(Self.windowTitle(for: section))
+        // The section's name once (brief 99; George agreed): the big header says it, so the toolbar draws no title.
+        // The window keeps the name for the Window menu and Mission Control.
+        .toolbar(removing: Self.showsToolbarTitle ? nil : .title)
         .accessibilityIdentifier("mac-settings-page")
     }
 }
