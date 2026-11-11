@@ -123,7 +123,7 @@ final class CompanionNewCastTests: XCTestCase {
     /// Each comes alive now and then in its own way: two flickers (a blink, an ear), routines of its own drawing (at
     /// least three for every day, one each for rain, snow, a storm and a clear sky), none asleep.
     func testFlickersAndRoutinesOfTheirOwn() {
-        for character in [CompanionCharacter.posy] {
+        for character in Self.new {
             for place in CompanionPlace.allCases {
                 let posture = character.posture(place)
                 let awake = posture.awake
@@ -144,6 +144,8 @@ final class CompanionNewCastTests: XCTestCase {
         }
         XCTAssertEqual(CompanionCharacter.posy.field.awake.routines.map(\.name),
                        ["practice", "snuffle", "earflop", "raindrop", "snowflake", "thunder", "sunshine"])
+        XCTAssertEqual(CompanionCharacter.mallow.field.awake.routines.map(\.name),
+                       ["band", "wobble", "doze", "tufts", "raindrop", "shiver", "thunder", "sunshine"])
     }
 
     /// The weather routines are drawn whole, prop and all: Posy keeps its wings over its head through the raindrop,
@@ -152,6 +154,10 @@ final class CompanionNewCastTests: XCTestCase {
         let posy = CompanionCharacter.posy
         for frame in ["rainLookUp", "rainDrop2", "rainWince", "rainFlap", "stormCower"] {
             XCTAssertTrue(posy.rows(frame)![0..<5].joined().contains("l"), "\(frame): its wings over its head")
+        }
+        let mallow = CompanionCharacter.mallow
+        for frame in ["rainLookUp", "rainSplash", "rainShakeL", "stormCover"] {
+            for row in mallow.rows(frame)![4...5] { XCTAssertTrue(row.contains("w"), "\(frame): its headscarf") }
         }
         let hop = posy.rows("hopUp")!
         XCTAssertTrue(hop[posy.seatRow].contains("d"), "its trotters still at the edge")
