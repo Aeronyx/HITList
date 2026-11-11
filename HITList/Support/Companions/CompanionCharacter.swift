@@ -60,7 +60,8 @@ struct CompanionLook: Hashable {
 ///
 /// A gesture is drawn as frames that differ from the mode's rest frame in a few pixels. In rain or snow the same
 /// gesture is drawn over the weather's frame: only the pixels the gesture changes are taken from it
-/// (`composite`), so a blink under Nod's umbrella needs no frame of its own.
+/// (`composite`), so a blink under Nod's umbrella needs no frame of its own. Where a gesture moves what the weather
+/// changed, a frame named "gesture@weather" is drawn instead (Nod's nod in the snow).
 struct CompanionCharacter: Identifiable {
     struct Frame {
         let name: String
@@ -173,8 +174,10 @@ struct CompanionCharacter: Identifiable {
                 for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
                     for tick in (mode.gestures + [mode.answer]).flatMap(\.ticks) {
                         let key = "\(tick.frame)@\(base)"
-                        guard composites[key] == nil, let g = rows[tick.frame], let r = rows[mode.rest],
-                              let b = rows[base] else { continue }
+                        guard composites[key] == nil else { continue }
+                        // A frame of that name, drawn by hand, wins over the composite (Nod's nod in the snow).
+                        if let own = index[key] { composites[key] = own; continue }
+                        guard let g = rows[tick.frame], let r = rows[mode.rest], let b = rows[base] else { continue }
                         composites[key] = drawn.count
                         drawn.append(Self.runs(of: Self.composite(gesture: g, rest: r, base: b)))
                     }
@@ -303,7 +306,7 @@ struct CompanionCharacter: Identifiable {
                 // weather changes too, or the prop would be cut through.
                 for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
                     guard let r = rows(mode.rest), let b = rows(base) else { continue }
-                    for tick in (mode.gestures + [mode.answer]).flatMap(\.ticks) {
+                    for tick in (mode.gestures + [mode.answer]).flatMap(\.ticks) where index["\(tick.frame)@\(base)"] == nil {
                         guard let g = rows(tick.frame) else { continue }
                         if Self.overlap(gesture: g, rest: r, base: b) > 0 {
                             out.append("\(id) \(at): \(tick.frame) changes pixels that \(base) changes")

@@ -43,8 +43,10 @@ final class CompanionSpriteTests: XCTestCase {
                 for (label, mode) in [("awake", posture.awake), ("asleep", posture.asleep)] {
                     for gesture in mode.gestures + [mode.answer] {
                         let at = "\(character.id) \(place) \(label) \(gesture.name)"
+                        // Asleep, a stir may be the whole of it dipping a pixel (Nod nods) once in several minutes.
+                        let most = label == "asleep" ? 110 : 16
                         for tick in gesture.ticks {
-                            XCTAssertLessThanOrEqual(character.difference(tick.frame, mode.rest), 16, at)
+                            XCTAssertLessThanOrEqual(character.difference(tick.frame, mode.rest), most, at)
                         }
                     }
                     for gesture in mode.gestures {
@@ -53,6 +55,50 @@ final class CompanionSpriteTests: XCTestCase {
                 }
             }
         }
+    }
+
+    /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
+    static let dressed = ["nod"]
+
+    /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
+    /// three small gestures and a stir in each place.
+    func testEachLookIsItsOwnStillPose() {
+        for character in CompanionCharacter.all where Self.dressed.contains(character.id) {
+            for place in CompanionPlace.allCases {
+                let posture = character.posture(place)
+                let at = "\(character.id) \(place)"
+                XCTAssertGreaterThanOrEqual(character.difference(posture.asleep.rest, posture.awake.rest), 8, "\(at): asleep")
+                for weather in [posture.awake.rain, posture.awake.snow] {
+                    let w = try? XCTUnwrap(weather, "\(at): a pose for rain and for snow")
+                    guard let w else { continue }
+                    let change = character.difference(w, posture.awake.rest)
+                    XCTAssertTrue((4...48).contains(change), "\(at) \(w): \(change) pixels")
+                }
+                XCTAssertGreaterThanOrEqual(posture.awake.gestures.count, 3, "\(at): three small gestures")
+                XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 1, "\(at): a stir")
+                XCTAssertNotEqual(posture.asleep.answer.ticks, posture.awake.answer.ticks, "\(at): woken, not just looking")
+            }
+        }
+    }
+
+    func testNodsNightAndWeather() {
+        let nod = CompanionCharacter.nod
+        XCTAssertEqual(nod.field.asleep.rest, "sleep")
+        XCTAssertEqual(nod.field.awake.rain, "rain")
+        XCTAssertEqual(nod.field.awake.snow, "snow")
+        XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
+        XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "glance"])
+        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway"])
+        // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
+        let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
+        XCTAssertEqual(rest[13][17], "w")
+        XCTAssertNotEqual(sleep[13][17], "w")
+        // Its nod in the snow is drawn by hand (the dusting dips with the cap), not cut through.
+        let clock = CompanionClock(character: nod)
+        let stage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: true, weather: .snow),
+                                   act: CompanionAct(kind: .gesture(0), start: Date(timeIntervalSinceReferenceDate: 0)))
+        XCTAssertEqual(clock.pose(at: Date(timeIntervalSinceReferenceDate: 0.1), stage: stage).frame, nod.index["sleepNod@sleepSnow"])
     }
 
     func testTheChecksCatchBadData() {
