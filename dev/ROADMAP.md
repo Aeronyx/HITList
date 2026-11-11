@@ -9,19 +9,20 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 
 | Brief | What | Status |
 |---|---|---|
-| 74 `widgets` | Today, Upcoming and Flipboard widgets on iPhone, iPad and the Mac; the app's first extension | in progress |
-| 75 `motion-polish` | An audit of everything that moves (cards, pickers, tabs, rows, small controls), and fixes | in progress |
-| 76 `companions` | Two or three original pixel creatures in quiet corners, with idle loops and a rare flourish | in progress |
-| 77 `calendar-events` | Today's and the week's calendar events beside the tasks, read-only and off by default (the last open item of the original list, #8) | in progress |
-| 78 `steady-bolt` | The sync bolt keeps still while status is green and shows work or trouble only when it has lasted; a sync blip after an update no longer reads as an alarm | in progress |
+| 74 `widgets` | Today, Upcoming and Flipboard widgets on iPhone, iPad and the Mac; the app's first extension | merged, awaiting release |
+| 75 `motion-polish` | An audit of everything that moves (cards, pickers, tabs, rows, small controls), and fixes | merged, awaiting release |
+| 76 `companions` | Two or three original pixel creatures in quiet corners, with idle loops and a rare flourish | merged, awaiting release |
+| 77 `calendar-events` | Today's and the week's calendar events beside the tasks, read-only and off by default (the last open item of the original list, #8) | merged, awaiting release |
+| 78 `steady-bolt` | The sync bolt keeps still while status is green and shows work or trouble only when it has lasted; a sync blip after an update no longer reads as an alarm | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 
 1. **Share extension.** "Add to HITList" from any app's share sheet (a link, selected text) on iPhone and the Mac.
    With widgets it is what the App Group store was moved for on 2026-10-27; it reuses the widget round's extension
    setup.
-2. **Widgets, second pass** after George has lived with them: completing a task from the widget, Lock Screen and
-   Control Center pieces left out of the first pass, calendar events in the Upcoming widget.
+2. **Widgets, second pass** after George has lived with them: completing a task from the widget, a Control Center
+   "Add task", calendar events in the Upcoming widget, and a look at the Mac's widgets (never seen running before
+   release: nothing here could put one on a desktop).
 3. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
    controls; whether the sidebar column floats (26) or sits flush (27) is still the system's. Owning it means our own
    split view and top bar. Decide after a friend's screenshot of 0.9.0 (21) on macOS 27.2.
@@ -29,7 +30,11 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
    and pickers, the Flipboard's switches, the companions (hidden from VoiceOver).
 5. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1).
 6. **iPad and iPhone Duo check** of Switchboards, widgets and the sidebar's swipe to delete.
-7. **A user's own companion.** Extras → Companions → "Choose your own…", a sprite sheet from Files, the way the
+7. **The Mac's task list.** It is still the system's `List`: a completed row's gap closes in one frame and the
+   completion flash snaps, where the iPhone eases both (brief 75's audit). Drawing our own rows there, as the sidebar
+   does since 0.9.0 (21), fixes both and removes the last system-drawn selection.
+8. **A third companion** (the one with flowers, for an empty Inbox or Today), if George likes the first two.
+9. **A user's own companion.** Extras → Companions → "Choose your own…", a sprite sheet from Files, the way the
    completion sound already takes a file. Characters other people own can live on someone's own device this way; the
    app and this public repository ship only original ones.
 

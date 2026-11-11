@@ -44,8 +44,8 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.0 (21): core 488, Mac 1329, iOS 1287, and 27 UI tests
-  (`scripts/test.sh ui`, about 19 minutes on a fresh simulator; run it on the merged tree, not only per branch). CI
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.1: core 528, Mac 1462, iOS 1421, and 45 UI tests
+  (`scripts/test.sh ui`, about 24 minutes on a fresh simulator; run it on the merged tree, not only per branch). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner's Xcode is older than local.
 - Simulator: iPhone 17, UDID `03F99117-3466-4810-A711-AF52514F6514`. Build with
@@ -271,7 +271,17 @@ for, a character someone else owns ships in the app or sits in the repository (t
 Claude logo in round 12; a user's own sprite on their own device is the roadmap's answer). `dev/ROADMAP.md` is the
 supervisor's file; sessions do not add rows.
 
-## 8. Where things stand (2026-11-10, round 17 running)
+## 8. Where things stand (2026-11-10, round 17 merged)
+
+**2026-11-10, round 17 merged for 0.9.1 (Fable 5.2 supervisor).** Briefs 74–78 are merged on master: widgets (the
+app's first extension), the motion audit and its repairs, two original pixel companions (Nod and Quill), calendar
+events (off by default) and a sync bolt with inertia. No schema change. A Release archive and export of both
+platforms pass `release.sh`'s checks, the new extension ones included. George releases with
+`scripts/release.sh --version 0.9.1 --quick`. Details and leftovers in COMMON's Round 17 record. Next: George's
+feedback on the widgets and the companions; a friend's screenshot on macOS 27.2 is still owed. The next brief
+number is 79.
+
+### Round 17 as briefed (kept for the record)
 
 **2026-11-10, 0.9.0 (21) released; round 17 briefed for 0.9.1 (Fable 5.2 supervisor).** George released build 21 and
 asked for 0.9.1: widgets, everything that moves, pixel companions, and the roadmap's forgotten items. Briefs 74–77
