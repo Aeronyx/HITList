@@ -9,7 +9,8 @@ import HITListCore
 enum WidgetSnapshotBuilder {
     @MainActor
     static func build(from context: ModelContext, shared: [SharedRow], themeID: String, weekStart: Int,
-                      now: Date = Date()) throws -> WidgetSnapshot {
+                      now: Date = Date(), pending: [WidgetSnapshot.Pending] = [],
+                      sync: WidgetSnapshot.Sync? = nil) throws -> WidgetSnapshot {
         let open = try context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted }))
             .filter { !$0.isSubtask }
         let switches = open.filter(Flipboard.isMember)
@@ -32,7 +33,9 @@ enum WidgetSnapshotBuilder {
                                                        resetWeekday: board.resetWeekday, weekStart: weekStart),
                     clock: WidgetSnapshot.Clock(board.schedule(weekStart: weekStart)),
                     switchIDs: Flipboard.sorted(onBoard: switches.filter { $0.switchboard?.id == board.id }, board).map(\.id))
-            })
+            },
+            // Brief 81: the widgets' taps the app is finishing, each row as the widget showed it, and the sync state.
+            pending: pending, sync: sync)
     }
 
     static func task(_ task: TaskItem, weekStart: Int) -> WidgetSnapshot.Task {

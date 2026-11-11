@@ -101,9 +101,12 @@ final class WidgetSnapshotWriter {
     func writeNow(now: Date = Date()) {
         guard let container, !ModelContainerFactory.isRunningInMemory else { return }
         do {
+            // Brief 81: the widgets' taps the app is finishing, and the sync state they wait on.
             let snapshot = try WidgetSnapshotBuilder.build(from: container.mainContext, shared: SharedRows.shared.open,
                                                            themeID: ThemeStore.shared.palette.id,
-                                                           weekStart: Preferences.weekStartWeekday(), now: now)
+                                                           weekStart: Preferences.weekStartWeekday(), now: now,
+                                                           pending: WidgetCompletionCenter.shared?.pending ?? [],
+                                                           sync: CloudSyncMonitor.shared.widgetSync)
             try write(snapshot)
         } catch {
             Self.log.error("widget snapshot not written: \(error.localizedDescription, privacy: .public)")

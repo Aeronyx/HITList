@@ -103,6 +103,102 @@ public enum WidgetContent {
         return Flipboard(boardID: chosen?.id, title: chosen?.name ?? looseTitle, line: chosen?.line, lights: lights)
     }
 
+    // MARK: - Taps on their way (brief 81)
+
+    /// How a task shows on a widget once the taps are counted.
+    public enum Shown: Equatable, Sendable {
+        /// As itself: unchecked, or a switch on its own side.
+        case open
+        /// Checked (a row) or flipping (a pill): a tap is on its way and iCloud doesn't have it yet.
+        case checked
+        /// Not on the widget.
+        case gone
+    }
+
+    /// The quiet line a widget adds: never an alarm.
+    public enum Note: Equatable, Sendable {
+        /// A tap has waited `pickupPatience` without the app picking it up (the Mac app isn't running): "Open HITList to
+        /// finish".
+        case openApp
+        /// An applied tap is waiting for iCloud: sync is offline, stuck or retrying, or the export is slow
+        /// (`exportPatience`). "Waiting for iCloud".
+        case waitingForICloud
+        /// The snapshot is older than a day (`staleAfter`): "As of yesterday".
+        case asOf(Date)
+    }
+
+    /// The widget as it draws: the snapshot with each pending row in place of its task, the tasks drawn checked, and the
+    /// quiet line.
+    public struct Marks: Equatable, Sendable {
+        public var snapshot: WidgetSnapshot
+        public var checked: Set<UUID>
+        public var note: Note?
+
+        public func isChecked(_ id: UUID) -> Bool { checked.contains(id) }
+
+        public func shown(_ id: UUID) -> Shown {
+            checked.contains(id) ? .checked : snapshot.task(id) != nil ? .open : .gone
+        }
+    }
+
+    /// How long a tap waits in the outbox, unseen by the app, before the widget says to open it.
+    public static let pickupPatience: TimeInterval = 20
+    /// How long an applied tap waits for its export, with sync looking fine, before the widget says it is waiting.
+    public static let exportPatience: TimeInterval = 30
+    /// How old a snapshot is before the widget says when it was written.
+    public static let staleAfter: TimeInterval = 86_400
+
+    /// `snapshot` as the widget draws it with the taps in its outbox (`requests`, read by the extension): a row the app
+    /// has picked up is drawn as the widget showed it (`WidgetSnapshot.pending`), in place of the task the store has
+    /// now (completed, or rolled on to its next date), until iCloud has the completion; a tap the app hasn't picked up
+    /// checks the row the snapshot has.
+    public static func marks(_ snapshot: WidgetSnapshot, requests: [WidgetRequest], at now: Date) -> Marks {
+        let pending = snapshot.pending ?? []
+        let pendingIDs = Set(pending.map(\.taskID))
+        var drawn = snapshot
+        drawn.tasks = snapshot.tasks.filter { !pendingIDs.contains($0.id) } + pending.map(\.task)
+        let heard = Set(pending.map(\.requestID))
+        let unheard = requests.filter { !heard.contains($0.id) }
+        let checked = pendingIDs.union(unheard.map(\.taskID))
+        return Marks(snapshot: drawn, checked: checked, note: note(snapshot, pending: pending, unheard: unheard, at: now))
+    }
+
+    private static func note(_ snapshot: WidgetSnapshot, pending: [WidgetSnapshot.Pending], unheard: [WidgetRequest],
+                             at now: Date) -> Note? {
+        // Unseen: the app hasn't written the snapshot since the tap (a running app writes it as it applies).
+        let unseen = unheard.filter { snapshot.writtenAt < $0.askedAt }
+        if unseen.contains(where: { now.timeIntervalSince($0.askedAt) >= pickupPatience }) { return .openApp }
+        if !pending.isEmpty {
+            if snapshot.sync == .waiting { return .waitingForICloud }
+            if pending.contains(where: { now.timeIntervalSince($0.appliedAt ?? $0.askedAt) >= exportPatience }) {
+                return .waitingForICloud
+            }
+        }
+        if now.timeIntervalSince(snapshot.writtenAt) >= staleAfter { return .asOf(snapshot.writtenAt) }
+        return nil
+    }
+
+    /// The moments after `now` at which the quiet line can change by itself: a tap's patience running out, the
+    /// snapshot turning a day old. A widget's timeline has an entry at each.
+    public static func noteChanges(_ snapshot: WidgetSnapshot, requests: [WidgetRequest], after now: Date) -> [Date] {
+        let heard = Set((snapshot.pending ?? []).map(\.requestID))
+        var moments = requests.filter { !heard.contains($0.id) }.map { $0.askedAt.addingTimeInterval(pickupPatience) }
+        moments += (snapshot.pending ?? []).map { ($0.appliedAt ?? $0.askedAt).addingTimeInterval(exportPatience) }
+        moments.append(snapshot.writtenAt.addingTimeInterval(staleAfter))
+        return Set(moments.filter { $0 > now }).sorted()
+    }
+
+    /// "As of yesterday", "As of Sunday" within the week, then "As of Nov 8".
+    public static func asOfText(_ written: Date, now: Date, calendar: Calendar = .current) -> String {
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: written),
+                                           to: calendar.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ...1: return "As of yesterday"
+        case 2...6: return "As of \(written.formatted(.dateTime.weekday(.wide)))"
+        default: return "As of \(written.formatted(.dateTime.month(.abbreviated).day()))"
+        }
+    }
+
     // MARK: - Timeline
 
     /// How far ahead a timeline looks; WidgetKit asks for the next one when it ends.

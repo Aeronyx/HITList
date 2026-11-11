@@ -37,6 +37,10 @@ final class CloudSyncMonitor {
     private(set) var isOnline: Bool?
     private(set) var lastImportAt: Date?
     private(set) var lastExportAt: Date?
+    /// When the latest export that finished well had started, in this session (brief 81). An export sends every change
+    /// not yet sent when it starts, so a save made before this moment has reached iCloud: a widget's completion leaves
+    /// the widget only then (`WidgetCompletionCenter`). `.cloudKitExportSucceeded` follows each such export.
+    @ObservationIgnored private(set) var lastExportStartedAt: Date?
     /// When the latest import or export finished in this session (not restored at launch, unlike the two
     /// above). Its advances drive the sync dot's pulse and Settings' "Synced just now" checkmark
     /// (`SyncConfirmation`).
@@ -913,6 +917,7 @@ final class CloudSyncMonitor {
                 AppGroup.defaults.set(now, forKey: Self.syncTimeKey(Self.lastImportKey))
             case .export:
                 lastExportAt = now
+                lastExportStartedAt = event.startDate
                 AppGroup.defaults.set(now, forKey: Self.syncTimeKey(Self.lastExportKey))
             default:
                 // A successful setup means CloudKit is reachable again; an older failure no longer applies.
@@ -933,6 +938,7 @@ final class CloudSyncMonitor {
                 NotificationCenter.default.post(name: .cloudKitImportSucceeded, object: nil)
                 importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .succeeded)
             }
+            if event.type == .export { NotificationCenter.default.post(name: .cloudKitExportSucceeded, object: nil) }
         }
     }
 
@@ -974,4 +980,6 @@ private func both<A, B>(_ a: A?, _ b: B?) -> (A, B)? {
 extension Notification.Name {
     /// Posted on the main actor after each successful CloudKit import.
     static let cloudKitImportSucceeded = Notification.Name("HITList.cloudKitImportSucceeded")
+    /// Posted on the main actor after each successful CloudKit export (`CloudSyncMonitor.lastExportStartedAt`, brief 81).
+    static let cloudKitExportSucceeded = Notification.Name("HITList.cloudKitExportSucceeded")
 }
