@@ -74,7 +74,11 @@ final class TimeZoneEdgesTests: XCTestCase {
         let imported = try XCTUnwrap(tasks.first { $0.title == "Call Sam" })
         XCTAssertEqual(imported.dueDate, midnight(Self.thursday, in: Self.chicago), "kept as it came in Tokyo")
         XCTAssertEqual(day(imported.dueDate, in: Self.tokyo), Self.thursday)
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, syncLog: { _, _, _ in }),
+        let suite = "TimeZoneEdgesTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(DayAnchoring.firstRunVersion, forKey: DayAnchoring.firstRunKey())
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, defaults: defaults, syncLog: { _, _, _ in }),
                        DayAnchoring.Count(dueDates: 1, deadlines: 1))
         XCTAssertEqual(imported.dueDate, DayAnchor.anchor(of: Self.thursday))
         XCTAssertEqual(imported.deadline, DayAnchor.anchor(of: Self.friday))

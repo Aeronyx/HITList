@@ -181,8 +181,9 @@ final class DayAnchorStoreTests: XCTestCase {
         let timed = try olderBuildTask("Timed", due: TimeZoneStoreTests.local(2026, 11, 12, 9, in: Self.chicago), hasTime: true)
         let anchored = try olderBuildTask("Anchored", due: DayAnchor.anchor(of: Self.thursday))
         var lines: [(String, [String: String])] = []
+        defaults.set(DayAnchoring.firstRunVersion, forKey: DayAnchoring.firstRunKey()) // this build's first pass has run
         let leftTokyo = DayAnchoring.Count.LeftAlone(notThisZonesMidnight: 1)
-        let count = DayAnchoring.importPass(in: context, calendar: Self.chicago, syncLog: { lines.append(($0, $2)) })
+        let count = DayAnchoring.importPass(in: context, calendar: Self.chicago, defaults: defaults, syncLog: { lines.append(($0, $2)) })
         XCTAssertEqual(count, DayAnchoring.Count(dueDates: 1, deadlines: 1, leftAlone: leftTokyo))
         XCTAssertEqual(try stored(fromChicago.id).dueDate, DayAnchor.anchor(of: Self.thursday))
         XCTAssertEqual(try stored(fromChicago.id).deadline, DayAnchor.anchor(of: Self.friday))
@@ -194,11 +195,11 @@ final class DayAnchorStoreTests: XCTestCase {
         XCTAssertEqual(lines.first?.1["zone"], "America/Chicago")
         XCTAssertEqual(lines.first?.1["leftNotAMidnightHere"], "1")
         // Nothing left that Chicago can vouch for: the next import's pass writes nothing and adds no line.
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, syncLog: { lines.append(($0, $2)) }),
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, defaults: defaults, syncLog: { lines.append(($0, $2)) }),
                        DayAnchoring.Count(leftAlone: leftTokyo))
         XCTAssertEqual(lines.count, 1)
         // The friend's device in Tokyo reads its own Friday as written, and anchors it there.
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.tokyo, syncLog: { lines.append(($0, $2)) }),
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.tokyo, defaults: defaults, syncLog: { lines.append(($0, $2)) }),
                        DayAnchoring.Count(dueDates: 1))
         XCTAssertEqual(try stored(fromTokyo.id).dueDate, DayAnchor.anchor(of: Self.friday))
     }
@@ -273,7 +274,7 @@ final class DayAnchorStoreTests: XCTestCase {
         XCTAssertEqual(outcome, .disabled)
         XCTAssertFalse(called)
         XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey()), 0)
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, enabled: false, syncLog: { _, _, _ in }),
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, enabled: false, defaults: defaults, syncLog: { _, _, _ in }),
                        DayAnchoring.Count())
         XCTAssertEqual(try stored(task.id).dueDate, midnight(Self.thursday, in: Self.chicago))
     }

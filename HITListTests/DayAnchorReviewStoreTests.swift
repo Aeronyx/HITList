@@ -76,6 +76,12 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         date.map { DayAnchor.localDay(of: $0, calendar: zone) }
     }
 
+    /// The import pass on a store whose first-run pass has run (marked in this test's own defaults, never the app group's).
+    private func importPass(calendar: Calendar, syncLog: ProfileStore.Log) -> DayAnchoring.Count? {
+        defaults.set(DayAnchoring.firstRunVersion, forKey: DayAnchoring.firstRunKey())
+        return DayAnchoring.importPass(in: context, calendar: calendar, defaults: defaults, syncLog: syncLog)
+    }
+
     /// The stored bits of a date: "byte for byte" means these are equal.
     private func bits(_ date: Date?) -> UInt64? { date?.timeIntervalSinceReferenceDate.bitPattern }
 
@@ -125,7 +131,7 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         // The import pass, with Chicago's own midnight beside them: that one is anchored, the rest kept and counted.
         let thursday = Self.day(2026, 11, 12)
         let own = try olderBuildTask("Chicago's Thursday", due: DayAnchor.start(of: thursday, calendar: Self.chicago))
-        let count = try XCTUnwrap(DayAnchoring.importPass(in: context, calendar: Self.chicago, syncLog: { lines.append(($0, $2)) }))
+        let count = try XCTUnwrap(importPass(calendar: Self.chicago, syncLog: { lines.append(($0, $2)) }))
         XCTAssertEqual(count, DayAnchoring.Count(dueDates: 1, leftAlone: .init(notThisZonesMidnight: 5, notAMidnight: 1)))
         XCTAssertEqual(try stored(own.id).dueDate, DayAnchor.anchor(of: thursday))
         try assertKept("after the import pass")
@@ -153,12 +159,12 @@ final class DayAnchorReviewStoreTests: XCTestCase {
                                                 backUp: { _ in backedUp = true; return nil }, syncLog: { _, _, _ in })
         XCTAssertEqual(outcome, .nothingToDo)
         XCTAssertFalse(backedUp)
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.losAngeles, syncLog: { _, _, _ in }),
+        XCTAssertEqual(importPass(calendar: Self.losAngeles, syncLog: { _, _, _ in }),
                        DayAnchoring.Count(leftAlone: .init(notThisZonesMidnight: 1)))
         XCTAssertEqual(bits(try stored(task.id).dueDate), bits(fromHome))
 
         // Home anchors it; the anchor syncs to the phone, which shows Thursday.
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, syncLog: { _, _, _ in }),
+        XCTAssertEqual(importPass(calendar: Self.chicago, syncLog: { _, _, _ in }),
                        DayAnchoring.Count(dueDates: 1))
         XCTAssertEqual(shown(try stored(task.id).dueDate, in: Self.losAngeles), thursday)
     }
@@ -170,7 +176,7 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         let rolled = Self.newYork.date(byAdding: .day, value: 12, to: DayAnchor.anchor(of: Self.day(2026, 10, 30)))!
         XCTAssertEqual(rolled, Self.utc("2026-11-11T11:00:00Z"))
         let task = try olderBuildTask("Stretch", due: rolled, recurrence: .daily)
-        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.newYork, syncLog: { _, _, _ in }),
+        XCTAssertEqual(importPass(calendar: Self.newYork, syncLog: { _, _, _ in }),
                        DayAnchoring.Count(leftAlone: .init(notThisZonesMidnight: 1)))
         XCTAssertEqual(bits(try stored(task.id).dueDate), bits(rolled))
         XCTAssertEqual(shown(try stored(task.id).dueDate), Self.day(2026, 11, 11))
@@ -277,5 +283,45 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         TaskActions.reschedule(task, to: snoozedTo, keepTime: false, in: context)
         XCTAssertEqual(bits(try stored(task.id).dueDate), bits(snoozedTo))
         XCTAssertTrue(try stored(task.id).hasDueTime)
+    }
+
+    // MARK: - The first-run pass
+
+    static let firstRunKey = "review.firstRun"
+
+    private func firstRun(in zone: Calendar = newYork, backUp: @escaping @MainActor (ModelContext) throws -> URL?,
+                          syncLog: @escaping ProfileStore.Log = { _, _, _ in }) -> DayAnchoring.FirstRunOutcome {
+        DayAnchoring.firstRunPass(context: context, defaults: defaults, key: Self.firstRunKey, calendar: zone, backUp: backUp,
+                                  syncLog: syncLog)
+    }
+
+    /// A folder of this test's own in the temporary directory, removed after the test.
+    private func scratchFolder() throws -> URL {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "DayAnchorReview-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: folder) }
+        return folder
+    }
+
+    /// No backup, no pass, and no pass behind its back: while the first-run pass waits for a backup (the disk full), an
+    /// import's pass rewrites nothing either. Before brief 92 the first import of that launch rewrote the whole store with
+    /// no backup taken. The next launch's backup works, its first pass anchors, and imports anchor again.
+    func testTheImportPassWaitsWhileTheFirstRunPassHasNoBackup() throws {
+        let thursday = Self.day(2026, 11, 12)
+        let midnight = DayAnchor.start(of: thursday, calendar: Self.newYork)
+        let task = try olderBuildTask("Call Sam", due: midnight)
+        let outcome = firstRun(backUp: { _ in throw CocoaError(.fileWriteOutOfSpace) })
+        guard case .noBackup = outcome else { return XCTFail("expected noBackup, got \(outcome)") }
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.newYork, defaults: defaults, firstRunKey: Self.firstRunKey,
+                                               syncLog: { _, _, _ in }), DayAnchoring.Count())
+        XCTAssertEqual(bits(try stored(task.id).dueDate), bits(midnight), "nothing rewritten without a backup")
+
+        let backup = try scratchFolder().appending(path: "HITList-2026-11-11.json")
+        let next = firstRun(backUp: { _ in try Data("{}".utf8).write(to: backup); return backup })
+        XCTAssertEqual(next, .rewrote(DayAnchoring.Count(dueDates: 1), backup: backup))
+        let later = try olderBuildTask("From the Mac on 0.9.2", due: DayAnchor.start(of: Self.day(2026, 11, 13), calendar: Self.newYork))
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.newYork, defaults: defaults, firstRunKey: Self.firstRunKey,
+                                               syncLog: { _, _, _ in }), DayAnchoring.Count(dueDates: 1))
+        XCTAssertEqual(try stored(later.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 13)))
     }
 }
