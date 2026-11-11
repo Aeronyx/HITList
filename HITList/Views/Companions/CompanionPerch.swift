@@ -64,6 +64,11 @@ struct CompanionPerch: View {
         }
     }
 
+    /// The Mac sidebar's search field as the seat sees it (`SidebarSearchField.height` and `.radius`, which only the
+    /// Mac compiles; `CompanionSeatTests` checks they agree).
+    static let fieldHeight: CGFloat = 28
+    static let fieldRadius: CGFloat = 7
+
     /// The host's shape (brief 100), in the sprite's own coordinates (its top-left at 0, 0): the "+" is a 76 × 50
     /// capsule (the iPhone's glass curves as a continuous one, the iPad's plain oval as a circular one; this is where
     /// both are, so a seat reaches the lower of the two); the Mac's field a continuous rounded rectangle 28 pt tall
@@ -80,9 +85,8 @@ struct CompanionPerch: View {
             return continuous.intersection(Capsule(style: .circular).path(in: rect))
         case .searchField:
             let width: CGFloat = 600
-            let height: CGFloat = 28
-            let rect = CGRect(x: -width - left, y: -offset.height, width: width, height: height)
-            return RoundedRectangle(cornerRadius: 7, style: .continuous).path(in: rect)
+            let rect = CGRect(x: -width - left, y: -offset.height, width: width, height: fieldHeight)
+            return RoundedRectangle(cornerRadius: fieldRadius, style: .continuous).path(in: rect)
         }
     }
 

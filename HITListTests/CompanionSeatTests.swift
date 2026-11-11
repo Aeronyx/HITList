@@ -47,7 +47,7 @@ final class CompanionSeatTests: XCTestCase {
     static let hostTop: CGFloat = 44
 
     static func hostSize(_ host: Host) -> CGSize {
-        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: SidebarSearchField.height)
+        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: CompanionPerch.fieldHeight)
     }
 
     static func sceneSize(_ host: Host) -> CGSize {
@@ -110,7 +110,7 @@ final class CompanionSeatTests: XCTestCase {
                     Capsule(style: .continuous).fill(Color(hex: palette.hex.accent))
                 }
             case .searchField:
-                let shape = RoundedRectangle(cornerRadius: SidebarSearchField.radius, style: .continuous)
+                let shape = RoundedRectangle(cornerRadius: CompanionPerch.fieldRadius, style: .continuous)
                 shape.fill(Color(hex: palette.hex.elevated))
                     .overlay(shape.strokeBorder(Color(hex: palette.hex.separator).opacity(0.5), lineWidth: 1))
             }
@@ -395,6 +395,10 @@ final class CompanionSeatTests: XCTestCase {
         let spriteWidth: CGFloat = CGFloat(nod.width) * p
         XCTAssertEqual(surface.maxX, spriteWidth - offset.width, accuracy: 0.001)
         XCTAssertEqual(surface.width, FloatingAddButton.size.width, accuracy: 0.001)
+        #if os(macOS)
+        XCTAssertEqual(CompanionPerch.fieldHeight, SidebarSearchField.height, "the seat's field is the Mac's")
+        XCTAssertEqual(CompanionPerch.fieldRadius, SidebarSearchField.radius)
+        #endif
     }
 
     // MARK: - Sheets
