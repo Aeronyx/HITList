@@ -33,7 +33,7 @@ final class CompanionNewCastTests: XCTestCase {
         // A wing out at each side.
         XCTAssertEqual(rest[14].first, "l")
         XCTAssertEqual(rest[14].last, "l")
-        XCTAssertEqual(posy.field.awake.gestures.map(\.name), ["blink", "sniff", "ear", "flutter", "glance"])
+        XCTAssertEqual(posy.field.awake.gestures.map(\.name), ["blink", "sniff", "ear", "flutter", "glance", "drip", "pant"])
     }
 
     /// Its flourish: it flies, all of three pixels, and lands back where it sat.
@@ -85,7 +85,7 @@ final class CompanionNewCastTests: XCTestCase {
         for row in rest[12...14] { XCTAssertTrue(row.contains("w"), "the band") }
         XCTAssertTrue(rest[13].contains("g"), "its stitches")
         XCTAssertEqual(rest.joined().filter { $0 == "k" }.count, 8, "two button eyes")
-        XCTAssertEqual(mallow.field.awake.gestures.map(\.name), ["blink", "ear", "wave", "settle", "glance"])
+        XCTAssertEqual(mallow.field.awake.gestures.map(\.name), ["blink", "ear", "wave", "settle", "glance", "drip", "fan"])
     }
 
     /// Its flourish: a hug its arms are too short for.
@@ -118,18 +118,22 @@ final class CompanionNewCastTests: XCTestCase {
 
     // MARK: - Routines (brief 84's format)
 
-    /// Each comes alive now and then in its own way: two flickers (a blink, an ear), routines of its own drawing (at
-    /// least three for every day, one each for rain, snow, a storm and a clear sky), none asleep.
+    /// Each comes alive now and then in its own way: two everyday flickers (a blink, an ear) and one each for rain and
+    /// heat, routines of its own drawing (at least three for every day, and for rain, snow, a storm, a clear sky and a
+    /// hot day), none asleep.
     func testFlickersAndRoutinesOfTheirOwn() {
         for character in Self.new {
             for place in CompanionPlace.allCases {
                 let posture = character.posture(place)
                 let awake = posture.awake
                 let at = "\(character.id) \(place)"
-                XCTAssertEqual(awake.flickers.map { awake.gestures[$0].name }, ["blink", "ear"], "\(at): two flickers")
+                let flickers = awake.flickers.map { awake.gestures[$0] }
+                XCTAssertEqual(flickers.filter { $0.sky == nil }.map(\.name), ["blink", "ear"], "\(at): two flickers")
+                XCTAssertEqual(flickers.filter { $0.sky == .rain }.map(\.name), ["drip"], "\(at): a drip in the rain")
+                XCTAssertEqual(flickers.filter { $0.sky == .heat }.count, 1, "\(at): one heat flicker")
                 XCTAssertGreaterThanOrEqual(awake.routines.filter { $0.sky == nil }.count, 3, at)
-                for sky in [CompanionSky.rain, .snow, .storm, .clear] {
-                    XCTAssertEqual(awake.routines.filter { $0.sky == sky }.count, 1, "\(at): one for \(sky)")
+                for sky in [CompanionSky.rain, .snow, .storm, .clear, .heat] {
+                    XCTAssertGreaterThanOrEqual(awake.routines.filter { $0.sky == sky }.count, 1, "\(at): one for \(sky)")
                 }
                 XCTAssertTrue(posture.asleep.routines.isEmpty, at)
                 for routine in awake.routines {
@@ -141,25 +145,85 @@ final class CompanionNewCastTests: XCTestCase {
             }
         }
         XCTAssertEqual(CompanionCharacter.posy.field.awake.routines.map(\.name),
-                       ["practice", "snuffle", "earflop", "raindrop", "snowflake", "thunder", "sunshine"])
+                       ["practice", "snuffle", "earflop", "wetshake", "shakeoff", "thunder", "sunshine", "fan"])
         XCTAssertEqual(CompanionCharacter.mallow.field.awake.routines.map(\.name),
-                       ["band", "wobble", "doze", "tufts", "raindrop", "shiver", "thunder", "sunshine"])
+                       ["band", "wobble", "doze", "tufts", "wetshake", "shiver", "shakeoff", "thunder", "sunshine", "siesta"])
     }
 
     /// The weather routines are drawn whole, prop and all: Posy keeps its wings over its head through the raindrop,
     /// Mallow its headscarf through the drop and the thunder. Posy's practice hop leaves the edge by a pixel only.
     func testTheWeatherRoutinesKeepTheirProps() {
         let posy = CompanionCharacter.posy
-        for frame in ["rainLookUp", "rainDrop2", "rainWince", "rainFlap", "stormCower"] {
+        for frame in ["rainLookUp", "rainRunoff1", "rainWince", "rainFlap", "stormCower"] {
             XCTAssertTrue(posy.rows(frame)![0..<5].joined().contains("l"), "\(frame): its wings over its head")
         }
         let mallow = CompanionCharacter.mallow
-        for frame in ["rainLookUp", "rainSplash", "rainShakeL", "stormCover"] {
+        for frame in ["rainLookUp", "rainBlinkUp", "rainShakeL", "stormCover"] {
             for row in mallow.rows(frame)![4...5] { XCTAssertTrue(row.contains("w"), "\(frame): its headscarf") }
         }
         let hop = posy.rows("hopUp")!
         XCTAssertTrue(hop[posy.seatRow].contains("d"), "its trotters still at the edge")
         XCTAssertTrue(hop[(posy.seatRow + 1)...].allSatisfy { row in row.allSatisfy { $0 == CompanionInk.clear } })
+    }
+
+    // MARK: - The weather on the creature (brief 91)
+
+    /// Rain: a single drop runs off what it holds (a flicker), and the rain routine is a wet shake. Nothing else of the
+    /// weather is drawn: no drop or flake in the air.
+    func testTheRainDripsOffThem() {
+        for character in Self.new {
+            let awake = character.plus.awake
+            let drip = awake.gesture(named: "drip")!
+            XCTAssertEqual(drip.sky, .rain)
+            for tick in drip.ticks {
+                XCTAssertEqual(character.difference(tick.frame, awake.rain!), 1, "\(character.id).\(tick.frame): one drop")
+            }
+            XCTAssertNotNil(awake.routines.first { $0.sky == .rain && $0.name == "wetshake" }, character.id)
+            for gone in ["rainDrop1", "rainSplash", "snowFlake1"] {
+                XCTAssertNil(character.index[gone], "\(character.id): \(gone) drew the weather in the air")
+            }
+        }
+    }
+
+    /// Snow piles up in two deeper stills (each with more snow than the one before, the line where it meets the "+"
+    /// untouched), awake and asleep, and a routine shakes it all off, ending a step from the dusting.
+    func testTheSnowPilesUpAndIsShakenOff() {
+        func snow(_ frame: [String]) -> Int { frame.joined().filter { $0 == "l" }.count }
+        for character in Self.new {
+            for mode in [character.plus.awake, character.plus.asleep] {
+                let piles = [mode.snow!] + mode.snowDeep
+                XCTAssertEqual(piles.count, 3, character.id)
+                for (a, b) in zip(piles, piles.dropFirst()) {
+                    let ra = character.rows(a)!, rb = character.rows(b)!
+                    XCTAssertGreaterThan(snow(rb), snow(ra), "\(character.id): \(b) deeper than \(a)")
+                    XCTAssertEqual(Array(ra[(character.seatRow - 1)...]), Array(rb[(character.seatRow - 1)...]),
+                                   "\(character.id).\(b): the pile leaves its seat alone")
+                }
+            }
+            let awake = character.plus.awake
+            let shake = awake.routines.first { $0.shakesOff }!
+            XCTAssertEqual(shake.sky, .snow)
+            // Its last tick is a step from the dusting: drawn whole, from `snow`; a gesture over the still, from rest.
+            let last = awake.ticks(of: shake).last!
+            let reference = last.whole ? awake.snow! : awake.rest
+            XCTAssertLessThanOrEqual(character.difference(last.tick.frame, reference), 16, "\(character.id): it ends on the dusting")
+        }
+    }
+
+    /// Heat: a still of its own, one heat flicker and one heat routine. Posy wilts with its tongue out and fans itself
+    /// with its useless wings; Mallow sags like a marshmallow in the sun, its band slipped, and takes a siesta.
+    func testTheHeatWiltsThem() {
+        let posy = CompanionCharacter.posy
+        XCTAssertEqual(posy.plus.awake.heat, "heat")
+        XCTAssertGreaterThan(posy.rows("heat")!.joined().filter { $0 == "a" }.count,
+                             posy.rows("rest")!.joined().filter { $0 == "a" }.count, "its tongue out")
+        XCTAssertEqual(posy.plus.awake.routines.first { $0.sky == .heat }?.name, "fan")
+        let mallow = CompanionCharacter.mallow
+        XCTAssertEqual(mallow.plus.awake.heat, "heat")
+        XCTAssertTrue(mallow.rows("heat")![15].contains("w"), "its band slipped down")
+        XCTAssertFalse(mallow.rows("heat")![12].contains("w"))
+        XCTAssertEqual(mallow.plus.awake.routines.first { $0.sky == .heat }?.name, "siesta")
+        XCTAssertTrue(mallow.rows("heatMask")![9].contains("w"), "its band over its eyes for the siesta")
     }
 
     // MARK: - In place
@@ -170,8 +234,9 @@ final class CompanionNewCastTests: XCTestCase {
     func testNothingFloatsOverTheCurveOfThePlus() {
         for character in Self.new {
             let posture = character.plus
-            let frames = [posture.awake.rest, posture.awake.rain, posture.awake.snow, posture.asleep.rest,
-                          posture.asleep.snow].compactMap { $0 }
+            let frames = ([posture.awake.rest, posture.awake.rain, posture.awake.snow, posture.awake.heat,
+                           posture.asleep.rest, posture.asleep.snow].compactMap { $0 })
+                + posture.awake.snowDeep + posture.asleep.snowDeep
             for frame in frames {
                 for (x, drop) in restingDrops(character, frame: frame) {
                     XCTAssertLessThanOrEqual(drop, 1, "\(character.id).\(frame), column \(x): \(drop) pt above the +")
