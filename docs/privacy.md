@@ -58,6 +58,10 @@ sharing at any time. Switching Shared Tasks off keeps your lists in iCloud.
 HITList's Siri phrases and Shortcuts actions run on your device and use the same data as the app. What you say
 to Siri is handled by Apple under Apple's privacy policy.
 
+"Add to HITList" in the share sheet keeps only what you share with it (a page's address and title, or the text you
+chose) in HITList's own folder on your device until HITList opens and saves it as a task like any other; it uses no
+network and reads nothing else from the app you shared from.
+
 ## Calendar events (optional, off unless you turn it on)
 
 If you switch on Settings → General → Calendar events, HITList asks for access to your calendars and shows the
