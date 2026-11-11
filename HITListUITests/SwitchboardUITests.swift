@@ -132,7 +132,9 @@ final class SwitchboardUITests: XCTestCase {
         let today = app.buttons["tab-today"]
         today.tap()
         XCTAssertTrue(text("Take vitamins").waitForExistence(timeout: 5), "opted in, past its time: today's task")
-        if Calendar.current.component(.hour, from: Date()) < 21 {
+        // The board's day starts at its 04:00 reset: between midnight and 04:00 it is still yesterday's board day,
+        // whose 21:00 has passed, so the switch is rightly in Today then (this ran at 00:30 once and failed).
+        if (4..<21).contains(Calendar.current.component(.hour, from: Date())) {
             XCTAssertFalse(text("Take meds").exists, "opted in too, but its 21:00 hasn't come")
         }
         snapshot("4 Today with an opted-in switch after its time")
