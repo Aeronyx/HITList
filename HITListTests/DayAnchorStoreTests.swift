@@ -213,7 +213,7 @@ final class DayAnchorStoreTests: XCTestCase {
         XCTAssertEqual(try stored(task.id).dueDate, DayAnchor.anchor(of: Self.thursday))
         XCTAssertEqual(try stored(task.id).deadline, DayAnchor.anchor(of: Self.friday))
         XCTAssertEqual(lines, ["Days anchored on the first run of this build: 1 due date and 1 deadline"])
-        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey), DayAnchoring.firstRunVersion)
+        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey()), DayAnchoring.firstRunVersion)
 
         var calledAgain = false
         let again = DayAnchoring.firstRunPass(context: context, defaults: defaults, calendar: Self.chicago,
@@ -235,7 +235,7 @@ final class DayAnchorStoreTests: XCTestCase {
         guard case .noBackup = none else { return XCTFail("a backup that wrote nothing is no backup, got \(none)") }
         XCTAssertEqual(levels, [.error, .error])
         XCTAssertEqual(try stored(task.id).dueDate, midnight(Self.thursday, in: Self.chicago))
-        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey), 0)
+        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey()), 0)
 
         let later = DayAnchoring.firstRunPass(context: context, defaults: defaults, calendar: Self.chicago,
                                               backUp: { _ in URL(fileURLWithPath: "/tmp/b.json") }, syncLog: { _, _, _ in })
@@ -251,7 +251,7 @@ final class DayAnchorStoreTests: XCTestCase {
                                                 backUp: { _ in called = true; return nil }, syncLog: { _, _, _ in })
         XCTAssertEqual(outcome, .nothingToDo)
         XCTAssertFalse(called)
-        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey), DayAnchoring.firstRunVersion)
+        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey()), DayAnchoring.firstRunVersion)
     }
 
     /// The one switch: off, the first-run pass does nothing and is not marked done (it runs on the first launch with
@@ -263,13 +263,20 @@ final class DayAnchorStoreTests: XCTestCase {
                                                 backUp: { _ in called = true; return nil }, syncLog: { _, _, _ in })
         XCTAssertEqual(outcome, .disabled)
         XCTAssertFalse(called)
-        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey), 0)
+        XCTAssertEqual(defaults.integer(forKey: DayAnchoring.firstRunKey()), 0)
         XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.chicago, enabled: false, syncLog: { _, _, _ in }),
                        DayAnchoring.Count())
         XCTAssertEqual(try stored(task.id).dueDate, midnight(Self.thursday, in: Self.chicago))
     }
 
     /// A side store's backup goes into a folder of its own, never into HITList.store's backups.
+    /// The pass's mark is named after its store, so a Debug run on another store never marks HITList.store's done.
+    func testTheFirstRunMarkIsNamedAfterItsStore() {
+        XCTAssertEqual(DayAnchoring.firstRunKey(storeName: "HITList.store"), "dates.dayAnchorPass.HITList.store")
+        XCTAssertNotEqual(DayAnchoring.firstRunKey(storeName: "HITList-Development.store"),
+                          DayAnchoring.firstRunKey(storeName: "HITList.store"))
+    }
+
     func testASideStoresBackupGoesInItsOwnFolder() throws {
         _ = try olderBuildTask("Call Sam", due: midnight(Self.thursday, in: Self.chicago))
         let folder = FileManager.default.temporaryDirectory.appending(path: "DayAnchorStoreTests-\(UUID().uuidString)")

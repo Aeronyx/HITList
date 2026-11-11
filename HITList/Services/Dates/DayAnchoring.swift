@@ -121,9 +121,10 @@ enum DayAnchoring {
 
     // MARK: - The first-run pass
 
-    /// The defaults key (the store's own suite, `AppGroup.defaults`) that says the whole store has been anchored, and by
-    /// which version of the pass.
-    static let firstRunKey = "dates.dayAnchorPass"
+    /// The defaults key that says the whole store has been anchored, and by which version of the pass. In the store's
+    /// own suite (`AppGroup.defaults`) and named after the store too, so a Debug run on HITList-Development.store can
+    /// never mark HITList.store's pass done for the TestFlight build that shares the app group.
+    static func firstRunKey(storeName: String = ModelContainerFactory.storeName) -> String { "dates.dayAnchorPass.\(storeName)" }
     static let firstRunVersion = 1
 
     enum FirstRunOutcome: Equatable {
@@ -144,21 +145,22 @@ enum DayAnchoring {
     /// for it (`backUp`: `LocalBackup`'s daily copy for HITList.store); no backup, no pass.
     @MainActor
     @discardableResult
-    static func firstRunPass(context: ModelContext, defaults: UserDefaults = AppGroup.defaults, calendar: Calendar = .current,
+    static func firstRunPass(context: ModelContext, defaults: UserDefaults = AppGroup.defaults, key: String = firstRunKey(),
+                             calendar: Calendar = .current,
                              enabled: Bool = isEnabled, backUp: @MainActor (ModelContext) throws -> URL? = { try backUp(context: $0) },
                              syncLog: ProfileStore.Log = syncLog) -> FirstRunOutcome {
         guard enabled else {
             log.notice("Days are not anchored: DayAnchor.isEnabled is off")
             return .disabled
         }
-        guard defaults.integer(forKey: firstRunKey) < firstRunVersion else { return .alreadyDone }
+        guard defaults.integer(forKey: key) < firstRunVersion else { return .alreadyDone }
         let pending: Count
         do { pending = try self.pending(in: context, calendar: calendar, enabled: enabled) } catch {
             log.error("First-run day pass could not read the store: \(error.localizedDescription, privacy: .public)")
             return .failed(error.localizedDescription)
         }
         guard pending.total > 0 else {
-            defaults.set(firstRunVersion, forKey: firstRunKey)
+            defaults.set(firstRunVersion, forKey: key)
             log.notice("First-run day pass: every day was already anchored")
             return .nothingToDo
         }
@@ -174,7 +176,7 @@ enum DayAnchoring {
         }
         do {
             let count = try pass(in: context, calendar: calendar, enabled: enabled)
-            defaults.set(firstRunVersion, forKey: firstRunKey)
+            defaults.set(firstRunVersion, forKey: key)
             log.notice("First-run day pass rewrote \(count.total) values (\(count.description, privacy: .public)) in \(calendar.timeZone.identifier, privacy: .public); backup \(backup.lastPathComponent, privacy: .public)")
             var fields = count.fields
             fields["zone"] = calendar.timeZone.identifier
