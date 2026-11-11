@@ -140,6 +140,8 @@ struct SwitchboardCard: View {
             SwitchTimeChip(time: draft.resetTime, placeholder: "4:00 AM", allowsNone: false, speechName: "Resets at") { time in
                 // A board always has a day: there is always a reset time.
                 if let time { draft.resetTime = time }
+            } onStart: {
+                nameFocused = false
             } onFinish: {
                 nameFocused = true
             }
