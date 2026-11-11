@@ -49,7 +49,7 @@ struct MacAppearanceSection: View {
                 .toggleStyle(.hit)
                 .hitRowPadding()
             Toggle(isOn: $compactRows) {
-                HITMenuRowLabel("Compact rows", subtitle: "Tighter task rows, more on screen. Arrives in the task lists with the next row update.",
+                HITMenuRowLabel("Compact rows", subtitle: "Tighter task rows, more on screen",
                                 systemImage: "rectangle.compress.vertical")
             }
             .toggleStyle(.hit)
@@ -188,8 +188,8 @@ struct ThemePreviewCard: View {
 }
 
 extension Preferences {
-    /// Tighter task rows. Stored by Settings → Appearance on the Mac; `TaskRow` doesn't read it yet
-    /// (pending: TaskRow had no owner in round 6). The preview card already shows the compact spacing.
+    /// Tighter task rows. Stored by Settings → Appearance on the Mac; the task lists read it (`TaskRow`,
+    /// `ListMetrics`), and the preview card shows the compact spacing.
     static let compactRows = "pref.compactRows"
     static let compactRowsDefault = false
 }

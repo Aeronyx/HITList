@@ -176,7 +176,7 @@ struct AccountSettingsSection: View {
         .onChange(of: pickedPhoto) { _, item in if let item { loadPhoto(item) } }
         .onDisappear { saveName() }
 
-        HITGroup("iCloud", footer: AccountCopy.storage) {
+        HITGroup("iCloud account", footer: AccountCopy.storage) {
             AccountStatusRow(state: AccountState.current)
             HITMenuRow(AccountCopy.signOutTitle, systemImage: "rectangle.portrait.and.arrow.right",
                        accessory: .expand(isExpanded: showSignOut)) {
