@@ -83,6 +83,13 @@ final class MacSettingsTests: XCTestCase {
                        "a plain open (⌘,) comes back to the pane last shown")
     }
 
+    /// A section's name once (brief 99, George agreed with the sweep): the page's big header names it and the toolbar
+    /// draws no title; the window keeps the name for the Window menu.
+    func testTheSettingsPageNamesItsSectionOnce() {
+        XCTAssertFalse(MacSettingsPage.showsToolbarTitle)
+        XCTAssertEqual(MacSettingsPage.windowTitle(for: .general), "General")
+    }
+
     func testOpenSettingsLaunchArgumentOnlyOpensThePage() {
         XCTAssertFalse(SettingsRouter.opensAtLaunch(arguments: ["HITList"]))
         XCTAssertTrue(SettingsRouter.opensAtLaunch(arguments: ["HITList", "-openSettings"]))
