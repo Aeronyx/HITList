@@ -279,7 +279,7 @@ struct InboxProcessView: View {
                 open(.date)
             }
             .popover(isPresented: isOpen(.date)) {
-                PickDatePopover(initial: TaskRescheduling.QuickDate.tomorrow.date(now: now)) { day in
+                PickDatePopover(selected: task.dueDate, now: now) { day in
                     popover = nil
                     schedule(task, to: day)
                 }
