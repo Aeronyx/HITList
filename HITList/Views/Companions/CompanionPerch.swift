@@ -3,40 +3,51 @@ import SwiftUI
 /// Where a companion lives, placed with one overlay line in the view that hosts it (brief 76):
 /// `.overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }`.
 /// It never changes its host's layout (it is drawn with an offset), takes no tap meant for the field or a row
-/// (only its own pixels above the field), is hidden from VoiceOver, makes no
+/// (only its own pixels above the field, and none at the Mac sidebar's foot), is hidden from VoiceOver, makes no
 /// sound, and is gone when Settings → Extras → Companions is off. Reduce Motion draws the rest frame and runs
 /// nothing; Reduce Effects and Low Power Mode keep the idle and drop the flourish.
 struct CompanionPerch: View {
     enum Spot {
         /// Nod, sitting on the top edge of a search field (the Mac sidebar's, Browse's on iPhone), legs over it.
         case searchField
+        /// Quill, asleep on the top edge of Browse's last card (iPhone).
+        case browseFoot
+        /// Quill, asleep at the right of the Mac sidebar's Settings row.
+        case sidebarFoot
 
         var character: CompanionCharacter {
             switch self {
             case .searchField: .nod
+            case .browseFoot, .sidebarFoot: .quill
             }
         }
 
         var alignment: Alignment {
             switch self {
             case .searchField: .topTrailing
+            case .browseFoot, .sidebarFoot: .bottomTrailing
             }
         }
 
         /// From the host's trailing edge to the sprite's right edge, and from the host's top (a seat) or bottom
-        /// (a floor) to the line it sits or lies on, in points. Whole points, so every pixel stays crisp.
+        /// (a floor) to the line it sits or lies on, in points. Whole points, so every pixel stays crisp. On Browse,
+        /// Quill's last row (its shadow) lies a pixel into the card's top edge, clear of the card's rounded corner.
         var inset: (trailing: CGFloat, edge: CGFloat) {
             switch self {
             #if os(macOS)
             case .searchField: (12, 0)
+            case .sidebarFoot: (16, 12)
+            case .browseFoot: (16, 0)
             #else
             case .searchField: (14, 0)
+            case .browseFoot: (26, -2)
+            case .sidebarFoot: (16, 12)
             #endif
             }
         }
 
-        /// Whether a tap on the companion plays its flourish.
-        var takesTaps: Bool { true }
+        /// Whether a tap on the companion plays its flourish. The Mac's Settings row keeps every click.
+        var takesTaps: Bool { self != .sidebarFoot }
     }
 
     let spot: Spot
@@ -123,3 +134,26 @@ private struct TapArea: Shape {
         return path.intersection(Path(above))
     }
 }
+
+#if os(iOS)
+/// The header of Browse's last section on iPhone: room above the card for Quill to sleep on its top edge, at the
+/// right. Nothing (and no room) while Companions is off.
+struct CompanionShelf: View {
+    @AppStorage(Preferences.companions, store: AppGroup.defaults) private var enabled = true
+
+    /// Quill's height, less the two empty rows above its sleeping curl: the stand and the stretch use them, and may
+    /// reach a little into the gap above.
+    static let height = CGFloat(CompanionCharacter.quill.height - 2) * CompanionCharacter.pointsPerPixel
+
+    var body: some View {
+        if enabled {
+            Color.clear
+                .frame(maxWidth: .infinity)
+                .frame(height: Self.height)
+                .overlay(alignment: CompanionPerch.alignment(.browseFoot)) { CompanionPerch(.browseFoot) }
+                .listRowInsets(EdgeInsets())
+                .textCase(nil)
+        }
+    }
+}
+#endif
