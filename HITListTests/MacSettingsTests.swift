@@ -228,7 +228,7 @@ final class MacSettingsTests: XCTestCase {
     // MARK: Appearance
 
     func testAppearanceSwatchesAndCompactRowsKey() {
-        XCTAssertEqual(MacAppearanceSection.swatchSide, 56)
+        XCTAssertEqual(MacAppearanceSection.swatchSide, 64, "larger, for its companion (brief 86)")
         XCTAssertEqual(ThemeSwatch.size, 44, "the iPhone sheet keeps its 44 pt swatches")
         XCTAssertEqual(Preferences.compactRows, "pref.compactRows")
         XCTAssertFalse(Preferences.compactRowsDefault)
@@ -242,7 +242,7 @@ final class MacSettingsTests: XCTestCase {
             render(ThemePreviewCard(palette: palette), "preview \(palette.name)", width: 312)
             render(ThemePreviewCard(palette: palette, compact: true), "compact preview \(palette.name)", width: 560)
             render(ThemeSwatch(palette: palette, isSelected: true, side: MacAppearanceSection.swatchSide),
-                   "56 pt swatch \(palette.name)", width: 70)
+                   "64 pt swatch \(palette.name)", width: 80)
         }
     }
 

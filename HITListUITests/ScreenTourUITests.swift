@@ -66,14 +66,14 @@ final class ScreenTourUITests: XCTestCase {
             pause()
         }
 
-        // Settings, down to Extras.
+        // Settings' first screen, then its Extras page (brief 86: pages push inside the sheet).
         let gear = app.buttons["settingsButton"].firstMatch
         if gear.waitForExistence(timeout: 3) {
             gear.tap()
             pause()
             snapshot("10 Settings")
-            let extras = app.staticTexts["Sync bolt"].firstMatch
-            for _ in 0..<10 where !(extras.exists && extras.isHittable) { app.swipeUp() }
+            let extras = app.descendants(matching: .any)["settings-page-extras"].firstMatch
+            if extras.waitForExistence(timeout: 3) { extras.tap() }
             pause()
             snapshot("11 Settings, Extras")
             let done = app.buttons["Done"].firstMatch
