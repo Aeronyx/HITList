@@ -240,6 +240,7 @@ final class CompanionWeather {
             sky = observed
             observedAt = reading.date
             skySource.set(observed, at: reading.date)
+            Self.log.info("Weather observed: \(observed.rawValue, privacy: .public) (\(reading.condition, privacy: .public))")
             expireIfStale(now: clock())
         } catch {
             Self.log.error("Weather unavailable: \(Self.describe(error), privacy: .public)")
