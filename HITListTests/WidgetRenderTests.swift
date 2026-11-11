@@ -95,6 +95,10 @@ enum WidgetRenders {
                                         cell.view
                                             .frame(width: cell.size.width, height: cell.size.height)
                                             .background(Color.black.opacity(0.35))
+                                            // The circular one's own background is a system material that draws only on
+                                            // the Lock Screen; its shape is the system's too.
+                                            .clipShape(cell.size.width == cell.size.height
+                                                       ? AnyShape(Circle()) : AnyShape(RoundedRectangle(cornerRadius: 10)))
                                             .environment(\.widgetPalette, palette)
                                             .environment(\.widgetOffscreen, true)
                                             .environment(\.colorScheme, .dark)
