@@ -24,6 +24,13 @@ struct CompanionPerch: View {
             }
         }
 
+        init(_ place: CompanionPlace) {
+            switch place {
+            case .field: self = .searchField
+            case .plus: self = .addButton
+            }
+        }
+
         /// From the host's trailing edge to the right edge of the companion's resting pose, in points (whole
         /// points, so every pixel stays crisp). Its seat row lies on the host's top edge.
         var trailing: CGFloat {
@@ -57,6 +64,28 @@ struct CompanionPerch: View {
         }
     }
 
+    /// The host's shape (brief 100), in the sprite's own coordinates (its top-left at 0, 0): the "+" is a 76 × 50
+    /// capsule (the iPhone's glass curves as a continuous one, the iPad's plain oval as a circular one; this is where
+    /// both are, so a seat reaches the lower of the two); the Mac's field a continuous rounded rectangle 28 pt tall
+    /// with a 7 pt radius, whose far end is out of the picture.
+    static func surface(_ character: CompanionCharacter, spot: Spot) -> Path {
+        let offset = offset(character, spot: spot)
+        let spriteWidth: CGFloat = CGFloat(character.width) * CompanionCharacter.pointsPerPixel
+        let left: CGFloat = -spriteWidth + offset.width
+        switch spot {
+        case .addButton:
+            let size = FloatingAddButton.size
+            let rect = CGRect(x: -size.width - left, y: -offset.height, width: size.width, height: size.height)
+            let continuous = Capsule(style: .continuous).path(in: rect)
+            return continuous.intersection(Capsule(style: .circular).path(in: rect))
+        case .searchField:
+            let width: CGFloat = 600
+            let height: CGFloat = 28
+            let rect = CGRect(x: -width - left, y: -offset.height, width: width, height: height)
+            return RoundedRectangle(cornerRadius: 7, style: .continuous).path(in: rect)
+        }
+    }
+
     /// The sprite's offset from the host's top-trailing corner: its resting pose's rightmost pixel `spot.trailing`
     /// in from the edge (and the posture's own `inset` further), its seat row on the top edge.
     static func offset(_ character: CompanionCharacter, spot: Spot) -> CGSize {
@@ -86,13 +115,14 @@ private struct CompanionLife: View {
         let stage = director.stages[character.id]
             ?? CompanionStage(since: .now, place: place, look: director.look(at: .now))
         let rest = clock.restPose(at: .now, stage: stage)
+        let spot = CompanionPerch.Spot(place)
         Group {
             if !still, director.isAppActive, stage.act != nil {
                 TimelineView(CompanionTimeline(clock: clock, stage: stage)) { context in
-                    CompanionSprite(character: character, pose: clock.pose(at: context.date, stage: stage))
+                    CompanionFigure(character: character, pose: clock.pose(at: context.date, stage: stage), spot: spot)
                 }
             } else {
-                CompanionSprite(character: character, pose: rest)
+                CompanionFigure(character: character, pose: rest, spot: spot)
             }
         }
         .contentShape(TapArea(runs: character.drawn[rest.frame], width: character.width, seatRow: character.seatRow,
@@ -102,6 +132,70 @@ private struct CompanionLife: View {
         .onDisappear { director.disappear(character.id) }
         .onChange(of: still) { _, new in director.setMotion(character.id, still: new, calm: calm) }
         .onChange(of: calm) { _, new in director.setMotion(character.id, still: still, calm: new) }
+    }
+}
+
+/// A companion as it sits on its host: the sprite, and its seat under it.
+struct CompanionFigure: View {
+    let character: CompanionCharacter
+    let pose: CompanionPose
+    let spot: CompanionPerch.Spot
+    var inks: CompanionInks? = nil
+
+    var body: some View {
+        CompanionSprite(character: character, pose: pose, inks: inks)
+            .background(alignment: .topLeading) { CompanionSeat(character: character, pose: pose, spot: spot, inks: inks) }
+    }
+}
+
+/// Brief 100, the seat: where the host curves away under a companion's base (the "+"'s shoulder, the field's corner)
+/// the base is carried down to the host's edge in its own ink, so no background shows between them. What it adds is
+/// tucked behind the rim: one sprite pixel below each base pixel that has nothing hanging under it, clipped to above
+/// the host's shape (half a point into it, so the two edges meet without a seam). On the flat it is that half point;
+/// a base more than a pixel above the curve is the drawing's to fix (`CompanionSeatTests`).
+struct CompanionSeat: View {
+    let character: CompanionCharacter
+    let pose: CompanionPose
+    let spot: CompanionPerch.Spot
+    var inks: CompanionInks? = nil
+
+    /// How far the clip sits into the host, so the seat's edge and the host's meet without a seam of background.
+    static let overlap: CGFloat = 0.5
+
+    /// The base pixels a seat goes under: on the edge row, with nothing hanging below them (x as drawn, mirrored or
+    /// not).
+    static func base(_ character: CompanionCharacter, pose: CompanionPose) -> [(x: Int, ink: CompanionInk)] {
+        guard character.drawn.indices.contains(pose.frame) else { return [] }
+        let runs = character.drawn[pose.frame]
+        let edge = character.seatRow - 1
+        var below = Set<Int>()
+        for run in runs where run.y == edge + 1 { for x in run.x..<(run.x + run.length) { below.insert(x) } }
+        var out: [(x: Int, ink: CompanionInk)] = []
+        for run in runs where run.y == edge {
+            for x in run.x..<(run.x + run.length) where !below.contains(x) {
+                let drawnX: Int = pose.mirrored ? character.width - 1 - x : x
+                out.append((drawnX, run.ink))
+            }
+        }
+        return out
+    }
+
+    var body: some View {
+        let inks = inks ?? CompanionInks(palette: Theme.palette)
+        let p = CompanionCharacter.pointsPerPixel
+        let base = Self.base(character, pose: pose)
+        let host = CompanionPerch.surface(character, spot: spot).offsetBy(dx: 0, dy: Self.overlap)
+        let top: CGFloat = CGFloat(character.seatRow) * p
+        Canvas { context, _ in
+            context.clip(to: host, options: .inverse)
+            for pixel in base {
+                let left: CGFloat = CGFloat(pixel.x) * p
+                context.fill(Path(CGRect(x: left, y: top, width: p, height: p)), with: .color(inks[pixel.ink]))
+            }
+        }
+        .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height + 1) * p)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
