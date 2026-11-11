@@ -10,6 +10,8 @@ struct CompanionInks: Equatable {
     /// How far the dark tone and the glow lean into the background.
     static let darkMix = 0.52
     static let glowMix = 0.5
+    /// How opaque the veil is (brief 101): the accent at this, so the window or the field shows through Phase's hem.
+    static let veilOpacity = 0.4
 
     init(palette: ThemePalette) {
         let h = palette.hex
@@ -21,6 +23,8 @@ struct CompanionInks: Equatable {
             (.accent, h.accent),
             (.warm, h.bolt),
             (.glow, Self.mix(h.bolt, h.background, Self.glowMix)),
+            // The accent's colour; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
+            (.veil, h.accent),
         ]
         hex = Dictionary(uniqueKeysWithValues: pairs)
         colors = Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, Color(hex: $0.1)) })
@@ -51,7 +55,8 @@ struct CompanionInks: Equatable {
     }
 }
 
-/// One companion pose, drawn: every sprite pixel a 2 pt square of its ink, no smoothing, nothing between pixels.
+/// One companion pose, drawn: every sprite pixel a 2 pt square of its ink, no smoothing, nothing between pixels; a
+/// see-through ink or body (`CompanionCharacter.opacity`, brief 101) at its opacity, so what is behind shows through.
 struct CompanionSprite: View {
     let character: CompanionCharacter
     let pose: CompanionPose
@@ -65,6 +70,7 @@ struct CompanionSprite: View {
         let width = character.width
         let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
         let mirrored = pose.mirrored
+        let character = character
         Canvas { context, _ in
             for run in runs {
                 // One step per line: the CI runner's older Swift gave up on this as one expression.
@@ -73,7 +79,9 @@ struct CompanionSprite: View {
                 let top: CGFloat = CGFloat(run.y) * p
                 let length: CGFloat = CGFloat(run.length) * p
                 let rect = CGRect(x: left, y: top, width: length, height: p)
-                context.fill(Path(rect), with: .color(inks[run.ink]))
+                let alpha: Double = character.opacity(run.ink)
+                let color: Color = alpha < 1 ? inks[run.ink].opacity(alpha) : inks[run.ink]
+                context.fill(Path(rect), with: .color(color))
             }
         }
         .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height) * p)
