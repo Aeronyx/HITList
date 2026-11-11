@@ -124,6 +124,8 @@ struct MacSidebarRow<Icon: View, Trailing: View>: View {
     @ViewBuilder var trailing: Trailing
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Set when the column draws one gliding selected fill for all its rows (`macSidebarSelectionGlide`).
+    @Environment(\.macSidebarSelectionSpace) private var selectionSpace
 
     private typealias M = MacSidebarMetrics
 
@@ -147,9 +149,16 @@ struct MacSidebarRow<Icon: View, Trailing: View>: View {
         }
         .frame(height: M.rowHeight)
         .background {
-            RoundedRectangle(cornerRadius: M.rowRadius, style: .circular)
-                .fill(isSelected ? MacSidebarStyle.selectionFill : isHovered ? MacSidebarStyle.hoverFill : .clear)
+            let shape = RoundedRectangle(cornerRadius: M.rowRadius, style: .circular)
+            if isSelected, let selectionSpace {
+                // The column's fill takes this place (and glides here); the row only says where it is.
+                shape.fill(.clear)
+                    .matchedGeometryEffect(id: MacSidebarSelection.id, in: selectionSpace, properties: .frame, isSource: true)
+            } else {
+                shape.fill(isSelected ? MacSidebarStyle.selectionFill : isHovered ? MacSidebarStyle.hoverFill : .clear)
+            }
         }
+        .preference(key: MacSidebarSelection.HasSelectedRow.self, value: isSelected)
         .contentShape(Rectangle())
         .padding(.horizontal, M.rowInset)
         .onHover { isHovered = $0 }
@@ -197,6 +206,58 @@ struct MacSidebarHeader: View {
 extension EnvironmentValues {
     /// Set by `MacSidebarRow` for its trailing views.
     @Entry var macSidebarRowSelected = false
+    /// Set by `macSidebarSelectionGlide` on a column of rows, which then leave the selected fill to it.
+    @Entry var macSidebarSelectionSpace: Namespace.ID? = nil
+}
+
+// MARK: - The selection's glide (brief 75)
+
+/// The selected fill of a column of `MacSidebarRow`s, drawn once behind them all, so a new selection glides to its row
+/// the way the iPhone island's pill slides to a tapped tab, instead of leaving one row and appearing on another in a
+/// single frame.
+enum MacSidebarSelection {
+    static let id = "macSidebarSelection"
+
+    /// The fill's motion to a newly selected row: the island pill's spring (`HITMotion.tabPill`, within 2% of its place
+    /// in 200 ms, no visible bounce); under Reduce Motion it jumps, as the pill does.
+    static func glide(reduceMotion: Bool) -> Animation? { HITMotion.tabPill(reduceMotion: reduceMotion) }
+
+    /// Whether any row in the column is selected (the fill hides when the selection is somewhere else).
+    struct HasSelectedRow: PreferenceKey {
+        static let defaultValue = false
+        static func reduce(value: inout Bool, nextValue: () -> Bool) { value = value || nextValue() }
+    }
+}
+
+extension View {
+    /// One selected fill for the `MacSidebarRow`s in this stack, behind them all, gliding to the row `selection` picks
+    /// (`MacSidebarSelection.glide`). At rest it is the row's own fill, to the pixel; rows outside such a stack keep
+    /// drawing their own. Apply to the stack that holds the rows.
+    func macSidebarSelectionGlide<Value: Equatable>(_ selection: Value) -> some View {
+        modifier(MacSidebarSelectionGlide(selection: selection))
+    }
+}
+
+private struct MacSidebarSelectionGlide<Value: Equatable>: ViewModifier {
+    let selection: Value
+    @Namespace private var space
+    @State private var hasSelectedRow = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .environment(\.macSidebarSelectionSpace, space)
+            .onPreferenceChange(MacSidebarSelection.HasSelectedRow.self) { hasSelectedRow = $0 }
+            .background(alignment: .topLeading) {
+                if hasSelectedRow {
+                    RoundedRectangle(cornerRadius: MacSidebarMetrics.rowRadius, style: .circular)
+                        .fill(MacSidebarStyle.selectionFill)
+                        .matchedGeometryEffect(id: MacSidebarSelection.id, in: space, properties: .frame, isSource: false)
+                        .animation(MacSidebarSelection.glide(reduceMotion: reduceMotion), value: selection)
+                        .accessibilityHidden(true)
+                }
+            }
+    }
 }
 
 /// ↑ and ↓ in the sidebar: the next row in the order they are drawn, nil at either end (the selection stays).
