@@ -2,8 +2,14 @@ import Foundation
 
 extension CompanionCharacter {
     /// Every companion drawn so far.
-    static let all: [CompanionCharacter] = [CompanionCharacter.nod, CompanionCharacter.quill, CompanionCharacter.hush,
-                                            CompanionCharacter.posy, CompanionCharacter.mallow]
+    static let all: [CompanionCharacter] = [
+        CompanionCharacter.nod,
+        CompanionCharacter.quill,
+        CompanionCharacter.hush,
+        CompanionCharacter.posy,
+        CompanionCharacter.mallow,
+        CompanionCharacter.tuck,
+    ]
 
     static func named(_ id: String) -> CompanionCharacter? { all.first { $0.id == id } }
 }
@@ -23,6 +29,8 @@ enum CompanionCast {
         "rose": "posy",
         // Round 18's plushy sketch, fatter and rounder, in a knitted band: a marshmallow for a mocha (brief 85).
         "mocha": "mallow",
+        // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
+        "moss": "tuck",
     ]
 
     /// The companion for the theme `themeID`.
