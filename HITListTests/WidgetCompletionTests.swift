@@ -261,11 +261,14 @@ final class WidgetCompletionTests: XCTestCase {
             try ledger.save(to: ledgerURL)
             if applies { TaskActions.toggleCompletion(task, in: context, now: clock) }
         }
+        // The relaunch, a minute on: its first export ran before the drain, after the old saves, before the new one.
+        clock = clock.addingTimeInterval(60)
+        export(startedIn: -30)
         launch().drain()
         XCTAssertTrue(landed.isCompleted, "not applied a second time (that would un-complete it)")
         XCTAssertTrue(lost.isCompleted, "applied now")
-        XCTAssertEqual(try shown(landed.id), .checked)
-        XCTAssertEqual(try shown(lost.id), .checked)
+        XCTAssertEqual(try shown(landed.id), .gone, "its save came before that export: iCloud has it")
+        XCTAssertEqual(try shown(lost.id), .checked, "applied after that export started: it waits for the next")
     }
 
     // MARK: - Idempotent and ordered
