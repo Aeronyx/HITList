@@ -5,17 +5,24 @@ import HITListCore
 
 /// Brief 82, item 1: the store written in one time zone and read in another, field by field. Tasks are written the way
 /// the app's writers do in the writer's zone (quick add's parser, the editor's start of day, a completion), saved into
-/// an in-memory store, fetched back in a fresh context, and read with core's rules in the reader's zone. Every clock
-/// is injected: nothing here reads the wall clock or this Mac's zone.
+/// an in-memory store through the app's one place (`DayAnchoring.SaveHook`, in the writer's zone), fetched back in a
+/// fresh context, and read with core's rules in the reader's zone. Every clock is injected: nothing here reads the
+/// wall clock or this Mac's zone.
 @MainActor
 final class TimeZoneStoreTests: XCTestCase {
     private var container: ModelContainer!
+    /// The app's one place (brief 82): every save anchors its days, read in the zone the device writing is in.
+    private var hook: DayAnchoring.SaveHook?
+    private var writerZone = TimeZoneStoreTests.chicago
 
     override func setUp() async throws {
         container = ModelContainerFactory.preview()
+        hook = DayAnchoring.SaveHook(container: container, calendar: { [unowned self] in self.writerZone })
     }
 
     override func tearDown() async throws {
+        hook?.stop()
+        hook = nil
         container = nil
     }
 
@@ -45,6 +52,7 @@ final class TimeZoneStoreTests: XCTestCase {
     /// Writes one task the way quick add does in `zone` on Wednesday 2026-11-11 at noon there, saves, and returns its id.
     private func write(_ text: String, deadlineDay: Int? = nil, in zone: Calendar) throws -> UUID {
         let context = container.mainContext
+        writerZone = zone
         let now = Self.local(2026, 11, 11, 12, in: zone)
         let parsed = QuickAddParser(now: now, calendar: zone).parse(text)
         let task = TaskItem(title: parsed.title, dueDate: parsed.dueDate, hasDueTime: parsed.hasDueTime,
@@ -64,12 +72,11 @@ final class TimeZoneStoreTests: XCTestCase {
         return try XCTUnwrap(tasks.first)
     }
 
-    // MARK: - A day is a day: these fail before brief 82
+    // MARK: - A day is a day: these failed before brief 82
 
     /// The due date with no time (`dueDate`, `hasDueTime` false): typed "thu" in Chicago, it is Thursday in Los Angeles,
     /// Tokyo, Honolulu and Auckland: on Today on Thursday there, never Wednesday's.
     func testADueDayWrittenInChicagoIsThursdayInEveryZone() throws {
-        XCTExpectFailure("Before brief 82 a due day is stored as Chicago's midnight: Wednesday evening to the west")
         let id = try write("Call Sam thu", in: Self.chicago)
         let task = try read(id)
         XCTAssertFalse(task.hasDueTime)
@@ -85,14 +92,12 @@ final class TimeZoneStoreTests: XCTestCase {
 
     /// The same, written in Tokyo and read in Chicago (a shared device, or a friend's list): Thursday, not Wednesday.
     func testADueDayWrittenInTokyoIsThursdayInChicago() throws {
-        XCTExpectFailure("Before brief 82 Tokyo's midnight is Wednesday morning in Chicago")
         let id = try write("Call Sam thu", in: Self.tokyo)
         XCTAssertEqual(Self.day(of: try read(id).dueDate, in: Self.chicago), [2026, 11, 12])
     }
 
     /// The deadline (always a day): picked as Friday in Chicago, Friday everywhere.
     func testADeadlineWrittenInChicagoIsFridayInEveryZone() throws {
-        XCTExpectFailure("Before brief 82 a deadline is stored as Chicago's midnight")
         let id = try write("Report", deadlineDay: 13, in: Self.chicago)
         let task = try read(id)
         for zone in [Self.losAngeles, Self.honolulu, Self.tokyo, Self.auckland] {

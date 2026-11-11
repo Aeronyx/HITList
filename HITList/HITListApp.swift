@@ -38,6 +38,7 @@ struct HITListApp: App {
         CompanionWeather.shared.start() // brief 80: the companions' sky, when the app comes forward (off by default)
         if ModelContainerFactory.didResetStore { CloudSyncMonitor.shared.forgetLastSync() }
         let context = container.mainContext
+        DayAnchoring.start(container: container) // brief 82: a day is the same day in every zone (every save, each import, once)
         TaskActions.seedDefaultsIfNeeded(in: context)
         Deduplicator.runAndLog(in: context, trigger: "launch")
         TaskActions.seedSampleDataIfRequested(in: context)
