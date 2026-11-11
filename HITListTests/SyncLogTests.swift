@@ -265,6 +265,60 @@ final class SyncLogTests: XCTestCase {
     }
 }
 
+/// The note a stretch of sync trouble ends with (brief 78: "the log should end with a note that it recovered and how
+/// long it took").
+final class SyncRecoveryNoteTests: XCTestCase {
+    /// 18:11:18.433 on George's Mac, 2026-11-10, as seconds after this.
+    private let t0 = Date(timeIntervalSince1970: 1_794_355_878.433)
+    private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
+
+    func testGeorgesBlipEndsWithHowLongItTook() throws {
+        var tracker = SyncTroubleTracker()
+        XCTAssertNil(tracker.observe(.synced(at(-3 * 3600)), at: at(0)))
+        XCTAssertNil(tracker.observe(.syncing, at: at(0.3)))
+        XCTAssertNil(tracker.observe(.error("iCloud needs you to sign in again", at(7.192)), at: at(7.192)))
+        XCTAssertEqual(tracker.span?.since, at(7.192))
+        XCTAssertNil(tracker.observe(.error("iCloud needs you to sign in again", at(9.9)), at: at(9.9)), "one span")
+        XCTAssertNil(tracker.observe(.syncing, at: at(21.31)), "trying again isn't recovered yet")
+        let note = try XCTUnwrap(tracker.observe(.synced(at(28.666)), at: at(28.666)))
+        XCTAssertEqual(note.message, "Sync recovered after 21 s")
+        XCTAssertEqual(note.fields["cause"], "Sync paused: iCloud needs you to sign in again")
+        XCTAssertNil(tracker.span)
+    }
+
+    func testAWobbleEndsWithoutALine() {
+        var tracker = SyncTroubleTracker()
+        _ = tracker.observe(.offline, at: at(0))
+        XCTAssertNil(tracker.observe(.synced(at(-60)), at: at(3)), "a Wi-Fi hand-over isn't worth a line")
+        XCTAssertNil(tracker.span)
+    }
+
+    func testARelaunchInBetweenIsPartOfTheStory() throws {
+        // 18:11:47.653 badContainer; George quit at 18:14:11 and the relaunch exported at 18:14:39.639.
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "HITListTests.\(UUID().uuidString)"))
+        var before = SyncTroubleTracker(defaults: defaults, storeName: "HITList-test")
+        _ = before.observe(.synced(at(28.775)), at: at(28.775))
+        _ = before.observe(.error("app can't use iCloud", at(29.22)), at: at(29.22))
+        var after = SyncTroubleTracker(defaults: defaults, storeName: "HITList-test")
+        XCTAssertEqual(after.span?.relaunched, true)
+        XCTAssertNil(after.observe(.synced(at(28.775)), at: at(200.2)), "the remembered sync says nothing new")
+        XCTAssertNil(after.observe(.syncing, at: at(200.6)))
+        let note = try XCTUnwrap(after.observe(.synced(at(201.206)), at: at(201.206)))
+        XCTAssertEqual(note.message, "Sync recovered after 2 min 52 s, after a relaunch")
+        XCTAssertEqual(note.fields["cause"], "Sync paused: app can't use iCloud")
+        XCTAssertNil(SyncTroubleTracker(defaults: defaults, storeName: "HITList-test").span, "forgotten once logged")
+        XCTAssertNil(SyncTroubleTracker(defaults: defaults, storeName: "HITList-other").span, "each store its own")
+    }
+
+    func testLocalOnlyAndWorkAreNotTrouble() {
+        var tracker = SyncTroubleTracker()
+        _ = tracker.observe(.localOnly("iCloud sync turned off"), at: at(0))
+        _ = tracker.observe(.syncing, at: at(1))
+        _ = tracker.observe(.retrying(since: at(1)), at: at(2))
+        XCTAssertNil(tracker.span)
+    }
+}
+
 /// What the push log line says about a remote notification (brief 25, item 2).
 final class SyncPushTests: XCTestCase {
     /// The shape CloudKit sends for a database subscription such as NSPersistentCloudKitContainer's.
