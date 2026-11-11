@@ -47,6 +47,10 @@
 	<string>HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
+	<key>NSLocationDefaultAccuracyReduced</key>
+	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>HITList uses your approximate location only to ask Apple Weather whether it is raining or snowing, so your companion can dress for it. It is never stored or shared.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Inter_18pt-Light.ttf</string>
