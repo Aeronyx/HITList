@@ -91,16 +91,22 @@ final class FirstRunUITests: XCTestCase {
         snapshot("09 Browse")
 
         gear.tap()
-        let account = app.staticTexts["Account"].firstMatch
-        XCTAssertTrue(account.waitForExistence(timeout: 5), "Settings opened, Account first")
-        snapshot("10 Settings, Account")
+        // Brief 86: Settings opens on one short screen, the profile first; Account and About are pages in it.
+        let profile = app.descendants(matching: .any)["settings-profile"].firstMatch
+        XCTAssertTrue(profile.waitForExistence(timeout: 5), "Settings opened, the profile first")
+        snapshot("10 Settings")
 
-        // Down through Settings to About.
+        profile.tap()
+        let name = app.descendants(matching: .any)["settings-account-name"].firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5), "Account")
+        snapshot("11 Settings, Account")
+        app.buttons["sheetBack"].firstMatch.tap()
+
+        let about = app.descendants(matching: .any)["settings-page-about"].firstMatch
+        XCTAssertTrue(about.waitForExistence(timeout: 5))
+        about.tap()
         let version = app.descendants(matching: .any)["settings-version"].firstMatch
-        app.swipeUp()
-        snapshot("11 Settings, further down")
-        for _ in 0..<12 where !(version.exists && version.isHittable) { app.swipeUp() }
-        XCTAssertTrue(version.isHittable, "About, with the version")
+        XCTAssertTrue(version.waitForExistence(timeout: 5) && version.isHittable, "About, with the version")
         snapshot("12 Settings, About")
     }
 

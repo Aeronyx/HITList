@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// The sections of the Mac Settings page, in the order the left column lists them. The raw values are
-/// stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change
-/// (Account, added in 0.5.0, comes first, as on the iPhone).
+/// The sections of the Mac Settings page, in the order the left column lists them: the iPhone's homes under the same
+/// names, in the same order (brief 86), with iCloud & data as two sections (the log shows inline here). The raw values
+/// are stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change (Appearance
+/// moved up to second in 0.9.3). `completing` is Extras' id from before it was called Extras.
 enum MacSettingsSection: String, CaseIterable, Identifiable {
-    case account, general, iCloud, reminders, completing, appearance, data, claude, about
+    case account, appearance, general, reminders, completing, iCloud, data, claude, about
 
     var id: String { rawValue }
 
@@ -29,7 +30,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .general: "Week, badge, shortcuts"
         case .iCloud: "Sync status and checks"
         case .reminders: "Alerts and summary"
-        case .completing: "Sound, haptics, holidays"
+        case .completing: "Sound, companions, bolt"
         case .appearance: "Themes and effects"
         case .data: "Counts, export, backups"
         case .claude: "Connector and privacy"
@@ -43,7 +44,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         case .general: "gearshape.fill"
         case .iCloud: "icloud.fill"
         case .reminders: "bell.badge.fill"
-        case .completing: "checkmark.circle.fill"
+        case .completing: "wand.and.stars"
         case .appearance: "paintpalette.fill"
         case .data: "externaldrive.fill"
         case .claude: "sparkles"

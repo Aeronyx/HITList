@@ -116,6 +116,10 @@ final class WeatherUITests: XCTestCase {
         let gear = app.buttons["settingsButton"].firstMatch
         XCTAssertTrue(gear.waitForExistence(timeout: 5))
         gear.tap()
+        // Brief 86: Extras is a page of Settings' first screen.
+        let extras = app.descendants(matching: .any)["settings-page-extras"].firstMatch
+        XCTAssertTrue(extras.waitForExistence(timeout: 5))
+        extras.tap()
         for _ in 0..<10 where !(weatherToggle.exists && weatherToggle.isHittable) { app.swipeUp() }
         XCTAssertTrue(weatherToggle.exists, "Extras has a Weather switch")
         // Bring the switch to the middle of the screen, so the rows under it show and nothing covers it.
