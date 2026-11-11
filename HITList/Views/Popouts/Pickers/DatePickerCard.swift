@@ -17,6 +17,8 @@ struct DatePickerCard: View {
     /// Shown above the presets when set ("Deadline").
     var title: String?
     var clearTitle = "No date"
+    /// False turns the No date preset off (Review Inbox schedules; it does not take a date away).
+    var canClear = true
     var onPick: (Date?) -> Void
     /// The time of day; shown only when `onTime` is set.
     var time: PickerTime?
@@ -37,7 +39,7 @@ struct DatePickerCard: View {
 
     enum RepeatPage { case menu, custom }
 
-    init(selected: Date?, now: Date = Date(), title: String? = nil, clearTitle: String = "No date",
+    init(selected: Date?, now: Date = Date(), title: String? = nil, clearTitle: String = "No date", canClear: Bool = true,
          onPick: @escaping (Date?) -> Void,
          time: PickerTime? = nil, onTime: ((PickerTime?) -> Void)? = nil,
          recurrence: RecurrenceRule? = nil, onRepeat: ((RecurrenceRule?) -> Void)? = nil,
@@ -46,6 +48,7 @@ struct DatePickerCard: View {
         self.now = now
         self.title = title
         self.clearTitle = clearTitle
+        self.canClear = canClear
         self.onPick = onPick
         self.time = time
         self.onTime = onTime
@@ -92,7 +95,7 @@ struct DatePickerCard: View {
                 HStack(spacing: HITSpacing.xs) {
                     ForEach(DatePreset.all(now: now, weekStart: weekStart, clearTitle: clearTitle)) { preset in
                         DatePresetTile(preset: preset, isSelected: isPicked(preset)) { onPick(preset.date) }
-                            .disabled(preset.kind == .none && selected == nil)
+                            .disabled(preset.kind == .none && (selected == nil || !canClear))
                     }
                 }
                 .padding(.horizontal, HITSpacing.m)

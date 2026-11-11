@@ -304,7 +304,7 @@ struct UpcomingView: View {
             .contextMenu { rowMenu(task) }
             .popover(isPresented: Binding(get: { pickingDateFor == task.id },
                                           set: { if !$0, pickingDateFor == task.id { pickingDateFor = nil } })) {
-                PickDatePopover(initial: task.dueDate ?? today) { day in
+                PickDatePopover(selected: task.dueDate, now: now) { day in
                     pickingDateFor = nil
                     move(task, to: day)
                 } onRemove: {
@@ -346,7 +346,7 @@ struct UpcomingView: View {
             #endif
             .popover(isPresented: Binding(get: { pickingDateFor == row.id },
                                           set: { if !$0, pickingDateFor == row.id { pickingDateFor = nil } })) {
-                PickDatePopover(initial: row.filterDueDate ?? today) { day in
+                PickDatePopover(selected: row.filterDueDate, now: now) { day in
                     pickingDateFor = nil
                     move(row, to: day)
                 } onRemove: {
