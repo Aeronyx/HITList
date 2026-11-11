@@ -31,7 +31,7 @@ final class WeatherLaunchQuestionTests: XCTestCase {
 
     func testOnceAnsweredItIsNeverAskedAgain() {
         for answered in [WeatherAccess.allowed, .denied, .restricted] {
-            XCTAssertEqual(decide(firstLaunch(), access: answered), .never, "\(answered)")
+            XCTAssertEqual(decide(firstLaunch(), access: answered), .answered, "\(answered): nothing to ask")
         }
         XCTAssertEqual(decide(firstLaunch { $0.asked = true }, access: .notDetermined), .never,
                        "asked before (Allow Once lapses back to not determined): HITList never asks again by itself")

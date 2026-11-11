@@ -202,6 +202,30 @@ final class WeatherServiceTests: XCTestCase {
         XCTAssertEqual(madeLocation, 0)
     }
 
+    /// The permission was already given (the asked flag lost with the defaults, say): nothing is asked, it is taken
+    /// as the answer, and the weather starts.
+    func testAPermissionAlreadyGivenIsTakenAsTheAnswer() async {
+        location.status = .allowed
+        weather.reading = WeatherReading(condition: "snow", date: now)
+        let service = service()
+        let decision = await service.considerAskingAtLaunch()
+        XCTAssertEqual(decision, .answered)
+        XCTAssertEqual(location.requests, 0, "no prompt")
+        XCTAssertTrue(service.hasAsked)
+        XCTAssertTrue(service.isOn)
+        XCTAssertEqual(sky.sky, .snow)
+
+        discard()
+        fresh()
+        location.status = .denied
+        let refused = self.service()
+        let again = await refused.considerAskingAtLaunch()
+        XCTAssertEqual(again, .answered)
+        XCTAssertEqual(location.requests, 0)
+        XCTAssertEqual(refused.access, .denied, "Extras can say why")
+        XCTAssertEqual(sky.sky, .unknown)
+    }
+
     func testSwitchedOffMakesNoCallAtAll() async {
         defaults.set(false, forKey: Preferences.companionWeather)
         defaults.set(true, forKey: Preferences.companionWeatherAsked)

@@ -226,6 +226,11 @@ final class CompanionWeather {
         case .never:
             questionSettled = true
             return .never
+        case .answered:
+            questionSettled = true
+            defaults.set(true, forKey: Preferences.companionWeatherAsked)
+            await cameForward()
+            return .answered
         case .ask:
             questionSettled = true
             await askAtLaunch()
