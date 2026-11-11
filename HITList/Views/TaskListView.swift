@@ -158,7 +158,8 @@ struct TaskListView: View {
             let matched = try matchedTasks()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-                return .success([Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
+                // None yet: no section, so the empty state shows (an empty section drew a blank page).
+                return .success(sorted.isEmpty ? [] : [Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
             }
             let rows = placed(matched, shared: matchedShared())
             if isSharedTasks { return .success(sharedTasksGroups(rows)) }
