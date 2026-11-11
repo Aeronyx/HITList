@@ -203,7 +203,7 @@ struct BrowseView: View {
                         .accessibilityIdentifier("browse-settings-row")
                     }
                 }
-            }
+            } header: { CompanionShelf() }
         }
         .listStyle(.insetGrouped)
         // The chips sit just under the field, not a grouped list's full top gap away. `.automatic`, the placement

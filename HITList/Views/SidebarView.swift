@@ -69,6 +69,7 @@ struct SidebarView: View {
         // The gear at the foot of the sidebar opens Settings in this window's detail column.
         .safeAreaInset(edge: .bottom, spacing: 0) {
             SidebarSettingsButton(isSelected: selection == .settings) { selection = .settings }
+                .overlay(alignment: CompanionPerch.alignment(.sidebarFoot)) { CompanionPerch(.sidebarFoot) }
         }
         #endif
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }

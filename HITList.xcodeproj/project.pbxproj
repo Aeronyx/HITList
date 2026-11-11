@@ -188,6 +188,7 @@
 		891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */; };
 		8BFBC81113808FF6C522011F /* SharedTasksComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD1883288948D9C8624C512 /* SharedTasksComponents.swift */; };
 		8EA8B7035CF91044770D8739 /* QuickAddDraft+SwitchBackOn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264E61502149B4014A7C48D0 /* QuickAddDraft+SwitchBackOn.swift */; };
+		91445F841F1807D9F4272BB5 /* Quill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF631693F1C48C03F264CB0 /* Quill.swift */; };
 		926274475D6599BDD81C3CF2 /* HITTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE419EFB9497F9FB13FE74B /* HITTokens.swift */; };
 		92973FBF19DB570087754456 /* HITField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DE63E2D5D5BA8429AB8933 /* HITField.swift */; };
 		935B78ADE8FC76D7BEC94BB1 /* SwitchboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B31D4A1617C81BED0241B1 /* SwitchboardRules.swift */; };
@@ -427,6 +428,7 @@
 		2BC16CC906DD2899D26B2A28 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
 		2BFD4802AA2A6EAF451AB270 /* HITListUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = HITListUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
+		2FF631693F1C48C03F264CB0 /* Quill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quill.swift; sourceTree = "<group>"; };
 		30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingBoardTests.swift; sourceTree = "<group>"; };
 		315D24154A9ABD69200C164B /* PickerTimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTimeField.swift; sourceTree = "<group>"; };
 		31EED87BAB4D02BA4465BA09 /* SyncHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHealth.swift; sourceTree = "<group>"; };
@@ -802,6 +804,7 @@
 			isa = PBXGroup;
 			children = (
 				274607610BD862CCA9F02DE0 /* Nod.swift */,
+				2FF631693F1C48C03F264CB0 /* Quill.swift */,
 			);
 			path = Characters;
 			sourceTree = "<group>";
@@ -1764,6 +1767,7 @@
 				9580397F7D4ADFFD9422A015 /* QuickAddDraft.swift in Sources */,
 				9C99912454DD44480CCEE61E /* QuickAddEntry.swift in Sources */,
 				A8CEEB66309F56025E17DD1C /* QuickAddPopout.swift in Sources */,
+				91445F841F1807D9F4272BB5 /* Quill.swift in Sources */,
 				2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */,
 				B45177102F56678B6535528C /* ReminderPickerCard.swift in Sources */,
 				8657C41CB79A77C4A9253FBE /* RemindersSettingsSection.swift in Sources */,

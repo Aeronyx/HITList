@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 final class CompanionSpriteTests: XCTestCase {
     func testEveryCompanionIsGoodData() {
-        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod"])
+        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill"])
         for character in CompanionCharacter.all {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
@@ -27,9 +27,20 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
-    func testNodSitsBackDownWhereItWas() {
+    func testNodSitsWhereItWasAndQuillCurlsUpTheOtherWay() {
         XCTAssertFalse(CompanionCharacter.nod.flourishTurns, "Nod sits back down exactly where it was")
+        XCTAssertTrue(CompanionCharacter.quill.flourishTurns, "Quill turns once and curls up the other way")
         XCTAssertEqual(CompanionCharacter.nod.footing, .seat(row: 17))
+        XCTAssertEqual(CompanionCharacter.quill.footing, .floor)
+    }
+
+    func testQuillTwitchesRarely() {
+        // An ear or the inked tip about one breath in six: every half minute or so.
+        let clock = CompanionClock(character: .quill, seed: 11)
+        let anchor = Date(timeIntervalSinceReferenceDate: 800_000_000)
+        let picks = (1..<1_200).map { clock.loop(forCycle: $0, anchor: anchor).name }
+        let twitches = Double(picks.filter { $0 != "breath" }.count) / Double(picks.count)
+        XCTAssertEqual(twitches, 2.0 / 12.0, accuracy: 0.04)
     }
 
     func testNodBlinksNowAndThen() {
@@ -106,6 +117,7 @@ final class CompanionSpriteTests: XCTestCase {
 
     func testFewColoursFromTheTheme() {
         XCTAssertEqual(CompanionCharacter.nod.inks, [.ink, .dark, .mid, .light, .warm, .glow])
+        XCTAssertEqual(CompanionCharacter.quill.inks, [.ink, .dark, .mid, .light, .accent])
         let slate = CompanionInks(palette: .slate)
         XCTAssertEqual(slate.hex[.ink], ThemePalette.slate.hex.background)
         XCTAssertEqual(slate.hex[.mid], ThemePalette.slate.hex.secondaryText)
@@ -161,7 +173,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     func testMirroringFlipsThePixels() throws {
-        let character = CompanionCharacter.nod
+        let character = CompanionCharacter.quill
         let inks = CompanionInks(palette: .slate)
         let plain = try render(CompanionSprite(character: character, pose: .init(frame: 0, mirrored: false), inks: inks), scale: 1)
         let flipped = try render(CompanionSprite(character: character, pose: .init(frame: 0, mirrored: true), inks: inks), scale: 1)
