@@ -16,7 +16,7 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 | 86 `settings-tidy` | Settings as one short screen and pages, Appearance second, every option in one home; a companion on each theme's swatch | merged, awaiting release |
 | 90 `share-extension` | "Add to HITList" from the share sheet, through an outbox the app drains | merged, awaiting release |
 | 93 `qa-sweep` | Every screen on four devices looked at; seven plain defects fixed, the rest listed for George | merged, awaiting release |
-| 94 `accessibility` | VoiceOver wording for rows, tabs, switches, chips, cards and Settings; the Mac by keyboard; hit targets (the Mac's sync bolt); the system's audit as an on-demand UI test | merged, awaiting release; the audit's exclusions were still being settled |
+| 94 `accessibility` | VoiceOver wording for rows, tabs, switches, chips, cards and Settings; the Mac by keyboard; hit targets (the Mac's sync bolt); the system's audit as an on-demand UI test | merged, awaiting release; the audit passes on a fresh iPhone 17 simulator and runs on demand |
 
 ## Next (in this order unless George says otherwise)
 
@@ -29,10 +29,12 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 3. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
    controls; whether the sidebar column floats (26) or sits flush (27) is still the system's. Owning it means our own
    split view and top bar. Decide after a friend's screenshot on macOS 27.2 (still owed).
-4. **Accessibility with a person, and the audit made green.** Round 19 wrote the labels and the audit
-   (`TEST_RUNNER_HITLIST_AUDIT=1`); wording and order need someone who uses VoiceOver, and the audit's last findings
-   (text sizes in the editor, unlabelled pieces of the Flipboard's cards) need fixing or a written exclusion before
-   it joins the ordinary UI run.
+4. **Accessibility with a person, and the audit in the ordinary run.** Round 19 wrote the labels and the audit
+   (`TEST_RUNNER_HITLIST_AUDIT=1`; 9 tests pass on a fresh iPhone 17 simulator, every one of its 404 findings
+   excluded with a written reason). Wording and order need someone who uses VoiceOver; Full Keyboard Access on the
+   Mac was never switched on (toolbar buttons, the board's cards, Flipboard tiles and Settings controls are not
+   reachable by Tab without it); and the audit joins the ordinary UI run once it has passed at night and on a
+   second device size (its exclusions name positions on the screen).
 5. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1). A day a friend's 0.9.2
    wrote in another zone shows as before until their device updates.
 6. **The share extension on a real Mac**: Safari's Share menu was never seen (macOS offers a new share extension

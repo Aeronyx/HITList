@@ -319,9 +319,12 @@ After the round:
   YES` shows rows that way to tests), the iPhone's tabs are a tab bar, a switch says off or on, chips say what they
   are, an open card is read alone, the Undo toast is announced; the Mac's keyboard reaches the editor; the toolbar's
   sync bolt and its pill are one toolbar item so the whole bolt takes a click. `AccessibilityAuditUITests` runs the
-  system's audit on every screen, on demand (`TEST_RUNNER_HITLIST_AUDIT=1`): at the merge it still failed on text
-  sizes in the editor and unlabelled pieces of the Flipboard's cards, and session 94 was still settling its
-  exclusions (anything it committed after is on `claude/accessibility-ab4778`). Debug: `-dumpAccessibility YES`.
+  system's audit on every screen, on demand (`TEST_RUNNER_HITLIST_AUDIT=1`): 9 tests pass on a fresh iPhone 17
+  simulator, each of its 404 findings excluded with a written reason in the test (custom fonts the audit misreads,
+  clipping it guesses at the largest sizes, the screen behind a card, text under the tab island's glass). It stays
+  out of the ordinary UI run until it has passed at night and on another device size. Never use
+  `accessibilityHidden(false)` over a container: it un-hides everything inside (use `accessibilityHidden(true,
+  isEnabled:)`). Debug: `-dumpAccessibility YES` logs what VoiceOver can reach.
 - **Left for George** (the sweep's `FINDINGS.md`, with pictures): the large title 4 pt right of its rows on the Pro
   Max and the Duo, the system date picker in Review Inbox and Upcoming's swipe, day headers written four ways,
   "Done" with three looks, empty states in four styles, the Mac Settings page's name shown twice, the companion on
