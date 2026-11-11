@@ -101,12 +101,11 @@ struct HITMenuRowLabel: View {
     var body: some View {
         HStack(spacing: HITSpacing.m) {
             if let systemImage {
-                Image(systemName: systemImage)
+                // Its words say it; VoiceOver stopped on the icon first ("Home", "Calendar") (brief 94).
+                Image(systemName: systemImage).accessibilityHidden(true)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(iconTint)
                     .frame(width: 22)
-                    // Its words say it; VoiceOver stopped on the icon first ("Home", "Calendar") (brief 94).
-                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
