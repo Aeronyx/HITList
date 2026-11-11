@@ -5,7 +5,8 @@ import UIKit
 /// Debug only (brief 94): what VoiceOver can reach, written to the log, for checking without VoiceOver. Launch with
 /// `-dumpAccessibility YES`; every 4 s the key window's accessibility tree is walked as VoiceOver walks it (an element
 /// is a stop and its children are not; hidden elements and hidden views are skipped; a modal view hides its siblings)
-/// and each stop is logged under the "accessibility" category, one line each: label | value | traits | frame.
+/// and each stop is logged under the "accessibility" category, one line each: label | value | traits | frame |
+/// its actions.
 /// Read it with `xcrun simctl spawn <udid> log show --last 2m --info --predicate 'category == "accessibility"'`.
 @MainActor
 enum AccessibilityDump {
@@ -37,9 +38,10 @@ enum AccessibilityDump {
         if object.accessibilityElementsHidden { return }
         if object.isAccessibilityElement {
             let frame = object.accessibilityFrame.integral
+            let actions = (object.accessibilityCustomActions ?? []).map(\.name).joined(separator: ", ")
             stops.append("\(object.accessibilityLabel ?? "") | \(object.accessibilityValue ?? "") | "
                          + "\(object.accessibilityTraits.rawValue) | \(Int(frame.minX)),\(Int(frame.minY)) "
-                         + "\(Int(frame.width))x\(Int(frame.height))")
+                         + "\(Int(frame.width))x\(Int(frame.height))" + (actions.isEmpty ? "" : " | actions: \(actions)"))
             return
         }
         var children: [NSObject] = []
