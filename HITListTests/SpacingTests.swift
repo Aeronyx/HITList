@@ -68,6 +68,25 @@ final class SpacingTests: XCTestCase {
     }
     #endif
 
+    #if os(macOS)
+    // MARK: The Mac editor's check circle (brief 99)
+
+    /// The editor's check circle takes clicks on 24 × 24 pt (it was 22 × 24, its icon column's width): the outset fills
+    /// the column out to 24 and the layout keeps the column's 22, so nothing moves. Read from Accessibility on the Debug
+    /// Mac app before and after: 22 × 24, then 24 × 24.
+    func testTheEditorsCheckCircleTakesClicksOn24By24() {
+        let outset = HITHitTarget.outset(for: EditorMetrics.iconColumn)
+        XCTAssertEqual(EditorMetrics.iconColumn + 2 * outset, 24)
+        XCTAssertEqual(EditorMetrics.titleLine, 24, "the frame's height, the title's line")
+        let circle = Image(systemName: "circle").frame(width: EditorMetrics.iconColumn, height: EditorMetrics.titleLine)
+        let hit = circle.hitOutset(horizontal: outset)
+        XCTAssertEqual(NSHostingView(rootView: hit).fittingSize, CGSize(width: 24, height: 24), "the hit frame")
+        XCTAssertEqual(NSHostingView(rootView: hit.hitOutsetLayout(horizontal: outset)).fittingSize,
+                       CGSize(width: EditorMetrics.iconColumn, height: 24), "the room it takes in the layout")
+        XCTAssertEqual(HITHitTarget.outset(for: 30), 0, "nothing for a control that is large enough")
+    }
+    #endif
+
     // MARK: Settings → Data's tiles (brief 99)
 
     /// Library's six counts sit three across in two rows at every width: the narrowest iPhone's group (311 pt inside),
