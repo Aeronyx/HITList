@@ -50,6 +50,7 @@
 		1B99CCFFDABA2AF91627D80F /* HITListCore in Frameworks */ = {isa = PBXBuildFile; productRef = 498143C159A4BD0FF960EE6C /* HITListCore */; };
 		1C38EE460A421664F56305F4 /* InboxProcessQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379D57D8772CB122DAF2854C /* InboxProcessQueue.swift */; };
 		1E36848F6012B749688CFE50 /* DuoNextDays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1960A13263E02500E37004C0 /* DuoNextDays.swift */; };
+		1F0DF291DE2319844AF6B3CA /* WidgetDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 665FF2BFFB9E4E0A69D46391 /* WidgetDebug.swift */; };
 		20CF31C4714CB5F315804F7A /* CompletionAnimatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C24398A7C88613701C20EE8 /* CompletionAnimatorTests.swift */; };
 		21A306D0DC2302061DC2205C /* ListRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCEA3CCC681372C04E433275 /* ListRulesTests.swift */; };
 		220983279DFC5A2C6EE2691B /* FlipboardGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0CDA94242E336C8805AF0BF /* FlipboardGrid.swift */; };
@@ -615,6 +616,7 @@
 		655EDB13C3FC51E969A0BE98 /* TaskEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEntity.swift; sourceTree = "<group>"; };
 		659074BDF3973B67D923222D /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		65DBCFC9B67D1B0D889D68A7 /* Inter_18pt-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-SemiBold.ttf"; sourceTree = "<group>"; };
+		665FF2BFFB9E4E0A69D46391 /* WidgetDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDebug.swift; sourceTree = "<group>"; };
 		669670811BCE08D934276B4E /* WidgetRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetRenderTests.swift; sourceTree = "<group>"; };
 		66FCF891D85A9FDB9278F2D6 /* ReminderDateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderDateTests.swift; sourceTree = "<group>"; };
 		67618842F0C28E3CF638D784 /* EditorCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorCard.swift; sourceTree = "<group>"; };
@@ -1522,6 +1524,7 @@
 			isa = PBXGroup;
 			children = (
 				F5D751C9825869AFD8CC37B2 /* WidgetCompletionCenter.swift */,
+				665FF2BFFB9E4E0A69D46391 /* WidgetDebug.swift */,
 				097EF1A12059B02DAB71F295 /* WidgetSnapshotBuilder.swift */,
 				F8584438E0E1CC9F13D693F8 /* WidgetSnapshotWriter.swift */,
 			);
@@ -2195,6 +2198,7 @@
 				180AF814EDD1B6BAC0F70795 /* WhatsNewPopout.swift in Sources */,
 				697EDF94F465DA33D599FA29 /* WidgetCompletionCenter.swift in Sources */,
 				962DC11FCDB53FA33925F52F /* WidgetCompletionIntent.swift in Sources */,
+				1F0DF291DE2319844AF6B3CA /* WidgetDebug.swift in Sources */,
 				EE73EA0962B9BB9A9153C892 /* WidgetIntentRoad.swift in Sources */,
 				9854084C4F0716263A778898 /* WidgetLook.swift in Sources */,
 				9389AECD2F6D6541F34B7928 /* WidgetSamples.swift in Sources */,
@@ -2364,6 +2368,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				HITLIST_WIDGET_SUFFIX = "";
 				INFOPLIST_FILE = HITList/Info.plist;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -2574,6 +2579,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				HITLIST_WIDGET_SUFFIX = "";
 				INFOPLIST_FILE = HITList/Info.plist;
 				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
 				LD_RUNPATH_SEARCH_PATHS = (
