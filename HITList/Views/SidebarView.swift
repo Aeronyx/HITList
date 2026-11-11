@@ -218,6 +218,8 @@ struct SidebarView: View {
                         }
                     }
                 }
+                // One fill follows the selected row (brief 75); it jumps under Reduce Motion.
+                .macSidebarSelectionGlide(selection)
                 .padding(.bottom, MacSidebarMetrics.bottomPadding)
             }
             .scrollBounceBehavior(.basedOnSize)
