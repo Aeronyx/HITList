@@ -151,7 +151,7 @@ struct PopoutHost: ViewModifier {
                             .environment(\.panelDismissGuard, editorGuard)
                             .panelChrome()
                     }
-                    .transition(.opacity)
+                    .transition(PanelBackdrop<EmptyView>.transition(reduceMotion: reduceMotion))
                 }
             }
             .overlay {
@@ -163,7 +163,7 @@ struct PopoutHost: ViewModifier {
                             .environment(\.panelDismissGuard, sharedGuard)
                             .panelChrome()
                     }
-                    .transition(.opacity)
+                    .transition(PanelBackdrop<EmptyView>.transition(reduceMotion: reduceMotion))
                 }
             }
             .animation(HITMotion.enter(reduceMotion: reduceMotion), value: style.editor == .panel && popouts.state.isSharedTaskOpen)
@@ -375,7 +375,7 @@ struct PopoutHost: ViewModifier {
                         .simultaneousGesture(TapGesture().onEnded { if confirmingDiscard { resumeDraft() } })
                 }
             }
-            .transition(.opacity)
+            .transition(PanelBackdrop<EmptyView>.transition(reduceMotion: reduceMotion))
         } else {
             #if os(iOS)
             GeometryReader { geo in
@@ -683,22 +683,58 @@ struct PanelBackdrop<Content: View>: View {
     @ViewBuilder var content: Content
 
     static var width: CGFloat { 560 }
+    /// The panel's top edge, as a fraction of the window's height.
+    static var topFraction: CGFloat { 0.18 }
+    /// How far the dim reaches past the window's sides and bottom, so the arrival's drop never shows its edge. Not the
+    /// top: the toolbar band above must stay undimmed, as it is at rest.
+    static var dimOverscan: CGFloat { 40 }
+
+    /// The panel's arrival and departure (brief 75): it fades as it comes down 6 pt into place (`PanelTransition`),
+    /// so it settles in under the toolbar rather than just appearing, and goes back up as it leaves; in with `enter`,
+    /// out with `exit` (both were a 200 ms fade on `enter`, the close no quicker than the open). Under Reduce Motion a
+    /// fade alone, on the roles' calm stand-ins.
+    static func transition(reduceMotion: Bool) -> AnyTransition {
+        let look = AnyTransition(PanelTransition(calm: reduceMotion))
+        return .asymmetric(insertion: look.animation(HITMotion.enter(reduceMotion: reduceMotion)),
+                           removal: look.animation(HITMotion.exit(reduceMotion: reduceMotion)))
+    }
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 Color.black.opacity(0.45)
+                    .padding(EdgeInsets(top: 0, leading: -Self.dimOverscan, bottom: -Self.dimOverscan,
+                                        trailing: -Self.dimOverscan))
                     .contentShape(Rectangle())
                     .onTapGesture(perform: onDismiss)
                 content
                     .frame(width: min(Self.width, geo.size.width - 2 * HITSpacing.l))
                     .frame(maxHeight: geo.size.height * 0.78, alignment: .top)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, geo.size.height * 0.18)
+                    .padding(.top, geo.size.height * Self.topFraction)
             }
             .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
         }
         .ignoresSafeArea(.container, edges: .bottom)
+    }
+}
+
+/// `PanelBackdrop.transition`: the backdrop and its panel fade together while they come down `drop` points into
+/// place (and go back up as they leave). A scale was tried first and dropped: under it the editor's row of pills came to
+/// rest 2.5 pt further scrolled than on master. The dim reaches past the window's sides and bottom (`dimOverscan`).
+struct PanelTransition: Transition {
+    /// How far above its place the panel starts, and leaves to.
+    static let drop: CGFloat = 6
+    var calm: Bool
+
+    func body(content: Content, phase: TransitionPhase) -> some View {
+        content
+            .opacity(phase.isIdentity ? 1 : 0)
+            .offset(y: Self.offset(phase: phase, calm: calm))
+    }
+
+    static func offset(phase: TransitionPhase, calm: Bool) -> CGFloat {
+        phase.isIdentity || calm ? 0 : -drop
     }
 }
 
