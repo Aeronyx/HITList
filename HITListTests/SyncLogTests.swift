@@ -593,14 +593,23 @@ final class SyncEnvironmentTests: XCTestCase {
             let directory = be32(0xFADE_0C02) + be32(12) + be32(0)
             let entitlements = be32(0xFADE_7171) + be32(UInt32(8 + body.count)) + body
             let header = 12 + 2 * 8
-            blob = be32(0xFADE_0CC0) + be32(UInt32(header + directory.count + entitlements.count)) + be32(2)
-                + be32(0) + be32(UInt32(header)) + be32(5) + be32(UInt32(header + directory.count))
-                + directory + entitlements
+            // One append per field: as a single chain of `+` this took the type checker 1.7 s here, and the CI
+            // runner's older Swift gives up on expressions like it.
+            let total = UInt32(header + directory.count + entitlements.count)
+            let entitlementsOffset = UInt32(header + directory.count)
+            let fields: [UInt32] = [0xFADE_0CC0, total, 2, 0, UInt32(header), 5, entitlementsOffset]
+            for field in fields { blob.append(be32(field)) }
+            blob.append(directory)
+            blob.append(entitlements)
         }
         let signatureOffset: UInt32 = 32 + 16
-        var data = le32(0xFEED_FACF) + le32(0x0100_000C) + le32(0) + le32(2) + le32(1) + le32(16) + le32(0) + le32(0)
-        data += le32(0x1D) + le32(16) + le32(signatureOffset) + le32(UInt32(blob.count))
-        return data + blob
+        var data = Data()
+        let machHeader: [UInt32] = [0xFEED_FACF, 0x0100_000C, 0, 2, 1, 16, 0, 0]
+        for field in machHeader { data.append(le32(field)) }
+        let command: [UInt32] = [0x1D, 16, signatureOffset, UInt32(blob.count)]
+        for field in command { data.append(le32(field)) }
+        data.append(blob)
+        return data
     }
 
     private let sampleEntitlements = #"<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>beta-reports-active</key><true/><key>com.apple.developer.icloud-container-environment</key><string>Production</string><key>aps-environment</key><string>production</string></dict></plist>"#
