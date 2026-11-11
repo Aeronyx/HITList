@@ -155,6 +155,7 @@ final class CompanionDirectorTests: XCTestCase {
             perWeek.append(Double(light.flourishes.count) / 12)
         }
         let weekly = perWeek.reduce(0, +) / Double(perWeek.count)
+        print("Companion month: \(perHour) hours of showing per flourish at twelve hours a day; \(perWeek) a week at an hour a day")
         XCTAssertEqual(weekly, 2.3, accuracy: 0.8, "perhaps twice a week: \(perWeek)")
     }
 
