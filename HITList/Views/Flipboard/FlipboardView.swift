@@ -42,6 +42,10 @@ struct FlipboardView: View {
     /// The switch just added or edited, which settles into its place in the grid (`SwitchLanding`).
     @State private var landing: SwitchLanding.Mark?
     private static let boardSpace = "flipboard"
+    /// Where a dragged switch would land, lit while it is over it (brief 96).
+    @State private var dropTarget: SwitchDrop.Target?
+    /// The switch a drag began with on this board, and the board it was on (nil: loose).
+    @State private var dragging: DraggedSwitch?
     /// The switch just deleted, while its "Deleted · Undo" toast shows.
     @State private var deleted: Flipboard.DeletedSwitch?
     @State private var deleteGeneration = 0
@@ -230,7 +234,8 @@ struct FlipboardView: View {
 
     // MARK: Sections
 
-    /// The loose switches, exactly as the board was before Switchboards, with the + tile (or the card) last.
+    /// The loose switches, exactly as the board was before Switchboards, with the + tile (or the card) last. A switch
+    /// dragged here leaves its Switchboard (brief 96).
     private func looseGrid(_ loose: [TaskItem], tip: HITTip?, tipID: UUID?) -> some View {
         FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
             ForEach(loose) { task in
@@ -245,6 +250,7 @@ struct FlipboardView: View {
                     .allowsHitTesting(!hasInlineCard)
             }
         }
+        .switchDropTarget(.loose, dragging: dragging, lit: $dropTarget) { drop($0, onto: .loose) }
     }
 
     /// A Switchboard: its header (or its card, in place), then its switches. An empty board shows the + tile, so it
@@ -275,6 +281,8 @@ struct FlipboardView: View {
                 }
             }
         }
+        // Brief 96: a switch dragged over the board lights it; let go, and it is on the board.
+        .switchDropTarget(.board(board.id), dragging: dragging, lit: $dropTarget) { drop($0, onto: .board(board.id)) }
         .id("board-\(board.id.uuidString)")
     }
 
@@ -285,7 +293,10 @@ struct FlipboardView: View {
             inlineCardView(.edit(task))
         } else {
             FlipSwitchTile(task: task, now: now, onEdit: { openCard(.edit(task)) },
-                           onOpen: { open(task) }, onDelete: { delete(task) })
+                           onOpen: { open(task) }, onDelete: { delete(task) },
+                           moves: SwitchDrop.moves(for: task, boards: boards),
+                           onMove: { drop(task.id, onto: $0) },
+                           onDragStart: { dragging = DraggedSwitch(id: task.id, board: boardID(of: task)) })
                 .hitTip(tip)
                 .modifier(SwitchLanding(mark: landing?.id == task.id ? landing : nil))
                 .allowsHitTesting(!hasInlineCard)
@@ -441,6 +452,33 @@ struct FlipboardView: View {
     /// shouldn't be a starting option"): once there is a switch to put on one, or a board already. The empty board is
     /// its Add a Switch tile alone; the switch card's Switchboard picker offers a new one whenever it is open.
     static func offersNewSwitchboard(switches: Int, boards: Int) -> Bool { switches > 0 || boards > 0 }
+
+    // MARK: Dragging a switch (brief 96)
+
+    /// The board a switch shows on: its Switchboard, or nil when it is loose (or on one this device hasn't received).
+    private func boardID(of task: TaskItem) -> UUID? {
+        guard let id = task.switchboard?.id, boards.contains(where: { $0.id == id }) else { return nil }
+        return id
+    }
+
+    /// A drop (or VoiceOver's Move to…): the switch moves as choosing that Switchboard in its card does, and settles
+    /// into its new place.
+    private func drop(_ id: UUID, onto target: SwitchDrop.Target) {
+        dragging = nil
+        dropTarget = nil
+        let moved = withAnimation(.snappy(duration: 0.35)) { SwitchDrop.move(id, onto: target, in: context) }
+        guard moved, let task = switches.first(where: { $0.id == id }) else { return }
+        #if os(iOS)
+        TapHaptic.play()
+        #endif
+        land(task)
+        let place: String = switch target {
+        case .loose: "the Flipboard"
+        case .board(let boardID): boards.first { $0.id == boardID }?.name ?? "its Switchboard"
+        }
+        AccessibilityNotification.Announcement("Moved \(task.title) to \(place)").post()
+        Task { await NotificationScheduler.reschedule(context: context) }
+    }
 
     /// Opens the task popout (`selectedTask` is `PopoutController.selection`).
     private func open(_ task: TaskItem) { selectedTask = task }
@@ -637,5 +675,27 @@ struct AddSwitchTile: View {
         .animation(HITMotion.quick(reduceMotion: reduceMotion), value: hovered)
         .accessibilityLabel("Add switch")
         .accessibilityIdentifier("addSwitchTile")
+    }
+}
+
+/// The switch a drag began with on the board (brief 96), so a place lights only when it would take it.
+struct DraggedSwitch: Equatable {
+    let id: UUID
+    /// Its board then (nil: loose).
+    let board: UUID?
+}
+
+extension View {
+    /// A board section (or the loose switches) as a place to drop a switch: lit while a switch it would take is over
+    /// it, the drop handed to `perform` as the switch's id.
+    func switchDropTarget(_ target: SwitchDrop.Target, dragging: DraggedSwitch?, lit: Binding<SwitchDrop.Target?>,
+                          perform: @escaping (UUID) -> Void) -> some View {
+        let isLit = lit.wrappedValue == target
+        return background {
+            if isLit { SwitchDropHighlight().transition(.opacity) }
+        }
+        .animation(HITMotion.quick, value: isLit)
+        .onDrop(of: [SwitchDrag.type], delegate: SwitchDropDelegate(target: target, draggedFrom: dragging.map(\.board),
+                                                                     lit: lit, perform: perform))
     }
 }

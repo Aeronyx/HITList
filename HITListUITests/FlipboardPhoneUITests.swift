@@ -94,7 +94,66 @@ final class FlipboardPhoneUITests: XCTestCase {
         snapshot("3 The board with its switch")
     }
 
+    // MARK: Dragging a switch onto a Switchboard (item 3)
+
+    /// The demo week: a loose switch pressed, held and moved onto Before Bed lands on it ("2 of 5"); dragged back onto
+    /// the loose switches it leaves it ("2 of 4"). A long press held still still opens the menu, and a tap still flips.
+    func testDraggingASwitchOntoASwitchboardAndOff() throws {
+        app.launchArguments += ["-seedDemoData"]
+        app.launch()
+        openFlipboard()
+        let water = switchTile("Water the plants")
+        XCTAssertTrue(water.waitForExistence(timeout: 10))
+        let bed = boardHeader("Before Bed")
+        XCTAssertTrue(bed.waitForExistence(timeout: 5))
+        XCTAssertTrue(boardLine(containing: "2 of 4").exists)
+
+        // Held still: the menu, as before.
+        water.press(forDuration: 1.0)
+        let menu = app.buttons["Remove from Flipboard"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 3), "the menu")
+        snapshot("1 Held still: the menu")
+        // A tap on the dimmed board beside the menu closes it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap()
+        XCTAssertTrue(menu.waitForNonExistence(timeout: 3), "the menu closed")
+
+        // The loose switches' first row and Before Bed's together on the screen.
+        scroll(by: 0.2)
+        // Held, then moved onto Before Bed, and held there a moment before letting go.
+        water.press(forDuration: 0.8, thenDragTo: bed, withVelocity: .slow, thenHoldForDuration: 3)
+        XCTAssertTrue(boardLine(containing: "2 of 5").waitForExistence(timeout: 5), "on Before Bed now")
+        snapshot("2 Dropped on Before Bed")
+
+        // Back off it: dragged onto the loose switches.
+        let recycling = switchTile("Take out the recycling")
+        let moved = switchTile("Water the plants")
+        XCTAssertTrue(moved.waitForExistence(timeout: 3))
+        for _ in 0..<3 where !(moved.isHittable && recycling.isHittable) {
+            scroll(by: moved.frame.midY > app.frame.height * 0.7 ? 0.15 : -0.15)
+        }
+        moved.press(forDuration: 0.8, thenDragTo: recycling, withVelocity: .slow, thenHoldForDuration: 1.0)
+        XCTAssertTrue(boardLine(containing: "2 of 4").waitForExistence(timeout: 5), "off Before Bed again")
+        snapshot("3 Dragged back onto the loose switches")
+    }
+
+    /// Scrolls the board by `fraction` of the screen's height (positive: further down the board), from the screen's
+    /// right edge, where no tile's long press can start.
+    private func scroll(by fraction: CGFloat) {
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.55))
+        let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.55 - fraction))
+        from.press(forDuration: 0.05, thenDragTo: to)
+        Thread.sleep(forTimeInterval: 0.6)
+    }
+
     // MARK: Helpers
+
+    private func boardHeader(_ name: String) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == 'switchboardHeader' AND label == %@", name)).firstMatch
+    }
+
+    private func boardLine(containing text: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "identifier == 'switchboardLine' AND label CONTAINS %@", text)).firstMatch
+    }
 
     /// The time: the compact time control, whose tap opens a field in its place.
     private func setTime(_ typed: String) {

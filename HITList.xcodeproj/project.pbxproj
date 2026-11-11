@@ -55,6 +55,7 @@
 		1B99CCFFDABA2AF91627D80F /* HITListCore in Frameworks */ = {isa = PBXBuildFile; productRef = 498143C159A4BD0FF960EE6C /* HITListCore */; };
 		1BE90253E84FB1B4ED7747EF /* HITListShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D17E34A4CAB819BB8BFDD7BA /* HITListShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1C38EE460A421664F56305F4 /* InboxProcessQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379D57D8772CB122DAF2854C /* InboxProcessQueue.swift */; };
+		1CADFAADEDF176FCB49622B6 /* SwitchDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8541FA09F2D1988F2BD0DBE1 /* SwitchDragTests.swift */; };
 		1CB48CA24D054DC52FB14740 /* ShareSheetModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2F88716EB7134BEC4655E94 /* ShareSheetModel.swift */; };
 		1D0C2DC2D0A5C7CAA2CA890A /* HITSheetPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7507272CF27356E20DACB086 /* HITSheetPages.swift */; };
 		1E36848F6012B749688CFE50 /* DuoNextDays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1960A13263E02500E37004C0 /* DuoNextDays.swift */; };
@@ -433,6 +434,7 @@
 		DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29800AE3317F5D97333D1CDF /* HITMaterial.swift */; };
 		DD66C2518E7D8BA9BB922633 /* BrowseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C50BDDCE5CD3BBAE4215CFE6 /* BrowseView.swift */; };
 		DD66FCDE2203AFD42E38B1B3 /* ScreenMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = D756AF47EBCBD00580C2A32D /* ScreenMenu.swift */; };
+		DED6BFE5B5CC67674FE845EB /* SwitchDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10C42650F78D2424DD988E18 /* SwitchDrag.swift */; };
 		E0405BDAFDF12AD90BCE2E0A /* SyncRecovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CD698A5F08AB63F32AEBED2 /* SyncRecovery.swift */; };
 		E04FB8CD48D3B227514AAFDA /* LocalBackupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */; };
 		E0C67B46C8E0D66BE68A6434 /* SyncSteadiness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C02100B69A596D736C1F59 /* SyncSteadiness.swift */; };
@@ -592,6 +594,7 @@
 		0F69C7AD0F70F6C933CC821D /* FlipSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipSound.swift; sourceTree = "<group>"; };
 		103542F81B4DB4B92AE55D74 /* RockerSwitch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RockerSwitch.swift; sourceTree = "<group>"; };
 		1054B92FCF463385DF075D13 /* SyncLogFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLogFormat.swift; sourceTree = "<group>"; };
+		10C42650F78D2424DD988E18 /* SwitchDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchDrag.swift; sourceTree = "<group>"; };
 		12F744776A755EC2CDBCB774 /* Smudge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Smudge.swift; sourceTree = "<group>"; };
 		133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingScheduleTests.swift; sourceTree = "<group>"; };
 		14255A51748F8F42EA94CDCF /* HighlightRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightRun.swift; sourceTree = "<group>"; };
@@ -798,6 +801,7 @@
 		8467A7278905944FAF43F971 /* HITListCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = HITListCore; path = HITListCore; sourceTree = SOURCE_ROOT; };
 		847A246D1F1C5F42FAA5105A /* PopoutHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoutHost.swift; sourceTree = "<group>"; };
 		84BA75B32715E4CC319201B2 /* CompanionDirector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionDirector.swift; sourceTree = "<group>"; };
+		8541FA09F2D1988F2BD0DBE1 /* SwitchDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchDragTests.swift; sourceTree = "<group>"; };
 		85AF9BE9301C94A1DBD2EDE8 /* WidgetCompletionRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetCompletionRenderTests.swift; sourceTree = "<group>"; };
 		872E52408155EDE930C89CC6 /* QuickAddEntry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddEntry.swift; sourceTree = "<group>"; };
 		8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
@@ -1401,6 +1405,7 @@
 				F66A82D7D7E91AA9118B93C6 /* SwitchCard.swift */,
 				0136AA4680A0A96E23E44E40 /* SwitchControls.swift */,
 				91BE7D86CD42E2D3DFEC8EDB /* SwitchDraft.swift */,
+				10C42650F78D2424DD988E18 /* SwitchDrag.swift */,
 				02572FFF58BF51113AD8152B /* SwitchTimeChip.swift */,
 			);
 			path = Flipboard;
@@ -1610,6 +1615,7 @@
 				EAEC76EA04E09F604DA0DDA5 /* StoreResetTests.swift */,
 				0875D669DF9C6B9BB0A90853 /* SubtaskTests.swift */,
 				C0B8A079990A9A8C1BD9C0C5 /* SwitchboardTests.swift */,
+				8541FA09F2D1988F2BD0DBE1 /* SwitchDragTests.swift */,
 				80FC29DB1F9289C32B262576 /* SyncLogTests.swift */,
 				422E0340B7BAAAB4BAFBB26F /* SyncStateTests.swift */,
 				07406BB8A07A30E6468DE824 /* SyncSteadinessTests.swift */,
@@ -2500,6 +2506,7 @@
 				439DB36D43C5D48966D60813 /* SwitchCard.swift in Sources */,
 				6FF1D4BE49986AAA87BB32D1 /* SwitchControls.swift in Sources */,
 				BA3A5F0CCD1CACEA96DC2C26 /* SwitchDraft.swift in Sources */,
+				DED6BFE5B5CC67674FE845EB /* SwitchDrag.swift in Sources */,
 				A718CC4A4864B9AD2A743627 /* SwitchTimeChip.swift in Sources */,
 				39523C34032CB4FE86533816 /* SwitchboardCard.swift in Sources */,
 				A03096E43CA676FBA4E0BEA4 /* SwitchboardDraft.swift in Sources */,
@@ -2667,6 +2674,7 @@
 				BE49E81DF41EEBDFC398FED3 /* SpotlightTests.swift in Sources */,
 				0F9EB6A121578D72E6DCBDFB /* StoreResetTests.swift in Sources */,
 				A5582DCC236003C9F6C5873A /* SubtaskTests.swift in Sources */,
+				1CADFAADEDF176FCB49622B6 /* SwitchDragTests.swift in Sources */,
 				3CA8854413B8F7FD1BFC8C23 /* SwitchboardTests.swift in Sources */,
 				A2BA4C7BFF9977D7AE2FF0B5 /* SyncLogTests.swift in Sources */,
 				6647789EC3814C8BED45F16B /* SyncStateTests.swift in Sources */,
