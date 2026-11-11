@@ -10,7 +10,7 @@ extension CompanionCharacter {
     /// drifts down onto its nose; it goes cross-eyed, breathes in twice and sneezes its ears straight up, and
     /// they float back down. At night it wraps its ears round itself like a shawl; in the rain it draws them up
     /// round its head into a pointed hood; in snow, a dusting on its head and the tops of its ears.
-    static let hush = CompanionCharacter(
+    static let hush: CompanionCharacter = CompanionCharacter(
         id: "hush",
         name: "Hush",
         width: 20,

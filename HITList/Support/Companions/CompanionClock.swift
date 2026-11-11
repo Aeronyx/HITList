@@ -121,7 +121,11 @@ struct CompanionClock {
     /// The tick `elapsed` seconds in, at `fps`. A hair of slack, so a moment computed as a tick's start (which a
     /// `Date` far from its reference can round a nanosecond early) counts as that tick and not the one before.
     static func tick(_ elapsed: TimeInterval, fps: Double) -> Int {
-        max(0, Int((elapsed * fps + 1e-6).rounded(.down)))
+        // One step per line: the CI runner's older Swift is slow to type-check mixed arithmetic.
+        let ticks: Double = elapsed * fps
+        let slack: Double = ticks + 1e-6
+        let whole: Int = Int(slack.rounded(.down))
+        return max(0, whole)
     }
 }
 
@@ -137,11 +141,21 @@ enum CompanionRandom {
 
     /// A number in 0..<1 from `seed` and `index`.
     static func unit(_ seed: UInt64, _ index: Int) -> Double {
-        Double(mix(seed ^ mix(UInt64(bitPattern: Int64(index)))) >> 11) / Double(1 << 53)
+        let key: UInt64 = mix(UInt64(bitPattern: Int64(index)))
+        let mixed: UInt64 = mix(seed ^ key)
+        let top: UInt64 = mixed >> 11
+        let scale: Double = 9_007_199_254_740_992    // 2^53
+        return Double(top) / scale
     }
 
     /// A stable seed for a name (`String.hashValue` changes from launch to launch).
     static func seed(_ name: String) -> UInt64 {
-        name.utf8.reduce(0xCBF2_9CE4_8422_2325) { ($0 ^ UInt64($1)) &* 0x0000_0100_0000_01B3 }
+        let prime: UInt64 = 0x0000_0100_0000_01B3
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in name.utf8 {
+            let xored: UInt64 = hash ^ UInt64(byte)
+            hash = xored &* prime
+        }
+        return hash
     }
 }

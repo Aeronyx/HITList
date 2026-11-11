@@ -10,7 +10,7 @@ extension CompanionCharacter {
     /// it yawns, gets up into a long stretch with its tail straight up, turns to face you, and settles again
     /// facing the other way. At night it sleeps curled up, an ear or the tip twitching now and then; a tap opens
     /// one eye. In the rain it holds its tail over its head; in snow, a dusting on its head and back.
-    static let quill = CompanionCharacter(
+    static let quill: CompanionCharacter = CompanionCharacter(
         id: "quill",
         name: "Quill",
         width: 20,

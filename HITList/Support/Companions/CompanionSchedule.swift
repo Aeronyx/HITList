@@ -44,15 +44,19 @@ enum CompanionSchedule {
 
     /// The gap before the next gesture (awake) or stir (asleep), from a number in 0..<1.
     static func gap(asleep: Bool, unit: Double) -> TimeInterval {
-        let range = asleep ? stirGap : gestureGap
-        return range.lowerBound + (range.upperBound - range.lowerBound) * unit
+        let range: ClosedRange<TimeInterval> = asleep ? stirGap : gestureGap
+        let span: TimeInterval = range.upperBound - range.lowerBound
+        let extra: TimeInterval = span * unit
+        return range.lowerBound + extra
     }
 
     /// Showing time until the next flourish may come, from a number in 0..<1: the floor, then an exponential.
     static func flourishBudget(unit: Double) -> TimeInterval {
-        let u = min(max(unit, 0), 0.999_999)
-        let tail: TimeInterval = -log(1 - u) * flourishMeanAfterFloor
-        return flourishFloor + min(tail, flourishLongest - flourishFloor)
+        let u: Double = min(max(unit, 0), 0.999_999)
+        let survival: Double = 1 - u
+        let tail: TimeInterval = -log(survival) * flourishMeanAfterFloor
+        let longestTail: TimeInterval = flourishLongest - flourishFloor
+        return flourishFloor + min(tail, longestTail)
     }
 
     /// Which gesture comes next, by weight, from a number in 0..<1: never the same one three times running.
@@ -63,8 +67,11 @@ enum CompanionSchedule {
         if recent.count >= 2, recent[recent.count - 1] == recent[recent.count - 2] {
             allowed.removeAll { $0 == recent[recent.count - 1] }
         }
-        let total = allowed.reduce(0) { $0 + max(1, weights[$1]) }
-        var pick = Int(Double(total) * min(max(unit, 0), 0.999_999))
+        var total = 0
+        for i in allowed { total += max(1, weights[i]) }
+        let u: Double = min(max(unit, 0), 0.999_999)
+        let scaled: Double = Double(total) * u
+        var pick: Int = Int(scaled)
         for i in allowed {
             let w = max(1, weights[i])
             if pick < w { return i }

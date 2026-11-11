@@ -11,7 +11,7 @@ extension CompanionCharacter {
     /// open with every tip catching the light, and a winged seed pops out of the top and spins down past the edge
     /// while it watches. At night it tucks its face in and is just a pinecone, the tip of its nose peeking out. In
     /// the rain its scales close tight, as a pinecone's do, a drop on its nose; in snow, snow on its top scales.
-    static let pip = CompanionCharacter(
+    static let pip: CompanionCharacter = CompanionCharacter(
         id: "pip",
         name: "Pip",
         width: 20,
@@ -383,28 +383,6 @@ extension CompanionCharacter {
                 "....dmlllmddddddmmmd",
                 "...dmmmmmmdmlllmdmmd",
                 "..dmkldmmmdmmmmmmddd",
-                "..dlllddddddddmmmmd.",
-                "aammmmmmmddmlllmmdd.",
-                ".ddllllmmddmmmmmmd..",
-                "...dlll.ll.ddddmd...",
-                "..............dmd...",
-                ".............dmd....",
-                ".............dmd....",
-                "..............dd....",
-            ]),
-            Frame(name: "openLook", rows: [
-                "....................",
-                "............d.d.....",
-                "...........dlmld....",
-                "..........dllllmd...",
-                ".........dmmmmmmmd..",
-                "........ddddmmmmddd.",
-                ".......dmlllmdlmmmd.",
-                "......dmmmmmmdlllmdd",
-                ".....ddddmmmmdmmmmmd",
-                "....dmlllmddddddmmmd",
-                "...dmmmmmmdmlllmdmmd",
-                "..dmlkdmmmdmmmmmmddd",
                 "..dlllddddddddmmmmd.",
                 "aammmmmmmddmlllmmdd.",
                 ".ddllllmmddmmmmmmd..",
