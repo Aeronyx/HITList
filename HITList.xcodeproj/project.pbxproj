@@ -239,6 +239,7 @@
 		87942B8922387B0FF3BDACE8 /* TaskPopoutTitleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF922AE937BECF293EE28887 /* TaskPopoutTitleTests.swift */; };
 		881A80EA905BB828E295375B /* SearchScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E13ACE44A63995095A971A36 /* SearchScreen.swift */; };
 		891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D15C3C5BD9ADB239A1C839E /* NotificationActionTests.swift */; };
+		8A1F138180A53DFA609D56F5 /* HITHitArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAD190D4052B50EC215C22A /* HITHitArea.swift */; };
 		8BFBC81113808FF6C522011F /* SharedTasksComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCD1883288948D9C8624C512 /* SharedTasksComponents.swift */; };
 		8C2FEA8066A9998403709098 /* HITButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */; };
 		8D89A72DC04A51ED1EC851D6 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470E9FA3AA856BA92FBFC6FA /* Preferences.swift */; };
@@ -626,6 +627,7 @@
 		4E15C0CED187F50576BBD250 /* WeatherUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherUITests.swift; sourceTree = "<group>"; };
 		4EC7B932C6B8D510FA4827B9 /* swish.caf */ = {isa = PBXFileReference; path = swish.caf; sourceTree = "<group>"; };
 		4F2C6F0B31F217723029B1AA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		4FAD190D4052B50EC215C22A /* HITHitArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITHitArea.swift; sourceTree = "<group>"; };
 		4FD507EEBD7A6AAD5F22146C /* HolidayEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HolidayEffects.swift; sourceTree = "<group>"; };
 		4FE40ED6927C3D829A1EAE13 /* CompletionSound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionSound.swift; sourceTree = "<group>"; };
 		504A3406B726B88C71C98278 /* BetaFeedbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BetaFeedbackTests.swift; sourceTree = "<group>"; };
@@ -1807,6 +1809,7 @@
 				F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */,
 				C52D4DEDC8BFB16C07252D16 /* HITChip.swift */,
 				B3DE63E2D5D5BA8429AB8933 /* HITField.swift */,
+				4FAD190D4052B50EC215C22A /* HITHitArea.swift */,
 				29800AE3317F5D97333D1CDF /* HITMaterial.swift */,
 				8DC5CAB524A97500619271F4 /* HITMenuRow.swift */,
 				165FA6D62560AF712E0AB48D /* HITSegmented.swift */,
@@ -2171,6 +2174,7 @@
 				2B4928700AAE525B3F71005E /* HITCalendar.swift in Sources */,
 				5530F11C224FC2EB6213122B /* HITChip.swift in Sources */,
 				92973FBF19DB570087754456 /* HITField.swift in Sources */,
+				8A1F138180A53DFA609D56F5 /* HITHitArea.swift in Sources */,
 				2627D544E45DE46036EB040C /* HITListApp.swift in Sources */,
 				EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */,
 				DCFAA52861DB6398E71CDBD5 /* HITMaterial.swift in Sources */,

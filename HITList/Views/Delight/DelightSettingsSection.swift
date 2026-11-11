@@ -326,9 +326,11 @@ private struct BoltStyleRow: View {
             Button(action: play) {
                 BoltPreviewGlyph(player: player)
                     .frame(width: 22)
-                    .contentShape(Rectangle())
+                    // 44 pt square inside its own row, the glyph where it was (brief 94: a 22 x 17 pt target).
+                    .hitOutset(horizontal: 11, vertical: 13)
             }
             .buttonStyle(.plain)
+            .hitOutsetLayout(horizontal: 11, vertical: 13)
             .accessibilityLabel("Play the sync bolt")
             HITMenuRowLabel("Sync bolt", subtitle: "When you're good to go")
                 .foregroundStyle(HITColor.text)
