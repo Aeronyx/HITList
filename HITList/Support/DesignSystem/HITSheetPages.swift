@@ -102,7 +102,9 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
             screen { root }
                 .offset(x: offset(level: 0, top: top, width: width))
                 .allowsHitTesting(top == 0)
-                .accessibilityHidden(top != 0)
+                // `isEnabled`, never `accessibilityHidden(false)`: false un-hides everything inside (brief 94: the edge
+                // strip below, hidden, was an unnamed VoiceOver stop on every page).
+                .accessibilityHidden(true, isEnabled: top != 0)
             ForEach(entries, id: \.self) { entry in
                 screen { destination(entry.page) }
                     .overlay(alignment: .leading) {
@@ -114,12 +116,11 @@ struct HITSheetPages<Page: Hashable, Root: View, Destination: View>: View {
                             .allowsHitTesting(false)
                     }
                     .overlay(alignment: .leading) {
-                        // The strip is a gesture, not an element: the audit found it as an unnamed one (brief 94).
-                        if entry.level == top { edgeSwipe(width: width).accessibilityHidden(true) }
+                        if entry.level == top { edgeSwipe(width: width) }
                     }
                     .offset(x: offset(level: entry.level, top: top, width: width))
                     .allowsHitTesting(entry.level == top)
-                    .accessibilityHidden(entry.level != top)
+                    .accessibilityHidden(true, isEnabled: entry.level != top)
                     .accessibilityAction(.escape) { back() }
                     .transition(slides ? .move(edge: .trailing) : .opacity)
                     .zIndex(Double(entry.level))
