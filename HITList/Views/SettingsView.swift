@@ -33,6 +33,14 @@ struct SettingsView: View {
     }
 }
 
+/// A request to show the Settings sheet (iPhone, iPad), on its first screen or straight on a page. Identifiable, so
+/// `.sheet(item:)` builds the sheet for the page that was asked for: "Account settings…" opens Account, the sync
+/// bolt opens iCloud & data.
+struct SettingsSheetRequest: Identifiable {
+    let id = UUID()
+    var page: SettingsPage? = nil
+}
+
 /// The pages of iPhone and iPad Settings, and each one's row on the first screen. One topic each; every option has
 /// one home (brief 86's audit). The Mac's sections (`MacSettingsSection`) are the same homes under the same names,
 /// with iCloud & data in two (the Mac shows the sync log inline, which would make one page too long).

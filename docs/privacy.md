@@ -77,7 +77,7 @@ does not ask again, and your companion keeps your device's time without weather.
 When the app comes to the front, at most once an hour, HITList gets that approximate location from your device
 and makes two requests with it, both handled by Apple under [Apple's Privacy
 Policy](https://www.apple.com/legal/privacy/): it asks Apple Weather (WeatherKit) whether it is raining, snowing,
-stormy, cloudy or clear there, and it asks Apple's map service (the reverse geocoder in MapKit) which time zone
+stormy, cloudy, clear or a hot day there, and it asks Apple's map service (the reverse geocoder in MapKit) which time zone
 that place is in. HITList shows no forecast, temperature or place name. The location is never stored, synced
 through iCloud, logged, put in backups or exports, or sent anywhere else; the sky and the time zone are kept in
 memory only and forgotten after three hours. Your tasks, reminders and lists always follow your device's own time

@@ -28,7 +28,7 @@ struct SidebarView: View {
     @State private var deletingProject: GroupDeletion?
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
-    @State private var showSettings = false
+    @State private var settingsRequest: SettingsSheetRequest?
     #if os(macOS)
     /// The rows hold the keyboard (brief 70): ↑ and ↓ move the selection. Taken at launch and whenever the window's
     /// focus guard lets go of a text field the system handed the keyboard.
@@ -60,10 +60,10 @@ struct SidebarView: View {
         .listStyle(.insetGrouped)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button { showSettings = true } label: { Image(systemName: "gearshape") }
+                Button { settingsRequest = SettingsSheetRequest() } label: { Image(systemName: "gearshape") }
             }
         }
-        .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
+        .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
         #else
         .background(Theme.surface)
         // The gear at the foot of the sidebar opens Settings in this window's detail column.
@@ -388,7 +388,7 @@ struct SidebarView: View {
     /// From the search field to the first row (Inbox).
     static let searchBottom: CGFloat = HITSpacing.s
 
-    /// Mac: the Settings page straight at Account. iPad: the Settings sheet, whose first group is Account.
+    /// Mac: the Settings page straight at Account. iPad: the Settings sheet, straight on its Account page.
     private func openAccountSettings() {
         #if os(macOS)
         if let settingsRouter {
@@ -398,7 +398,7 @@ struct SidebarView: View {
             selection = .settings
         }
         #else
-        showSettings = true
+        settingsRequest = SettingsSheetRequest(page: .account)
         #endif
     }
 
@@ -407,7 +407,7 @@ struct SidebarView: View {
         #if os(macOS)
         if let settingsRouter { settingsRouter.open() } else { selection = .settings }
         #else
-        showSettings = true
+        settingsRequest = SettingsSheetRequest()
         #endif
     }
 

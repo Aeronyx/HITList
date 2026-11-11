@@ -88,6 +88,11 @@ decided. **No schema change this round**: a fix that needs one stops and reports
 - Added at 02:25: 90 `share-extension` (xhigh): a new `HITListShare/` target, a core outbox, `Services/Share/*`, one
   start-up line in `HITListApp`, one drain line in `WidgetRefresh`, its own target lines in `project.yml`, one
   sentence in the privacy page.
+- Added at 03:40 (George: "continue reviewing, improving, and hardening"): 92 `day-anchor-review` (max) core's
+  `DayAnchor` and date files, `Services/Dates/*`, the date-writing lines; 93 `qa-sweep` (xhigh) spacing and
+  consistency defects in `Views/` and the design system; 94 `accessibility` (xhigh) accessibility modifiers, focus
+  and hit shapes in the same view files, and the Mac toolbar's sync bolt. 93 and 94 share view files: each keeps
+  its change to the lines it needs. Brief 91 (03:05) adds the weather on the creature to every companion session.
 - **The Mac is saturated tonight** (nine sessions, swap full): no baseline suite runs for the three companion
   sessions; everyone else, prefer `-only-testing` while you iterate and run the full suites once, at the end.
 - **A Debug build never asks for the location by itself** (brief 83 keeps it so): if a system dialog appears on the
