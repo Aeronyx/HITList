@@ -9,7 +9,7 @@ import SwiftUI
 /// It never changes its host's layout (it is drawn with an offset), takes no tap meant for the field or the "+"
 /// (only its own pixels above the edge it sits on), is hidden from VoiceOver, makes no sound, and is gone when
 /// Settings → Extras → Companions is off. Reduce Motion draws the still pose for the hour and the weather and runs
-/// nothing; Reduce Effects and Low Power Mode keep the small gestures and drop the flourish.
+/// nothing; Reduce Effects and Low Power Mode keep the flickers and drop the routines and the flourish.
 struct CompanionPerch: View {
     enum Spot {
         /// The Mac sidebar's search field.
@@ -58,12 +58,15 @@ struct CompanionPerch: View {
     }
 
     /// The sprite's offset from the host's top-trailing corner: its resting pose's rightmost pixel `spot.trailing`
-    /// in from the edge, its seat row on the top edge.
+    /// in from the edge (and the posture's own `inset` further), its seat row on the top edge.
     static func offset(_ character: CompanionCharacter, spot: Spot) -> CGSize {
         let p = CompanionCharacter.pointsPerPixel
-        let rest = character.posture(spot.place).awake.rest
+        let posture = character.posture(spot.place)
+        let rest = posture.awake.rest
         let clearColumns = character.width - 1 - character.rightmostColumn(rest)
-        let x: CGFloat = CGFloat(clearColumns) * p - spot.trailing
+        let inset: CGFloat = CGFloat(posture.inset) * p
+        let clear: CGFloat = CGFloat(clearColumns) * p
+        let x: CGFloat = clear - spot.trailing - inset
         let y: CGFloat = -CGFloat(character.seatRow) * p
         return CGSize(width: x, height: y)
     }
