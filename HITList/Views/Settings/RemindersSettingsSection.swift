@@ -21,16 +21,20 @@ struct RemindersSettingsSection: View {
     @AppStorage(Preferences.morningSummaryMinutes, store: AppGroup.defaults)
     private var morningMinutes = Preferences.morningSummaryMinutesDefault
 
-    /// The summary time as a Date today, for the time picker; stored as minutes after midnight.
-    private var morningTime: Binding<Date> {
-        Binding {
-            let minutes = min(max(0, morningMinutes), 24 * 60 - 1)
-            return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
-        } set: { date in
-            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-            morningMinutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
-        }
+    /// The summary time for our time field (brief 99: it was the system's picker), stored as minutes after midnight.
+    private var morningTime: PickerTime { Self.summaryTime(minutes: morningMinutes) }
+    /// Rebuilds the field after its × (the summary always has a time), so it shows the stored one again.
+    @State private var summaryFieldRevision = 0
+
+    static func summaryTime(minutes: Int) -> PickerTime {
+        let clamped = min(max(0, minutes), 24 * 60 - 1)
+        return PickerTime(hour: clamped / 60, minute: clamped % 60)
     }
+
+    static func summaryMinutes(_ time: PickerTime) -> Int { time.hour * 60 + time.minute }
+
+    /// The field's width in the row: "12:45 PM" and its clock and × with room.
+    static let summaryFieldWidth: CGFloat = 132
     @State private var authorization: UNAuthorizationStatus?
     @State private var scheduled = "…"
     @State private var testMessage: String?
@@ -88,9 +92,12 @@ struct RemindersSettingsSection: View {
             }
             if morningSummary {
                 HITMenuRow("Summary time", systemImage: "clock", trailing: {
-                    DatePicker("Summary time", selection: morningTime, displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .fixedSize()
+                    // The cards' time field (`PickerTimeField`): type "8am", "7:30", "noon", then Return.
+                    PickerTimeField(time: morningTime) { time in
+                        if let time { morningMinutes = Self.summaryMinutes(time) } else { summaryFieldRevision += 1 }
+                    }
+                    .id(summaryFieldRevision)
+                    .frame(width: Self.summaryFieldWidth)
                 })
                 .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
             }
