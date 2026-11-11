@@ -61,6 +61,18 @@ final class SweepPolishUITests: XCTestCase {
         XCTAssertTrue(lines.isEmpty, "no line across the screen between the title and the first row: \(lines)")
     }
 
+    /// Today at the smallest text size, for the record: its meta lines stay at 13 pt and its captions at 12 (they fell to
+    /// 10.7 and 9.7), so the rows' second lines keep their size while the titles shrink.
+    func testTodayAtTheSmallestTextSize() throws {
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXS"]
+        try launchPhone()
+        tab("today")
+        let header = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", " · Today · ")).firstMatch
+        XCTAssertTrue(header.waitForExistence(timeout: 5))
+        pause(1)
+        shot("Today, smallest text size")
+    }
+
     // MARK: iPad
 
     /// The iPad sidebar's selected row is our own fill (the Mac's selection colour), with no accent outline round it.
