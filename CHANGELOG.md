@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.3
+## 0.9.3 — build 24, 2026-11-11
 
 George's notes on 0.9.2, worked through in one night by sixteen sessions: a companion for every theme with a life
 of its own, weather that shows on the creature, the location asked once, time zones done properly, a Settings you
