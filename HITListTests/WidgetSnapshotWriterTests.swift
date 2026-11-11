@@ -151,4 +151,22 @@ final class WidgetSnapshotWriterTests: XCTestCase {
         XCTAssertFalse(try next.write(snap))
         XCTAssertEqual(reloads, 2)
     }
+
+    /// Brief 81: an unchanged snapshot is written again after six hours, so its age is true, but only once the store has
+    /// heard from iCloud since (offline, it ages into "As of yesterday" rather than claiming news it hasn't had).
+    func testAnUnchangedSnapshotSaysItIsCurrentOnlyWhenItIs() throws {
+        let url = FileManager.default.temporaryDirectory.appending(path: "widgets-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        var heard = false
+        let writer = WidgetSnapshotWriter(fileURL: { url }, reload: {}, confirmedSince: { _ in heard })
+        var snap = try snapshot()
+        XCTAssertTrue(try writer.write(snap))
+        snap.writtenAt = snap.writtenAt.addingTimeInterval(WidgetSnapshotWriter.refreshAfter)
+        XCTAssertFalse(try writer.write(snap), "six hours on, but nothing heard from iCloud: the old moment stands")
+        heard = true
+        XCTAssertTrue(try writer.write(snap), "an import since: still current, said so")
+        snap.writtenAt = snap.writtenAt.addingTimeInterval(60)
+        XCTAssertFalse(try writer.write(snap), "a minute later: nothing to say")
+        XCTAssertEqual(try WidgetSnapshot.decode(Data(contentsOf: url)).writtenAt, snap.writtenAt.addingTimeInterval(-60))
+    }
 }

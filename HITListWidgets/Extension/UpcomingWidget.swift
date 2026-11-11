@@ -22,7 +22,7 @@ private struct UpcomingWidgetEntryView: View {
 
     var body: some View {
         let palette = ThemePalette.named(entry.snapshot?.themeID)
-        UpcomingWidgetView(snapshot: entry.snapshot, now: entry.date, family: family)
+        UpcomingWidgetView(snapshot: entry.snapshot, now: entry.date, family: family, requests: entry.requests)
             .environment(\.widgetPalette, palette)
             .widgetBackground(palette)
     }

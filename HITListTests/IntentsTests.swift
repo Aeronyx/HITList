@@ -257,4 +257,57 @@ final class IntentsTests: XCTestCase {
         XCTAssertEqual(entity.detail, "\(DueFormatter.text(for: day(1, hour: 17), hasTime: true, now: now)) · Home")
         XCTAssertNil(TaskEntity(try insert("Plain", due: nil), now: now).detail)
     }
+
+    // MARK: Completing from a widget (brief 81)
+
+    private func widgetRow(due: Date?, hasTime: Bool) -> WidgetSnapshot.Task {
+        WidgetSnapshot.Task(id: UUID(), title: "Call Sam", priority: 2, due: due, hasTime: hasTime, groupName: nil,
+                            groupColorHex: nil, labelNames: [], isRecurring: false, createdAt: nil, isShared: false,
+                            switchOptedIn: false, switchboardID: nil, clock: nil)
+    }
+
+    func testAWidgetTapCarriesWhatTheWidgetShowed() throws {
+        // A due date with a fraction of a second: it must cross the processes exactly.
+        let row = widgetRow(due: day(0, hour: 9, minute: 30).addingTimeInterval(0.123_456), hasTime: true)
+        let intent = WidgetCompletionIntent(task: row, action: .flip, widget: "flipboard")
+        let request = try XCTUnwrap(intent.request(at: now))
+        XCTAssertEqual(request.taskID, row.id)
+        XCTAssertEqual(request.action, .flip)
+        XCTAssertEqual(request.seenDue, row.due)
+        XCTAssertTrue(request.seenHasTime)
+        XCTAssertEqual(request.widget, "flipboard")
+        XCTAssertEqual(request.askedAt, now)
+        XCTAssertTrue(request.recordedBy.hasPrefix(ProcessInfo.processInfo.processName), "says which process ran it")
+        let undated = try XCTUnwrap(WidgetCompletionIntent(task: widgetRow(due: nil, hasTime: false), action: .complete,
+                                                           widget: "today").request(at: now))
+        XCTAssertNil(undated.seenDue)
+        XCTAssertNotEqual(intent.request(at: now)?.id, request.id, "each delivery is a request of its own")
+    }
+
+    func testAWidgetTapThatNamesNoTaskIsRefused() {
+        var intent = WidgetCompletionIntent(task: widgetRow(due: nil, hasTime: false), action: .complete, widget: "today")
+        intent.taskID = "not a task"
+        XCTAssertNil(intent.request(at: now))
+        intent = WidgetCompletionIntent(task: widgetRow(due: nil, hasTime: false), action: .complete, widget: "today")
+        intent.action = "delete"
+        XCTAssertNil(intent.request(at: now))
+    }
+
+    func testTheAppWritesAWidgetTapDownBeforeAnythingElse() async throws {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "IntentsTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        WidgetIntentRoad.outboxOverride = WidgetOutbox(folder: folder)
+        defer { WidgetIntentRoad.outboxOverride = nil }
+        let handed = expectation(forNotification: .widgetTapRecorded, object: nil)
+        let request = try XCTUnwrap(WidgetCompletionIntent(task: widgetRow(due: day(0), hasTime: false), action: .complete,
+                                                           widget: "today").request(at: now))
+        try await WidgetIntentRoad.deliver(request)
+        XCTAssertEqual(WidgetOutbox(folder: folder).read().requests, [request])
+        await fulfillment(of: [handed], timeout: 1)
+    }
+
+    func testHostedTestsNeverWriteTheRealOutbox() {
+        WidgetIntentRoad.outboxOverride = nil
+        XCTAssertNil(WidgetIntentRoad.outbox, "the test process is a Debug HITList in George's App Group")
+    }
 }

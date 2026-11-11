@@ -75,7 +75,9 @@ targets:
         CFBundleShortVersionString: "0.9.1"
         CFBundleVersion: "22"
         LSApplicationCategoryType: public.app-category.productivity
-        UIBackgroundModes: [remote-notification]
+        # Brief 81: fetch for the widgets' background refresh (WidgetRefresh), beside the silent pushes.
+        UIBackgroundModes: [remote-notification, fetch]
+        BGTaskSchedulerPermittedIdentifiers: [com.trammells.hitlist.widget-refresh]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
@@ -98,6 +100,9 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: com.trammells.hitlist
             CFBundleURLSchemes: [hitlist]
+        # Debug only (brief 81, WidgetDebug): the side store a build made with HITLIST_WIDGET_SUFFIX=<name> opens when the
+        # system launches it for a widget's tap, as its extension reads that store's snapshot. Release ignores it.
+        HITListWidgetSuffix: $(HITLIST_WIDGET_SUFFIX)
         # ProMotion iPhones may run animations above 60 Hz (the sync bolt's strike, brief 54); without this key
         # Core Animation caps them at 60 on iPhone.
         CADisableMinimumFrameDurationOnPhone: true
@@ -124,6 +129,8 @@ targets:
         ENABLE_HARDENED_RUNTIME: YES
         DEAD_CODE_STRIPPING: YES
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        # Brief 81: empty unless a Debug build names a side store (see HITListWidgetSuffix above and the extension's).
+        HITLIST_WIDGET_SUFFIX: ""
   # The widgets (brief 74): Today, Upcoming and Flipboard on the Home Screen, the Mac's desktop and Notification
   # Centre, and the iPhone's Lock Screen. The extension never opens the store (it mirrors to CloudKit; a second
   # process must not touch it): the app writes a JSON snapshot of its open tasks into the App Group container
@@ -149,6 +156,9 @@ targets:
       - HITList/Support/DesignSystem/HITCalendar.swift
       - HITList/Support/DesignSystem/HITButtonStyle.swift
       - HITList/Services/DeepLinks/DeepLink.swift
+      # Brief 81: a row's check and a red pill's flip. The intent is the same type in both targets, so the system can
+      # run it in the app (iPhone, iPad) or here (the Mac); each target has its own WidgetIntentRoad.
+      - HITList/Services/Intents/WidgetCompletionIntent.swift
       # The six Inter cuts the app ships, registered by the extension's own Info.plist.
       - path: HITList/Resources/Fonts/Inter/static
         buildPhase: resources

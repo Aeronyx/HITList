@@ -36,8 +36,25 @@ enum WidgetLook {
     #endif
     /// A Flipboard pill's widest; a longer name truncates.
     static let pillMaxWidth: CGFloat = 150
+    #if os(macOS)
+    /// The smallest a tap target may be (HIG, Accessibility: 20 × 20 pt on the Mac). A row's check and a red pill are
+    /// buttons (brief 81).
+    static let minimumTarget: CGFloat = 20
     /// Ring to title.
     static let ringGap: CGFloat = 8
+    #else
+    /// The smallest a tap target may be (HIG, Accessibility: 28 × 28 pt on iPhone and iPad). A row's check and a red
+    /// pill are buttons (brief 81).
+    static let minimumTarget: CGFloat = 28
+    /// Ring to title: the check's column (ring and gap) is the minimum target's width.
+    static let ringGap: CGFloat = 10
+    #endif
+    /// The check's column, its button's width: the ring and the gap to the title.
+    static var checkColumn: CGFloat { ringSize + 2 + ringGap }
+    /// A row the widget has tapped, on its way to iCloud: the app's completed look (filled check, struck title), dimmed.
+    static let pendingOpacity: Double = 0.6
+    /// Between a pill's capsule and its button's edge, so a 22-pt pill is a 28-pt target; the flow's spacing is this twice.
+    static var pillTargetInset: CGFloat { max(3, (minimumTarget - pillHeight) / 2) }
     /// Between a row's title and its second line.
     static let lineGap: CGFloat = 1
     /// Between rows.
@@ -53,6 +70,29 @@ enum WidgetLook {
     /// A row's height: its title line, with its second line when it has one.
     static func rowHeight(hasMeta: Bool) -> CGFloat {
         hasMeta ? rowTitleLine + lineGap + rowMetaLine : rowTitleLine
+    }
+
+    /// A row's frame: its content's height, grown to the minimum target when shorter (the extra half above, half below),
+    /// so its check is a target of at least `minimumTarget` both ways.
+    static func rowFrame(_ content: CGFloat) -> CGFloat { max(content, minimumTarget) }
+
+    /// The gap under a row of `content` height in a list spaced `spacing`: what growing the row to the minimum target
+    /// took comes out of the gap, so a short row keeps its pitch where it can, and gets the minimum where it can't.
+    static func gap(after content: CGFloat, spacing: CGFloat) -> CGFloat {
+        max(0, spacing - (rowFrame(content) - content))
+    }
+
+    /// How many items of `heights`, with `gaps[i]` between item i and the next, fit in `height`, keeping `reserve` for a
+    /// "+N more" line when some don't fit.
+    static func itemsThatFit(_ heights: [CGFloat], gaps: [CGFloat], in height: CGFloat, reserve: CGFloat) -> Int {
+        var used: CGFloat = 0
+        for (index, item) in heights.enumerated() {
+            let next = used + (index == 0 ? 0 : gaps[index - 1]) + item
+            let isLast = index == heights.count - 1
+            if next > height - (isLast ? 0 : reserve) { return index }
+            used = next
+        }
+        return heights.count
     }
 
     /// How many rows of `heights` fit in `height` with `rowSpacing` between them, keeping `reserve` for a "+N more"
