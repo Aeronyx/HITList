@@ -86,6 +86,8 @@ struct TaskListView: View {
         let id: String
         let title: String
         let rows: [TaskListRow]
+        /// A day's header with the weekday in three letters, drawn when `title` does not fit (`DayHeadingLine`).
+        var shortTitle: String?
         /// The header's colour: "Overdue" red, today green, other days grey.
         var color: Color = Theme.secondaryText
         /// Rows under a header that names their day show only their time.
@@ -96,6 +98,7 @@ struct TaskListView: View {
         /// Today by Group: "Overdue" or the day, above the first section of its half (in its header, not a
         /// section of its own, which left an empty gap on the Mac).
         var banner: String?
+        var shortBanner: String?
         /// A set of people's section in the Shared Tasks Group (brief 64): their faces and first names.
         var people: SharedSetHeading?
     }
@@ -174,15 +177,16 @@ struct TaskListView: View {
             for row in rows {
                 // A red switch files under today whatever its date (brief 59).
                 let due = FlipboardSwitch.listedDueDate(for: row, now: now)
-                let key = DueFormatter.sectionTitle(for: due, now: now)
-                // A header that names one day ("Tomorrow", "Friday, Nov 13") says it for its rows; "Overdue" and
-                // "No date" do not.
+                let key = DueFormatter.sectionTitle(for: due, now: now, style: .dated)
+                // A header that names one day ("Nov 12 · Tomorrow · Thursday", "Nov 13 · Friday") says it for its rows;
+                // "Overdue" and "No date" do not.
                 let singleDay = due != nil && key != "Overdue"
                 if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, rows: groups[i].rows + [row], color: groups[i].color,
-                                      hidesDay: groups[i].hidesDay)
+                    groups[i] = Group(id: key, title: key, rows: groups[i].rows + [row], shortTitle: groups[i].shortTitle,
+                                      color: groups[i].color, hidesDay: groups[i].hidesDay)
                 } else {
-                    groups.append(Group(id: key, title: key, rows: [row],
+                    let short = singleDay ? due.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) } : nil
+                    groups.append(Group(id: key, title: key, rows: [row], shortTitle: short,
                                         color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay))
                 }
             }
@@ -194,7 +198,7 @@ struct TaskListView: View {
         }
     }
 
-    /// Today: "Overdue" (red), then the day, "Oct 31, Saturday" (green), each by priority then due time.
+    /// Today: "Overdue" (red), then the day, "Oct 31 · Today · Saturday" (green), each by priority then due time.
     /// The day header shows whenever the list isn't empty, so its "Add task" row sits under it.
     /// Sorted by Group (briefs 57, 61), the Overdue block stays on top: its header, then its tasks in Group
     /// sections, then the day's header and the day's tasks in Group sections the same way.
@@ -215,7 +219,8 @@ struct TaskListView: View {
                                 color: HITColor.dueOverdue))
         }
         groups.append(Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated),
-                            rows: TaskOrdering.sorted(today, now: now), color: HITColor.dueToday, hidesDay: true))
+                            rows: TaskOrdering.sorted(today, now: now), shortTitle: todayShortTitle,
+                            color: HITColor.dueToday, hidesDay: true))
         return groups
     }
 
@@ -230,8 +235,11 @@ struct TaskListView: View {
     private func withDayHeader(_ groups: [Group], events: [DayEvent]) -> [Group] {
         guard groups.isEmpty, !events.isEmpty, !isCompact else { return groups }
         return [Group(id: "today", title: DueFormatter.sectionTitle(for: now, now: now, style: .dated), rows: [],
-                      color: HITColor.dueToday, hidesDay: true)]
+                      shortTitle: todayShortTitle, color: HITColor.dueToday, hidesDay: true)]
     }
+
+    /// Today's header with the weekday in three letters, for when the full one does not fit.
+    private var todayShortTitle: String { DueFormatter.dayHeading(for: now, now: now, shortWeekday: true) }
 
     /// Today's sort: Priority (the flat Overdue and day sections) or Group.
     private var todaySort: ListSort { Preferences.sort(storedTodaySort, offered: ListSort.today) }
@@ -269,21 +277,23 @@ struct TaskListView: View {
         let split = GroupedOrdering.today(rows, by: .group, groupOrder: order, now: now,
                                           sectionOf: { TaskOrdering.todaySection(of: $0, now: now) }) { $0.group }
         guard !split.isEmpty else { return [] }
-        func sections(_ sections: [ListSection<ListRowGroup, TaskListRow>], half: String, banner: String, color: Color,
-                      hidesDay: Bool) -> [Group] {
+        func sections(_ sections: [ListSection<ListRowGroup, TaskListRow>], half: String, banner: String,
+                      shortBanner: String? = nil, color: Color, hidesDay: Bool) -> [Group] {
             sections.enumerated().map { index, section in
                 Group(id: "\(half)-\(section.key)", title: "", rows: section.tasks, color: color, hidesDay: hidesDay,
                       heading: .make(row: section.key, count: section.openCount, projects: projects, now: now),
-                      banner: index == 0 ? banner : nil)
+                      banner: index == 0 ? banner : nil, shortBanner: index == 0 ? shortBanner : nil)
             }
         }
         let day = DueFormatter.sectionTitle(for: now, now: now, style: .dated)
         var groups = sections(split.overdue, half: "overdue", banner: "Overdue", color: HITColor.dueOverdue, hidesDay: false)
         if split.today.isEmpty {
             // The day's header still shows, so its "Add task" row sits under it (as by priority).
-            groups.append(Group(id: "today", title: day, rows: [], color: HITColor.dueToday, hidesDay: true))
+            groups.append(Group(id: "today", title: day, rows: [], shortTitle: todayShortTitle, color: HITColor.dueToday,
+                                hidesDay: true))
         } else {
-            groups += sections(split.today, half: "today", banner: day, color: HITColor.dueToday, hidesDay: true)
+            groups += sections(split.today, half: "today", banner: day, shortBanner: todayShortTitle,
+                               color: HITColor.dueToday, hidesDay: true)
         }
         return groups
     }
@@ -351,13 +361,15 @@ struct TaskListView: View {
                                     } else if let heading = group.heading {
                                         VStack(spacing: 0) {
                                             if let banner = group.banner {
-                                                Text(banner).taskSectionHeader(color: group.color)
+                                                DayHeadingLine(full: banner, short: group.shortBanner)
+                                                    .taskSectionHeader(color: group.color)
                                             }
                                             GroupSectionHeader(heading: heading, belowBanner: group.banner != nil)
                                         }
                                         .listRowInsets(EdgeInsets())
                                     } else if !group.title.isEmpty {
-                                        Text(group.title).taskSectionHeader(color: group.color)
+                                        DayHeadingLine(full: group.title, short: group.shortTitle)
+                                            .taskSectionHeader(color: group.color)
                                     }
                                 }
                             }

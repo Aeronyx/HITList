@@ -105,14 +105,36 @@ final class ListRulesTests: XCTestCase {
         XCTAssertEqual(list.today.map(\.title), ["today p1", "today all day p3", "today 5pm p3"])
     }
 
+    /// A day reads one way in every list (brief 99): the date, then Today, Tomorrow or Yesterday when it is one, then
+    /// the weekday; three letters only for a line that does not fit (`DayHeadingLine`).
+    func testADayReadsOneWay() {
+        func heading(_ day: Date, short: Bool = false) -> String {
+            DueFormatter.dayHeading(for: day, now: now, shortWeekday: short, calendar: calendar, locale: locale)
+        }
+        XCTAssertEqual(heading(date(2026, 10, 31, 17)), "Oct 31 · Today · Saturday")
+        XCTAssertEqual(heading(date(2026, 11, 1)), "Nov 1 · Tomorrow · Sunday")
+        XCTAssertEqual(heading(date(2026, 10, 30)), "Oct 30 · Yesterday · Friday")
+        XCTAssertEqual(heading(date(2026, 11, 3)), "Nov 3 · Tuesday")
+        XCTAssertEqual(heading(date(2027, 1, 2)), "Jan 2, 2027 · Saturday")
+        XCTAssertEqual(heading(date(2026, 10, 31), short: true), "Oct 31 · Today · Sat")
+        XCTAssertEqual(heading(date(2027, 1, 2), short: true), "Jan 2, 2027 · Sat")
+        // Today's header, a filter's and a Group's date sections, Upcoming's list and the Mac board all write it so.
+        XCTAssertEqual(DueFormatter.sectionTitle(for: date(2026, 11, 3), now: now, style: .dated, calendar: calendar, locale: locale),
+                       "Nov 3 · Tuesday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 11, 1), now: now, calendar: calendar, locale: locale),
+                       "Nov 1 · Tomorrow · Sunday")
+        // The widgets and the Duo's next days keep the short relative form ("Tomorrow"): they have the room for no more.
+        XCTAssertEqual(DueFormatter.sectionTitle(for: date(2026, 11, 1), now: now, calendar: calendar, locale: locale), "Tomorrow")
+    }
+
     func testTodayHeaderTitlesAndColours() {
         XCTAssertEqual(DueFormatter.sectionTitle(for: now, now: now, style: .dated, calendar: calendar, locale: locale),
-                       "Oct 31, Saturday")
+                       "Oct 31 · Today · Saturday")
         XCTAssertEqual(DueFormatter.sectionTitle(for: date(2026, 10, 30), now: now, style: .dated, calendar: calendar, locale: locale),
                        "Overdue")
         XCTAssertEqual(DueFormatter.sectionTitle(for: now, now: now, calendar: calendar, locale: locale), "Today")
         XCTAssertEqual(DueFormatter.dayTitle(for: date(2027, 1, 2), now: now, calendar: calendar, locale: locale),
-                       "Jan 2, 2027, Saturday")
+                       "Jan 2, 2027, Saturday", "the Today widget's header keeps its form")
         XCTAssertEqual(DueFormatter.sectionColor(for: date(2026, 10, 30), now: now, calendar: calendar), HITColor.dueOverdue)
         XCTAssertEqual(DueFormatter.sectionColor(for: date(2026, 10, 31, 23), now: now, calendar: calendar), HITColor.dueToday)
         XCTAssertEqual(DueFormatter.sectionColor(for: date(2026, 11, 1), now: now, calendar: calendar), Theme.secondaryText)

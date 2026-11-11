@@ -428,11 +428,14 @@ struct UpcomingView: View {
     private func dayHeader(_ day: UpcomingDay<Entry>) -> some View {
         let isToday = day.date == today
         return HStack(spacing: 6) {
-            Text(UpcomingFormat.header(for: day.date, now: now, calendar: calendar))
-                .foregroundStyle(isToday ? Theme.accent : .primary)
-            if !day.items.isEmpty {
-                Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
+            DayHeadingLine(full: AttributedString(UpcomingFormat.header(for: day.date, now: now, calendar: calendar)),
+                           short: AttributedString(UpcomingFormat.header(for: day.date, now: now, shortWeekday: true,
+                                                                         calendar: calendar))) {
+                if !day.items.isEmpty {
+                    Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
+                }
             }
+            .foregroundStyle(isToday ? Theme.accent : .primary)
             Spacer()
             if dropTarget == day.date {
                 Label("Move here", systemImage: "arrow.down.to.line").labelStyle(.titleAndIcon).foregroundStyle(Theme.accent)

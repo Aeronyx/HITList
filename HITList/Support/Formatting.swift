@@ -67,9 +67,9 @@ enum DueFormatter {
 
     /// How `sectionTitle` names days from today on.
     enum SectionStyle {
-        /// "Today", "Tomorrow", "Monday, Nov 2", "Mon, Nov 9, 2026".
+        /// "Today", "Tomorrow", "Monday, Nov 2", "Mon, Nov 9, 2026": the widgets and the Duo's next days.
         case relative
-        /// Every day by its date, the Today screen's header: "Oct 31, Saturday".
+        /// Every day in the lists' one form (`dayHeading`): "Oct 31 · Today · Saturday", "Nov 3 · Tuesday".
         case dated
     }
 
@@ -80,7 +80,7 @@ enum DueFormatter {
         let today = calendar.startOfDay(for: now)
         let day = calendar.startOfDay(for: date)
         if day < today { return "Overdue" }
-        if style == .dated { return dayTitle(for: date, now: now, calendar: calendar, locale: locale) }
+        if style == .dated { return dayHeading(for: date, now: now, calendar: calendar, locale: locale) }
         let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
         let days = calendar.dateComponents([.day], from: today, to: day).day ?? 0
         switch days {
@@ -91,7 +91,28 @@ enum DueFormatter {
         }
     }
 
-    /// "Oct 31, Saturday"; another year adds it: "Jan 2, 2027, Saturday".
+    /// A day as every list's header writes it (brief 99: Today's header, a Group's and a filter's date sections,
+    /// Upcoming and the Mac board had four forms): the date, then "Today", "Tomorrow" or "Yesterday" when it is one,
+    /// then the weekday. "Nov 11 · Today · Wednesday", "Nov 13 · Friday", another year "Jan 1, 2027 · Friday".
+    /// `shortWeekday` gives "Wed", for a line that does not fit (`DayHeadingLine`).
+    static func dayHeading(for date: Date, now: Date = Date(), shortWeekday: Bool = false, calendar: Calendar = .current,
+                           locale: Locale = .current) -> String {
+        let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
+        var parts = [date.formatted(sameYear ? format.month(.abbreviated).day() : format.month(.abbreviated).day().year())]
+        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
+                                             to: calendar.startOfDay(for: date)).day ?? 0
+        switch offset {
+        case 0: parts.append("Today")
+        case 1: parts.append("Tomorrow")
+        case -1: parts.append("Yesterday")
+        default: break
+        }
+        parts.append(date.formatted(format.weekday(shortWeekday ? .abbreviated : .wide)))
+        return parts.joined(separator: " · ")
+    }
+
+    /// "Oct 31, Saturday"; another year adds it: "Jan 2, 2027, Saturday". The Today widget's header.
     static func dayTitle(for date: Date, now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current) -> String {
         let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)

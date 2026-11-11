@@ -75,3 +75,50 @@ private struct TaskSectionHeaderStyle: ViewModifier {
             .listRowInsets(EdgeInsets())
     }
 }
+
+/// A header line that names a day (`DueFormatter.dayHeading`, brief 99): the full line, or the one with the weekday in
+/// three letters when the full one does not fit its width. Measured in Inter: at the largest ordinary text size a
+/// phone's "May 30 · Tomorrow · Wednesday" is 354 pt against the 335 an iPhone 16 header has (253 at the default
+/// size), and the Mac board's longest, "Jan 1, 2027 · Tomorrow · Saturday", outgrows its 258 pt column once a year; every
+/// other line fits in full. `trailing` (a count) goes with whichever line is drawn.
+struct DayHeadingLine<Trailing: View>: View {
+    let full: AttributedString
+    let short: AttributedString?
+    var spacing: CGFloat = 6
+    let trailing: Trailing
+
+    init(full: AttributedString, short: AttributedString?, spacing: CGFloat = 6, @ViewBuilder trailing: () -> Trailing) {
+        self.full = full
+        self.short = short
+        self.spacing = spacing
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        if let short {
+            ViewThatFits(in: .horizontal) {
+                line(full)
+                line(short)
+            }
+        } else {
+            line(full)
+        }
+    }
+
+    private func line(_ text: AttributedString) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: spacing) {
+            Text(text).lineLimit(1)
+            trailing
+        }
+    }
+}
+
+extension DayHeadingLine where Trailing == EmptyView {
+    init(full: String, short: String?) {
+        self.init(full: AttributedString(full), short: short.map { AttributedString($0) }) { EmptyView() }
+    }
+
+    init(full: AttributedString, short: AttributedString?) {
+        self.init(full: full, short: short) { EmptyView() }
+    }
+}
