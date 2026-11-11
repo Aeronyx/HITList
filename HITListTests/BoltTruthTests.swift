@@ -116,10 +116,25 @@ final class BoltTruthTests: XCTestCase {
     func testADeletionHereThatICloudStillHasIsSendingNotReceiving() {
         let gone = remote("TaskItem", updatedAt: at(0))
         let result = SyncComparison.compare(remote: [gone], local: [], entities: StoreInventory.entities)
+        let young = BoltTruth.findings(comparison: result, unsentSaves: 0, oldestUnsentSave: nil, lastLocalSaveAt: at(10),
+                                       deletedHere: [gone.id: at(10)], inFlight: false, now: at(12))
+        XCTAssertTrue(young.agree, "a deletion on its way out")
         let findings = BoltTruth.findings(comparison: result, unsentSaves: 0, oldestUnsentSave: nil, lastLocalSaveAt: at(10),
-                                          deletedHere: [gone.id], inFlight: false, now: at(30))
+                                          deletedHere: [gone.id: at(10)], inFlight: false, now: at(30))
         XCTAssertEqual(findings.sending, 1)
         XCTAssertEqual(findings.receiving, 0)
+    }
+
+    func testAnUnrelatedSaveNeverExcusesAnOldRecordICloudLacks() {
+        // Seen running on 2026-11-11 at 16:13:36 (a side store against Development): records written while the store was
+        // opened without iCloud, then a profile merge saved at launch, and the bolt filled although iCloud lacked six.
+        let old = local("TaskItem", updatedAt: at(-25))
+        let result = SyncComparison.compare(remote: [remote("Profile", updatedAt: at(-60))], local: [old],
+                                            entities: StoreInventory.entities)
+        let findings = BoltTruth.findings(comparison: result, unsentSaves: 0, oldestUnsentSave: nil, lastLocalSaveAt: at(-0.2),
+                                          inFlight: false, now: at(0))
+        XCTAssertEqual(findings.sending, 1, "the save a moment ago didn't touch it, so it can't be on its way")
+        XCTAssertEqual(findings.receiving, 1, "nor does it explain a record iCloud has and this device doesn't")
     }
 
     // MARK: Waiting to come in
