@@ -3,9 +3,10 @@ import CoreLocation
 import HITListCore
 @testable import HITList
 
-/// Brief 80: the sky for the companions. Off by default and silent while off; asked once; one fix and one request
-/// when the app comes forward and the last observation is over an hour old; an observation over three hours old is
-/// `unknown`; failures are quiet and wait for the next time the app comes forward. A fake clock, fake sources.
+/// Briefs 80 and 83: the sky for the companions. On by default but silent until asked; silent while off; asked once;
+/// one fix and one request when the app comes forward and the last observation is over an hour old; an observation
+/// over three hours old is `unknown`; failures are quiet and wait for the next time the app comes forward. A fake
+/// clock, fake sources.
 @MainActor
 final class WeatherServiceTests: XCTestCase {
     private var defaults: UserDefaults!
@@ -57,19 +58,54 @@ final class WeatherServiceTests: XCTestCase {
         return service
     }
 
-    // MARK: - Off
+    // MARK: - On by default (brief 83), silent until asked
 
-    func testOffByDefaultMakesNoLocationOrWeatherCallAtAll() async {
+    func testOnByDefaultButSilentUntilAsked() async {
         let service = service()
-        XCTAssertFalse(service.isOn)
-        XCTAssertFalse(Preferences.companionWeatherDefault)
+        XCTAssertTrue(service.isOn, "a switch nobody touched is on")
+        XCTAssertTrue(Preferences.companionWeatherDefault)
+        XCTAssertNil(defaults.object(forKey: Preferences.companionWeather), "reading the default writes nothing")
+        XCTAssertFalse(service.hasAsked)
         await service.cameForward()
         service.refreshAccess()
         await service.loadCredit()
-        XCTAssertEqual(madeLocation, 0, "Core Location is never touched while off and never asked")
-        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched while off")
+        XCTAssertEqual(madeLocation, 0, "Core Location is never touched before the question")
+        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched before the question")
         XCTAssertEqual(sky.sky, .unknown)
         XCTAssertNil(service.credit)
+    }
+
+    /// Someone updating from 0.9.2: on stays on (and was asked), off stays off, untouched reads on and is still to be
+    /// asked. Nothing is rewritten.
+    func testUpdatingFrom092KeepsWhatThePersonChose() async {
+        struct Case { let stored: Bool?; let asked: Bool; let on: Bool }
+        let cases = [Case(stored: true, asked: true, on: true),     // switched on and allowed
+                     Case(stored: false, asked: true, on: false),   // switched on, then off (or refused)
+                     Case(stored: false, asked: false, on: false),  // off without ever being asked
+                     Case(stored: nil, asked: false, on: true)]     // never touched
+        for item in cases {
+            discard()
+            fresh()
+            if let stored = item.stored { defaults.set(stored, forKey: Preferences.companionWeather) }
+            if item.asked { defaults.set(true, forKey: Preferences.companionWeatherAsked) }
+            let service = service()
+            XCTAssertEqual(service.isOn, item.on, "stored \(String(describing: item.stored))")
+            XCTAssertEqual(service.hasAsked, item.asked)
+            XCTAssertEqual(defaults.object(forKey: Preferences.companionWeather) as? Bool, item.stored, "never rewritten")
+        }
+    }
+
+    func testSwitchedOffMakesNoCallAtAll() async {
+        defaults.set(false, forKey: Preferences.companionWeather)
+        defaults.set(true, forKey: Preferences.companionWeatherAsked)
+        location.status = .allowed
+        let service = service()
+        XCTAssertFalse(service.isOn)
+        await service.cameForward()
+        await service.loadCredit()
+        XCTAssertEqual(location.fixes, 0)
+        XCTAssertEqual(madeWeather, 0, "WeatherKit is never touched while off")
+        XCTAssertEqual(sky.sky, .unknown)
     }
 
     func testSwitchingOffClearsTheSkyAndStopsEveryCall() async {

@@ -1,6 +1,7 @@
 import XCTest
 
-/// Brief 80 on iPhone: Settings → Extras → Weather, the sky for the companions. Off by default; on with the demo sky
+/// Briefs 80 and 83 on iPhone: Settings → Extras → Weather, the sky for the companions. On by default, though a Debug
+/// build never asks by itself (brief 83's first-launch question is `LocationQuestionUITests`); on with the demo sky
 /// (`-seedDemoSky rain`, no location or network) it shows Apple's attribution; the real location prompt on this
 /// simulator, refused and allowed. Each launch has a store of its own, sync off, no tips. Screenshots land in the
 /// .xcresult.
@@ -14,13 +15,15 @@ final class WeatherUITests: XCTestCase {
         app.launchArguments += ["-disableCloudKit", "YES", "-hideTips"]
     }
 
-    func testOffByDefault() {
+    func testOnByDefaultButNotAskedInADebugBuild() {
         app.launch()
         openExtras()
+        XCTAssertEqual(weatherToggle.value as? String, "1", "a switch nobody touched is on")
         XCTAssertTrue(subtitle("dresses for the weather").exists)
-        XCTAssertFalse(attribution.exists, "no attribution while off")
+        XCTAssertFalse(attribution.exists, "no attribution before the question is answered")
         XCTAssertFalse(openSystemSettingsRow.exists)
-        snapshot("1 Extras, Weather off")
+        XCTAssertFalse(springboard.alerts.firstMatch.exists, "a Debug build never asks by itself")
+        snapshot("1 Extras, Weather on, not yet asked")
     }
 
     func testOnWithTheDemoSkyShowsTheAttribution() {
@@ -47,13 +50,13 @@ final class WeatherUITests: XCTestCase {
         XCTAssertTrue(attribution.waitForExistence(timeout: 5))
     }
 
-    /// The real prompt: switching on asks for location while in use, approximate, with the purpose string; Don't
+    /// The real prompt: switching on (a Debug build has not asked, so off and on again) asks for location while in use, approximate, with the purpose string; Don't
     /// Allow leaves the switch off, says why and offers the system's settings.
     func testThePromptAndRefusing() {
         app.resetAuthorizationStatus(for: .location)
         app.launch()
         openExtras()
-        weatherToggle.tap()
+        switchOffThenOn()
         let alert = springboard.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system's prompt")
         XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "approximate location only")).firstMatch.exists,
@@ -74,7 +77,7 @@ final class WeatherUITests: XCTestCase {
         app.resetAuthorizationStatus(for: .location)
         app.launch()
         openExtras()
-        weatherToggle.tap()
+        switchOffThenOn()
         let alert = springboard.alerts.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system's prompt")
         alert.buttons.matching(NSPredicate(format: "label CONTAINS %@", "While Using")).firstMatch.tap()
@@ -85,6 +88,14 @@ final class WeatherUITests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// The switch reads on but a Debug build never asked: off, then on, asks.
+    private func switchOffThenOn() {
+        weatherToggle.tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
+        XCTAssertEqual(weatherToggle.value as? String, "0")
+        weatherToggle.tap()
+    }
 
     private var springboard: XCUIApplication { XCUIApplication(bundleIdentifier: "com.apple.springboard") }
     private var weatherToggle: XCUIElement { app.descendants(matching: .any)["settings-weather"].firstMatch }
