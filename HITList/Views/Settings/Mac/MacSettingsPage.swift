@@ -98,20 +98,14 @@ struct MacSettingsHeader: View {
     }
 }
 
-/// A section's SF Symbol, white in a small rounded square of the section's colour.
+/// A section's SF Symbol, white in a small rounded square of the section's colour: the iPhone's page rows draw the
+/// same square (`SettingsSymbolSquare`).
 struct MacSettingsIcon: View {
     let section: MacSettingsSection
     var size: CGFloat = 26
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-        Image(systemName: section.systemImage)
-            .font(.system(size: size * 0.5, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(shape.fill(section.tint.gradient))
-            .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
-            .accessibilityHidden(true)
+        SettingsSymbolSquare(systemImage: section.systemImage, tint: section.tint, size: size)
     }
 }
 
@@ -178,7 +172,8 @@ struct MacSettingsSectionRows: View {
     }
 }
 
-/// One section's groups. The pieces are the iPhone sheet's (`SettingsView.allGroups`), regrouped.
+/// One section's groups: the iPhone's pages (`SettingsPageContent`), with iCloud & data as two sections, the
+/// shortcuts under General, the larger swatches and a preview in Appearance, and What's New inline in About.
 struct MacSettingsSectionContent: View {
     let section: MacSettingsSection
 
@@ -187,19 +182,20 @@ struct MacSettingsSectionContent: View {
             switch section {
             case .account:
                 AccountSettingsSection()
+            case .appearance:
+                MacAppearanceSection()
             case .general:
                 GeneralSettingsSection()
                 KeyboardShortcutsGroups()
-            case .iCloud:
-                ICloudSyncGroup(showsLastChange: true)
-                SyncLogSection()
-                ResetLocalCacheGroup()
             case .reminders:
                 RemindersSettingsSection()
             case .completing:
                 DelightSettingsSection()
-            case .appearance:
-                MacAppearanceSection()
+            case .iCloud:
+                ICloudSyncGroup(showsLastChange: true)
+                ICloudCheckGroup()
+                SyncLogSection()
+                ResetLocalCacheGroup()
             case .data:
                 MacDataSection()
             case .claude:

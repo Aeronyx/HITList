@@ -65,6 +65,7 @@ struct SearchScreen: View {
         } menu: {}
         .sheet(item: $savingQuery) { FilterEditorView(filter: nil, initialQuery: $0.query).slateSheet() }
         .onReceive(clock) { now = $0 }
+        .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .onAppear { now = Date() }
     }
 

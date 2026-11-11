@@ -166,6 +166,12 @@ enum HITRowMetrics {
     #else
     static let minHeight: CGFloat = 44
     #endif
+
+    /// The icon column of `HITMenuRowLabel`.
+    static let iconColumn: CGFloat = 22
+    /// From a row's leading padding to its title: the icon column and the gap after it. Text under a row (a
+    /// disclosure's words, an attribution) starts here so it lines up with the titles.
+    static let titleInset: CGFloat = iconColumn + HITSpacing.m
 }
 
 extension View {

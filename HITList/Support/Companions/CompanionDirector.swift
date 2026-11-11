@@ -222,6 +222,7 @@ final class CompanionDirector {
         case .storm: skies = [.storm, .rain]
         case .snow: skies = [.snow]
         case .clear: skies = [.clear]
+        case .heat: skies = [.heat]
         case .clouds, .unknown: skies = []
         }
         for (i, routine) in mode.routines.enumerated() {

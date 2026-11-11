@@ -217,6 +217,7 @@ struct FlipboardView: View {
             if let board = floatingCard?.board, !ids.contains(board.id) { withoutAnimation { floatingCard = nil } }
         }
         .onReceive(clock) { _ in now = Self.clockNow() }
+        .onReceive(CalendarChange.moments) { _ in now = Self.clockNow() } // brief 82: a board resets at its hour where you are
         .onAppear {
             now = Self.clockNow()
             FlipSound.prepare()
