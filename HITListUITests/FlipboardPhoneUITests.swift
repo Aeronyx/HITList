@@ -141,7 +141,8 @@ final class FlipboardPhoneUITests: XCTestCase {
     private func scroll(by fraction: CGFloat) {
         let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.55))
         let to = app.coordinate(withNormalizedOffset: CGVector(dx: 0.985, dy: 0.55 - fraction))
-        from.press(forDuration: 0.05, thenDragTo: to)
+        // Held at the end, so the board stops where the finger does (no momentum: the same distance every run).
+        from.press(forDuration: 0.05, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.4)
         Thread.sleep(forTimeInterval: 0.6)
     }
 
