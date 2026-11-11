@@ -59,6 +59,25 @@ struct AccountWatch {
         }
     }
 
+    /// What a change of the account status the app shows asks for (`CloudSyncMonitor` feeds it the steadied status,
+    /// `AccountSteadiness`, so a blip that never reaches the screen runs none of it): the notice to show, whether the
+    /// sign-out clean-up runs (`AccountSwitch.handleSignOut`: reminders and badge), and whether the session forgets
+    /// the signed-in account (the profile shown follows it).
+    struct Change: Equatable {
+        var notice: Notice?
+        var signsOut = false
+        var forgetsAccount = false
+    }
+
+    /// Records `status` (as `update`) and says what the change from `previous` asks for. `previous` is the status
+    /// shown before, or the last launch's.
+    func change(from previous: CKAccountStatus?, to status: CKAccountStatus, shown: Notice?,
+                signedOutDismissed: Bool) -> Change {
+        Change(notice: update(status: status, shown: shown, signedOutDismissed: signedOutDismissed),
+               signsOut: status == .noAccount && previous == .available,
+               forgetsAccount: ![.available, .couldNotDetermine, .temporarilyUnavailable].contains(status))
+    }
+
     /// What `identify` found: this account's key, the one remembered before it (nil the first time), and
     /// whether they differ.
     struct Identity: Equatable {

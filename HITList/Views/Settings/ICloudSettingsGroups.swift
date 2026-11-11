@@ -80,7 +80,7 @@ struct ICloudSyncGroup: View {
     @ViewBuilder
     private var syncDetails: some View {
         let monitor = CloudSyncMonitor.shared
-        detailRow("Account", "\(AccountState.current.label) (\(CloudSyncMonitor.describe(monitor.accountStatus)))")
+        detailRow("Account", "\(AccountState.current.label) (iCloud says \(CloudSyncMonitor.describe(monitor.rawAccountStatus)))")
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         detailRow("Last import", timestamp(monitor.lastImportAt))
         detailRow("Last export", timestamp(monitor.lastExportAt))
