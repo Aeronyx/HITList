@@ -1,4 +1,5 @@
 import Foundation
+import HITListCore
 
 extension Preferences {
     /// Settings → Extras → Companions: the small pixel creatures (brief 76). On by default.
@@ -35,6 +36,10 @@ enum CompanionSchedule {
     /// While a sky holds, the chance that the next routine is the sky's own when the last one wasn't (and that it
     /// is again when it was, if the sky has another): about every other routine is the sky's.
     static let skyShare = 0.8
+    /// While a sky holds, the chance that a flicker is one of the sky's own (a drip, a bead of sweat), brief 91.
+    static let skyFlickerShare = 0.5
+    /// Showing time in the snow before the pile grows one frame deeper (brief 91), at random.
+    static let snowGap: ClosedRange<TimeInterval> = 480...840
     /// Between stirs, asleep.
     static let stirGap: ClosedRange<TimeInterval> = 360...900
     /// No flourish sooner than this after the last one (tapped or not), on this device.
@@ -74,6 +79,19 @@ enum CompanionSchedule {
         let tail: TimeInterval = -log(survival) * flourishMeanAfterFloor
         let longestTail: TimeInterval = flourishLongest - flourishFloor
         return flourishFloor + min(tail, longestTail)
+    }
+
+    /// Showing time in the snow until the pile grows, from a number in 0..<1: anywhere in `snowGap`.
+    static func snowBudget(unit: Double) -> TimeInterval {
+        let u: Double = min(max(unit, 0), 1)
+        let span: TimeInterval = snowGap.upperBound - snowGap.lowerBound
+        let extra: TimeInterval = span * u
+        return snowGap.lowerBound + extra
+    }
+
+    /// Whether a gesture or routine of `sky` belongs under the sky that holds (`.rain` also in a storm).
+    static func belongs(_ sky: CompanionSky, under holding: CompanionSky) -> Bool {
+        sky == holding || (sky == .rain && holding == .storm)
     }
 
     /// Showing time until the next routine may come, from a number in 0..<1: anywhere in `routineGap`.
@@ -134,10 +152,12 @@ enum CompanionSchedule {
     /// - Parameters:
     ///   - onScreenSince: when its screen appeared or the app came back, whichever is later (nil while not on screen).
     ///   - calm: Reduce Effects (gestures, no flourish); `still`: Reduce Motion (nothing moves).
+    ///   - plainStill: the still frame is the plain `rest` (brief 91: a hot day without a heat still is one), so
+    ///     the flourish can start and end on it.
     static func mayFlourish(now: Date, look: CompanionLook, onScreenSince: Date?, acting: Bool, still: Bool,
-                            calm: Bool, lowPower: Bool, lastFlourish: Date?) -> Bool {
+                            calm: Bool, lowPower: Bool, lastFlourish: Date?, plainStill: Bool = true) -> Bool {
         guard let onScreenSince, !acting, !still, !calm, !lowPower else { return false }
-        guard !look.asleep, look.weather == .plain else { return false }
+        guard !look.asleep, look.flourishes, plainStill else { return false }
         guard now.timeIntervalSince(onScreenSince) >= settling else { return false }
         if let lastFlourish, now.timeIntervalSince(lastFlourish) < flourishFloor { return false }
         return true
@@ -158,10 +178,10 @@ enum CompanionSchedule {
     ///   - routines: whether it has a routine it could play now (a character with none answers instead).
     static func tapReply(now: Date, onScreen: Bool, look: CompanionLook, acting: Bool, still: Bool, calm: Bool,
                          lowPower: Bool, lastFlourish: Date?, lastAnswer: Date?, lastRoutine: Date? = nil,
-                         routines: Bool = false) -> TapReply {
+                         routines: Bool = false, plainStill: Bool = true) -> TapReply {
         guard onScreen, !still, !acting else { return .nothing }
         let rested = lastFlourish.map { now.timeIntervalSince($0) >= tapFlourishRest } ?? true
-        if rested, !look.asleep, look.weather == .plain, !calm, !lowPower { return .flourish }
+        if rested, !look.asleep, look.flourishes, plainStill, !calm, !lowPower { return .flourish }
         let routineRested = lastRoutine.map { now.timeIntervalSince($0) >= tapRoutineRest } ?? true
         if routines, routineRested, !look.asleep, !calm, !lowPower { return .routine }
         if let lastAnswer, now.timeIntervalSince(lastAnswer) < answerRest { return .nothing }
@@ -185,7 +205,8 @@ enum CompanionSchedule {
 ///   window can be recorded. `all` takes turns through every gesture, every routine it may play now, the reply and
 ///   the flourish. `-companionPlay routine` takes turns through the routines it may play now (the everyday ones and
 ///   the sky's), `-companionPlay routine:<name>` plays that one again and again. `-companionDemo` is the old name.
-/// `-companionSky rain` and `-companionZone Asia/Tokyo` (`CompanionSkySource`'s own) force the sky and the zone.
+/// `-companionSky rain` and `-companionZone Asia/Tokyo` (`CompanionSkySource`'s own) force the sky and the zone;
+/// `-companionSnowDepth 2` piles the snow that deep (beside `-companionSky snow`).
 struct CompanionLaunchOptions: Equatable {
     enum Play: Equatable {
         case flourish
@@ -202,6 +223,8 @@ struct CompanionLaunchOptions: Equatable {
     var play: Play?
     var hour: Int?
     var companion: String?
+    /// `-companionSnowDepth 2`: the snow piled that many frames deep whenever it snows, and it doesn't grow.
+    var snowDepth: Int?
 
     static let demoSettling: TimeInterval = 3
     /// Between demo acts.
@@ -244,6 +267,7 @@ struct CompanionLaunchOptions: Equatable {
         }
         if let raw = value("-companionHour"), let h = Int(raw), (0...23).contains(h) { hour = h }
         if let raw = value("-companion"), !raw.isEmpty { companion = raw.lowercased() }
+        if let raw = value("-companionSnowDepth"), let depth = Int(raw), depth >= 0 { snowDepth = depth }
     }
 
     var isDemo: Bool { play != nil }
