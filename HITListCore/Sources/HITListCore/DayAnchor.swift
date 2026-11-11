@@ -73,7 +73,8 @@ public enum DayAnchor {
         abs(secondsIntoUTCDay(value) - Double(hourUTC * 3600)) < 0.0005
     }
 
-    /// The anchor of the day `value` names (`day(of:calendar:)`); an anchor is its own.
+    /// The anchor of the day `value` names (`day(of:calendar:)`); an anchor is its own. For a value that isn't this zone's
+    /// midnight that day is a guess, so this is for reading and tests only: a store keeps `rewrite`'s answer, never this.
     public static func anchored(_ value: Date, calendar: Calendar) -> Date {
         isAnchor(value) ? value : anchor(of: day(of: value, calendar: calendar))
     }

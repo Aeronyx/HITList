@@ -311,6 +311,28 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         XCTAssertEqual(try stored(gym.id).dueDate, TimeZoneStoreTests.local(2026, 11, 12, 17, in: Self.newYork))
     }
 
+    // MARK: - The switch
+
+    /// With the switch off (`DayAnchor.isEnabled`, here the hook's own) nothing is anchored, and the writers still put a
+    /// day on its day, in the form 0.9.2 wrote: a repeat rolled across the autumn change lands on Nov 11's midnight here, a
+    /// picked day on its own midnight; an anchor a 0.9.3 device already wrote is kept and reads as its day.
+    func testWithTheSwitchOffTheWritersStillPutADayOnItsDay() throws {
+        hook = DayAnchoring.SaveHook(container: container, calendar: { Self.newYork }, enabled: false)
+        let task = TaskItem(title: "Stretch", dueDate: DayAnchor.anchor(of: Self.day(2026, 10, 30)), recurrence: .daily)
+        let anchored = TaskItem(title: "From a 0.9.3 device", dueDate: DayAnchor.anchor(of: Self.day(2026, 11, 12)))
+        context.insert(task)
+        context.insert(anchored)
+        try context.save()
+        TaskActions.toggleCompletion(task, in: context, now: TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork))
+        XCTAssertEqual(try stored(task.id).dueDate, DayAnchor.start(of: Self.day(2026, 11, 11), calendar: Self.newYork))
+        TaskActions.reschedule(task, to: Self.utc("2027-12-01T11:00:00Z"), in: context)
+        XCTAssertEqual(try stored(task.id).dueDate, DayAnchor.start(of: Self.day(2027, 12, 1), calendar: Self.newYork))
+        anchored.notes = "edited"
+        try context.save()
+        XCTAssertEqual(try stored(anchored.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 12)))
+        XCTAssertEqual(shown(try stored(anchored.id).dueDate), Self.day(2026, 11, 12))
+    }
+
     // MARK: - The first-run pass
 
     static let firstRunKey = "review.firstRun"
