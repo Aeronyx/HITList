@@ -373,6 +373,20 @@ final class CompanionSeatTests: XCTestCase {
         add(attachment)
     }
 
+    /// A see-through character's seat: none under the veil (Phase's hem), and under the rest only base pixels.
+    func testNoSeatUnderAVeil() {
+        for character in CompanionCharacter.all where character.inks.contains(.veil) {
+            for frame in character.frames {
+                let pose = CompanionPose(frame: character.index[frame.name]!, mirrored: false)
+                let rows = frame.rows.map(Array.init)
+                for pixel in CompanionSeat.base(character, pose: pose) {
+                    XCTAssertNotEqual(pixel.ink, .veil, "\(character.id) \(frame.name) column \(pixel.x)")
+                    XCTAssertEqual(rows[character.seatRow - 1][pixel.x], pixel.ink.rawValue)
+                }
+            }
+        }
+    }
+
     /// The seat itself: on the flat it adds only the half point tucked into the rim; on a curve, at most a pixel.
     func testTheSeatIsTuckedBehindTheRim() {
         let nod = CompanionCharacter.nod
@@ -430,6 +444,35 @@ final class CompanionSeatTests: XCTestCase {
             }
         }
         print("Companion seat sheets: \(folder.path)")
+    }
+
+    /// The see-through characters (brief 101's Phase) in every frame of their routines on the iPhone's "+", with the
+    /// seat, real size and enlarged: what the seat adds under a risen ghost's hem (`CompanionSeat` skips the veil and
+    /// draws the rest at the ink's own opacity).
+    func testRenderTheSeeThroughSeats() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CompanionSeats", isDirectory: true)
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let host = Self.iPhone17
+        for character in CompanionCharacter.all where character.seeThrough > 0 {
+            let palette = Self.home(character)
+            let mode = character.plus.awake
+            var names: [String] = []
+            for routine in mode.routines where routine.sky == nil || routine.sky == .storm {
+                for entry in mode.ticks(of: routine) where !names.contains(entry.tick.frame) { names.append(entry.tick.frame) }
+            }
+            var strips: [CGImage] = []
+            for name in names {
+                guard let frame = character.index[name] else { continue }
+                let pose = CompanionPose(frame: frame, mirrored: false)
+                let scene = Scene(character: character, pose: pose, host: host, palette: palette)
+                guard let image = Self.render(scene, scale: host.scale) else { continue }
+                strips.append(Self.strip(image, character: character, host: host, label: name))
+                if ["risen", "rise2", "boo", "stormJump", "risenWave", "giggle"].contains(name) {
+                    try Self.writePNG(image, to: folder.appendingPathComponent("\(character.id)-plus-\(name).png"))
+                }
+            }
+            try Self.writePNG(Self.stack(strips), to: folder.appendingPathComponent("\(character.id)-plus-routine-frames.png"))
+        }
     }
 
     /// One still: the real-size scene, then the meeting strip enlarged eight times (nearest neighbour), with a label.
