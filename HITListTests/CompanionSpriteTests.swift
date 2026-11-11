@@ -58,7 +58,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
-    static let dressed = ["nod"]
+    static let dressed = ["nod", "quill"]
 
     /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
     /// three small gestures and a stir in each place.
@@ -99,6 +99,29 @@ final class CompanionSpriteTests: XCTestCase {
         let stage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: true, weather: .snow),
                                    act: CompanionAct(kind: .gesture(0), start: Date(timeIntervalSinceReferenceDate: 0)))
         XCTAssertEqual(clock.pose(at: Date(timeIntervalSinceReferenceDate: 0.1), stage: stage).frame, nod.index["sleepNod@sleepSnow"])
+    }
+
+    func testQuillIsAwakeByDayInAPoseForEachPlaceAndCurledAtNight() {
+        let quill = CompanionCharacter.quill
+        XCTAssertEqual(quill.field.awake.rest, "loaf", "lying on the Mac's field")
+        XCTAssertEqual(quill.plus.awake.rest, "sit", "sitting up on the +")
+        XCTAssertEqual(quill.field.asleep.rest, "curl")
+        XCTAssertEqual(quill.plus.asleep.rest, "curl")
+        // Awake by day: its eyes are open (the curl's are shut).
+        for frame in ["loaf", "sit"] {
+            XCTAssertTrue(quill.rows(frame)!.joined().contains("k"), "\(frame): eyes open")
+        }
+        XCTAssertFalse(quill.rows("curl")!.joined().contains("k"), "the curl: eyes shut")
+        XCTAssertGreaterThan(quill.difference("curl", "loaf"), 40, "night is not its day pose")
+        // The flourish still stretches and turns: from each day pose and back to it, the other way round.
+        for place in CompanionPlace.allCases {
+            let ticks = quill.posture(place).flourish
+            XCTAssertTrue(ticks.contains { $0.frame == "stretchDeep" })
+            XCTAssertEqual(ticks.last, .init(frame: quill.posture(place).awake.rest, mirrored: true))
+        }
+        // In the rain it holds its tail over its head; its tip still twitches there (drawn by hand).
+        XCTAssertNotNil(quill.index["loafTip@loafRain"])
+        XCTAssertNotNil(quill.index["sitTip@sitRain"])
     }
 
     func testTheChecksCatchBadData() {
