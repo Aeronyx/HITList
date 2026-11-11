@@ -1,333 +1,293 @@
 import XCTest
+import HITListCore
 @testable import HITList
 
-/// Brief 76: the companions' engine, on two tiny characters of its own: the pure clock (which frame, when it next
-/// changes), the seeded schedule of flourishes and its rules, the Debug launch argument, and the director that keeps
-/// them (never two at once, never in the first 20 seconds, no timer while nothing may flourish).
+/// Brief 79: the companions' pure parts on two tiny characters of their own. The clock (a still picture at rest, an
+/// act's ticks, a gesture drawn over the weather's frame, the turn that sticks), and the schedule's rules (night's
+/// edges, the gaps, the flourish's budget, never the same gesture three times running, the tap's replies, the Debug
+/// arguments).
 @MainActor
 final class CompanionClockTests: XCTestCase {
     private let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
     private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
 
-    private func clock(_ character: CompanionCharacter, seed: UInt64 = 7) -> CompanionClock {
-        CompanionClock(character: character, seed: seed)
-    }
-
     /// Two characters for the engine alone: one that stays facing the same way, one whose flourish turns it round.
     enum TestCast {
-        private static let frames: [CompanionCharacter.Frame] = [
-            .init(name: "rest", rows: ["kmml", "mlld", "d..d"]),
-            .init(name: "breathe", rows: ["kmml", "mlld", "dd.."]),
-            .init(name: "blink", rows: ["mmml", "mlld", "d..d"]),
-            .init(name: "hop", rows: ["....", "kmml", "mlld"]),
+        static let frames: [CompanionCharacter.Frame] = [
+            .init(name: "rest", rows: ["....", "kmml", "mlld", "d..d"]),
+            .init(name: "blink", rows: ["....", "mmml", "mlld", "d..d"]),
+            .init(name: "wag", rows: ["....", "kmml", "mlld", "dd.."]),
+            .init(name: "both", rows: ["....", "mmml", "mlld", "dd.."]),
+            .init(name: "hop", rows: ["kmml", "mlld", "d..d", "...."]),
+            .init(name: "rain", rows: ["llll", "kmml", "mlld", "d..d"]),
+            .init(name: "snow", rows: [".l.l", "kmml", "mlld", "d..d"]),
+            .init(name: "sleep", rows: ["....", "....", "mmmm", "dddd"]),
+            .init(name: "stir", rows: ["....", "....", "mmmm", "ddd."]),
+            .init(name: "peek", rows: ["....", "....", "kmmm", "dddd"]),
+            .init(name: "sleepSnow", rows: ["....", "l.l.", "mmmm", "dddd"]),
         ]
-        private static let idle: [CompanionCharacter.Loop] = [
-            .init(name: "plain", weight: 4, ticks: CompanionCharacter.ticks(("rest", 4), ("breathe", 2))),
-            .init(name: "blink", weight: 1, ticks: CompanionCharacter.ticks(("rest", 2), ("blink", 1), ("rest", 3))),
-        ]
-        static let stayer = CompanionCharacter(
-            id: "stayer", width: 4, height: 3, footing: .seat(row: 2), frames: frames, idleFPS: 5, idle: idle,
-            flourishFPS: 9, flourish: CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1)), flourishTurns: false)
-        static let turner = CompanionCharacter(
-            id: "turner", width: 4, height: 3, footing: .floor, frames: frames, idleFPS: 5, idle: idle, flourishFPS: 9,
-            flourish: CompanionCharacter.ticks(("rest", 1), ("hop", 5)) + CompanionCharacter.ticks(mirrored: true, ("hop", 5), ("rest", 1)),
-            flourishTurns: true)
-        static let all = [stayer, turner]
+        static let awake: CompanionCharacter.Mode = CompanionCharacter.Mode(
+            rest: "rest", rain: "rain", snow: "snow",
+            gestures: [
+                .init(name: "blink", weight: 2, ticks: CompanionCharacter.ticks(("blink", 2))),
+                .init(name: "wag", ticks: CompanionCharacter.ticks(("wag", 3))),
+                .init(name: "both", ticks: CompanionCharacter.ticks(("both", 2))),
+            ],
+            answer: .init(name: "look", ticks: CompanionCharacter.ticks(("blink", 4))))
+        static let asleep: CompanionCharacter.Mode = CompanionCharacter.Mode(
+            rest: "sleep", snow: "sleepSnow",
+            gestures: [.init(name: "stir", ticks: CompanionCharacter.ticks(("stir", 3)))],
+            answer: .init(name: "wake", ticks: CompanionCharacter.ticks(("peek", 8))))
+        static func posture(turns: Bool) -> CompanionCharacter.Posture {
+            var flourish: [CompanionCharacter.Tick]
+            if turns {
+                flourish = CompanionCharacter.ticks(("rest", 1), ("hop", 5))
+                let back: [CompanionCharacter.Tick] = CompanionCharacter.ticks(mirrored: true, ("hop", 5), ("rest", 1))
+                flourish.append(contentsOf: back)
+            } else {
+                flourish = CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1))
+            }
+            return CompanionCharacter.Posture(awake: awake, asleep: asleep, flourish: flourish)
+        }
+        static let stayer: CompanionCharacter = CompanionCharacter(
+            id: "stayer", name: "Stayer", width: 4, height: 4, seatRow: 3, frames: frames, gestureFPS: 8,
+            flourishFPS: 9, flourishTurns: false, field: posture(turns: false), plus: posture(turns: false))
+        static let turner: CompanionCharacter = CompanionCharacter(
+            id: "turner", name: "Turner", width: 4, height: 4, seatRow: 4, frames: frames, gestureFPS: 8,
+            flourishFPS: 9, flourishTurns: true, field: posture(turns: true), plus: posture(turns: true))
+        static let all: [CompanionCharacter] = [stayer, turner]
+    }
+
+    private func stage(_ act: CompanionAct? = nil, look: CompanionLook = .day, turned: Bool = false,
+                       place: CompanionPlace = .field) -> CompanionStage {
+        CompanionStage(since: t0, place: place, look: look, turned: turned, act: act)
     }
 
     func testTheTestCastIsGoodData() {
         for character in TestCast.all { XCTAssertEqual(character.problems, [], character.id) }
     }
 
-    // MARK: - Idle
+    // MARK: - The clock
 
-    func testTheIdleStartsOnTheRestFrameAndRunsAtItsRate() {
-        for character in TestCast.all {
-            let c = clock(character)
-            let stage = CompanionStage(since: t0)
-            XCTAssertEqual(c.pose(at: t0, stage: stage), CompanionPose(frame: character.restFrame, mirrored: false))
-            // The first cycle is always the first loop; tick k shows that loop's k-th frame.
-            let first = character.idle[0]
-            for k in 0..<character.idleLength {
-                let t = at((Double(k) + 0.5) / character.idleFPS)
-                XCTAssertEqual(c.pose(at: t, stage: stage).frame, character.index[first.ticks[k].frame], "\(character.id) tick \(k)")
-            }
-            // Exactly on a tick's start (a time far from the reference date rounds), it is that tick.
-            XCTAssertEqual(c.pose(at: at(4.0 / character.idleFPS), stage: stage).frame, character.index["breathe"])
+    func testAtRestItIsAStillPictureThatNeverChanges() {
+        let c = CompanionClock(character: TestCast.stayer)
+        let s = stage()
+        for t in [0.0, 1, 59, 3_600, 86_400] {
+            XCTAssertEqual(c.pose(at: at(t), stage: s), CompanionPose(frame: TestCast.stayer.index["rest"]!, mirrored: false))
         }
+        XCTAssertNil(c.nextChange(after: t0, stage: s), "nothing to redraw while it rests")
+        var entries = CompanionTimeline(clock: c, stage: s).entries(from: t0, mode: .normal).makeIterator()
+        XCTAssertEqual(entries.next(), t0)
+        XCTAssertNil(entries.next(), "the timeline ends: no ticking")
     }
 
-    func testEveryCycleStartsOnTheRestFrame() {
-        for character in TestCast.all {
-            let c = clock(character)
-            let stage = CompanionStage(since: t0)
-            for cycle in 0..<40 {
-                let t = at(Double(cycle) * character.idleCycle + 0.01)
-                XCTAssertEqual(c.pose(at: t, stage: stage).frame, character.restFrame, "\(character.id) cycle \(cycle)")
-            }
-        }
-    }
-
-    func testTheLoopsAreSeededAndVaried() {
+    func testAGesturePlaysItsTicksThenTheRestFrameIsBack() {
         let character = TestCast.stayer
-        let a = clock(character, seed: 1), b = clock(character, seed: 1), other = clock(character, seed: 99)
-        let picksA = (0..<80).map { a.loop(forCycle: $0, anchor: t0).name }
-        XCTAssertEqual(picksA, (0..<80).map { b.loop(forCycle: $0, anchor: t0).name }, "same seed, same idle")
-        XCTAssertNotEqual(picksA, (0..<80).map { other.loop(forCycle: $0, anchor: t0).name }, "another seed differs")
-        XCTAssertNotEqual(picksA, (0..<80).map { a.loop(forCycle: $0, anchor: at(60)).name }, "another visit differs")
-        // By weight: the plain loop about four times in five.
-        let picks = (1..<5_000).map { a.loop(forCycle: $0, anchor: t0).name }
-        let blinks = Double(picks.filter { $0 == "blink" }.count) / Double(picks.count)
-        XCTAssertEqual(blinks, 0.2, accuracy: 0.03)
+        let c = CompanionClock(character: character)
+        let s = stage(CompanionAct(kind: .gesture(1), start: at(10)))
+        XCTAssertEqual(c.pose(at: at(9.9), stage: s).frame, character.index["rest"])
+        for k in 0..<3 {
+            let middle: TimeInterval = (Double(k) + 0.5) / 8
+            XCTAssertEqual(c.pose(at: at(10 + middle), stage: s).frame, character.index["wag"], "tick \(k)")
+        }
+        XCTAssertEqual(c.end(of: s.act!, stage: s), at(10.375))
+        XCTAssertEqual(c.pose(at: at(10.375), stage: s).frame, character.index["rest"])
+        XCTAssertFalse(c.isActing(at: at(10.375), stage: s))
+        // Its changes: the first tick, then the rest frame at the end; nothing after.
+        XCTAssertEqual(c.nextChange(after: at(9), stage: s), at(10))
+        XCTAssertEqual(c.nextChange(after: at(10), stage: s), at(10.375))
+        XCTAssertNil(c.nextChange(after: at(10.375), stage: s))
     }
 
-    // MARK: - Flourish
+    func testAGestureInTheRainIsDrawnUnderTheProp() {
+        let character = TestCast.stayer
+        let c = CompanionClock(character: character)
+        let rainy = CompanionLook(asleep: false, weather: .rain)
+        let s = stage(CompanionAct(kind: .gesture(0), start: at(10)), look: rainy)
+        XCTAssertEqual(c.pose(at: at(5), stage: s).frame, character.index["rain"], "the rain pose at rest")
+        let blinking = c.pose(at: at(10.05), stage: s).frame
+        let rows = character.drawn[blinking]
+        XCTAssertEqual(rows, CompanionCharacter.runs(of: ["llll", "mmml", "mlld", "d..d"]), "the blink, under the prop")
+        XCTAssertEqual(c.pose(at: at(11), stage: s).frame, character.index["rain"])
+    }
 
-    func testAFlourishPlaysItsTicksThenTheIdleRestarts() {
+    func testEachLookHasItsStillFrame() {
+        let character = TestCast.stayer
+        let c = CompanionClock(character: character)
+        func frame(_ look: CompanionLook) -> String {
+            character.frames[c.pose(at: t0, stage: stage(look: look)).frame].name
+        }
+        XCTAssertEqual(frame(.day), "rest")
+        XCTAssertEqual(frame(.init(asleep: false, weather: .rain)), "rain")
+        XCTAssertEqual(frame(.init(asleep: false, weather: .snow)), "snow")
+        XCTAssertEqual(frame(.init(asleep: true, weather: .plain)), "sleep")
+        XCTAssertEqual(frame(.init(asleep: true, weather: .rain)), "sleep", "asleep wins over rain without a pose for it")
+        XCTAssertEqual(frame(.init(asleep: true, weather: .snow)), "sleepSnow")
+        XCTAssertEqual(CompanionLook.Weather(.storm), .rain)
+        XCTAssertEqual(CompanionLook.Weather(.clouds), .plain)
+        XCTAssertEqual(CompanionLook.Weather(.unknown), .plain)
+        XCTAssertEqual(CompanionLook.Weather(.clear), .plain)
+        XCTAssertEqual(CompanionLook.Weather(.snow), .snow)
+    }
+
+    func testAFlourishPlaysAndATurnerStaysTurned() {
         for character in TestCast.all {
-            let c = clock(character)
-            let play = at(100)
-            let stage = CompanionStage(since: t0, plays: [play])
-            for (k, tick) in character.flourish.enumerated() {
-                let t = play.addingTimeInterval((Double(k) + 0.5) / character.flourishFPS)
-                let pose = c.pose(at: t, stage: stage)
+            let c = CompanionClock(character: character)
+            let s = stage(CompanionAct(kind: .flourish, start: at(100)))
+            let ticks = character.field.flourish
+            for (k, tick) in ticks.enumerated() {
+                let middle: TimeInterval = (Double(k) + 0.5) / 9
+                let pose = c.pose(at: at(100 + middle), stage: s)
                 XCTAssertEqual(pose.frame, character.index[tick.frame], "\(character.id) tick \(k)")
                 XCTAssertEqual(pose.mirrored, tick.mirrored, "\(character.id) tick \(k)")
-                XCTAssertTrue(c.isFlourishing(at: t, stage: stage))
             }
-            let after = c.end(of: play)
-            XCTAssertFalse(c.isFlourishing(at: after, stage: stage))
-            // Back on the rest frame, facing the way the flourish left it, and the idle starts over from there.
-            XCTAssertEqual(c.pose(at: after, stage: stage),
-                           CompanionPose(frame: character.restFrame, mirrored: character.flourishTurns))
-            XCTAssertEqual(c.pose(at: after.addingTimeInterval(4.5 / character.idleFPS), stage: stage).frame,
-                           character.index["breathe"])
+            let after = c.end(of: s.act!, stage: s)
+            XCTAssertEqual(c.pose(at: after.addingTimeInterval(3_600), stage: s),
+                           CompanionPose(frame: character.index["rest"]!, mirrored: character.flourishTurns))
+            XCTAssertNil(c.nextChange(after: after, stage: s))
         }
+        // Already turned: a gesture plays mirrored, and the next flourish turns it back.
+        let c = CompanionClock(character: TestCast.turner)
+        XCTAssertTrue(c.pose(at: at(10.05), stage: stage(CompanionAct(kind: .gesture(0), start: at(10)), turned: true)).mirrored)
+        XCTAssertFalse(c.pose(at: at(200), stage: stage(CompanionAct(kind: .flourish, start: at(100)), turned: true)).mirrored)
     }
 
-    func testATurnerTurnsRoundEachTimeAndAStayerDoesNot() {
-        let turner = clock(TestCast.turner), stayer = clock(TestCast.stayer)
-        let stage = CompanionStage(since: t0, plays: [at(100), at(400), at(800)])
-        XCTAssertTrue(turner.pose(at: at(200), stage: stage).mirrored, "after one turn")
-        XCTAssertFalse(turner.pose(at: at(500), stage: stage).mirrored, "after two")
-        XCTAssertTrue(turner.pose(at: at(900), stage: stage).mirrored, "after three")
-        // The second flourish starts from the turned pose: mirrored until its own turn, then back.
-        XCTAssertTrue(turner.pose(at: at(400.05), stage: stage).mirrored)
-        XCTAssertFalse(turner.pose(at: at(400 + 10.5 / 9), stage: stage).mirrored)
-        for t in [200.0, 500, 900] { XCTAssertFalse(stayer.pose(at: at(t), stage: stage).mirrored) }
-        // A stage that starts turned keeps it.
-        XCTAssertTrue(turner.pose(at: at(5), stage: CompanionStage(since: t0, turned: true)).mirrored)
+    func testReduceMotionIsTheStillPoseForTheHourAndTheWeather() {
+        let character = TestCast.turner
+        let c = CompanionClock(character: character)
+        let s = stage(CompanionAct(kind: .gesture(1), start: at(10)), look: .init(asleep: true, weather: .snow))
+        XCTAssertEqual(c.pose(at: at(10.1), stage: s, still: true).frame, character.index["sleepSnow"])
     }
 
-    func testReduceMotionIsTheRestFrameWhicheverWayItLastLay() {
-        let c = clock(TestCast.turner)
-        let stage = CompanionStage(since: t0, plays: [at(100)])
-        XCTAssertEqual(c.pose(at: at(50), stage: stage, still: true), CompanionPose(frame: 0, mirrored: false))
-        XCTAssertEqual(c.pose(at: at(100.5), stage: stage, still: true), CompanionPose(frame: 0, mirrored: false),
-                       "mid-flourish it hasn't turned yet")
-        XCTAssertEqual(c.pose(at: at(200), stage: stage, still: true), CompanionPose(frame: 0, mirrored: true))
-    }
-
-    // MARK: - When the drawing changes
-
-    func testNextChangeSkipsHeldFrames() {
-        let c = clock(TestCast.stayer)
-        let stage = CompanionStage(since: t0)
-        // The first loop holds the rest frame for four ticks, then breathes.
-        let next = c.nextChange(after: t0, stage: stage)
-        XCTAssertEqual(next.timeIntervalSince(t0), 4 / 5, accuracy: 1e-6)
-        XCTAssertNotEqual(c.pose(at: next, stage: stage), c.pose(at: t0, stage: stage))
-    }
-
-    func testNextChangeNeverStallsAndStopsAtAKnownFlourish() {
+    func testNextChangeSkipsHeldFramesAndNeverStalls() {
         for character in TestCast.all {
-            let c = clock(character)
-            let play = at(30)
-            let stage = CompanionStage(since: t0, plays: [play])
-            var t = t0
+            let c = CompanionClock(character: character)
+            let s = stage(CompanionAct(kind: .flourish, start: at(30)))
+            var t = at(29)
             var changes = 0
-            while t < at(60) {
-                let next = c.nextChange(after: t, stage: stage)
-                XCTAssertGreaterThan(next, t, "\(character.id) at \(t.timeIntervalSince(t0))")
-                // A held frame may run past a loop's end, but the clock never looks further than this ahead.
-                XCTAssertLessThanOrEqual(next.timeIntervalSince(t), max(character.idleCycle, character.flourishDuration) + 1 + 1e-6)
-                if t < play { XCTAssertLessThanOrEqual(next, play) }
+            while let next = c.nextChange(after: t, stage: s) {
+                XCTAssertGreaterThan(next, t)
+                XCTAssertNotEqual(c.pose(at: next, stage: s), c.pose(at: t, stage: s), "a change is a change")
                 t = next
                 changes += 1
+                XCTAssertLessThan(changes, 40)
             }
-            // A few changes a second at most: far fewer than a 60 Hz redraw.
-            XCTAssertLessThan(changes, 60 * 6, character.id)
-            XCTAssertGreaterThan(changes, 10, character.id)
+            // rest → hop (held) → … → rest: a handful of redraws, not one per tick.
+            XCTAssertLessThanOrEqual(changes, 4, character.id)
         }
-    }
-
-    func testNextChangeFromATickStartIsTheNextTick() {
-        // Tick starts computed by adding to a far-off date round a hair either way; the next change must still move on.
-        let c = clock(TestCast.stayer)
-        let play = at(10)
-        let stage = CompanionStage(since: t0, plays: [play])
-        var t = play
-        for _ in 0..<12 {
-            let next = c.nextChange(after: t, stage: stage)
-            XCTAssertGreaterThan(next.timeIntervalSince(t), 0.05)
-            t = next
-        }
-    }
-
-    func testTheTimelineYieldsTheClocksChanges() {
-        let c = clock(TestCast.turner)
-        let stage = CompanionStage(since: t0)
-        var entries = CompanionTimeline(clock: c, stage: stage).entries(from: t0, mode: .normal).makeIterator()
-        XCTAssertEqual(entries.next(), t0)
-        XCTAssertEqual(entries.next(), c.nextChange(after: t0, stage: stage))
     }
 
     // MARK: - The schedule
 
-    func testFlourishesComeTwoToSixMinutesApart() {
-        var gaps: [TimeInterval] = []
+    func testNightIsTenToSeven() {
+        XCTAssertFalse(CompanionSchedule.isNight(hour: 21))
+        XCTAssertTrue(CompanionSchedule.isNight(hour: 22))
+        XCTAssertTrue(CompanionSchedule.isNight(hour: 23))
+        XCTAssertTrue(CompanionSchedule.isNight(hour: 0))
+        XCTAssertTrue(CompanionSchedule.isNight(hour: 6))
+        XCTAssertFalse(CompanionSchedule.isNight(hour: 7))
+        XCTAssertFalse(CompanionSchedule.isNight(hour: 12))
+    }
+
+    func testTheGaps() {
         for i in 0..<500 {
-            let gap = CompanionSchedule.gap(seed: 42, index: i)
-            XCTAssertTrue(CompanionSchedule.interval.contains(gap), "\(gap)")
-            gaps.append(gap)
+            let u = CompanionRandom.unit(9, i)
+            XCTAssertTrue((45...120).contains(CompanionSchedule.gap(asleep: false, unit: u)))
+            XCTAssertTrue((360...900).contains(CompanionSchedule.gap(asleep: true, unit: u)), "a stir every six to fifteen minutes")
         }
-        XCTAssertEqual(gaps, (0..<500).map { CompanionSchedule.gap(seed: 42, index: $0) }, "seeded")
-        XCTAssertLessThan(gaps.min()!, 140)
-        XCTAssertGreaterThan(gaps.max()!, 340)
-        XCTAssertEqual(CompanionSchedule.interval, 120...360)
+    }
+
+    func testTheFlourishsBudgetAveragesThreeHoursAndNeverUnderFortyFive() {
+        let draws = (0..<20_000).map { CompanionSchedule.flourishBudget(unit: CompanionRandom.unit(5, $0)) }
+        XCTAssertGreaterThanOrEqual(draws.min()!, 45 * 60)
+        XCTAssertLessThanOrEqual(draws.max()!, 12 * 3600)
+        var total: TimeInterval = 0
+        for draw in draws { total += draw }
+        let meanHours: Double = total / Double(draws.count) / 3600
+        XCTAssertEqual(meanHours, 3, accuracy: 0.1, "about once in three hours of showing")
+        XCTAssertEqual(CompanionSchedule.flourishBudget(unit: 0), 45 * 60)
+    }
+
+    func testNeverTheSameGestureThreeTimesRunning() {
+        var recent: [Int] = []
+        var counts = [0, 0, 0]
+        for i in 0..<3_000 {
+            let pick = CompanionSchedule.pickGesture(weights: [5, 1, 1], recent: recent, unit: CompanionRandom.unit(4, i))
+            if recent.count >= 2 { XCTAssertFalse(recent.suffix(2) == [pick, pick], "three \(pick)s running at \(i)") }
+            recent.append(pick)
+            counts[pick] += 1
+        }
+        XCTAssertGreaterThan(counts[0], counts[1] * 2, "by weight")
+        XCTAssertGreaterThan(counts[2], 0)
+        XCTAssertEqual(CompanionSchedule.pickGesture(weights: [3], recent: [0, 0], unit: 0.5), 0, "one gesture is all it has")
     }
 
     func testTheRulesForAFlourish() {
-        let since = at(0)
-        func may(_ now: TimeInterval, busy: TimeInterval? = nil, last: TimeInterval? = nil, calm: Bool = false,
-                 lowPower: Bool = false, onScreen: Bool = true) -> Bool {
-            CompanionSchedule.mayFlourish(now: at(now), onScreenSince: onScreen ? since : nil, busyUntil: busy.map(at),
-                                          lastPlay: last.map(at), calm: calm, lowPower: lowPower)
+        func may(_ now: TimeInterval, look: CompanionLook = .day, acting: Bool = false, still: Bool = false,
+                 calm: Bool = false, lowPower: Bool = false, last: TimeInterval? = nil, onScreen: Bool = true) -> Bool {
+            CompanionSchedule.mayFlourish(now: at(now), look: look, onScreenSince: onScreen ? t0 : nil, acting: acting,
+                                          still: still, calm: calm, lowPower: lowPower, lastFlourish: last.map(at))
         }
         XCTAssertFalse(may(19.9), "never in the first 20 seconds on a screen")
         XCTAssertTrue(may(20))
-        XCTAssertFalse(may(100, onScreen: false), "not while its screen isn't showing")
-        XCTAssertFalse(may(100, busy: 99), "never while another is playing")
-        XCTAssertFalse(may(100, busy: 96), "nor just after")
-        XCTAssertTrue(may(100, busy: 90))
-        XCTAssertFalse(may(100, calm: true), "Reduce Motion / Reduce Effects")
-        XCTAssertFalse(may(100, lowPower: true), "Low Power Mode: idle only")
-        XCTAssertFalse(may(100, last: 70), "not again for a while")
-        XCTAssertTrue(may(100, last: 30))
+        XCTAssertFalse(may(100, onScreen: false))
+        XCTAssertFalse(may(100, acting: true), "never over a gesture")
+        XCTAssertFalse(may(100, still: true), "Reduce Motion")
+        XCTAssertFalse(may(100, calm: true), "Reduce Effects: gestures, no flourish")
+        XCTAssertFalse(may(100, lowPower: true), "Low Power Mode: gestures, no flourish")
+        XCTAssertFalse(may(100, look: .init(asleep: true, weather: .plain)), "never asleep")
+        XCTAssertFalse(may(100, look: .init(asleep: false, weather: .rain)), "sheltering from the rain")
+        XCTAssertFalse(may(100, look: .init(asleep: false, weather: .snow)))
+        XCTAssertFalse(may(3_000, last: 400), "never within 45 minutes of the last")
+        XCTAssertTrue(may(3_100, last: 400))
     }
 
-    func testATapPlaysAtOnceThenNotForAWhile() {
-        func may(_ now: TimeInterval, busy: TimeInterval? = nil, last: TimeInterval? = nil) -> Bool {
-            CompanionSchedule.mayPlayOnTap(now: at(now), onScreen: true, busyUntil: busy.map(at), lastPlay: last.map(at),
-                                           calm: false, lowPower: false)
+    func testWhatATapDoes() {
+        func reply(_ now: TimeInterval, look: CompanionLook = .day, acting: Bool = false, still: Bool = false,
+                   calm: Bool = false, lowPower: Bool = false, last: TimeInterval? = nil,
+                   answer: TimeInterval? = nil) -> CompanionSchedule.TapReply {
+            CompanionSchedule.tapReply(now: at(now), onScreen: true, look: look, acting: acting, still: still, calm: calm,
+                                       lowPower: lowPower, lastFlourish: last.map(at), lastAnswer: answer.map(at))
         }
-        XCTAssertTrue(may(2), "a tap doesn't wait the 20 seconds")
-        XCTAssertFalse(may(10, busy: 11), "not over another flourish")
-        XCTAssertFalse(may(50, last: 2), "not again within the minute")
-        XCTAssertTrue(may(63, last: 2))
-        XCTAssertFalse(CompanionSchedule.mayPlayOnTap(now: at(5), onScreen: true, busyUntil: nil, lastPlay: nil,
-                                                      calm: true, lowPower: false))
-        XCTAssertFalse(CompanionSchedule.mayPlayOnTap(now: at(5), onScreen: true, busyUntil: nil, lastPlay: nil,
-                                                      calm: false, lowPower: true))
+        XCTAssertEqual(reply(5), .flourish, "none has played on this device: the tap plays it")
+        XCTAssertEqual(reply(1_299.9, last: 100), .answer, "a flourish within the last 20 minutes: a small reply")
+        XCTAssertEqual(reply(1_300, last: 100), .flourish)
+        XCTAssertEqual(reply(1_000, last: 100, answer: 995), .nothing, "a reply at most once every ten seconds")
+        XCTAssertEqual(reply(1_000, last: 100, answer: 990), .answer)
+        XCTAssertEqual(reply(5, look: .init(asleep: true, weather: .plain)), .answer, "asleep: it wakes for a moment")
+        XCTAssertEqual(reply(5, look: .init(asleep: false, weather: .rain)), .answer)
+        XCTAssertEqual(reply(5, calm: true), .answer)
+        XCTAssertEqual(reply(5, lowPower: true), .answer)
+        XCTAssertEqual(reply(5, still: true), .nothing, "Reduce Motion: nothing moves")
+        XCTAssertEqual(reply(5, acting: true), .nothing)
     }
 
-    func testTheDemoLaunchArgument() {
-        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app"]).demo, [])
-        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionDemo", "nod"]).demo, ["nod"])
-        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionDemo", "stayer,turner"]).demo, ["stayer", "turner"])
-        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionDemo", "all"]).demo, Set(CompanionCharacter.all.map(\.id)))
-        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionDemo", "NO"]).demo, [])
-        XCTAssertEqual(CompanionSchedule.gap(seed: 1, index: 3, demo: true), CompanionLaunchOptions.demoInterval)
+    func testTheDebugArguments() {
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app"]), .none)
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionHour", "23"]).hour, 23)
+        XCTAssertNil(CompanionLaunchOptions(arguments: ["app", "-companionHour", "25"]).hour)
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companion", "Quill"]).companion, "quill")
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "flourish"]).play, .flourish)
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "gestures"]).play, .gestures)
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "blink"]).play, .gesture("blink"))
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionDemo", "all"]).play, .all, "the old name")
+        XCTAssertNil(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "NO"]).play)
     }
 
-    // MARK: - The director
-
-    private func director(demo: [String] = []) -> CompanionDirector {
-        let launch = demo.isEmpty ? CompanionLaunchOptions.none
-            : CompanionLaunchOptions(arguments: ["-companionDemo", demo.joined(separator: ",")])
-        return CompanionDirector(seed: 3, launch: launch, observeSystem: false, cast: TestCast.all)
-    }
-
-    func testTheDirectorKeepsWhatIsOnScreen() {
-        let d = director()
-        d.appear("stayer", calm: false, now: at(0))
-        d.appear("stayer", calm: false, now: at(1))
-        XCTAssertEqual(d.stages["stayer"]?.since, at(0))
-        XCTAssertTrue(d.isWaiting)
-        d.disappear("stayer", now: at(2))
-        XCTAssertNotNil(d.stages["stayer"], "a second window still shows it")
-        d.disappear("stayer", now: at(3))
-        XCTAssertNil(d.stages["stayer"])
-        XCTAssertFalse(d.isWaiting, "no timer when nothing is on screen")
-    }
-
-    func testTheDirectorWaitsForTheEarliestMoment() {
-        let d = director()
-        d.appear("stayer", calm: false, now: at(0))
-        let moment = try? XCTUnwrap(d.nextMoment)
-        XCTAssertNotNil(moment)
-        if let moment { XCTAssertTrue((120...360).contains(moment.timeIntervalSince(at(0))), "\(moment.timeIntervalSince(at(0)))") }
-    }
-
-    func testNeverTwoAtOnceAndNeverInTheFirstTwentySeconds() {
-        let d = director()
-        d.appear("stayer", calm: false, now: at(0))
-        d.appear("turner", calm: false, now: at(0))
-        // Both moments (2 to 6 minutes in) have passed by 400 s: only one of them plays.
-        d.fire(now: at(400))
-        let playing = ["stayer", "turner"].filter { !(d.stages[$0]?.plays.isEmpty ?? true) }
-        XCTAssertEqual(playing.count, 1, "never two companions at once")
-        // Back in the app after a while away: 20 quiet seconds first, whatever the moment says.
-        let e = director()
-        e.appear("stayer", calm: false, now: at(0))
-        e.setAppActive(false, now: at(500))
-        XCTAssertFalse(e.isWaiting, "no timer while the app isn't active")
-        e.setAppActive(true, now: at(1_000))
-        e.fire(now: at(1_005))
-        XCTAssertEqual(e.stages["stayer"]?.plays, [], "back in the app: 20 quiet seconds first")
-    }
-
-    func testTapsLowPowerAndCalm() {
-        let d = director()
-        d.appear("turner", calm: false, now: at(0))
-        d.tap("turner", now: at(5))
-        XCTAssertEqual(d.stages["turner"]?.plays, [at(5)])
-        d.tap("turner", now: at(30))
-        XCTAssertEqual(d.stages["turner"]?.plays, [at(5)], "not again for a while")
-        d.setLowPower(true, now: at(40))
-        XCTAssertFalse(d.isWaiting, "Low Power Mode: no timer")
-        d.tap("turner", now: at(100))
-        XCTAssertEqual(d.stages["turner"]?.plays, [at(5)])
-        let calm = director()
-        calm.appear("stayer", calm: true, now: at(0))
-        XCTAssertFalse(calm.isWaiting, "Reduce Motion: no timer")
-        calm.tap("stayer", now: at(5))
-        calm.fire(now: at(400))
-        XCTAssertEqual(calm.stages["stayer"]?.plays, [])
-    }
-
-    func testATurnerRemembersWhichWayItLay() {
-        let d = director()
-        d.appear("turner", calm: false, now: at(0))
-        d.tap("turner", now: at(5))
-        d.disappear("turner", now: at(60))
-        d.appear("turner", calm: false, now: at(120))
-        XCTAssertEqual(d.stages["turner"]?.turned, true, "it comes back lying the way it last lay")
-    }
-
-    func testDemosTakeTurnsAndWaitRatherThanMiss() {
-        let d = director(demo: ["stayer", "turner"])
-        // The turner came on screen first, so its demo (8 s in) lands in the middle of the stayer's (3 s in).
-        d.appear("turner", calm: false, now: at(-4.5))
-        d.appear("stayer", calm: false, now: at(0))
-        d.fire(now: at(3))
-        XCTAssertEqual(d.stages["stayer"]?.plays, [at(3)], "the first demo a few seconds in")
-        // The turner's turn comes while the stayer still plays: it waits for the end instead of missing it.
-        d.fire(now: at(3.5))
-        XCTAssertEqual(d.stages["turner"]?.plays ?? [], [])
-        let end = at(3).addingTimeInterval(TestCast.stayer.flourishDuration)
-        d.fire(now: end.addingTimeInterval(0.6))
-        XCTAssertEqual(d.stages["turner"]?.plays.count, 1, "then it plays")
+    func testEachThemeHasItsCompanionAndTheRestHaveNod() {
+        XCTAssertEqual(CompanionCast.character(forTheme: "slate", launch: .none).id, "nod")
+        XCTAssertEqual(CompanionCast.character(forTheme: "midnight", launch: .none).id, "quill")
+        for theme in ThemePalette.all.map(\.id) where CompanionCast.byTheme[theme] == nil {
+            XCTAssertEqual(CompanionCast.character(forTheme: theme, launch: .none).id, "nod", theme)
+        }
+        XCTAssertEqual(CompanionCast.character(forTheme: "a theme from a newer build", launch: .none).id, "nod")
+        let forced = CompanionLaunchOptions(arguments: ["-companion", "quill"])
+        XCTAssertEqual(CompanionCast.character(forTheme: "slate", launch: forced).id, "quill")
+        // Every theme's companion is one that is drawn, and no two themes share one.
+        let ids = Array(CompanionCast.byTheme.values)
+        XCTAssertEqual(Set(ids).count, ids.count)
+        for id in ids { XCTAssertNotNil(CompanionCharacter.named(id), id) }
+        for theme in CompanionCast.byTheme.keys { XCTAssertTrue(ThemePalette.all.contains { $0.id == theme }, theme) }
     }
 }
