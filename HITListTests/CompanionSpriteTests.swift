@@ -66,7 +66,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
-    static let dressed = ["nod", "quill", "hush", "posy", "mallow"]
+    static let dressed = ["nod", "quill", "hush", "button", "mallow"]
 
     /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
     /// three small gestures and a stir in each place.
