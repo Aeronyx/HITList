@@ -105,12 +105,11 @@ final class CalendarEvents {
             Task { @MainActor in await self?.reload() }
         }
         let center = NotificationCenter.default
-        // Midnight (and a change of the clock or time zone): today's events are tomorrow's now.
-        for name in [Notification.Name.NSCalendarDayChanged, .NSSystemTimeZoneDidChange, .NSSystemClockDidChange] {
-            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in await self?.reload() }
-            })
-        }
+        // Midnight (and a change of the clock or time zone): today's events are tomorrow's now. The app's one source
+        // of calendar changes (brief 82), which re-reads the zone first.
+        observers.append(CalendarChange.observe { [weak self] _ in
+            Task { @MainActor in await self?.reload() }
+        })
         #if os(iOS)
         let active = UIApplication.didBecomeActiveNotification
         #else

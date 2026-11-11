@@ -130,6 +130,7 @@ struct UpcomingView: View {
             Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
         .onReceive(clock) { now = $0 }
+        .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day moves the days (and the Mac board) at once
         .onAppear {
             CompletionFeedback.shared.prepare()
             sharedRows.start()
