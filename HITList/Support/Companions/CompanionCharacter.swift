@@ -1,18 +1,24 @@
 import Foundation
 import HITListCore
 
-// HOW A COMPANION COMES ALIVE (briefs 84 and 91): a character is data; this is all a new one needs.
+// HOW A COMPANION COMES ALIVE (briefs 84, 91 and 100): a character is data; this is all a new one needs.
 // - Frames: rows of `CompanionInk` letters, all the character's size. A Mode (awake or asleep, per place): the still
 //   `rest`, its weather stills `rain`, `snow`, `heat` and `snowDeep` (snow piling up, shallow to deep), `gestures`,
 //   the `answer` to a tap and, awake, `routines`. A Posture holds both modes and the rare `flourish`.
-// - Flickers: mark the smallest gestures `flicker: true`; one plays every 40 to 110 s (unmarked ones play only inside
-//   routines; a mode that marks none flickers with all of them, as before brief 84).
-// - Routines: `Routine(name:, sky:, weight:, shakesOff:, steps:)`, one every 5 to 12 minutes of showing time, never the
-//   same twice running. Steps at the character's `gestureFPS` (8 ticks a second): `.gesture("blink")`, `.hold(4)` (the
-//   still frame for the weather, 4 ticks), `.play(("scoot1", 2), ("rest", 1))` (frames of its own). Four to nine moves
-//   (every step but a hold), 3 to 7 s, the first and last frame a step from the still frame, so nothing pops.
+// - Idles (brief 100): one every 6 to 36 s of showing time, awake or asleep, the first 2 to 6 s after it comes on
+//   screen, never the same one twice running, by weight (give the plainest, a blink, the most). An idle is a flicker
+//   (about two in three) or, awake, a little loop (about one in three).
+// - Flickers: mark the smallest gestures `flicker: true` (unmarked ones play only inside routines and loops; a mode
+//   that marks none flickers with all of them). Asleep every gesture is a flicker: its breaths, a twitch, a murmur.
+// - Little loops: `Routine(name:, little: true, steps:)`, awake only: two to four moves in at most 2.5 s (a blink and
+//   two swings of a foot, a glance each way and a settle), the first and last frame a step from the still frame.
+// - Routines: `Routine(name:, sky:, weight:, shakesOff:, steps:)`, one every 3 to 8 minutes of showing time, never the
+//   same twice running, never a little loop. Steps at the character's `gestureFPS` (8 ticks a second):
+//   `.gesture("blink")`, `.hold(4)` (the still frame for the weather, 4 ticks), `.play(("scoot1", 2), ("rest", 1))`
+//   (frames of its own). Four to nine moves (every step but a hold), 3 to 7 s, the first and last frame a step from
+//   the still frame, so nothing pops.
 // - Skies: a routine or gesture with `sky:` (.rain, .snow, .storm, .heat, .clear; storm also takes the rain's) plays
-//   only under it, about every other routine or flicker while it holds; its own frames are drawn whole, for that
+//   only under it, about every other routine or idle while it holds; its own frames are drawn whole, for that
 //   sky's still. Everything else is drawn over the still frame (only the pixels it changes from `rest`) and plays in a
 //   weather only where it leaves that still's own pixels alone, or a frame named "frame@still" is drawn for it.
 // - Nothing is drawn in the air around a companion, except a single drop or flake it touches.
@@ -175,8 +181,9 @@ struct CompanionCharacter: Identifiable {
         /// Brief 91: it ends with the snow shaken off, the still frame `snow` again, the first of the pile. A snow
         /// routine only; drawn from the deepest pile, it plays only there.
         var shakesOff = false
-        /// Round 20 (brief 100): a little loop, two to four moves in a second or two (a blink and two swings of a
-        /// foot). It plays in an idle slot, beside the flickers; the long routines keep their own clock.
+        /// Round 20 (brief 100): a little loop, two to four moves in at most 2.5 s (a blink and two swings of a foot).
+        /// It plays in an idle slot, beside the flickers, awake only; the long routines keep their own clock and never
+        /// play one. `problems` checks it.
         var little = false
         let steps: [Step]
 
@@ -353,6 +360,9 @@ struct CompanionCharacter: Identifiable {
     static let routineLength: ClosedRange<TimeInterval> = 3...7
     /// A routine's moves (every step but a hold).
     static let routineMoves: ClosedRange<Int> = 4...9
+    /// A little loop's moves and its longest (brief 100): a blink and two swings of a foot, quick.
+    static let littleMoves: ClosedRange<Int> = 2...4
+    static let littleLongest: TimeInterval = 2.5
     /// At most this many pixels from the still frame on a routine's first and last frames, so nothing pops.
     static let routineEdge = 16
 
@@ -736,6 +746,7 @@ struct CompanionCharacter: Identifiable {
                 }
             }
             if routine.weight < 1 { out.append("\(at): weight \(routine.weight)") }
+            if routine.little, routine.shakesOff { out.append("\(at): a little loop can't shake the snow off") }
             for step in routine.steps {
                 switch step {
                 case .gesture(let name) where mode.gesture(named: name) == nil:
@@ -752,11 +763,18 @@ struct CompanionCharacter: Identifiable {
                 }
             }
             let seconds = duration(of: routine, mode: mode)
-            if !Self.routineLength.contains(seconds) {
-                out.append("\(at): \(seconds) s, not \(Self.routineLength.lowerBound)…\(Self.routineLength.upperBound)")
-            }
-            if !Self.routineMoves.contains(routine.moves) {
-                out.append("\(at): \(routine.moves) moves, not \(Self.routineMoves.lowerBound)…\(Self.routineMoves.upperBound)")
+            if routine.little {
+                if seconds > Self.littleLongest { out.append("\(at): \(seconds) s, a little loop longer than \(Self.littleLongest) s") }
+                if !Self.littleMoves.contains(routine.moves) {
+                    out.append("\(at): \(routine.moves) moves, not \(Self.littleMoves.lowerBound)…\(Self.littleMoves.upperBound) for a little loop")
+                }
+            } else {
+                if !Self.routineLength.contains(seconds) {
+                    out.append("\(at): \(seconds) s, not \(Self.routineLength.lowerBound)…\(Self.routineLength.upperBound)")
+                }
+                if !Self.routineMoves.contains(routine.moves) {
+                    out.append("\(at): \(routine.moves) moves, not \(Self.routineMoves.lowerBound)…\(Self.routineMoves.upperBound)")
+                }
             }
             let ticks = mode.ticks(of: routine)
             let base = routineBase(routine, mode: mode)
