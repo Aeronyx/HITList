@@ -486,7 +486,8 @@ struct TaskPopout: View {
                     setReminderMoment(pick)
                 })
             }
-            .accessibilityLabel("Reminder: \(title)")
+            // "Reminder: none" rather than "Reminder: Reminder" while the chip shows only its name (brief 94).
+            .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
             .accessibilityIdentifier("popoutReminderChip")
     }
 
