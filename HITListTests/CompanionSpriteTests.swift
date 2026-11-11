@@ -116,23 +116,26 @@ final class CompanionSpriteTests: XCTestCase {
         }
     }
 
-    /// Brief 84, "nothing floats": on the "+" (a capsule whose top curves away under a companion's right side),
-    /// every column of a still pose that rests on the edge line reaches down to the curve, in every look. Over the
-    /// flat and the start of the curve no more than half a point of background shows under it (under 2 device pixels
-    /// at 3x, inside the edge's own antialiasing); where the shoulder is steep, a 2 pt pixel stair leaves at most a
-    /// point at its corner. On the field (flat) every resting column sits on the line by construction.
+    /// Brief 84, "nothing floats": on the "+" (the glass button curves like a continuous capsule, falling away from
+    /// about 44 pt across; the shape here is SwiftUI's own, the lower of the continuous and the circular one at each
+    /// point), every column of a still pose that rests on the edge line reaches down to the curve, in every look. At
+    /// most 0.45 pt of background shows under it at a column's outer corner (about a device row at 3x: a 2 pt pixel
+    /// can't follow a curve that falls a third of a point across it without sinking in), and beyond that only where the
+    /// curve falls further than the sprite's box reaches (Quill's rump). On the field (flat) every resting column sits
+    /// on the line.
     func testNothingFloatsOnThePlus() {
         let size = FloatingAddButton.size
-        let radius: CGFloat = size.height / 2
-        func top(_ x: CGFloat) -> CGFloat {
-            let left: CGFloat = radius
-            let right: CGFloat = size.width - radius
-            guard x < left || x > right else { return 0 }
-            let centre: CGFloat = x < left ? left : right
-            let dx: CGFloat = x - centre
-            let under: CGFloat = max(0, radius * radius - dx * dx)
-            return radius - under.squareRoot()
+        let rect = CGRect(origin: .zero, size: size)
+        let shapes = [Capsule(style: .continuous).path(in: rect), Capsule(style: .circular).path(in: rect)]
+        var tops: [Int: CGFloat] = [:]
+        // The top edge every quarter point: how far down the first point of either shape is.
+        for q in 0...Int(size.width * 4) {
+            let x: CGFloat = CGFloat(q) / 4
+            var y: CGFloat = 0
+            while y < size.height / 2, !shapes.allSatisfy({ $0.contains(CGPoint(x: x, y: y)) }) { y += 0.02 }
+            tops[q] = y
         }
+        func top(_ x: CGFloat) -> CGFloat { tops[Int((x * 4).rounded())] ?? size.height / 2 }
         let p = CompanionCharacter.pointsPerPixel
         for character in CompanionCharacter.all where Self.lively.contains(character.id) {
             let offset = CompanionPerch.offset(character, spot: .addButton)
@@ -150,12 +153,18 @@ final class CompanionSpriteTests: XCTestCase {
                     let bottom: CGFloat = CGFloat(y + 1 - seat) * p
                     let x0: CGFloat = boxLeft + CGFloat(c) * p
                     var lowest: CGFloat = 0
+                    var highest: CGFloat = .infinity
                     for k in 0...8 {
                         let step: CGFloat = CGFloat(k) * p / 8
                         lowest = max(lowest, top(x0 + step))
+                        highest = min(highest, top(x0 + step))
                     }
                     let gap: CGFloat = lowest - bottom
-                    let allowed: CGFloat = x0 + p <= 60 ? 0.56 : 1.01
+                    // Where the curve falls further than the box reaches below the seat, only the part it can reach.
+                    let deepest: CGFloat = CGFloat(character.height - seat) * p
+                    let unreachable: CGFloat = max(0, lowest - deepest)
+                    let allowed: CGFloat = 0.45 + unreachable
+                    _ = highest
                     XCTAssertLessThanOrEqual(gap, allowed, "\(character.id) \(name) column \(c): \(gap) pt of background under it")
                 }
             }

@@ -2013,7 +2013,7 @@ extension CompanionCharacter {
             flourish:
                 Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1), ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1), ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1), ("land", 1), ("rest", 1)),
             // Its right hand and foot sit on the flat of the "+", not over the shoulder where its top curves away.
-            inset: 2)
+            inset: 5)
     )
 
     /// Nod's routines (briefs 84 and 91), the same in both places. Its legs are who it is: it swings them about out of
