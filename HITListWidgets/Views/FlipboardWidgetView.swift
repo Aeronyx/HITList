@@ -124,23 +124,38 @@ struct FlipboardPills: View {
     }
 }
 
-/// A pill and its target: a red one flips its switch; a flipping or green one is drawn only.
+/// A pill and its target: a red one is a toggle that flips its switch (drawn flipping the moment it is tapped, as a row's
+/// check is); a flipping or green one is drawn only.
 struct FlipboardPillButton: View {
     let light: WidgetContent.Flipboard.Light
     var flipping = false
     var interactive = false
 
     var body: some View {
-        let pill = FlipboardPill(light: light, flipping: flipping)
+        if interactive, light.side == .red, !flipping {
+            Toggle(isOn: false, intent: WidgetCompletionIntent(task: light.task, action: .flip, widget: FlipboardWidgetView.kind)) {
+                Text("Flip \(light.task.title)")
+            }
+            .toggleStyle(FlipboardPillToggleStyle(light: light))
+            .accessibilityLabel("Flip \(light.task.title)")
+        } else {
+            FlipboardPillToggleStyle.pill(light, flipping: flipping)
+        }
+    }
+}
+
+/// Off: the red pill. On (the moment it is tapped): flipping, green and dimmed.
+struct FlipboardPillToggleStyle: ToggleStyle {
+    let light: WidgetContent.Flipboard.Light
+
+    func makeBody(configuration: Configuration) -> some View {
+        Self.pill(light, flipping: configuration.isOn)
+    }
+
+    static func pill(_ light: WidgetContent.Flipboard.Light, flipping: Bool) -> some View {
+        FlipboardPill(light: light, flipping: flipping)
             .padding(WidgetLook.pillTargetInset)
             .contentShape(Rectangle())
-        if interactive, light.side == .red, !flipping {
-            Button(intent: WidgetCompletionIntent(task: light.task, action: .flip, widget: FlipboardWidgetView.kind)) { pill }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Flip \(light.task.title)")
-        } else {
-            pill
-        }
     }
 }
 
