@@ -1589,8 +1589,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "..vvvvvvvvvvvvvvvvvv",
+                "...vvvv.vvvv.vvvv.vv",
             ]),
             Frame(name: "heatDrip1", rows: [
                 "....................",
@@ -1611,8 +1611,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "..vvvvvvvvvvvvvvvvvv",
+                "...vvvv.vvvv.vvvv.vv",
             ]),
             Frame(name: "heatDrip2", rows: [
                 "....................",
@@ -1633,8 +1633,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "..vvvvvvvvvvvvvvvvvv",
+                "...vvvv.vvvv.vvvv.vv",
             ]),
             Frame(name: "heatSink1", rows: [
                 "....................",
@@ -1656,7 +1656,7 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvvvvvvvvvvvvvv.",
+                "..vvvvvvvvvvvvvvvvvv",
             ]),
             Frame(name: "heatCool", rows: [
                 "....................",
@@ -1941,8 +1941,8 @@ extension CompanionCharacter {
                 "...aaaaaaakkaaaaaaaa",
                 "..aaaaaaaaaaaaaaaaaa",
                 "..vvvvvvvvvvvvvvvvvv",
-                "...vvvvvvvvvvvvvvvv.",
-                "...vvvv.vvvv.vvvv.v.",
+                "..vvvvvvvvvvvvvvvvvv",
+                "...vvvv.vvvv.vvvv.vv",
             ]),
             Frame(name: "snowUp", rows: [
                 "....................",
