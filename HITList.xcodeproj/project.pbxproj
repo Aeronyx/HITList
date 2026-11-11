@@ -46,6 +46,7 @@
 		18B51652740BB679351F7062 /* BoltSlamMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCF9F197274239D4F4C42673 /* BoltSlamMotion.swift */; };
 		192227292DEEE7320E61203C /* SharedTasksRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B58B86B080E75A9F4828B71 /* SharedTasksRules.swift */; };
 		1A0B5FD5EBC029B36B56A375 /* ClaudeSetup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E960BA53B8D648FD669C878 /* ClaudeSetup.swift */; };
+		1B96E61FC299B5F62571F92C /* Hush.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8FFF3EE152C6D82DAA7152 /* Hush.swift */; };
 		1B99CCFFDABA2AF91627D80F /* HITListCore in Frameworks */ = {isa = PBXBuildFile; productRef = 498143C159A4BD0FF960EE6C /* HITListCore */; };
 		1C38EE460A421664F56305F4 /* InboxProcessQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 379D57D8772CB122DAF2854C /* InboxProcessQueue.swift */; };
 		1E36848F6012B749688CFE50 /* DuoNextDays.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1960A13263E02500E37004C0 /* DuoNextDays.swift */; };
@@ -692,6 +693,7 @@
 		99F5C84701529B786312B4FD /* AppGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupTests.swift; sourceTree = "<group>"; };
 		9BAD8DAF8E3D43C3CEAC20E8 /* ClaudeConnector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeConnector.swift; sourceTree = "<group>"; };
 		9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Light.ttf"; sourceTree = "<group>"; };
+		9C8FFF3EE152C6D82DAA7152 /* Hush.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Hush.swift; sourceTree = "<group>"; };
 		9D205E4007ED3FF4C43D51EE /* InboxProcessQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxProcessQueueTests.swift; sourceTree = "<group>"; };
 		9E960BA53B8D648FD669C878 /* ClaudeSetup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSetup.swift; sourceTree = "<group>"; };
 		A2A545D8589B95F94157760F /* AppearanceSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsSection.swift; sourceTree = "<group>"; };
@@ -954,6 +956,7 @@
 		25871571111CA5C3DE51CD1C /* Characters */ = {
 			isa = PBXGroup;
 			children = (
+				9C8FFF3EE152C6D82DAA7152 /* Hush.swift */,
 				274607610BD862CCA9F02DE0 /* Nod.swift */,
 				2FF631693F1C48C03F264CB0 /* Quill.swift */,
 			);
@@ -2040,6 +2043,7 @@
 				47BD085667FD840F097A05B4 /* HolidayAccent.swift in Sources */,
 				9A2EB2729C739BDEEE95FB40 /* HolidayDelight.swift in Sources */,
 				548AA92042E74504EBE5C6DE /* HolidayEffects.swift in Sources */,
+				1B96E61FC299B5F62571F92C /* Hush.swift in Sources */,
 				D114CA8B1E24A73E9A4F449E /* ICloudCheck.swift in Sources */,
 				12C2AEC0C6C88E1E64EC78BB /* ICloudSettingsGroups.swift in Sources */,
 				3AC80CE57BD7C51458E81210 /* InboxPicker.swift in Sources */,

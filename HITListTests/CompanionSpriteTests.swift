@@ -8,7 +8,7 @@ import SwiftUI
 @MainActor
 final class CompanionSpriteTests: XCTestCase {
     func testEveryCompanionIsGoodData() {
-        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill"])
+        XCTAssertEqual(CompanionCharacter.all.map(\.id), ["nod", "quill", "hush"])
         for character in CompanionCharacter.all {
             XCTAssertEqual(character.problems, [], character.id)
             XCTAssertLessThanOrEqual(character.width, 20)
@@ -58,7 +58,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
-    static let dressed = ["nod", "quill"]
+    static let dressed = ["nod", "quill", "hush"]
 
     /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
     /// three small gestures and a stir in each place.
@@ -71,8 +71,9 @@ final class CompanionSpriteTests: XCTestCase {
                 for weather in [posture.awake.rain, posture.awake.snow] {
                     let w = try? XCTUnwrap(weather, "\(at): a pose for rain and for snow")
                     guard let w else { continue }
+                    // One prop or one change: an umbrella, a dusting, a tail or a pair of ears drawn up into a hood.
                     let change = character.difference(w, posture.awake.rest)
-                    XCTAssertTrue((4...48).contains(change), "\(at) \(w): \(change) pixels")
+                    XCTAssertTrue((4...120).contains(change), "\(at) \(w): \(change) pixels")
                 }
                 XCTAssertGreaterThanOrEqual(posture.awake.gestures.count, 3, "\(at): three small gestures")
                 XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 1, "\(at): a stir")
@@ -124,6 +125,22 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertNotNil(quill.index["sitTip@sitRain"])
     }
 
+    func testHushKeepsWarmWithItsEars() {
+        let hush = CompanionCharacter.hush
+        XCTAssertEqual(CompanionCast.character(forTheme: "nord", launch: .none).id, "hush")
+        XCTAssertEqual(hush.seatRow, 17, "its ears hang over the edge from row 17")
+        func hangs(_ frame: String) -> Bool { hush.rows(frame)![hush.seatRow...].contains { $0.contains("d") } }
+        XCTAssertTrue(hangs("rest"), "by day its ears hang over the edge it sits on")
+        XCTAssertFalse(hangs("sleep"), "at night it wraps them round itself")
+        XCTAssertFalse(hangs("rain"), "in the rain it draws them up into a hood")
+        XCTAssertTrue(hangs("snow"))
+        // Its flourish: a snowflake (the accent) comes down to its nose, and the sneeze throws its ears up.
+        let ticks = hush.field.flourish.map(\.frame)
+        XCTAssertTrue(ticks.contains("flake1") && ticks.contains("crossEyed") && ticks.contains("sneeze"))
+        XCTAssertTrue(hush.rows("flake1")![0].contains("a"), "the flake starts above its head")
+        XCTAssertFalse(hush.flourishTurns)
+    }
+
     func testTheChecksCatchBadData() {
         typealias C = CompanionCharacter
         let mode = C.Mode(rest: "rest", rain: "wet", gestures: [.init(name: "slow", ticks: C.ticks(("rest", 9))),
@@ -146,6 +163,7 @@ final class CompanionSpriteTests: XCTestCase {
     func testFewColoursFromTheTheme() {
         XCTAssertEqual(CompanionCharacter.nod.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         XCTAssertEqual(CompanionCharacter.quill.inks, [.ink, .dark, .mid, .light, .accent])
+        XCTAssertEqual(CompanionCharacter.hush.inks, [.ink, .dark, .mid, .light, .accent])
         let slate = CompanionInks(palette: .slate)
         XCTAssertEqual(slate.hex[.ink], ThemePalette.slate.hex.background)
         XCTAssertEqual(slate.hex[.mid], ThemePalette.slate.hex.secondaryText)

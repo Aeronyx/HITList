@@ -112,7 +112,7 @@ final class CompanionsUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    static let companions = ["nod", "quill"]
+    static let companions = ["nod", "quill", "hush"]
 
     private func plusButton() -> XCUIElement {
         let plus = app.buttons["quickAddButton"].firstMatch
