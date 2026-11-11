@@ -20,6 +20,14 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.3", items: [
+            "Every theme has its own companion now: Nod, Smudge, Quill, Tuck, Hush, Glim, Mallow and Posy. Each sits on its theme's swatch in Settings.",
+            "Companions come alive now and then: a few seconds of a routine of their own every several minutes, then quiet again.",
+            "They show the weather on themselves: a drip and a shake in the rain, snow that piles up until they shake it off, wilting on a hot day. Weather is on unless you switch it off in Settings → Extras → Weather, and HITList asks for your approximate location once.",
+            "A task due on a day stays on that day wherever you are, and the lists catch up by themselves when you change time zone or midnight passes.",
+            "Settings is one short screen: you, your themes, then a page for everything else.",
+            "Add to HITList from the share sheet: a web page, a link or some text becomes a task.",
+        ]),
         Entry(version: "0.9.2", items: [
             "Check off a task right on the Today and Upcoming widgets, or flip a switch on the Flipboard widget. It stays ticked until iCloud has it, then the next one takes its place.",
             "Companions keep still now: a blink or a swing of a leg every minute or two, and their party trick so rarely you might miss it for a day. Tap one to ask for it.",

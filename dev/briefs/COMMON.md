@@ -270,6 +270,58 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 19 record (2026-11-11, overnight; sessions 82–90 and 92–94 merged for 0.9.3)
+Twelve sessions on three of George's turns, all Opus 5.5, supervised by a Fable 5.2 chat while George slept: 82
+`time-zones` (xhigh), 83 `location-weather` (high), 84 `companion-routines` (max), 85 `new-companions` (max), 86
+`settings-tidy` (xhigh), 87 to 89 one companion each (max), 90 `share-extension` (xhigh), then 92
+`day-anchor-review` (max), 93 `qa-sweep` (xhigh), 94 `accessibility` (xhigh); brief 91 (the weather on the
+creature) went to every companion session as a second pass. Merged in the order that unblocked others: 82, 83, 86,
+the engine's first commit of 84 (so the others could draw routines), the cast (85, 88, 87, 89), 84's weather
+engine, 92, the cast's weather, 93, 90, 84's own three. Conflicts: the generated project (regenerated),
+`CompanionCast.swift` at each cast merge (a list per line now), one comment. Supervisor's own: `CompanionSky.heat`
+and the reading that feeds it (apparent temperature and daylight from the same WeatherKit answer), the sheet
+request that opens Settings on a page, calendar-change listeners on six more screens and the sidebar's counts, the
+eight swatch seats and a 2 pt clearance under the names above them, the release script's share-extension checks,
+the notes.
+After the round:
+- **Days**: core's `DayAnchor`: a date with no time is stored at 10:00 UTC on its day. `DayAnchor.verdict` anchors
+  only a midnight in the device's own zone (brief 92: never on a guess); everything else is kept byte for byte and
+  read as the local day it shows, as 0.9.2 did. Three passes share it: every save, after each import, and once per
+  store after a backup (`Backups before day anchors`); `DayAnchor.isEnabled` turns the rewriting off. A day a 0.9.2
+  device wrote in another zone keeps its old reading until a device in that zone anchors it. `CalendarChange`
+  (`Services/Dates`) is the one source of "the zone, the clock or the day changed"; a view with its own clock adds
+  `.onReceive(CalendarChange.moments)`. Debug: `-calendarChangeTo Asia/Tokyo -calendarChangeAfter 90`.
+- **Location and weather**: on unless switched off; asked once, about 2 s after the first screen is up
+  (`LaunchLocationQuestion.decide`); a Debug build never asks without `-askLocationAtLaunch YES`. Each fix also
+  asks Apple's geocoder for the place's zone, which only `CompanionSkySource.zone` (the companions' clock) reads.
+  Skies: unknown, clear, clouds, rain, snow, storm, heat (by day, when it feels like 30 °C or more and nothing is
+  falling).
+- **Companions**: the format is explained at the top of `CompanionCharacter.swift` (read that, not this). Still;
+  a flicker every 40 to 110 s; a routine after 5 to 12 minutes of showing time (kept across launches); the
+  flourish as before; a tap plays the flourish after 20 minutes, else a routine after 3, else the small answer.
+  Weather on the creature: sky-bound gestures and routines, `snowDeep` piling up every 8 to 14 minutes until a
+  `shakesOff` routine, `heat`. Nothing is drawn in the air. Cast, in the themes' order: Nod, Smudge, Quill, Tuck,
+  Hush, Glim, Mallow, Posy (`CompanionCast`); seats on the swatches in `ThemeCompanion.seats`. The drawing
+  workshop (frames as text, sheets, mock-ups of the "+" and the field) is in `build.noindex/round-19/workshop/`
+  on George's Mac, outside the repository. Debug: `-companion glim`, `-companionSky heat`, `-companionSnowDepth 2`,
+  `-companionPlay routine:<name>`, `-companionHour 23`, `-companionZone Asia/Tokyo`.
+- **Settings**: `SettingsHome` (the first screen) and `SettingsPage` pushed inside the sheet (`HITSheetPages`, a
+  design-system piece); the Mac's `MacSettingsSection` in the same order. `SettingsView(page:)` and
+  `SettingsSheetRequest` open the sheet on a page. The first screen measures 718 of the 720 pt an iPhone 17 has
+  (`SettingsTidyTests.testFirstScreenFitsAnIPhone17`); on George's iPhone 16 its last row ends at the home
+  indicator's edge.
+- **Share extension**: `HITListShare/` (one target, three platforms), core's `ShareOutbox`, the app's
+  `Services/Share/ShareInbox` (drains at launch, on activation, on the bell, in the widgets' background moments;
+  tasks through `TaskActions.create`). On the Mac it must be switched on once in System Settings → General → Login
+  Items & Extensions → Sharing; Safari's real Share menu there was never seen. `TEST_RUNNER_HITLIST_SHARE=1` runs
+  its UI test.
+- **Left for George** (the sweep's `FINDINGS.md`, with pictures): the large title 4 pt right of its rows on the Pro
+  Max and the Duo, the system date picker in Review Inbox and Upcoming's swipe, day headers written four ways,
+  "Done" with three looks, empty states in four styles, the Mac Settings page's name shown twice, the companion on
+  the "+" covering a row's chevron.
+- **Not seen running**: a real zone change on a device; the location question on a real Mac; real weather for a
+  hot day or snow; the share sheet on a real Mac; anything on macOS 27.
+
 ## Round 18 record (2026-11-11; sessions 79–81 merged for 0.9.2)
 Three sessions on George's turn, all Opus 5.5, supervised by a Fable 5.2 chat: 79 `companion-cast` (max, 9 commits),
 80 `weather` (high, 8), 81 `widget-completion` (xhigh, 12). Merged 80, 81, 79; one conflict, the generated project

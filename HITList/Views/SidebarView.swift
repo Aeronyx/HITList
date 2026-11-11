@@ -41,11 +41,21 @@ struct SidebarView: View {
     /// The shared lists and their tasks (brief 62); nothing while Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
 
+    /// Goes up when the zone, the clock or the day changes (`CalendarChange`), so the counts, which read the clock when
+    /// they are drawn, are drawn again: Today's count no longer stays on yesterday after midnight (brief 92's finding).
+    @State private var calendarTick = 0
+
     /// Today's count: the rows Today shows, yours and shared ones (briefs 62, 64).
-    private var todayCount: Int { SidebarCounts.today(openTasks, shared: sharedRows) }
+    private var todayCount: Int {
+        _ = calendarTick
+        return SidebarCounts.today(openTasks, shared: sharedRows)
+    }
 
     /// The Inbox's count: yours and the dated shared tasks it shows (brief 62).
-    private var inboxCount: Int { SidebarCounts.inbox(openTasks, shared: sharedRows) }
+    private var inboxCount: Int {
+        _ = calendarTick
+        return SidebarCounts.inbox(openTasks, shared: sharedRows)
+    }
 
     var body: some View {
         rows
@@ -54,6 +64,7 @@ struct SidebarView: View {
         .safeAreaInset(edge: .top, spacing: 0) { profileHeader }
         // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
         .navigationTitle("HITList")
+        .onReceive(CalendarChange.moments) { _ in calendarTick &+= 1 }
         #if os(iOS)
         .scrollContentBackground(.hidden)
         .background(Theme.surface)

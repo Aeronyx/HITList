@@ -5,36 +5,46 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.2 (round 18, 2026-11-11)
+## Now: 0.9.3 (round 19, 2026-11-11, overnight)
 
 | Brief | What | Status |
 |---|---|---|
-| 79 `companion-cast` | One companion per theme, in one place per platform (the Mac's search field, the "+" on iPhone); still by default, a rare flourish, asleep at night, dressed for rain and snow; two new critters (four of eight themes) | merged, awaiting release |
-| 80 `weather` | The sky for the companions: WeatherKit behind an Extras switch, off by default | merged, awaiting release |
-| 81 `widget-completion` | Complete a task or flip a switch from a widget; the row stays checked until iCloud has it; widgets refresh while the app is closed | merged, awaiting release |
+| 82 `time-zones`, 92 `day-anchor-review` | A date with no time is the same calendar day in every zone (stored at 10:00 UTC on its day; only a date this device can vouch for is rewritten, after a backup); everything catches up when the zone or the day changes | merged, awaiting release |
+| 83 `location-weather` | Weather on by default; the location asked once at first launch; the place's time zone drives the companion's night and day | merged, awaiting release |
+| 84 `companion-routines`, 91 | Idle routines (a few seconds of life every 5 to 12 minutes), sky-bound gestures, snow that piles up, a hot-day sky; nothing drawn in the air | merged, awaiting release |
+| 85, 87, 88, 89 | A companion for every theme: Posy (Rosé, in Pip's place), Mallow (Mocha), Smudge (Graphite), Tuck (Moss), Glim (Tokyo Night) beside Nod, Quill and Hush | merged, awaiting release |
+| 86 `settings-tidy` | Settings as one short screen and pages, Appearance second, every option in one home; a companion on each theme's swatch | merged, awaiting release |
+| 90 `share-extension` | "Add to HITList" from the share sheet, through an outbox the app drains | merged, awaiting release |
+| 93 `qa-sweep` | Every screen on four devices looked at; seven plain defects fixed, the rest listed for George | merged, awaiting release |
+| 94 `accessibility` | The system's audit on every screen, VoiceOver wording, the Mac by keyboard, hit targets (the Mac's sync bolt) | see COMMON's Round 19 record |
 
 ## Next (in this order unless George says otherwise)
 
-1. **Share extension.** "Add to HITList" from any app's share sheet (a link, selected text) on iPhone and the Mac.
-   With widgets it is what the App Group store was moved for on 2026-10-27; it reuses the widget round's extension
-   setup.
+1. **George's answers to the sweep's findings** (`93-qa-sweep/FINDINGS.md` in the round's notes): the large title's
+   edge on the Pro Max and the Duo, the system date picker in Review Inbox and Upcoming's swipe, day headers written
+   four ways, empty states in four styles, "Done" with three looks, the Mac Settings page's name shown twice. Each is
+   a matter of taste or changes how a screen works, so none was touched.
 2. **Widgets, third pass**: a Control Center "Add task", calendar events in the Upcoming widget, an "Add task"
    widget.
 3. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
    controls; whether the sidebar column floats (26) or sits flush (27) is still the system's. Owning it means our own
-   split view and top bar. Decide after a friend's screenshot of 0.9.0 (21) on macOS 27.2.
-4. **Accessibility pass.** VoiceOver and Full Keyboard Access on the custom pieces: the Mac sidebar rows, the cards
-   and pickers, the Flipboard's switches, the companions (hidden from VoiceOver).
-5. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1).
-6. **iPad and iPhone Duo check** of Switchboards, widgets and the sidebar's swipe to delete.
+   split view and top bar. Decide after a friend's screenshot on macOS 27.2 (still owed).
+4. **Accessibility with a person.** Round 19 ran the system's audit and wrote the labels; wording and order need
+   someone who uses VoiceOver.
+5. **Shared Tasks with two Apple accounts**, tested with a friend (untested since 0.7.1). A day a friend's 0.9.2
+   wrote in another zone shows as before until their device updates.
+6. **The share extension on a real Mac**: Safari's Share menu was never seen (macOS offers a new share extension
+   only once it is switched on in System Settings); pickers for a Group and a date on the card.
 7. **The Mac's task list.** It is still the system's `List`: a completed row's gap closes in one frame and the
    completion flash snaps, where the iPhone eases both (brief 75's audit). Drawing our own rows there, as the sidebar
    does since 0.9.0 (21), fixes both and removes the last system-drawn selection.
-8. **The other four themes' companions** (round 18 draws four of eight), and companions in nested screens by
-   theme, as George described.
+8. **Companions in nested screens by theme**, as George described, and more skies if he wants them (wind, fog, a
+   cold snap).
 9. **A user's own companion.** Extras → Companions → "Choose your own…", a sprite sheet from Files, the way the
    completion sound already takes a file. Characters other people own can live on someone's own device this way; the
    app and this public repository ship only original ones.
+10. **The first-run day pass after the first frame**: it runs inside the app's start-up (6.8 s for 20,000 tasks;
+    real stores are small today), and an import that can restore the backup it takes.
 
 ## George's, no code needed
 
@@ -52,6 +62,9 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 ## Shipped
 
 Newest first; one line per release, details in `CHANGELOG.md`.
+
+- **0.9.2**, 2026-11-11: companions that keep still, one per theme (four drawn), asleep at night, dressed for rain
+  and snow through WeatherKit; widgets that check a task off and keep it ticked until iCloud has it.
 
 - **0.9.1**, 2026-11-10: widgets (Today, Upcoming, Flipboard, Lock Screen); the motion audit and its repairs; two
   pixel companions, Nod and Quill; calendar events, off by default; the sync bolt keeps still.
