@@ -182,6 +182,10 @@ struct SidebarView: View {
     #endif
 
     #if os(macOS)
+    /// The Mac's "Filters" header shows only over saved filters (brief 99). Its "+" is not the only way to make one:
+    /// Search's "Save as filter…" is (the iPad's header stays, its "+" being the iPad's only way).
+    static func showsFiltersHeader(savedFilters: Int) -> Bool { savedFilters > 0 }
+
     /// The rows in the order they are drawn, for ↑ and ↓.
     private var macOrder: [SidebarItem] {
         [.inbox, .today, .upcoming, .flipboard, .completed] + projects.map { .project($0.id) } + [.sharedTasks]
@@ -208,8 +212,11 @@ struct SidebarView: View {
                     // Shared Tasks, the forced Group, always last (brief 64): no reorder, rename or delete.
                     macSharedTasksRow
 
-                    // Filters below the Groups (George, 2026-11-08: "definitely put it below Groups").
-                    MacSidebarHeader(title: "Filters") { creatingFilter = true }
+                    // Filters below the Groups (George, 2026-11-08: "definitely put it below Groups"). No header over
+                    // nothing (brief 99): with no saved filter, Search's "Save as filter…" makes the first.
+                    if Self.showsFiltersHeader(savedFilters: filters.count) {
+                        MacSidebarHeader(title: "Filters") { creatingFilter = true }
+                    }
                     ForEach(Array(filters.enumerated()), id: \.element.id) { index, filter in
                         macFilterRow(filter, index: index)
                     }
