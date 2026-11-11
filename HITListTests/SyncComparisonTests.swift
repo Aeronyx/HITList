@@ -123,6 +123,18 @@ final class SyncComparisonTests: XCTestCase {
         XCTAssertEqual(index.remoteRecords(entities: entities).count, 1)
     }
 
+    func testAFirstReadCutShortCompletesWhenItsRestArrives() {
+        var index = ICloudZoneIndex()
+        index.apply(.init(changed: ["a": entry()], token: Data([1]), isFullRead: true, reachedEnd: false), at: at(0))
+        XCTAssertFalse(index.complete)
+        XCTAssertEqual(index.zoneToken, Data([1]))
+        XCTAssertNil(index.lastFullRead)
+        index.apply(.init(changed: ["b": entry()], token: Data([2])), at: at(20))
+        XCTAssertTrue(index.complete)
+        XCTAssertEqual(Set(index.entries.keys), ["a", "b"])
+        XCTAssertEqual(index.lastFullRead, at(20))
+    }
+
     func testAMissingZoneIsAnAnswerWithNothingInIt() {
         var index = ICloudZoneIndex()
         index.apply(.init(changed: ["a": entry()], token: Data([1]), isFullRead: true), at: at(0))

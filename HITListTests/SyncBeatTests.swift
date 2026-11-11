@@ -137,6 +137,36 @@ final class SyncBeatTests: XCTestCase {
         XCTAssertEqual(reader.zoneTokens, [nil, nil])
     }
 
+    func testAFirstReadCutShortGoesOnFromWhereItStopped() async {
+        // A large zone on a slow network: the first read is cut short after its first records and a token.
+        let reader = FakeReader()
+        reader.zoneQueue = [.success(.init(changed: ["r1": entry()], token: Data([1]), reachedEnd: false)),
+                            .success(.init(changed: ["r2": entry()], token: Data([2])))]
+        let beat = SyncBeat(reader: reader, indexURL: nil, clock: { self.at(0) })
+        _ = await beat.runOnce()
+        XCTAssertFalse(beat.index.complete, "still reading: nothing can be compared yet")
+        XCTAssertEqual(beat.index.zoneToken, Data([1]))
+        _ = await beat.runOnce()
+        XCTAssertEqual(reader.zoneTokens, [nil, Data([1])], "the second beat went on from the first one's token")
+        XCTAssertTrue(beat.index.complete)
+        XCTAssertEqual(Set(beat.index.entries.keys), ["r1", "r2"])
+    }
+
+    func testAWholeReadAgainCutShortKeepsTheCompleteIndex() async {
+        let reader = FakeReader()
+        reader.zone = .success(.init(changed: ["r1": entry(), "r2": entry()], token: Data([1]), isFullRead: true))
+        let beat = SyncBeat(reader: reader, indexURL: nil, clock: { self.at(0) })
+        _ = await beat.runOnce()
+        reader.database = .success(ICloudDatabaseAnswer(zoneChanged: false, token: Data([5])))
+        reader.zoneQueue = [.success(.init(changed: ["r3": entry()], token: Data([9]), reachedEnd: false))]
+        beat.requireFullRead()
+        _ = await beat.runOnce()
+        XCTAssertTrue(beat.index.complete)
+        XCTAssertEqual(Set(beat.index.entries.keys), ["r1", "r2"], "half a read never replaces a whole one")
+        _ = await beat.runOnce()
+        XCTAssertEqual(reader.zoneTokens, [nil, nil, nil], "and the next beat reads it whole again")
+    }
+
     private func entry() -> ICloudZoneIndex.Entry {
         ICloudZoneIndex.Entry(type: "CD_TaskItem", entity: "TaskItem", id: UUID(), updatedAt: at(0), modifiedAt: at(0))
     }
@@ -146,6 +176,8 @@ final class SyncBeatTests: XCTestCase {
 final class FakeReader: ICloudZoneReading, @unchecked Sendable {
     var database: Result<ICloudDatabaseAnswer, SyncBeatFailure> = .success(ICloudDatabaseAnswer(zoneChanged: true, token: Data([0])))
     var zone: Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure> = .success(.init(changed: [:], token: Data([0]), isFullRead: true))
+    /// Answers for the next zone fetches, in order, before `zone`.
+    var zoneQueue: [Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure>] = []
     var names: [String: String] = [:]
     private(set) var databaseCalls = 0
     private(set) var zoneTokens: [Data?] = []
@@ -158,11 +190,12 @@ final class FakeReader: ICloudZoneReading, @unchecked Sendable {
     func zoneChanges(since token: Data?, timeout: TimeInterval,
                      progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure> {
         zoneTokens.append(token)
-        if case .success(var changes) = zone {
+        let next = zoneQueue.isEmpty ? zone : zoneQueue.removeFirst()
+        if case .success(var changes) = next {
             changes.isFullRead = token == nil
             return .success(changes)
         }
-        return zone
+        return next
     }
 
     func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], SyncBeatFailure> {

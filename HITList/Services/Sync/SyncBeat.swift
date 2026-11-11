@@ -237,24 +237,35 @@ final class SyncBeat {
         case .success(let value): answer = value
         }
         var changed = false
-        let old = self.index.lastFullRead.map { clock().timeIntervalSince($0) >= Self.fullReadAge } ?? true
-        if !self.index.complete || answer.zoneChanged || answer.zoneDeleted || wantsFullRead || old {
-            let whole = !self.index.complete || answer.zoneDeleted || wantsFullRead || old
-            wantsFullRead = false
-            if whole { onReading?(0) }
+        let kept = self.index
+        let old = kept.lastFullRead.map { clock().timeIntervalSince($0) >= Self.fullReadAge } ?? false
+        // The first read of a zone, or the rest of one cut short; or a whole read again of a complete index.
+        let first = !kept.complete && kept.zoneToken == nil
+        let resuming = !kept.complete && kept.zoneToken != nil
+        let rereading = kept.complete && (answer.zoneDeleted || wantsFullRead || old)
+        if first || resuming || rereading || answer.zoneChanged {
+            let reading = first || resuming || rereading
+            if reading { onReading?(0) }
             let report: @Sendable (Int) -> Void = { [weak self] count in
-                Task { @MainActor in if whole { self?.onReading?(count) } }
+                Task { @MainActor in if reading { self?.onReading?(count) } }
             }
-            let zone = await reader.zoneChanges(since: whole ? nil : self.index.zoneToken,
-                                                timeout: whole ? rules.fullReadTimeout : rules.timeout, progress: report)
-            if whole { onReading?(nil) }
+            let from: Data? = first || rereading ? nil : kept.zoneToken
+            let zone = await reader.zoneChanges(since: from, timeout: reading ? rules.fullReadTimeout : rules.timeout,
+                                                progress: report)
+            if reading { onReading?(nil) }
             switch zone {
             case .failure(let failure):
-                if whole, self.index.complete { wantsFullRead = true }
+                if rereading { wantsFullRead = true }
                 return .failed(failure)
             case .success(let changes):
-                self.index.apply(changes, at: clock())
-                changed = whole || !changes.changed.isEmpty || !changes.deleted.isEmpty || changes.zoneMissing
+                if rereading, !changes.reachedEnd {
+                    // A whole read again that was cut short never replaces a complete index: the next beat tries again.
+                    wantsFullRead = true
+                } else {
+                    if changes.reachedEnd { wantsFullRead = false }
+                    self.index.apply(changes, at: clock())
+                    changed = reading || !changes.changed.isEmpty || !changes.deleted.isEmpty || changes.zoneMissing
+                }
             }
         }
         self.index.databaseToken = answer.token
