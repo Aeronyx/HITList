@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.2: core 573, Mac 1529, iOS 1488, and about 60 UI tests
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.3: core 647, Mac about 1730, iOS about 1690, and about 70 UI tests
   (`scripts/test.sh ui`, half an hour on a fresh simulator; run it on the merged tree, not only per branch). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -303,15 +303,16 @@ iPhone's first screen fits.
 
 ## 8. Where things stand (2026-11-11, round 19 merged)
 
-**2026-11-11, 0.9.2 (23) released; round 19 briefed for 0.9.3 (Fable 5.2 supervisor), run overnight while George
-sleeps.** George's notes on 0.9.2 (`dev/briefs/ROUND-19.md`): idle routines for the companions instead of lone
-gestures, weather that moves, a new companion for Rosé (Pip goes), the plushy sketch as a fifth companion, Quill
-resting on the "+"; the location asked at first launch with weather on by default; time zones handled properly;
-Settings tidied with Appearance near the top and a small companion on each theme. Briefs 82 `time-zones` (xhigh),
-83 `location-weather` (high), 84 `companion-routines` (max), 85 `new-companions` (max, with a second pass after 84
-and 86 merge), 86 `settings-tidy` (xhigh) run as five Opus sessions. Brief 82 rewrites date-only values to a
-zone-proof form behind one switch: tell George in the hand-over. After the merge: archive and export, the UI suite,
-the screenshot pass. The next brief number is 87.
+**2026-11-11, round 19 merged for 0.9.3 (Fable 5.2 supervisor), overnight while George slept.** Briefs 82 to 94
+are merged on master (`dev/briefs/ROUND-19.md` has George's four messages of the night): a companion for each of
+the eight themes with idle routines and the weather shown on the creature; the location asked once and weather on
+by default; a date with no time kept on its day in every zone (rewritten only where the device can vouch for it,
+after a backup, behind `DayAnchor.isEnabled`); Settings as one short screen and pages; the share extension; a
+second pair of eyes on the date change, a screen-by-screen sweep and an accessibility pass. No schema change. A
+Release archive and export of both platforms pass `release.sh`'s checks with the share extension inside. George
+releases with `scripts/release.sh --version 0.9.3 --quick`. Details, leftovers and what was never seen running are
+in COMMON's Round 19 record; the sweep's open questions for George are the roadmap's first item. The next brief
+number is 95.
 
 ### Round 18 (kept for the record)
 

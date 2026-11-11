@@ -27,6 +27,7 @@ enum WhatsNew {
             "A task due on a day stays on that day wherever you are, and the lists catch up by themselves when you change time zone or midnight passes.",
             "Settings is one short screen: you, your themes, then a page for everything else.",
             "Add to HITList from the share sheet: a web page, a link or some text becomes a task.",
+            "VoiceOver reads tasks, switches and Settings in full, and the Mac's sync bolt takes a click anywhere on it.",
         ]),
         Entry(version: "0.9.2", items: [
             "Check off a task right on the Today and Upcoming widgets, or flip a switch on the Flipboard widget. It stays ticked until iCloud has it, then the next one takes its place.",
