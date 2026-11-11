@@ -136,7 +136,28 @@ struct SharedTaskListRow: View {
             Spacer(minLength: 0)
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
+        .taskRowSpeech(label: task.title.value, value: TaskRowSpeech.value(speechParts),
+                       actionName: TaskRowSpeech.actionName(isChecked: isChecked, isSwitch: false),
+                       canToggle: row.canWrite, toggle: onToggleCompletion)
         .contextMenu { menu }
+    }
+
+    /// What the row shows, for VoiceOver (`TaskRowSpeech`).
+    private var speechParts: TaskRowSpeech.Parts {
+        var parts = TaskRowSpeech.Parts(completed: task.isCompleted, priority: priority)
+        if let due = task.due.value {
+            if !hidesDay {
+                parts.due = DueFormatter.text(for: due.date, hasTime: due.hasTime, now: now)
+            } else if due.hasTime {
+                parts.due = DueFormatter.timeText(for: due.date)
+            }
+            parts.overdue = DueFormatter.isOverdue(due.date, hasTime: due.hasTime, isCompleted: task.isCompleted, now: now)
+        }
+        if !row.people.isEmpty { parts.people = SharedAvatarStack.accessibilityLabel(row.people) }
+        if showGroup { parts.group = SharedTasksGroup.name }
+        let notes = task.notes.value
+        parts.notes = notes.isEmpty ? nil : TaskLimits.firstLine(of: notes)
+        return parts
     }
 
     // MARK: The meta line

@@ -58,6 +58,9 @@ struct TaskRow: View {
             Spacer(minLength: 0)
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
+        .taskRowSpeech(label: task.title, value: TaskRowSpeech.value(speechParts),
+                       actionName: TaskRowSpeech.actionName(isChecked: isChecked, isSwitch: isSwitch),
+                       toggle: onToggleCompletion)
         .contextMenu {
             Menu("Priority") {
                 ForEach(Priority.allCases, id: \.self) { p in
@@ -81,6 +84,26 @@ struct TaskRow: View {
                 if let popouts { popouts.requestDelete(task, perform: delete) } else { delete() }
             } label: { Label("Delete", systemImage: "trash") }
         }
+    }
+
+    /// What the row shows, for VoiceOver (`TaskRowSpeech`): the day or time as the meta line has it.
+    private var speechParts: TaskRowSpeech.Parts {
+        var parts = TaskRowSpeech.Parts(completed: task.isCompleted, isSwitch: isSwitch, priority: task.priorityValue)
+        if !isSwitch, let due = task.dueDate {
+            if !hidesDay {
+                parts.due = DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now)
+            } else if task.hasDueTime {
+                parts.due = DueFormatter.timeText(for: due)
+            }
+            parts.overdue = DueFormatter.isOverdue(due, hasTime: task.hasDueTime, isCompleted: task.isCompleted, now: now)
+            parts.repeats = task.recurrence != nil
+        }
+        parts.reminder = Self.reminderText(for: task, now: now)
+        parts.checklist = task.subtaskProgress
+        parts.labels = task.labelList.map(\.name)
+        if showProject { parts.group = task.project?.name }
+        parts.notes = task.notes.isEmpty ? nil : TaskLimits.firstLine(of: task.notes)
+        return parts
     }
 
     // MARK: The meta line
@@ -364,6 +387,9 @@ struct MetaItem: View {
             Image(systemName: systemImage)
                 .font(.system(size: iconSize, weight: TaskRowMetrics.metaIconWeight))
                 .frame(width: 12)
+                // Its text says it ("Today", the Group's name); VoiceOver read the dot as "Circle". An item with no
+                // text (the repeat and switch glyphs) is labelled where it is made, and keeps its image.
+                .accessibilityHidden(text != nil)
         }
     }
 }
