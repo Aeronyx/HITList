@@ -28,12 +28,18 @@ HITList is in beta on TestFlight.
 - **Views.** Inbox, Today, Upcoming (a list on iPhone, a seven-day board on Mac and iPad), Browse, and
   Flipboard: a wall of switches for recurring chores that turn red again when they come due.
 - **Sub-tasks, repeats, reminders, deadlines.** Repeats keep their wall-clock time across daylight-saving
-  changes and land on the right day at month ends.
+  changes and land on the right day at month ends. A task due on a day stays on that day in every time
+  zone, and the lists catch up by themselves when the zone or the day changes.
 - **Shared Tasks (preview).** Lists shared with other people through CloudKit sharing.
 - **Claude connector.** An MCP server inside the Mac app lets Claude Desktop or Claude Code list, add,
   complete and edit the tasks you choose to expose. It is off by default and cannot delete anything.
-- **System integration.** Siri and Shortcuts, Spotlight, local notifications, and layouts for the
-  foldable iPhone.
+- **Widgets.** Today, Upcoming and the Flipboard on the Home Screen, the Lock Screen and the Mac's
+  desktop. A task checked on a widget stays there, ticked, until iCloud has it.
+- **System integration.** Siri and Shortcuts, Spotlight, local notifications, calendar events beside
+  your tasks, and layouts for the foldable iPhone.
+- **Companions.** A small pixel creature for each of the eight themes sits on the search field or the
+  add button: still most of the time, asleep at night, and dressed for the weather outside. They can be
+  switched off.
 
 ## How it is put together
 
@@ -41,6 +47,7 @@ HITList is in beta on TestFlight.
 |------|----------|
 | `HITListCore/` | Swift package with no UI and no persistence: the quick-add parser, date expressions, recurrence, the filter language, list ordering, the backup format and the MCP wire types. About 4,000 lines, about 300 tests, runs in seconds. |
 | `HITList/` | The SwiftUI app (iOS 18, macOS 15). `Models/` holds the SwiftData models and schema versions, `Services/` sync monitoring, notifications, sharing, intents and the Claude connector, `Support/DesignSystem/` the components every screen is built from. |
+| `HITListWidgets/` | The widget extension. It never opens the store: it reads a snapshot the app writes into the App Group, and a tap is written to an outbox the app works through. |
 | `HITListMCP/` | `hitlist-mcp`, the command-line helper Claude launches. It forwards each tool call to the running app. |
 | `HITListTests/`, `HITListUITests/` | App tests, hosted in the app against an in-memory store, run on macOS and the iPhone simulator; a few XCUITest flows. |
 | `scripts/` | `test.sh`, `release.sh`, and two helpers that screenshot and drive a Debug build on the Mac. |

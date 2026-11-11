@@ -32,9 +32,26 @@ final class CompanionSkyWeatherTests: XCTestCase {
 
     func testEverythingElseIsClouds() {
         for condition in ["cloudy", "mostlyCloudy", "partlyCloudy", "foggy", "haze", "smoky", "blowingDust", "breezy",
-                          "windy", "hot", "frigid"] {
+                          "windy", "frigid"] {
             XCTAssertEqual(sky(condition), .clouds, condition)
         }
+    }
+
+    func testAHotDayIsHeatAndWhateverFallsWins() {
+        XCTAssertEqual(sky("hot"), .heat)
+        func feels(_ condition: String, _ celsius: Double?, day: Bool? = true) -> CompanionSky {
+            CompanionSky(weatherCondition: condition, apparentCelsius: celsius, isDaylight: day)
+        }
+        XCTAssertEqual(feels("clear", 30), .heat, "from 30 °C")
+        XCTAssertEqual(feels("mostlyCloudy", 34.5), .heat)
+        XCTAssertEqual(feels("clear", 29.9), .clear)
+        XCTAssertEqual(feels("clear", nil), .clear, "no temperature, no heat")
+        XCTAssertEqual(feels("clear", 33, day: false), .clear, "a warm night is not a hot day")
+        XCTAssertEqual(feels("clear", 33, day: nil), .heat, "an unknown sun counts as up")
+        XCTAssertEqual(feels("heavyRain", 35), .rain, "rain in a heatwave is rain")
+        XCTAssertEqual(feels("thunderstorms", 35), .storm)
+        XCTAssertEqual(feels("snow", 35), .snow)
+        XCTAssertEqual(feels("hot", 12, day: false), .heat, "WeatherKit's own word stands")
     }
 
     func testAConditionWeatherKitAddsLaterIsClouds() {
@@ -46,6 +63,6 @@ final class CompanionSkyWeatherTests: XCTestCase {
         let named = CompanionSky.weatherConditions
         XCTAssertEqual(named.count, 34)
         XCTAssertFalse(named.values.contains(.unknown), "an observation is never unknown")
-        XCTAssertEqual(Set(named.values), [.clear, .clouds, .rain, .snow, .storm])
+        XCTAssertEqual(Set(named.values), [.clear, .clouds, .rain, .snow, .storm, .heat])
     }
 }

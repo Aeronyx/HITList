@@ -1,6 +1,6 @@
 import XCTest
 
-/// The companions on iPhone (briefs 76 and 79): one at a time, the theme's, on the top right of the "+" on every
+/// The companions on iPhone (briefs 76, 79 and 84): one at a time, the theme's, on the top right of the "+" on every
 /// screen that shows it, and nowhere else. It never takes a tap meant for the "+", goes away with the "+" when a
 /// card opens and comes back with it, and a theme change is the other companion at once. `testEveryLookOnThePlus`
 /// keeps a screenshot of each companion by day, asleep, in rain and in snow; `testCompanionsDemo` holds the screen
@@ -23,7 +23,8 @@ final class CompanionsUITests: XCTestCase {
         app.launch()
         let plus = plusButton()
         snapshot("Today with the companion on the +")
-        // The companion sits 8 pt in from the "+"'s right edge, its feet 2 to 6 pt down into it.
+        // The companion sits 8 to 12 pt in from the "+"'s right edge (brief 84: on its flat), its feet 2 to 6 pt down
+        // into it.
         plus.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
             .withOffset(CGVector(dx: plus.frame.width - 22, dy: 3)).tap()
         let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
@@ -98,6 +99,36 @@ final class CompanionsUITests: XCTestCase {
         }
     }
 
+    /// Brief 84: a routine playing on the "+" (Quill's question mark straightening into an exclamation mark, on its
+    /// own theme) never takes a tap meant for the "+": a tap under its feet mid-routine opens the card.
+    func testARoutineNeverTakesTheCardsTap() throws {
+        app.launchArguments += ["-companion", "quill", "-pref.theme", "midnight", "-companionPlay", "routine:exclaim"]
+        app.launch()
+        let plus = plusButton()
+        // The demo starts its first routine three seconds after the companion appears; "!" is held from 0.4 s in.
+        Thread.sleep(forTimeInterval: 3.8)
+        snapshot("Quill mid-routine on the +")
+        plus.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: plus.frame.width - 22, dy: 6)).tap()
+        let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(title.waitForExistence(timeout: 5), "the tap under its feet, mid-routine, opened the card")
+    }
+
+    /// Each companion's routines in turn, then its weather routines (`-companionPlay routine`, a sky each), held long
+    /// enough to record (`HITLIST_COMPANION` picks the companion; Nod by default).
+    func testRoutinesDemo() throws {
+        let companion = ProcessInfo.processInfo.environment["HITLIST_COMPANION"] ?? "nod"
+        for sky in ["clouds", "rain", "snow", "storm", "clear"] {
+            app.terminate()
+            app.launchArguments = app.launchArguments.filter { $0 != "-companionSky" && !["clouds", "rain", "snow", "storm", "clear"].contains($0) }
+            app.launchArguments += ["-companion", companion, "-companionPlay", "routine", "-companionSky", sky]
+            app.launch()
+            _ = plusButton()
+            Thread.sleep(forTimeInterval: 8)
+            snapshot("\(companion) routines under \(sky)")
+        }
+    }
+
     /// Every gesture, the reply and the flourish in turn, a few seconds apart, held long enough to record.
     func testCompanionsDemo() throws {
         let companion = ProcessInfo.processInfo.environment["HITLIST_COMPANION"] ?? "nod"
@@ -112,7 +143,7 @@ final class CompanionsUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    static let companions = ["nod", "quill", "hush", "pip"]
+    static let companions = ["nod", "quill", "hush", "posy", "mallow"]
 
     private func plusButton() -> XCUIElement {
         let plus = app.buttons["quickAddButton"].firstMatch

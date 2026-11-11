@@ -35,6 +35,8 @@ struct CompanionStage: Equatable {
     var act: CompanionAct?
     /// The sky the look was decided for: which weather routines it may play (storm and rain share a look).
     var sky: CompanionSky = .unknown
+    /// Brief 91: how deep the snow has piled, in frames past `snow` (0: the bare `snow`).
+    var snowDepth = 0
 }
 
 /// The pure clock (briefs 76, 79 and 84): from the time and the stage, which frame to draw and when the drawing next
@@ -63,35 +65,72 @@ struct CompanionClock {
     }
 
     /// What each tick of an act draws (its frame in `drawn`, and whether that tick is mirrored on its own), and the
-    /// rate. The flourish and a weather routine's own frames are drawn whole; everything else is drawn over the
-    /// still frame for the weather (only the pixels it changes), and the still frame itself is the weather's.
-    func frames(_ kind: CompanionAct.Kind, stage: CompanionStage) -> (frames: [CompanionPose], fps: Double) {
+    /// rate; nil when it cannot be drawn in the stage's look (a gesture that would cut through a pile of snow). The
+    /// flourish and the weather's own frames are drawn whole; everything else over the still frame for the weather
+    /// (only the pixels it changes), and the still frame itself is the weather's, as deep as the snow has piled. A
+    /// shake-off shows the bare snow from its first frame of its own on.
+    func drawing(_ kind: CompanionAct.Kind, stage: CompanionStage) -> (frames: [CompanionPose], fps: Double)? {
         let mode = character.posture(stage.place).mode(stage.look)
-        let base = mode.base(stage.look.weather)
+        let weather = stage.look.weather
         if case .flourish = kind {
             let (ticks, fps) = ticks(kind, stage: stage)
             return (ticks.map { CompanionPose(frame: character.drawnIndex($0.frame), mirrored: $0.mirrored) }, fps)
         }
         var entries: [(tick: CompanionCharacter.Tick, whole: Bool)]
-        if case .routine(let i) = kind, mode.routines.indices.contains(i) {
-            entries = mode.ticks(of: mode.routines[i])
-        } else {
+        var sky: CompanionSky?
+        var shakes = false
+        switch kind {
+        case .routine(let i) where mode.routines.indices.contains(i):
+            let routine = mode.routines[i]
+            entries = mode.ticks(of: routine)
+            sky = routine.sky
+            shakes = routine.shakesOff && weather == .snow
+        case .gesture(let i) where mode.gestures.indices.contains(i):
+            let gesture = mode.gestures[i]
+            entries = gesture.ticks.map { ($0, gesture.sky != nil) }
+            sky = gesture.sky
+        default:
             entries = ticks(kind, stage: stage).ticks.map { ($0, false) }
         }
         var out: [CompanionPose] = []
         out.reserveCapacity(entries.count)
+        var gone = false
         for entry in entries {
-            let frame: Int
-            if entry.tick.frame == mode.rest {
-                frame = character.drawnIndex(base)
-            } else if entry.whole {
-                frame = character.drawnIndex(entry.tick.frame)
+            if shakes, entry.whole { gone = true }
+            let depth = gone ? 0 : stage.snowDepth
+            let frame: Int?
+            if shakes, entry.whole {
+                frame = character.index[entry.tick.frame]
             } else {
-                frame = character.drawnIndex(entry.tick.frame, over: base, rest: mode.rest)
+                frame = character.draw(entry.tick, whole: entry.whole, sky: sky, mode: mode, weather: weather, depth: depth)
             }
+            guard let frame else { return nil }
             out.append(CompanionPose(frame: frame, mirrored: entry.tick.mirrored))
         }
         return (out, character.gestureFPS)
+    }
+
+    /// The same, falling back to the still frame for a tick that cannot be drawn.
+    func frames(_ kind: CompanionAct.Kind, stage: CompanionStage) -> (frames: [CompanionPose], fps: Double) {
+        if let drawn = drawing(kind, stage: stage) { return drawn }
+        let still = restPose(at: .distantPast, stage: CompanionStage(since: stage.since, place: stage.place,
+                                                                     look: stage.look, turned: false, sky: stage.sky,
+                                                                     snowDepth: stage.snowDepth))
+        let count = ticks(kind, stage: stage).ticks.count
+        return (Array(repeating: CompanionPose(frame: still.frame, mirrored: false), count: count), character.gestureFPS)
+    }
+
+    /// Whether an act can be drawn in the stage's look.
+    func canDraw(_ kind: CompanionAct.Kind, stage: CompanionStage) -> Bool { drawing(kind, stage: stage) != nil }
+
+    /// How deep the snow is at `now`: after a shake-off has ended, the bare snow.
+    func snowDepth(at now: Date, stage: CompanionStage) -> Int {
+        guard stage.look.weather == .snow, let act = stage.act, case .routine(let i) = act.kind else { return stage.snowDepth }
+        let mode = character.posture(stage.place).mode(stage.look)
+        guard mode.routines.indices.contains(i), mode.routines[i].shakesOff, now >= end(of: act, stage: stage) else {
+            return stage.snowDepth
+        }
+        return 0
     }
 
     func duration(_ kind: CompanionAct.Kind, stage: CompanionStage) -> TimeInterval {
@@ -117,11 +156,11 @@ struct CompanionClock {
         return !stage.turned
     }
 
-    /// The still frame for the stage's look, facing the way it faces at `now`.
+    /// The still frame for the stage's look (as deep as the snow has piled), facing the way it faces at `now`.
     func restPose(at now: Date, stage: CompanionStage) -> CompanionPose {
         let mode = character.posture(stage.place).mode(stage.look)
-        let base = mode.base(stage.look.weather)
-        return CompanionPose(frame: character.drawnIndex(base), mirrored: facing(at: now, stage: stage))
+        let still = mode.still(stage.look.weather, depth: snowDepth(at: now, stage: stage))
+        return CompanionPose(frame: character.drawnIndex(still), mirrored: facing(at: now, stage: stage))
     }
 
     /// The pose at `now`; the still frame when `still` (Reduce Motion).

@@ -80,6 +80,8 @@ final class WidgetSnapshotWriter {
             center.addObserver(forName: Self.becameActive, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.schedule() }
             },
+            // Brief 82: a new zone or a new day moves every widget's midnights and resets.
+            CalendarChange.observe { [weak self] _ in self?.calendarChanged() },
         ]
         watchSharedRows()
         writeNow()
@@ -111,6 +113,12 @@ final class WidgetSnapshotWriter {
 
     func schedule() {
         debounce.schedule { [weak self] in self?.writeNow() }
+    }
+
+    /// The zone, the clock or the day changed (`CalendarChange`, brief 82): the snapshot is written if it changed, and
+    /// the widgets reload either way, since their timelines were worked out at the old midnights and resets.
+    func calendarChanged() {
+        if !writeNow() { reload() }
     }
 
     /// Builds the snapshot and writes it if anything changed; true when it wrote.

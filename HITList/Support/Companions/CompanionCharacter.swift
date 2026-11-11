@@ -1,26 +1,31 @@
 import Foundation
 import HITListCore
 
-// HOW A COMPANION COMES ALIVE (brief 84): a character is data; this is all a new one needs.
-// - Frames: rows of `CompanionInk` letters, every frame the character's size. A Mode (awake or asleep, per place) names
-//   its still `rest` frame, optional `rain` and `snow` variations, its `gestures`, the `answer` to a tap and, awake,
-//   its `routines`. The Posture holds both modes and the rare `flourish` (12 to 24 ticks, rest to rest).
-// - Flickers: mark the smallest gestures (one blink, one swing of a foot) `flicker: true`. One plays every 40 to 110 s.
-//   Unmarked gestures play only inside routines. A mode that marks none plays every gesture as a flicker (as before).
-// - Routines: `Routine(name:, steps:)`, played every 5 to 12 minutes of showing time, never the same twice running.
-//   Steps, in order, at the character's `gestureFPS` (8: one tick is 1/8 s):
-//     .gesture("blink")              one of this mode's gestures, by name
-//     .hold(4)                       the still frame (dressed for the weather) for 4 ticks: a held beat
-//     .play(("scoot1", 2), ("rest", 1))   frames of its own, each for a number of ticks ("rest" is the still frame)
-//   Four to nine moves (every step but a hold), 3 to 7 seconds in all; the first and last frames a step from the
-//   still frame, so nothing pops. The rest frame comes back when it ends. Draw the in-between frames a move needs.
-// - Weather: an everyday routine (no `sky`) also plays in rain or snow when its frames leave the weather's pixels alone
-//   (or a frame named "frame@weather" is drawn, as for gestures); otherwise only in plain weather. A routine with
-//   `sky: .rain`, `.snow`, `.storm` or `.clear` plays only under that sky (storm also takes the rain ones), about every
-//   other routine while it holds; its own frames are drawn whole, prop and all (a few drops may fall inside the box).
-// - Places: `Posture(inset:)` moves the companion that many sprite pixels further in from the host's trailing edge;
-//   `Posture(turns: false)` keeps a flourish that turns round (`flourishTurns`) facing the same way in that place.
-// - A character with no routines and no flicker marks is still valid: flickers and the flourish, as before.
+// HOW A COMPANION COMES ALIVE (briefs 84 and 91): a character is data; this is all a new one needs.
+// - Frames: rows of `CompanionInk` letters, all the character's size. A Mode (awake or asleep, per place): the still
+//   `rest`, its weather stills `rain`, `snow`, `heat` and `snowDeep` (snow piling up, shallow to deep), `gestures`,
+//   the `answer` to a tap and, awake, `routines`. A Posture holds both modes and the rare `flourish`.
+// - Flickers: mark the smallest gestures `flicker: true`; one plays every 40 to 110 s (unmarked ones play only inside
+//   routines; a mode that marks none flickers with all of them, as before brief 84).
+// - Routines: `Routine(name:, sky:, weight:, shakesOff:, steps:)`, one every 5 to 12 minutes of showing time, never the
+//   same twice running. Steps at the character's `gestureFPS` (8 ticks a second): `.gesture("blink")`, `.hold(4)` (the
+//   still frame for the weather, 4 ticks), `.play(("scoot1", 2), ("rest", 1))` (frames of its own). Four to nine moves
+//   (every step but a hold), 3 to 7 s, the first and last frame a step from the still frame, so nothing pops.
+// - Skies: a routine or gesture with `sky:` (.rain, .snow, .storm, .heat, .clear; storm also takes the rain's) plays
+//   only under it, about every other routine or flicker while it holds; its own frames are drawn whole, for that
+//   sky's still. Everything else is drawn over the still frame (only the pixels it changes from `rest`) and plays in a
+//   weather only where it leaves that still's own pixels alone, or a frame named "frame@still" is drawn for it.
+// - Nothing is drawn in the air around a companion, except a single drop or flake it touches.
+// - Snow piles up: in snow the still moves one frame deeper through `snowDeep` every 8 to 14 minutes of showing time,
+//   stopping at the last (kept in memory; it starts again when the sky leaves snow, at a new launch, when night and day
+//   change over). At a depth, what was drawn for `rest` or for `snow` plays only where it leaves that frame's extra
+//   pixels alone (or "frame@thatFrame" is drawn). A `shakesOff` snow routine is drawn from the deepest pile and plays
+//   only there; from its first frame of its own on it shows the bare `snow`, and it leaves the pile at `snow` again.
+// - Heat: the still is `heat ?? rest`. The flourish plays only from the plain `rest` (never in a rain, snow or heat
+//   still). Gesture(name:, weight:, ticks:, flicker:, sky:); Mode(rest:, rain:, snow:, heat:, snowDeep:, gestures:, ...)
+//   or with `heat:` and `snowDeep:` last; Routine's `shakesOff:` before or after `weight:`.
+// - Places: `Posture(inset:)` sprite pixels further in from the host's edge; `Posture(turns: false)` keeps a turning
+//   flourish facing the same way there. A character using none of this still works: flickers and the flourish.
 // `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
 
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
@@ -53,15 +58,16 @@ enum CompanionPlace: String, CaseIterable {
 }
 
 /// How a companion is dressed for the moment: awake or asleep (22:00 to 07:00), and the weather it shelters
-/// from. Clear, cloudy and unknown skies are the ordinary pose; rain and storm are `rain`.
+/// from. Clear, cloudy and unknown skies are the ordinary pose; rain and storm are `rain`; a hot day is `heat`.
 struct CompanionLook: Hashable {
     enum Weather: String, CaseIterable {
-        case plain, rain, snow
+        case plain, rain, snow, heat
 
         init(_ sky: CompanionSky) {
             switch sky {
             case .rain, .storm: self = .rain
             case .snow: self = .snow
+            case .heat: self = .heat
             case .unknown, .clear, .clouds: self = .plain
             }
         }
@@ -71,6 +77,9 @@ struct CompanionLook: Hashable {
     var weather = Weather.plain
 
     static let day = CompanionLook()
+
+    /// Whether the weather lets the flourish play: plain, or a hot day (when the character has no heat still).
+    var flourishes: Bool { weather == .plain || weather == .heat }
 }
 
 /// A small pixel creature as data (briefs 76 and 79): frames as rows of `CompanionInk` letters, and for each place
@@ -104,6 +113,27 @@ struct CompanionCharacter: Identifiable {
         var weight = 1
         let ticks: [Tick]
         var flicker = false
+        /// The sky it belongs to (brief 91): a drip in the rain, a bead of sweat on a hot day. Nil: every sky. With
+        /// a sky it plays only under it (`.rain` also in a storm), and its frames are the weather's own, drawn whole.
+        var sky: CompanionSky?
+
+        init(name: String, weight: Int = 1, ticks: [Tick], flicker: Bool = false, sky: CompanionSky? = nil) {
+            self.name = name
+            self.weight = weight
+            self.ticks = ticks
+            self.flicker = flicker
+            self.sky = sky
+        }
+
+        /// The same, with `sky:` before `flicker:`.
+        init(name: String, weight: Int = 1, ticks: [Tick], sky: CompanionSky?, flicker: Bool) {
+            self.init(name: name, weight: weight, ticks: ticks, flicker: flicker, sky: sky)
+        }
+
+        /// The same, with `sky:` right after the name.
+        init(name: String, sky: CompanionSky?, weight: Int = 1, ticks: [Tick], flicker: Bool = false) {
+            self.init(name: name, weight: weight, ticks: ticks, flicker: flicker, sky: sky)
+        }
     }
 
     /// A few seconds of life (brief 84): four to nine small moves in quick succession with held beats between, from
@@ -133,16 +163,25 @@ struct CompanionCharacter: Identifiable {
         }
 
         let name: String
-        /// The sky it belongs to (`.rain`, `.snow`, `.storm`, `.clear`); nil for an everyday routine.
+        /// The sky it belongs to (`.rain`, `.snow`, `.storm`, `.heat`, `.clear`); nil for an everyday routine.
         var sky: CompanionSky?
         var weight = 1
+        /// Brief 91: it ends with the snow shaken off, the still frame `snow` again, the first of the pile. A snow
+        /// routine only; drawn from the deepest pile, it plays only there.
+        var shakesOff = false
         let steps: [Step]
 
-        init(name: String, sky: CompanionSky? = nil, weight: Int = 1, steps: [Step]) {
+        init(name: String, sky: CompanionSky? = nil, weight: Int = 1, shakesOff: Bool = false, steps: [Step]) {
             self.name = name
             self.sky = sky
             self.weight = weight
+            self.shakesOff = shakesOff
             self.steps = steps
+        }
+
+        /// The same, with `shakesOff:` before `weight:`.
+        init(name: String, sky: CompanionSky? = nil, shakesOff: Bool, weight: Int, steps: [Step]) {
+            self.init(name: name, sky: sky, weight: weight, shakesOff: shakesOff, steps: steps)
         }
 
         /// How many moves it makes (every step but a hold).
@@ -159,14 +198,58 @@ struct CompanionCharacter: Identifiable {
         let answer: Gesture
         /// Awake only: its routines (brief 84). Asleep a companion has none.
         var routines: [Routine] = []
+        /// Brief 91: the still frame on a hot day (nil: `rest`).
+        var heat: String?
+        /// Brief 91: snow piling up, the still frames after `snow`, shallow to deep.
+        var snowDeep: [String] = []
 
-        /// Every tick of its gestures and its answer, in order.
+        init(rest: String, rain: String? = nil, snow: String? = nil, gestures: [Gesture], answer: Gesture,
+             routines: [Routine] = [], heat: String? = nil, snowDeep: [String] = []) {
+            self.rest = rest
+            self.rain = rain
+            self.snow = snow
+            self.gestures = gestures
+            self.answer = answer
+            self.routines = routines
+            self.heat = heat
+            self.snowDeep = snowDeep
+        }
+
+        /// The same, with `heat:` (and `snowDeep:`) beside the other weather stills.
+        init(rest: String, rain: String? = nil, snow: String? = nil, heat: String?, snowDeep: [String] = [],
+             gestures: [Gesture], answer: Gesture, routines: [Routine] = []) {
+            self.init(rest: rest, rain: rain, snow: snow, gestures: gestures, answer: answer, routines: routines,
+                      heat: heat, snowDeep: snowDeep)
+        }
+
+        /// The same, with `snowDeep:` beside the other weather stills.
+        init(rest: String, rain: String? = nil, snow: String? = nil, snowDeep: [String],
+             gestures: [Gesture], answer: Gesture, routines: [Routine] = []) {
+            self.init(rest: rest, rain: rain, snow: snow, gestures: gestures, answer: answer, routines: routines,
+                      snowDeep: snowDeep)
+        }
+
+        /// Every tick of its everyday gestures and its answer, in order: what is drawn over the still frame (a
+        /// gesture with a sky is drawn whole).
         var everyTick: [Tick] {
             var out: [Tick] = []
-            for gesture in gestures { out.append(contentsOf: gesture.ticks) }
+            for gesture in gestures where gesture.sky == nil { out.append(contentsOf: gesture.ticks) }
             out.append(contentsOf: answer.ticks)
             return out
         }
+
+        /// The weather's own ticks, drawn whole: the gestures with a sky and the routines' own frames.
+        func wholeTicks(sky: CompanionSky) -> [Tick] {
+            var out: [Tick] = []
+            for gesture in gestures where gesture.sky == sky { out.append(contentsOf: gesture.ticks) }
+            for routine in routines where routine.sky == sky {
+                for entry in ticks(of: routine) where entry.whole { out.append(entry.tick) }
+            }
+            return out
+        }
+
+        /// The deepest the snow piles (0 with no `snowDeep`).
+        var deepest: Int { snowDeep.count }
 
         /// The gestures that play on their own: the ones marked `flicker`, or all of them when none is marked.
         var flickers: [Int] {
@@ -177,13 +260,15 @@ struct CompanionCharacter: Identifiable {
         func gesture(named name: String) -> Gesture? { gestures.first { $0.name == name } }
 
         /// A routine's ticks, flattened: a gesture's ticks, a hold's rest frames, its own frames. Each tick says
-        /// whether it is drawn whole (a weather routine's own frames, prop and all) rather than over the still frame.
+        /// whether it is drawn whole (a weather routine's own frames, prop and all; a gesture with a sky) rather than
+        /// over the still frame.
         func ticks(of routine: Routine) -> [(tick: Tick, whole: Bool)] {
             var out: [(tick: Tick, whole: Bool)] = []
             for step in routine.steps {
                 switch step {
                 case .gesture(let name):
-                    for tick in gesture(named: name)?.ticks ?? [] { out.append((tick, false)) }
+                    let gesture = gesture(named: name)
+                    for tick in gesture?.ticks ?? [] { out.append((tick, gesture?.sky != nil)) }
                 case .hold(let count):
                     for _ in 0..<max(0, count) { out.append((Tick(frame: rest), false)) }
                 case .frames(let ticks):
@@ -197,13 +282,28 @@ struct CompanionCharacter: Identifiable {
             return out
         }
 
-        /// The still frame for `weather`.
+        /// The still frame for `weather` (the snow's first, before any piles up).
         func base(_ weather: CompanionLook.Weather) -> String {
             switch weather {
             case .plain: rest
             case .rain: rain ?? rest
             case .snow: snow ?? rest
+            case .heat: heat ?? rest
             }
+        }
+
+        /// The still frame for `weather` with the snow `depth` frames deep (0: `snow`).
+        func still(_ weather: CompanionLook.Weather, depth: Int) -> String {
+            guard weather == .snow, depth > 0, !snowDeep.isEmpty else { return base(weather) }
+            return snowDeep[min(depth, snowDeep.count) - 1]
+        }
+
+        /// Every still frame it may show: the rest, the weather's, the pile.
+        var stills: [String] {
+            var out = [rest]
+            for frame in [rain, snow, heat] { if let frame { out.append(frame) } }
+            out.append(contentsOf: snowDeep)
+            return out
         }
     }
 
@@ -267,6 +367,9 @@ struct CompanionCharacter: Identifiable {
     let drawn: [[Run]]
     /// "frame@base" → index into `drawn`, for a gesture drawn over a weather frame.
     let composites: [String: Int]
+    /// "frame@base" for what cannot be drawn over that still: it changes pixels the still changes too, and no frame
+    /// of that name is drawn (brief 91: a gesture that would cut through a pile of snow is not played over it).
+    let undrawable: Set<String>
 
     init(id: String, name: String, width: Int, height: Int, seatRow: Int, frames: [Frame], gestureFPS: Double,
          flourishFPS: Double, flourishTurns: Bool, field: Posture, plus: Posture) {
@@ -286,28 +389,39 @@ struct CompanionCharacter: Identifiable {
         self.index = index
         var drawn = frames.map { Self.runs(of: $0.rows) }
         var composites: [String: Int] = [:]
+        var undrawable = Set<String>()
         let rows = Dictionary(frames.map { ($0.name, $0.rows) }, uniquingKeysWith: { a, _ in a })
+        // `frame`, drawn for `reference`, carried onto `base`: the pixels it changes from `reference` painted on `base`.
+        func carry(_ frame: String, from reference: String, onto base: String) {
+            let key = "\(frame)@\(base)"
+            guard composites[key] == nil, !undrawable.contains(key), frame != base, reference != base else { return }
+            // A frame of that name, drawn by hand, wins over the composite (Nod's nod in the snow).
+            if let own = index[key] { composites[key] = own; return }
+            guard let g = rows[frame], let r = rows[reference], let b = rows[base] else { return }
+            if Self.overlap(gesture: g, rest: r, base: b) > 0 { undrawable.insert(key) }
+            composites[key] = drawn.count
+            drawn.append(Self.runs(of: Self.composite(gesture: g, rest: r, base: b)))
+        }
         for posture in [field, plus] {
             for mode in [posture.awake, posture.asleep] {
-                // Everything drawn over the still frame: the gestures, the answer, and the routines' frames that
-                // are not drawn whole.
+                // Everything drawn over the still frame: the everyday gestures, the answer, and the routines' frames
+                // that are not drawn whole.
                 var over = mode.everyTick
                 for routine in mode.routines {
                     for entry in mode.ticks(of: routine) where !entry.whole { over.append(entry.tick) }
                 }
-                for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
-                    for tick in over where tick.frame != mode.rest {
-                        let key = "\(tick.frame)@\(base)"
-                        guard composites[key] == nil else { continue }
-                        // A frame of that name, drawn by hand, wins over the composite (Nod's nod in the snow).
-                        if let own = index[key] { composites[key] = own; continue }
-                        guard let g = rows[tick.frame], let r = rows[mode.rest], let b = rows[base] else { continue }
-                        composites[key] = drawn.count
-                        drawn.append(Self.runs(of: Self.composite(gesture: g, rest: r, base: b)))
-                    }
+                let stills = [mode.rain, mode.snow, mode.heat].compactMap { $0 } + mode.snowDeep
+                for base in stills where base != mode.rest {
+                    for tick in over where tick.frame != mode.rest { carry(tick.frame, from: mode.rest, onto: base) }
+                }
+                // The snow's own frames, drawn whole for the bare `snow`, carried onto each depth of the pile.
+                let snow = mode.snow ?? mode.rest
+                for base in mode.snowDeep {
+                    for tick in mode.wholeTicks(sky: .snow) where tick.frame != snow { carry(tick.frame, from: snow, onto: base) }
                 }
             }
         }
+        self.undrawable = undrawable
         self.drawn = drawn
         self.composites = composites
     }
@@ -322,17 +436,38 @@ struct CompanionCharacter: Identifiable {
     /// Whether its flourish turns it round in `place`.
     func turns(_ place: CompanionPlace) -> Bool { posture(place).turns ?? flourishTurns }
 
-    /// Whether an everyday routine can be drawn in `weather`: in plain weather always; in rain or snow when none of
-    /// its frames changes a pixel the weather's frame changes (or a "frame@weather" is drawn for it).
-    func plays(_ routine: Routine, in weather: CompanionLook.Weather, mode: Mode) -> Bool {
+    /// Whether an everyday routine can be drawn in `weather` (the snow `depth` deep): in plain weather always;
+    /// otherwise when none of its frames changes a pixel the still changes (or a "frame@still" is drawn for it).
+    func plays(_ routine: Routine, in weather: CompanionLook.Weather, mode: Mode, depth: Int = 0) -> Bool {
         guard routine.sky == nil else { return false }
-        let base = mode.base(weather)
-        guard base != mode.rest else { return true }
-        guard let r = rows(mode.rest), let b = rows(base) else { return false }
-        for entry in mode.ticks(of: routine) where entry.tick.frame != mode.rest {
-            if index["\(entry.tick.frame)@\(base)"] != nil { continue }
-            guard let g = rows(entry.tick.frame) else { return false }
-            if Self.overlap(gesture: g, rest: r, base: b) > 0 { return false }
+        return canDraw(routine, in: weather, mode: mode, depth: depth)
+    }
+
+    /// Whether every tick of a routine can be drawn in `weather` with the snow `depth` deep; a `shakesOff` routine
+    /// only from the deepest pile.
+    func canDraw(_ routine: Routine, in weather: CompanionLook.Weather, mode: Mode, depth: Int) -> Bool {
+        if routine.shakesOff, weather == .snow, min(depth, mode.deepest) != mode.deepest { return false }
+        let shaken = routine.shakesOff && weather == .snow
+        var gone = false
+        for entry in mode.ticks(of: routine) {
+            if shaken, entry.whole { gone = true }
+            let at = shaken ? (gone ? 0 : depth) : depth
+            if shaken, entry.whole {
+                if index[entry.tick.frame] == nil { return false }
+                continue
+            }
+            if draw(entry.tick, whole: entry.whole, sky: routine.sky, mode: mode, weather: weather, depth: at) == nil {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Whether every tick of a gesture can be drawn in `weather` with the snow `depth` deep.
+    func canDraw(_ gesture: Gesture, in weather: CompanionLook.Weather, mode: Mode, depth: Int) -> Bool {
+        for tick in gesture.ticks {
+            let whole = gesture.sky != nil
+            if draw(tick, whole: whole, sky: gesture.sky, mode: mode, weather: weather, depth: depth) == nil { return false }
         }
         return true
     }
@@ -342,6 +477,7 @@ struct CompanionCharacter: Identifiable {
         switch routine.sky {
         case .rain?, .storm?: mode.rain ?? mode.rest
         case .snow?: mode.snow ?? mode.rest
+        case .heat?: mode.heat ?? mode.rest
         default: mode.rest
         }
     }
@@ -355,6 +491,29 @@ struct CompanionCharacter: Identifiable {
     func drawnIndex(_ frame: String, over base: String? = nil, rest: String? = nil) -> Int {
         if let base, base != rest, base != frame, let i = composites["\(frame)@\(base)"] { return i }
         return index[frame] ?? 0
+    }
+
+    /// `frame`, drawn for the still `reference`, shown over the still `base`: itself when they are the same, the
+    /// composite (or a frame drawn by hand for it), or nil when it would cut through what `base` adds.
+    func carried(_ frame: String, from reference: String, onto base: String) -> Int? {
+        if base == reference || base == frame { return index[frame] }
+        let key = "\(frame)@\(base)"
+        guard !undrawable.contains(key) else { return nil }
+        return composites[key] ?? index[frame]
+    }
+
+    /// What a tick shows in `mode` under `weather` with the snow `depth` deep: the still frame for a hold, a whole
+    /// frame of the weather's own (carried onto the pile when it is snow's), else the frame over the still. Nil when
+    /// it cannot be drawn there.
+    func draw(_ tick: Tick, whole: Bool, sky: CompanionSky?, mode: Mode, weather: CompanionLook.Weather,
+              depth: Int) -> Int? {
+        let still = mode.still(weather, depth: depth)
+        if tick.frame == mode.rest { return index[still] }
+        if whole {
+            guard sky == .snow, weather == .snow else { return index[tick.frame] }
+            return carried(tick.frame, from: mode.snow ?? mode.rest, onto: still)
+        }
+        return carried(tick.frame, from: mode.rest, onto: still)
     }
 
     /// The rows of a frame by name.
@@ -448,7 +607,23 @@ struct CompanionCharacter: Identifiable {
                 exists(mode.rest, at)
                 exists(mode.rain, "\(at) rain")
                 exists(mode.snow, "\(at) snow")
+                exists(mode.heat, "\(at) heat")
+                for deep in mode.snowDeep { exists(deep, "\(at) snowDeep") }
+                // A pile of snow sits on top: the line where it meets the field or the "+" is the snow frame's.
+                if let snow = rows(mode.snow ?? mode.rest) {
+                    for deep in mode.snowDeep {
+                        guard let pile = rows(deep), pile.count == snow.count else { continue }
+                        if pile[(seatRow - 1)...] != snow[(seatRow - 1)...] {
+                            out.append("\(id) \(at): \(deep) changes the line where it sits")
+                        }
+                    }
+                }
                 if mode.gestures.isEmpty { out.append("\(id) \(at): no gestures") }
+                for gesture in mode.gestures {
+                    if let sky = gesture.sky, ![.rain, .snow, .storm, .heat, .clear].contains(sky) {
+                        out.append("\(id) \(at) \(gesture.name): no gesture belongs to a \(sky.rawValue) sky")
+                    }
+                }
                 for gesture in mode.gestures + [mode.answer] {
                     for tick in gesture.ticks { exists(tick.frame, "\(at) \(gesture.name)") }
                     if gesture.ticks.isEmpty { out.append("\(id) \(at) \(gesture.name): no ticks") }
@@ -463,9 +638,9 @@ struct CompanionCharacter: Identifiable {
                 }
                 // A gesture drawn over a weather frame only takes the pixels it changes: they must not be pixels the
                 // weather changes too, or the prop would be cut through.
-                for base in [mode.rain, mode.snow].compactMap({ $0 }) where base != mode.rest {
+                for base in [mode.rain, mode.snow, mode.heat].compactMap({ $0 }) where base != mode.rest {
                     guard let r = rows(mode.rest), let b = rows(base) else { continue }
-                    for tick in mode.everyTick where index["\(tick.frame)@\(base)"] == nil {
+                    for tick in mode.everyTick where index["\(tick.frame)@\(base)"] == nil && tick.frame != mode.rest {
                         guard let g = rows(tick.frame) else { continue }
                         if Self.overlap(gesture: g, rest: r, base: b) > 0 {
                             out.append("\(id) \(at): \(tick.frame) changes pixels that \(base) changes")
@@ -492,9 +667,8 @@ struct CompanionCharacter: Identifiable {
         for place in CompanionPlace.allCases {
             let posture = posture(place)
             for mode in [posture.awake, posture.asleep] {
-                used.insert(mode.rest)
-                if let rain = mode.rain { used.insert(rain) }
-                if let snow = mode.snow { used.insert(snow) }
+                for still in mode.stills { used.insert(still) }
+                for gesture in mode.gestures { for tick in gesture.ticks { used.insert(tick.frame) } }
                 for tick in mode.everyTick { used.insert(tick.frame) }
                 for routine in mode.routines {
                     for entry in mode.ticks(of: routine) { used.insert(entry.tick.frame) }
@@ -524,8 +698,14 @@ struct CompanionCharacter: Identifiable {
         for routine in mode.routines {
             let at = "\(place) routine \(routine.name)"
             if !names.insert(routine.name).inserted { out.append("\(place): two routines named \(routine.name)") }
-            if let sky = routine.sky, ![.rain, .snow, .storm, .clear].contains(sky) {
+            if let sky = routine.sky, ![.rain, .snow, .storm, .heat, .clear].contains(sky) {
                 out.append("\(at): no routine belongs to a \(sky.rawValue) sky")
+            }
+            if routine.shakesOff {
+                if routine.sky != .snow { out.append("\(at): shakesOff on a routine that isn't the snow's") }
+                if !mode.ticks(of: routine).contains(where: \.whole) {
+                    out.append("\(at): shakesOff with no frame of its own to shake the snow off in")
+                }
             }
             if routine.weight < 1 { out.append("\(at): weight \(routine.weight)") }
             for step in routine.steps {
@@ -552,8 +732,10 @@ struct CompanionCharacter: Identifiable {
             }
             let ticks = mode.ticks(of: routine)
             let base = routineBase(routine, mode: mode)
-            for entry in [ticks.first, ticks.last].compactMap({ $0 }) where entry.tick.frame != mode.rest {
-                let reference = entry.whole ? base : mode.rest
+            for (k, entry) in [ticks.first, ticks.last].compactMap({ $0 }).enumerated() where entry.tick.frame != mode.rest {
+                // A shake-off starts from the deepest pile and ends on the bare snow.
+                let deep = routine.shakesOff && k == 0 ? mode.still(.snow, depth: mode.deepest) : base
+                let reference = entry.whole ? deep : mode.rest
                 let change = difference(entry.tick.frame, reference)
                 if change > Self.routineEdge { out.append("\(at): starts or ends \(change) pixels from \(reference)") }
             }

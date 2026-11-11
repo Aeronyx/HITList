@@ -2,15 +2,28 @@ import XCTest
 import SwiftUI
 @testable import HITList
 
-/// Brief 80: the Weather row's words in Extras, and that the section still draws with it on both platforms.
+/// Briefs 80 and 83: the Weather row's words in Extras, the system question's words, and that the section still draws with it on both platforms.
 @MainActor
 final class WeatherSettingsTests: XCTestCase {
     func testTheRowSaysWhatItDoesOrWhyItCant() {
-        XCTAssertEqual(WeatherSettingsText.subtitle(for: .notDetermined), "Your companion dresses for the weather where you are.")
+        XCTAssertEqual(WeatherSettingsText.subtitle(for: .notDetermined),
+                       "Your companion dresses for the weather and keeps the hours of where you are.")
         XCTAssertEqual(WeatherSettingsText.subtitle(for: .allowed), WeatherSettingsText.about)
-        XCTAssertTrue(WeatherSettingsText.subtitle(for: .denied).contains("isn't allowed to use your location"))
-        XCTAssertTrue(WeatherSettingsText.subtitle(for: .restricted).contains("restricted"))
+        XCTAssertEqual(WeatherSettingsText.subtitle(for: .denied),
+                       "HITList isn't allowed to use your location, so your companion keeps this device's hours, without weather. Allow it below.")
+        XCTAssertEqual(WeatherSettingsText.subtitle(for: .restricted),
+                       "Location is restricted on this device, so your companion keeps its hours, without weather.")
         XCTAssertEqual(WeatherSettingsText.settingsPath, "Privacy & Security → Location Services → HITList")
+    }
+
+    /// Brief 83: the system's question says what the location is for, on both platforms (one Info.plist).
+    func testTheQuestionsWordsAreTrue() {
+        XCTAssertEqual(WeatherSettingsText.purpose,
+                       "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. It is never stored or shared.")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") as? String,
+                       WeatherSettingsText.purpose)
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSLocationDefaultAccuracyReduced") as? Bool, true,
+                       "approximate only")
     }
 
     func testTheFallbackCreditIsApplesNameAndLegalPage() {

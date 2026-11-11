@@ -28,7 +28,7 @@ extension View {
 private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     let viewOptions: () -> Options
     let menu: () -> Items
-    @State private var showSettings = false
+    @State private var settingsRequest: SettingsSheetRequest?
     #if os(iOS)
     @Environment(\.mobileChrome) private var mobileChrome
     #endif
@@ -39,9 +39,18 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     /// Settings: a sheet on iPhone and iPad, the Settings page in this window's detail column on the Mac.
     private func openAppSettings() {
         #if os(iOS)
-        showSettings = true
+        settingsRequest = SettingsSheetRequest()
         #else
         settingsRouter?.open()
+        #endif
+    }
+
+    /// The sync bolt's way in: Settings at iCloud (the sync state, the log, what to do when something doesn't sync).
+    private func openSyncSettings() {
+        #if os(iOS)
+        settingsRequest = SettingsSheetRequest(page: .iCloud)
+        #else
+        settingsRouter?.open(at: .iCloud)
         #endif
     }
 
@@ -71,10 +80,10 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 // The bolt stands apart from the controls: on iOS 26 / macOS 26 that means outside the
                 // toolbar's shared glass; before, toolbar items have no shared background anyway.
                 if #available(iOS 26, macOS 26, *) {
-                    ToolbarItem(placement: trailing) { SyncBolt(action: openAppSettings) }
+                    ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
                         .sharedBackgroundVisibility(.hidden)
                 } else {
-                    ToolbarItem(placement: trailing) { SyncBolt(action: openAppSettings) }
+                    ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
                 }
                 #if os(iOS)
                 ToolbarItemGroup(placement: trailing) {
@@ -104,7 +113,7 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 #endif
             }
             #if os(iOS)
-            .sheet(isPresented: $showSettings) { SettingsView().slateSheet() }
+            .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
             #endif
     }
 }

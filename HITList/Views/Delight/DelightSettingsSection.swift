@@ -6,9 +6,11 @@ import HITListCore
 import UIKit
 #endif
 
-/// Settings → Extras (George, 2026-11-05: "Delight" is called "Extras"): completion sound, haptics, holiday
-/// touches and rare surprises, a `HITGroup` for SettingsView's page and the Mac page's Extras section.
-/// The sound row opens a compact list of sounds, each with a ▶ that plays it without choosing it.
+/// Settings → Extras (George, 2026-11-05: "Delight" is called "Extras"), in three small groups (brief 86): completing
+/// a task (the sound, your own sound, haptics), companions (Companions, then Weather with Apple's attribution) and
+/// effects (the sync bolt, holiday touches, rare surprises, the creaky hinge on a Duo). The iPhone's Extras page and
+/// the Mac page's Extras section. The sound row opens a compact list of sounds, each with a ▶ that plays it without
+/// choosing it.
 struct DelightSettingsSection: View {
     @AppStorage(CompletionFeedback.hapticsKey, store: AppGroup.defaults) private var haptics = true
     @AppStorage(Preferences.holidayTouches, store: AppGroup.defaults) private var holidayTouches = true
@@ -38,7 +40,7 @@ struct DelightSettingsSection: View {
     }
 
     var body: some View {
-        HITGroup("Extras", footer: footer) {
+        HITGroup(Self.completingTitle, footer: Self.completingFooter) {
             HITMenuRow("Completion sound", systemImage: "speaker.wave.2", value: sound.displayName,
                        accessory: .expand(isExpanded: showingSounds)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showingSounds.toggle() }
@@ -56,17 +58,6 @@ struct DelightSettingsSection: View {
             Toggle(isOn: $haptics) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }
                 .toggleStyle(.hit)
                 .hitRowPadding()
-            BoltStyleRow()
-            holidayTouchesRow
-            Toggle(isOn: $rareSurprises) { HITMenuRowLabel("Rare surprises", systemImage: "moon.stars") }
-                .toggleStyle(.hit)
-                .hitRowPadding()
-            Toggle(isOn: $companions) { HITMenuRowLabel("Companions", systemImage: "pawprint") }
-                .toggleStyle(.hit)
-                .hitRowPadding()
-                .accessibilityIdentifier("companionsToggle")
-            WeatherSettingsRows(companionsOn: companions)
-            HingeCreakSettingsRow()
         }
         .onChange(of: sound) { _, new in CompletionSound.select(new, in: AppGroup.defaults) }
         .fileImporter(isPresented: $isImporting, allowedContentTypes: Self.audioTypes) { result in
@@ -80,22 +71,52 @@ struct DelightSettingsSection: View {
         } message: {
             Text(importError ?? "")
         }
+
+        HITGroup(Self.companionsTitle, footer: Self.companionsFooter) {
+            Toggle(isOn: $companions) {
+                // "Show companions": the group's header already says Companions.
+                HITMenuRowLabel("Show companions", subtitle: Self.companionsSubtitle, systemImage: "pawprint")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            .accessibilityIdentifier("companionsToggle")
+            WeatherSettingsRows(companionsOn: companions)
+        }
+
+        HITGroup(Self.effectsTitle, footer: Self.effectsFooter) {
+            BoltStyleRow()
+            holidayTouchesRow
+            Toggle(isOn: $rareSurprises) {
+                HITMenuRowLabel("Rare surprises", subtitle: Self.rareSurprisesSubtitle, systemImage: "moon.stars")
+            }
+            .toggleStyle(.hit)
+            .hitRowPadding()
+            HingeCreakSettingsRow()
+        }
     }
 
+    static let completingTitle = "Completing a task"
+    static let companionsTitle = "Companions"
+    static let effectsTitle = "Effects"
+
     #if os(iOS)
-    private let footer = "Your own sound can be up to 2 seconds long. Sounds follow the silent switch and never pause your music. " + Self.holidayFooter
+    static let completingFooter = "Your own sound can be up to 2 seconds long. Sounds follow the silent switch and never pause your music."
+    static let companionsSubtitle = "One for each theme, by the +"
     #else
-    private let footer = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad. " + Self.holidayFooter
+    static let completingFooter = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad."
+    static let companionsSubtitle = "One for each theme, on the search field"
     #endif
-    private static let holidayFooter = "Holiday touches: snow dust around Christmas, fireworks on July 4th and New Year, hearts, leaves, bats and more around the holidays. Rare surprises: once in a long while, someone drops by. Reduce Motion turns both off. " + companionsFooter
-    private static let companionsFooter = "Companions: a small creature keeps you company, one for each theme, by the search field on the Mac and by the + on iPhone and iPad. Mostly it sits still, and it sleeps at night. Reduce Motion keeps it still."
+    static let companionsFooter = "A small creature keeps you company. Mostly it sits still, and it sleeps at night; Reduce Motion keeps it still."
+    static let holidaySubtitle = "Snow, fireworks, hearts and more"
+    static let rareSurprisesSubtitle = "Once in a long while, someone drops by"
+    static let effectsFooter = "Reduce Motion turns off holiday touches and rare surprises."
 
     /// Holiday touches, with today's holiday (if any) as its icon and subtitle, so the row shows what it does.
     private var holidayTouchesRow: some View {
         let today = HolidayDelight.holiday(at: .now)
         return Toggle(isOn: $holidayTouches) {
             HITMenuRowLabel("Holiday touches",
-                            subtitle: today.map { "On now: \($0.displayName)" },
+                            subtitle: today.map { "On now: \($0.displayName)" } ?? Self.holidaySubtitle,
                             systemImage: today.map(HolidayAccent.symbol(for:)) ?? "sparkles",
                             iconTint: today.map(HolidayAccent.tint(for:)) ?? Theme.secondaryText)
         }
@@ -258,8 +279,8 @@ private struct WeatherAttributionRow: View {
                 .accessibilityIdentifier("settings-weather-sources")
             Spacer(minLength: 0)
         }
-        // Lined up with the row titles above it (the icon column is 22 pt wide).
-        .padding(.leading, HITSpacing.l + 22 + HITSpacing.m)
+        // Lined up with the row titles above it.
+        .padding(.leading, HITSpacing.l + HITRowMetrics.titleInset)
         .padding(.trailing, HITSpacing.l)
         .padding(.vertical, HITSpacing.s)
         .accessibilityElement(children: .contain)

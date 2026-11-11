@@ -115,6 +115,7 @@ every theme. Every text/surface pair passes WCAG AA (`ThemeTests`).
 | Colour choice | `HITColorDots(selection: $hex)` |
 | A day (due date, deadline) | `HITCalendar` (never the system `DatePicker`) |
 | An editor sheet | `HITSheetChrome` with `HITSection`s inside |
+| A sheet whose pages open inside it (iPhone and iPad Settings) | `HITSheetPages`: the first screen under the bar, a page pushed in on `enter`/`exit` with "‹ back" in the bar, the edge swipe, Esc; never a second sheet |
 | Settings-style lists | `HITGroup` of `HITMenuRow`s |
 
 All of them: hover state on macOS, 35% opacity when `.disabled`, Reduce Motion respected.
@@ -158,6 +159,13 @@ HITSheetChrome("New Project", isPrimaryEnabled: !name.isEmpty, onPrimary: save) 
     HITSection("Colour") { HITColorDots(selection: $colorHex) }
 }
 // cancelTitle: nil gives a Done-only sheet; background: Theme.background for a page of groups.
+
+// A sheet with pages (brief 86): any view inside opens one with @Environment(\.hitPages) var pages; pages(page).
+HITSheetPages("Settings", path: $path, title: \.title, onPrimary: { dismiss() }) {
+    HITGroup { HITMenuRow("General", systemImage: "gearshape") { path.append(.general) } }
+} destination: { page in
+    SettingsPageContent(page: page)
+}
 
 // Settings-style rows
 HITGroup("Reminders", footer: "Only tasks with a time get a notification.") {

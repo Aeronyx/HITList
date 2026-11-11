@@ -100,12 +100,50 @@ final class CompanionClockTests: XCTestCase {
             id: "dancer", name: "Dancer", width: 4, height: 4, seatRow: 3, frames: routineFrames, gestureFPS: 8,
             flourishFPS: 9, flourishTurns: false, field: dancerPosture, plus: dancerPosture)
 
-        static let all: [CompanionCharacter] = [stayer, turner, dancer]
+        // Brief 91: one the weather shows on. A heat still; snow that piles two frames deeper (the deepest covers
+        // its eye, so a blink can't be drawn there); a drip in the rain and a pant in the heat, both flickers; a
+        // shake-off drawn from the deepest pile; a heat routine.
+        static let weatherFrames: [CompanionCharacter.Frame] = frames + routineFrames.filter { $0.name == "lean" } + [
+            .init(name: "hot", rows: ["....", "kmml", "mmld", "d..d"]),
+            .init(name: "snow2", rows: [".lll", "kmml", "mlld", "d..d"]),
+            .init(name: "snow3", rows: ["llll", "lmml", "mlld", "d..d"]),
+            .init(name: "drop", rows: ["llll", "kmml", "mlld", "dl.d"]),
+            .init(name: "pant", rows: ["....", "kmml", "mmld", "dk.d"]),
+            .init(name: "shake1", rows: [".lll", "lmml", "mlld", "d..d"]),
+            .init(name: "shake2", rows: ["....", "kmml", "mlld", "d..d"]),
+            .init(name: "fan", rows: ["....", "kmml", "mmlm", "d..d"]),
+        ]
+        static let weatheredAwake: CompanionCharacter.Mode = CompanionCharacter.Mode(
+            rest: "rest", rain: "rain", snow: "snow", heat: "hot", snowDeep: ["snow2", "snow3"],
+            gestures: [
+                .init(name: "blink", weight: 2, ticks: CompanionCharacter.ticks(("blink", 2)), flicker: true),
+                .init(name: "wag", ticks: CompanionCharacter.ticks(("wag", 3)), flicker: true),
+                .init(name: "drip", ticks: CompanionCharacter.ticks(("drop", 2)), sky: .rain, flicker: true),
+                .init(name: "pant", sky: .heat, ticks: CompanionCharacter.ticks(("pant", 2)), flicker: true),
+                .init(name: "both", ticks: CompanionCharacter.ticks(("both", 2))),
+            ],
+            answer: .init(name: "look", ticks: CompanionCharacter.ticks(("blink", 4))),
+            routines: [
+                routines[0],
+                Routine(name: "shake", sky: .snow, shakesOff: true, steps: [
+                    .hold(3), .play(("shake1", 2)), .play(("shake2", 2)), .hold(3), .gesture("blink"), .hold(4),
+                    .gesture("wag"), .hold(6)]),
+                Routine(name: "fan", sky: .heat, steps: [
+                    .play(("fan", 3)), .hold(2), .play(("fan", 3)), .hold(2), .gesture("pant"), .hold(4),
+                    .gesture("blink"), .hold(8)]),
+            ])
+        static let weatheredPosture = CompanionCharacter.Posture(
+            awake: weatheredAwake, asleep: asleep, flourish: CompanionCharacter.ticks(("rest", 1), ("hop", 10), ("rest", 1)))
+        static let weathered: CompanionCharacter = CompanionCharacter(
+            id: "weathered", name: "Weathered", width: 4, height: 4, seatRow: 3, frames: weatherFrames, gestureFPS: 8,
+            flourishFPS: 9, flourishTurns: false, field: weatheredPosture, plus: weatheredPosture)
+
+        static let all: [CompanionCharacter] = [stayer, turner, dancer, weathered]
     }
 
     private func stage(_ act: CompanionAct? = nil, look: CompanionLook = .day, turned: Bool = false,
-                       place: CompanionPlace = .field, sky: CompanionSky = .unknown) -> CompanionStage {
-        CompanionStage(since: t0, place: place, look: look, turned: turned, act: act, sky: sky)
+                       place: CompanionPlace = .field, sky: CompanionSky = .unknown, depth: Int = 0) -> CompanionStage {
+        CompanionStage(since: t0, place: place, look: look, turned: turned, act: act, sky: sky, snowDepth: depth)
     }
 
     func testTheTestCastIsGoodData() {
@@ -432,6 +470,102 @@ final class CompanionClockTests: XCTestCase {
         }
     }
 
+    // MARK: - The weather on the creature (brief 91)
+
+    func testTheContractReadsInEveryOrder() {
+        typealias C = CompanionCharacter
+        let ticks = C.ticks(("blink", 2))
+        let a = C.Gesture(name: "a", weight: 2, ticks: ticks, flicker: true, sky: .rain)
+        let b = C.Gesture(name: "b", ticks: ticks, sky: .heat, flicker: true)
+        let c = C.Gesture(name: "c", sky: .snow, ticks: ticks)
+        XCTAssertEqual([a.sky, b.sky, c.sky], [.rain, .heat, .snow])
+        XCTAssertEqual([a.flicker, b.flicker, c.flicker], [true, true, false])
+        XCTAssertNil(C.Gesture(name: "d", ticks: ticks).sky, "nil: every sky")
+        let r1 = C.Routine(name: "r1", sky: .snow, shakesOff: true, steps: [.hold(1)])
+        let r2 = C.Routine(name: "r2", sky: .snow, shakesOff: true, weight: 2, steps: [.hold(1)])
+        let r3 = C.Routine(name: "r3", sky: .heat, weight: 2, steps: [.hold(1)])
+        XCTAssertEqual([r1.shakesOff, r2.shakesOff, r3.shakesOff], [true, true, false])
+        XCTAssertEqual(r2.weight, 2)
+        let m1 = C.Mode(rest: "rest", snow: "snow", gestures: [a], answer: a, routines: [r1], heat: "hot", snowDeep: ["s2"])
+        let m2 = C.Mode(rest: "rest", snow: "snow", heat: "hot", snowDeep: ["s2"], gestures: [a], answer: a)
+        let m3 = C.Mode(rest: "rest", snow: "snow", snowDeep: ["s2"], gestures: [a], answer: a)
+        let m4 = C.Mode(rest: "rest", gestures: [a], answer: a)
+        XCTAssertEqual([m1.heat, m2.heat, m3.heat, m4.heat], ["hot", "hot", nil, nil])
+        XCTAssertEqual([m1.snowDeep, m2.snowDeep, m3.snowDeep, m4.snowDeep], [["s2"], ["s2"], ["s2"], []])
+        XCTAssertEqual(CompanionLook.Weather(.heat), .heat)
+        XCTAssertEqual(m1.still(.heat, depth: 0), "hot")
+        XCTAssertEqual(m4.still(.heat, depth: 0), "rest", "no heat still: the rest")
+        XCTAssertEqual(m1.still(.snow, depth: 0), "snow")
+        XCTAssertEqual(m1.still(.snow, depth: 5), "s2", "the pile stops at its last")
+        XCTAssertEqual(m4.still(.snow, depth: 2), "rest")
+    }
+
+    func testAShakeOffShowsTheBareSnowFromItsFirstFrameOfItsOwn() {
+        let character = TestCast.weathered
+        let c = CompanionClock(character: character)
+        let snowy = CompanionLook(asleep: false, weather: .snow)
+        let mode = character.field.awake
+        // At the deepest pile the shake can play; it can't at the bare snow or half way.
+        XCTAssertTrue(character.canDraw(mode.routines[1], in: .snow, mode: mode, depth: 2))
+        XCTAssertFalse(character.canDraw(mode.routines[1], in: .snow, mode: mode, depth: 1))
+        XCTAssertFalse(character.canDraw(mode.routines[1], in: .snow, mode: mode, depth: 0))
+        let s = stage(CompanionAct(kind: .routine(1), start: at(10)), look: snowy, sky: .snow, depth: 2)
+        func frame(_ tick: Double) -> String {
+            let pose = c.pose(at: at(10 + (tick + 0.5) / 8), stage: s)
+            return character.frames.indices.contains(pose.frame) ? character.frames[pose.frame].name : "composite"
+        }
+        XCTAssertEqual(frame(0), "snow3", "held at the deepest pile")
+        XCTAssertEqual(frame(3), "shake1")
+        XCTAssertEqual(frame(5), "shake2")
+        XCTAssertEqual(frame(7), "snow", "then the bare snow")
+        XCTAssertEqual(character.drawn[c.pose(at: at(10 + 10.5 / 8), stage: s).frame],
+                       CompanionCharacter.runs(of: [".l.l", "mmml", "mlld", "d..d"]), "its blink over the bare snow")
+        let end = c.end(of: s.act!, stage: s)
+        XCTAssertEqual(c.snowDepth(at: end, stage: s), 0, "shaken off")
+        XCTAssertEqual(c.restPose(at: end, stage: s).frame, character.index["snow"], "no flash of the old pile at its end")
+        // At the deepest pile a blink would cut through the snow on its eye: not drawn there; one frame less deep it is.
+        let deep = stage(look: snowy, sky: .snow, depth: 2)
+        XCTAssertFalse(c.canDraw(.gesture(0), stage: deep))
+        XCTAssertTrue(c.canDraw(.gesture(1), stage: deep), "the wag leaves the pile alone")
+        XCTAssertTrue(c.canDraw(.gesture(0), stage: stage(look: snowy, sky: .snow, depth: 1)))
+        XCTAssertEqual(c.restPose(at: t0, stage: deep).frame, character.index["snow3"])
+    }
+
+    func testTheWeathersOwnGesturesAreDrawnWhole() {
+        let character = TestCast.weathered
+        let c = CompanionClock(character: character)
+        let rainy = stage(CompanionAct(kind: .gesture(2), start: at(10)), look: .init(asleep: false, weather: .rain), sky: .rain)
+        XCTAssertEqual(c.pose(at: at(10.05), stage: rainy).frame, character.index["drop"], "the drip, prop and all")
+        let hot = stage(CompanionAct(kind: .gesture(0), start: at(10)), look: .init(asleep: false, weather: .heat), sky: .heat)
+        XCTAssertEqual(c.restPose(at: at(5), stage: hot).frame, character.index["hot"], "the heat still")
+        XCTAssertEqual(character.drawn[c.pose(at: at(10.05), stage: hot).frame],
+                       CompanionCharacter.runs(of: ["....", "mmml", "mmld", "d..d"]), "a blink over the heat still")
+    }
+
+    func testTheChecksCatchBadWeather() {
+        typealias C = CompanionCharacter
+        let blink = C.Gesture(name: "blink", ticks: C.ticks(("blink", 2)), flicker: true)
+        let cloudy = C.Gesture(name: "cloudy", ticks: C.ticks(("blink", 2)), flicker: true, sky: .clouds)
+        let shake = C.Routine(name: "dry", sky: .rain, shakesOff: true, steps: [.gesture("blink"), .hold(10), .gesture("blink"),
+                                                                                .hold(10), .gesture("blink"), .hold(4), .gesture("blink")])
+        let awake = C.Mode(rest: "rest", snow: "snow", heat: "nowhere", snowDeep: ["sunk"], gestures: [blink, cloudy],
+                           answer: blink, routines: [shake])
+        let asleep = C.Mode(rest: "rest", gestures: [blink], answer: blink)
+        let posture = C.Posture(awake: awake, asleep: asleep, flourish: C.ticks(("rest", 1), ("blink", 10), ("rest", 1)))
+        let rows = ["mmmmmmmm", "mlllllll", "mlklkllm", "mmmmmmmm", "dddddddd"]
+        let bad = C(id: "bad", name: "Bad", width: 8, height: 5, seatRow: 4,
+                    frames: [.init(name: "rest", rows: rows),
+                             .init(name: "blink", rows: rows.enumerated().map { $0.offset == 2 ? "mlmlmllm" : $0.element }),
+                             .init(name: "snow", rows: rows.enumerated().map { $0.offset == 0 ? "llllllll" : $0.element }),
+                             .init(name: "sunk", rows: rows.enumerated().map { $0.offset == 3 ? "llllllll" : $0.element })],
+                    gestureFPS: 8, flourishFPS: 9, flourishTurns: false, field: posture, plus: posture)
+        let problems = bad.problems.joined(separator: "\n")
+        for expected in ["heat: no frame nowhere", "sunk changes the line where it sits", "no gesture belongs to a clouds sky",
+                         "shakesOff on a routine that isn't the snow's", "shakesOff with no frame of its own"] {
+            XCTAssertTrue(problems.contains(expected), "missing: \(expected)\n\(problems)")
+        }
+    }
+
     func testTheDebugArguments() {
         XCTAssertEqual(CompanionLaunchOptions(arguments: ["app"]), .none)
         XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionHour", "23"]).hour, 23)
@@ -445,6 +579,8 @@ final class CompanionClockTests: XCTestCase {
         XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "routine"]).play, .routines)
         XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionPlay", "routine:shakeOff"]).play,
                        .routine("shakeOff"))
+        XCTAssertEqual(CompanionLaunchOptions(arguments: ["app", "-companionSnowDepth", "2"]).snowDepth, 2)
+        XCTAssertNil(CompanionLaunchOptions(arguments: ["app"]).snowDepth)
     }
 
     func testATapPlaysARoutineBetweenFlourishes() {

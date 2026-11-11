@@ -546,6 +546,172 @@ final class CompanionDirectorTests: XCTestCase {
                        "the gestures, the routines it may play in the rain, the reply")
     }
 
+    // MARK: - The weather on the creature (brief 91)
+
+    /// Fires until the snow has piled at least a frame deep on the weathered one; when.
+    private func untilItPiles(_ d: CompanionDirector) -> Date {
+        var steps = 0
+        while let next = d.nextMoment, steps < 5_000 {
+            steps += 1
+            d.fire(now: next)
+            if d.stages["weathered"]!.snowDepth > 0 { return next }
+        }
+        XCTFail("it never piled")
+        return .distantFuture
+    }
+
+    /// An hour or two in the snow: the pile grows one frame every 8 to 14 minutes of showing time and stops at its
+    /// last; a shake-off (only from the deepest) leaves it bare and it starts again. It keeps across a change of screen
+    /// (the "+" goes away while a card is open), and starts again when the sky leaves snow, at night and at a new launch.
+    func testASnowyHour() {
+        let d = director(seed: 7, sky: .snow)
+        d.appear("weathered", place: .field, still: false, calm: false, now: time(9))
+        XCTAssertEqual(d.stages["weathered"]?.snowDepth, 0)
+        var t = time(9)
+        var depths: [(Date, Int)] = [(t, 0)]
+        var shakes: [CompanionAct] = []
+        var steps = 0
+        while let next = d.nextMoment, next < time(13), steps < 20_000 {
+            steps += 1
+            d.fire(now: next)
+            t = next
+            let stage = d.stages["weathered"]!
+            if let act = stage.act, act.start == next, case .routine(let i) = act.kind,
+               Cast.weathered.field.awake.routines[i].shakesOff { shakes.append(act) }
+            if depths.last!.1 != stage.snowDepth { depths.append((next, stage.snowDepth)) }
+            if case .gesture(0)? = stage.act?.kind, stage.act?.start == next {
+                XCTAssertLessThan(stage.snowDepth, 2, "no blink through the snow on its eye")
+            }
+        }
+        XCTAssertFalse(shakes.isEmpty, "it shakes the snow off")
+        for (a, b) in zip(depths, depths.dropFirst()) {
+            if b.1 == a.1 + 1 {
+                let gap = b.0.timeIntervalSince(a.0)
+                XCTAssertTrue((480 - 1...840 + 8).contains(gap), "one frame deeper after 8 to 14 minutes: \(gap)")
+            } else {
+                XCTAssertEqual(b.1, 0, "only a shake-off makes it shallower")
+                XCTAssertEqual(a.1, 2, "and only from the deepest pile")
+            }
+        }
+        XCTAssertTrue(depths.contains { $0.1 == 2 }, "it piles to its last frame")
+        print("Companion snow: \(depths.map { "\($0.1)" }.joined(separator: " → ")) with \(shakes.count) shake-offs in four hours")
+
+        // The "+" goes and comes back (a card opened): the pile stays.
+        let kept = director(seed: 8, launch: CompanionLaunchOptions(arguments: ["-companionSnowDepth", "2"]), sky: .snow)
+        kept.appear("weathered", place: .plus, still: false, calm: false, now: time(9))
+        XCTAssertEqual(kept.stages["weathered"]?.snowDepth, 2, "-companionSnowDepth 2")
+        let grown = director(seed: 8, sky: .snow)
+        grown.appear("weathered", place: .plus, still: false, calm: false, now: time(9))
+        let piled = untilItPiles(grown)
+        let depth = grown.stages["weathered"]!.snowDepth
+        XCTAssertGreaterThan(depth, 0)
+        grown.disappear("weathered", now: piled)
+        grown.appear("weathered", place: .plus, still: false, calm: false, now: piled.addingTimeInterval(60))
+        XCTAssertEqual(grown.stages["weathered"]?.snowDepth, depth, "kept across a change of screen")
+        // Night falls while nobody looks: the pile starts again.
+        grown.setAppActive(false, now: time(22, 30))
+        XCTAssertEqual(grown.stages["weathered"]?.snowDepth, 0)
+        // A new launch starts bare.
+        let relaunched = director(seed: 9, sky: .snow)
+        relaunched.appear("weathered", place: .plus, still: false, calm: false, now: time(9, 40))
+        XCTAssertEqual(relaunched.stages["weathered"]?.snowDepth, 0)
+        // Reduce Motion: the pile doesn't grow (nothing changes by itself).
+        let still = director(sky: .snow)
+        still.appear("weathered", place: .plus, still: true, calm: false, now: time(9))
+        XCTAssertFalse(still.isWaiting)
+    }
+
+    func testTheSkyLeavingSnowStartsThePileAgain() {
+        var sky = CompanionSky.snow
+        let d = CompanionDirector(seed: 4, launch: .none, observeSystem: false, cast: Cast.all, defaults: freshDefaults(),
+                                  zone: { TimeZone(identifier: "UTC")! }, sky: { sky })
+        d.appear("weathered", place: .field, still: false, calm: false, now: time(9))
+        let piled = untilItPiles(d)
+        XCTAssertGreaterThan(d.stages["weathered"]!.snowDepth, 0)
+        XCTAssertLessThan(piled, time(10))
+        d.setAppActive(false, now: time(10))
+        sky = .clouds
+        d.setAppActive(true, now: time(10, 5))
+        XCTAssertEqual(d.stages["weathered"]?.snowDepth, 0)
+        XCTAssertEqual(d.stages["weathered"]?.look.weather, .plain)
+        d.setAppActive(false, now: time(10, 10))
+        sky = .snow
+        d.setAppActive(true, now: time(10, 15))
+        XCTAssertEqual(d.stages["weathered"]?.snowDepth, 0, "bare snow again")
+    }
+
+    /// While a sky holds, about every other flicker is its own (a drip in the rain and the storm, a pant in the heat);
+    /// none under other skies; a character with no sky gestures flickers as before.
+    func testTheSkysShareOfFlickers() {
+        func flickers(_ sky: CompanionSky, _ id: String = "weathered") -> [String] {
+            let d = director(seed: 12, sky: sky)
+            d.appear(id, place: .field, still: false, calm: false, now: time(8))
+            let mode = Cast.all.first { $0.id == id }!.field.awake
+            return run(d, id, until: time(12)).compactMap { act in
+                if case .gesture(let g) = act.kind { return mode.gestures[g].name }
+                return nil
+            }
+        }
+        let rain = flickers(.rain)
+        XCTAssertEqual(Double(rain.filter { $0 == "drip" }.count) / Double(rain.count), 0.5, accuracy: 0.1, "\(rain.count) flickers")
+        XCTAssertFalse(rain.contains("pant"))
+        XCTAssertTrue(flickers(.storm).contains("drip"), "a storm drips too")
+        let heat = flickers(.heat)
+        XCTAssertEqual(Double(heat.filter { $0 == "pant" }.count) / Double(heat.count), 0.5, accuracy: 0.1)
+        for sky in [CompanionSky.clouds, .clear, .unknown, .snow] {
+            let names = Set(flickers(sky))
+            XCTAssertFalse(names.contains("drip") || names.contains("pant"), "\(sky)")
+        }
+        XCTAssertFalse(flickers(.rain).contains("both"), "an unmarked gesture is no flicker")
+        XCTAssertEqual(Set(flickers(.rain, "stayer")), ["blink", "wag", "both"], "none of it: as before")
+    }
+
+    /// A hot day by day: the heat still, its own routine and flicker about every other time, no flourish from a heat
+    /// still. At night the look is asleep (the heat still is the awake one) with nothing of the heat's. A character
+    /// with no heat still keeps its flourish on a hot day.
+    func testHeatByDayOnly() {
+        let d = director(seed: 3, sky: .heat)
+        d.appear("weathered", place: .field, still: false, calm: false, now: time(8))
+        XCTAssertEqual(d.stages["weathered"]?.look, CompanionLook(asleep: false, weather: .heat))
+        let clock = CompanionClock(character: Cast.weathered)
+        XCTAssertEqual(clock.restPose(at: time(8), stage: d.stages["weathered"]!).frame, Cast.weathered.index["hot"])
+        let acts = run(d, "weathered", until: time(20))
+        XCTAssertFalse(acts.contains { $0.kind == .flourish }, "no flourish from a heat still")
+        let names = routines(acts).map { routineName($0, Cast.weathered) }
+        XCTAssertTrue(names.contains("fan"))
+        XCTAssertFalse(names.contains("shake"))
+        d.tap("weathered", now: time(20, 30))
+        XCTAssertNotEqual(d.stages["weathered"]?.act?.kind, .flourish)
+
+        let night = director(sky: .heat)
+        night.appear("weathered", place: .field, still: false, calm: false, now: time(23))
+        let stage = night.stages["weathered"]!
+        XCTAssertTrue(stage.look.asleep)
+        XCTAssertEqual(clock.restPose(at: time(23), stage: stage).frame, Cast.weathered.index["sleep"], "asleep, not wilting")
+        let nightActs = run(night, "weathered", until: time(4, day: 1))
+        XCTAssertTrue(routines(nightActs).isEmpty)
+        XCTAssertFalse(nightActs.contains { $0.kind == .gesture(3) }, "no panting in its sleep")
+
+        let plain = director(sky: .heat)
+        plain.appear("stayer", place: .field, still: false, calm: false, now: time(12))
+        XCTAssertEqual(CompanionClock(character: Cast.stayer).restPose(at: time(12), stage: plain.stages["stayer"]!).frame,
+                       Cast.stayer.index["rest"], "no heat still: the rest")
+        plain.tap("stayer", now: time(12, 0, second: 30))
+        XCTAssertEqual(plain.stages["stayer"]?.act?.kind, .flourish, "and its flourish, as before")
+    }
+
+    /// A character that uses none of brief 91: snow never piles on it, it has no sky flickers, a hot day is plain.
+    func testACharacterThatUsesNoneOfIt() {
+        let d = director(seed: 5, sky: .snow)
+        d.appear("dancer", place: .field, still: false, calm: false, now: time(9))
+        run(d, "dancer", until: time(13))
+        XCTAssertEqual(d.stages["dancer"]?.snowDepth, 0)
+        let hot = director(seed: 5, sky: .heat)
+        hot.appear("dancer", place: .field, still: false, calm: false, now: time(9))
+        let names = routines(run(hot, "dancer", until: time(13))).map { routineName($0) }
+        XCTAssertEqual(Set(names), ["shuffle", "stretch", "feet"], "its everyday routines, none of a sky's")
+    }
+
     // MARK: - A day
 
     /// "3 blink, 1 flourish": counts by name, in name order.

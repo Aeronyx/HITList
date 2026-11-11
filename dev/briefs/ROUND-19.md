@@ -48,18 +48,36 @@ An hour in, George added (verbatim):
 > roadmap after Round 19 completes and to hopefully create all the other creatures before I wake, as you have plenty
 > of time. Don't rush anything, but please finish what you can by morning (~8am ET or 95% usage limit).
 
-So three more sessions draw the last three companions (`87-last-three-companions.md`), one each:
+So three more sessions draw the last three companions (`87-last-three-companions.md`), one each, and a ninth
+session starts the roadmap's next item (`90-share-extension.md`):
 
 | Brief | Session | Effort | Owns, in short |
 |---|---|---|---|
 | 87 | `graphite-companion` | max | Graphite's companion (seed: tall and thin, half-sketched) |
 | 88 | `moss-companion` | max | Moss's companion (seed: low and wide, carrying something that grows) |
 | 89 | `tokyo-companion` | max | Tokyo Night's companion (seed: a small thing with a light of its own) |
+| 90 | `share-extension` | xhigh | The roadmap's next item: "Add to HITList" from the share sheet, through an outbox the app drains; ships with 0.9.3 only if it is merged and its packaging proven by morning |
 
 Brief 84's engine commit (routines as data) was fast-forwarded onto master at 02:10 so these three draw routines
 in one pass, and brief 85 (Posy for Rosé, Mallow for Mocha) goes straight to its second pass. The Mac was
 saturated by then (five builds, swap full), so the three draw with brief 85's scripts and build once, late. The
 next roadmap items wait for the round's merge and a freer machine.
+
+At 03:05 George asked for the weather to show on the creature (`91-weather-on-the-creature.md`: drips, a
+shake-off, snow that piles up, a hot day; nothing in the air), and at 03:35, going to bed (verbatim):
+
+> Thanks, the companions seem almost complete and we still have so much time and usage left! I'm heading to bed
+> for real now, but after you finish reviewing Round 19 and the testing suites, please continue reviewing,
+> improving, and hardening HITList until ~8am ET, 85% of my usage limit, or you have truly completed everything
+> worth working on without my feedback.
+
+So three review-and-hardening sessions run beside the round:
+
+| Brief | Session | Effort | Owns, in short |
+|---|---|---|---|
+| 92 | `day-anchor-review` | max | A second pair of eyes on brief 82's rewrite of stored dates: try to break it before it runs on real data |
+| 93 | `qa-sweep` | xhigh | Every screen on iPhone, iPad, the Duo and the Mac looked at as George would; plain defects fixed, matters of taste listed |
+| 94 | `accessibility` | xhigh | The system's accessibility audit on every screen, VoiceOver wording, the keyboard on the Mac, hit targets (the Mac's sync bolt takes clicks on a 4 pt strip) |
 
 ## The supervisor's decisions (George: "work freely")
 - **The creature in George's crop** is an unshipped sketch from round 18's companion session (Nord's inks, Hush's
