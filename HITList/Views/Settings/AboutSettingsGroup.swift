@@ -1,23 +1,53 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → About: the version, Copy diagnostics, What's new (a sheet), Show tips again and the privacy policy. The iPhone sheet's group;
-/// the Mac page's About section builds on the same rows.
+/// Settings → About: the version, Copy diagnostics, What's New (a page of its own, `SettingsPage.whatsNew`), Show
+/// tips again and the privacy policy. The iPhone sheet's page; the Mac page's About section builds on the same rows.
 struct AboutSettingsGroup: View {
-    @State private var showWhatsNew = false
+    @Environment(\.hitPages) private var pages
 
     var body: some View {
         HITGroup("About") {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
             CopyDiagnosticsRow()
-            HITMenuRow("What's new", systemImage: "sparkles") { showWhatsNew = true }
+            HITMenuRow("What's new", systemImage: "sparkles") { pages(SettingsPage.whatsNew) }
                 .accessibilityIdentifier("settings-whats-new")
             ShowTipsAgainRow()
             PrivacyPolicyRow()
         }
-        .sheet(isPresented: $showWhatsNew) {
-            WhatsNewSheet().slateSheet()
+    }
+}
+
+/// What's New as groups: this version's list, then the earlier versions behind a disclosure row. About → What's New
+/// on iPhone and iPad, and inline in the Mac's About section.
+struct WhatsNewGroups: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var showEarlier = false
+
+    var body: some View {
+        if let current = WhatsNew.current {
+            HITGroup("What's new in \(current.label)") {
+                WhatsNewItems(entry: current)
+            }
+            .accessibilityIdentifier("settings-whats-new-inline")
+
+            let earlier = Array(WhatsNew.entries.dropFirst())
+            if !earlier.isEmpty {
+                HITGroup {
+                    HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
+                               value: earlier.map(\.label).joined(separator: ", "),
+                               accessory: .expand(isExpanded: showEarlier)) {
+                        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
+                    }
+                    .accessibilityIdentifier("settings-whats-new-earlier")
+                }
+                if showEarlier {
+                    ForEach(earlier) { entry in
+                        HITGroup("Version \(entry.label)") { WhatsNewItems(entry: entry) }
+                    }
+                }
+            }
         }
     }
 }
