@@ -21,7 +21,7 @@ import HITListCore
 ///   behaves as the one that was tested (the app would otherwise be launched with its window).
 ///
 /// Each process logs which one ran it (subsystem com.trammells.hitlist, category widgets, "widget tap … recorded by").
-struct WidgetCompletionIntent: AppIntent {
+struct WidgetCompletionIntent: SetValueIntent {
     static let title: LocalizedStringResource = "Complete from a Widget"
     static let description = IntentDescription("Checks off a task, or flips a switch, from a HITList widget.")
     /// Only the widgets' buttons run it: not offered in Shortcuts or Spotlight (Siri's is `CompleteTaskIntent`).
@@ -51,6 +51,12 @@ struct WidgetCompletionIntent: AppIntent {
     @Parameter(title: "Widget")
     var widget: String
 
+    /// What the widget's toggle asks for: checked (true). A toggle hands its intent the new value, which is what lets
+    /// the system draw it in that state the moment it is tapped. Un-checking from a widget does nothing (Undo is the
+    /// app's), so a false is ignored.
+    @Parameter(title: "Done")
+    var value: Bool
+
     init() {}
 
     init(task: WidgetSnapshot.Task, action: WidgetRequest.Action, widget: String) {
@@ -59,6 +65,7 @@ struct WidgetCompletionIntent: AppIntent {
         self.seenDue = task.due.map { String($0.timeIntervalSinceReferenceDate) } ?? ""
         self.seenHasTime = task.hasTime
         self.widget = widget
+        self.value = true
     }
 
     /// The request this tap makes, asked at `now`; nil when its parameters don't name a task.
@@ -71,6 +78,7 @@ struct WidgetCompletionIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        guard value else { return .result() }
         guard let request = request(at: Date()) else { throw WidgetIntentFailure.notATask }
         try await WidgetIntentRoad.deliver(request)
         return .result()
