@@ -15,6 +15,9 @@ struct HITListApp: App {
     #endif
 
     init() {
+        #if DEBUG
+        WidgetDebug.adoptBakedSideStore() // brief 81: a launch for a widget's tap opens the session's side store, sync off
+        #endif
         HITFont.installPlatformAppearance()
         // Unit tests run hosted in the app; keep them off the real store and CloudKit.
         isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -49,6 +52,8 @@ struct HITListApp: App {
         NotificationScheduler.bootstrap(container: container)
         ClaudeConnector.start(container: container)  // brief 43: the Mac's Claude connector, if allowed
         WidgetSnapshotWriter.start(container: container) // brief 74: the widgets' snapshot, after every change
+        WidgetCompletionCenter.start(container: container) // brief 81: completes what the widgets ask, once iCloud can have it
+        WidgetRefresh.start() // brief 81: the background refresh (iOS) or the hourly settle (Mac) that keeps widgets true
     }
 
     var body: some Scene {
@@ -79,5 +84,9 @@ struct HITListApp: App {
             SettingsCommands()
             #endif
         }
+        #if os(iOS)
+        // Brief 81: a background refresh lets CloudKit import, rewrites the widgets' snapshot and drains their outbox.
+        .backgroundTask(.appRefresh(WidgetRefresh.identifier)) { await WidgetRefresh.run() }
+        #endif
     }
 }

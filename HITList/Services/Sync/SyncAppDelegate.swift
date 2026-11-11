@@ -147,6 +147,9 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             let outcome = await monitor.nextImport(after: receivedAt, within: SyncAppDelegateSupport.backgroundImportWait)
             let waited = SyncLogFormat.duration(Date().timeIntervalSince(receivedAt))
+            // Brief 81: the widgets hear of the import before the app is suspended again (the snapshot writer's own
+            // debounce would run only at the next launch), and the outbox is drained.
+            await WidgetRefresh.settle()
             monitor.write(.push, "Push handler finished after \(waited): \(outcome)", fields: ["waited": waited, "outcome": "\(outcome)"])
             monitor.pushHandled(stillInBackground: application.applicationState == .background)
             switch outcome {

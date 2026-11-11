@@ -76,4 +76,40 @@ final class WidgetSnapshotTests: XCTestCase {
         XCTAssertEqual(WidgetSnapshot.fileName(suffix: "../x"), "HITList.widgets.json", "never a path")
         XCTAssertEqual(WidgetSnapshot.mainFileName, "HITList.widgets.json")
     }
+
+    // MARK: - Brief 81
+
+    func testPendingRowsAndTheSyncStateRoundTrip() throws {
+        var snapshot = sample()
+        let row = snapshot.tasks[1]
+        snapshot.pending = [WidgetSnapshot.Pending(requestID: UUID(), askedAt: Fixed.now, appliedAt: Fixed.now.addingTimeInterval(1),
+                                                   task: row)]
+        snapshot.sync = .waiting
+        let read = try WidgetSnapshot.decode(snapshot.encoded())
+        XCTAssertEqual(read, snapshot)
+        XCTAssertEqual(read.pending?.first?.taskID, row.id)
+    }
+
+    func testNoPendingRowsIsNoField() throws {
+        let snapshot = WidgetSnapshot(writtenAt: Fixed.now, themeID: "slate", weekStart: 2, tasks: [], looseSwitchIDs: [],
+                                      switchboards: [], pending: [])
+        XCTAssertNil(snapshot.pending)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: snapshot.encoded()) as? [String: Any])
+        XCTAssertNil(object["pending"], "a file without taps reads as before")
+    }
+
+    func testAFileFromBefore092ReadsWithoutPendingOrSync() throws {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: sample().encoded()) as? [String: Any])
+        object["pending"] = nil
+        object["sync"] = nil
+        let read = try WidgetSnapshot.decode(JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(read.pending)
+        XCTAssertNil(read.sync)
+    }
+
+    func testASyncStateFromALaterBuildReadsAsFine() throws {
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: sample().encoded()) as? [String: Any])
+        object["sync"] = "somethingNew"
+        XCTAssertEqual(try WidgetSnapshot.decode(JSONSerialization.data(withJSONObject: object)).sync, .fine)
+    }
 }

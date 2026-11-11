@@ -6,29 +6,47 @@ import HITListCore
 /// widget's settings), its line ("Daily · resets 4:00 AM · 2 of 4"), then each switch as a small pill with its name,
 /// green or red exactly as the board judges it at that minute (`WidgetContent.flipboard`). No counts of what is late:
 /// the Flipboard is a calm status check. A tap opens the Flipboard.
+///
+/// Brief 81: a red pill flips its switch (`WidgetCompletionIntent`, the same road and the same waiting as a row's
+/// check); until iCloud has the flip it is drawn flipping, green and dimmed. A green pill does nothing but open the
+/// Flipboard, like the rest of the widget.
 struct FlipboardWidgetView: View {
     let snapshot: WidgetSnapshot?
     /// The Switchboard chosen in the widget's settings; nil for the loose switches.
     let boardID: UUID?
     let now: Date
     let family: WidgetFamily
+    /// The taps in the outbox, as the extension read them with the snapshot.
+    var requests: [WidgetRequest] = []
     @Environment(\.widgetPalette) private var palette
+    @Environment(\.widgetOffscreen) private var offscreen
 
-    private var board: WidgetContent.Flipboard? {
-        snapshot.map { WidgetContent.flipboard($0, board: boardID, at: now) }
+    private var marks: WidgetContent.Marks? {
+        snapshot.map { WidgetContent.marks($0, requests: requests, at: now) }
     }
 
+    private var board: WidgetContent.Flipboard? {
+        marks.map { WidgetContent.flipboard($0.snapshot, board: boardID, at: now) }
+    }
+
+    static let kind = "flipboard"
+
     var body: some View {
+        let marks = marks
         VStack(alignment: .leading, spacing: WidgetLook.headerGap) {
             header
             if let board {
                 if board.lights.isEmpty {
                     WidgetNote(text: board.boardID == nil ? "No loose switches." : "No switches on this board yet.")
                 } else {
-                    FlipboardPills(lights: board.lights)
+                    FlipboardPills(lights: board.lights, flipping: marks?.checked ?? [], interactive: !offscreen)
+                }
+                if let note = marks?.note {
+                    Spacer(minLength: 0)
+                    WidgetQuietLine(note: note, now: now)
                 }
             } else {
-                WidgetNote(text: "Open HITList to fill this in.")
+                WidgetNote(text: WidgetEmpty.openOnce)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -80,33 +98,66 @@ enum WidgetLights {
     static func color(_ side: FlipboardSwitch.Side) -> Color { side == .green ? green : red }
 }
 
-/// The switches as pills, flowing onto as many lines as fit; the rest become one "+N" pill.
+/// The switches as pills, flowing onto as many lines as fit; the rest become one "+N" pill. Each pill sits in a frame
+/// `WidgetLook.pillTargetInset` larger on every side, the flow's spacing, so a red pill's button is the minimum target.
 struct FlipboardPills: View {
     let lights: [WidgetContent.Flipboard.Light]
+    /// Switches whose flip is on its way (`WidgetContent.Marks.checked`).
+    var flipping: Set<UUID> = []
+    /// A red pill is a button; false in the hosted tests' renders.
+    var interactive = false
 
     var body: some View {
+        let inset = WidgetLook.pillTargetInset
         ViewThatFits(in: .vertical) {
             ForEach(Array(stride(from: lights.count, through: 1, by: -1)), id: \.self) { shown in
-                WidgetFlowLayout(spacing: 6, lineSpacing: 6) {
-                    ForEach(lights.prefix(shown)) { FlipboardPill(light: $0) }
-                    if shown < lights.count { FlipboardMorePill(count: lights.count - shown) }
+                WidgetFlowLayout(spacing: 0, lineSpacing: 0) {
+                    ForEach(lights.prefix(shown)) { light in
+                        FlipboardPillButton(light: light, flipping: flipping.contains(light.id), interactive: interactive)
+                    }
+                    if shown < lights.count { FlipboardMorePill(count: lights.count - shown).padding(inset) }
                 }
             }
         }
+        .padding(-inset)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
-/// One switch: a small capsule in its light's colour with the switch's name, the board's light at its start.
+/// A pill and its target: a red one is a button that flips its switch (dimmed at once by the system, drawn flipping once
+/// the tap is written down, as a row's check is); a flipping or green one is drawn only.
+struct FlipboardPillButton: View {
+    let light: WidgetContent.Flipboard.Light
+    var flipping = false
+    var interactive = false
+
+    var body: some View {
+        let pill = FlipboardPill(light: light, flipping: flipping)
+            .padding(WidgetLook.pillTargetInset)
+            .contentShape(Rectangle())
+        if interactive, light.side == .red, !flipping {
+            Button(intent: WidgetCompletionIntent(task: light.task, action: .flip, widget: FlipboardWidgetView.kind)) { pill }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Flip \(light.task.title)")
+        } else {
+            pill
+        }
+    }
+}
+
+/// One switch: a small capsule in its light's colour with the switch's name, the board's light at its start. Flipping
+/// (brief 81): green, dimmed, until iCloud has the flip.
 struct FlipboardPill: View {
     let light: WidgetContent.Flipboard.Light
+    var flipping = false
     @Environment(\.widgetPalette) private var palette
 
     var body: some View {
-        let color = WidgetLights.color(light.side)
+        let side: FlipboardSwitch.Side = flipping ? .green : light.side
+        let color = WidgetLights.color(side)
         HStack(spacing: 5) {
             Capsule().fill(color).frame(width: 6, height: 6)
-                .shadow(color: color.opacity(light.side == .red ? 0.6 : 0.3), radius: 2)
+                .shadow(color: color.opacity(side == .red ? 0.6 : 0.3), radius: 2)
                 .widgetAccentable()
             Text(light.task.title)
                 .font(WidgetLook.pill)
@@ -115,12 +166,13 @@ struct FlipboardPill: View {
         }
         .padding(.horizontal, 8)
         .frame(height: WidgetLook.pillHeight)
-        .background(Capsule().fill(color.opacity(light.side == .red ? 0.2 : 0.13)))
-        .overlay(Capsule().strokeBorder(color.opacity(light.side == .red ? 0.45 : 0.3), lineWidth: 1))
+        .background(Capsule().fill(color.opacity(side == .red ? 0.2 : 0.13)))
+        .overlay(Capsule().strokeBorder(color.opacity(side == .red ? 0.45 : 0.3), lineWidth: 1))
+        .opacity(flipping ? WidgetLook.pendingOpacity : 1)
         .frame(maxWidth: WidgetLook.pillMaxWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .privacySensitive()
-        .accessibilityLabel("\(light.task.title), \(light.side == .green ? "done" : "to do")")
+        .accessibilityLabel("\(light.task.title), \(flipping ? "flipping" : side == .green ? "done" : "to do")")
     }
 }
 

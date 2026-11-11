@@ -9,7 +9,8 @@ import XCTest
 ///       HITLIST_WIDGET_SUFFIX=widgets -resultBundlePath build.noindex/widgets.xcresult
 ///     xcrun xcresulttool export attachments --path build.noindex/widgets.xcresult --output-path build.noindex/widgets
 ///
-/// It changes the simulator's Home Screen, so run it on a simulator of your own.
+/// It changes the simulator's Home Screen, so run it on a simulator of your own. Brief 81 adds the tap to checked to gone
+/// (`testCheckingATaskOnTheTodayWidget`, same build setting, `-only-testing:` it alone).
 final class WidgetsUITests: XCTestCase {
     private let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
 
@@ -58,6 +59,68 @@ final class WidgetsUITests: XCTestCase {
             page += 1
         }
         dump("home, every widget")
+    }
+
+    // MARK: - Brief 81: a tap to checked to gone
+
+    /// The Today widget's check, tapped on the Home Screen with the app not running: the row goes checked at once, and
+    /// leaves once its (pretend, `-widgetExportDelay 4`) export has finished, the next task taking its place. A frame
+    /// every half second is kept in the .xcresult; the simulator's log says which process ran the intent ("recorded
+    /// by", category widgets). The build needs `HITLIST_WIDGET_SUFFIX=widgets` (the app the system launches for the tap
+    /// gets no arguments and opens that side store with sync off, `WidgetDebug`).
+    func testCheckingATaskOnTheTodayWidget() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["HITLIST_STORE_SUFFIX"] = "widgets"
+        app.launchArguments = ["-disableCloudKit", "YES", "-seedDemoData", "YES", "-hideTips", "-widgetExportDelay", "4"]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab-today"].waitForExistence(timeout: 15))
+        sleep(3) // the writer's debounce, then its write
+        app.terminate() // not running when the widget is tapped
+        XCUIDevice.shared.press(.home)
+        sleep(1)
+
+        addWidget(page: 1) // Today, medium
+        // A widget's check is a button; matched as any element, as the system's widget host may report it differently.
+        let checks = springboard.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Complete '"))
+        guard checks.firstMatch.waitForExistence(timeout: 10) else {
+            dump("no check found")
+            return XCTFail("the Today widget's checks are buttons on the Home Screen")
+        }
+        let check = checks.firstMatch
+        let title = String(check.label.dropFirst("Complete ".count))
+        attach("0 before · \(title)")
+        check.tap()
+        let tapped = Date()
+
+        var sawChecked = false, gone = false
+        for step in 1...40 {
+            usleep(500_000)
+            let seconds = String(format: "%.1f", Date().timeIntervalSince(tapped))
+            let checked = springboard.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "\(title), checked")).firstMatch.exists
+            let row = springboard.descendants(matching: .any)
+                .matching(NSPredicate(format: "label == %@", "Complete \(title)")).firstMatch
+            let stillThere = row.exists
+            if checked { sawChecked = true }
+            attach("\(step) +\(seconds) s · \(checked ? "checked" : stillThere ? "open" : "gone")")
+            if sawChecked, !checked, !stillThere { gone = true; break }
+        }
+        dump("after the tap")
+        XCTAssertTrue(sawChecked, "the row went checked")
+        XCTAssertTrue(gone, "and left once the export had finished")
+    }
+
+    /// Adds the widget on gallery page `page` (0 Today small, 1 Today medium, 2 Today large, …) to the Home Screen.
+    private func addWidget(page: Int) {
+        openGallery()
+        for _ in 0..<page {
+            springboard.buttons.matching(NSPredicate(format: "label BEGINSWITH 'HITList,'")).firstMatch.swipeLeft()
+            usleep(700_000)
+        }
+        springboard.buttons[" Add Widget"].firstMatch.tap()
+        sleep(2)
+        springboard.buttons["Done"].firstMatch.tap()
+        sleep(3)
     }
 
     /// Edit mode, Edit → Add Widget, search for HITList, its page.

@@ -68,6 +68,8 @@ struct FlipboardEntry: TimelineEntry {
     let date: Date
     let snapshot: WidgetSnapshot?
     let boardID: UUID?
+    /// The taps in the outbox (brief 81): their pills are drawn flipping.
+    var requests: [WidgetRequest] = []
 }
 
 struct FlipboardProvider: AppIntentTimelineProvider {
@@ -79,13 +81,13 @@ struct FlipboardProvider: AppIntentTimelineProvider {
         WidgetFonts.register()
         let now = Date()
         return FlipboardEntry(date: now, snapshot: WidgetSnapshotStore.read() ?? WidgetSamples.snapshot(now: now),
-                              boardID: configuration.board?.boardID)
+                              boardID: configuration.board?.boardID, requests: WidgetOutboxStore.read())
     }
 
     func timeline(for configuration: FlipboardWidgetIntent, in context: Context) async -> Timeline<FlipboardEntry> {
         let timeline = SnapshotTimeline.timeline(context: context, kind: FlipboardWidget.kind)
         return Timeline(entries: timeline.entries.map {
-            FlipboardEntry(date: $0.date, snapshot: $0.snapshot, boardID: configuration.board?.boardID)
+            FlipboardEntry(date: $0.date, snapshot: $0.snapshot, boardID: configuration.board?.boardID, requests: $0.requests)
         }, policy: timeline.policy)
     }
 }
@@ -96,7 +98,8 @@ private struct FlipboardWidgetEntryView: View {
 
     var body: some View {
         let palette = ThemePalette.named(entry.snapshot?.themeID)
-        FlipboardWidgetView(snapshot: entry.snapshot, boardID: entry.boardID, now: entry.date, family: family)
+        FlipboardWidgetView(snapshot: entry.snapshot, boardID: entry.boardID, now: entry.date, family: family,
+                            requests: entry.requests)
             .environment(\.widgetPalette, palette)
             .widgetBackground(palette)
     }
