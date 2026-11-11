@@ -144,6 +144,10 @@ targets:
       # The six Inter cuts the app ships, registered by the extension's own Info.plist.
       - path: HITList/Resources/Fonts/Inter/static
         buildPhase: resources
+      # The app's privacy manifest: the extension reads its own UserDefaults (the compiled-in ThemeStore), a
+      # required-reason API, and App Store Connect looks for a manifest in each bundle.
+      - path: HITList/PrivacyInfo.xcprivacy
+        buildPhase: resources
     dependencies:
       - package: HITListCore
     entitlements:

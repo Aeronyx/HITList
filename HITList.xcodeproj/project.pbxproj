@@ -340,6 +340,7 @@
 		E8898C318652ACB14FF9C2DB /* SharedTasksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB83DD95B3DB250A4C0544C2 /* SharedTasksStore.swift */; };
 		E8B78F8F8B858A38DA4721D8 /* AccountSwitchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A66D3EBF11AEEB13847A0856 /* AccountSwitchTests.swift */; };
 		E95577674FCA941401D4111D /* WidgetUpcomingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20CA43020CE7832A00C1FA46 /* WidgetUpcomingTests.swift */; };
+		E9ACC03BBB596564B446D1E8 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 539BFD19C56E1470BFC04DBA /* PrivacyInfo.xcprivacy */; };
 		E9F91069D04695E89BCEBE1D /* HingeCreakSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1BB614B969D4D6C82FE7EE /* HingeCreakSynth.swift */; };
 		EA6D2DB20B8C50D0FB805E44 /* HITListShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDAFDAD4653C94E796C7FAD2 /* HITListShortcuts.swift */; };
 		EC2045D33D746F7D258FDE5A /* HITCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */; };
@@ -1712,6 +1713,7 @@
 				3F018E9A7C93D604FF882E0F /* Inter_18pt-Medium.ttf in Resources */,
 				A2088F01F506B5FFB9EDF7A4 /* Inter_18pt-Regular.ttf in Resources */,
 				AE89809505D95274386FEDA2 /* Inter_18pt-SemiBold.ttf in Resources */,
+				E9ACC03BBB596564B446D1E8 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
