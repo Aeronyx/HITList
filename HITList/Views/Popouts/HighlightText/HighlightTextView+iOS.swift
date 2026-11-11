@@ -47,9 +47,11 @@ struct HighlightTextField: UIViewRepresentable {
         // owner's "let go" acts at once; "take it" waits a turn, as the view may not be in a window yet, and is
         // dropped if the owner let go meanwhile.
         let coordinator = context.coordinator
-        if isFocused != coordinator.lastFocus {
+        let isReport = context.transaction[HighlightFocusReport.self]
+        if coordinator.reported == isFocused { coordinator.reported = nil }
+        if isFocused != coordinator.lastFocus, !coordinator.isStale(isFocused, isReport: isReport) {
             coordinator.lastFocus = isFocused
-            if !context.transaction[HighlightFocusReport.self] {
+            if !isReport {
                 view.wantsFocus = isFocused
                 if isFocused {
                     DispatchQueue.main.async { view.takeKeyboardForOwner() }
@@ -72,6 +74,32 @@ struct HighlightTextField: UIViewRepresentable {
         var parent: HighlightTextField
         /// The focus last asked for or reported, so only a change acts.
         var lastFocus = false
+        /// A change the field told its owner about (a tap brought the keyboard, or it left by itself) that no update
+        /// has carried back yet, and when it was told.
+        var reported: Bool?
+        var reportedAt = Date.distantPast
+
+        /// An update still showing the focus as it was before the field's own report reached the owner: not the
+        /// owner asking. (Brief 75: a tap on the quick-add title while the card offered "Discard" gave the field the
+        /// keyboard, an update already on its way said "not focused", and the field let go; the owner's "focused"
+        /// then came back as the field's own report and moved nothing, so the keyboard flashed up and left.) A
+        /// report the owner never carries back stops counting after `staleWindow`.
+        func isStale(_ isFocused: Bool, isReport: Bool, now: Date = .now) -> Bool {
+            Self.isStale(isFocused, isReport: isReport, reported: reported, since: now.timeIntervalSince(reportedAt))
+        }
+
+        static let staleWindow: TimeInterval = 0.5
+
+        static func isStale(_ isFocused: Bool, isReport: Bool, reported: Bool?, since: TimeInterval) -> Bool {
+            guard !isReport, let reported else { return false }
+            return isFocused != reported && since < staleWindow
+        }
+
+        private func report(_ focused: Bool) {
+            reported = focused
+            reportedAt = .now
+            parent.onFocusChange(focused)
+        }
 
         init(_ parent: HighlightTextField) { self.parent = parent }
 
@@ -89,7 +117,7 @@ struct HighlightTextField: UIViewRepresentable {
             guard let view = textView as? HighlightUITextView else { return }
             view.wantsFocus = true
             lastFocus = true
-            if !view.isMovingKeyboardForOwner { parent.onFocusChange(true) }
+            if !view.isMovingKeyboardForOwner { report(true) }
         }
 
         /// The keyboard left. Told to the owner only when it went by itself (another field, the system), after the
@@ -99,10 +127,9 @@ struct HighlightTextField: UIViewRepresentable {
             view.wantsFocus = false
             lastFocus = false
             guard !view.isMovingKeyboardForOwner else { return }
-            let report = parent.onFocusChange
-            DispatchQueue.main.async { [weak view] in
-                guard let view, !view.wantsFocus, !view.isFirstResponder else { return }
-                report(false)
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view, !view.wantsFocus, !view.isFirstResponder else { return }
+                self.report(false)
             }
         }
 
