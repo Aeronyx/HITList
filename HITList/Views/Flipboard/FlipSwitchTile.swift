@@ -31,6 +31,8 @@ struct FlipSwitchTile: View {
     var onOpen: () -> Void
     /// Deletes the switch; the board asks first (if that setting is on) and offers Undo.
     var onDelete: () -> Void = {}
+    /// "Duplicate" (brief 96): the Add a Switch card with this switch's settings and an empty name.
+    var onDuplicate: () -> Void = {}
     /// VoiceOver's "Move to…" actions (brief 96): to each other Switchboard, and off its own.
     var moves: [SwitchDrop.Move] = []
     var onMove: (SwitchDrop.Target) -> Void = { _ in }
@@ -329,7 +331,7 @@ struct FlipSwitchTile: View {
     // MARK: The menu
 
     /// Brief 59's order: Flip (or Mark done), Flip back to red, Edit task…, Edit switch… (the interval, flips
-    /// and name, brief 69), then Remove from Flipboard and Delete.
+    /// and name, brief 69), Duplicate (brief 96), then Remove from Flipboard and Delete.
     private var menuItems: [FlipMenuItem] {
         let canFlipBack = Flipboard.canFlipBack(Flipboard.Charge(task), target: target, clock: clock, now: now)
         let chargedCharger = isDoneForNow
@@ -353,6 +355,7 @@ struct FlipSwitchTile: View {
             // Name, interval and flips in the switch card (brief 69; it replaced "Edit interval…" and "Flips per
             // interval…", which opened a sheet).
             FlipMenuItem(id: "edit", title: "Edit switch…", systemImage: "slider.horizontal.3") { onEdit() },
+            FlipMenuItem(id: "duplicate", title: "Duplicate", systemImage: "plus.square.on.square") { onDuplicate() },
             FlipMenuItem(id: "remove", title: "Remove from Flipboard", systemImage: "minus.circle", role: .destructive) {
                 withAnimation(.snappy) { Flipboard.remove(task, in: context) }
             },
