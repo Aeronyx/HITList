@@ -504,7 +504,9 @@ final class SettingsTidyTests: XCTestCase {
             shown[character.id] = palette.id
         }
         XCTAssertEqual(shown["nod"], "slate", "Nod on Slate, never on the themes that borrow it")
-        XCTAssertLessThan(shown.count, ThemePalette.all.count, "no grid of Nods")
+        // Since 0.9.3 every theme has a companion of its own: eight swatches, eight different companions.
+        XCTAssertEqual(shown.count, ThemePalette.all.count, "each theme's own, each on one swatch")
+        XCTAssertEqual(Set(shown.keys).count, ThemePalette.all.count, "no companion twice")
     }
 
     func testEveryCompanionSitsOnItsSwatchOnWholePoints() {
