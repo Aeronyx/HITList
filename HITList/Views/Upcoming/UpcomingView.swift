@@ -401,7 +401,7 @@ struct UpcomingView: View {
                     Text("Overdue")
                     Text("\(overdue.count)").foregroundStyle(Theme.secondaryText)
                 }
-                .foregroundStyle(.red)
+                .foregroundStyle(HITColor.dueOverdue)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

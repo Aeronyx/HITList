@@ -65,6 +65,28 @@ final class ScreenTourUITests: XCTestCase {
             app.navigationBars.buttons.firstMatch.tap()
             pause()
         }
+        // Completed (brief 93), at Browse's foot.
+        let completed = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Completed")).firstMatch
+        for _ in 0..<4 where !(completed.exists && completed.isHittable) { app.swipeUp() }
+        if completed.waitForExistence(timeout: 3), completed.isHittable {
+            completed.tap()
+            pause()
+            snapshot("9b Completed")
+            app.navigationBars.buttons.firstMatch.tap()
+            pause()
+        }
+        for _ in 0..<4 { app.swipeDown() }
+        // Search with a query (brief 93): Browse's field.
+        let field = app.textFields["browseSearch"].exists ? app.textFields["browseSearch"] : app.textFields.firstMatch
+        if field.waitForExistence(timeout: 3) {
+            field.tap()
+            app.typeText("lease")
+            pause()
+            snapshot("9c Search, a query")
+            let clear = app.buttons["Clear"].firstMatch
+            if clear.exists { clear.tap() }
+            pause()
+        }
 
         // Settings' first screen, then its Extras page (brief 86: pages push inside the sheet).
         let gear = app.buttons["settingsButton"].firstMatch

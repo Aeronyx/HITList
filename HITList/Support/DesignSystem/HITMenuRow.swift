@@ -104,7 +104,7 @@ struct HITMenuRowLabel: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(iconTint)
-                    .frame(width: 22)
+                    .frame(width: HITRowMetrics.iconColumn, height: HITRowMetrics.iconHeight)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -169,6 +169,10 @@ enum HITRowMetrics {
 
     /// The icon column of `HITMenuRowLabel`.
     static let iconColumn: CGFloat = 22
+    /// The icon's height: a row's content at its minimum height, so the glyph never makes a row taller than its
+    /// text does (on the Mac a hammer or a pair of pages drew Built and Copy diagnostics 3 and 1 pt taller than
+    /// Version beside them).
+    static let iconHeight: CGFloat = minHeight - 2 * HITSpacing.s
     /// From a row's leading padding to its title: the icon column and the gap after it. Text under a row (a
     /// disclosure's words, an attribution) starts here so it lines up with the titles.
     static let titleInset: CGFloat = iconColumn + HITSpacing.m
