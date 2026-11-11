@@ -234,6 +234,8 @@ struct FlipDial: View {
         }
         .buttonStyle(HITIconButtonStyle(font: .system(size: 10, weight: .bold)))
         .disabled(!enabled)
+        // VoiceOver adjusts the dial as one element; these are named for Voice Control and the audit (brief 94).
+        .accessibilityLabel(delta < 0 ? "Fewer" : "More")
     }
 }
 
