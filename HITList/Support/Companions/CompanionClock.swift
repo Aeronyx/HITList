@@ -29,7 +29,7 @@ struct CompanionStage: Equatable {
     var look: CompanionLook
     /// Facing the other way before `act` (after an odd number of Quill's turns).
     var turned = false
-    /// The last thing it did or is doing; nil when it has done nothing since it came on screen.
+    /// What it is doing; nil at rest (the director puts an act away when it ends).
     var act: CompanionAct?
 }
 
