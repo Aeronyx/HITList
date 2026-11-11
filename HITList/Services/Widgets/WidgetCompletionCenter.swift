@@ -65,7 +65,6 @@ final class WidgetCompletionCenter {
     private(set) var ledger: WidgetLedger
     /// Requests already logged as waiting (a store that hasn't imported), so a drain on every event doesn't repeat it.
     private var loggedWaiting: Set<UUID> = []
-    private var waiters: [UUID: [CheckedContinuation<Void, Never>]] = [:]
     private var observers: [NSObjectProtocol] = []
 
     init(outbox: WidgetOutbox, ledgerURL: URL, container: ModelContainer, sync: WidgetSyncFacts,
@@ -174,23 +173,6 @@ final class WidgetCompletionCenter {
         drain()
     }
 
-    /// Waits (tests, the background refresh) until `id` is resolved or `timeout` passes.
-    func waitUntilResolved(_ id: UUID, within timeout: Duration) async {
-        guard ledger.entry(id)?.stage != .resolved, ledger.entry(id) != nil || outbox.read().requests.contains(where: { $0.id == id })
-        else { return }
-        await withCheckedContinuation { continuation in
-            waiters[id, default: []].append(continuation)
-            Task { @MainActor [weak self] in
-                try? await Task.sleep(for: timeout)
-                self?.wake(id)
-            }
-        }
-    }
-
-    private func wake(_ id: UUID) {
-        for continuation in waiters.removeValue(forKey: id) ?? [] { continuation.resume() }
-    }
-
     // MARK: - Draining
 
     /// One pass over the outbox and the ledger: new requests applied or resolved, applied ones finished when their
@@ -229,19 +211,15 @@ final class WidgetCompletionCenter {
                 if apply(request, now: now) { changed = true }
             }
         }
-        for entry in ledger.live {
-            switch entry.stage {
-            case .applying:
-                if recover(entry, now: now) { changed = true }
-            case .waiting:
-                if let resolution = WidgetCompletion.finish(entry, line: sync.finishLine, lastExportStart: sync.lastExportStart) {
-                    resolve(entry.id, resolution, now: now)
-                    leaving.append(entry.id)
-                    changed = true
-                }
-            case .resolved:
-                break
-            }
+        for live in ledger.live {
+            if live.stage == .applying, recover(live, now: now) { changed = true }
+            // Recovered or not, a waiting entry is checked against the finish line in this same pass.
+            guard let entry = ledger.entry(live.id), entry.stage == .waiting,
+                  let resolution = WidgetCompletion.finish(entry, line: sync.finishLine, lastExportStart: sync.lastExportStart)
+            else { continue }
+            resolve(entry.id, resolution, now: now)
+            leaving.append(entry.id)
+            changed = true
         }
         scheduleRecheck()
         guard changed || !leaving.isEmpty else { return }
@@ -252,7 +230,6 @@ final class WidgetCompletionCenter {
         snapshot(pending)
         for id in leaving {
             do { try outbox.remove(id) } catch { log("Widget: a finished tap couldn't leave the outbox: \(error.localizedDescription)", .error) }
-            wake(id)
         }
         holdAwake(!ledger.live.isEmpty)
     }
@@ -346,6 +323,8 @@ final class WidgetCompletionCenter {
         }
         var entry = entry
         if let before = entry.before, Self.fingerprint(task) == before {
+            // Made now: only an export that starts after this moment carries it, not the relaunch's first.
+            entry.appliedAt = now
             entry.outcome = perform(entry.request, on: task, now: now)
             log("Widget: \(entry.outcome ?? "completed") ‘\(task.title)’ after a relaunch (the app had stopped mid-way)", .notice)
         } else {
@@ -364,7 +343,7 @@ final class WidgetCompletionCenter {
         let waited = (entry?.appliedAt).map { " after \(SyncLogFormat.duration(now.timeIntervalSince($0)))" } ?? ""
         switch resolution {
         case .exported: log("Widget: \(name) is done and iCloud has it\(waited)", .info)
-        case .saved: log("Widget: \(name) is done (saved; this store doesn't sync)", .info)
+        case .saved: log("Widget: \(name) is done (saved; iCloud is off or signed out here)", .info)
         case .alreadyDone: log("Widget: a tap on \(name) was already done elsewhere; nothing changed", .notice)
         case .gone: log("Widget: a tap on a task that was deleted; nothing changed", .notice)
         case .changedElsewhere: log("Widget: \(name) changed elsewhere since the widget showed it; the tap was let go", .notice)
