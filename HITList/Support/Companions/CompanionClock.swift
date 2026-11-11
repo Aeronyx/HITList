@@ -1,4 +1,5 @@
 import Foundation
+import HITListCore
 
 /// What a companion draws at one moment: an index into `CompanionCharacter.drawn`, mirrored or not.
 struct CompanionPose: Equatable {
@@ -6,11 +7,12 @@ struct CompanionPose: Equatable {
     let mirrored: Bool
 }
 
-/// One thing a companion does: a small gesture (by its index in the mode's `gestures`), the reply to a tap, or the
-/// rare flourish, from `start`.
+/// One thing a companion does: a small gesture (by its index in the mode's `gestures`), a routine (by its index in
+/// the mode's `routines`), the reply to a tap, or the rare flourish, from `start`.
 struct CompanionAct: Equatable {
     enum Kind: Equatable {
         case gesture(Int)
+        case routine(Int)
         case answer
         case flourish
     }
@@ -20,8 +22,8 @@ struct CompanionAct: Equatable {
 }
 
 /// Where a companion's life stands, as the director keeps it: since when it has been on screen, in which place,
-/// how it is dressed (`look`, decided while nobody is looking), which way it faced before its last act, and that
-/// act. The clock turns this and a time into a pose.
+/// how it is dressed (`look`, and the `sky` it was dressed for, both decided while nobody is looking), which way it
+/// faced before its last act, and that act. The clock turns this and a time into a pose.
 struct CompanionStage: Equatable {
     /// When it came on screen.
     var since: Date
@@ -31,15 +33,17 @@ struct CompanionStage: Equatable {
     var turned = false
     /// What it is doing; nil at rest (the director puts an act away when it ends).
     var act: CompanionAct?
+    /// The sky the look was decided for: which weather routines it may play (storm and rain share a look).
+    var sky: CompanionSky = .unknown
 }
 
-/// The pure clock (briefs 76 and 79): from the time and the stage, which frame to draw and when the drawing next
+/// The pure clock (briefs 76, 79 and 84): from the time and the stage, which frame to draw and when the drawing next
 /// changes. At rest it is the still frame for the look, and nothing changes until the director starts an act; an
 /// act's ticks play at their rate and end on the rest frame again. Tests pin it.
 struct CompanionClock {
     let character: CompanionCharacter
 
-    /// The ticks an act plays, and their rate.
+    /// The ticks an act plays, and their rate. A routine's ticks are flattened from its steps.
     func ticks(_ kind: CompanionAct.Kind, stage: CompanionStage) -> (ticks: [CompanionCharacter.Tick], fps: Double) {
         let posture = character.posture(stage.place)
         let mode = posture.mode(stage.look)
@@ -52,7 +56,42 @@ struct CompanionClock {
             let gestures = mode.gestures
             guard gestures.indices.contains(i) else { return ([], character.gestureFPS) }
             return (gestures[i].ticks, character.gestureFPS)
+        case .routine(let i):
+            guard mode.routines.indices.contains(i) else { return ([], character.gestureFPS) }
+            return (mode.ticks(of: mode.routines[i]).map(\.tick), character.gestureFPS)
         }
+    }
+
+    /// What each tick of an act draws (its frame in `drawn`, and whether that tick is mirrored on its own), and the
+    /// rate. The flourish and a weather routine's own frames are drawn whole; everything else is drawn over the
+    /// still frame for the weather (only the pixels it changes), and the still frame itself is the weather's.
+    func frames(_ kind: CompanionAct.Kind, stage: CompanionStage) -> (frames: [CompanionPose], fps: Double) {
+        let mode = character.posture(stage.place).mode(stage.look)
+        let base = mode.base(stage.look.weather)
+        if case .flourish = kind {
+            let (ticks, fps) = ticks(kind, stage: stage)
+            return (ticks.map { CompanionPose(frame: character.drawnIndex($0.frame), mirrored: $0.mirrored) }, fps)
+        }
+        var entries: [(tick: CompanionCharacter.Tick, whole: Bool)]
+        if case .routine(let i) = kind, mode.routines.indices.contains(i) {
+            entries = mode.ticks(of: mode.routines[i])
+        } else {
+            entries = ticks(kind, stage: stage).ticks.map { ($0, false) }
+        }
+        var out: [CompanionPose] = []
+        out.reserveCapacity(entries.count)
+        for entry in entries {
+            let frame: Int
+            if entry.tick.frame == mode.rest {
+                frame = character.drawnIndex(base)
+            } else if entry.whole {
+                frame = character.drawnIndex(entry.tick.frame)
+            } else {
+                frame = character.drawnIndex(entry.tick.frame, over: base, rest: mode.rest)
+            }
+            out.append(CompanionPose(frame: frame, mirrored: entry.tick.mirrored))
+        }
+        return (out, character.gestureFPS)
     }
 
     func duration(_ kind: CompanionAct.Kind, stage: CompanionStage) -> TimeInterval {
@@ -70,10 +109,11 @@ struct CompanionClock {
         return now >= act.start && now < end(of: act, stage: stage)
     }
 
-    /// Which way it faces at rest at `now`: after a flourish that turns it, the other way.
+    /// Which way it faces at rest at `now`: after a flourish that turns it, the other way. Never turned in a place
+    /// where it doesn't turn (Quill on the "+").
     func facing(at now: Date, stage: CompanionStage) -> Bool {
-        guard character.flourishTurns, let act = stage.act, act.kind == .flourish, now >= end(of: act, stage: stage)
-        else { return stage.turned }
+        guard character.turns(stage.place) else { return false }
+        guard let act = stage.act, act.kind == .flourish, now >= end(of: act, stage: stage) else { return stage.turned }
         return !stage.turned
     }
 
@@ -89,16 +129,12 @@ struct CompanionClock {
         guard !still, let act = stage.act, isActing(at: now, stage: stage) else {
             return restPose(at: now, stage: stage)
         }
-        let (ticks, fps) = ticks(act.kind, stage: stage)
-        let i = min(ticks.count - 1, Self.tick(now.timeIntervalSince(act.start), fps: fps))
-        let entry = ticks[i]
-        let mirrored = stage.turned != entry.mirrored
-        if act.kind == .flourish {
-            return CompanionPose(frame: character.drawnIndex(entry.frame), mirrored: mirrored)
-        }
-        let mode = character.posture(stage.place).mode(stage.look)
-        let base = mode.base(stage.look.weather)
-        return CompanionPose(frame: character.drawnIndex(entry.frame, over: base, rest: mode.rest), mirrored: mirrored)
+        let (frames, fps) = frames(act.kind, stage: stage)
+        guard !frames.isEmpty else { return restPose(at: now, stage: stage) }
+        let i = min(frames.count - 1, Self.tick(now.timeIntervalSince(act.start), fps: fps))
+        let entry = frames[i]
+        let turned = character.turns(stage.place) && stage.turned
+        return CompanionPose(frame: entry.frame, mirrored: turned != entry.mirrored)
     }
 
     /// The first moment after `now` at which `pose` differs; nil when it won't change again until the director
@@ -108,11 +144,14 @@ struct CompanionClock {
         let end = end(of: act, stage: stage)
         guard now < end else { return nil }
         let current = pose(at: now, stage: stage)
-        let (ticks, fps) = ticks(act.kind, stage: stage)
+        let (frames, fps) = frames(act.kind, stage: stage)
+        let turned = character.turns(stage.place) && stage.turned
         var k = now < act.start ? 0 : Self.tick(now.timeIntervalSince(act.start), fps: fps) + 1
-        while k < ticks.count {
+        while k < frames.count {
             let t = act.start.addingTimeInterval(Double(k) / fps)
-            if t > now, pose(at: t, stage: stage) != current { return t }
+            let entry = frames[k]
+            let pose = CompanionPose(frame: entry.frame, mirrored: turned != entry.mirrored)
+            if t > now, pose != current { return t }
             k += 1
         }
         return pose(at: end, stage: stage) != current ? end : nil
