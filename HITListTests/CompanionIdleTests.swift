@@ -33,6 +33,45 @@ final class CompanionIdleTests: XCTestCase {
         }
     }
 
+    /// The first 100 seconds after it comes on screen, as the app starts (its own launch arguments, a fresh store, a
+    /// random seed), over many launches: still about one idle in three a little loop, from the first idle on.
+    func testTheFirstIdlesOfALaunch() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 12))!
+        let launch = CompanionLaunchOptions(arguments: ["-seedDemoData", "YES", "-companionHour", "12"])
+        for character in CompanionCharacter.all where Self.five.contains(character.id) {
+            var idles = 0
+            var loops = 0
+            for seed in 0..<300 as Range<UInt64> {
+                let name = "CompanionIdleTests.\(UUID().uuidString)"
+                let defaults = UserDefaults(suiteName: name)!
+                let d = CompanionDirector(seed: CompanionRandom.mix(seed), launch: launch, observeSystem: false,
+                                          cast: CompanionCharacter.all, defaults: defaults,
+                                          zone: { TimeZone(identifier: "UTC")! }, sky: { .unknown })
+                d.appear(character.id, place: .plus, still: false, calm: false, now: start)
+                let mode = character.plus.awake
+                var steps = 0
+                while let next = d.nextMoment, next < start.addingTimeInterval(100), steps < 1_000 {
+                    steps += 1
+                    d.fire(now: next)
+                    guard let act = d.stages[character.id]?.act, act.start == next else { continue }
+                    switch act.kind {
+                    case .gesture: idles += 1
+                    case .routine(let r) where mode.routines[r].little:
+                        idles += 1
+                        loops += 1
+                    default: break
+                    }
+                }
+                defaults.removePersistentDomain(forName: name)
+            }
+            let share: Double = Double(loops) / Double(idles)
+            print("Companion \(character.id): \(loops) loops in \(idles) idles in the first 100 s of 300 launches")
+            XCTAssertEqual(share, 1.0 / 3, accuracy: 0.05, "\(character.id): \(loops) of \(idles)")
+        }
+    }
+
     /// Ten minutes on the "+" by day and ten asleep, as George watched: how many different idles came up.
     func testTenMinutesOfIdles() {
         var report: [String] = []
