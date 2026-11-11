@@ -21,8 +21,8 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
-            if let stalled = CloudSyncMonitor.shared.stalledSince {
-                SyncStuckRow(since: stalled)
+            if let stall = CloudSyncMonitor.shared.stall {
+                SyncStuckRow(stall: stall)
             }
             if showsLastChange {
                 LastSyncChangeRow()
@@ -120,16 +120,17 @@ struct ICloudSyncGroup: View {
     }
 }
 
-/// Shown while an import, export or setup has run for two minutes with nothing in its way
-/// (`CloudSyncMonitor.stalledSince`): CloudKit syncs nothing else until it ends, and only a fresh process
-/// gets it going again. The Mac relaunches in one click; the iPhone says how to reopen the app.
+/// Shown while sync is stuck (`CloudSyncMonitor.stall`): an import, export or setup has run for two minutes with
+/// nothing in its way, or local changes have waited two minutes for an export with nothing running (CloudKit's
+/// mirroring stopped, as on George's Mac after a badContainer on 2026-11-10). Either way only a fresh process gets it
+/// going again. The Mac relaunches in one click; the iPhone says how to reopen the app.
 struct SyncStuckRow: View {
-    let since: Date
+    let stall: SyncWatchdog.Stall
     @State private var relaunchFailed = false
 
     var body: some View {
         #if os(macOS)
-        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since), systemImage: "exclamationmark.arrow.circlepath",
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(for: stall), systemImage: "exclamationmark.arrow.circlepath",
                    iconTint: HITColor.danger) {
             Button("Relaunch") { SyncRecovery.relaunch { relaunchFailed = true } }
                 .buttonStyle(HITButtonStyle(.primary, size: .small))
@@ -142,7 +143,7 @@ struct SyncStuckRow: View {
             Text("HITList couldn't relaunch itself. Quit it and open it again; your changes are kept and upload when it starts.")
         }
         #else
-        HITMenuRow("Sync is stuck", subtitle: Self.detail(since: since) + " " + Self.reopen,
+        HITMenuRow("Sync is stuck", subtitle: Self.detail(for: stall) + " " + Self.reopen,
                    systemImage: "exclamationmark.arrow.circlepath", iconTint: HITColor.danger)
             .accessibilityIdentifier("settings-sync-stuck")
         #endif
@@ -150,17 +151,28 @@ struct SyncStuckRow: View {
 
     static let reopen = "Swipe HITList away in the app switcher and open it again."
 
-    /// "iCloud sync has been busy with one request since 6:51 PM. Relaunching starts it afresh; your
-    /// changes are kept and upload right after."
-    static func detail(since: Date) -> String {
-        let time = since.formatted(date: .omitted, time: .shortened)
+    /// "iCloud sync has been busy with one request since 6:51 PM. Relaunching starts it afresh; your changes are kept
+    /// and upload right after." or "iCloud sync stopped answering: 6 changes made since 6:13 PM haven't been sent.
+    /// Relaunching …".
+    static func detail(for stall: SyncWatchdog.Stall) -> String {
+        let time = stall.since.formatted(date: .omitted, time: .shortened)
         #if os(macOS)
         let verb = "Relaunching"
         #else
         let verb = "Reopening"
         #endif
-        return "iCloud sync has been busy with one request since \(time). \(verb) starts it afresh; your changes are kept and upload right after."
+        let fix = "\(verb) starts it afresh; your changes are kept and upload right after."
+        switch stall {
+        case .busy:
+            return "iCloud sync has been busy with one request since \(time). \(fix)"
+        case .quiet(_, let saves):
+            let changes = saves == 1 ? "1 change" : "\(saves) changes"
+            return "iCloud sync stopped answering: \(changes) made since \(time) haven't been sent. \(fix)"
+        }
     }
+
+    /// The busy wording, as before (tests and the iPhone's row).
+    static func detail(since: Date) -> String { detail(for: .busy(since: since)) }
 }
 
 /// Which CloudKit environment and build this is ("Production · TestFlight build 11") and which account state

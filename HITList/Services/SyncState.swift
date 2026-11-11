@@ -83,7 +83,9 @@ enum SyncState: Equatable {
     /// mirroring events. An error counts only while it is newer than the last successful import or export.
     /// `stalledSince` is when an import, export or setup began that has run for two minutes (ten for a
     /// store's first import) with nothing in its way (`SyncWatchdog.stalledSince`): CloudKit's mirroring runs one request at a time,
-    /// so nothing else syncs until it ends (brief 25: an import on Nov 1 never did).
+    /// so nothing else syncs until it ends (brief 25: an import on Nov 1 never did). Or when the first of local saves
+    /// was made that have waited two minutes for an export with nothing running: the mirroring stopped (brief 78:
+    /// George's Mac after a badContainer on 2026-11-10 exported nothing more until he relaunched).
     static func derive(
         cloudKitEnabled: Bool,
         localOnlyReason: String,

@@ -37,6 +37,8 @@ struct SyncWatchdog: Sendable {
         var stuckAfter: TimeInterval = 60
         /// An event running this long makes the sync state say so (`stalledSince`), and Settings offers
         /// a relaunch. Longer than `stuckAfter`, so the log has the evidence before anyone sees a warning.
+        /// Also how long a local save may wait for its export with nothing running and nothing in the way before
+        /// sync counts as stopped (`Stall.quiet`; George's Mac after a badContainer, 2026-11-10).
         var stalledAfter: TimeInterval = 120
         /// `stalledAfter` for a store's first import (no import recorded yet: a new device, a reinstall,
         /// a reset): it brings every task down in one event that can run for minutes with nothing wrong,
@@ -91,6 +93,9 @@ struct SyncWatchdog: Sendable {
         /// A wait paused: it can't happen until `reason` goes away (offline, iCloud unavailable, background).
         case waiting(Wait, reason: String, count: Int)
         case eventStuck(type: SyncEventType, running: TimeInterval, context: Context)
+        /// `saves` local saves have waited `waited` for an export with nothing running and nothing in the way:
+        /// CloudKit's mirroring stopped (reported once; `Stall.quiet`).
+        case exportStopped(saves: Int, waited: TimeInterval, context: Context)
         /// A stuck event ended after all.
         case eventRecovered(type: SyncEventType, duration: TimeInterval, succeeded: Bool)
         case importAfterActivation(latency: TimeInterval)
@@ -98,7 +103,7 @@ struct SyncWatchdog: Sendable {
 
         var level: SyncLogEntry.Level {
             switch self {
-            case .exportOverdue, .importOverdue, .eventStuck: .error
+            case .exportOverdue, .importOverdue, .eventStuck, .exportStopped: .error
             case .exportLate, .importLate, .eventRecovered: .notice
             case .exportOnTime, .importAfterPush, .waiting, .importAfterActivation, .noImportAfterActivation: .info
             }
@@ -130,6 +135,8 @@ struct SyncWatchdog: Sendable {
                 return "\(wait == .export ? "Export" : "Import") waiting: \(reason)"
             case .eventStuck(let type, let running, _):
                 return "\(type.rawValue.capitalized) still running after \(d(running))"
+            case .exportStopped(_, let waited, _):
+                return "Export still not started \(d(waited)) after a local save, with nothing running: iCloud sync has stopped; relaunching starts it again"
             case .eventRecovered(let type, let duration, let succeeded):
                 return "Stuck \(type.rawValue) \(succeeded ? "finished" : "failed") after \(d(duration))"
             case .importAfterActivation(let latency):
@@ -149,6 +156,7 @@ struct SyncWatchdog: Sendable {
             case .importLate(let latency, let pushes): return ["waited": SyncLogFormat.duration(latency), "pushes": "\(pushes)"]
             case .waiting(_, _, let count): return ["waiting": "\(count)"]
             case .eventStuck(_, _, let context): return context.fields
+            case .exportStopped(let saves, _, let context): return context.fields.merging(["saves": "\(saves)"]) { $1 }
             case .eventRecovered: return [:]
             case .importAfterActivation(let latency): return ["afterActive": SyncLogFormat.duration(latency)]
             case .noImportAfterActivation: return [:]
@@ -173,6 +181,10 @@ struct SyncWatchdog: Sendable {
         var deadline: Date?
         var overdue = false
         var reportedWaiting = false
+        /// Where the stopped clock counts from: the first save, or the last time the obstacle went away. Nil while
+        /// the wait can't be met (offline, iCloud unavailable, not set up, suspended).
+        var clockFrom: Date?
+        var reportedStopped = false
     }
 
     /// CloudKit's mirroring exports and imports only after its setup event succeeded in this process.
@@ -195,6 +207,8 @@ struct SyncWatchdog: Sendable {
     private var lastExportStart: Date?
     private var lastImportStart: Date?
     private(set) var lastError: String?
+    /// When the last import, export or setup ended (`stoppedClock`).
+    private var lastEventEndedAt: Date?
 
     init(rules: Rules = Rules(), lastExportAt: Date? = nil, lastImportAt: Date? = nil) {
         self.rules = rules
@@ -252,6 +266,7 @@ struct SyncWatchdog: Sendable {
             return type == .setup ? transition(at) { $0.setup = .pending } : []
 
         case let .eventEnded(id, type, startedAt, succeeded, error, at):
+            lastEventEndedAt = max(at, lastEventEndedAt ?? at)
             var findings: [Finding] = []
             if let flight = flights.removeValue(forKey: id), flight.reportedStuck {
                 findings.append(.eventRecovered(type: type, duration: at.timeIntervalSince(flight.startedAt), succeeded: succeeded))
@@ -341,6 +356,13 @@ struct SyncWatchdog: Sendable {
                 exports = pending
                 findings.append(.exportOverdue(saves: pending.times.count, context: context(now)))
             }
+            if var pending = exports, !pending.reportedStopped, flights.isEmpty, let from = stoppedClock(pending),
+               now.timeIntervalSince(from) >= rules.stalledAfter {
+                pending.reportedStopped = true
+                exports = pending
+                findings.append(.exportStopped(saves: pending.times.count, waited: now.timeIntervalSince(pending.times[0]),
+                                               context: context(now)))
+            }
             if var pending = imports, !pending.overdue, let deadline = pending.deadline, deadline <= now {
                 pending.overdue = true
                 pending.deadline = nil
@@ -360,6 +382,9 @@ struct SyncWatchdog: Sendable {
         var candidates: [Date] = []
         if let d = exports?.deadline { candidates.append(d) }
         if let d = imports?.deadline { candidates.append(d) }
+        if let p = exports, !p.reportedStopped, flights.isEmpty, let from = stoppedClock(p) {
+            candidates.append(from.addingTimeInterval(rules.stalledAfter))
+        }
         if let activation { candidates.append(activation.deadline) }
         for flight in flights.values {
             guard let from = flight.clockFrom else { continue }
@@ -369,15 +394,46 @@ struct SyncWatchdog: Sendable {
         return candidates.filter { $0 > now }.min()
     }
 
-    /// The start of the oldest event that has been running for `rules.stalledAfter` (a first import:
-    /// `rules.firstImportStalledAfter`; paused time not counted) while nothing stood in its way; nil when
-    /// nothing is stalled.
-    func stalledSince(now: Date) -> Date? {
+    /// Why sync counts as stuck, and since when.
+    enum Stall: Equatable, Sendable {
+        /// An import, export or setup started at `since` has run for `Rules.stalledAfter` (a first import:
+        /// `firstImportStalledAfter`) with nothing in its way: CloudKit runs one request at a time (Nov 1).
+        case busy(since: Date)
+        /// `saves` local saves, the first at `since`, have waited `Rules.stalledAfter` for an export with nothing
+        /// running and nothing in the way: CloudKit's mirroring stopped (George's Mac after a badContainer on
+        /// 2026-11-10: six saves, nothing exported until he relaunched).
+        case quiet(since: Date, saves: Int)
+
+        var since: Date {
+            switch self {
+            case .busy(let since), .quiet(let since, _): since
+            }
+        }
+    }
+
+    /// A busy stall first (the oldest event running too long), else a quiet one; nil when nothing is stuck.
+    func stall(now: Date) -> Stall? {
         guard blockedReason == nil else { return nil }
-        return flights.values
+        let busy = flights.values
             .filter { flight in flight.clockFrom.map { now.timeIntervalSince($0) >= flight.stalledAfter } ?? false }
             .map(\.startedAt)
             .min()
+        if let busy { return .busy(since: busy) }
+        guard flights.isEmpty, waitBlockedReason == nil, let pending = exports, let from = stoppedClock(pending),
+              now.timeIntervalSince(from) >= rules.stalledAfter, let first = pending.times.first else { return nil }
+        return .quiet(since: first, saves: pending.times.count)
+    }
+
+    /// Where a waiting export's stopped clock counts from: its own clock, or the end of the last event if that came
+    /// later (an export waits its turn behind a running import; only time with nothing running counts).
+    private func stoppedClock(_ pending: Pending) -> Date? {
+        guard let from = pending.clockFrom else { return nil }
+        return max(from, lastEventEndedAt ?? from)
+    }
+
+    /// `stall(now:)`'s start: the oldest event running too long, or the first save that never exported.
+    func stalledSince(now: Date) -> Date? {
+        stall(now: now)?.since
     }
 
     func context(_ now: Date) -> Context {
@@ -392,7 +448,7 @@ struct SyncWatchdog: Sendable {
 
     private static func add(_ at: Date, to pending: inout Pending?, wait: Wait, window: TimeInterval, blocked: String?,
                             cap: Int) -> [Finding] {
-        var p = pending ?? Pending(times: [])
+        var p = pending ?? Pending(times: [], clockFrom: blocked == nil ? at : nil)
         p.times.append(at)
         if p.times.count > cap { p.times.remove(at: 1) }
         var findings: [Finding] = []
@@ -425,7 +481,9 @@ struct SyncWatchdog: Sendable {
             // Saves made while this export ran need the next one, with a full window from now.
             p.overdue = false
             p.reportedWaiting = false
+            p.reportedStopped = false
             p.deadline = blocked == nil ? max(p.times[0].addingTimeInterval(window), endedAt.addingTimeInterval(window)) : nil
+            p.clockFrom = blocked == nil ? max(p.times[0], endedAt) : nil
             pending = p
         }
         return [result]
@@ -443,6 +501,13 @@ struct SyncWatchdog: Sendable {
         } else if wasBlocked != nil, nowBlocked == nil {
             // Every running event's clock restarts: the time it couldn't run doesn't count against it.
             for id in flights.keys { flights[id]?.clockFrom = at }
+        }
+        if wasWaitBlocked == nil, nowWaitBlocked != nil {
+            exports?.clockFrom = nil
+            imports?.clockFrom = nil
+        } else if wasWaitBlocked != nil, nowWaitBlocked == nil {
+            exports?.clockFrom = at
+            imports?.clockFrom = at
         }
         if wasWaitBlocked == nil, let reason = nowWaitBlocked {
             findings += Self.pause(&exports, wait: .export, reason: reason)
