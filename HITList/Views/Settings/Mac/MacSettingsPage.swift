@@ -172,6 +172,8 @@ struct MacSettingsSectionRows: View {
                 .accessibilityIdentifier("settings-section-\(section.rawValue)")
             }
         }
+        // One fill that glides from section to section (brief 75).
+        .macSidebarSelectionGlide(selection)
         .padding(.vertical, HITSpacing.s)
     }
 }
