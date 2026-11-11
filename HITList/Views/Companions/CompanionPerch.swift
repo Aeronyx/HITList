@@ -1,53 +1,42 @@
 import SwiftUI
 
-/// Where a companion lives, placed with one overlay line in the view that hosts it (brief 76):
-/// `.overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }`.
-/// It never changes its host's layout (it is drawn with an offset), takes no tap meant for the field or a row
-/// (only its own pixels above the field, and none at the Mac sidebar's foot), is hidden from VoiceOver, makes no
-/// sound, and is gone when Settings → Extras → Companions is off. Reduce Motion draws the rest frame and runs
-/// nothing; Reduce Effects and Low Power Mode keep the idle and drop the flourish.
+/// Where the companion lives, placed with one overlay line in the view that hosts it (briefs 76 and 79):
+/// `.overlay(alignment: CompanionPerch.alignment(.searchField)) { CompanionPerch(.searchField) }`. One place per
+/// platform, the same for every companion: the Mac sidebar's search field, at its right-hand middle; the "+" on
+/// iPhone and iPad, at its top right (it goes with the "+" when a card opens and comes back with it). Which
+/// companion is the theme's (`CompanionCast`).
+///
+/// It never changes its host's layout (it is drawn with an offset), takes no tap meant for the field or the "+"
+/// (only its own pixels above the edge it sits on), is hidden from VoiceOver, makes no sound, and is gone when
+/// Settings → Extras → Companions is off. Reduce Motion draws the still pose for the hour and the weather and runs
+/// nothing; Reduce Effects and Low Power Mode keep the small gestures and drop the flourish.
 struct CompanionPerch: View {
     enum Spot {
-        /// Nod, sitting on the top edge of a search field (the Mac sidebar's, Browse's on iPhone), legs over it.
+        /// The Mac sidebar's search field.
         case searchField
-        /// Quill, asleep on the top edge of Browse's last card (iPhone).
-        case browseFoot
-        /// Quill, asleep at the right of the Mac sidebar's Settings row.
-        case sidebarFoot
+        /// The iPhone's and iPad's floating "+".
+        case addButton
+        /// Brief 76's places at the foot of Browse and of the Mac sidebar: one companion at a time now, so they draw
+        /// nothing until their host lines go (brief 79, item 2).
+        case browseFoot, sidebarFoot
 
-        var character: CompanionCharacter {
+        var place: CompanionPlace {
             switch self {
-            case .searchField: .nod
-            case .browseFoot, .sidebarFoot: .quill
+            case .searchField: .field
+            case .addButton, .browseFoot, .sidebarFoot: .plus
             }
         }
 
-        var alignment: Alignment {
+        var isRetired: Bool { self == .browseFoot || self == .sidebarFoot }
+
+        /// From the host's trailing edge to the right edge of the companion's resting pose, in points (whole
+        /// points, so every pixel stays crisp). Its seat row lies on the host's top edge.
+        var trailing: CGFloat {
             switch self {
-            case .searchField: .topTrailing
-            case .browseFoot, .sidebarFoot: .bottomTrailing
+            case .searchField: 14
+            case .addButton, .browseFoot, .sidebarFoot: 8
             }
         }
-
-        /// From the host's trailing edge to the sprite's right edge, and from the host's top (a seat) or bottom
-        /// (a floor) to the line it sits or lies on, in points. Whole points, so every pixel stays crisp. On Browse,
-        /// Quill's last row (its shadow) lies a pixel into the card's top edge, clear of the card's rounded corner.
-        var inset: (trailing: CGFloat, edge: CGFloat) {
-            switch self {
-            #if os(macOS)
-            case .searchField: (12, 0)
-            case .sidebarFoot: (16, 12)
-            case .browseFoot: (16, 0)
-            #else
-            case .searchField: (14, 0)
-            case .browseFoot: (26, -2)
-            case .sidebarFoot: (16, 12)
-            #endif
-            }
-        }
-
-        /// Whether a tap on the companion plays its flourish. The Mac's Settings row keeps every click.
-        var takesTaps: Bool { self != .sidebarFoot }
     }
 
     let spot: Spot
@@ -59,34 +48,37 @@ struct CompanionPerch: View {
     }
 
     /// The overlay alignment that goes with `spot`.
-    static func alignment(_ spot: Spot) -> Alignment { spot.alignment }
+    static func alignment(_ spot: Spot) -> Alignment { .topTrailing }
 
     var body: some View {
-        if enabled {
-            CompanionLife(character: spot.character, spot: spot, still: effects.reduceMotion,
-                          calm: effects.calmMotion)
-                .offset(offset)
+        if enabled, !spot.isRetired {
+            let character = CompanionCast.current
+            CompanionLife(character: character, place: spot.place, still: effects.reduceMotion,
+                          calm: effects.reduceEffects)
+                .offset(Self.offset(character, spot: spot))
                 .accessibilityHidden(true)
+                // A theme change is a different companion: the old one leaves the screen, the new one arrives.
+                .id(character.id)
         }
     }
 
-    private var offset: CGSize {
-        let c = spot.character
+    /// The sprite's offset from the host's top-trailing corner: its resting pose's rightmost pixel `spot.trailing`
+    /// in from the edge, its seat row on the top edge.
+    static func offset(_ character: CompanionCharacter, spot: Spot) -> CGSize {
         let p = CompanionCharacter.pointsPerPixel
-        switch c.footing {
-        case .seat(let row):
-            return CGSize(width: -spot.inset.trailing, height: spot.inset.edge - CGFloat(row) * p)
-        case .floor:
-            return CGSize(width: -spot.inset.trailing, height: -spot.inset.edge)
-        }
+        let rest = character.posture(spot.place).awake.rest
+        let clearColumns = character.width - 1 - character.rightmostColumn(rest)
+        let x: CGFloat = CGFloat(clearColumns) * p - spot.trailing
+        let y: CGFloat = -CGFloat(character.seatRow) * p
+        return CGSize(width: x, height: y)
     }
 }
 
 /// A companion on screen: registers with the director while it shows, and draws its pose on the clock's
-/// timeline (only while the app is active and motion is allowed).
+/// timeline while an act plays (only while the app is active and motion is allowed); a still picture otherwise.
 private struct CompanionLife: View {
     let character: CompanionCharacter
-    let spot: CompanionPerch.Spot
+    let place: CompanionPlace
     let still: Bool
     let calm: Bool
 
@@ -94,66 +86,43 @@ private struct CompanionLife: View {
         let director = CompanionDirector.shared
         let clock = director.clock(for: character)
         let stage = director.stages[character.id]
+            ?? CompanionStage(since: .now, place: place, look: director.look(at: .now))
+        let rest = clock.restPose(at: .now, stage: stage)
         Group {
-            if let stage, !still, director.isAppActive {
+            if !still, director.isAppActive, stage.act != nil {
                 TimelineView(CompanionTimeline(clock: clock, stage: stage)) { context in
                     CompanionSprite(character: character, pose: clock.pose(at: context.date, stage: stage))
                 }
             } else {
-                CompanionSprite(character: character, pose: stage.map { clock.pose(at: .now, stage: $0, still: true) }
-                                ?? CompanionPose(frame: character.restFrame, mirrored: false))
+                CompanionSprite(character: character, pose: rest)
             }
         }
-        .contentShape(TapArea(character: character, spot: spot, mirrored: facing(stage, clock)))
+        .contentShape(TapArea(runs: character.drawn[rest.frame], width: character.width, seatRow: character.seatRow,
+                              mirrored: rest.mirrored))
         .onTapGesture { director.tap(character.id) }
-        .allowsHitTesting(spot.takesTaps)
-        .onAppear { director.appear(character.id, calm: calm || still) }
+        .onAppear { director.appear(character.id, place: place, still: still, calm: calm) }
         .onDisappear { director.disappear(character.id) }
-        .onChange(of: calm || still) { _, new in director.setCalm(character.id, new) }
-    }
-
-    private func facing(_ stage: CompanionStage?, _ clock: CompanionClock) -> Bool {
-        stage.map { clock.pose(at: .now, stage: $0, still: true).mirrored } ?? false
+        .onChange(of: still) { _, new in director.setMotion(character.id, still: new, calm: calm) }
+        .onChange(of: calm) { _, new in director.setMotion(character.id, still: still, calm: new) }
     }
 }
 
-/// The companion's own pixels (a pixel's slack around them), above the field it sits on.
+/// The companion's own pixels above the edge it sits on (a pixel's slack around them): a tap below the edge is the
+/// field's or the "+"'s.
 private struct TapArea: Shape {
-    let character: CompanionCharacter
-    let spot: CompanionPerch.Spot
+    let runs: [CompanionCharacter.Run]
+    let width: Int
+    let seatRow: Int
     let mirrored: Bool
 
     func path(in rect: CGRect) -> Path {
-        var seat: Int?
-        if case .seat(let row) = character.footing { seat = row }
-        let path = character.tapShape(mirrored: mirrored, belowRow: seat)
-        guard let seat else { return path }
-        let above = CGRect(x: -CompanionCharacter.pointsPerPixel, y: -CompanionCharacter.pointsPerPixel,
-                           width: rect.width + 2 * CompanionCharacter.pointsPerPixel,
-                           height: CGFloat(seat) * CompanionCharacter.pointsPerPixel + CompanionCharacter.pointsPerPixel)
-        return path.intersection(Path(above))
+        CompanionCharacter.tapShape(runs: runs, width: width, mirrored: mirrored, belowRow: seatRow)
     }
 }
 
 #if os(iOS)
-/// The header of Browse's last section on iPhone: room above the card for Quill to sleep on its top edge, at the
-/// right. Nothing (and no room) while Companions is off.
+/// Brief 76's room above Browse's last card for Quill; nothing now (brief 79, item 2 removes its host line).
 struct CompanionShelf: View {
-    @AppStorage(Preferences.companions, store: AppGroup.defaults) private var enabled = true
-
-    /// Quill's height, less the two empty rows above its sleeping curl: the stand and the stretch use them, and may
-    /// reach a little into the gap above.
-    static let height = CGFloat(CompanionCharacter.quill.height - 2) * CompanionCharacter.pointsPerPixel
-
-    var body: some View {
-        if enabled {
-            Color.clear
-                .frame(maxWidth: .infinity)
-                .frame(height: Self.height)
-                .overlay(alignment: CompanionPerch.alignment(.browseFoot)) { CompanionPerch(.browseFoot) }
-                .listRowInsets(EdgeInsets())
-                .textCase(nil)
-        }
-    }
+    var body: some View { EmptyView() }
 }
 #endif

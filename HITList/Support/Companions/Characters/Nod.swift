@@ -1,18 +1,17 @@
 import Foundation
 
-// Generated from the companion design sheets (brief 76); edit the frames here, `CompanionSpriteTests` checks them.
+// Generated from the companion design sheets (briefs 76 and 79); edit the frames here, `CompanionSpriteTests` checks them.
 // Inks: . clear  k ink  d dark  m mid  l light  a accent  w warm  g glow (see `CompanionInk`).
 
 extension CompanionCharacter {
     /// Nod: a small round creature in a nightcap too long for it, the cap's bobble glowing warm. It sits on the
-    /// search field's top edge, legs over the field. Idle: the legs swing out of step, a slow breath, a blink now
-    /// and then. Rare: it looks up, hops onto its feet, stretches on tiptoe, holds its bobble up, and the bobble
-    /// flares into a small star that warms its cap and cheek; a few embers fall into the field as it sits back down.
+    /// search field's top edge, legs over the field.
     static let nod = CompanionCharacter(
         id: "nod",
+        name: "Nod",
         width: 20,
         height: 20,
-        footing: .seat(row: 17),
+        seatRow: 17,
         frames: [
             Frame(name: "rest", rows: [
                 "....................",
@@ -30,28 +29,6 @@ extension CompanionCharacter {
                 "..mllllllllllllmgwg.",
                 "...mllkllllkllm.www.",
                 "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
-                "...lmddddddddml.....",
-                "......md..md........",
-                "......md..md........",
-                "......ll..ll........",
-            ]),
-            Frame(name: "breatheIn", rows: [
-                "....................",
-                "....................",
-                ".......ddddd........",
-                ".....dddddddddd.....",
-                "....dmmdddddddddd...",
-                "....dmddddddddddd...",
-                "...mmmmmmmmmmmm.dd..",
-                "...mlllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllmgwg.",
-                "...mllkllllkllm.www.",
-                "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
                 "....dmmmmmmmmd......",
                 "...lmddddddddml.....",
                 "......md..md........",
@@ -102,50 +79,6 @@ extension CompanionCharacter {
                 "......md..ll........",
                 "......ll............",
             ]),
-            Frame(name: "breatheInLeftKick", rows: [
-                "....................",
-                "....................",
-                ".......ddddd........",
-                ".....dddddddddd.....",
-                "....dmmdddddddddd...",
-                "....dmddddddddddd...",
-                "...mmmmmmmmmmmm.dd..",
-                "...mlllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllmgwg.",
-                "...mllkllllkllm.www.",
-                "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
-                "....dmmmmmmmmd......",
-                "...lmddddddddml.....",
-                "......md..md........",
-                "......ll..md........",
-                "..........ll........",
-            ]),
-            Frame(name: "breatheInRightKick", rows: [
-                "....................",
-                "....................",
-                ".......ddddd........",
-                ".....dddddddddd.....",
-                "....dmmdddddddddd...",
-                "....dmddddddddddd...",
-                "...mmmmmmmmmmmm.dd..",
-                "...mlllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllmgwg.",
-                "...mllkllllkllm.www.",
-                "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
-                "....dmmmmmmmmd......",
-                "...lmddddddddml.....",
-                "......md..md........",
-                "......md..ll........",
-                "......ll............",
-            ]),
             Frame(name: "blink", rows: [
                 "....................",
                 "....................",
@@ -162,28 +95,6 @@ extension CompanionCharacter {
                 "..mllllllllllllmgwg.",
                 "...mllmllllmllm.www.",
                 "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
-                "...lmddddddddml.....",
-                "......md..md........",
-                "......md..md........",
-                "......ll..ll........",
-            ]),
-            Frame(name: "breatheInBlink", rows: [
-                "....................",
-                "....................",
-                ".......ddddd........",
-                ".....dddddddddd.....",
-                "....dmmdddddddddd...",
-                "....dmddddddddddd...",
-                "...mmmmmmmmmmmm.dd..",
-                "...mlllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllm.d..",
-                "..mllllllllllllmgwg.",
-                "...mllmllllmllm.www.",
-                "....mmllllllmm..gwg.",
-                "....dmmmmmmmmd......",
                 "....dmmmmmmmmd......",
                 "...lmddddddddml.....",
                 "......md..md........",
@@ -565,31 +476,38 @@ extension CompanionCharacter {
                 "......ll..ll........",
             ]),
         ],
-        idleFPS: 5,
-        idle: [
-            Loop(name: "swing", weight: 4, ticks:
-                     Self.ticks(("rest", 2), ("leftKick", 3), ("rest", 2), ("rightKick", 3), ("rest", 2),
-                                ("breatheIn", 2), ("breatheInLeftKick", 3), ("breatheIn", 2),
-                                ("breatheInRightKick", 3), ("breatheIn", 2))),
-            Loop(name: "swingBlink", weight: 2, ticks:
-                     Self.ticks(("rest", 2), ("leftKick", 3), ("rest", 2), ("rightKick", 3), ("blink", 1),
-                                ("rest", 1), ("breatheIn", 2), ("breatheInLeftKick", 3), ("breatheIn", 2),
-                                ("breatheInRightKick", 3), ("breatheIn", 2))),
-            Loop(name: "still", weight: 2, ticks:
-                     Self.ticks(("rest", 12), ("breatheIn", 12))),
-            Loop(name: "stillBlink", weight: 2, ticks:
-                     Self.ticks(("rest", 6), ("blink", 1), ("rest", 5), ("breatheIn", 6), ("breatheInBlink", 1),
-                                ("breatheIn", 5))),
-            Loop(name: "kick", weight: 1, ticks:
-                     Self.ticks(("rest", 3), ("rightKick", 2), ("rest", 2), ("rightKick", 2), ("rest", 3),
-                                ("breatheIn", 12))),
-        ],
+        gestureFPS: 8,
         flourishFPS: 9,
-        flourish:
-            Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1),
-                       ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1),
-                       ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1),
-                       ("land", 1), ("rest", 1)),
-        flourishTurns: false
+        flourishTurns: false,
+        field: Posture(
+            awake: Mode(rest: "rest",
+                        gestures: [
+                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2))),
+                            Gesture(name: "swing", weight: 2, ticks: Self.ticks(("leftKick", 3))),
+                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5))),
+                        ],
+                        answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 6)))),
+            asleep: Mode(rest: "rest",
+                         gestures: [
+                             Gesture(name: "blink", ticks: Self.ticks(("blink", 2))),
+                         ],
+                         answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 6)))),
+            flourish:
+                Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1), ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1), ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1), ("land", 1), ("rest", 1))),
+        plus: Posture(
+            awake: Mode(rest: "rest",
+                        gestures: [
+                            Gesture(name: "blink", weight: 2, ticks: Self.ticks(("blink", 2))),
+                            Gesture(name: "swing", weight: 2, ticks: Self.ticks(("leftKick", 3))),
+                            Gesture(name: "glance", ticks: Self.ticks(("lookUp", 5))),
+                        ],
+                        answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 6)))),
+            asleep: Mode(rest: "rest",
+                         gestures: [
+                             Gesture(name: "blink", ticks: Self.ticks(("blink", 2))),
+                         ],
+                         answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 6)))),
+            flourish:
+                Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1), ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1), ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1), ("land", 1), ("rest", 1)))
     )
 }

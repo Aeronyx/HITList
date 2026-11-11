@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The moments a companion's drawing changes, from its clock: SwiftUI redraws only then (four to ten times a
-/// second while it moves, never during a held frame), and not at all while the view is off screen.
+/// The moments a companion's drawing changes, from its clock: SwiftUI redraws only then (a few times while an act
+/// plays, never during a held frame) and the schedule ends when the act does, so a still companion costs nothing.
 struct CompanionTimeline: TimelineSchedule {
     let clock: CompanionClock
     let stage: CompanionStage
@@ -13,10 +13,10 @@ struct CompanionTimeline: TimelineSchedule {
     struct Entries: Sequence, IteratorProtocol {
         let clock: CompanionClock
         let stage: CompanionStage
-        var upcoming: Date
+        var upcoming: Date?
 
         mutating func next() -> Date? {
-            let now = upcoming
+            guard let now = upcoming else { return nil }
             upcoming = clock.nextChange(after: now, stage: stage)
             return now
         }
