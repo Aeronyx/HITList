@@ -8,8 +8,9 @@ import SwiftData
 final class MacChromeTests: XCTestCase {
     #if os(macOS)
     /// Every glyph that sits in the trailing pill: the filter lines (task lists, Upcoming), the flip sound on and
-    /// off (the Flipboard) and the "…". The speaker is the widest, and before brief 66 it pushed the pill out.
-    static let pillGlyphs = ["line.3.horizontal.decrease", "speaker.wave.2", "speaker.slash", "ellipsis.circle"]
+    /// off (the Flipboard) and the Settings gear (the "…" until brief 99). The speaker is the widest, and before brief 66
+    /// it pushed the pill out.
+    static let pillGlyphs = ["line.3.horizontal.decrease", "speaker.wave.2", "speaker.slash", MobileTopControl.settings.symbol]
 
     func testEveryControlInTheTrailingPillTakesTheSameFrame() {
         let size = CGSize(width: ScreenControlMetrics.width, height: ScreenControlMetrics.height)
@@ -19,6 +20,9 @@ final class MacChromeTests: XCTestCase {
             let menu = Menu { Button("x") {} } label: { Image(systemName: glyph) }.screenControlFrame()
             XCTAssertEqual(NSHostingView(rootView: menu).fittingSize, size, "\(glyph) as a menu")
         }
+        // The gear as it is drawn: a plain button in the pill's control style.
+        let gear = SettingsGearButton {}.buttonStyle(ToolbarPillControlStyle())
+        XCTAssertEqual(NSHostingView(rootView: gear).fittingSize, size, "the Settings gear")
     }
 
     func testTheFrameHoldsTheWidestGlyphWithRoomToSpare() {
@@ -37,7 +41,7 @@ final class MacChromeTests: XCTestCase {
         XCTAssertEqual(ToolbarPillMetrics.height, 36)
         let pill = ToolbarPill {
             Image(systemName: "line.3.horizontal.decrease").screenControlFrame()
-            Image(systemName: "ellipsis.circle").screenControlFrame()
+            Image(systemName: MobileTopControl.settings.symbol).screenControlFrame()
         }
         // `fittingSize` rounds up to whole points; the window draws it at 67.5 (135 px at 2x, measured).
         let size = NSHostingView(rootView: pill).fittingSize
@@ -339,6 +343,15 @@ final class MacChromeTests: XCTestCase {
     private func spin(_ seconds: TimeInterval) {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    }
+    #endif
+
+    #if os(macOS)
+    /// No header over nothing (brief 99): "Filters" shows once there is a saved filter; before that, Search's "Save as
+    /// filter…" makes the first one.
+    func testTheFiltersHeaderShowsOnlyOverSavedFilters() {
+        XCTAssertFalse(SidebarView.showsFiltersHeader(savedFilters: 0))
+        XCTAssertTrue(SidebarView.showsFiltersHeader(savedFilters: 1))
     }
     #endif
 }

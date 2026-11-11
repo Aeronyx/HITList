@@ -106,6 +106,51 @@ struct HITSheetChrome<Content: View>: View {
     }
 }
 
+/// One header for a section of rows (brief 99; SUPERVISOR §7, "one section-header style"): Browse's "Groups +" and
+/// every `HITGroup`'s ("Appearance", "Library") were two styles (regular 17 pt 16 in from the card; small semibold on
+/// its edge). Now both are the task lists' header type (`HITType.listSectionHeader`, Inter 16 semibold on iPhone, 14
+/// bold on the Mac) in grey, on the rows' leading edge (`inset`: a row's padding in from the card; 0 where the list
+/// puts the header there itself, as Browse's does), with an optional "+" after the title.
+struct HITSectionHeader: View {
+    let title: String
+    var inset: CGFloat = HITSpacing.l
+    var add: (() -> Void)?
+    /// The "+"'s words: "Add Group".
+    var addLabel: String?
+
+    init(_ title: String, inset: CGFloat = HITSpacing.l, addLabel: String? = nil, add: (() -> Void)? = nil) {
+        self.title = title
+        self.inset = inset
+        self.addLabel = addLabel
+        self.add = add
+    }
+
+    /// The header's line: at least the old header's 20 pt, which a 16 pt Inter line fits (Settings' first screen keeps
+    /// its height).
+    static let minHeight: CGFloat = 20
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(HITType.listSectionHeader)
+                .foregroundStyle(Theme.secondaryText)
+                .textCase(nil)
+                .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
+            if let add {
+                Button(action: add) { Image(systemName: "plus") }
+                    .buttonStyle(HITIconButtonStyle(font: .system(size: 13, weight: .semibold), alignment: .leading))
+                    .help(addLabel ?? "Add")
+                    .accessibilityLabel(addLabel ?? "Add")
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: Self.minHeight)
+        .padding(.leading, inset)
+    }
+}
+
+
 /// A titled block inside a sheet or settings page: small grey header (with an optional trailing
 /// accessory such as a help button), the content, and an optional footer note.
 ///

@@ -95,29 +95,24 @@ final class ProfileMenuTests: XCTestCase {
         WhatsNew.Entry(version: "0.5.0", items: ["Oldest"]),
     ]
 
-    func testWhatsNewShowsTheNewestThenEarlierVersions() {
+    /// This version's lines only (brief 99: the earlier versions went from the popout and from About).
+    func testWhatsNewShowsTheNewestVersionOnly() {
         XCTAssertEqual(WhatsNewPopoutModel.current(sampleEntries)?.version, "0.7.0")
-        XCTAssertEqual(WhatsNewPopoutModel.earlier(sampleEntries).map(\.version), ["0.6.0", "0.5.0"])
         XCTAssertNil(WhatsNewPopoutModel.current([]))
-        XCTAssertEqual(WhatsNewPopoutModel.earlier([]), [])
         XCTAssertEqual(WhatsNewPopoutModel.versionTitle(sampleEntries[0]), "Version 0.7.0")
         XCTAssertEqual(WhatsNewPopoutModel.title, "What's New")
-        XCTAssertEqual(WhatsNewPopoutModel.earlierTitle, "Earlier versions")
     }
 
     /// The popout reads the supervisor's list as it is: the newest entry is the one Settings → About shows.
     func testWhatsNewReadsTheRealList() {
         XCTAssertEqual(WhatsNewPopoutModel.current(WhatsNew.entries), WhatsNew.current)
-        XCTAssertEqual(WhatsNewPopoutModel.earlier(WhatsNew.entries).count, WhatsNew.entries.count - 1)
     }
 
-    func testWhatsNewRendersCollapsedAndExpanded() {
-        for expanded in [false, true] {
-            let view = WhatsNewPopout(showsEarlier: expanded, onDone: {})
-                .frame(width: WhatsNewPopoutModel.width, height: WhatsNewPopoutModel.maxHeight)
-                .preferredColorScheme(.dark)
-            XCTAssertNotNil(ImageRenderer(content: view).cgImage, expanded ? "expanded" : "collapsed")
-        }
+    func testWhatsNewRenders() {
+        let view = WhatsNewPopout(onDone: {})
+            .frame(width: WhatsNewPopoutModel.width, height: WhatsNewPopoutModel.maxHeight)
+            .preferredColorScheme(.dark)
+        XCTAssertNotNil(ImageRenderer(content: view).cgImage)
     }
 
     func testICloudLineUsesTheAccountScreensWords() {

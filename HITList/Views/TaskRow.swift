@@ -348,7 +348,7 @@ extension View {
     func taskRowChrome(compact: Bool, completionPhase: CompletionPhase?, calmMotion: Bool) -> some View {
         let slide = completionPhase == .animating && !calmMotion ? CompletionMotion.slideDistance : 0
         return self
-            .listRowInsets(ListMetrics.rowInsets(compact: compact))
+            .listRowInsetsOnMargin(compact: compact) // the list's margin, the system's on iPhone (brief 99)
             .listRowSeparatorTint(Theme.separator)
             .contentShape(Rectangle())
             .offset(x: slide)

@@ -113,16 +113,20 @@ struct UpcomingView: View {
         }
         .quickAddEntry(.upcoming)
         .background(Theme.background)
+        // Rows, headers and the week strip's month on the large title's edge (brief 99).
+        .followsSystemListMargin()
         .navigationTitle("Upcoming")
         .screenChrome {
             ViewOptionsMenu {
-                Toggle("Show overdue", isOn: $overdueExpanded)
+                Toggle(isOn: $overdueExpanded) { Label("Show overdue", systemImage: "exclamationmark.circle") }
                 // The board always shows seven days.
                 if !showsBoard {
-                    Picker("Days shown", selection: $dayCount) {
+                    Picker(selection: $dayCount) {
                         Text("2 weeks").tag(14)
                         Text("1 month").tag(30)
                         Text("2 months").tag(60)
+                    } label: {
+                        Label("Days shown", systemImage: "calendar.day.timeline.leading")
                     }
                 }
             }
@@ -426,11 +430,14 @@ struct UpcomingView: View {
     private func dayHeader(_ day: UpcomingDay<Entry>) -> some View {
         let isToday = day.date == today
         return HStack(spacing: 6) {
-            Text(UpcomingFormat.header(for: day.date, now: now, calendar: calendar))
-                .foregroundStyle(isToday ? Theme.accent : .primary)
-            if !day.items.isEmpty {
-                Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
+            DayHeadingLine(full: AttributedString(UpcomingFormat.header(for: day.date, now: now, calendar: calendar)),
+                           short: AttributedString(UpcomingFormat.header(for: day.date, now: now, shortWeekday: true,
+                                                                         calendar: calendar))) {
+                if !day.items.isEmpty {
+                    Text("\(day.items.count)").foregroundStyle(Theme.secondaryText)
+                }
             }
+            .foregroundStyle(isToday ? Theme.accent : .primary)
             Spacer()
             if dropTarget == day.date {
                 Label("Move here", systemImage: "arrow.down.to.line").labelStyle(.titleAndIcon).foregroundStyle(Theme.accent)
@@ -460,7 +467,7 @@ struct UpcomingView: View {
                     .id(AddRowID(day: day))
                     .selectionDisabled()
                     .listRowSeparator(.hidden)
-                    .listRowInsets(ListMetrics.rowInsets(compact: false))
+                    .listRowInsetsOnMargin(compact: false)
                     .listRowBackground(Theme.background)
             }
         } else {
@@ -750,7 +757,7 @@ private struct DayHeaderStyle: ViewModifier {
         content
             .font(HITType.listSectionHeader)
             .textCase(nil)
-            .padding(.horizontal, ListMetrics.horizontalInset)
+            .listMarginPadding()
             .padding(.top, ListMetrics.headerTop)
             .padding(.bottom, ListMetrics.headerBottom)
             .frame(maxWidth: .infinity, alignment: .leading)

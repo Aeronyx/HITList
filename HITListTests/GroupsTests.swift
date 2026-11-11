@@ -92,23 +92,30 @@ final class GroupsTests: XCTestCase {
     }
 
     func testDateHeadingsUseTheDueColoursAndNoDot() {
-        let now = Date()
+        // Noon of a fixed day, not the wall clock (a test must not change its answer at midnight).
+        let now = Calendar.current.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 12))!
         let overdue = GroupSectionHeading.make(for: .due(.overdue), count: 2, projects: [], now: now)
         XCTAssertEqual(overdue.title, "Overdue")
         XCTAssertEqual(overdue.titleColor, HITColor.dueOverdue)
         XCTAssertNil(overdue.dot)
+        // The days in the lists' one form (brief 99): "Nov 11 · Today · Wednesday", with a three-letter fallback.
+        let calendar = Calendar.current
         let today = GroupSectionHeading.make(for: .due(.today), count: 1, projects: [], now: now)
-        XCTAssertEqual(today.title, "Today")
+        XCTAssertEqual(today.title, DueFormatter.dayHeading(for: calendar.startOfDay(for: now), now: now))
+        XCTAssertTrue(today.title.contains(" · Today · "), today.title)
+        XCTAssertEqual(today.shortTitle, DueFormatter.dayHeading(for: now, now: now, shortWeekday: true))
         XCTAssertEqual(today.titleColor, HITColor.dueToday)
-        XCTAssertEqual(GroupSectionHeading.make(for: .due(.tomorrow), count: 1, projects: [], now: now).title, "Tomorrow")
+        let tomorrow = GroupSectionHeading.make(for: .due(.tomorrow), count: 1, projects: [], now: now)
+        XCTAssertTrue(tomorrow.title.contains(" · Tomorrow · "), tomorrow.title)
         XCTAssertEqual(GroupSectionHeading.make(for: .due(.later), count: 1, projects: [], now: now).title, "Later")
         XCTAssertEqual(GroupSectionHeading.make(for: .due(.noDate), count: 1, projects: [], now: now).title, "No date")
 
         // A day of the coming week by name, as the filter lists title it.
         let day = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: 3, to: now)!)
         let named = GroupSectionHeading.make(for: .due(.day(day)), count: 1, projects: [], now: now)
-        XCTAssertEqual(named.title, DueFormatter.sectionTitle(for: day, now: now))
-        XCTAssertTrue(named.title.contains(day.formatted(.dateTime.weekday(.wide))), named.title)
+        XCTAssertEqual(named.title, DueFormatter.sectionTitle(for: day, now: now, style: .dated))
+        XCTAssertTrue(named.title.hasSuffix(" · " + day.formatted(.dateTime.weekday(.wide))), named.title)
+        XCTAssertNil(overdue.shortTitle, "Overdue names no one day")
         XCTAssertEqual(named.titleColor, Theme.secondaryText)
     }
 

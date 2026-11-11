@@ -29,6 +29,13 @@ struct HITSegment<Value: Hashable>: Identifiable {
 struct HITSegmented<Value: Hashable>: View {
     @Binding var selection: Value
     let segments: [HITSegment<Value>]
+    /// `.small` makes the whole control 28 pt tall, a small button's height, for a row of small buttons (brief 99:
+    /// the sync log's filter beside Copy log and Save…).
+    var size: HITButtonStyle.Size = .regular
+
+    /// A segment's height; the track adds `trackInset` above and below (32 pt in all, or 28 when small).
+    static func segmentHeight(_ size: HITButtonStyle.Size) -> CGFloat { size == .regular ? 28 : 24 }
+    static var trackInset: CGFloat { 2 }
 
     @Namespace private var highlight
     @Environment(\.isEnabled) private var isEnabled
@@ -54,7 +61,7 @@ struct HITSegmented<Value: Hashable>: View {
                     }
                     .padding(.horizontal, HITSpacing.s + 2)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 28)
+                    .frame(height: Self.segmentHeight(size))
                     .background {
                         if selected {
                             highlightCapsule
@@ -67,7 +74,7 @@ struct HITSegmented<Value: Hashable>: View {
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .padding(2)
+        .padding(Self.trackInset)
         .background(Capsule().fill(Theme.elevated))
         .opacity(isEnabled ? 1 : HITButtonStyle.Appearance.disabledOpacity)
         .accessibilityElement(children: .contain)

@@ -275,8 +275,15 @@ struct TaskPopout: View {
                         .contentTransition(isChecked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
                         .hitCelebratePop(trigger: pops)
                         .contentShape(Rectangle())
+                        #if os(macOS)
+                        // 24 × 24 (brief 99; the 22 pt icon column made it 22 × 24): a point of the empty space each side.
+                        .hitOutset(horizontal: HITHitTarget.outset(for: EditorMetrics.iconColumn))
+                        #endif
                 }
                 .buttonStyle(.plain)
+                #if os(macOS)
+                .hitOutsetLayout(horizontal: HITHitTarget.outset(for: EditorMetrics.iconColumn))
+                #endif
                 .accessibilityLabel(task.isCompleted ? "Mark incomplete" : "Complete task")
                 .accessibilityIdentifier("popoutCheckbox")
 

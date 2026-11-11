@@ -38,13 +38,10 @@ struct SendFeedbackRow: View {
     }
 }
 
-/// What's New as groups: this version's list, then the earlier versions behind a disclosure row. About → What's New
-/// on iPhone and iPad (a page titled What's New, so its first group says "Version 0.9.3"), and inline in the Mac's
-/// About section ("What's new in 0.9.3", with the earlier versions listed on their row, which has the room).
+/// What's New as one group: this version's list only (brief 99, George: "Earlier versions isn't even a necessary
+/// feature"; the Mac's About links every version's notes on GitHub). About → What's New on iPhone and iPad (a page
+/// titled What's New, so its group says "Version 0.9.3"), and inline in the Mac's About section ("What's new in 0.9.3").
 struct WhatsNewGroups: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var showEarlier = false
-
     #if os(macOS)
     private static let inline = true
     #else
@@ -57,23 +54,6 @@ struct WhatsNewGroups: View {
                 WhatsNewItems(entry: current)
             }
             .accessibilityIdentifier("settings-whats-new-inline")
-
-            let earlier = Array(WhatsNew.entries.dropFirst())
-            if !earlier.isEmpty {
-                HITGroup {
-                    HITMenuRow("Earlier versions", systemImage: "clock.arrow.circlepath",
-                               value: Self.inline ? earlier.map(\.label).joined(separator: ", ") : nil,
-                               accessory: .expand(isExpanded: showEarlier)) {
-                        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showEarlier.toggle() }
-                    }
-                    .accessibilityIdentifier("settings-whats-new-earlier")
-                }
-                if showEarlier {
-                    ForEach(earlier) { entry in
-                        HITGroup("Version \(entry.label)") { WhatsNewItems(entry: entry) }
-                    }
-                }
-            }
         }
     }
 }

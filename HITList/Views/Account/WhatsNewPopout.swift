@@ -1,13 +1,12 @@
 import SwiftUI
 
 // What's New from the profile menu (brief 53): a small card with this version's lines from `WhatsNew.entries`
-// (read only; the supervisor keeps that list) and "Earlier versions", which expands to the rest. A popover
-// on the Mac and iPad, a medium sheet on iPhone (`whatsNewPopout(isPresented:)`).
+// (read only; the supervisor keeps that list), and only this version's (brief 99: the earlier versions went). A
+// popover on the Mac and iPad, a medium sheet on iPhone (`whatsNewPopout(isPresented:)`).
 
 /// What the card shows. Pure, so tests pin the split and the words.
 enum WhatsNewPopoutModel {
     static let title = "What's New"
-    static let earlierTitle = "Earlier versions"
     static let doneTitle = "Done"
     /// The popover's width on the Mac and iPad.
     static let width: CGFloat = 360
@@ -17,9 +16,6 @@ enum WhatsNewPopoutModel {
     /// The newest entry: this build's version (or, in a development build, the one being worked on).
     static func current(_ entries: [WhatsNew.Entry]) -> WhatsNew.Entry? { entries.first }
 
-    /// Every older entry, newest first.
-    static func earlier(_ entries: [WhatsNew.Entry]) -> [WhatsNew.Entry] { Array(entries.dropFirst()) }
-
     /// "Version 0.7.0", or "Version 0.9.0 (21)" for a build of a version that has several.
     static func versionTitle(_ entry: WhatsNew.Entry) -> String { "Version \(entry.label)" }
 }
@@ -27,62 +23,21 @@ enum WhatsNewPopoutModel {
 struct WhatsNewPopout: View {
     var entries: [WhatsNew.Entry] = WhatsNew.entries
     var onDone: () -> Void
-    @State private var showsEarlier: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    /// `showsEarlier` starts expanded for the offscreen renders in the tests.
-    init(entries: [WhatsNew.Entry] = WhatsNew.entries, showsEarlier: Bool = false, onDone: @escaping () -> Void) {
-        self.entries = entries
-        self.onDone = onDone
-        _showsEarlier = State(initialValue: showsEarlier)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
             Rectangle().fill(Theme.separator).frame(height: 1)
-            ScrollViewReader { scroller in
             ScrollView {
                 VStack(alignment: .leading, spacing: HITSpacing.s) {
                     if let current = WhatsNewPopoutModel.current(entries) {
-                        WhatsNewPopoutLines(items: current.items, prominent: true)
-                    }
-                    let earlier = WhatsNewPopoutModel.earlier(entries)
-                    if !earlier.isEmpty {
-                        earlierButton
-                            .padding(.top, HITSpacing.s)
-                            .id(Self.earlierAnchor)
-                        if showsEarlier {
-                            ForEach(earlier) { entry in
-                                VStack(alignment: .leading, spacing: HITSpacing.xs) {
-                                    Text(WhatsNewPopoutModel.versionTitle(entry))
-                                        .font(HITType.sectionHeader)
-                                        .textCase(.uppercase)
-                                        .foregroundStyle(Theme.secondaryText)
-                                    WhatsNewPopoutLines(items: entry.items, prominent: false)
-                                }
-                                .padding(.top, HITSpacing.s)
-                                .accessibilityElement(children: .contain)
-                            }
-                        }
+                        WhatsNewPopoutLines(items: current.items)
                     }
                 }
                 .padding(HITSpacing.l)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollBounceBehavior(.basedOnSize)
-            // A popover keeps the height it opened at, so the expanded versions would sit below the fold:
-            // bring "Earlier versions" to the top once they are there.
-            .onChange(of: showsEarlier) { _, expanded in
-                guard expanded else { return }
-                // Next turn of the run loop, once the expanded rows are laid out and there is room to scroll.
-                DispatchQueue.main.async {
-                    withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) {
-                        scroller.scrollTo(Self.earlierAnchor, anchor: .top)
-                    }
-                }
-            }
-            }
         }
         .background(Theme.elevated)
         .accessibilityElement(children: .contain)
@@ -104,8 +59,9 @@ struct WhatsNewPopout: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
             Spacer(minLength: HITSpacing.s)
+            // The accent pill, as every sheet's Done (brief 99: it was grey text here).
             Button(WhatsNewPopoutModel.doneTitle, action: onDone)
-                .buttonStyle(.hitGhost)
+                .buttonStyle(.hitPrimary)
                 .keyboardShortcut(.cancelAction)
                 .accessibilityIdentifier("whatsNewDone")
         }
@@ -113,53 +69,24 @@ struct WhatsNewPopout: View {
         .padding(.top, HITSpacing.m)
         .padding(.bottom, HITSpacing.s)
     }
-
-    private static let earlierAnchor = "earlier"
-
-    private var earlierButton: some View {
-        Button {
-            // Expanding lays the rows out at once (the scroll to them then has room to move); collapsing fades.
-            if showsEarlier {
-                withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { showsEarlier = false }
-            } else {
-                showsEarlier = true
-            }
-        } label: {
-            HStack(spacing: HITSpacing.xs) {
-                Text(WhatsNewPopoutModel.earlierTitle)
-                    .font(HITType.calloutMedium)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10, weight: .bold))
-                    .rotationEffect(.degrees(showsEarlier ? 90 : 0))
-                Spacer(minLength: 0)
-            }
-            .foregroundStyle(Theme.accent)
-            .frame(minHeight: 28)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityValue(showsEarlier ? "Expanded" : "Collapsed")
-        .accessibilityIdentifier("whatsNewEarlier")
-    }
 }
 
-/// One version's lines: a sparkle in the accent (grey for earlier versions), then the line.
+/// This version's lines: a sparkle in the accent, then the line.
 private struct WhatsNewPopoutLines: View {
     let items: [String]
-    var prominent: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: HITSpacing.s) {
             ForEach(items, id: \.self) { item in
                 HStack(alignment: .firstTextBaseline, spacing: HITSpacing.s) {
                     Image(systemName: "sparkle")
-                        .font(.system(size: prominent ? 11 : 9, weight: .semibold))
-                        .foregroundStyle(prominent ? Theme.accent : Theme.secondaryText)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
                         .frame(width: 14)
                         .accessibilityHidden(true)
                     Text(item)
-                        .font(prominent ? HITType.body : HITType.callout)
-                        .foregroundStyle(prominent ? HITColor.text : Theme.secondaryText)
+                        .font(HITType.body)
+                        .foregroundStyle(HITColor.text)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -185,7 +112,7 @@ extension View {
 }
 
 #Preview("What's New") {
-    WhatsNewPopout(showsEarlier: true, onDone: {})
+    WhatsNewPopout(onDone: {})
         .frame(width: 360, height: 480)
         .preferredColorScheme(.dark)
 }

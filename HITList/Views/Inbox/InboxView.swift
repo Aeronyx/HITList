@@ -92,6 +92,8 @@ struct InboxView: View {
         }
         .quickAddEntry(.inbox)
         .background(Theme.background)
+        // Rows and headers on the large title's edge (brief 99).
+        .followsSystemListMargin()
         .navigationTitle("Inbox")
         #if os(iOS)
         // The name once, as the system large title (brief 61); the count is on Browse's Inbox row and the
@@ -99,10 +101,10 @@ struct InboxView: View {
         .navigationBarTitleDisplayMode(.large)
         #endif
         // Show completed and Sort by behind the filter-lines icon, the only control beside the magnifying glass;
-        // reviewing the inbox one task at a time in the "…".
+        // reviewing the inbox one task at a time under their divider.
         .screenChrome {
             ViewOptionsMenu {
-                Toggle("Show completed", isOn: $showCompleted)
+                Toggle(isOn: $showCompleted) { Label("Show completed", systemImage: "checkmark.circle") }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
                 SortPicker(selection: sortBinding, choices: ListSort.inbox)
             }
@@ -135,6 +137,8 @@ struct InboxView: View {
                         GroupSectionHeader(heading: .make(row: section.key, count: section.openCount, projects: projects, now: now))
                     }
                 }
+                // No hairline between the large title and the first row (brief 99): a section with no header drew one.
+                .hidesTopSeparatorWithoutHeader(section.key == .all)
             }
             if !isCompact {
                 Section { InlineAddRow(context: .inbox, key: "inbox") }

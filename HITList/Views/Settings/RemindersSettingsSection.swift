@@ -21,16 +21,27 @@ struct RemindersSettingsSection: View {
     @AppStorage(Preferences.morningSummaryMinutes, store: AppGroup.defaults)
     private var morningMinutes = Preferences.morningSummaryMinutesDefault
 
-    /// The summary time as a Date today, for the time picker; stored as minutes after midnight.
-    private var morningTime: Binding<Date> {
-        Binding {
-            let minutes = min(max(0, morningMinutes), 24 * 60 - 1)
-            return Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
-        } set: { date in
-            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-            morningMinutes = (parts.hour ?? 8) * 60 + (parts.minute ?? 0)
-        }
+    /// The summary time for our time field (brief 99: it was the system's picker), stored as minutes after midnight.
+    private var morningTime: PickerTime { Self.summaryTime(minutes: morningMinutes) }
+    /// Rebuilds the field after its × (the summary always has a time), so it shows the stored one again.
+    @State private var summaryFieldRevision = 0
+
+    static func summaryTime(minutes: Int) -> PickerTime {
+        let clamped = min(max(0, minutes), 24 * 60 - 1)
+        return PickerTime(hour: clamped / 60, minute: clamped % 60)
     }
+
+    static func summaryMinutes(_ time: PickerTime) -> Int { time.hour * 60 + time.minute }
+
+    /// The field's width in the row: the widest time ("10:30 AM", 73 pt of Inter 17 on iPhone, 56 of 13 on the Mac) with
+    /// the field's padding, its clock and its × (70 pt), growing with the text size.
+    #if os(macOS)
+    static let summaryFieldBaseWidth: CGFloat = 132
+    #else
+    static let summaryFieldBaseWidth: CGFloat = 156
+    #endif
+    @ScaledMetric(relativeTo: .body) private var summaryFieldWidth = RemindersSettingsSection.summaryFieldBaseWidth
+    static let summaryFieldMinWidth: CGFloat = 120
     @State private var authorization: UNAuthorizationStatus?
     @State private var scheduled = "…"
     @State private var testMessage: String?
@@ -88,9 +99,15 @@ struct RemindersSettingsSection: View {
             }
             if morningSummary {
                 HITMenuRow("Summary time", systemImage: "clock", trailing: {
-                    DatePicker("Summary time", selection: morningTime, displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .fixedSize()
+                    // The cards' time field (`PickerTimeField`): type "8am", "7:30", "noon", then Return.
+                    PickerTimeField(time: morningTime) { time in
+                        if let time { morningMinutes = Self.summaryMinutes(time) } else { summaryFieldRevision += 1 }
+                    }
+                    .id(summaryFieldRevision)
+                    // The title keeps its one line first; the field takes the rest, up to its width (on iPhone 16 that
+                    // is 153 pt, room for "10:30 AM").
+                    .frame(minWidth: Self.summaryFieldMinWidth, maxWidth: summaryFieldWidth)
+                    .layoutPriority(-1)
                 })
                 .onChange(of: morningMinutes) { _, _ in Task { await rescheduleAndRefresh() } }
             }

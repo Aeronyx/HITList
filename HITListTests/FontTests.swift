@@ -68,7 +68,7 @@ final class FontTests: XCTestCase {
         XCTAssertEqual(HITType.listSectionHeader, HITFont.inter(16, .semibold, relativeTo: .subheadline))
         #endif
         XCTAssertEqual(HITType.taskTitle, HITFont.inter(HITType.taskTitleSize, .regular, relativeTo: .body))
-        XCTAssertEqual(HITType.taskMeta, HITFont.inter(HITType.taskMetaSize, .regular, relativeTo: .caption))
+        XCTAssertEqual(HITType.taskMeta, HITFont.inter(HITType.taskMetaSize, .regular, relativeTo: .caption2)) // brief 99: never below 11 pt
     }
 
     /// The target's title line, "check backlog/longterm", is 313 px wide at 2x (SF Pro 14); Inter 14 with the Mac's

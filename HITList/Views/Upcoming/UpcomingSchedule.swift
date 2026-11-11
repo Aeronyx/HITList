@@ -193,30 +193,10 @@ struct UpcomingBoardModel<Item: FilterableTask> {
 }
 
 enum UpcomingFormat {
-    /// "Tue · Oct 28 · Today", "Wed · Oct 29 · Tomorrow", "Thu · Oct 30", "Fri · Jan 1, 2027".
-    static func header(for day: Date, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
-        let sameYear = calendar.component(.year, from: day) == calendar.component(.year, from: now)
-        var parts = [
-            day.formatted(style.weekday(.abbreviated)),
-            day.formatted(sameYear ? style.month(.abbreviated).day() : style.month(.abbreviated).day().year()),
-        ]
-        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: day)).day ?? 0
-        if offset == 0 { parts.append("Today") }
-        if offset == 1 { parts.append("Tomorrow") }
-        return parts.joined(separator: " · ")
-    }
-
-    /// The board's column header: "Nov 4 · Today · Wednesday", "Nov 5 · Tomorrow · Thursday",
-    /// "Nov 6 · Friday", "Jan 1, 2027 · Friday".
-    static func boardHeader(for day: Date, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        let style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
-        let sameYear = calendar.component(.year, from: day) == calendar.component(.year, from: now)
-        var parts = [day.formatted(sameYear ? style.month(.abbreviated).day() : style.month(.abbreviated).day().year())]
-        let offset = calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: day)).day ?? 0
-        if offset == 0 { parts.append("Today") }
-        if offset == 1 { parts.append("Tomorrow") }
-        parts.append(day.formatted(style.weekday(.wide)))
-        return parts.joined(separator: " · ")
+    /// A day's header in the list (iPhone, iPad) and on the Mac board: the lists' one form (`DueFormatter.dayHeading`,
+    /// brief 99), "Oct 28 · Today · Wednesday", "Oct 30 · Friday", "Jan 1, 2027 · Friday".
+    static func header(for day: Date, now: Date, shortWeekday: Bool = false, calendar: Calendar = .current,
+                       locale: Locale = .current) -> String {
+        DueFormatter.dayHeading(for: day, now: now, shortWeekday: shortWeekday, calendar: calendar, locale: locale)
     }
 }

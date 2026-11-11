@@ -115,11 +115,14 @@ final class UpcomingScheduleTests: XCTestCase {
         XCTAssertEqual(counts, [date(2026, 10, 28): 2, date(2026, 10, 20): 1, date(2027, 3, 1): 1])
     }
 
+    /// The list's headers (iPhone, iPad) read as the board's and every list's (brief 99; they were "Wed · Oct 28 · Today").
     func testHeaderTitles() {
-        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 28), now: now, calendar: calendar, locale: locale), "Wed · Oct 28 · Today")
-        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 29), now: now, calendar: calendar, locale: locale), "Thu · Oct 29 · Tomorrow")
-        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 30), now: now, calendar: calendar, locale: locale), "Fri · Oct 30")
-        XCTAssertEqual(UpcomingFormat.header(for: date(2027, 1, 1), now: now, calendar: calendar, locale: locale), "Fri · Jan 1, 2027")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 28), now: now, calendar: calendar, locale: locale), "Oct 28 · Today · Wednesday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 29), now: now, calendar: calendar, locale: locale), "Oct 29 · Tomorrow · Thursday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 30), now: now, calendar: calendar, locale: locale), "Oct 30 · Friday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2027, 1, 1), now: now, calendar: calendar, locale: locale), "Jan 1, 2027 · Friday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 29), now: now, shortWeekday: true, calendar: calendar, locale: locale),
+                       "Oct 29 · Tomorrow · Thu")
     }
 
     func testInlineAddDefaultsToTheRowsDayOnlyWithoutADate() {
@@ -241,10 +244,8 @@ final class UpcomingScheduleTests: XCTestCase {
     }
 
     func testBoardColumnHeaders() {
-        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 10, 28), now: now, calendar: calendar, locale: locale), "Oct 28 · Today · Wednesday")
-        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 10, 29), now: now, calendar: calendar, locale: locale), "Oct 29 · Tomorrow · Thursday")
-        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2026, 11, 4), now: now, calendar: calendar, locale: locale), "Nov 4 · Wednesday")
-        XCTAssertEqual(UpcomingFormat.boardHeader(for: date(2027, 1, 1), now: now, calendar: calendar, locale: locale), "Jan 1, 2027 · Friday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 10, 28), now: now, calendar: calendar, locale: locale), "Oct 28 · Today · Wednesday")
+        XCTAssertEqual(UpcomingFormat.header(for: date(2026, 11, 4), now: now, calendar: calendar, locale: locale), "Nov 4 · Wednesday")
     }
 
     // MARK: - Week strip

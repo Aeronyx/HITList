@@ -248,8 +248,15 @@ struct SharedTaskPopout: View {
                         .contentTransition(checked && !reduceMotion ? .symbolEffect(.replace) : .opacity)
                         .hitCelebratePop(trigger: pops)
                         .contentShape(Rectangle())
+                        #if os(macOS)
+                        // 24 × 24, as the editor's (brief 99).
+                        .hitOutset(horizontal: HITHitTarget.outset(for: EditorMetrics.iconColumn))
+                        #endif
                 }
                 .buttonStyle(.plain)
+                #if os(macOS)
+                .hitOutsetLayout(horizontal: HITHitTarget.outset(for: EditorMetrics.iconColumn))
+                #endif
                 .disabled(!row.canWrite)
                 .accessibilityLabel(row.task.isCompleted ? "Mark incomplete" : "Complete task")
                 .accessibilityIdentifier("popoutCheckbox")
