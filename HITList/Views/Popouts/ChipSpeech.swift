@@ -4,7 +4,8 @@ import HITListCore
 /// where the chip shows only the value ("Tomorrow 9:00 AM", "P2", "@errands") or only its name when empty.
 enum ChipSpeech {
     static func date(_ text: String?) -> String { "Date: \(text ?? "none")" }
-    static func priority(_ priority: Priority) -> String { priority == .p4 ? "Priority: none" : priority.displayName }
+    /// "Priority: P1", as the chip writes it (the UI tests read the P1 in it).
+    static func priority(_ priority: Priority) -> String { "Priority: " + (priority == .p4 ? "none" : priority.shortName) }
     static func labels(_ names: [String]) -> String {
         "Labels: " + (names.isEmpty ? "none" : names.joined(separator: ", "))
     }

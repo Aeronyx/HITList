@@ -53,7 +53,7 @@ final class AccessibilityTests: XCTestCase {
     func testChipsSayWhatTheyAre() {
         XCTAssertEqual(ChipSpeech.date("Tomorrow"), "Date: Tomorrow")
         XCTAssertEqual(ChipSpeech.date(nil), "Date: none")
-        XCTAssertEqual(ChipSpeech.priority(.p2), "Priority 2")
+        XCTAssertEqual(ChipSpeech.priority(.p2), "Priority: P2")
         XCTAssertEqual(ChipSpeech.priority(.p4), "Priority: none")
         XCTAssertEqual(ChipSpeech.labels(["errands", "waiting"]), "Labels: errands, waiting")
         XCTAssertEqual(ChipSpeech.labels([]), "Labels: none")
