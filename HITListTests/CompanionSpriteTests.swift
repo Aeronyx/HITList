@@ -66,7 +66,7 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     /// The companions dressed for the night and the weather so far (brief 79, items 3 to 6).
-    static let dressed = ["nod", "quill", "hush", "button", "mallow"]
+    static let dressed = ["nod", "quill", "hush", "button", "phase"]
 
     /// Asleep is a pose of its own; rain and snow are the resting pose with one prop or change, a few pixels; the
     /// three small gestures and a stir in each place.
@@ -338,8 +338,9 @@ final class CompanionSpriteTests: XCTestCase {
     }
 
     func testDrawnCrispWithOnlyItsOwnColours() throws {
-        // At 3x, every device pixel is exactly a sprite ink or clear: nothing blurred or half-shifted.
-        for character in CompanionCharacter.all {
+        // At 3x, every device pixel is exactly a sprite ink or clear: nothing blurred or half-shifted. (A see-through
+        // character's pixels are checked at their opacity in `CompanionPhaseTests`.)
+        for character in CompanionCharacter.all where character.seeThrough == 0 && !character.inks.contains(.veil) {
             let inks = CompanionInks(palette: .slate)
             let allowed = Set(character.inks.map { CompanionInks.rgb(inks.hex[$0]!) })
             let flourish = character.field.flourish

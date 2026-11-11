@@ -32,6 +32,8 @@ import HITListCore
 //   or with `heat:` and `snowDeep:` last; Routine's `shakesOff:` before or after `weight:`.
 // - Places: `Posture(inset:)` sprite pixels further in from the host's edge; `Posture(turns: false)` keeps a turning
 //   flourish facing the same way there. A character using none of this still works: flickers and the flourish.
+// - See-through (brief 101): the ink `v` (veil) is the accent dimmed toward the background, drawn see-through (a hem
+//   over the "+", a ghost phasing); `seeThrough:` (0 to 0.5) makes the body's inks see-through, eyes and glints solid.
 // `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
 
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
@@ -45,7 +47,8 @@ enum CompanionInk: Character, CaseIterable {
     case mid = "m"
     /// The text colour: faces, highlights.
     case light = "l"
-    /// The accent: one small detail at most (the tip of Quill's tail).
+    /// The accent: one small detail at most (the tip of Quill's tail). Phase alone is drawn mostly in it: a ghost in
+    /// the "+"'s own colour, which George asked to be purple, and in Mocha the purple is the accent (brief 101).
     case accent = "a"
     /// The warm light (the sync bolt's pastel): one small detail at most (Nod's bobble).
     case warm = "w"
@@ -54,6 +57,10 @@ enum CompanionInk: Character, CaseIterable {
     /// The accent darkened into the background, as `dark` is to `mid`: the shade under a cap drawn in the accent
     /// (round 20, brief 102: Button's rose cap; that character draws in the accent, not one detail of it).
     case accentDark = "r"
+    /// The accent dimmed toward the background, see-through (brief 101): Phase's hem, and all of it while it phases.
+    /// Over the "+" (the accent) it is the body's own dusky tone with the button showing through; over the window
+    /// or the Mac's field it is fainter, and what is behind shows through.
+    case veil = "v"
 
     /// Clear.
     static let clear: Character = "."
@@ -378,6 +385,10 @@ struct CompanionCharacter: Identifiable {
     let flourishTurns: Bool
     let field: Posture
     let plus: Posture
+    /// How see-through its body is (brief 101), 0 (solid, every companion before Phase) to 0.5: its `dark`, `mid`,
+    /// `accent`, `warm` and `glow` pixels are drawn at 1 − seeThrough, so a list row scrolling behind the "+" shows
+    /// faintly through it; its eyes and glints (`ink`, `light`) stay solid. The veil is see-through in any character.
+    let seeThrough: Double
 
     /// Frame name → index into `drawn`.
     let index: [String: Int]
@@ -390,8 +401,9 @@ struct CompanionCharacter: Identifiable {
     let undrawable: Set<String>
 
     init(id: String, name: String, width: Int, height: Int, seatRow: Int, frames: [Frame], gestureFPS: Double,
-         flourishFPS: Double, flourishTurns: Bool, field: Posture, plus: Posture) {
+         flourishFPS: Double, flourishTurns: Bool, field: Posture, plus: Posture, seeThrough: Double = 0) {
         self.id = id
+        self.seeThrough = seeThrough
         self.name = name
         self.width = width
         self.height = height
@@ -568,6 +580,16 @@ struct CompanionCharacter: Identifiable {
     /// The inks the character uses anywhere.
     var inks: Set<CompanionInk> { Set(frames.flatMap { Self.runs(of: $0.rows) }.map(\.ink)) }
 
+    /// How opaque `ink` is drawn for this character (brief 101): the veil always see-through, the eyes and glints
+    /// solid, the rest at 1 − `seeThrough`.
+    func opacity(_ ink: CompanionInk) -> Double {
+        switch ink {
+        case .veil: CompanionInks.veilOpacity
+        case .ink, .light: 1
+        case .dark, .mid, .accent, .warm, .glow: 1 - seeThrough
+        }
+    }
+
     /// Pixels that differ between two frames (mirroring the second when asked).
     func difference(_ a: String, _ b: String, mirrored: Bool = false) -> Int {
         guard let ra = rows(a)?.map(Array.init), let rb = rows(b)?.map({ mirrored ? Array($0.reversed()) : Array($0) })
@@ -701,9 +723,11 @@ struct CompanionCharacter: Identifiable {
         if !(8...10).contains(flourishFPS) { out.append("\(id): flourish at \(flourishFPS) fps, not 8…10") }
         let inks = inks
         if !(4...6).contains(inks.count) { out.append("\(id): \(inks.count) colours, not 4…6") }
-        if inks.contains(.accent) && (inks.contains(.warm) || inks.contains(.glow)) {
+        let accented = inks.contains(.accent) || inks.contains(.veil)
+        if accented && (inks.contains(.warm) || inks.contains(.glow)) {
             out.append("\(id): both an accent and a warm detail")
         }
+        if !(0...0.5).contains(seeThrough) { out.append("\(id): see-through \(seeThrough), not 0…0.5") }
         if !(1...height).contains(seatRow) { out.append("\(id): seat row \(seatRow) outside the sprite") }
         return out
     }

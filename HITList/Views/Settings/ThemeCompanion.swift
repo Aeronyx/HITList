@@ -48,8 +48,6 @@ enum ThemeCompanion {
         "glim": Seat(placement: .onCard, along: 0.3),
         // Mocha: Phase asleep in the accent dot, sunk to its eyes, its point flopped over like a nightcap.
         "phase": Seat(placement: .asleepOnDot, along: 0.7),
-        // Mocha until brief 101 merges: Mallow asleep on the accent dot.
-        "mallow": Seat(placement: .asleepOnDot, along: 0.7),
         // Rosé: Button sits on the card under its cap (peeking, its tall cap rose 13 pt and the iPhone's first
         // screen no longer fit).
         "button": Seat(placement: .onCard, along: 0.3),
