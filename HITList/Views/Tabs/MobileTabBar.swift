@@ -200,6 +200,9 @@ struct MobileTabBar: View {
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
                 .onAppear { TapHaptic.prepareSelection() }
+                #if DEBUG && os(iOS)
+                .onAppear { AccessibilityDump.startIfRequested() }
+                #endif
                 .padding(.horizontal, IslandMetrics.sideInset)
                 .padding(.bottom, IslandMetrics.bottomGap)
         }
