@@ -7,12 +7,13 @@ import UIKit
 import AppKit
 #endif
 
-/// Keeps every companion's life in one place (briefs 76, 79 and 84): which is on screen, where and since when, how
-/// it is dressed, what it is doing, and the one timer that wakes for the next thing it does. At rest a companion is
-/// a still picture and nothing runs; the timer sleeps until the next flicker (every 40 to 110 seconds), routine (every
-/// 5 to 12 minutes of showing time), stir or the rare flourish, and only while a companion that may move is on screen
-/// and the app is in front. The drawing runs in each perch's `TimelineView` for the length of an act and stops. The
-/// rules are `CompanionSchedule`'s; the frames are `CompanionClock`'s.
+/// Keeps every companion's life in one place (briefs 76, 79, 84 and 100): which is on screen, where and since when,
+/// how it is dressed, what it is doing, and the one timer that wakes for the next thing it does. Between acts a
+/// companion is a still picture and nothing runs; the timer sleeps until the next idle (a flicker or a little loop,
+/// 6 to 36 seconds after the last one ends, the first 2 to 6 seconds after it comes on screen), routine (every 3 to 8
+/// minutes of showing time) or the rare flourish, and only while a companion that may move is on screen and the app
+/// is in front. The drawing runs in each perch's `TimelineView` for the length of an act and stops. The rules are
+/// `CompanionSchedule`'s; the frames are `CompanionClock`'s.
 ///
 /// The flourish's and the routine's clocks are kept on the device (`Preferences.companionLastFlourish`,
 /// `.companionFlourishBudget`, `.companionRoutineBudget`, `.companionLastRoutine`, `.companionLastRoutineName`): each
@@ -46,9 +47,11 @@ final class CompanionDirector {
     @ObservationIgnored private var still: [String: Bool] = [:]
     @ObservationIgnored private var calm: [String: Bool] = [:]
     @ObservationIgnored private var activeSince: [String: Date] = [:]
-    /// When each companion's next flicker or stir comes.
-    @ObservationIgnored private var nextGesture: [String: Date] = [:]
-    /// The gestures each played, the last few.
+    /// When each companion's next idle comes.
+    @ObservationIgnored private var nextIdle: [String: Date] = [:]
+    /// The idle each played last, and in which place and look (its index means nothing in another mode).
+    @ObservationIgnored private var lastIdle: [String: (idle: CompanionSchedule.Idle, place: CompanionPlace, asleep: Bool)] = [:]
+    /// A demo's turns so far.
     @ObservationIgnored private var recent: [String: [Int]] = [:]
     @ObservationIgnored private var lastAnswer: [String: Date] = [:]
     /// Which way each companion faced when it last left the screen (Quill keeps its side).
@@ -120,7 +123,7 @@ final class CompanionDirector {
 
     // MARK: - Presence
 
-    /// A perch came on screen in `place`. `still`: Reduce Motion (nothing moves); `calm`: Reduce Effects (flickers
+    /// A perch came on screen in `place`. `still`: Reduce Motion (nothing moves); `calm`: Reduce Effects (idles
     /// only).
     func appear(_ id: String, place: CompanionPlace, still isStill: Bool, calm isCalm: Bool, now: Date = .now) {
         settleBudgets(now: now)
@@ -141,7 +144,7 @@ final class CompanionDirector {
             stages[id] = stage
             forceSnowDepth(id)
             activeSince[id] = now
-            scheduleGesture(id, after: now, first: true)
+            scheduleIdle(id, after: now, first: true)
         }
         startSpending(now: now)
         reschedule(now: now)
@@ -160,7 +163,7 @@ final class CompanionDirector {
         }
         stages[id] = nil
         activeSince[id] = nil
-        nextGesture[id] = nil
+        nextIdle[id] = nil
         startSpending(now: now)
         reschedule(now: now)
     }
@@ -222,26 +225,29 @@ final class CompanionDirector {
         return CompanionRandom.unit(seed, draws)
     }
 
-    private func scheduleGesture(_ id: String, after now: Date, first: Bool = false) {
+    /// The next idle `after` (the end of the act that just started, or the moment it came on screen when `first`):
+    /// 6 to 36 s of stillness, the first 2 to 6 s.
+    private func scheduleIdle(_ id: String, after now: Date, first: Bool = false) {
         if launch.isDemo {
             let wait = first ? CompanionLaunchOptions.demoSettling
                 : (launch.play == .flourish ? CompanionLaunchOptions.demoFlourishInterval : CompanionLaunchOptions.demoInterval)
-            nextGesture[id] = now.addingTimeInterval(wait)
+            nextIdle[id] = now.addingTimeInterval(wait)
             return
         }
-        let asleep = stages[id]?.look.asleep ?? false
-        nextGesture[id] = now.addingTimeInterval(CompanionSchedule.gap(asleep: asleep, unit: unit()))
+        let gap = first ? CompanionSchedule.firstIdle(unit: unit()) : CompanionSchedule.idleGap(unit: unit())
+        nextIdle[id] = now.addingTimeInterval(gap)
     }
 
     /// The routines it may play now, as indices into its awake mode's routines: the everyday ones that can be drawn
-    /// in the weather, and the sky's own (storm takes the rain ones too). Empty asleep.
-    func routinePools(_ id: String) -> (everyday: [Int], weather: [Int]) {
+    /// in the weather, and the sky's own (storm takes the rain ones too); the long ones, or with `little` the little
+    /// loops. Empty asleep.
+    func routinePools(_ id: String, little: Bool = false) -> (everyday: [Int], weather: [Int]) {
         guard let character = character(id), let stage = stages[id], !stage.look.asleep else { return ([], []) }
         let mode = character.posture(stage.place).awake
         var everyday: [Int] = []
         var weather: [Int] = []
         let depth = stage.snowDepth
-        for (i, routine) in mode.routines.enumerated() {
+        for (i, routine) in mode.routines.enumerated() where routine.little == little {
             if let sky = routine.sky {
                 guard CompanionSchedule.belongs(sky, under: stage.sky) else { continue }
                 if character.canDraw(routine, in: stage.look.weather, mode: mode, depth: depth) { weather.append(i) }
@@ -252,8 +258,9 @@ final class CompanionDirector {
         return (everyday, weather)
     }
 
-    /// The flickers it may play now (asleep: its stirs), as indices into the mode's gestures: the everyday ones and
-    /// the sky's own, each only if it can be drawn over the still frame as it is (a pile of snow).
+    /// The flickers it may play now (asleep: every gesture, its breaths and stirs), as indices into the mode's
+    /// gestures: the everyday ones and the sky's own, each only if it can be drawn over the still frame as it is (a
+    /// pile of snow).
     func flickerPools(_ id: String) -> (everyday: [Int], weather: [Int]) {
         guard let character = character(id), let stage = stages[id] else { return ([], []) }
         let mode = character.posture(stage.place).mode(stage.look)
@@ -267,6 +274,22 @@ final class CompanionDirector {
             if gesture.sky == nil { everyday.append(i) } else { weather.append(i) }
         }
         return (everyday, weather)
+    }
+
+    /// Every idle it may play now (brief 100): its flickers and, awake, its little loops, each with its weight and
+    /// whether it is the sky's own.
+    func idleChoices(_ id: String) -> [CompanionSchedule.IdleChoice] {
+        guard let character = character(id), let stage = stages[id] else { return [] }
+        let mode = character.posture(stage.place).mode(stage.look)
+        var out: [CompanionSchedule.IdleChoice] = []
+        let flickers = flickerPools(id)
+        for i in flickers.everyday { out.append(.init(idle: .flicker(i), weight: mode.gestures[i].weight)) }
+        for i in flickers.weather { out.append(.init(idle: .flicker(i), weight: mode.gestures[i].weight, own: true)) }
+        let loops = routinePools(id, little: true)
+        let routines = character.posture(stage.place).awake.routines
+        for i in loops.everyday { out.append(.init(idle: .little(i), weight: routines[i].weight)) }
+        for i in loops.weather { out.append(.init(idle: .little(i), weight: routines[i].weight, own: true)) }
+        return out
     }
 
     /// Whether the still frame is the plain `rest`, so the flourish can start and end on it (brief 91).
@@ -321,15 +344,15 @@ final class CompanionDirector {
         return !(still[id] ?? true) && !(calm[id] ?? true) && !isLowPower
     }
 
-    /// Awake, motion and effects allowed, and a routine to play.
+    /// Awake, motion and effects allowed, and a routine (not a little loop) to play.
     private func canRoutine(_ id: String, stage: CompanionStage) -> Bool {
         guard !stage.look.asleep, !(still[id] ?? true), !(calm[id] ?? true), !isLowPower else { return false }
         guard let character = character(id) else { return false }
-        return !character.posture(stage.place).awake.routines.isEmpty
+        return character.posture(stage.place).awake.routines.contains { !$0.little }
     }
 
     /// The timer's turn: finished acts put away, then the flourish if its moment has come and it may play, then a
-    /// routine if its moment has come, else the next flicker or stir.
+    /// routine if its moment has come, else the next idle.
     func fire(now: Date = .now) {
         settleActs(now: now)
         let soon = now.addingTimeInterval(0.05)
@@ -365,18 +388,18 @@ final class CompanionDirector {
                 save()
                 startSpending(now: now)
             }
-            guard let next = nextGesture[id], next <= soon else { continue }
+            guard let next = nextIdle[id], next <= soon else { continue }
             if acting, let act = stage.act {
-                // Something is playing (a tap's flourish): the flicker waits until a little after it ends.
-                nextGesture[id] = clock.end(of: act, stage: stage).addingTimeInterval(1)
+                // Something is playing (a tap's flourish): the idle waits until a little after it ends.
+                nextIdle[id] = clock.end(of: act, stage: stage).addingTimeInterval(1)
                 continue
             }
-            playNextGesture(id, now: now)
+            playNextIdle(id, now: now)
         }
         reschedule(now: now)
     }
 
-    private func playNextGesture(_ id: String, now: Date) {
+    private func playNextIdle(_ id: String, now: Date) {
         guard let character = character(id), let stage = stages[id] else { return }
         let mode = character.posture(stage.place).mode(stage.look)
         switch launch.play {
@@ -390,7 +413,8 @@ final class CompanionDirector {
             if let i { start(id, .gesture(i), now: now) } else if name == "flourish" { playFlourish(id, now: now); return }
         case .routines?, .routine?:
             let pools = routinePools(id)
-            let all = pools.everyday + pools.weather
+            let loops = routinePools(id, little: true)
+            let all = pools.everyday + pools.weather + loops.everyday + loops.weather
             var pick: Int?
             if case .routine(let name)? = launch.play {
                 pick = mode.routines.firstIndex { $0.name == name }
@@ -405,10 +429,11 @@ final class CompanionDirector {
             }
             start(id, .answer, now: now)
         case .all?:
-            // Every gesture in turn, then every routine it may play, the reply, then the flourish (awake, plain
-            // weather), and round again.
+            // Every gesture in turn, then every routine it may play (the long ones, then the little loops), the
+            // reply, then the flourish (awake, plain weather), and round again.
             let pools = routinePools(id)
-            let routines = pools.everyday + pools.weather
+            let loops = routinePools(id, little: true)
+            let routines = pools.everyday + pools.weather + loops.everyday + loops.weather
             let playable = mode.gestures.indices.filter { i in
                 mode.gestures[i].sky.map { CompanionSchedule.belongs($0, under: stage.sky) } ?? true
             }
@@ -420,24 +445,30 @@ final class CompanionDirector {
             else if afterGestures == routines.count { start(id, .answer, now: now) }
             else if canFlourish(id, stage: stage) { playFlourish(id, now: now); return }
             else { start(id, .answer, now: now) }
-            scheduleGesture(id, after: now)
+            scheduleIdle(id, after: now)
             return
         case .gestures?, nil:
-            // A flicker (asleep: a stir), by weight, never the same three times running; while a sky holds, about
-            // every other one is the sky's own (a drip, a bead of sweat).
-            let pools = flickerPools(id)
-            let own = !pools.weather.isEmpty && (pools.everyday.isEmpty || unit() < CompanionSchedule.skyFlickerShare)
-            let choices = own ? pools.weather : pools.everyday
-            guard !choices.isEmpty else { scheduleGesture(id, after: now); return }
-            let weights = choices.map { mode.gestures[$0].weight }
-            let played = recent[id, default: []].compactMap { choices.firstIndex(of: $0) }
-            let k = CompanionSchedule.pickGesture(weights: weights, recent: played, unit: unit())
-            let i = choices[min(k, choices.count - 1)]
-            recent[id, default: []].append(i)
-            if recent[id, default: []].count > 4 { recent[id]?.removeFirst() }
-            start(id, .gesture(i), now: now)
+            // An idle (brief 100): a flicker or, awake, a little loop, never the same one twice running, by weight;
+            // while a sky holds, about every other one is the sky's own (a drip, a bead of sweat). The next comes a
+            // gap after this one ends.
+            let kept = lastIdle[id]
+            let last = kept.flatMap { $0.place == stage.place && $0.asleep == stage.look.asleep ? $0.idle : nil }
+            guard let idle = CompanionSchedule.pickIdle(idleChoices(id), last: last, sky: unit(), kind: unit(),
+                                                        pick: unit()) else {
+                scheduleIdle(id, after: now)
+                return
+            }
+            lastIdle[id] = (idle, stage.place, stage.look.asleep)
+            switch idle {
+            case .flicker(let i): start(id, .gesture(i), now: now)
+            case .little(let i): start(id, .routine(i), now: now)
+            }
+            var end = now
+            if let act = stages[id]?.act { end = clock(for: character).end(of: act, stage: stages[id] ?? stage) }
+            scheduleIdle(id, after: end)
+            return
         }
-        scheduleGesture(id, after: now)
+        scheduleIdle(id, after: now)
     }
 
     /// Puts away the acts that have ended: the turn folded into the facing, the act cleared, so each perch goes back
@@ -510,16 +541,16 @@ final class CompanionDirector {
         reschedule(now: now)
     }
 
-    /// After a routine or the flourish: back to still, the next flicker a whole gap after it ends (in a demo, the
-    /// next act a few seconds after).
+    /// After a routine or the flourish: back to still, the next idle a gap after it ends (in a demo, the next act a
+    /// few seconds after).
     private func quietAfter(_ id: String, end: Date) {
         if launch.isDemo {
-            nextGesture[id] = end.addingTimeInterval(CompanionLaunchOptions.demoQuiet)
-            if launch.play == .flourish { scheduleGesture(id, after: end) }
+            nextIdle[id] = end.addingTimeInterval(CompanionLaunchOptions.demoQuiet)
+            if launch.play == .flourish { scheduleIdle(id, after: end) }
             return
         }
-        if let next = nextGesture[id], next < end.addingTimeInterval(CompanionSchedule.flickerGap.lowerBound) {
-            nextGesture[id] = end.addingTimeInterval(CompanionSchedule.gap(asleep: false, unit: unit()))
+        if let next = nextIdle[id], next < end.addingTimeInterval(CompanionSchedule.idleGap.lowerBound) {
+            nextIdle[id] = end.addingTimeInterval(CompanionSchedule.idleGap(unit: unit()))
         }
     }
 
@@ -532,7 +563,7 @@ final class CompanionDirector {
         guard isAppActive else { return }
         var moments: [Date] = []
         for id in stages.keys where !(still[id] ?? true) {
-            if let g = nextGesture[id] { moments.append(g) }
+            if let g = nextIdle[id] { moments.append(g) }
             if let f = flourishMoment(id) { moments.append(f) }
             if let r = routineMoment(id) { moments.append(r) }
             if let p = snowMoment(id) { moments.append(p) }
@@ -675,15 +706,15 @@ final class CompanionDirector {
             forceSnowDepth(id)
             if changed {
                 recent[id] = []
-                scheduleGesture(id, after: now)
+                lastIdle[id] = nil
             }
         }
         if active {
-            // Coming back is arriving on the screen again: 20 quiet seconds before a flourish, and no gesture owed
-            // from while it was away.
+            // Coming back is arriving on the screen again: 20 quiet seconds before a flourish or a routine, and the
+            // first idle 2 to 6 seconds in, so a short visit sees it move.
             for id in stages.keys {
                 activeSince[id] = now
-                if let next = nextGesture[id], next < now { scheduleGesture(id, after: now) }
+                scheduleIdle(id, after: now, first: true)
             }
         }
         startSpending(now: now)

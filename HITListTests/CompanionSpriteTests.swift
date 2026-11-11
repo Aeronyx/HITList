@@ -100,12 +100,13 @@ final class CompanionSpriteTests: XCTestCase {
             for place in CompanionPlace.allCases {
                 let mode = character.posture(place).awake
                 let at = "\(character.id) \(place)"
-                let everyday = mode.routines.filter { $0.sky == nil }
+                // Brief 100: a little loop is an idle, held to its own length (`problems`), not a routine's.
+                let everyday = mode.routines.filter { $0.sky == nil && !$0.little }
                 XCTAssertGreaterThanOrEqual(everyday.count, 3, "\(at): three routines of its own")
                 for sky in [CompanionSky.rain, .snow, .storm] {
                     XCTAssertTrue(mode.routines.contains { $0.sky == sky }, "\(at): a routine for \(sky)")
                 }
-                for routine in mode.routines {
+                for routine in mode.routines where !routine.little {
                     let seconds = character.duration(of: routine, mode: mode)
                     XCTAssertTrue((3...7).contains(seconds), "\(at) \(routine.name): \(seconds) s")
                     XCTAssertTrue((4...9).contains(routine.moves), "\(at) \(routine.name): \(routine.moves) moves")
