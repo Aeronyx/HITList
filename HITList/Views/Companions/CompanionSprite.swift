@@ -63,14 +63,17 @@ struct CompanionSprite: View {
         let inks = inks ?? CompanionInks(palette: Theme.palette)
         let p = pixel
         let width = character.width
-        let runs = character.runs[pose.frame]
+        let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
         let mirrored = pose.mirrored
         Canvas { context, _ in
             for run in runs {
-                let x = mirrored ? width - run.x - run.length : run.x
-                context.fill(Path(CGRect(x: CGFloat(x) * p, y: CGFloat(run.y) * p,
-                                         width: CGFloat(run.length) * p, height: p)),
-                             with: .color(inks[run.ink]))
+                // One step per line: the CI runner's older Swift gave up on this as one expression.
+                let x: Int = mirrored ? width - run.x - run.length : run.x
+                let left: CGFloat = CGFloat(x) * p
+                let top: CGFloat = CGFloat(run.y) * p
+                let length: CGFloat = CGFloat(run.length) * p
+                let rect = CGRect(x: left, y: top, width: length, height: p)
+                context.fill(Path(rect), with: .color(inks[run.ink]))
             }
         }
         .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height) * p)
@@ -79,16 +82,22 @@ struct CompanionSprite: View {
 }
 
 extension CompanionCharacter {
-    /// The opaque pixels of the rest frame (mirrored when asked), as a shape, for taps: only rows above `belowRow`
-    /// (Nod's legs hang over the field, and a tap there is the field's).
-    func tapShape(mirrored: Bool, belowRow: Int? = nil) -> Path {
+    /// The opaque pixels of a pose's runs (mirrored when asked), as a shape, for taps: only rows above `belowRow`
+    /// (what hangs over the field or the "+" is theirs to tap).
+    static func tapShape(runs: [Run], width: Int, mirrored: Bool, belowRow: Int? = nil) -> Path {
         var path = Path()
-        let p = Self.pointsPerPixel
-        for run in runs[restFrame] where belowRow.map({ run.y < $0 }) ?? true {
-            let x = mirrored ? width - run.x - run.length : run.x
-            // A pixel's worth of slack around the body, so a fingertip finds it.
-            path.addRect(CGRect(x: CGFloat(x) * p - p, y: CGFloat(run.y) * p - p,
-                                width: CGFloat(run.length + 2) * p, height: p * 3))
+        let p = pointsPerPixel
+        let edge: Int = belowRow ?? Int.max
+        for run in runs where run.y < edge {
+            let x: Int = mirrored ? width - run.x - run.length : run.x
+            // A pixel's worth of slack around the body, so a fingertip finds it; none below the edge.
+            let top: CGFloat = CGFloat(run.y - 1) * p
+            let underRun: CGFloat = CGFloat(run.y + 2) * p
+            let edgeLine: CGFloat = CGFloat(min(edge, run.y + 2)) * p
+            let bottom: CGFloat = min(underRun, edgeLine)
+            let left: CGFloat = CGFloat(x - 1) * p
+            let length: CGFloat = CGFloat(run.length + 2) * p
+            path.addRect(CGRect(x: left, y: top, width: length, height: bottom - top))
         }
         return path
     }
