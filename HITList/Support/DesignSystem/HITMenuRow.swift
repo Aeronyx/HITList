@@ -105,6 +105,8 @@ struct HITMenuRowLabel: View {
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(iconTint)
                     .frame(width: 22)
+                    // Its words say it; VoiceOver stopped on the icon first ("Home", "Calendar") (brief 94).
+                    .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -117,6 +119,8 @@ struct HITMenuRowLabel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            // The title and its subtitle are one VoiceOver stop ("Start screen, Applies the next time HITList opens").
+            .accessibilityElement(children: .combine)
         }
     }
 }
