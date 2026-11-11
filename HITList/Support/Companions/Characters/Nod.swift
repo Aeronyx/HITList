@@ -1668,7 +1668,9 @@ extension CompanionCharacter {
                          ],
                          answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 3), ("sleepPeekUp", 5), ("sleepPeek", 2)))),
             flourish:
-                Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1), ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1), ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1), ("land", 1), ("rest", 1)))
+                Self.ticks(("rest", 1), ("lookUp", 2), ("crouch", 1), ("squat", 1), ("stand", 1), ("armsOut", 1), ("stretchTop", 2), ("settle", 1), ("lookAtLight", 1), ("raiseLight", 1), ("flare1", 1), ("flare2", 2), ("flare3", 1), ("flare4", 1), ("holdLight", 1), ("letGo", 1), ("sitDown", 1), ("land", 1), ("rest", 1)),
+            // Its right hand and foot sit on the flat of the "+", not over the shoulder where its top curves away.
+            inset: 2)
     )
 
     /// Nod's routines (brief 84), the same in both places. Its legs are who it is: it swings them about out of step;
