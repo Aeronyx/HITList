@@ -223,15 +223,25 @@ enum TaskActions {
         try? context.save()
     }
 
-    /// The Repeat menu (task popout, its date card): sets or clears the task's repeat and saves. A repeat
-    /// on an undated task starts today. A monthly or yearly repeat keeps the day the task returns to
-    /// (`RecurrenceRule.keepingAnchor`): picking "Every month" again on a "31st" task due Feb 28 used to
-    /// store the plain rule, and the task repeated on the 28th from then on. A timed task's repeat keeps
-    /// its time (`RecurrenceRule.timed`).
-    static func setRecurrence(_ rule: RecurrenceRule?, on task: TaskItem, in context: ModelContext, now: Date = Date()) {
-        if rule != nil, task.dueDate == nil { task.dueDate = Calendar.current.startOfDay(for: now) }
-        task.recurrenceRule = rule?.keepingAnchor(of: task.recurrenceRule, due: task.dueDate)
-            .timed(to: task.dueDate, hasTime: task.hasDueTime)
+    /// The Repeat menu (task popout, its date card, Custom…): sets or clears the task's repeat and saves, as typing
+    /// its words would (brief 97, `RecurrenceRule.picked`): a task with no date gets the repeat's next occurrence
+    /// ("Every month on the 28th" picked on the 11th starts on the 28th; it used to start today); a dated one keeps
+    /// its day and time. A monthly or yearly repeat keeps the day the task returns to (`keepingAnchor`): picking
+    /// "Every month" again on a "31st" task due Feb 28 used to store the plain rule, and the task repeated on the 28th
+    /// from then on. A timed task's repeat keeps its time (`RecurrenceRule.timed`).
+    static func setRecurrence(_ rule: RecurrenceRule?, on task: TaskItem, in context: ModelContext, now: Date = Date(),
+                              calendar: Calendar = .current) {
+        if let rule {
+            let pick = rule.picked(due: task.dueDate, hasTime: task.hasDueTime, previous: task.recurrenceRule, now: now,
+                                   calendar: calendar)
+            if task.dueDate == nil {
+                task.dueDate = pick.due
+                task.hasDueTime = false
+            }
+            task.recurrenceRule = pick.rule
+        } else {
+            task.recurrenceRule = nil
+        }
         task.touch()
         try? context.save()
     }
