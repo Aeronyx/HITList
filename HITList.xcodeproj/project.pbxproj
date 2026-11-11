@@ -73,6 +73,7 @@
 		2AB451F536619563641D56E7 /* CompletionToastStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7868073CAB4AFD8BACFCC3A9 /* CompletionToastStateTests.swift */; };
 		2ADB84FE1F7461037DC27A2A /* SharedTasksRecords.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D47EBD278801897E89A2D06 /* SharedTasksRecords.swift */; };
 		2B4928700AAE525B3F71005E /* HITCalendar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E6CD019F9D321EF8B6A898 /* HITCalendar.swift */; };
+		2D4D92A8CF48D877D679AE58 /* TimeZoneEdgesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92334AF5030B130392220EA0 /* TimeZoneEdgesTests.swift */; };
 		2D9B3165524E299CDC86304B /* QuickAddContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5E609CA10C57C69771BB15C /* QuickAddContext.swift */; };
 		2E5CE89ADD351A5D1FBE95A6 /* WidgetDeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C0C12F7850B1B3F41432001 /* WidgetDeepLinkTests.swift */; };
 		2E788BA8AB8A069A4FF428F7 /* FlipboardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD84C1BC8268886C641F3FE3 /* FlipboardTests.swift */; };
@@ -730,6 +731,7 @@
 		8F762856AE6FEDA572D8741B /* SharedEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedEditorTests.swift; sourceTree = "<group>"; };
 		8FE59DCFEB4D91117840B506 /* SchemaVersions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersions.swift; sourceTree = "<group>"; };
 		91BE7D86CD42E2D3DFEC8EDB /* SwitchDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchDraft.swift; sourceTree = "<group>"; };
+		92334AF5030B130392220EA0 /* TimeZoneEdgesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeZoneEdgesTests.swift; sourceTree = "<group>"; };
 		92811CBB96DCB3B993F65CEF /* PickerTime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTime.swift; sourceTree = "<group>"; };
 		9388258DD5F4BF21418975C1 /* HighlightTextView+macOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+macOS.swift"; sourceTree = "<group>"; };
 		949018764012BBE12E6F0ED2 /* SyncEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEnvironment.swift; sourceTree = "<group>"; };
@@ -1451,6 +1453,7 @@
 				CF922AE937BECF293EE28887 /* TaskPopoutTitleTests.swift */,
 				3AB0E811BC8B9E3BBF492DED /* ThemeTests.swift */,
 				0551198F241BEB4513B3A57F /* TimeZoneCatchUpTests.swift */,
+				92334AF5030B130392220EA0 /* TimeZoneEdgesTests.swift */,
 				B3B4995696E96A285874E1D7 /* TimeZoneStoreTests.swift */,
 				E794A10998B1D953655D0ABA /* TipsTests.swift */,
 				30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */,
@@ -2389,6 +2392,7 @@
 				87942B8922387B0FF3BDACE8 /* TaskPopoutTitleTests.swift in Sources */,
 				7F600F45E5CD9A4E535D951A /* ThemeTests.swift in Sources */,
 				6AC16F7029CEB259CC10F7B8 /* TimeZoneCatchUpTests.swift in Sources */,
+				2D4D92A8CF48D877D679AE58 /* TimeZoneEdgesTests.swift in Sources */,
 				D629923F23540B8E4DC76E30 /* TimeZoneStoreTests.swift in Sources */,
 				42C25D10E5AF893E25E60E23 /* TipsTests.swift in Sources */,
 				BF9FE919E6B7F4C346BA2D10 /* UpcomingBoardTests.swift in Sources */,
