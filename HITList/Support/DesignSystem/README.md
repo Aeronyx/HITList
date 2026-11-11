@@ -64,8 +64,9 @@ Built on the roles (round 17, brief 75; each measured frame by frame on the simu
   own curve (an ease-out, `1 - e^(-t/τ)`, τ a fifth of the notification's duration), set on the next turn of the run
   loop: a SwiftUI change made inside UIKit's keyboard animation is drawn wrongly. Never animate with the keyboard
   any other way.
-- **Panels** (Mac and iPad quick add, editor, shared task): `PanelBackdrop.transition` fades the backdrop and grows
-  the panel its last 2% from its top edge, in on `enter`, out on `exit`.
+- **Panels** (Mac and iPad quick add, editor, shared task): `PanelBackdrop.transition` fades the backdrop and panel
+  as the panel comes down 6 pt into place, in on `enter`, back up and out on `exit`. (Not a scale: under one, the
+  editor's scrolling row of pills came to rest scrolled 2.5 pt off.)
 - **The Mac sidebar's selection**: `macSidebarSelectionGlide(selection)` on a column of `MacSidebarRow`s draws one
   fill that glides to the selected row on `tabPill`, as the iPhone island's pill does.
 - **Numbers** that change in place roll (`.contentTransition(.numericText(value:))` on `standard`).
