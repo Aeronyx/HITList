@@ -109,6 +109,43 @@ final class RepeatPickerTests: XCTestCase {
         XCTAssertEqual(old.result(parser()).recurrence, .daily)
     }
 
+    // MARK: Item 4: what choosing does in the editor
+
+    /// The editor stores a picked repeat as typing it would: a task with no date gets the repeat's next occurrence (not
+    /// today), a dated one keeps its day and its time, and the rule is anchored and timed.
+    func testTheEditorPicksAsTypingDoes() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let parser = parser()
+        let undated = TaskItem(title: "Pay rent")
+        context.insert(undated)
+        let on28 = RecurrenceRule(frequency: .monthly, place: .day(28))
+        TaskActions.setRecurrence(on28, on: undated, in: context, now: now, calendar: calendar)
+        let typed = parser.parse("Pay rent every month on the 28th")
+        XCTAssertEqual(undated.dueDate, typed.dueDate)
+        XCTAssertEqual(undated.dueDate, date(2026, 11, 28))
+        XCTAssertFalse(undated.hasDueTime)
+        XCTAssertEqual(undated.recurrenceRule?.encoded, typed.recurrence?.encoded)
+
+        let saturday = date(2026, 11, 14, 9)
+        let weekend = TaskItem(title: "Standup")
+        context.insert(weekend)
+        TaskActions.setRecurrence(.weekdays, on: weekend, in: context, now: saturday, calendar: calendar)
+        XCTAssertEqual(weekend.dueDate, date(2026, 11, 16), "Every weekday picked on a Saturday starts on Monday")
+
+        let timed = TaskItem(title: "Gym", dueDate: date(2026, 11, 13, 7), hasDueTime: true)
+        context.insert(timed)
+        let weekly = RepeatChoice.all(for: date(2026, 11, 13), calendar: calendar)[2]
+        TaskActions.setRecurrence(weekly.rule, on: timed, in: context, now: now, calendar: calendar)
+        XCTAssertEqual(timed.dueDate, date(2026, 11, 13, 7))
+        XCTAssertEqual(timed.recurrenceRule?.encoded, parser.parse("Gym fri 7am every week").recurrence?.encoded)
+        XCTAssertEqual(timed.recurrenceRule?.time, RecurrenceRule.TimeOfDay(hour: 7, minute: 0))
+
+        TaskActions.setRecurrence(nil, on: timed, in: context, now: now, calendar: calendar)
+        XCTAssertNil(timed.recurrenceRule)
+        XCTAssertEqual(timed.dueDate, date(2026, 11, 13, 7), "Don't repeat keeps the day")
+    }
+
     /// A pick replaces a typed repeat; Don't repeat takes it away.
     func testAPickReplacesATypedRepeat() {
         let parser = parser()

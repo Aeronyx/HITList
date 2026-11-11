@@ -78,6 +78,28 @@ public struct RepeatChoice: Hashable, Sendable, Identifiable {
 }
 
 extension RecurrenceRule {
+    /// What picking a repeat does to a task (`picked`).
+    public struct Pick: Equatable, Sendable {
+        /// The task's due date: the one it had, or the repeat's next occurrence for a task with none.
+        public var due: Date
+        public var hasTime: Bool
+        /// The rule to store, anchored to the day it returns to and timed to the task's time.
+        public var rule: RecurrenceRule
+    }
+
+    /// What picking this repeat (the Repeat menu, Custom…) does to a task due at `due` (nil: no date) whose repeat was
+    /// `previous`: what typing its words does (brief 97, item 4; `QuickAddParser`). A task with a day keeps it, as a
+    /// typed day is kept, and its time; one with no date gets the repeat's next occurrence from today, all day. The rule
+    /// is anchored to the day (keeping the day `previous` returned to while the task is still on it,
+    /// `keepingAnchor`) and timed to the task's time.
+    public func picked(due: Date?, hasTime: Bool, previous: RecurrenceRule?, now: Date = Date(),
+                       calendar: Calendar = .current) -> Pick {
+        let day = due ?? firstOccurrence(onOrAfter: calendar.startOfDay(for: now), calendar: calendar)
+        let timed = due != nil && hasTime
+        let rule = keepingAnchor(of: previous, due: day, calendar: calendar).timed(to: day, hasTime: timed, calendar: calendar)
+        return Pick(due: day, hasTime: timed, rule: rule)
+    }
+
     /// The words the quick-add card writes for this rule, which read back as it (`QuickAddParser`): "every day",
     /// "every 3 days", "every weekday", "every tue, thu and sat", "every 2 weeks", "every month on the 11th",
     /// "every 3 months on the last day", "every month on the second wednesday", "every year on nov 11". Nil for the
