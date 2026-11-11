@@ -379,7 +379,8 @@ struct QuickAddPopout: View {
                                        if pick != nil { done() }
                                    })
             }
-            .accessibilityLabel("Reminder: \(title)")
+            // "Reminder: none" rather than "Reminder: Reminder" while the chip shows only its name (brief 94).
+            .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
             .accessibilityIdentifier("quickAddReminderChip")
     }
 
