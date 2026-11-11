@@ -22,7 +22,7 @@ enum WhatsNew {
     static let entries: [Entry] = [
         Entry(version: "0.9.4", items: [
             "The sync bolt is filled only when iCloud has confirmed, in the last 30 seconds, that this device and iCloud match. Otherwise it says what it is waiting for.",
-            "Settings → iCloud & data → Check iCloud shows what differs between this device and iCloud, task by task. It changes nothing unless you choose to.",
+            "Check iCloud… in Settings, under iCloud, shows what differs between this device and iCloud, task by task. It changes nothing unless you choose to.",
             "Companions are alive: a blink, a glance or a little loop every few seconds, and they sit on the + instead of floating over it.",
             "Three new companions: Button the mushroom on Rosé, Phase the see-through ghost on Mocha and Gargle the gargoyle pup on Graphite. Tuck's eyes shine.",
             "Repeat has a menu worded for your task's day and a Custom… for anything else, and the date picker has a Repeat button.",
