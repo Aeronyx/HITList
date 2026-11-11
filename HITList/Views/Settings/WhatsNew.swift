@@ -20,6 +20,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.2", items: [
+            "Check off a task right on the Today and Upcoming widgets, or flip a switch on the Flipboard widget. It stays ticked until iCloud has it, then the next one takes its place.",
+            "Companions keep still now: a blink or a swing of a leg every minute or two, and their party trick so rarely you might miss it for a day. Tap one to ask for it.",
+            "One companion for each theme: Nod on Slate, Quill on Midnight, Hush on Nord, Pip on Rosé (more to come). It sits on the search field on the Mac and on the + on iPhone.",
+            "Companions sleep at night, and dress for rain and snow if you switch on Settings → Extras → Weather.",
+            "Widgets catch up with your other devices while HITList is closed.",
+        ]),
         Entry(version: "0.9.1", items: [
             "Widgets for your Home Screen, Lock Screen and Mac desktop: Today, Upcoming with a little calendar, and the Flipboard's switches. Tap a task to open it.",
             "The sync bolt keeps still while all is well, and a short iCloud hiccup no longer shows alarming words. If sync ever stops, Settings says so and the Mac offers Relaunch.",
