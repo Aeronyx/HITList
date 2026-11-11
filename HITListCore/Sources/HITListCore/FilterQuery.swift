@@ -793,6 +793,13 @@ public struct FilterQuery: Sendable, Equatable {
 
     private enum DateComparison { case on, before, after }
 
+    /// When a task falls due for `due:`, `due before:` and `due after:`: a timed task at its moment, a day from its start
+    /// here (`TaskOrdering.dueOrderKey`), as a day stored at a local midnight was before 0.9.3. Brief 92: a day's anchor is
+    /// 05:00 in New York and 19:00 in Tokyo, and "due before: +4 hours" mustn't depend on which.
+    private static func dueKey(_ task: FilterableTask, _ ctx: EvalContext) -> Date? {
+        TaskOrdering.dueOrderKey(task, calendar: ctx.parser.calendar)
+    }
+
     private static func compare(_ date: Date?, _ term: DateTerm, _ how: DateComparison, _ ctx: EvalContext) -> Bool {
         guard let date, let span = ctx.span(for: term) else { return false }
         switch how {
@@ -809,9 +816,9 @@ public struct FilterQuery: Sendable, Equatable {
         case .or(let a, let b): return eval(a, t, ctx) || eval(b, t, ctx)
         case .not(let a): return !eval(a, t, ctx)
         case .priority(let op, let v): return op.test(t.filterPriority, v)
-        case .dueOn(let term): return compare(t.filterDueDate, term, .on, ctx)
-        case .dueBefore(let term): return compare(t.filterDueDate, term, .before, ctx)
-        case .dueAfter(let term): return compare(t.filterDueDate, term, .after, ctx)
+        case .dueOn(let term): return compare(dueKey(t, ctx), term, .on, ctx)
+        case .dueBefore(let term): return compare(dueKey(t, ctx), term, .before, ctx)
+        case .dueAfter(let term): return compare(dueKey(t, ctx), term, .after, ctx)
         case .createdOn(let term): return compare(t.filterCreatedDate, term, .on, ctx)
         case .createdBefore(let term): return compare(t.filterCreatedDate, term, .before, ctx)
         case .createdAfter(let term): return compare(t.filterCreatedDate, term, .after, ctx)

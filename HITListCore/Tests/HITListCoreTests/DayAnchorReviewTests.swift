@@ -494,6 +494,27 @@ final class DayAnchorReviewTests: XCTestCase {
         }
     }
 
+    /// The filter language's moments ("due before: +4 hours", "due before: tomorrow at 3am") compared a day's instant
+    /// with a moment. A day stored at a local midnight was due from that midnight; its anchor is 05:00 in New York, 19:00
+    /// in Tokyo and 00:00 in Honolulu, so the same task matched in one zone and not in another, and not as in 0.9.2. A day
+    /// counts from its start in every zone, as before 0.9.3.
+    func testTheFilterLanguagesMomentsReadADayFromItsStartInEveryZone() throws {
+        let thursday = Self.d(2026, 11, 12)
+        var failures: [String] = []
+        for zone in Self.served {
+            let wednesdayLate = zone.date(from: DateComponents(year: 2026, month: 11, day: 11, hour: 22))!
+            let anchored = PlainTask(title: "Anchored", dueDate: DayAnchor.anchor(of: thursday))
+            let older = PlainTask(title: "Older", dueDate: DayAnchor.start(of: thursday, calendar: zone))
+            for source in ["due before: +4 hours", "due before: tomorrow at 3am", "due after: +1 hour", "due: +2 hours"] {
+                let query = try FilterQuery(source, calendar: zone, now: wednesdayLate)
+                let a = !query.apply(to: [anchored], now: wednesdayLate, calendar: zone).isEmpty
+                let o = !query.apply(to: [older], now: wednesdayLate, calendar: zone).isEmpty
+                if a != o { failures.append("\(zone.timeZone.identifier) \"\(source)\": anchored \(a), 0.9.2's \(o)") }
+            }
+        }
+        XCTAssertTrue(failures.isEmpty, report(failures))
+    }
+
     /// The widgets' snapshot is written in one zone and read in another after a flight: an anchored day is in the
     /// widget's Today on its own day in every served zone, and in nobody's the day before.
     func testTheWidgetsReadAnAnchoredDayOnItsDayAfterAFlight() {
