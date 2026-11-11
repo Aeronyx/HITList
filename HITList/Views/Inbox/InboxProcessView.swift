@@ -756,7 +756,7 @@ private struct DeletedToast: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "trash").foregroundStyle(.red)
+            Image(systemName: "trash").foregroundStyle(HITColor.danger)
             Text("Deleted ‘\(title)’")
                 .lineLimit(1)
                 .truncationMode(.middle)

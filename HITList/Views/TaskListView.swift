@@ -158,7 +158,8 @@ struct TaskListView: View {
             let matched = try matchedTasks()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
-                return .success([Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
+                // None yet: no section, so the empty state shows (an empty section drew a blank page).
+                return .success(sorted.isEmpty ? [] : [Group(id: "completed", title: "", rows: sorted.map { .own($0) })])
             }
             let rows = placed(matched, shared: matchedShared())
             if isSharedTasks { return .success(sharedTasksGroups(rows)) }
@@ -301,12 +302,13 @@ struct TaskListView: View {
                             showSharing = true
                         }
                     } else if groups.isEmpty, events.isEmpty, isCompact {
-                        // iPhone: one quiet grey line; the "+" is right there.
+                        // iPhone: one quiet grey line; the "+" is right there. It starts where the rows and headers
+                        // do, under the title.
                         Text(emptyTitle)
                             .font(HITType.subheadline)
                             .foregroundStyle(Theme.secondaryText)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, HITSpacing.xl)
+                            .padding(.horizontal, ListMetrics.horizontalInset)
                             .padding(.top, HITSpacing.l)
                             .frame(maxHeight: .infinity, alignment: .top)
                     } else if groups.isEmpty, events.isEmpty {
