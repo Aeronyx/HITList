@@ -80,7 +80,7 @@ final class WidgetsUITests: XCTestCase {
         sleep(1)
 
         addWidget(page: 1) // Today, medium
-        // A widget's check is a toggle: a switch to accessibility, a button on some systems.
+        // A widget's check is a button; matched as any element, as the system's widget host may report it differently.
         let checks = springboard.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Complete '"))
         guard checks.firstMatch.waitForExistence(timeout: 10) else {
             dump("no check found")
@@ -98,13 +98,11 @@ final class WidgetsUITests: XCTestCase {
             let seconds = String(format: "%.1f", Date().timeIntervalSince(tapped))
             let checked = springboard.descendants(matching: .any)
                 .matching(NSPredicate(format: "label == %@", "\(title), checked")).firstMatch.exists
-            let toggle = springboard.descendants(matching: .any)
+            let row = springboard.descendants(matching: .any)
                 .matching(NSPredicate(format: "label == %@", "Complete \(title)")).firstMatch
-            let stillThere = toggle.exists
-            // The toggle drawn on at once (value 1), before the app has run; then the row drawn as a tap on its way.
-            let turned = stillThere && "\(toggle.value ?? "")" == "1"
+            let stillThere = row.exists
             if checked { sawChecked = true }
-            attach("\(step) +\(seconds) s · \(checked ? "checked" : turned ? "check turned" : stillThere ? "open" : "gone")")
+            attach("\(step) +\(seconds) s · \(checked ? "checked" : stillThere ? "open" : "gone")")
             if sawChecked, !checked, !stillThere { gone = true; break }
         }
         dump("after the tap")

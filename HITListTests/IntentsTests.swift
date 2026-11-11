@@ -282,7 +282,6 @@ final class IntentsTests: XCTestCase {
                                                            widget: "today").request(at: now))
         XCTAssertNil(undated.seenDue)
         XCTAssertNotEqual(intent.request(at: now)?.id, request.id, "each delivery is a request of its own")
-        XCTAssertTrue(intent.value, "a widget's toggle asks for checked; un-checking from a widget does nothing")
     }
 
     func testAWidgetTapThatNamesNoTaskIsRefused() {
