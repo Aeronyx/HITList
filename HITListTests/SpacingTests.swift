@@ -2,6 +2,9 @@ import XCTest
 import SwiftUI
 import SwiftData
 import CoreGraphics
+#if canImport(UIKit)
+import UIKit
+#endif
 import HITListCore
 @testable import HITList
 
@@ -109,6 +112,40 @@ final class SpacingTests: XCTestCase {
         XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime(hour: 21, minute: 15)), 21 * 60 + 15)
         XCTAssertEqual(RemindersSettingsSection.summaryMinutes(PickerTime.parse("7:30") ?? PickerTime(hour: 0, minute: 0)), 7 * 60 + 30)
     }
+
+    #if os(iOS)
+    // MARK: Text sizes (brief 99)
+
+    /// At the largest ordinary text size a theme's name wraps under its swatch instead of truncating ("Tokyo Night"
+    /// did, at XL); at the default size every name is one line, so nothing moves.
+    func testAThemesNameWrapsRatherThanTruncates() {
+        let cell: CGFloat = 76
+        func height(_ palette: ThemePalette, _ size: DynamicTypeSize) -> CGFloat {
+            let button = ThemeSwatchButton(palette: palette, isSelected: false) {}
+                .frame(width: cell)
+                .environment(\.dynamicTypeSize, size)
+            return UIHostingController(rootView: button).sizeThatFits(in: CGSize(width: cell, height: 1000)).height
+        }
+        XCTAssertEqual(height(.tokyo, .large), height(.slate, .large), accuracy: 0.5, "one line at the default size")
+        XCTAssertGreaterThan(height(.tokyo, .xxxLarge), height(.slate, .xxxLarge) + 10, "two lines at xxxLarge, not cut off")
+        XCTAssertEqual(ThemeSwatchButton.nameLines, 2)
+    }
+
+    /// At the smallest text size no caption or meta line goes below 11 pt: each small role scaled by its text style the
+    /// way `Font.custom(_:size:relativeTo:)` scales it.
+    func testCaptionsAndMetaLinesStayAt11PtAtTheSmallestSize() {
+        let smallest = UITraitCollection(preferredContentSizeCategory: .extraSmall)
+        let roles: [(String, CGFloat, UIFont.TextStyle)] = [
+            ("caption", 12, .caption1), ("captionBold", 12, .caption1), ("caption2", 11, .caption2),
+            ("caption2Semibold", 11, .caption2), ("footnote", 13, .footnote),
+            ("taskMeta", HITType.taskMetaSize, .caption1), ("subheadline", 15, .subheadline),
+        ]
+        for (name, size, style) in roles {
+            let scaled = UIFontMetrics(forTextStyle: style).scaledValue(for: size, compatibleWith: smallest)
+            XCTAssertGreaterThanOrEqual(scaled, 11, "\(name): \(scaled) pt at the smallest size")
+        }
+    }
+    #endif
 
     // MARK: Helpers
 
