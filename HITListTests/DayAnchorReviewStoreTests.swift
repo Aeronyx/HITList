@@ -285,6 +285,32 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         XCTAssertTrue(try stored(task.id).hasDueTime)
     }
 
+    // MARK: - The one place: the other writers
+
+    /// The Claude tools (add and update) and Siri's "Add a task" (`IntentActions.addTask`): a day they write is stored as
+    /// its anchor, a time stays its moment, on a device in New York.
+    func testTheClaudeToolsAndSiriStoreADayAsItsAnchorAndATimeAsItsMoment() throws {
+        watch(in: Self.newYork)
+        let now = TimeZoneStoreTests.local(2026, 11, 11, 12, in: Self.newYork)
+        var claude = ClaudeToolHandler(context: context, rule: ClaudeAccessRule(mode: .allExceptHidden))
+        claude.now = now
+        claude.calendar = Self.newYork
+        _ = claude.call(ClaudeTools.addTask, ["text": .string("Call Sam tomorrow")])
+        _ = claude.call(ClaudeTools.addTask, ["text": .string("Dentist tomorrow 3pm")])
+        let tasks = try context.fetch(FetchDescriptor<TaskItem>())
+        let call = try XCTUnwrap(tasks.first { $0.title == "Call Sam" })
+        let dentist = try XCTUnwrap(tasks.first { $0.title == "Dentist" })
+        XCTAssertEqual(try stored(call.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 12)))
+        XCTAssertEqual(try stored(dentist.id).dueDate, TimeZoneStoreTests.local(2026, 11, 12, 15, in: Self.newYork))
+        _ = claude.call(ClaudeTools.updateTask, ["id": .string(call.id.uuidString), "due": .string("friday")])
+        XCTAssertEqual(try stored(call.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 13)))
+
+        let milk = try IntentActions.addTask("Buy milk tomorrow", group: nil, in: context, now: now)
+        XCTAssertEqual(try stored(milk.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 12)))
+        let gym = try IntentActions.addTask("Gym tomorrow 5pm", group: nil, in: context, now: now)
+        XCTAssertEqual(try stored(gym.id).dueDate, TimeZoneStoreTests.local(2026, 11, 12, 17, in: Self.newYork))
+    }
+
     // MARK: - The first-run pass
 
     static let firstRunKey = "review.firstRun"
@@ -323,5 +349,107 @@ final class DayAnchorReviewStoreTests: XCTestCase {
         XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.newYork, defaults: defaults, firstRunKey: Self.firstRunKey,
                                                syncLog: { _, _, _ in }), DayAnchoring.Count(dueDates: 1))
         XCTAssertEqual(try stored(later.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 13)))
+    }
+
+    /// A backup that can't be written (its folder under a file, as an unwritable or missing folder would) or that dies
+    /// half way (a partial file, then an error) is no backup: nothing is rewritten, the pass isn't marked done, and the
+    /// next launch's backup replaces the partial file (the same day's name) before anything changes.
+    func testAFolderThatCantBeWrittenOrABackupThatDiesHalfWayIsNoBackup() throws {
+        let midnight = DayAnchor.start(of: Self.day(2026, 11, 12), calendar: Self.newYork)
+        let task = try olderBuildTask("Call Sam", due: midnight)
+        let scratch = try scratchFolder()
+        let file = scratch.appending(path: "not-a-folder")
+        try Data("x".utf8).write(to: file)
+        let now = TimeZoneStoreTests.local(2026, 11, 11, 7, in: Self.newYork)
+        let unwritable = firstRun(backUp: { try DayAnchoring.backUp(context: $0, now: now, isMainStore: false, sideFolder: file) })
+        guard case .noBackup = unwritable else { return XCTFail("expected noBackup, got \(unwritable)") }
+
+        let folder = scratch.appending(path: "Backups before day anchors", directoryHint: .isDirectory)
+        let partial = folder.appending(path: LocalBackup.fileName(for: now))
+        let halfWay = firstRun(backUp: { _ in
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data("{\"tasks\":[{\"title\":\"Call".utf8).write(to: partial)
+            throw CocoaError(.fileWriteOutOfSpace)
+        })
+        guard case .noBackup = halfWay else { return XCTFail("expected noBackup, got \(halfWay)") }
+        XCTAssertEqual(bits(try stored(task.id).dueDate), bits(midnight))
+        XCTAssertEqual(defaults.integer(forKey: Self.firstRunKey), 0)
+
+        let next = firstRun(backUp: { try DayAnchoring.backUp(context: $0, now: now, isMainStore: false, sideFolder: folder) })
+        XCTAssertEqual(next, .rewrote(DayAnchoring.Count(dueDates: 1), backup: partial))
+        let snapshot = try Snapshot.from(json: Data(contentsOf: partial))
+        XCTAssertEqual(snapshot.tasks.first?.dueDate, midnight, "the backup holds the old value, and is whole")
+    }
+
+    /// Killed in the middle. After the backup and before the save: nothing was written (the rewrite and the save are one
+    /// transaction), the pass isn't marked, and the next launch backs up again (still the old values) and anchors. After
+    /// the save and before the mark: the next launch finds nothing to do, takes no second backup, and marks it.
+    func testAPassKilledBeforeOrAfterItsSaveIsWholeAtTheNextLaunch() throws {
+        let midnight = DayAnchor.start(of: Self.day(2026, 11, 12), calendar: Self.newYork)
+        let task = try olderBuildTask("Call Sam", due: midnight)
+        let folder = try scratchFolder()
+        let now = TimeZoneStoreTests.local(2026, 11, 11, 7, in: Self.newYork)
+        // Killed after the backup: the backup exists, the store and the mark are as they were.
+        _ = try DayAnchoring.backUp(context: context, now: now, isMainStore: false, sideFolder: folder)
+        XCTAssertEqual(bits(try stored(task.id).dueDate), bits(midnight))
+        var backups = 0
+        let relaunch = firstRun(backUp: { backups += 1; return try DayAnchoring.backUp(context: $0, now: now, isMainStore: false, sideFolder: folder) })
+        guard case .rewrote(let count, let url) = relaunch else { return XCTFail("\(relaunch)") }
+        XCTAssertEqual(count, DayAnchoring.Count(dueDates: 1))
+        XCTAssertEqual(backups, 1)
+        XCTAssertEqual(try Snapshot.from(json: Data(contentsOf: url)).tasks.first?.dueDate, midnight, "taken before the rewrite")
+
+        // Killed after the save, before the mark.
+        let second = try olderBuildTask("Pay rent", due: DayAnchor.start(of: Self.day(2026, 11, 13), calendar: Self.newYork))
+        defaults.removeObject(forKey: Self.firstRunKey)
+        _ = try DayAnchoring.pass(in: context, calendar: Self.newYork)
+        XCTAssertEqual(firstRun(backUp: { _ in XCTFail("no second backup"); return nil }), .nothingToDo)
+        XCTAssertEqual(defaults.integer(forKey: Self.firstRunKey), DayAnchoring.firstRunVersion)
+        XCTAssertEqual(try stored(second.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 13)))
+    }
+
+    /// A new device opens an empty store before iCloud has imported anything: the first-run pass has nothing to do and is
+    /// marked done, with no backup (there is nothing to keep). What the import then brings in the old form is anchored by
+    /// the pass after the import.
+    func testAnEmptyStoreBeforeTheImportIsMarkedDoneAndTheImportIsAnchored() throws {
+        XCTAssertEqual(firstRun(backUp: { _ in XCTFail("nothing to back up"); return nil }), .nothingToDo)
+        let imported = try olderBuildTask("From iCloud", due: DayAnchor.start(of: Self.day(2026, 11, 12), calendar: Self.newYork),
+                                          deadline: DayAnchor.start(of: Self.day(2026, 11, 20), calendar: Self.newYork))
+        XCTAssertEqual(DayAnchoring.importPass(in: context, calendar: Self.newYork, defaults: defaults, firstRunKey: Self.firstRunKey,
+                                               syncLog: { _, _, _ in }), DayAnchoring.Count(dueDates: 1, deadlines: 1))
+        XCTAssertEqual(try stored(imported.id).dueDate, DayAnchor.anchor(of: Self.day(2026, 11, 12)))
+    }
+
+    /// A store of 20,000 tasks in a file, as on a device (no iCloud here): the first-run pass reads it, backs it up to a
+    /// JSON file and anchors 15,000 days, timed tasks untouched. It runs in `HITListApp.init`, before the first frame,
+    /// so its time is the launch's: printed for the report, and well under iOS's launch watchdog on this Mac.
+    func testTheFirstRunPassOverTwentyThousandTasksInAFile() throws {
+        let folder = try scratchFolder()
+        let opened = ModelContainerFactory.open(schema: HITListSchema.schema, url: folder.appending(path: "Review.store"), useCloudKit: false)
+        let big = opened.container
+        let bigContext = big.mainContext
+        bigContext.autosaveEnabled = false
+        let start = DayAnchor.start(of: Self.day(2026, 1, 1), calendar: Self.newYork)
+        for i in 0..<20_000 {
+            let day = Self.newYork.date(byAdding: .day, value: i % 700, to: start)!
+            let task = i % 4 == 0
+                ? TaskItem(title: "Timed \(i)", dueDate: day.addingTimeInterval(9 * 3600), hasDueTime: true)
+                : TaskItem(title: "Day \(i)", dueDate: day)
+            bigContext.insert(task)
+        }
+        try bigContext.save()
+        let fresh = ModelContext(big)
+        let clock = ContinuousClock()
+        var outcome: DayAnchoring.FirstRunOutcome?
+        let elapsed = try clock.measure {
+            outcome = DayAnchoring.firstRunPass(context: fresh, defaults: defaults, key: Self.firstRunKey, calendar: Self.newYork,
+                                                backUp: { try DayAnchoring.backUp(context: $0, now: .now, isMainStore: false, sideFolder: folder) },
+                                                syncLog: { _, _, _ in })
+            _ = try XCTUnwrap(outcome)
+        }
+        guard case .rewrote(let count, _) = try XCTUnwrap(outcome) else { return XCTFail("\(String(describing: outcome))") }
+        XCTAssertEqual(count, DayAnchoring.Count(dueDates: 15_000))
+        print("Brief 92: the first-run pass over 20,000 tasks (15,000 days) took \(elapsed) on this Mac")
+        XCTAssertLessThan(elapsed, .seconds(60))
     }
 }
