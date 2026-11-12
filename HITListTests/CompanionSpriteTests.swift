@@ -81,7 +81,9 @@ final class CompanionSpriteTests: XCTestCase {
                     guard let w else { continue }
                     // One prop or one change: an umbrella, a dusting, a tail or a pair of ears drawn up into a hood.
                     let change = character.difference(w, posture.awake.rest)
-                    XCTAssertTrue((4...120).contains(change), "\(at) \(w): \(change) pixels")
+                    // Brief 120: Button's one change is his whole cap pulled three rows down over his eyes.
+                    let most = character.id == "button" && w == posture.awake.rain ? 200 : 120
+                    XCTAssertTrue((4...most).contains(change), "\(at) \(w): \(change) pixels")
                 }
                 XCTAssertGreaterThanOrEqual(posture.awake.gestures.count, 3, "\(at): three small gestures")
                 XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 1, "\(at): a stir")
@@ -226,7 +228,13 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.rain, "rain")
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
-        XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
+        // Brief 120: asleep in the rain the umbrella is propped over it, its shaft on its shoulder; awake it holds it up.
+        XCTAssertEqual(nod.field.asleep.rain, "sleepRain")
+        XCTAssertEqual(nod.plus.asleep.rain, "sleepRain")
+        let rain = nod.rows("rain")!.map(Array.init)
+        XCTAssertTrue(rain[0...3].joined().contains("m"), "the canopy is a dome over its head")
+        XCTAssertTrue((4...13).allSatisfy { rain[$0][0] == "l" }, "the shaft stands beside it")
+        XCTAssertEqual(rain[12][1], "m", "its arm reaches out to hold the shaft")
         // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
         XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
                                                               "rimDrip", "sweat"])
