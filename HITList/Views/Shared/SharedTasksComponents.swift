@@ -180,17 +180,27 @@ struct SharedTaskListRow: View {
             }
             .lineLimit(1)
         } else {
-            HStack(spacing: HITSpacing.s + 2) {
-                // The date and the people keep their full width, as yours keep the date and labels.
-                HStack(spacing: HITSpacing.s + 2) {
+            if showGroup {
+                // The date and the people on the first line; the Group under them where the line is too narrow for
+                // all three, never cut to a letter (brief 106), as on your rows.
+                TaskMetaLine(items: HStack(spacing: HITSpacing.s + 2) {
                     dueItem
                     SharedRowPeople(people: row.people)
+                }) {
+                    groupItem
                 }
-                .layoutPriority(1)
-                Spacer(minLength: HITSpacing.s)
-                if showGroup { groupItem } else { emptyLine }
+            } else {
+                HStack(spacing: HITSpacing.s + 2) {
+                    HStack(spacing: HITSpacing.s + 2) {
+                        dueItem
+                        SharedRowPeople(people: row.people)
+                    }
+                    .layoutPriority(1)
+                    Spacer(minLength: HITSpacing.s)
+                    emptyLine
+                }
+                .lineLimit(1)
             }
-            .lineLimit(1)
         }
     }
 

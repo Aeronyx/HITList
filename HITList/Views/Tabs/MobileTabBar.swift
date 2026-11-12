@@ -88,6 +88,29 @@ enum IslandMetrics {
     static var sideChromeHeight: CGFloat { bottomGap + sideAddButtonSize.height + sideAddButtonGap + sideHeight }
     /// The narrowest bar column that holds the island with air on both sides.
     static var sideColumnWidth: CGFloat { sideWidth + 2 * 4 }
+
+    /// The largest text size a tab's label follows (brief 106). Upright the island is 66 pt wide: at the default size
+    /// "Upcoming" is 53.7 pt (Inter SemiBold 11), at XL 63.6, which ran to both of the island's edges, so the upright
+    /// labels keep the default size. At the bottom a tab's cell is about 87 pt on an iPhone 16 and XL's 63.6 fits.
+    static func labelSizeCap(_ axis: Axis) -> DynamicTypeSize {
+        axis == .vertical ? .large : .xLarge
+    }
+
+    /// The upright label's widest, "Upcoming", at the default size, and the room it has: the cell's width less the pill's
+    /// inset on both sides.
+    static let sideLabelWidestAtDefault: CGFloat = 53.7
+    static var sideLabelRoom: CGFloat { sidePillWidth }
+}
+
+/// Whether a keyboard frame the system announced is the on-screen keyboard (a hardware keyboard's shortcut bar is a
+/// strip of 50 pt or so, and leaves the island where it is).
+enum KeyboardCover {
+    static let minimumHeight: CGFloat = 120
+
+    static func isUp(frameEnd: CGRect, screenHeight: CGFloat) -> Bool {
+        let covered = screenHeight - frameEnd.minY
+        return frameEnd.height >= minimumHeight && covered >= minimumHeight
+    }
 }
 
 /// Where the iPhone shell's island and "+" stand (brief 50). Apple's iPhone Duo guidelines: "Follow the
@@ -103,10 +126,11 @@ enum IslandPlacement: Equatable {
     case side(HorizontalEdge)
 
     /// The window height (safe areas included, so the keyboard changes nothing) below which the column is too
-    /// short: the system's items take up to about 335 pt from the top, the island and the "+"
-    /// `IslandMetrics.sideChromeHeight` (326 pt since brief 63, 290 before) from the bottom, and the two may
-    /// meet in the bottom safe area's 25 or so (600 for the old 290). The outer display upright is 678 pt tall,
-    /// on its side 466.
+    /// short: the system's items took up to about 335 pt from the top while the screen's controls stood in the column,
+    /// the island and the "+" `IslandMetrics.sideChromeHeight` (326 pt since brief 63, 290 before) from the bottom, and
+    /// the two may meet in the bottom safe area's 25 or so (600 for the old 290). Since brief 106 the column holds only
+    /// the status, a call and Back (282 pt at most, `BarColumnBudget`), so the threshold has room to spare; it is kept,
+    /// so nothing changes where the island stands. The outer display upright is 678 pt tall, on its side 466.
     static var sideMinimumWindowHeight: CGFloat { 310 + IslandMetrics.sideChromeHeight }
 
     /// `windowHeight` 0 (not yet measured) goes by the edge alone.
@@ -142,6 +166,13 @@ enum IslandPlacement: Equatable {
         let offset = cameraCentre - columnWidth / 2
         let room = (columnWidth - IslandMetrics.sideWidth) / 2
         return abs(offset) <= room ? offset : 0
+    }
+
+    /// Whether the island and the "+" are on show (brief 106): upright they step aside while the keyboard is up, rather
+    /// than leave the island's top cell peeking out between a card and the keys. At the bottom the keyboard covers them
+    /// whole, as before.
+    func showsChrome(keyboardUp: Bool) -> Bool {
+        !(isSide && keyboardUp)
     }
 
     /// Where the chrome stands in the shell.
@@ -272,6 +303,11 @@ struct MobileTabBar: View {
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(selection == tab ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("tab-\(tab.rawValue)")
+            // The labels stop growing (`labelSizeCap`); at an accessibility text size a long press shows the tab large,
+            // as the system's tab bars do.
+            .accessibilityShowsLargeContentViewer {
+                Label(tab.title, systemImage: tab.symbol)
+            }
         }
     }
 
@@ -315,7 +351,7 @@ struct MobileTabBar: View {
                 .lineLimit(1)
                 // Upright, "Flipboard" and "Upcoming" have the island's 66 pt and no more.
                 .minimumScaleFactor(axis == .vertical ? 0.75 : 1)
-                .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                .dynamicTypeSize(...IslandMetrics.labelSizeCap(axis))
         }
         .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -261,3 +261,64 @@ extension View {
         #endif
     }
 }
+
+// MARK: - Beside the bar column (brief 106)
+
+/// Which edge the system's bar column stands on, when it stands in a column at all (the Duo's outer display upright and on
+/// its side, the inner display on its side): set by `placesIsland()` from `toolbarVerticalEdge`, whether or not our island
+/// stands in it (on its side the island is at the bottom and the column still holds the system's items).
+struct BarColumnSide: Equatable {
+    var edge: HorizontalEdge?
+
+    static let none = BarColumnSide(edge: nil)
+
+    /// The column's edge, where a sideways strip stops; nil where the bars are horizontal.
+    var stops: Edge.Set? {
+        switch edge {
+        case nil: nil
+        case .leading: .leading
+        case .trailing: .trailing
+        }
+    }
+
+    /// The edges a list's own strip may draw its background under: all of them, except the column's (the clock and
+    /// the battery ring, or the system's Back and toolbar items, sit there).
+    var stripBackgroundEdges: Edge.Set {
+        switch edge {
+        case nil: .all
+        case .leading: [.top, .bottom, .trailing]
+        case .trailing: [.top, .bottom, .leading]
+        }
+    }
+}
+
+extension EnvironmentValues {
+    @Entry var barColumnSide: BarColumnSide = .none
+}
+
+extension View {
+    /// A strip that scrolls sideways (Upcoming's week, Browse's saved filters) ends at the content's edge beside the
+    /// system's bar column: a scroll view draws into the safe area around it, which there is the column, so the next
+    /// week's first day and the last filter ran under the battery ring (and, on its side, the week's band under the
+    /// system's controls). Clipped to its own frame on that side only; wherever the bars are horizontal (every other
+    /// iPhone, the iPad, the Mac) it is left as it was.
+    func endsBeforeTheBarColumn() -> some View { modifier(EndsBeforeTheBarColumn()) }
+}
+
+private struct EndsBeforeTheBarColumn: ViewModifier {
+    @Environment(\.barColumnSide) private var column
+
+    func body(content: Content) -> some View {
+        if let edge = column.stops {
+            // Open on every other side (a press's lift, a chip's shadow), shut on the column's.
+            content.mask {
+                Rectangle()
+                    .padding(.horizontal, -400)
+                    .padding(.vertical, -400)
+                    .padding(edge, 400)
+            }
+        } else {
+            content
+        }
+    }
+}
