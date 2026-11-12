@@ -5075,7 +5075,7 @@ extension CompanionCharacter {
                             // come back; it leans to its seedling and the leaf lifts; it stretches up to the sky and
                             // then looks ahead; at a fright, half a retreat, and one eye comes out before the other.
                             Routine(name: "stalksIn", little: true, steps: [.play(("inL1", 2), ("inL2", 2)), .play(("inL2R1", 2), ("inBoth", 4)), .play(("inR2", 3), ("inR1", 2)), .hold(1)]),
-                            Routine(name: "lean", little: true, steps: [.play(("lookBack", 1), ("leanBack", 3)), .play(("leanLeaf", 6)), .play(("leanBack", 2), ("lookBack", 1)), .hold(1), .gesture("blink")]),
+                            Routine(name: "lean", little: true, steps: [.play(("lookBack", 1), ("leanBack", 3)), .play(("leanLeaf", 6)), .play(("leanBack", 2), ("lookBack", 1)), .gesture("blink"), .hold(1)]),
                             Routine(name: "skyward", little: true, steps: [.play(("lookUp", 1), ("upL", 2), ("upBoth", 5)), .play(("upL", 2), ("lookUp", 1)), .play(("look", 1), ("leanAhead", 4), ("look", 1)), .hold(1)]),
                             Routine(name: "fright", little: true, steps: [.play(("flinch", 1), ("halfIn", 4)), .play(("inBoth", 3), ("inL2R1", 3)), .play(("inL2", 2), ("inL1", 2)), .hold(1)]),
                             Routine(name: "shake", sky: .rain, steps: [.play(("drop1", 1), ("rest", 1)),

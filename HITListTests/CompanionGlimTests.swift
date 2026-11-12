@@ -144,12 +144,8 @@ final class CompanionGlimTests: XCTestCase {
                                    act: CompanionAct(kind: .gesture(flicker), start: start))
         let pose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: stage)
         XCTAssertEqual(pose.frame, glim.index["dim@rain"])
-        // Its ear in the snow is drawn with the dusting on it, too.
-        let ear = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "ear" })
-        let snowStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .snow),
-                                       act: CompanionAct(kind: .gesture(ear), start: start))
-        let earPose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: snowStage)
-        XCTAssertEqual(earPose.frame, glim.index["ear@snow"])
+        // Its ear in the snow (in its wash, brief 105) is drawn with the dusting on it, too.
+        XCTAssertEqual(glim.drawnIndex("ear", over: "snow", rest: "rest"), glim.index["ear@snow"])
         // The rain's own flicker, a drop gathering under the lantern it holds, is drawn whole.
         let drop = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "drop" })
         let dropStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .rain),
