@@ -6,8 +6,9 @@ enum SyncSignal: Equatable, Sendable {
     case eventStarted(id: UUID, type: SyncEventType, at: Date)
     /// `startedAt` is the event's own start date (the start notification can be missed).
     case eventEnded(id: UUID, type: SyncEventType, startedAt: Date, succeeded: Bool, error: String?, at: Date)
-    /// A local save that changed at least one object, so an export has to follow.
-    case localSave(at: Date)
+    /// A local save that changed at least one object, so an export has to follow. `records`: how many objects it
+    /// changed, for the words of what is waiting (brief 95: George's Mac saved 46 tasks in one save).
+    case localSave(at: Date, records: Int = 1)
     /// A CloudKit push for this app's container, so an import has to follow.
     case push(at: Date)
     /// The app became active after `idle` seconds away (nil: unknown, e.g. the first activation).
@@ -177,6 +178,8 @@ struct SyncWatchdog: Sendable {
     private struct Pending: Equatable, Sendable {
         /// Save or push times not yet covered, oldest first.
         var times: [Date]
+        /// How many records each of `times` changed (1 for a push), kept beside it.
+        var records: [Int] = []
         /// When it becomes overdue; nil while paused or once reported.
         var deadline: Date?
         var overdue = false
@@ -247,6 +250,8 @@ struct SyncWatchdog: Sendable {
 
     /// Saves and pushes not yet covered by an export or import.
     var waitingSaves: Int { exports?.times.count ?? 0 }
+    /// The records those saves changed: what the bolt's words count ("Sending 46 changes to iCloud…").
+    var waitingRecords: Int { exports?.records.reduce(0, +) ?? 0 }
     /// The oldest save no export has covered yet (brief 95: past the grace, the bolt isn't confirmed).
     var oldestWaitingSave: Date? { exports?.times.first }
     var waitingPushes: Int { imports?.times.count ?? 0 }
@@ -305,13 +310,13 @@ struct SyncWatchdog: Sendable {
             }
             return findings
 
-        case let .localSave(at):
+        case let .localSave(at, records):
             if exports == nil, let start = lastExportStart, let end = lastExportAt,
                start >= at.addingTimeInterval(-rules.exportSlack) {
                 return [.exportOnTime(latency: end.timeIntervalSince(at), saves: 1)]
             }
             let blocked = waitBlockedReason, window = rules.exportWithin, cap = rules.maxWaiting
-            return Self.add(at, to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
+            return Self.add(at, records: max(1, records), to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
 
         case let .push(at):
             if imports == nil, let start = lastImportStart, let end = lastImportAt,
@@ -448,11 +453,15 @@ struct SyncWatchdog: Sendable {
 
     // MARK: Helpers
 
-    private static func add(_ at: Date, to pending: inout Pending?, wait: Wait, window: TimeInterval, blocked: String?,
-                            cap: Int) -> [Finding] {
+    private static func add(_ at: Date, records: Int = 1, to pending: inout Pending?, wait: Wait, window: TimeInterval,
+                            blocked: String?, cap: Int) -> [Finding] {
         var p = pending ?? Pending(times: [], clockFrom: blocked == nil ? at : nil)
         p.times.append(at)
-        if p.times.count > cap { p.times.remove(at: 1) }
+        p.records.append(records)
+        if p.times.count > cap {
+            p.times.remove(at: 1)
+            p.records.remove(at: 1)
+        }
         var findings: [Finding] = []
         if !p.overdue && p.deadline == nil {
             if let reason = blocked {
@@ -477,6 +486,7 @@ struct SyncWatchdog: Sendable {
         guard let oldest = covered.first else { return [] }
         let result = finding(endedAt.timeIntervalSince(oldest), p.overdue, covered.count)
         p.times.removeFirst(covered.count)
+        p.records.removeFirst(min(covered.count, p.records.count))
         if p.times.isEmpty {
             pending = nil
         } else {

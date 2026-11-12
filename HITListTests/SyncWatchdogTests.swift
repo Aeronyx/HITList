@@ -45,6 +45,33 @@ final class SyncWatchdogTests: XCTestCase {
         XCTAssertEqual(dog.waitingSaves, 0)
     }
 
+    /// Brief 95, George's logs: the 0.9.3 launch on his Mac saved 46 tasks in one save (M1676). The bolt's words
+    /// count what is waiting by records, so they said "Sending 1 change to iCloud…" for 46 before this.
+    func testWaitingRecordsCountEachSavesRecordsUntilTheExportThatCoversThem() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.localSave(at: at(0), records: 46))
+        _ = dog.handle(.localSave(at: at(1)))
+        XCTAssertEqual(dog.waitingSaves, 2)
+        XCTAssertEqual(dog.waitingRecords, 47)
+        // An export that started after the first save but before the second covers the first only.
+        _ = dog.handle(started(exportID, .exporting, 0.5))
+        _ = dog.handle(ended(exportID, .exporting, from: 0.5, at: 1.5))
+        XCTAssertEqual(dog.waitingRecords, 1)
+        XCTAssertEqual(dog.oldestWaitingSave, at(1))
+        let next = UUID()
+        _ = dog.handle(started(next, .exporting, 2))
+        _ = dog.handle(ended(next, .exporting, from: 2, at: 2.2))
+        XCTAssertEqual(dog.waitingRecords, 0)
+    }
+
+    func testPastTheCapTheRecordsLeaveWithTheirSaves() {
+        var dog = makeWatchdog()
+        let cap = dog.rules.maxWaiting
+        for i in 0..<(cap + 5) { _ = dog.handle(.localSave(at: at(Double(i) * 0.01), records: i == 1 ? 1000 : 2)) }
+        XCTAssertEqual(dog.waitingSaves, cap)
+        XCTAssertEqual(dog.waitingRecords, cap * 2, "the dropped saves (the second onwards) take their records with them")
+    }
+
     func testNoExportWithinFiveSecondsIsOverdueOnce() throws {
         var dog = makeWatchdog()
         _ = dog.handle(.localSave(at: at(0)))
@@ -424,7 +451,7 @@ final class SyncWatchdogTests: XCTestCase {
 
     private func signalTime(_ signal: SyncSignal) -> Date {
         switch signal {
-        case let .eventStarted(_, _, at), let .eventEnded(_, _, _, _, _, at), let .localSave(at), let .push(at),
+        case let .eventStarted(_, _, at), let .eventEnded(_, _, _, _, _, at), let .localSave(at, _), let .push(at),
              let .activated(at, _), let .network(_, at), let .account(_, _, at), let .suspended(at), let .resumed(at):
             return at
         }
