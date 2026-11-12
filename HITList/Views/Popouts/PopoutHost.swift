@@ -407,6 +407,9 @@ struct PopoutHost: ViewModifier {
                         }
                         card
                             .ovalCardChrome()
+                            // What brief 114's inset test measures against.
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("quickAddCard")
                             // A chip's card opens for where the chip will be once the keyboard has stepped aside and
                             // the card has dropped with it, by `aboveKeyboard` (brief 107).
                             .environment(\.pickerSettleInset, geo.safeAreaInsets.bottom)

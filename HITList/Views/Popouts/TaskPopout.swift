@@ -127,6 +127,9 @@ struct TaskPopout: View {
             footer
         }
         .background(Theme.background)
+        // What brief 114's inset test measures against.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("editorCard")
         // A view reaching into the safe area reports how deep it is (the editor itself is laid out inside it).
         .background {
             Color.clear
