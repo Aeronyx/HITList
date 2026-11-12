@@ -14,6 +14,11 @@ import SwiftUI
 /// brief 35) it is `MobileTopControl`: a magnifying glass that pushes Browse on a tab's first screen and the
 /// same gear on Browse and the lists pushed from it.
 ///
+/// Where the system's bars run down one edge (the iPhone Duo's outer display, `ScreenControlsPlacement.titleRow`, brief
+/// 106) the three leave the system's column for the large title's row: the column is the system's status, Back, the tab
+/// island and the "+", and the bolt and the pill (`TitleRowControls`) stand at the trailing end of the title's row, which
+/// stays while the list scrolls under it.
+///
 ///     .screenChrome {
 ///         ViewOptionsMenu { Toggle("Show completed", isOn: $showCompleted) }
 ///     } menu: {
@@ -32,6 +37,7 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     @State private var settingsRequest: SettingsSheetRequest?
     #if os(iOS)
     @Environment(\.mobileChrome) private var mobileChrome
+    @Environment(\.islandPlacement) private var islandPlacement
     #endif
     #if os(macOS)
     @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
@@ -89,36 +95,81 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
     }
     #endif
 
+    #if os(iOS)
+    private var controlsPlacement: ScreenControlsPlacement {
+        ScreenControlsPlacement(islandPlacement: islandPlacement, isPhoneShell: mobileChrome != nil)
+    }
+
+    /// The magnifying glass pushes Browse; the gear opens Settings.
+    private func topControlTapped(_ control: MobileTopControl) {
+        switch control {
+        case .browse: mobileChrome?.openBrowse()
+        case .settings: openAppSettings()
+        }
+    }
+
+    /// The bolt and the pill in the large title's row (brief 106), for `.titleRow`.
+    @ViewBuilder
+    private var titleRowControls: some View {
+        if let mobileChrome {
+            TitleRowControls {
+                SyncBolt(action: openSyncSettings)
+            } options: {
+                viewOptions()
+                    .environment(\.screenMenuItems, AnyView(menu()))
+            } top: {
+                MobileTopButton(control: mobileChrome.control) { topControlTapped(mobileChrome.control) }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var phoneToolbar: some ToolbarContent {
+        if controlsPlacement == .titleRow {
+            // Where the bars stand in a column the system draws a screen's first plain trailing item in the large
+            // title's row, and shortens the title for it; the rest it stacks down the column. So the bolt and the pill
+            // are that one item. (Drawn by us over the title's row instead, they took no taps: the navigation bar,
+            // in front of the screen, kept them.)
+            if #available(iOS 26, *) {
+                ToolbarItem(placement: trailing) { titleRowControls }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: trailing) { titleRowControls }
+            }
+        } else {
+            // The bolt stands apart from the controls: on iOS 26 that means outside the toolbar's shared glass;
+            // before, toolbar items have no shared background anyway.
+            if #available(iOS 26, *) {
+                ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
+                    .sharedBackgroundVisibility(.hidden)
+            } else {
+                ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
+            }
+            ToolbarItemGroup(placement: trailing) {
+                if let mobileChrome {
+                    viewOptions()
+                        .environment(\.screenMenuItems, AnyView(menu()))
+                    MobileTopButton(control: mobileChrome.control) { topControlTapped(mobileChrome.control) }
+                } else {
+                    // iPad: the Mac's pair, the screen's items in the view options and the gear (brief 99).
+                    viewOptions()
+                        .environment(\.screenMenuItems, AnyView(menu()))
+                    SettingsGearButton(action: openAppSettings)
+                }
+            }
+        }
+    }
+    #endif
+
     func body(content: Content) -> some View {
         content
+            #if os(iOS)
+            // The title's row stays while the list scrolls under it, so the controls in it can always be reached.
+            .modifier(PinsTheTitleRow(isOn: controlsPlacement == .titleRow))
+            .toolbar { phoneToolbar }
+            .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
+            #else
             .toolbar {
-                #if os(iOS)
-                // The bolt stands apart from the controls: on iOS 26 that means outside the toolbar's shared glass;
-                // before, toolbar items have no shared background anyway.
-                if #available(iOS 26, *) {
-                    ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
-                        .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: trailing) { SyncBolt(action: openSyncSettings) }
-                }
-                ToolbarItemGroup(placement: trailing) {
-                    if let mobileChrome {
-                        viewOptions()
-                            .environment(\.screenMenuItems, AnyView(menu()))
-                        MobileTopButton(control: mobileChrome.control) {
-                            switch mobileChrome.control {
-                            case .browse: mobileChrome.openBrowse()
-                            case .settings: openAppSettings()
-                            }
-                        }
-                    } else {
-                        // iPad: the Mac's pair, the screen's items in the view options and the gear (brief 99).
-                        viewOptions()
-                            .environment(\.screenMenuItems, AnyView(menu()))
-                        SettingsGearButton(action: openAppSettings)
-                    }
-                }
-                #else
                 // Our own capsule around the two controls, with the toolbar's shared glass hidden for it (brief 70): the
                 // glass was an outline on 26.7.1 and filled grey on 27.2. macOS 15 has no shared glass. The bolt shares
                 // its item (`boltAndPill`).
@@ -128,10 +179,7 @@ private struct ScreenChrome<Options: View, Items: View>: ViewModifier {
                 } else {
                     ToolbarItem(placement: trailing) { boltAndPill }
                 }
-                #endif
             }
-            #if os(iOS)
-            .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
             #endif
     }
 }
@@ -294,3 +342,120 @@ private struct MobileTopButton: View {
         .help(control.title)
     }
 }
+
+// MARK: - The title row's controls (brief 106)
+
+/// Where a screen's own controls (the bolt, the view options and the magnifying glass or gear) stand.
+enum ScreenControlsPlacement: Equatable {
+    /// In the system's toolbar: the top bar on every iPhone, the toolbar on the iPad and the Mac.
+    case toolbar
+    /// At the trailing end of the large title's row, which stays while the list scrolls (`TitleRowControls`): where the
+    /// system's bars stand in a column down one edge (the iPhone Duo's outer display). That column has room for the
+    /// system's status, Back, the tab island and the "+", and no more: the system stacked the pill under Back, onto the
+    /// island's top cell on every pushed screen and, with a call widening the camera island, on every screen
+    /// (`BarColumnBudget`). The bolt stands with the pill, as on every other iPhone, rather than in the title's row alone.
+    case titleRow
+
+    init(islandPlacement: IslandPlacement, isPhoneShell: Bool) {
+        self = isPhoneShell && islandPlacement.isSide ? .titleRow : .toolbar
+    }
+
+    /// Whether the system's bar column holds the screen's controls.
+    var inSystemColumn: Bool { self == .toolbar }
+
+    /// `.titleRow`: the point of nothing above the screen's list that keeps the title's row from folding away.
+    static let titleRowAnchor: CGFloat = 1
+
+    /// Whether the large title's row stays while the list scrolls under it.
+    var pinsTitleRow: Bool { self == .titleRow }
+}
+
+/// The title row's controls, measured (`MobileChromeTests` pins them). The pill is the system's toolbar group at its
+/// iPhone size: two 44 pt targets in a glass capsule, the glyphs at the toolbar's 17 pt.
+enum TitleRowControlMetrics {
+    /// Each control's target, as a toolbar item's.
+    static let control: CGFloat = 44
+    /// Inside the capsule, before the first glyph's target and after the last.
+    static let pillPadding: CGFloat = 4
+    static var pillWidth: CGFloat { 2 * control + 2 * pillPadding }
+    static var pillHeight: CGFloat { control }
+    /// From the bolt's frame to the pill: the bolt reads as the pill's neighbour, not a third control in it.
+    static let boltGap: CGFloat = 6
+    /// After the pill, inside the item: the system sets the title row's last item against the bar column's edge, 3 pt
+    /// from the island; this keeps the pill on the rows' trailing side instead.
+    static let trailing: CGFloat = 12
+    /// The item's width: the bolt, its gap, the pill and the room after it.
+    static var width: CGFloat { SyncBolt.frame.width + boltGap + pillWidth + trailing }
+    /// The glyphs: the system toolbar's size on iPhone.
+    static let glyphSize: CGFloat = 17
+}
+
+#if os(iOS)
+/// The bolt and the pill (`ScreenControlsPlacement.titleRow`): the system's title-row item, so the system lays it out
+/// beside the large title (shortening a long title before it), takes its taps and reads it to VoiceOver after Back and
+/// the title. The pill is glass, as the island and the system's own controls in the column are.
+struct TitleRowControls<Bolt: View, Options: View, Top: View>: View {
+    @ViewBuilder var bolt: Bolt
+    @ViewBuilder var options: Options
+    @ViewBuilder var top: Top
+
+    var body: some View {
+        let capsule = Capsule(style: .continuous)
+        HStack(spacing: TitleRowControlMetrics.boltGap) {
+            bolt
+                // The bolt is drawn `SyncBolt.nudge` right of its slot for the toolbar's spacing; here it has our own.
+                .offset(x: -SyncBolt.nudge)
+            HStack(spacing: 0) {
+                options
+                top
+            }
+            .menuStyle(.button)
+            .buttonStyle(TitleRowControlStyle())
+            .padding(.horizontal, TitleRowControlMetrics.pillPadding)
+            .frame(height: TitleRowControlMetrics.pillHeight)
+            .hitGlass(in: capsule, tint: Theme.surface.opacity(0.6), fallback: Theme.surface, fallbackShadow: .chrome)
+            .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5).allowsHitTesting(false) }
+            .contentShape(capsule)
+        }
+        .padding(.trailing, TitleRowControlMetrics.trailing)
+    }
+}
+
+/// Each control in the title row's pill: its glyph at the toolbar's size in the accent, a 44 pt target, a soft dip while
+/// pressed. Used for the menus too (`.menuStyle(.button)`), so no system bezel is drawn around them.
+private struct TitleRowControlStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: TitleRowControlMetrics.glyphSize))
+            .imageScale(.medium)
+            .foregroundStyle(Theme.accent)
+            .frame(width: TitleRowControlMetrics.control, height: TitleRowControlMetrics.control)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+            .animation(HITMotion.quick, value: configuration.isPressed)
+    }
+}
+
+/// Keeps the large title's row on screen while the list scrolls (`.titleRow`): the navigation bar folds its large title
+/// away with the screen's first scroll view only when that scroll view starts at the bar; a point of nothing above it
+/// leaves the title and the controls in its row where they are, as Browse's search field and Upcoming's week strip
+/// already did. The list starts a point lower; at rest nothing else moves. The screen's background goes up under the
+/// title again from here (the list's no longer reaches the bar: the title's row was black).
+private struct PinsTheTitleRow: ViewModifier {
+    let isOn: Bool
+
+    func body(content: Content) -> some View {
+        if isOn {
+            VStack(spacing: 0) {
+                Color.clear
+                    .frame(height: ScreenControlsPlacement.titleRowAnchor)
+                    .accessibilityHidden(true)
+                content
+            }
+            .background(Theme.background)
+        } else {
+            content
+        }
+    }
+}
+#endif
