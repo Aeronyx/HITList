@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.4
+## 0.9.4 — build 25, 2026-11-11
 
 George's notes on 0.9.3, worked through in an afternoon by eight sessions: a sync bolt that cannot claim more than
 it knows and a check that names what two devices disagree about, companions that are never still for long and sit
