@@ -639,6 +639,22 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(draft.chips(p).priority, .p1)
     }
 
+    /// Brief 127's scan: "!30mb" typed, then the time picked rather than typed (the Reminder card's time chips, the date
+    /// card's time row). The card writes the picked time into the text, so the phrase has its time beside it: it
+    /// lights up and counts, at the end of the text or not.
+    func testATypedReminderCountsBesideAPickedTime() {
+        let p = parser()
+        var draft = QuickAddDraft(context: .today, text: "PNHP Working Group !30mb")
+        XCTAssertTrue(draft.parsed(p, .final).tokens.filter { $0.kind == .reminder }.isEmpty, "no time yet: text")
+        draft.setTime(hour: 20, minute: 0, p)
+        XCTAssertEqual(draft.parsed(p).tokens.filter { $0.kind == .reminder }.map(\.text), ["!30mb"], "lit")
+        XCTAssertEqual(draft.chips(p).reminderOffsetMinutes, 30)
+        let result = draft.result(p)
+        XCTAssertEqual(result.reminderOffsetMinutes, 30)
+        XCTAssertEqual(result.title, "PNHP Working Group")
+        XCTAssertTrue(result.hasDueTime)
+    }
+
     func testReminderChipWording() {
         let eleven = calendar.date(bySettingHour: 11, minute: 0, second: 0, of: day(1))!
         let clock = eleven.formatted(date: .omitted, time: .shortened)
