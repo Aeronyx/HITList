@@ -303,3 +303,21 @@ struct DuoColumns: Equatable {
         min(max(value, range.lowerBound), range.upperBound).rounded()
     }
 }
+
+/// Upcoming's board on the Duo's inner display (brief 108). The iPad's columns are 270 pt whatever the room, which
+/// on a 429 pt detail column (upright, beside the sidebar) showed one day and half of the next, cut mid-card at the
+/// display's edge. Here as many whole columns fit as can be at least `minWidth`, each as wide as that leaves, and a
+/// swipe settles on whole columns: two days upright, three held like a book, one beside the editor.
+enum DuoBoardColumns {
+    /// A card this narrow still holds a title of three or four words a line and its meta line.
+    static let minWidth: CGFloat = 180
+
+    /// A column's width on a board `width` wide, its columns `inset` in from either edge and `spacing` apart.
+    static func width(board width: CGFloat, inset: CGFloat, spacing: CGFloat) -> CGFloat {
+        let room = max(0, width - 2 * inset)
+        let fit = ((room + spacing) / (minWidth + spacing)).rounded(.down)
+        let count = max(1, fit)
+        let gaps = (count - 1) * spacing
+        return ((room - gaps) / count).rounded(.down)
+    }
+}
