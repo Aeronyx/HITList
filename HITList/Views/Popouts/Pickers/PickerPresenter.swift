@@ -180,7 +180,9 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
         // iPad the roomier side is the one the system took, with the room to spare.
         let placement = opened ?? probe.placement(for: kind, settleInset: settleInset)
         content
-            .background(PickerChipReveal(isPresented: isPresented, probe: probe))
+            // Hidden from accessibility: with the chip's identifier passed down to it, it stood beside the chip's
+            // button as a second element of the same name that cannot be tapped (brief 114, quick add's wrapping row).
+            .background(PickerChipReveal(isPresented: isPresented, probe: probe).accessibilityHidden(true))
             // `arrowEdge` is the card's own edge that carries the arrow: its top for a card below the chip (measured on
             // the iPhone Duo simulator, iOS 27.1).
             .popover(isPresented: $isPresented, arrowEdge: placement.map { $0.edge == .below ? .top : .bottom }) {
