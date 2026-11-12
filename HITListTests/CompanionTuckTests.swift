@@ -39,20 +39,26 @@ final class CompanionTuckTests: XCTestCase {
         XCTAssertTrue(tuck.rows("rest")!.joined().contains("a"))
     }
 
-    /// Mostly still: two flickers (a blink, one eye stalk tipping out) and the weather's two (a drip off its pot's rim in
-    /// the rain, a pant on a hot day), the other gestures for its routines, each small beside the still it plays on and
-    /// under a second; a tap makes it flinch (eyes shut and pulled down a step), and woken it opens one eye.
+    /// Its idles are a snail's (brief 105): a blink, an eye stalk tipping out, one drawn in and back, both stretched up,
+    /// a lean ahead, the leaf stirring, a lean back to its seedling as the leaf lifts, and the weather's two (a drip off
+    /// its pot's rim in the rain, a pant on a hot day). Each starts and ends a step from the still it plays on (nothing
+    /// pops), moves no more than its eyes and a leaf, and is under a second; a tap makes it flinch (eyes shut and pulled
+    /// down a step), and woken it opens one eye.
     func testItsFlickersAndGesturesAreSmall() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
-            // Brief 100: every gesture an idle now, and a look back at its seedling.
-            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "lookBack", "drip", "pant"])
-            XCTAssertEqual(awake.gestures.map(\.name), ["blink", "twitch", "look", "lookUp", "leaf", "lookBack", "drip", "pant"])
-            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, nil, .rain, .heat])
+            // Brief 100: every gesture an idle. Brief 105: its own, slow, no glances about.
+            let names = ["blink", "twitch", "stalkIn", "stretch", "leanAhead", "leaf", "seedling", "drip", "pant"]
+            XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), names)
+            XCTAssertEqual(awake.gestures.map(\.name), names)
+            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, nil, nil, .rain, .heat])
             for gesture in awake.gestures + [awake.answer] {
                 let still = gesture.sky.map { awake.base(CompanionLook.Weather($0)) } ?? awake.rest
+                for tick in [gesture.ticks.first, gesture.ticks.last].compactMap({ $0 }) {
+                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 16, "\(place) \(gesture.name): nothing pops")
+                }
                 for tick in gesture.ticks {
-                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 16, "\(place) \(gesture.name)")
+                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 40, "\(place) \(gesture.name): its eyes and a leaf")
                 }
             }
             for gesture in awake.gestures {
@@ -124,7 +130,7 @@ final class CompanionTuckTests: XCTestCase {
             }
             // Its eyes' flickers play over the pile; the leaf and the look back at the seedling wait until it is bare.
             for gesture in awake.gestures where gesture.flicker && gesture.sky == nil {
-                let overThePile = ["blink", "twitch", "look", "lookUp"].contains(gesture.name)
+                let overThePile = ["blink", "twitch", "stalkIn", "stretch", "leanAhead"].contains(gesture.name)
                 if overThePile || depth == 0 {
                     XCTAssertTrue(tuck.canDraw(gesture, in: .snow, mode: awake, depth: depth), "\(gesture.name) at \(depth)")
                 }
@@ -176,7 +182,7 @@ final class CompanionTuckTests: XCTestCase {
             let awake = tuck.posture(place).awake
             let everyday = awake.routines.filter { $0.sky == nil && !$0.little }
             XCTAssertEqual(everyday.map(\.name), ["tend", "tuck", "scan", "wobble"])
-            XCTAssertEqual(awake.routines.filter(\.little).map(\.name), ["twitchTwitch", "lookBoth", "seedling"], "brief 100")
+            XCTAssertEqual(awake.routines.filter(\.little).map(\.name), ["stalksIn", "lean", "skyward", "fright"], "brief 105")
             XCTAssertEqual(awake.routines.compactMap(\.sky), [.rain, .snow, .storm, .clear, .snow, .heat])
             XCTAssertEqual(awake.routines.filter(\.shakesOff).map(\.name), ["shrug"])
             for routine in awake.routines where !routine.little {
