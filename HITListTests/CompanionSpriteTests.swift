@@ -226,9 +226,10 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
         // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "nod", "rub", "yawn", "lampFlicker",
-                                                              "swing", "swingRight", "rimDrip", "sweat"])
-        XCTAssertEqual(nod.field.awake.flickers, Array(0...9), "brief 100: every one an idle, the weather's drip and sweat too")
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
+                                                              "rimDrip", "sweat"])
+        XCTAssertEqual(nod.field.awake.flickers, Array(0...7), "brief 100: every one an idle, the weather's drip and sweat too")
+        XCTAssertEqual(nod.field.awake.routines.filter(\.little).map(\.name), ["nodOff", "rubYawn", "dangle", "lampTap"])
         XCTAssertEqual(nod.plus.awake.gestures.map(\.name), nod.field.awake.gestures.map(\.name), "the same in both places")
         XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "murmur"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
