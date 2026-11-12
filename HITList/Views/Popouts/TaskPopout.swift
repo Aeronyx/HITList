@@ -29,10 +29,6 @@ struct TaskPopout: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
-    /// The safe area on the editor's trailing side: the system's bar column on the iPhone Duo (its outer display, and its
-    /// inner one on its side), where the pills stop at the content's edge rather than scrolling under its clock (brief
-    /// 107). Measured, so it follows the bar wherever the system puts it.
-    @State private var trailingInset: CGFloat = 0
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
 
@@ -127,12 +123,9 @@ struct TaskPopout: View {
             footer
         }
         .background(Theme.background)
-        // A view reaching into the safe area reports how deep it is (the editor itself is laid out inside it).
-        .background {
-            Color.clear
-                .ignoresSafeArea()
-                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingInset = $0 }
-        }
+        // What brief 114's inset test measures against.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("editorCard")
         #if os(iOS)
         // A swipe down (or a tap above the sheet) with typing asks Discard; with none it just closes.
         .sheetSwipeGuard(isActive: !isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
@@ -421,28 +414,20 @@ struct TaskPopout: View {
         Binding(get: { openChip == chip }, set: { if !$0, openChip == chip { openChip = nil } })
     }
 
-    /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set (typed in the
-    /// title or stored: `shown`). Beside the Duo's bar column it stops at the content's edge on that side.
+    /// One sideways-scrolling row: outlined until set, filled with the value once set (typed in the title or stored:
+    /// `shown`). It scrolls inside the editor's padding, on the title card's left edge, and fades where more is hidden
+    /// (brief 114: it ran to the sheet's border and cut "@waiting" through its word there).
     private func pillRow(_ shown: EditorFields) -> some View {
-        let barOnTrailing = trailingInset > 0
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: HITSpacing.s) {
-                descriptionPill
-                priorityPill(shown.priority)
-                reminderPill(shown)
-                labelsPill(shown.labelNames)
-                repeatPill(shown.recurrence, day: shown.dueDate)
-                deadlinePill
-                locationPill
-            }
-            .padding(.leading, HITSpacing.l)
-            .padding(.trailing, barOnTrailing ? 0 : HITSpacing.l)
-            .padding(.vertical, 1)
+        HITScrollingChipRow(spacing: HITSpacing.s) {
+            descriptionPill
+            priorityPill(shown.priority)
+            reminderPill(shown)
+            labelsPill(shown.labelNames)
+            repeatPill(shown.recurrence, day: shown.dueDate)
+            deadlinePill
+            locationPill
         }
-        .padding(.leading, -HITSpacing.l)
-        .padding(.trailing, barOnTrailing ? 0 : -HITSpacing.l)
         .frame(height: HITChip.Size.compact.height + 2)
-        .clipped()
         .accessibilityIdentifier("editorPills")
     }
 

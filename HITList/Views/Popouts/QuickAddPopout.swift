@@ -219,24 +219,16 @@ struct QuickAddPopout: View {
         titleFocused = true
     }
 
-    /// One slim row that scrolls sideways, edge to edge inside the card; in the board's compact card the
-    /// chips wrap onto as many lines as the column needs instead.
-    @ViewBuilder
+    /// The chips under the title, wrapping onto as many lines as the card needs, each chip whole and inside the card's
+    /// padding (brief 114: the sideways row ran to the card's border and cut its last chip through its words, "11:00 AM
+    /// · 15"). One line while they fit, as on the Mac's wide panel most of the time.
     private func optionBar(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
-        if style == .compact {
-            HITFlowLayout(spacing: 6) { optionChips(chips, parser: parser) }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("quickAddOptionBar")
-        } else {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) { optionChips(chips, parser: parser) }
-                    .padding(.horizontal, Self.padding)
-                    .padding(.vertical, 1)
-            }
-            .padding(.horizontal, -Self.padding)
-            .frame(height: HITChip.Size.compact.height + 2)
+        HITFlowLayout(spacing: 6) { optionChips(chips, parser: parser) }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // A container of its own, as the scrolling row was: an identifier on a plain layout passes down to its
+            // chips and replaces theirs ("quickAddDateChip").
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("quickAddOptionBar")
-        }
     }
 
     @ViewBuilder
@@ -311,6 +303,9 @@ struct QuickAddPopout: View {
                        // The board's card shows its day with a × (no date: the task goes undated).
                        onDismiss: style == .compact && chips.dueDate != nil ? { draft.setDate(nil, parser) } : nil,
                        action: { openChip = .date })
+            // On the chip itself, inside its anchor: outside, the popover's anchor took the name too and stood
+            // first as an element that cannot be tapped (brief 114).
+            .accessibilityIdentifier("quickAddDateChip")
             .pickerAnchor(.date, isPresented: chipBinding(.date)) {
                 DatePickerCard(selected: chips.dueDate, now: now, onPick: { day in
                     draft.setDate(day, parser)
@@ -328,7 +323,6 @@ struct QuickAddPopout: View {
                     done()
                 }, onRepeatKept: { done() })
             }
-            .accessibilityIdentifier("quickAddDateChip")
     }
 
     private func priorityChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
@@ -336,13 +330,13 @@ struct QuickAddPopout: View {
                 tint: chips.priority == .p4 ? Theme.secondaryText : chips.priority.color,
                 isSelected: chips.priority != .p4, size: .compact, speech: ChipSpeech.priority(chips.priority),
                 action: { openChip = .priority })
+            .accessibilityIdentifier("quickAddPriorityChip")
             .pickerAnchor(.priority, isPresented: chipBinding(.priority)) {
                 PriorityChipPopover(selection: chips.priority) { p in
                     draft.setPriority(p, parser)
                     done()
                 }
             }
-            .accessibilityIdentifier("quickAddPriorityChip")
     }
 
     /// The task's time and its reminders: "5:00 PM · 15 min before", "In 15 min · 3:47 PM" (brief 48: "!15m",
@@ -355,6 +349,8 @@ struct QuickAddPopout: View {
         return HITChip(title, systemImage: (chips.reminderOffsetMinutes ?? 0) > 0 || chips.reminderDate != nil ? "bell.badge" : "alarm",
                        tint: set ? Theme.accent : Theme.secondaryText,
                        isSelected: set, size: .compact, action: { openChip = .reminder })
+            .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
+            .accessibilityIdentifier("quickAddReminderChip")
             .pickerAnchor(.reminder, isPresented: chipBinding(.reminder)) {
                 ReminderPickerCard(day: chips.dueDate, time: chips.hasDueTime ? chips.dueDate.map { PickerTime($0) } : nil,
                                    offsetMinutes: chips.reminderOffsetMinutes, now: parser.dateParser.now,
@@ -380,8 +376,6 @@ struct QuickAddPopout: View {
                                    })
             }
             // "Reminder: none" rather than "Reminder: Reminder" while the chip shows only its name (brief 94).
-            .accessibilityLabel("Reminder: \(title == "Reminder" ? "none" : title)")
-            .accessibilityIdentifier("quickAddReminderChip")
     }
 
     private func groupChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
@@ -392,6 +386,8 @@ struct QuickAddPopout: View {
         return HITChip(name ?? "Inbox", systemImage: name == nil ? "tray" : GroupDot.symbol,
                        tint: isShared ? Color(hex: SharedTasksGroup.colorHex) : projectTint(chips.projectName),
                        isSelected: name != nil, size: .compact, action: { openChip = .project })
+            .accessibilityLabel("Group: \(name ?? "Inbox")")
+            .accessibilityIdentifier("quickAddGroupChip")
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
                 ProjectChipPopover(projects: projects, selectedName: name, onPickShared: {
                     draft.setProject(SharedTasksGroup.name, parser)
@@ -401,8 +397,6 @@ struct QuickAddPopout: View {
                     done()
                 }
             }
-            .accessibilityLabel("Group: \(name ?? "Inbox")")
-            .accessibilityIdentifier("quickAddGroupChip")
     }
 
     private func labelsChip(_ chips: QuickAddChips, parser: QuickAddParser) -> some View {
@@ -426,13 +420,13 @@ struct QuickAddPopout: View {
                        speech: ChipSpeech.deadline(chips.deadline.map { DueFormatter.text(for: $0, hasTime: false, now: now) }),
                        onDismiss: chips.deadline == nil ? nil : { draft.setDeadline(nil) },
                        action: { openChip = .deadline })
+            .accessibilityIdentifier("quickAddDeadlineChip")
             .pickerAnchor(.deadline, isPresented: chipBinding(.deadline)) {
                 DatePickerCard(selected: chips.deadline, now: now, title: "Deadline", clearTitle: "No deadline") { day in
                     draft.setDeadline(day)
                     done()
                 }
             }
-            .accessibilityIdentifier("quickAddDeadlineChip")
     }
 
     /// The Repeat menu, worded for the card's day (today when it has none); picking keeps the day the card shows.
@@ -442,6 +436,7 @@ struct QuickAddPopout: View {
                 isSelected: chips.recurrence != nil, size: .compact, speech: ChipSpeech.repeats(chips.recurrence?.rowText),
                 onDismiss: chips.recurrence == nil ? nil : { draft.setRecurrence(nil, parser) },
                 action: { openChip = .repeating })
+            .accessibilityIdentifier("quickAddRepeatChip")
             .pickerAnchor(.repeating, isPresented: chipBinding(.repeating)) {
                 RepeatChipCard(rule: chips.recurrence, day: chips.dueDate ?? parser.dateParser.now, onPick: { rule in
                     draft.setRecurrence(rule, parser, keepingDay: chips.dueDate)
@@ -449,7 +444,6 @@ struct QuickAddPopout: View {
                     done()
                 }, onKeep: { done() })
             }
-            .accessibilityIdentifier("quickAddRepeatChip")
     }
 
     private func projectTint(_ name: String?) -> Color {

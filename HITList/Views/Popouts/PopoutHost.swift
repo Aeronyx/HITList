@@ -145,7 +145,7 @@ struct PopoutHost: ViewModifier {
                 }
                 .frame(maxWidth: style.cornerToasts ? CompletionToast.panelMaxWidth : nil, alignment: .trailing)
                 .padding(style.cornerToasts ? Self.panelToastInsets
-                         : Self.phoneToastInsets(for: islandPlacement))
+                         : Self.phoneToastInsets(for: islandPlacement, listMargin: popouts.listToast?.margin))
             }
             .overlay {
                 if let quickAdd = popouts.state.quickAdd, quickAdd.placement == .floating {
@@ -407,6 +407,9 @@ struct PopoutHost: ViewModifier {
                         }
                         card
                             .ovalCardChrome()
+                            // What brief 114's inset test measures against.
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("quickAddCard")
                             // A chip's card opens for where the chip will be once the keyboard has stepped aside and
                             // the card has dropped with it, by `aboveKeyboard` (brief 107).
                             .environment(\.pickerSettleInset, geo.safeAreaInsets.bottom)
@@ -814,15 +817,19 @@ extension PopoutHost {
     /// iPhone, wherever the island stands. Upright in the system's bar column (the Duo's outer display, brief
     /// 50) the toast sits at the bottom of the content, centred on the "+" at the island's foot; the safe area
     /// already keeps it off the column, so only a gap separates them.
-    static func phoneToastInsets(for placement: IslandPlacement) -> EdgeInsets {
+    static func phoneToastInsets(for placement: IslandPlacement, listMargin: CGFloat? = nil) -> EdgeInsets {
         let bottom = IslandMetrics.bottomGap + (IslandMetrics.sideAddButtonSize.height - CompletionToast.height) / 2
+        // A list's toast starts on its rows' left edge, the list's margin (brief 114), where the island is not there.
+        let leading = listMargin ?? IslandMetrics.sideInset
         switch placement {
         case .bottom:
-            return phoneToastInsets
+            var insets = phoneToastInsets
+            insets.leading = leading
+            return insets
         case .side(.leading):
             return EdgeInsets(top: 0, leading: HITSpacing.m, bottom: bottom, trailing: IslandMetrics.sideInset)
         case .side:
-            return EdgeInsets(top: 0, leading: IslandMetrics.sideInset, bottom: bottom, trailing: HITSpacing.m)
+            return EdgeInsets(top: 0, leading: leading, bottom: bottom, trailing: HITSpacing.m)
         }
     }
     /// Mac and iPad: the popout's toast sits one toast and a gap above a list's (`ListCompletionToast`).
@@ -851,6 +858,8 @@ private struct ListCompletionToast: ViewModifier {
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Handed to the host with the toast, which draws it on the iPhone over the shell, out of this list's reach.
+    @Environment(\.listMargin) private var listMargin
     /// The Duo's outer display: the island stands in the system's bar column, so the phone's toasts sit at
     /// the bottom beside the "+" at its foot (brief 50).
     @Environment(\.islandPlacement) private var islandPlacement
@@ -894,7 +903,7 @@ private struct ListCompletionToast: ViewModifier {
     private func handOver() {
         if drawnByHost, let message {
             withAnimation(HITMotion.enter) {
-                popouts.showListToast(.init(owner: owner, message: message, undo: onUndo))
+                popouts.showListToast(.init(owner: owner, message: message, undo: onUndo, margin: listMargin))
             }
         } else {
             withAnimation(HITMotion.exit) { popouts.hideListToast(owner: owner) }

@@ -158,7 +158,8 @@ struct ProjectChipPopover: View {
             }
             .frame(maxHeight: PickerListHeight.max(room: pickerRoom))
         }
-        .padding(.bottom, HITSpacing.xs)
+        // The list's last row clear of the card's foot (brief 114).
+        .padding(.bottom, HITSpacing.s)
         .onChange(of: focusRequest) { _, _ in searchFocused = true }
     }
 
@@ -239,7 +240,8 @@ struct LabelsChipPopover: View {
             }
             .frame(maxHeight: PickerListHeight.max(room: pickerRoom))
         }
-        .padding(.bottom, HITSpacing.xs)
+        // The list's last row clear of the card's foot (brief 114).
+        .padding(.bottom, HITSpacing.s)
         .onChange(of: focusRequest) { _, _ in searchFocused = true }
     }
 
@@ -262,7 +264,7 @@ struct LabelsChipPopover: View {
 /// search field above them always whole. Pure, so tests pin it.
 enum PickerListHeight {
     /// The search field and the padding around it and under the list.
-    static let chrome: CGFloat = 76
+    static let chrome: CGFloat = 80
     /// The list never shrinks below three rows.
     static let minimum: CGFloat = 132
 
