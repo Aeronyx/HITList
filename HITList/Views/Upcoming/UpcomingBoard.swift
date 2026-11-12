@@ -43,6 +43,19 @@ struct UpcomingBoard: View {
     /// The board's trailing safe area: the system's vertical bar on the iPhone Duo's inner display on its
     /// side (brief 56); 0 on the Mac and iPad.
     @State private var trailingBar: CGFloat = 0
+    /// The shell on show: the iPhone Duo's inner display sizes its columns to the board (brief 108).
+    @Environment(\.appShell) private var shell
+    /// The columns' scroll view's width, for the Duo's whole columns.
+    @State private var boardWidth: CGFloat = 0
+
+    /// On the Duo's inner display as many whole columns as fit (`DuoBoardColumns`), and a swipe settles on whole ones;
+    /// on the Mac and iPad the fixed 270, as before.
+    private var fitsWholeColumns: Bool { shell == .duo }
+
+    private var shownColumnWidth: CGFloat {
+        guard fitsWholeColumns, boardWidth > 0 else { return Self.columnWidth }
+        return DuoBoardColumns.width(board: boardWidth, inset: Self.boardInset, spacing: Self.columnSpacing)
+    }
 
     static let columnWidth: CGFloat = 270
     static let columnSpacing: CGFloat = 14
@@ -166,13 +179,17 @@ struct UpcomingBoard: View {
             LazyHStack(alignment: .top, spacing: Self.columnSpacing) {
                 ForEach(board.columns) { column in
                     columnView(column)
-                        .frame(width: Self.columnWidth)
+                        .frame(width: shownColumnWidth)
                         .frame(maxHeight: .infinity, alignment: .top)
                 }
             }
-            .padding(.horizontal, Self.boardInset)
+            .scrollTargetLayout(isEnabled: fitsWholeColumns)
+            // The Duo keeps the inset as the scroll view's margin, so a column settles on it after a swipe.
+            .padding(.horizontal, fitsWholeColumns ? 0 : Self.boardInset)
             .frame(maxHeight: .infinity, alignment: .top)
         }
+        .modifier(WholeColumnScrolling(isOn: fitsWholeColumns, inset: Self.boardInset))
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boardWidth = $0 }
         .scrollIndicators(.automatic)
         // While an inline card is open, a click on the board outside every card and button is a click away.
         // The card, the task cards and the buttons take their own clicks first.
@@ -305,12 +322,14 @@ struct UpcomingBoard: View {
     private func columnHeader(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let day = column.day {
-                DayHeadingLine(full: AttributedString(UpcomingFormat.header(for: day, now: now, calendar: calendar)),
-                               short: AttributedString(UpcomingFormat.header(for: day, now: now, shortWeekday: true,
-                                                                             calendar: calendar))) {
-                    if column.count > 0 {
-                        Text("\(column.count)").foregroundStyle(Theme.secondaryText)
-                    }
+                let full = UpcomingFormat.header(for: day, now: now, calendar: calendar)
+                let short = UpcomingFormat.header(for: day, now: now, shortWeekday: true, calendar: calendar)
+                // The Duo's narrower columns (brief 108): where even "Nov 12 · Tomorrow · Thu" does not fit, the weekday
+                // goes when "Today" or "Tomorrow" already names the day. Never a line cut short.
+                ViewThatFits(in: .horizontal) {
+                    DayHeadingLine(full: AttributedString(full), short: nil) { columnCount(column) }
+                    DayHeadingLine(full: AttributedString(short), short: nil) { columnCount(column) }
+                    DayHeadingLine(full: AttributedString(Self.compactHeader(short)), short: nil) { columnCount(column) }
                 }
                 .foregroundStyle(day == today ? Theme.accent : HITColor.text)
             } else {
@@ -339,6 +358,20 @@ struct UpcomingBoard: View {
         .padding(.top, HITSpacing.s)
         .padding(.bottom, HITSpacing.s + 2)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func columnCount(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
+        if column.count > 0 {
+            Text("\(column.count)").foregroundStyle(Theme.secondaryText)
+        }
+    }
+
+    /// "Nov 12 · Tomorrow · Thu" without its weekday when the day has a name of its own ("Nov 12 · Tomorrow"); any
+    /// other header as it is.
+    static func compactHeader(_ header: String) -> String {
+        let parts = header.components(separatedBy: " · ")
+        return parts.count == 3 ? parts.prefix(2).joined(separator: " · ") : header
     }
 
     // MARK: - Cards
@@ -438,6 +471,23 @@ private struct DayDropTarget: ViewModifier {
                     if hovering { dropTarget = day } else if dropTarget == day { dropTarget = nil }
                 }
             }
+        } else {
+            content
+        }
+    }
+}
+
+/// The Duo's board (brief 108): the columns' inset as the scroll view's margin and a swipe that settles on a column's
+/// edge, so the display's edge never cuts a day in half. Nothing elsewhere.
+private struct WholeColumnScrolling: ViewModifier {
+    let isOn: Bool
+    let inset: CGFloat
+
+    func body(content: Content) -> some View {
+        if isOn {
+            content
+                .contentMargins(.horizontal, inset, for: .scrollContent)
+                .scrollTargetBehavior(.viewAligned)
         } else {
             content
         }

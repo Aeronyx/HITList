@@ -112,6 +112,8 @@ struct ContentView: View {
         .containerBackground(Theme.background, for: .window)
         .frame(minWidth: 760, minHeight: 560)
         #endif
+        // Debug `-duoStandInSize inner`: an iPad draws the app at the inner display's size (brief 108).
+        .duoStandInFrame()
     }
 }
 
@@ -142,6 +144,9 @@ private struct SplitContent: View {
     @State private var focusGuard = WindowFocusGuard()
     #endif
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The sidebar has the search field (`AppShell.searchesInSidebar`): the Duo's inner display, on iOS.
+    private var searches: Bool { AppShell.searchesInSidebar(duo ? .duo : .split, idiom: AppShell.currentIdiom) }
 
     init(place: Binding<ShellPlace>, duo: Bool = false, geometry: WindowGeometry = WindowGeometry()) {
         _place = place
@@ -193,6 +198,12 @@ private struct SplitContent: View {
             if let new, new != .settings, new != .search { place.select(new) }
             if new == .settings, old != .settings { beforeSettings = old == .search ? search.returnTo : old }
             search.selectionChanged(to: new)
+            #if os(iOS)
+            // A search on the Duo ends when you pick a list; put the keyboard away with it.
+            if searches, old == .search, new != .search {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+            #endif
             #if os(macOS)
             let showing = new == .settings
             if showing != settingsSidebarShown {
@@ -203,6 +214,16 @@ private struct SplitContent: View {
             }
             #endif
         }
+        #if os(iOS)
+        // The Duo's inner display searches in its sidebar, as the Mac does: the sidebar is where Browse, the phone's
+        // way to search, would be (brief 108). The iPad is as it was.
+        .environment(\.sidebarSearch, searches ? search : nil)
+        .onChange(of: search.text) { _, _ in
+            guard searches else { return }
+            let next = search.selection(afterTextChangeFrom: selection)
+            if next != selection { selection = next }
+        }
+        #endif
         #if os(macOS)
         .environment(\.sidebarSearch, search)
         // Typing shows the results; emptying the field goes back (brief 66).

@@ -9,11 +9,14 @@ struct SidebarView: View {
     @Environment(\.modelContext) private var context
     #if os(macOS)
     @Environment(SettingsRouter.self) private var settingsRouter: SettingsRouter?
-    /// The search field under the profile (brief 66); nil in offscreen renders.
-    @Environment(\.sidebarSearch) private var search
     #endif
+    /// The search field under the profile: the Mac's (brief 66) and the iPhone Duo's inner display's (brief 108);
+    /// nil on iPad and in offscreen renders.
+    @Environment(\.sidebarSearch) private var search
     /// Optional: the offscreen renders in `ProfileMenuTests` have none.
     @Environment(PopoutController.self) private var popouts: PopoutController?
+    /// The shell on show (nil in offscreen renders).
+    @Environment(\.appShell) private var shell
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
@@ -70,8 +73,13 @@ struct SidebarView: View {
         .background(Theme.surface)
         .listStyle(.insetGrouped)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { settingsRequest = SettingsSheetRequest() } label: { Image(systemName: "gearshape") }
+            // The iPhone Duo's inner display has one gear, the list's beside its view options, on every screen (brief
+            // 108): two side by side read as two different settings, and on its side every toolbar item stands in the
+            // system's one bar column. The iPad keeps this one.
+            if AppShell.sidebarHasSettingsGear(shell) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { settingsRequest = SettingsSheetRequest() } label: { Image(systemName: "gearshape") }
+                }
             }
         }
         .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
@@ -400,14 +408,12 @@ struct SidebarView: View {
                 .padding(.horizontal, Self.profileInset)
                 .padding(.top, ProfileButtonMetrics.top)
                 .padding(.bottom, ProfileButtonMetrics.bottom)
-            #if os(macOS)
-            // Search, above Inbox (brief 66).
+            // Search, above Inbox (brief 66; the Duo's inner display, brief 108).
             if let search {
                 SidebarSearchField(search: search)
-                    .padding(.horizontal, Self.profileInset)
+                    .padding(.horizontal, Self.searchInset)
                     .padding(.bottom, Self.searchBottom)
             }
-            #endif
         }
         .background(Theme.surface)
         .zIndex(1)
@@ -415,6 +421,14 @@ struct SidebarView: View {
 
     /// From the search field to the first row (Inbox).
     static let searchBottom: CGFloat = HITSpacing.s
+    #if os(macOS)
+    /// The field's sides: the account button's.
+    static let searchInset: CGFloat = profileInset
+    #else
+    /// The field's sides: the inset grouped sections' (iOS 27's sidebar list draws them 16 pt in), so the field's
+    /// edges are the rows' edges below it.
+    static let searchInset: CGFloat = HITSpacing.l
+    #endif
 
     /// Mac: the Settings page straight at Account. iPad: the Settings sheet, straight on its Account page.
     private func openAccountSettings() {

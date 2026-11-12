@@ -37,6 +37,13 @@ enum AppShell: Equatable {
         }
     }
 
+    /// Where search is (brief 108): Browse's field on the phone's tabs; the sidebar's own field on the Mac (brief 66)
+    /// and on the Duo's inner display, whose sidebar stands where Browse would (without it the inner display had no
+    /// search at all). The iPad is as it was.
+    static func searchesInSidebar(_ shell: AppShell, idiom: Idiom) -> Bool {
+        idiom == .mac || shell == .duo
+    }
+
     #if os(iOS)
     static var currentIdiom: Idiom {
         if DuoDebug.standIn { return .phone }
@@ -45,6 +52,12 @@ enum AppShell: Equatable {
     #else
     static let currentIdiom = Idiom.mac
     #endif
+
+    /// The sidebar's own gear in its toolbar (brief 108): the iPad's, not the Duo's inner display's, where the list's gear
+    /// beside its view options is on every screen and the sidebar steps aside while the editor is open.
+    static func sidebarHasSettingsGear(_ shell: AppShell?) -> Bool {
+        shell != .duo
+    }
 }
 
 extension EnvironmentValues {
@@ -66,12 +79,29 @@ struct WindowGeometry: Equatable {
     /// keep (brief 50). Nil open flat, closed, on its side, and on every other device.
     var crease: CGRect?
 
+    /// The safe area's leading inset (the system's bar column, when it stands on the leading edge), so the display's
+    /// middle can be found in the columns' space.
+    var leadingInset: CGFloat = 0
+
     /// The fold's x, for the columns that meet there (brief 45).
     var fold: CGFloat? { crease?.midX }
 
-    init(fullSize: CGSize = .zero, width: CGFloat = 0, crease: CGRect? = nil) {
+    /// The display's middle in the columns' space (inside the safe areas): where the hinge is, open flat, held like a
+    /// book (brief 108). On its side the system's bar column takes the trailing edge, so half the width inside the safe
+    /// areas was left of the hinge by half the column (31 pt with a 62 pt column).
+    var middle: CGFloat { fullSize.width / 2 - leadingInset }
+
+    /// The window's trailing safe area: the system's bar column on its side, 0 upright and on every other phone.
+    var trailingInset: CGFloat { max(0, fullSize.width - width - leadingInset) }
+
+    /// Where the list and the editor meet when the sidebar steps aside: the crease while partly open, else the
+    /// display's middle (nil before the window is measured).
+    var split: CGFloat? { fold ?? (fullSize.width > 0 ? middle : nil) }
+
+    init(fullSize: CGSize = .zero, width: CGFloat = 0, leadingInset: CGFloat = 0, crease: CGRect? = nil) {
         self.fullSize = fullSize
         self.width = width
+        self.leadingInset = leadingInset
         self.crease = crease
     }
 
@@ -80,6 +110,7 @@ struct WindowGeometry: Equatable {
         self.init(fullSize: CGSize(width: proxy.size.width + insets.leading + insets.trailing,
                                    height: proxy.size.height + insets.top + insets.bottom),
                   width: proxy.size.width,
+                  leadingInset: insets.leading,
                   crease: Self.verticalCrease(among: Self.activeDivisions(in: proxy), in: proxy.size))
     }
 
@@ -271,7 +302,37 @@ struct DuoColumns: Equatable {
         return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nil, sidebarWidth: sidebarWidth)
     }
 
+    /// The editor's width once the sidebar has stepped aside (brief 108), from the detail as it is laid out: from where
+    /// the editor starts in the window (past the crease while partly open, else the hinge) to the detail's trailing edge,
+    /// less the bar column where the system left it to us. Whether or not the system insets the split view's column
+    /// from its bars, the list ends at the hinge and the editor starts there.
+    static func editorWidth(planned: CGFloat, detail: CGRect, start: CGFloat, trailingBar: CGFloat) -> CGFloat {
+        guard detail.width > 0 else { return planned }
+        let end = detail.maxX - trailingBar
+        let fitted = (end - start).rounded()
+        let widest = max(editorWidths.lowerBound, end - detail.minX - minListWidth)
+        return min(max(fitted, editorWidths.lowerBound), widest)
+    }
+
     private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {
         min(max(value, range.lowerBound), range.upperBound).rounded()
+    }
+}
+
+/// Upcoming's board on the Duo's inner display (brief 108). The iPad's columns are 270 pt whatever the room, which
+/// on a 429 pt detail column (upright, beside the sidebar) showed one day and half of the next, cut mid-card at the
+/// display's edge. Here as many whole columns fit as can be at least `minWidth`, each as wide as that leaves, and a
+/// swipe settles on whole columns: two days upright, three held like a book, one beside the editor.
+enum DuoBoardColumns {
+    /// A card this narrow still holds a title of three or four words a line and its meta line.
+    static let minWidth: CGFloat = 180
+
+    /// A column's width on a board `width` wide, its columns `inset` in from either edge and `spacing` apart.
+    static func width(board width: CGFloat, inset: CGFloat, spacing: CGFloat) -> CGFloat {
+        let room = max(0, width - 2 * inset)
+        let fit = ((room + spacing) / (minWidth + spacing)).rounded(.down)
+        let count = max(1, fit)
+        let gaps = (count - 1) * spacing
+        return ((room - gaps) / count).rounded(.down)
     }
 }

@@ -15,10 +15,24 @@ struct DuoDetail: View {
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The trailing safe area where the columns meet it: the system's bar column on its side (brief 108). The editor
+    /// and the next days, the trailing columns, stop there, as Upcoming's board does (brief 56); the background
+    /// still runs under it.
+    @State private var trailingBar: CGFloat = 0
+    /// The detail as laid out, in the window's space, for the editor's edge at the hinge.
+    @State private var detailFrame: CGRect = .zero
+
+    /// Where the editor starts in the window: past the crease while partly open, else the hinge (the display's middle).
+    private var editorStart: CGFloat {
+        (geometry.crease?.maxX ?? geometry.middle) + geometry.leadingInset
+    }
+
+    /// The bar column this detail keeps clear of.
+    private var trailingPad: CGFloat { min(trailingBar, geometry.trailingInset) }
 
     private var plan: DuoColumns {
         DuoColumns.plan(width: geometry.width, sidebarWidth: DuoSplit.sidebarWidth,
-                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.fold,
+                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.split,
                         crease: geometry.crease)
     }
 
@@ -33,15 +47,23 @@ struct DuoDetail: View {
                     .frame(width: width)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
-            if let task = popouts.task, let width = plan.editorWidth {
+            if let task = popouts.task, let planned = plan.editorWidth {
                 DuoColumnDivider(width: plan.gutter)
                 DuoEditorColumn(task: task)
-                    .frame(width: width)
+                    .frame(width: plan.showsSidebar ? planned
+                                : DuoColumns.editorWidth(planned: planned, detail: detailFrame, start: editorStart,
+                                                         trailingBar: trailingPad))
                     .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
         // Partly open, the sidebar ends at a top-to-bottom crease; the detail's content starts past it (brief 50).
         .padding(.leading, plan.detailLeadingInset)
+        // On its side the system's bars stand in a column down the trailing edge: the editor's "…" and Confirm, the
+        // next days' Groups, were under it.
+        // Never more than the window's own.
+        .padding(.trailing, trailingPad)
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingBar = $0 }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { detailFrame = $0 }
         .background(Theme.background)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: popouts.state.taskID)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: plan)
@@ -49,6 +71,19 @@ struct DuoDetail: View {
             let wanted: NavigationSplitViewVisibility = shows ? .all : .detailOnly
             guard columnVisibility != wanted else { return }
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { columnVisibility = wanted }
+        }
+        // Unfolding with the editor open builds this split view afresh, and on its side the first change above came
+        // before the split view's first layout and was dropped: the sidebar stayed and squeezed the list between it and
+        // the editor (brief 108). Once laid out, the visibility is set again.
+        .task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !plan.showsSidebar else { return }
+            // The binding may already read .detailOnly with the sidebar on show: through .automatic, so it changes.
+            if columnVisibility == .detailOnly {
+                columnVisibility = .automatic
+                await Task.yield()
+            }
+            columnVisibility = .detailOnly
         }
     }
 }
