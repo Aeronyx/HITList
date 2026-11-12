@@ -322,12 +322,14 @@ struct UpcomingBoard: View {
     private func columnHeader(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             if let day = column.day {
-                DayHeadingLine(full: AttributedString(UpcomingFormat.header(for: day, now: now, calendar: calendar)),
-                               short: AttributedString(UpcomingFormat.header(for: day, now: now, shortWeekday: true,
-                                                                             calendar: calendar))) {
-                    if column.count > 0 {
-                        Text("\(column.count)").foregroundStyle(Theme.secondaryText)
-                    }
+                let full = UpcomingFormat.header(for: day, now: now, calendar: calendar)
+                let short = UpcomingFormat.header(for: day, now: now, shortWeekday: true, calendar: calendar)
+                // The Duo's narrower columns (brief 108): where even "Nov 12 · Tomorrow · Thu" does not fit, the weekday
+                // goes when "Today" or "Tomorrow" already names the day. Never a line cut short.
+                ViewThatFits(in: .horizontal) {
+                    DayHeadingLine(full: AttributedString(full), short: nil) { columnCount(column) }
+                    DayHeadingLine(full: AttributedString(short), short: nil) { columnCount(column) }
+                    DayHeadingLine(full: AttributedString(Self.compactHeader(short)), short: nil) { columnCount(column) }
                 }
                 .foregroundStyle(day == today ? Theme.accent : HITColor.text)
             } else {
@@ -356,6 +358,20 @@ struct UpcomingBoard: View {
         .padding(.top, HITSpacing.s)
         .padding(.bottom, HITSpacing.s + 2)
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func columnCount(_ column: UpcomingBoardModel<Entry>.Column) -> some View {
+        if column.count > 0 {
+            Text("\(column.count)").foregroundStyle(Theme.secondaryText)
+        }
+    }
+
+    /// "Nov 12 · Tomorrow · Thu" without its weekday when the day has a name of its own ("Nov 12 · Tomorrow"); any
+    /// other header as it is.
+    static func compactHeader(_ header: String) -> String {
+        let parts = header.components(separatedBy: " · ")
+        return parts.count == 3 ? parts.prefix(2).joined(separator: " · ") : header
     }
 
     // MARK: - Cards

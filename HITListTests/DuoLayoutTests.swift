@@ -481,4 +481,12 @@ final class DuoLayoutTests: XCTestCase {
             XCTAssertLessThan(board - used, width + spacing, "\(board): no room left for another")
         }
     }
+
+    func testANarrowBoardColumnNamesItsDayWithoutCuttingIt() {
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 12 · Tomorrow · Thu"), "Nov 12 · Tomorrow",
+                       "the weekday goes when the day has a name of its own")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 11 · Today · Wed"), "Nov 11 · Today")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 13 · Fri"), "Nov 13 · Fri", "a plain day keeps its weekday")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Jan 1, 2027 · Tomorrow · Fri"), "Jan 1, 2027 · Tomorrow")
+    }
 }
