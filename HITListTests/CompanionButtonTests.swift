@@ -60,7 +60,7 @@ final class CompanionButtonTests: XCTestCase {
     /// three pixels a side, pale spots on it, a pale face on the stem with two big round eyes, each with a glint, rosy
     /// cheeks, and two boots of a pixel's height standing on the edge (brief 109: seat row 19, the soles on the host).
     func testItIsAMushroomInTheThemesRose() {
-        XCTAssertEqual(button.inks.subtracting([.snow, .snowBlue, .snowShade]), [.ink, .dark, .mid, .light, .accent, .accentDark])
+        XCTAssertEqual(button.inks, [.ink, .dark, .mid, .light, .accent, .accentDark])
         XCTAssertEqual(button.seatRow, 19)
         let rest = button.rows("rest")!.map(Array.init)
         func count(_ ink: Character, _ rows: ArraySlice<[Character]>) -> Int { rows.joined().filter { $0 == ink }.count }
