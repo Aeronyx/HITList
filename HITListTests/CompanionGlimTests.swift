@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 import SwiftUI
 @testable import HITList
@@ -26,21 +27,83 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertFalse(glim.flourishTurns, "it sits back exactly where it was")
     }
 
+    /// Brief 116 (George, of 0.9.6's redrawn Glim: "Please scrap him entirely and either use 0.9.5 Glim or try to
+    /// upgrade him again but with much more subtle changes"): his plain stills, awake and asleep, the same in both
+    /// places, are 0.9.5's with a few pixels in a second tone (below). The digests are of each still's rows joined by
+    /// newlines.
+    func testItIsZeroNineFivesGlim() {
+        let stills: [String: String] = [
+            "rest": "c7f046bcb158f20f65855db2a95eabeba340cdf7ed4d0909fbfb6b3ebc9828d8",
+            "sleep": "82023e6c17557180cb95fc9e1b4af3acd641f83af8bebb37d9ada4101c25d5bd",
+        ]
+        for (name, expected) in stills { XCTAssertEqual(digest(name), expected, "\(name)") }
+        XCTAssertEqual(glim.width, 20)
+        XCTAssertEqual(glim.height, 20)
+        XCTAssertEqual(glim.seatRow, 15)
+        for place in CompanionPlace.allCases {
+            XCTAssertEqual(glim.posture(place).awake.rest, "rest", "\(place)")
+            XCTAssertEqual(glim.posture(place).asleep.rest, "sleep", "\(place)")
+        }
+    }
+
+    /// Brief 116, Hush's kind of touches (George: "a tiny bit more color shading and such, but largely imperceptible
+    /// changes unless you're looking closely"): against 0.9.5's stills (`f3da1e6`, below), the outline and the eyes
+    /// are the same pixel for pixel, and only a handful of pixels inside take the other of two near tones (the face's
+    /// pale and the fur's mid, the lantern's warm and its glow): soft lower lids under the eye sockets (they stay put
+    /// when the eyes move, so no gesture grows), the hood's shade on the face's top corners and under the chin, two
+    /// pale rings far down the tail, the lantern's shaded side.
+    func testItsTouchesAreAFewPixelsInsideTheOutline() throws {
+        let v095: [String: [String]] = [
+            "rest": [
+                "....................", ".ddd......ddd.......", "dmmmd....dmmmd......", "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......", ".dddddddddddd.......", ".dddddddddddd.......", ".dddllllllddd.......",
+                ".ddlkllllkldd.......", ".dllkllllklld..md...", ".dlllllllllld.mdmd..", "..dlllddllld.md.md..",
+                "...dlllllld.md..md..", "...ddddddddmd...md..", "...dllddlld.....dd..", "...............gwwg.",
+                "...............wwww.", "...............wwww.", "...............gwwg.", "................gg..",
+            ],
+            "sleep": [
+                "....................", "....................", ".ddd......ddd.......", "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......", "dmmmddddddmmmd......", ".dddddddddddd.......", ".dddddddddddd.......",
+                ".dddllllllddd.......", ".ddlllllllldd.......", ".dlldlllldddd.......", ".dlllllllggggd......",
+                "..dlllddlgwwgm......", "...dlllllgwwgm......", "...dllddllggmm......", "....................",
+                "....................", "....................", "....................", "....................",
+            ],
+        ]
+        let near: Set<String> = ["lm", "ml", "wg"]
+        for (name, old) in v095 {
+            let now = try XCTUnwrap(glim.rows(name)).map(Array.init)
+            var changed = 0
+            for y in 0..<glim.height {
+                let was = Array(old[y])
+                for x in 0..<glim.width where was[x] != now[y][x] {
+                    changed += 1
+                    XCTAssertNotEqual(was[x], CompanionInk.clear, "\(name) (\(x), \(y)): the outline is 0.9.5's")
+                    XCTAssertNotEqual(now[y][x], CompanionInk.clear, "\(name) (\(x), \(y)): the outline is 0.9.5's")
+                    XCTAssertFalse(was[x] == "k" || now[y][x] == "k", "\(name) (\(x), \(y)): the eyes are 0.9.5's")
+                    XCTAssertTrue(near.contains(String([was[x], now[y][x]])), "\(name) (\(x), \(y)): a near tone")
+                }
+            }
+            XCTAssertGreaterThan(changed, 0, name)
+            XCTAssertLessThanOrEqual(changed, 10, "\(name): a handful of pixels, \(changed)")
+        }
+    }
+
+    private func digest(_ name: String) -> String? {
+        guard let rows = glim.rows(name) else { return nil }
+        return SHA256.hash(data: Data(rows.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
     /// Six inks: the night's for its eyes, three greys for the mouse, and the warm light and its glow for the
-    /// lantern, which is its one warm detail (no accent at all). Brief 113: the lantern's light shows in its face too,
-    /// low in each eye and on its two cheeks, a single warm pixel each; the glow stays in the lantern.
+    /// lantern, which is its one warm detail (no accent at all).
     func testItsLightIsItsOneWarmDetail() throws {
         XCTAssertEqual(glim.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         let rest = try XCTUnwrap(glim.rows("rest")).map(Array.init)
-        var face: [String] = []
         for y in 0..<glim.height {
             for x in 0..<glim.width where rest[y][x] == "w" || rest[y][x] == "g" {
-                if x >= 15, y >= 14 { continue }
-                XCTAssertEqual(rest[y][x], "w", "glow at (\(x), \(y)) outside the lantern")
-                face.append("\(x),\(y)")
+                XCTAssertGreaterThanOrEqual(x, 15, "warm pixel (\(x), \(y)) outside the lantern")
+                XCTAssertGreaterThanOrEqual(y, 14, "warm pixel (\(x), \(y)) outside the lantern")
             }
         }
-        XCTAssertEqual(face, ["5,9", "9,9", "3,10", "10,10"], "a light low in each eye, and its cheeks")
         // At night the lantern is turned down to an ember: a warm heart in a dim body, much less bright than by day.
         let bright = warmPixels("rest")
         let ember = warmPixels("sleep")
@@ -73,7 +136,7 @@ final class CompanionGlimTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(changed, 4)
-        XCTAssertEqual(glim.difference("blink", "rest"), 8, "a blink is its two eyes (brief 113: two by two each)")
+        XCTAssertEqual(glim.difference("blink", "rest"), 4, "a blink is its two eyes")
     }
 
     /// Routines that could belong to nobody else (its lantern, a mouse's face-washing), one each for rain, snow and
@@ -83,7 +146,7 @@ final class CompanionGlimTests: XCTestCase {
             let mode = glim.posture(place).awake
             let everyday = mode.routines.filter { $0.sky == nil && !$0.little }.map(\.name)
             XCTAssertEqual(everyday, ["swing", "checkLight", "warmPaws", "wash", "sniffAir"], "\(place)")
-            XCTAssertEqual(mode.routines.filter { $0.sky == .rain }.map(\.name), ["drip", "peek"])
+            XCTAssertEqual(mode.routines.filter { $0.sky == .rain }.map(\.name), ["drip"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .snow }.map(\.name), ["melt", "shakeOff", "warm"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .storm }.map(\.name), ["thunder"])
             XCTAssertEqual(mode.routines.filter { $0.sky == .heat }.map(\.name), ["shade"])
@@ -97,11 +160,12 @@ final class CompanionGlimTests: XCTestCase {
                 let routine = try XCTUnwrap(mode.routines.first { $0.name == name })
                 return glim.plays(routine, in: weather, mode: mode)
             }
-            // In the rain and the snow (brief 113) the light is held in his paws, so nothing that swings it plays;
-            // sniffing the air does, and so does looking at his light as it flickers.
-            XCTAssertTrue(try plays("sniffAir", .rain))
-            XCTAssertTrue(try plays("sniffAir", .snow))
-            XCTAssertTrue(try plays("lightCheck", .snow))
+            // In the rain and the snow (brief 116) the light is held to his chest in both paws, so nothing that
+            // swings it or takes a paw off it plays; sniffing the air does, and looking down at it as it flickers.
+            for weather in [CompanionLook.Weather.rain, .snow] {
+                XCTAssertTrue(try plays("sniffAir", weather), "\(weather)")
+                XCTAssertTrue(try plays("lightCheck", weather), "\(weather)")
+            }
             for name in ["swing", "checkLight", "warmPaws", "wash"] {
                 XCTAssertFalse(try plays(name, .rain), name)
                 XCTAssertFalse(try plays(name, .snow), name)
@@ -137,12 +201,31 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertEqual(glim.field.asleep.answer.ticks.first?.frame, "sleepPeek", "asleep: one eye opens")
     }
 
-    /// In the rain it holds its light close at its side, so nothing hangs; a flicker there is the held lantern's,
-    /// drawn by hand, not the hanging one cut through.
+    /// Brief 116 (George, of 0.9.5: "Glim should hide his tail in the snow/rain"): in rain and snow his head is
+    /// 0.9.5's, the tail is curled in against him and the light is held to his chest in both paws, the glow showing
+    /// between them, so nothing hangs; a flicker there is the held light's, drawn by hand, not the hanging one cut
+    /// through.
     func testInTheRainItHoldsItsLightClose() throws {
-        let rain = try XCTUnwrap(glim.rows("rain"))
-        for y in glim.seatRow..<glim.height {
-            XCTAssertEqual(rain[y], String(repeating: ".", count: glim.width), "row \(y): nothing hangs in the rain")
+        let rest = try XCTUnwrap(glim.rows("rest"))
+        for name in ["rain", "snow"] {
+            let rows = try XCTUnwrap(glim.rows(name))
+            for y in glim.seatRow..<glim.height {
+                XCTAssertEqual(rows[y], String(repeating: ".", count: glim.width), "\(name) row \(y): nothing hangs")
+            }
+            // The light in his lap, between his paws, its glow on his chest under his chin.
+            XCTAssertEqual(String(Array(rows[12])[5...8]), "lggl", "\(name): its glow on his chest")
+            XCTAssertEqual(String(Array(rows[13])[3...10]), "ddwwwwdd", "\(name): his arms round its top")
+            XCTAssertEqual(String(Array(rows[14])[3...9]), "dlwwwwl", "\(name): his paws at its sides")
+            // No tail out to the right: nothing right of his curled tail, and his face as by day.
+            for y in 0..<glim.seatRow {
+                let right = rows[y].dropFirst(14)
+                XCTAssertFalse(right.contains { $0 != CompanionInk.clear }, "\(name) row \(y): the tail is in")
+            }
+            if name == "rain" {
+                for y in 7...11 {
+                    XCTAssertEqual(String(rows[y].prefix(13)), String(rest[y].prefix(13)), "row \(y): his face")
+                }
+            }
         }
         let mode = glim.field.awake
         let flicker = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "flicker" })
@@ -151,9 +234,12 @@ final class CompanionGlimTests: XCTestCase {
                                    act: CompanionAct(kind: .gesture(flicker), start: start))
         let pose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: stage)
         XCTAssertEqual(pose.frame, glim.index["dim@rain"])
-        // Its ear in the snow (in its wash, brief 105) is drawn with the dusting on it, too.
-        XCTAssertEqual(glim.drawnIndex("ear", over: "snow", rest: "rest"), glim.index["ear@snow"])
-        // The rain's own flicker, a drop gathering at its ear's edge, is drawn whole.
+        // So is the snow's (brief 116).
+        let snowStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .snow),
+                                       act: CompanionAct(kind: .gesture(flicker), start: start))
+        XCTAssertEqual(CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: snowStage).frame,
+                       glim.index["dim@snow"])
+        // The rain's own flicker, a drop gathering on his ear's tip and falling, is drawn whole.
         let drop = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "drop" })
         let dropStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .rain),
                                        act: CompanionAct(kind: .gesture(drop), start: start), sky: .rain)
@@ -162,10 +248,10 @@ final class CompanionGlimTests: XCTestCase {
     }
 
     /// Brief 91: the weather is told by Glim, not drawn round it. Every still it shows is one shape (nothing floating
-    /// beside it); its flickers add at most the single drop it lets fall. In snow the pile grows on its ears and in the
-    /// hollow between them, never on the light in its paws, keeps the line where it sits, and a shake-off from the
-    /// deepest pile sends it off.
-    /// On a hot day its light is turned right down and its ears droop.
+    /// beside it); its flickers add at most the single drop it lets fall. In snow (brief 116, COMMON round 22's
+    /// powder) the pile grows on its ears and in the hollow of its hood between them, in the three snow inks, never on
+    /// the light in its lap, nothing hanging, and none of 0.9.5's snow in its own light ink; a shake-off from the
+    /// deepest pile sends it off. On a hot day its light is turned right down and its ears droop.
     func testTheWeatherIsOnIt() throws {
         let mode = glim.field.awake
         let asleep = glim.field.asleep
@@ -179,42 +265,48 @@ final class CompanionGlimTests: XCTestCase {
                 XCTAssertLessThanOrEqual(parts.dropFirst().map(\.count).reduce(0, +), 1, "\(tick.frame): one drop at most")
             }
         }
-        // The pile (brief 113, COMMON's snow): a dusting, then more, then the deepest, each with more snow on its
-        // ears and in the hollow between them, in the three snow inks; none on the light in its paws, nothing
-        // hanging (the tail is taken in), and none of the old snow in its own light ink.
         XCTAssertEqual(mode.snowDeep, ["snowCap", "snowHeap"])
         XCTAssertEqual(asleep.snowDeep, ["sleepSnowCap", "sleepSnowHeap"])
-        let depths = [try XCTUnwrap(mode.snow)] + mode.snowDeep
-        var snowAbove: [Int] = []
-        for name in depths {
-            let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
-            snowAbove.append(rows.joined().filter { "sbc".contains($0) }.count)
-            let inks = Set(rows.joined().filter { "sbc".contains($0) })
-            XCTAssertEqual(inks, ["s", "b", "c"], "\(name): three tones of snow")
-            for y in glim.seatRow..<glim.height {
-                XCTAssertEqual(String(rows[y]), String(repeating: ".", count: glim.width), "\(name) row \(y): the tail is in")
-            }
-            for y in 10...14 {
-                for x in 4...9 where "wg".contains(rows[y][x]) {
-                    for (nx, ny) in [(x, y - 1), (x - 1, y), (x + 1, y)] {
-                        XCTAssertFalse("sbc".contains(rows[ny][nx]), "\(name) (\(nx), \(ny)): snow on the light")
+        for (still, depths) in [("rest", [try XCTUnwrap(mode.snow)] + mode.snowDeep),
+                                ("sleep", [try XCTUnwrap(asleep.snow)] + asleep.snowDeep)] {
+            let plain = try XCTUnwrap(glim.rows(still)).map(Array.init)
+            var snow: [Int] = []
+            for name in depths {
+                let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
+                snow.append(rows.joined().filter { "sbc".contains($0) }.count)
+                let tones = Set(rows.joined().filter { "sbc".contains($0) })
+                XCTAssertEqual(tones, ["s", "b", "c"], "\(name): three tones")
+                XCTAssertEqual(rows[0..<8].joined().filter { $0 == "l" }.count,
+                               plain[0..<8].joined().filter { $0 == "l" }.count, "\(name): no snow in the light ink")
+                for y in glim.seatRow..<glim.height {
+                    XCTAssertEqual(String(rows[y]), String(repeating: ".", count: glim.width), "\(name) row \(y)")
+                }
+                // Nothing on the light or round it.
+                for y in 0..<glim.height {
+                    for x in 0..<glim.width where "wg".contains(rows[y][x]) {
+                        let around = [(x, y - 1), (x - 1, y), (x + 1, y)]
+                        for (nx, ny) in around where (0..<glim.width).contains(nx) && ny >= 0 {
+                            XCTAssertFalse("sbc".contains(rows[ny][nx]), "\(name) (\(nx), \(ny)): snow on the light")
+                        }
                     }
                 }
+                // His ears' tips still show: the ears' top rows are his own dark, at every depth.
+                let top = still == "rest" ? 1 : 2
+                XCTAssertEqual(String(rows[top][1...3]), "ddd", "\(name): the left ear's tip")
+                XCTAssertEqual(String(rows[top][10...12]), "ddd", "\(name): the right ear's tip")
             }
-            let light = try XCTUnwrap(glim.rows("rest"))[0..<7].joined().filter { $0 == "l" }.count
-            XCTAssertEqual(rows[0..<7].joined().filter { $0 == "l" }.count, light, "\(name): no snow in the old light ink")
+            XCTAssertEqual(snow, snow.sorted(), "\(still): the pile only grows")
+            XCTAssertEqual(Set(snow).count, snow.count, "\(still): each depth adds snow")
         }
-        XCTAssertEqual(snowAbove, snowAbove.sorted(), "the pile only grows")
-        XCTAssertEqual(Set(snowAbove).count, snowAbove.count, "each depth adds snow")
+        let held = try XCTUnwrap(glim.rows("snow"))[13]
+        XCTAssertEqual(String(held.dropFirst(5).prefix(4)), "wwww", "the light held, dry")
         let shakeOff = try XCTUnwrap(mode.routines.first { $0.name == "shakeOff" })
         XCTAssertTrue(shakeOff.shakesOff)
         XCTAssertTrue(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 2), "from the heap")
         XCTAssertFalse(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 1), "only from the deepest pile")
-        // A hot day: no warm pixel left in the lantern or its eyes (its light turned right down; brief 113: only its
-        // cheeks keep their colour), its ears lower than by day.
+        // A hot day: no warm pixel left (its light turned right down), its ears lower than by day.
         let heat = try XCTUnwrap(mode.heat)
-        let hot = try XCTUnwrap(glim.rows(heat)).joined()
-        XCTAssertEqual(hot.filter { $0 == "w" }.count, 2, "its light turned right down")
+        XCTAssertFalse(try XCTUnwrap(glim.rows(heat)).joined().contains("w"), "its light turned right down")
         XCTAssertGreaterThan(try topRow(heat), try topRow("rest"), "its ears droop")
         XCTAssertEqual(mode.gestures.filter { $0.sky == .heat && $0.flicker }.map(\.name), ["sweat"])
     }
