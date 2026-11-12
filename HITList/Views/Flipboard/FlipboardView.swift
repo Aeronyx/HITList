@@ -64,6 +64,7 @@ struct FlipboardView: View {
     /// Where each board's row was last asked to scroll (a light tapped, a switch added or opened), by board.
     @State private var rowScroll: [UUID: SwitchRowRequest] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
     static let spacing: CGFloat = 14
@@ -120,7 +121,8 @@ struct FlipboardView: View {
 
     /// A Switchboard row's tiles: whole ones and about a fifth of the next (`FlipboardLayout.rowTileWidth`).
     private var rowTileWidth: CGFloat {
-        FlipboardLayout.rowTileWidth(width: width, inset: BoardPanel.inset, spacing: Self.spacing, gridTile: cellWidth)
+        FlipboardLayout.rowTileWidth(width: width, inset: BoardPanel.inset, spacing: Self.spacing, gridTile: cellWidth,
+                                     largeType: dynamicTypeSize.isAccessibilitySize)
     }
 
     /// The columns the inline card takes (`FlipboardLayout.cardSpan`).
