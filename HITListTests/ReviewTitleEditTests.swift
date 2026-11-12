@@ -49,6 +49,22 @@ final class ReviewTitleEditTests: XCTestCase {
         XCTAssertNil(task.dueDate)
     }
 
+    /// A title's own words stay text: "Friday" kept as a word in quick add (a tap on its highlight) is not read again
+    /// when the review adds "p1"; only what was typed in the review is read, as in the task editor (brief 65).
+    func testTheStoredTitleStaysText() {
+        let (task, context) = reviewed("Watch Friday Night Lights")
+        let edit = ReviewTitleEdit.apply("Watch Friday Night Lights p1", parser: parser, to: task, in: context)
+        XCTAssertEqual(task.title, "Watch Friday Night Lights")
+        XCTAssertNil(task.dueDate)
+        XCTAssertEqual(task.priorityValue, .p1)
+        XCTAssertFalse(edit.handled)
+
+        let (typed, typedContext) = reviewed("Watch the game")
+        ReviewTitleEdit.apply("Watch the game friday", parser: parser, to: typed, in: typedContext)
+        XCTAssertEqual(typed.title, "Watch the game", "a day typed in the review is read")
+        XCTAssertNotNil(typed.dueDate)
+    }
+
     /// No time typed: "!30mb" is the title's text, as in quick add; "!at" beside a time is the default, at it.
     func testWithoutATimeABeforeReminderStaysText() {
         let (task, context) = reviewed("Pack")

@@ -834,7 +834,7 @@ private struct DeletedToast: View {
 /// Review Inbox's title edit: a date, priority, #project, @labels and reminders are taken out and set on the task,
 /// the rest is the title. The reminders were taken out and dropped until brief 127: "Pay the bill 5pm !30mb" lost its
 /// "30 min before" and "Call mom !15m" its reminder, without a word. A task under review has no date, so a reminder
-/// before the due time counts only beside a typed time, as in quick add.
+/// before the due time counts only beside a typed time, as in quick add. The task's own title is not read again.
 enum ReviewTitleEdit {
     struct Outcome: Equatable {
         /// A date or a Group: the task has its place and leaves the review.
@@ -846,7 +846,11 @@ enum ReviewTitleEdit {
     @MainActor
     @discardableResult
     static func apply(_ text: String, parser: QuickAddParser, to task: TaskItem, in context: ModelContext) -> Outcome {
-        let parsed = parser.parse(text)
+        // Only what was typed in the review is read, as in the task editor (brief 65): the title's own words stay text
+        // ("Watch Friday Night Lights", its "Friday" kept as a word in quick add, is not dated by adding "p1").
+        var draft = TaskEditorDraft(task: task)
+        draft.title = text
+        let parsed = draft.parsed(parser, for: task, .final, waking: false)
         let title = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
         if !title.isEmpty { task.title = title }
         var handled = false
