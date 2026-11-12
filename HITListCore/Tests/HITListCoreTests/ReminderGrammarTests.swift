@@ -75,6 +75,23 @@ final class ReminderGrammarTests: XCTestCase {
         }
     }
 
+    /// Brief 127 (George wrote "!0mb" for a friend's "!30mb"): zero before the due time is at it, as `!0` and `!at`
+    /// are, whatever the unit, and with no unit (`!0b`). Zero from now (`!0m`) is still nothing, and a zero part
+    /// in a longer span (`!0h30mb`, `!1h0mb`) is still malformed: only a whole zero counts.
+    func testZeroBeforeIsAtTheDueTime() {
+        for token in ["!0mb", "!0hb", "!0db", "!0b", "!0MB"] {
+            XCTAssertEqual(ReminderPhrase(token: token), .beforeDue(minutes: 0), token)
+            XCTAssertEqual(ReminderOffset.minutes(fromToken: token), 0, token)
+            let r = parser.parse("Call 5pm \(token)")
+            XCTAssertEqual(r.reminderOffsetMinutes, 0, token)
+            XCTAssertEqual(r.title, "Call", token)
+            XCTAssertEqual(parser.parse("Pack \(token)").title, "Pack \(token)", "still needs a time: \(token)")
+        }
+        for token in ["!0m", "!0h", "!0d", "!0h30mb", "!1h0mb", "!00mb", "!0bm"] {
+            XCTAssertNil(ReminderPhrase(token: token), token)
+        }
+    }
+
     func testAFromNowWordIsNotAnOffset() {
         for token in ["!15m", "!2h", "!1d", "!1h30m"] {
             XCTAssertNil(ReminderOffset.minutes(fromToken: token), token)
