@@ -24,8 +24,8 @@ enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
         "slate": "nod",
-        // A small stone dragon in Graphite's greys, perched on the "+" as its elders perch on a parapet, its tail
-        // behind the bar (briefs 102, 104 and 111).
+        // A gryphon cub in Graphite's greys, an eagle chick's head on a lion cub's body, with a peach beak and talons
+        // (brief 128, in place of Gargle the stone dragon of briefs 102 to 124).
         "graphite": "flint",
         "midnight": "quill",
         // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
