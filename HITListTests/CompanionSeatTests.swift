@@ -576,7 +576,8 @@ final class CompanionListMarginTests: XCTestCase {
                 }
             }
         }
-        // Tuck stands 17 pixels above the "+" since his eyes grew a row (round 20; 16 before, his seedling's tip).
-        XCTAssertEqual(CompanionPerch.clearance(.tuck), 34)
+        // Tuck stands 18 pixels above the "+" since he stretches up taller in the rain (brief 119; 17 since his eyes
+        // grew a row in round 20, 16 before, his seedling's tip).
+        XCTAssertEqual(CompanionPerch.clearance(.tuck), 36)
     }
 }

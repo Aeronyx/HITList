@@ -68,21 +68,28 @@ final class CompanionTuckTests: XCTestCase {
         }
     }
 
-    /// At night its stalks lower and its eyes shut on them (brief 113: no marks on its face, which is its face by day),
-    /// and its seedling's leaves fold up; it is the one that likes the rain (eyes up to the sky); in the snow its eyes
+    /// At night its stalks wilt and its shut eyes hang from them (brief 119: low, and no smile on its face), and its
+    /// seedling's leaves fold up; it is the one that likes the rain (eyes up to the sky); in the snow its eyes
     /// come down and snow sits on its pot's rim.
     func testItsNightAndWeather() throws {
         let rest = try XCTUnwrap(tuck.rows("rest")), sleep = try XCTUnwrap(tuck.rows("sleep"))
         let rain = try XCTUnwrap(tuck.rows("rain")), snow = try XCTUnwrap(tuck.rows("snow"))
         XCTAssertTrue(rest.joined().contains("k"), "awake: its eyes open")
-        XCTAssertFalse(sleep.joined().contains("k"), "asleep: no open eye")
-        // Brief 113 (George: "Why do the snail's eyes become lines at night?"): asleep its eyes stay on their stalks,
-        // shut under round lids above its head, and its face below them is its face by day, its smile and nothing else.
-        for y in 11...15 {
-            XCTAssertEqual(String(sleep[y].prefix(9)), String(rest[y].prefix(9)), "asleep row \(y): its face as by day")
+        // Brief 119 (George: "Tuck's eyes should still droop down far at night ... He also shouldn't smile while
+        // sleeping, that's creepy"): asleep each stalk folds over flat at its root and its eye hangs at its cheek at
+        // the side of its face, at day size and shut (a grey lid over a dark slit), and its face has no mouth.
+        for (y, row) in sleep.enumerated() {
+            for (x, c) in row.enumerated() where c == "k" {
+                XCTAssertEqual(Array(sleep[y - 1])[x], "m", "asleep (\(x), \(y)): a lid over each slit, no open eye")
+                XCTAssertEqual(Array(sleep[y + 1])[x], "d", "asleep (\(x), \(y)): the ball's underside below it")
+            }
         }
-        let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<9), "asleep: its eyes up on their stalks")
-        XCTAssertLessThan(lids, 9, "asleep: its shut eyes stand above its head")
+        XCTAssertEqual(String(sleep[15].prefix(10)), "dlllllllll", "asleep: no mouth")
+        XCTAssertEqual(String(Array(sleep[14])[3...6]), "llll", "asleep: no smile")
+        XCTAssertEqual(Self.topRow(of: "l", in: sleep, columns: 0..<9), 9, "asleep: its stalks folded flat on its head")
+        let slits = try XCTUnwrap(Self.topRow(of: "k", in: sleep, columns: 0..<10), "asleep: its two eyes")
+        let pupils = try XCTUnwrap(Self.topRow(of: "k", in: rest, columns: 0..<10))
+        XCTAssertGreaterThan(slits, pupils + 5, "asleep: its eyes hang at its cheeks, far below where they stand by day")
         XCTAssertLessThan(Self.width(of: "a", in: sleep), Self.width(of: "a", in: rest), "asleep: its leaves fold up")
         let eyesAtRest = try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10))
         XCTAssertLessThan(try XCTUnwrap(Self.topRow(of: "l", in: rain, columns: 0..<10)), eyesAtRest, "rain: eyes up")
