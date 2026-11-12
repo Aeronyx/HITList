@@ -89,6 +89,19 @@ final class DuoOuterListsTests: XCTestCase {
         #endif
     }
 
+    // MARK: Item 5: the keyboard
+
+    func testTheUprightIslandStepsAsideForTheKeyboard() {
+        XCTAssertFalse(IslandPlacement.side(.trailing).showsChrome(keyboardUp: true))
+        XCTAssertTrue(IslandPlacement.side(.trailing).showsChrome(keyboardUp: false))
+        XCTAssertTrue(IslandPlacement.bottom.showsChrome(keyboardUp: true), "at the bottom the keys cover it, as before")
+        // The Duo's outer display: a 678 pt screen, the keyboard about 300 pt tall; a hardware keyboard's bar is a strip.
+        XCTAssertTrue(KeyboardCover.isUp(frameEnd: CGRect(x: 0, y: 378, width: 466, height: 300), screenHeight: 678))
+        XCTAssertFalse(KeyboardCover.isUp(frameEnd: CGRect(x: 0, y: 628, width: 466, height: 50), screenHeight: 678))
+        XCTAssertFalse(KeyboardCover.isUp(frameEnd: CGRect(x: 0, y: 678, width: 466, height: 300), screenHeight: 678),
+                       "off the bottom: going away")
+    }
+
     // MARK: Helpers
 
     private func crowdedTask(labels names: [String], crowded: Bool = true, hasTime: Bool = true) throws -> (ModelContainer, TaskItem) {
