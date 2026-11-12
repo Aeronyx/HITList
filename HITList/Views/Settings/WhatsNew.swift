@@ -21,7 +21,7 @@ enum WhatsNew {
 
     static let entries: [Entry] = [
         Entry(version: "0.9.9", items: [
-            "A reminder typed in a task's title works when the task has a time: type !30mb and the reminder shows before you confirm. One left in a title from before the task had a time lights up when you open the task. And \"tonight\" now means today.",
+            "A reminder typed in a task's title works when the task has a time: type !30mb and the reminder shows before you confirm. One typed before the task had a time is set as soon as you give the task a time. And \"tonight\" now means today.",
             "Graphite has a new companion: Flint, a gryphon cub, in place of Gargle. He preens, pounces on his own tail and tries to fly.",
             "Rain looks like rain: blue drops bead on every companion, one runs off now and then, and a small puddle gathers at its feet, by day and asleep. To switch the weather off: Settings → Extras → Weather.",
             "Phase is a ghost you can see through, with black eyes: he thins toward the hem, fades and fills as he moves, and looks worried when the snow is deep. Glim's lantern glows.",
