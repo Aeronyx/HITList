@@ -28,6 +28,10 @@ struct InboxProcessView: View {
     @State private var titleDraft = ""
     @FocusState private var titleFocused: Bool
     @State private var popover: Popover?
+    /// Where the open card hangs (brief 107): over the actions, or from the line under the task's title.
+    @State private var popoverPlace = ReviewPopoverPlace.actions
+    /// The title's foot and the actions' top, measured as they move and read only as a card opens.
+    @State private var frames = ReviewFrames()
     /// The task editor, opened by Edit… in a sheet over the review (its own presenter, so closing it comes
     /// back here rather than to the list underneath).
     @State private var editor: PopoutController?
@@ -173,6 +177,12 @@ struct InboxProcessView: View {
             Text(InboxText.added(task.createdAt, now: now))
                 .font(HITType.caption)
                 .foregroundStyle(Theme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).maxY } action: { frames.titleBottom = $0 }
+                // A short screen (the iPhone Duo's outer display): the card hangs from here, under the title, rather
+                // than rising over it from the actions (its arrow on its top edge).
+                .popover(isPresented: isOpen(.date, at: .underTitle), arrowEdge: .top) { dateCard(task) }
+                .popover(isPresented: isOpen(.project, at: .underTitle), arrowEdge: .top) { groupCard(task) }
             if !task.notes.isEmpty, !editingTitle {
                 Text(task.notes)
                     .font(HITType.callout)
@@ -279,22 +289,14 @@ struct InboxProcessView: View {
                    shortcut: KeyboardShortcut("d", modifiers: []), id: "reviewPickDate") {
                 open(.date)
             }
-            .popover(isPresented: isOpen(.date)) {
-                PickDatePopover(selected: task.dueDate, now: now) { day in
-                    popover = nil
-                    schedule(task, to: day)
-                }
-            }
-            action("Move to a Group", "number", key: "P", tint: HITColor.dueLater,
+            .popover(isPresented: isOpen(.date, at: .actions)) { dateCard(task) }
+            // "Pick a Group" (was "Move to a Group", which was shrunk to fit its button on every iPhone; brief 107): the
+            // card it opens still says "Move to a Group".
+            action("Pick a Group", "number", key: "P", tint: HITColor.dueLater,
                    shortcut: KeyboardShortcut("p", modifiers: []), id: "reviewMoveToGroup") {
                 open(.project)
             }
-            .popover(isPresented: isOpen(.project)) {
-                InboxPicker(options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
-                    popover = nil
-                    move(task, to: choice)
-                }
-            }
+            .popover(isPresented: isOpen(.project, at: .actions)) { groupCard(task) }
             action("Later", "clock", key: "→", tint: Theme.secondaryText,
                    shortcut: KeyboardShortcut(.rightArrow, modifiers: []), id: "reviewLater") {
                 endEditing(save: true)
@@ -324,6 +326,7 @@ struct InboxProcessView: View {
             .contentShape(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous))
         }
         .buttonStyle(ReviewButtonStyle())
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { frames.actionsTop = $0 }
         .keyboardShortcut(shortcutsEnabled ? shortcut : nil)
         .help("\(title) (\(key))")
         .accessibilityIdentifier(id)
@@ -424,13 +427,32 @@ struct InboxProcessView: View {
         CompletionFeedback.shared.prepare()
     }
 
-    private func isOpen(_ which: Popover) -> Binding<Bool> {
-        Binding(get: { popover == which }, set: { if !$0, popover == which { popover = nil } })
+    private func isOpen(_ which: Popover, at place: ReviewPopoverPlace) -> Binding<Bool> {
+        Binding(get: { popover == which && popoverPlace == place },
+                set: { if !$0, popover == which, popoverPlace == place { popover = nil } })
     }
 
     private func open(_ which: Popover) {
         endEditing(save: true)
+        #if os(iOS)
+        let height = which == .date ? DatePickerCardLayout.regularHeight(hasFoot: false) : InboxPicker.height(options: projects.count)
+        popoverPlace = ReviewPopoverPlace.place(cardHeight: height, titleBottom: frames.titleBottom, actionsTop: frames.actionsTop)
+        #endif
         popover = which
+    }
+
+    private func dateCard(_ task: TaskItem) -> some View {
+        PickDatePopover(selected: task.dueDate, now: now) { day in
+            popover = nil
+            schedule(task, to: day)
+        }
+    }
+
+    private func groupCard(_ task: TaskItem) -> some View {
+        InboxPicker(options: projects.map { .init(id: $0.id, name: $0.name, colorHex: $0.colorHex) }) { choice in
+            popover = nil
+            move(task, to: choice)
+        }
     }
 
     private func advance() {
@@ -749,6 +771,25 @@ private struct KeyHint: View {
 }
 #endif
 
+/// Where Review Inbox's date and Group cards open (brief 107). Over the actions, as they always have, when the card fits
+/// between them and the task's title; otherwise (the iPhone Duo's outer display: 295 pt between them for a 309 pt
+/// calendar, which covered the title) hanging from the line under the title, so the task it is about stays in sight.
+/// Pure, so tests pin it.
+enum ReviewPopoverPlace: Equatable {
+    case actions, underTitle
+
+    static func place(cardHeight: CGFloat, titleBottom: CGFloat, actionsTop: CGFloat) -> Self {
+        let needs = cardHeight + PhonePickerPlacement.arrow + PhonePickerPlacement.margin
+        return actionsTop - titleBottom >= needs ? .actions : .underTitle
+    }
+}
+
+/// The title's foot and the actions' top, in the window; a reference, so measuring redraws nothing.
+final class ReviewFrames {
+    var titleBottom: CGFloat = 0
+    var actionsTop: CGFloat = .greatestFiniteMagnitude
+}
+
 /// "Deleted ‘Title’ · Undo", styled like the completion toast.
 private struct DeletedToast: View {
     let title: String
@@ -758,9 +799,14 @@ private struct DeletedToast: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "trash").foregroundStyle(HITColor.danger)
-            Text("Deleted ‘\(title)’")
-                .lineLimit(1)
-                .truncationMode(.middle)
+            // The title cut at its end, the quotes and "Deleted" whole (brief 107: cut in the middle it read
+            // "Read t…rticle Alex sent" on a phone).
+            HStack(spacing: 0) {
+                Text("Deleted ‘").fixedSize()
+                Text(title).lineLimit(1).truncationMode(.tail)
+                Text("’").fixedSize()
+            }
+            .accessibilityElement(children: .combine)
             Text("·").foregroundStyle(Theme.secondaryText)
             Button("Undo", action: onUndo)
                 .buttonStyle(.plain)

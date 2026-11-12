@@ -1131,9 +1131,12 @@ final class PopoutTests: XCTestCase {
         let opening = EditorOpeningDetent.openingHeight(maxDetentValue: 800)
         XCTAssertEqual(opening, EditorMetrics.sheetOpeningHeight, "an iPhone 17 has room for the whole design height")
         XCTAssertGreaterThanOrEqual(opening, 451 + 48, "at least a card row more than the old medium detent (451 pt)")
-        XCTAssertLessThanOrEqual(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 * 0.86,
-                                 "a short screen keeps some of the list in view")
-        XCTAssertGreaterThan(EditorOpeningDetent.openingHeight(maxDetentValue: 600), 600 / 2, "still above medium")
+        XCTAssertLessThanOrEqual(EditorOpeningDetent.openingHeight(maxDetentValue: 720), 720 - EditorOpeningDetent.minimumStrip,
+                                 "a shorter screen keeps some of the list in view")
+        XCTAssertGreaterThan(EditorOpeningDetent.openingHeight(maxDetentValue: 720), 720 / 2, "still above medium")
+        // Brief 107: a screen too short for the opening height and a strip of the list worth keeping (the iPhone Duo's
+        // outer display) opens the editor at its full height.
+        XCTAssertEqual(EditorOpeningDetent.openingHeight(maxDetentValue: 640), 640)
     }
     #endif
 

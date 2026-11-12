@@ -23,6 +23,13 @@ struct InboxPicker: View {
 
     private static let rowHeight: CGFloat = 36
 
+    /// The card's height with `options` Groups and nothing typed: its heading, the field, the hairline and the rows
+    /// (New Group… among them), the list never taller than 300 (Review Inbox places it by this; brief 107).
+    static func height(options: Int) -> CGFloat {
+        let list = min(300, CGFloat(options + 1) * rowHeight + 8)
+        return 96 + list
+    }
+
     private var trimmed: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var matches: [Option] {

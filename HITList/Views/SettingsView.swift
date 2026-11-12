@@ -194,10 +194,11 @@ struct SettingsProfileRow: View {
                         .font(HITType.headline)
                         .foregroundStyle(HITColor.text)
                         .lineLimit(1)
+                    // Two lines at larger text sizes rather than cut (brief 107: "iCloud: Not in use · …").
                     Text(Self.subtitle(for: state))
                         .font(HITType.caption)
                         .foregroundStyle(state.isWarning ? HITColor.dueTomorrow : Theme.secondaryText)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: HITSpacing.s)
                 SettingsChevron()
@@ -245,10 +246,12 @@ struct SettingsPageRow: View {
                     Text(page.title)
                         .font(HITType.body)
                         .foregroundStyle(HITColor.text)
+                    // Wraps to a second line rather than being cut (brief 107: at XL on the iPhone Duo's outer display,
+                    // "Start screen, week, badge,…").
                     Text(line.text)
                         .font(HITType.caption)
                         .foregroundStyle(line.isWarning ? HITColor.dueTomorrow : Theme.secondaryText)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
                 Spacer(minLength: HITSpacing.s)
                 SettingsChevron()
