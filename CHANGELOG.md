@@ -5,49 +5,80 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.8
+## 0.9.9
 
-0.9.7 was prepared and never released: George looked at its pictures at midday and wrote "we're getting closer to
-the final product, but … there's still a bit more work to be done". So this is everything since 0.9.6: the creatures
-as he sent them back twice in one day, and the Flipboard's Switchboards as rows. Eleven sessions over the two
-rounds; he saw every sketch as it was made.
+0.9.7 and 0.9.8 were each prepared and never released: George looked at their pictures the same day, wrote "we're
+getting closer to the final product" of the first and "I already have enough feedback for you to prepare 0.9.9" of
+the second. So this is everything since 0.9.6: a reminder a friend could not set from a task's title, the creatures
+as he sent them back three times in one day, their seats on the theme boxes in Settings, and the Flipboard's
+Switchboards as rows. Sixteen sessions over the three rounds; he saw every sketch as it was made.
+
+Reminders and quick add:
+
+- A reminder typed into a task's title is no longer lost. A friend typed "PNHP Working Group tonight !30mb" in quick
+  add: "tonight" was not a word the app read, so the task had no time and "!30mb" stayed in the title as text; he
+  gave it 8:00 PM by hand, opened it, and the reminder he had typed sat dead in the title. Now a reminder before the
+  due time ("!30mb", "!1hb", "!at") left in a title wakes once the task has a time: opening the task shows it lit,
+  the reminder pill shows what Confirm will save, and Confirm sets it and takes it out of the title. Closing with ×
+  changes nothing and asks nothing.
+- Typing such a reminder in the editor showed nothing until a space was typed after it, so it looked dead although
+  Confirm saved it. The editor's rows and pills now show it at once; the highlight in the title still waits for
+  the space, as in quick add.
+- "tonight" is a day word: today, with no hour of its own.
+- "!0mb", "!0hb", "!0db" and "!0b" mean at the due time, like "!0" and "!at".
+- The same fault looked for everywhere a typed phrase leans on something the task holds: Review Inbox kept dropping
+  a reminder typed into a title and read the task's stored title as if it had just been typed; the editor's "No
+  date" left a reminder before a time that was gone; "starting friday" typed on a task that already repeats now
+  starts that repeat from there; Claude's update_task no longer keeps "minutes before" on a task whose time it
+  removes, and reads a reminder in a due phrase.
 
 The creatures:
 
 - Rain is rain. Water is blue now, three blues that are the same in every theme. In the rain every companion has
   beads on it that stay, a drop that swells and runs off it now and then, and a small puddle at its feet, by day
   and asleep (each has a rain still for the night now; only Nod had one). What each does about the rain is why it
-  is wet there: Nod holds his canopy, Gargle lifts his wing over his head, Button pulls his cap down to his cheeks,
-  Quill lays his ears back under his arched tail, Hush draws his ears up into a hood, and Glim curls his tail in and
-  holds his lantern in his lap to keep it dry (there is never a drop on it).
+  is wet there: Nod sits under his canopy, Flint holds a wing over his head, Button pulls his cap down to his
+  cheeks, Quill lays his ears back under his arched tail, Hush draws his ears up into a hood, and Glim curls his
+  tail in and holds his lantern in his lap to keep it dry (there is never a drop on it).
+- Graphite's companion is Flint, a gryphon cub, in place of Gargle the stone dragon. George: "he's the only creature
+  that doesn't fit the theme. He needs to have more cartoonish eyes and appearance (not necessarily sillier, just
+  less real), and perhaps make him a Gryffin … (Also, please rename him; Gargle is a bad name)". Flint is drawn as
+  the other seven are: a round owl's face looking at you, eyes ringed in light, a peach beak and talons, and behind
+  it a lion cub's body in flat greys with one folded wing and a short tail that ends in a soft tuft. He preens,
+  pats at his own tail, and flaps until he lifts off the bar. Asleep he lies down with the tuft over his talons; in
+  the rain he holds his wing over his head in an arc; snow gathers between his ear tufts, on his wing and on his
+  tail, and never over his eyes.
 - Phase, Mocha's ghost, is one floating sheet you can see through: a wavy drape with a wavy hem, no head and body,
   nothing that reads as hands, no horn. His body thins from the crown down to a nearly clear hem and a tail that
-  ends in a wisp, his eyes are lit, and what he does is done with opacity: his bob thins and fills him, a tap makes
-  him flicker, and now and then he fades from the hem up until only his two eyes hang in the dark, then fills back
-  in from the crown. Rain falls through him to a puddle on the bar; snow gathers under him in one mound.
-- The companions can give real light. A creature names the inks that glow, and the app draws a soft halo of their
-  colour under the crisp pixels: Phase's eyes, and Glim's lantern (fainter in his lap, fainter still asleep). With
-  Reduce Transparency on, a see-through body is drawn solid.
+  ends in a wisp, and what he does is done with opacity: his bob thins and fills him, a tap makes him flicker, and
+  now and then he fades from the hem up to a faint shape round his eyes, then fills back in from the crown. His
+  eyes are black with one white pupil, solid on the see-through body (0.9.8 had lit them white: "ruin his entire
+  vibe"). By day he looks down and to the right; in rain away and up; in snow at the pile under him, and when it
+  is deep he looks a little worried. Rain falls through him to a puddle on the bar; snow gathers under him in one
+  mound.
+- A companion can give real light: it names the inks that glow, and the app draws a soft halo of their colour
+  under the crisp pixels. Glim's lantern does (fainter in his lap, fainter still asleep). With Reduce Transparency
+  on, a see-through body is drawn solid.
 - Glim, Tokyo Night's mouse, is 0.9.5's drawing again, every frame; 0.9.6 had redrawn him and he was "so much
   worse". He has nine pixels of new shading that nobody sees at real size without looking for them.
-- Gargle, Graphite's stone pup, is awake what he is asleep: his side-on night sprite with his eye open (0.9.6's
-  larger head was "a tad too big and not cute enough"); a test keeps the night sprite pixel for pixel. Under deep
-  snow he is still Gargle: the drifts grow on his back, his wing and at his feet, and his horns, brow, eye and
-  snout stay stone.
-- Tuck, Moss's snail, sleeps at rest: his daytime head, his eyes shut on short stalks that lean apart, and no
-  mouth (0.9.6 left him smiling in his sleep on upright stalks). In the rain he is himself, in a puddle that laps
-  at his foot, his pot brimming, and now and then a drop falls from a leaf into the pot.
+- Tuck, Moss's snail, sleeps at peace: his daytime head, his shut eyes resting low on short stalks that lean apart,
+  and a small flat line for a mouth (0.9.6 left him smiling in his sleep on upright stalks; 0.9.8 took the mouth
+  away altogether). In the rain he is himself, in a puddle that laps at his foot, his pot brimming, and now and
+  then a drop falls from a leaf into the pot.
 - Quill, Midnight's cat, keeps 0.9.6's face, three pixels friendlier: the centre stroke of the M on his brow, which
   read as a frown, is gone, and he has a small mouth under his nose.
 - Nod has eyes two pixels tall; George: "an art style where none of the characters have just single-pixel dots for
-  eyes". In the rain he holds his little canopy by a short handle, with beads on it and a drop off its rim, and it
+  eyes". In the rain 0.9.6's little canopy floats over his cap, with beads on it and a drop off its rim, and it
   stays over him while he sleeps.
-- Button pulls his cap down over his eyes in the rain and lifts it now and then to look out. In Settings →
-  Appearance he stands on the floor of his swatch, so the eight sit eight ways.
+- Button pulls his cap down over his eyes in the rain and lifts it now and then to look out.
 - Hush is as 0.9.6 drew it ("the perfect example of a good rework") but for the water in its rain, and a test pins
   every other frame.
-- Snow lies about half as deep again on Nod, Button, Gargle, Glim, Tuck and Quill, still as powder and never as a
-  cap.
+- Snow lies about half as deep again on Nod, Button, Glim, Tuck and Quill, still as powder and never as a cap.
+- In Settings → Appearance each companion sits its own way on its theme's box. Nod sits on the card; Flint is in
+  the air at the left edge, partly outside his box; Quill is asleep, sliding off the top right corner; Tuck sits
+  in the middle of the floor and Button at its left; Glim sits at the right of the floor with his lantern hanging
+  below the box toward "Tokyo Night"; Phase sleeps on the accent dot; and Hush peeks over the top, the only one
+  behind a box.
 
 The Flipboard:
 
