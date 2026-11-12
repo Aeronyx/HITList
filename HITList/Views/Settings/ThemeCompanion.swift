@@ -19,7 +19,14 @@ enum ThemeCompanion {
         case asleepOnDot
         /// On the swatch's top edge, legs over the edge (its "+" pose).
         case onTop
+        /// Standing on the swatch's floor, inside the box: its feet on the square's bottom edge, just above its border
+        /// line, in front of the card (its "+" pose; round 24, George: "have him sit at the bottom of his square box").
+        case onFloor
     }
+
+    /// The swatch's border line (`ThemeSwatch`'s separator stroke, inside the square): what one standing on the floor
+    /// stands on.
+    static let floorLine: CGFloat = 1
 
     /// Where one companion sits.
     struct Seat: Equatable {
@@ -48,8 +55,9 @@ enum ThemeCompanion {
         "glim": Seat(placement: .onCard, along: 0.3),
         // Mocha: Phase asleep over the accent dot, the sheet hovering low and slack a pixel above it (round 23).
         "phase": Seat(placement: .asleepOnDot, along: 0.7),
-        // Rosé: Button stands on the card's edge on its boots, left of the dot (round 22: 0.9.4's drawing, standing).
-        "button": Seat(placement: .onCard, along: 0.3),
+        // Rosé: Button stands on the floor of his box on his boots, under the card's edge and left of the dot, clear
+        // of the rounded corner (round 24; George: "just have him sit at the bottom of his square box").
+        "button": Seat(placement: .onFloor, along: 0.34),
     ]
 
     /// For a companion not in `seats` (a new one until it is given its own): on the card, legs over its edge, left of
@@ -91,7 +99,7 @@ enum ThemeCompanion {
         switch seat.placement {
         case .alongTop: frame = character.posture(.field).awake.rest
         case .asleepOnDot: frame = posture.asleep.rest
-        case .onCard, .peeking, .onTop: frame = posture.awake.rest
+        case .onCard, .peeking, .onTop, .onFloor: frame = posture.awake.rest
         }
         let rows = character.rows(frame) ?? []
         let first = CGFloat(firstOpaqueRow(rows) ?? 0)
@@ -118,6 +126,8 @@ enum ThemeCompanion {
             y = dot.minY - CGFloat(character.seatRow)
         case .onTop:
             y = -CGFloat(character.seatRow)
+        case .onFloor:
+            y = side - floorLine - CGFloat(character.seatRow)
         }
         // Keep it on the swatch across: no more than a pixel past either side.
         x = min(max(x, -1), side - width + 1)

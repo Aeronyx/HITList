@@ -32,11 +32,12 @@ final class CompanionButtonTests: XCTestCase {
     /// Brief 109, "completely revert": every still it shows that is not snow or rain (awake, heat, asleep; the same in
     /// both places) is 0.9.4's, row for row. The digests are of each still's rows joined by newlines, computed once
     /// from `git show v0.9.4:HITList/Support/Companions/Characters/Button.swift`. The rain's is brief 120's: the cap
-    /// pulled down over its eyes (George: "grab his mushroom hood and warp it down a bit, attempting to hide").
+    /// pulled down over its eyes (George: "grab his mushroom hood and warp it down a bit, attempting to hide"), with brief
+    /// 124's water on it (blue beads on the cap, its two drops blue, a puddle round its boots).
     func testItIsZeroNineFoursButtonPixelForPixel() {
         let v094: [String: String] = [
             "rest": "5a6420179c928ee7fce5f6ffbfec11a6408a184482c7879efd979a8be0ec0c1a",
-            "rain": "1618136210bc51b1db6d0b2139b19b788bf00b7485b46e504de4f3c20befd8ba",
+            "rain": "38f0771fd5362d9d962ff527fec45c0425d0d4363a6f8d2634c753aa70e95dbd",
             "heat": "7bcbb8e948ea38c99f254b33721bd8870fbf6788fe238fc3681da63fb2ed3ca8",
             "sleep": "2f79dd4fa7141ec21214971a993bea07b540d03ac6463a799ec82139de22db83",
         ]
@@ -45,7 +46,7 @@ final class CompanionButtonTests: XCTestCase {
             let data = Data(rows.joined(separator: "\n").utf8)
             return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         }
-        for (name, expected) in v094 { XCTAssertEqual(digest(name), expected, "\(name) is 0.9.4's (the rain brief 120's)") }
+        for (name, expected) in v094 { XCTAssertEqual(digest(name), expected, "\(name) is 0.9.4's (the rain brief 120's, wet)") }
         XCTAssertEqual(button.width, 20)
         XCTAssertEqual(button.height, 20)
         for place in CompanionPlace.allCases {
@@ -113,11 +114,14 @@ final class CompanionButtonTests: XCTestCase {
 
     /// Brief 109 (George, of 0.9.4's Button: "he has tiny stubs for feet and it makes no sense for his character's
     /// vibe"): no boot ever moves. In every frame it has, awake or asleep, in every weather and the flourish, the boots'
-    /// row is the resting one, and no idle or routine is named for a boot or a kick.
+    /// row is the resting one (in the rain with the water round them, brief 124: the puddle, a drop falling past), and
+    /// no idle or routine is named for a boot or a kick.
     func testItsBootsNeverSwing() {
         let boots = button.rows("rest")![button.seatRow - 1]
+        let water: Set<Character> = ["p", "h", "u"]
         for frame in button.frames {
-            XCTAssertEqual(frame.rows[button.seatRow - 1], boots, "\(frame.name): the boots planted")
+            let dry = String(frame.rows[button.seatRow - 1].map { water.contains($0) ? CompanionInk.clear : $0 })
+            XCTAssertEqual(dry, boots, "\(frame.name): the boots planted")
         }
         for place in CompanionPlace.allCases {
             let posture = button.posture(place)
@@ -255,7 +259,7 @@ final class CompanionButtonTests: XCTestCase {
         XCTAssertTrue(sleep[0...3].joined().allSatisfy { $0 == CompanionInk.clear }, "the cap pulled down")
         XCTAssertTrue(sleep[12...13].joined().contains("r"), "its rim over where its eyes were")
         XCTAssertEqual(button.plus.asleep.rest, "sleep")
-        XCTAssertNil(button.plus.asleep.rain, "asleep wins over the rain")
+        XCTAssertEqual(button.plus.asleep.rain, "sleepRain", "asleep in the rain: its own still (brief 124)")
         XCTAssertEqual(button.plus.asleep.answer.name, "wake")
         XCTAssertTrue(button.rows("sleepPeekLook")!.joined().contains("k"), "woken: one eye peeks out")
     }
@@ -270,7 +274,12 @@ final class CompanionButtonTests: XCTestCase {
             let drip = awake.gesture(named: "drip")!
             XCTAssertEqual(drip.sky, .rain)
             XCTAssertTrue(drip.flicker)
-            for tick in drip.ticks { XCTAssertEqual(button.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
+            // Brief 124: the drop and the trickle are only water moving over the wet still.
+            for gesture in awake.gestures where gesture.sky == .rain {
+                for tick in gesture.ticks {
+                    XCTAssertTrue((1...4).contains(button.difference(tick.frame, awake.rain!)), "\(at) \(tick.frame): one drop")
+                }
+            }
             XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "peek", at)
             // Brief 120: hiding under its cap: the rim pulled down over its eyes, its hands on the rim's ends, its eyes
             // (each with a glint) peeking out from under.
@@ -299,6 +308,63 @@ final class CompanionButtonTests: XCTestCase {
             XCTAssertTrue(button.rows("heat")![0].contains("r"))
             XCTAssertFalse(button.rows("rest")![0].contains("r"))
         }
+    }
+
+    /// Brief 124 (George: "During rain, they should have little droplets bead off of them every once in a while, and have
+    /// some droplets stick around or tiny puddles pool around their feet"): in the rain, awake and asleep, blue beads on
+    /// its cap, a drop hanging at the rim's ends, a puddle round its boots on the flat of the "+"; now and then the left
+    /// drop lets go and falls past the "+"'s shoulder (its cap is wider than the flat), and more rarely a drop off its
+    /// right hand runs down its side into the puddle, whose glint jumps. No drop is left in the light ink, nothing blinks
+    /// out, and the blink, the look up and the reply to a tap still play over it.
+    func testTheRainIsWaterOnIt() {
+        let water: Set<Character> = ["p", "h", "u"]
+        let edge = button.seatRow - 1
+        func row(_ name: String, _ y: Int) -> [Character] { Array(button.rows(name)![y]) }
+        func puddle(_ name: String) -> [Int] { row(name, edge).indices.filter { water.contains(row(name, edge)[$0]) } }
+        func lights(_ name: String) -> Int { button.rows(name)!.joined().filter { $0 == "l" }.count }
+        for place in CompanionPlace.allCases {
+            let posture = button.posture(place)
+            for mode in [posture.awake, posture.asleep] {
+                let still = mode.rain!
+                let at = "\(place) \(still)"
+                let flat = button.rows(still)!.joined()
+                for ink in water { XCTAssertTrue(flat.contains(ink), "\(at): all three blues") }
+                XCTAssertLessThanOrEqual(lights(still), lights(mode.rest), "\(at): no drop in the light ink")
+                let pool = puddle(still)
+                XCTAssertTrue((4...8).contains(pool.count), "\(at): a puddle four to eight wide, not a plinth")
+                XCTAssertLessThanOrEqual(pool.max()! - pool.min()!, 7, at)
+                XCTAssertTrue(pool.allSatisfy { (5...14).contains($0) }, "\(at): on the flat of the \"+\"")
+                let beads = button.rows(still)![0..<edge].joined().filter { water.contains($0) }.count
+                XCTAssertTrue((3...6).contains(beads), "\(at): beads on the cap, a drop at each end of its rim")
+                for gesture in mode.gestures where gesture.sky == .rain {
+                    XCTAssertLessThan(Double(gesture.ticks.count) / button.gestureFPS, 1, "\(at) \(gesture.name)")
+                    // A drop falling past the shoulder may touch the edge row there; the puddle on the flat stays.
+                    for tick in gesture.ticks {
+                        XCTAssertEqual(puddle(tick.frame).filter { (5...14).contains($0) }, pool, "\(at) \(tick.frame): the puddle stays")
+                    }
+                }
+                XCTAssertTrue(button.canDraw(mode.answer, in: .rain, mode: mode, depth: 0), "\(at): the reply to a tap")
+            }
+            let awake = posture.awake
+            for tick in awake.wholeTicks(sky: .rain) {
+                XCTAssertFalse(puddle(tick.frame).isEmpty, "\(place) \(tick.frame): the puddle stays")
+            }
+            for name in ["lookUp@rain", "blink@rain", "half@rain", "wink@rain", "breathe@sleepRain", "snuggle@sleepRain",
+                         "sleepPeek@sleepRain", "sleepPeekLook@sleepRain"] {
+                XCTAssertFalse(puddle(name).isEmpty, "\(name): the puddle stays")
+            }
+            XCTAssertTrue(button.canDraw(awake.gesture(named: "blink")!, in: .rain, mode: awake, depth: 0), "\(place): a blink")
+            XCTAssertTrue(button.canDraw(awake.gesture(named: "lookUp")!, in: .rain, mode: awake, depth: 0), "\(place)")
+            let asleep = posture.asleep
+            for name in ["breathe", "murmur", "snuggle"] {
+                XCTAssertTrue(button.canDraw(asleep.gesture(named: name)!, in: .rain, mode: asleep, depth: 0), "\(place) \(name)")
+            }
+        }
+        // The trickle lands in the puddle: its glint jumps to where the drop comes down.
+        let trickle = button.plus.awake.gesture(named: "trickle")!.ticks.map(\.frame)
+        XCTAssertEqual(row(trickle.last!, edge)[14], "h", "it lands in the puddle")
+        XCTAssertNotEqual(row(trickle.last!, edge), row("rain", edge), "the glint jumps")
+        XCTAssertEqual(row("drip1", 17)[0], "u", "the left drop swells")
     }
 
     /// Round 22's snow (COMMON; George: "more like powdery, pixelated fallen snow than just white globs … add some blue

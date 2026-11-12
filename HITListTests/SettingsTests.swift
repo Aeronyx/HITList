@@ -529,6 +529,7 @@ final class SettingsTidyTests: XCTestCase {
                     switch placement {
                     case .onCard: XCTAssertEqual(seatY, metrics.cardTop, "\(label): legs over the card's edge")
                     case .onTop: XCTAssertEqual(seatY, 0, "\(label): legs over the top edge")
+                    case .onFloor: XCTAssertEqual(seatY, side - ThemeCompanion.floorLine, "\(label): feet on the floor")
                     case .asleepOnDot: XCTAssertEqual(seatY, metrics.dot.minY, "\(label): on the dot")
                     case .alongTop:
                         let last = ThemeCompanion.lastOpaqueRow(character.rows(layout.frame) ?? []) ?? 0
@@ -549,7 +550,7 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .alongTop)
         XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
         XCTAssertEqual(ThemeCompanion.seats["gargle"]?.placement, .peeking)
-        XCTAssertEqual(ThemeCompanion.seats["button"]?.placement, .onCard)
+        XCTAssertEqual(ThemeCompanion.seats["button"]?.placement, .onFloor, "round 24: at the bottom of his box")
         XCTAssertNil(ThemeCompanion.seats["pip"], "Pip retired in 0.9.3")
         XCTAssertNil(ThemeCompanion.seats["smudge"], "Smudge, Posy and Mallow retired in 0.9.4")
         XCTAssertNil(ThemeCompanion.seats["posy"])
@@ -589,6 +590,45 @@ final class SettingsTidyTests: XCTestCase {
             let layout = ThemeCompanion.layout(for: hush, seat: ThemeCompanion.seat(for: hush), side: ThemeSwatch.size)
             let rest = hush.rows(hush.posture(.plus).awake.rest) ?? []
             XCTAssertEqual(layout.visibleRows, (ThemeCompanion.eyeRow(rest) ?? 0) + 2)
+        }
+    }
+
+    /// Round 24 (George: "just have him sit at the bottom of his square box in the Theme settings menu for variety's
+    /// sake"): Button stands on the floor of his swatch, inside the box, his boots on its bottom edge just above the
+    /// border line, every pixel of him inside the rounded square (its continuous corners) and clear of the accent dot,
+    /// so the grid's rows keep their height. He is the only one who stands there.
+    func testButtonStandsOnTheFloorOfHisBox() throws {
+        let button = try XCTUnwrap(CompanionCharacter.named("button"))
+        let seat = ThemeCompanion.seat(for: button)
+        XCTAssertEqual(seat.placement, .onFloor)
+        for (id, other) in ThemeCompanion.seats where id != "button" {
+            XCTAssertNotEqual(other.placement, .onFloor, "\(id) stands where Button does")
+        }
+        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+            let metrics = ThemeSwatch.Metrics(side: side)
+            let layout = ThemeCompanion.layout(for: button, seat: seat, side: side)
+            XCTAssertEqual(layout.rise, 0, "\(side): inside the swatch, the row keeps its height")
+            XCTAssertEqual(layout.frame, button.plus.awake.rest)
+            let line = ThemeCompanion.floorLine
+            let inner = CGRect(x: 0, y: 0, width: side, height: side).insetBy(dx: line, dy: line)
+            let box = RoundedRectangle(cornerRadius: metrics.radius - line, style: .continuous).path(in: inner)
+            // Half a device pixel of give where a pixel's corner meets the curve: the iPhone draws at 3x, the Mac at 2x.
+            let slack: CGFloat = side == ThemeSwatch.size ? 1.0 / 6 : 0.25
+            let rows = button.rows(layout.frame) ?? []
+            var lowest: CGFloat = 0
+            for (y, row) in rows.enumerated() {
+                for (x, ink) in row.enumerated() where ink != CompanionInk.clear {
+                    let left: CGFloat = layout.origin.x + CGFloat(x)
+                    let top: CGFloat = layout.origin.y + CGFloat(y)
+                    let pixel = CGRect(x: left, y: top, width: 1, height: 1).insetBy(dx: slack, dy: slack)
+                    let corners = [CGPoint(x: pixel.minX, y: pixel.minY), CGPoint(x: pixel.maxX, y: pixel.minY),
+                                   CGPoint(x: pixel.minX, y: pixel.maxY), CGPoint(x: pixel.maxX, y: pixel.maxY)]
+                    XCTAssertTrue(corners.allSatisfy { box.contains($0) }, "\(side): \(x),\(y) outside the box")
+                    XCTAssertFalse(pixel.intersects(metrics.dot), "\(side): \(x),\(y) on the accent dot")
+                    lowest = max(lowest, top + 1)
+                }
+            }
+            XCTAssertEqual(lowest, side - line, "\(side): his boots on the floor, not floating")
         }
     }
 
