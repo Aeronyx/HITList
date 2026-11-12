@@ -47,6 +47,57 @@ final class EditorReminderPhraseUITests: XCTestCase {
         XCTAssertTrue(reminderPill.label.contains("1 hour before"), "saved: \(reminderPill.label)")
     }
 
+    /// The friend's own sequence: "PNHP Working Group tonight !30mb" typed in quick add on Today ("tonight" is today,
+    /// a day only), so "!30mb" stays in the title as text; the task given 8 PM by hand in the Reminder card. The stored
+    /// phrase wakes at once; opened again it is lit and the pill previews it, × closes without asking, and Confirm
+    /// sets the reminder and takes the phrase out of the title.
+    func testAReminderTypedBeforeTheTaskHadATimeWakes() {
+        let today = app.buttons["tab-today"]
+        today.tap()
+        _ = today.wait(for: \.isSelected, toEqual: true, timeout: 5)
+        app.buttons["quickAddButton"].firstMatch.tap()
+        let field = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the quick-add card")
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        app.typeText("PNHP Working Group tonight !30mb")
+        app.buttons["quickAddSave"].tap()
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "the card closes after Add")
+
+        let stored = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ AND label ENDSWITH %@",
+                                                          "PNHP Working Group", "!30mb")).firstMatch
+        XCTAssertTrue(stored.waitForExistence(timeout: 5), "no time: \"!30mb\" is kept in the title as text")
+        stored.tap()
+        XCTAssertTrue(reminderPill.waitForExistence(timeout: 5), "the editor")
+        XCTAssertFalse(reminderPill.label.contains("before"), "no time yet: \(reminderPill.label)")
+        reminderPill.tap()
+        let eight = app.buttons["8 PM"].firstMatch
+        XCTAssertTrue(eight.waitForExistence(timeout: 5), "the Reminder card's times")
+        eight.tap()
+        let woken = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", "30 min before"),
+                                              object: reminderPill)
+        XCTAssertEqual(XCTWaiter().wait(for: [woken], timeout: 5), .completed,
+                       "8 PM by hand wakes the stored phrase: \(reminderPill.label)")
+
+        app.buttons["Close"].firstMatch.tap()
+        let title = app.descendants(matching: .any)["editorTitle"].firstMatch
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5), "× closes at once: a woken phrase is not typing")
+
+        XCTAssertTrue(stored.waitForExistence(timeout: 5), "nothing saved without Confirm")
+        stored.tap()
+        XCTAssertTrue(reminderPill.waitForExistence(timeout: 5))
+        snapshot("1 Opened: the stored phrase lit, the pill previewing it")
+        XCTAssertTrue(reminderPill.label.contains("30 min before"), "previewed on opening: \(reminderPill.label)")
+
+        app.buttons["editorConfirm"].firstMatch.tap()
+        XCTAssertTrue(title.waitForNonExistence(timeout: 5))
+        let saved = app.staticTexts.matching(NSPredicate(format: "label == %@", "PNHP Working Group")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 5), "the phrase left the title")
+        saved.tap()
+        XCTAssertTrue(reminderPill.waitForExistence(timeout: 5))
+        XCTAssertTrue(reminderPill.label.contains("30 min before"), "saved: \(reminderPill.label)")
+        snapshot("2 After Confirm")
+    }
+
     // MARK: Helpers
 
     private var groceriesRow: XCUIElement {

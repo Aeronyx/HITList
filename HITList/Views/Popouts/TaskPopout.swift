@@ -696,15 +696,18 @@ struct TaskPopout: View {
     }
 
     /// The title's reminder phrases of one sort: before the due time ("!15mb", "!at") or from now ("!15m").
-    private func removeTypedReminders(beforeDue: Bool) {
-        removeTyped([.reminder]) { ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue }
+    /// `keepingStored`: the time is going, so a stored one woken by it (brief 127) goes back to sleep where it is.
+    private func removeTypedReminders(beforeDue: Bool, keepingStored: Bool = false) {
+        draft.removeTyped([.reminder], parser(), for: task, keepingStored: keepingStored) {
+            ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue
+        }
     }
 
     /// A new day keeps the time of day; nil removes the date (and with it the time).
     private func setDate(_ day: Date?) {
         if day == nil {
             removeTyped([.date, .time, .recurrence])
-            removeTypedReminders(beforeDue: true)
+            removeTypedReminders(beforeDue: true, keepingStored: true)
         } else {
             removeTyped([.date])
         }
@@ -724,7 +727,7 @@ struct TaskPopout: View {
 
     private func clearTime() {
         removeTyped([.time])
-        removeTypedReminders(beforeDue: true)
+        removeTypedReminders(beforeDue: true, keepingStored: true)
         if let due = task.dueDate { task.dueDate = Calendar.current.startOfDay(for: due) }
         task.hasDueTime = false
         task.reminderOffsetMinutes = nil

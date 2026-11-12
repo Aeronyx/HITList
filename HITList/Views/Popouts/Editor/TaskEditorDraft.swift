@@ -10,7 +10,8 @@ import HITListCore
 ///
 /// The title reads quick-add phrases as the quick-add card does (brief 65, George on 0.8.1: "It also doesn't
 /// respect quickadd"), but only those typed in this editing session: the stored title's words stay plain text
-/// until they are typed again (`untouched`). A highlight clicked, tapped or backspaced stays text too
+/// until they are typed again (`untouched`), save a reminder before the due time once the task has a time
+/// (brief 127, `parsed(_:for:_:)`). A highlight clicked, tapped or backspaced stays text too
 /// (`switchedOff`). Confirm saves the title without its phrases and the fields with their values (`TitlePhrases`).
 struct TaskEditorDraft: Equatable {
     /// A sub-task's title being edited in place.
@@ -144,17 +145,41 @@ struct TaskEditorDraft: Equatable {
     /// the switched-off phrases left as plain text. `.live` (the default) is what the title highlights while typing
     /// (a "!" phrase at the very end waits for a space); the rows and Confirm read `.final`. A task with a time of its own
     /// lets "!15mb" count without one typed (`QuickAddParser.dueTimeIsSet`).
+    ///
+    /// One stored phrase wakes (brief 127): a reminder before the due time ("!30mb", "!1hb", "!at", "!0mb") is the
+    /// only phrase quick add refuses for want of something the task can gain later, a time. A friend typed "PNHP
+    /// Working Group tonight !30mb" with no time, so "!30mb" stayed text; given 8 PM by hand, the task's editor
+    /// showed it dead in the title. So on a task with a due time and no reminder before it of its own, such a stored
+    /// phrase is read as if typed: it lights up (at the very end too: a stored word is not being typed), the pill
+    /// previews it, a tap or Backspace switches it off, Confirm sets it and takes it out of the title. A
+    /// before-due phrase typed in this session wins over it wherever each sits. Every other stored word had its
+    /// chance when it was typed (read then, or switched off on purpose) and stays text (brief 65). A woken phrase
+    /// is not typing: opening and closing ask nothing and save nothing (`hasPendingChanges`).
     func parsed(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live) -> QuickAddResult {
         var parser = parser
         parser.dueTimeIsSet = task.hasDueTime && task.dueDate != nil
+        let wakes = Self.wakesStoredReminder(on: task)
+        let result = parsed(parser, mode, waking: wakes)
+        // No time of its own yet, but one typed in this session ("8pm", "in 2 hours"): Confirm gives the task that
+        // time, so a stored reminder wakes for it as for one picked in the date card.
+        guard !wakes, task.reminderOffsetMinutes == nil, result.hasDueTime else { return result }
+        return parsed(parser, mode, waking: true)
+    }
+
+    /// The title read with the stored title's phrases masked, a reminder before the due time among them unless
+    /// `waking`.
+    private func parsed(_ parser: QuickAddParser, _ mode: QuickAddParser.Mode, waking wakes: Bool) -> QuickAddResult {
+        // A stored last word is not being typed: read whole, as Confirm reads it.
+        let mode: QuickAddParser.Mode = mode == .live && wakes && endsInStoredWord ? .final : mode
         var off = switchedOff
         var result = parser.parse(title, switchedOff: off, mode: mode)
         // Each round masks at least one more phrase of the stored title (a masked one can reveal another, as
         // switching off "p3" lets an earlier "p2" apply), so this ends within the title's word count.
         for _ in 0..<64 {
+            let typedReminder = result.tokens.contains { Self.isBeforeDue($0) && !isStored($0) }
             let stored = result.tokens.compactMap { token -> QuickAddDisabledPhrase? in
-                guard let phrase = QuickAddDisabledPhrase(token, in: title), !off.contains(phrase),
-                      untouched.contains(where: { $0.lowerBound <= phrase.start && phrase.start + phrase.length <= $0.upperBound })
+                guard let phrase = QuickAddDisabledPhrase(token, in: title), !off.contains(phrase), isStored(phrase),
+                      !(wakes && !typedReminder && Self.isBeforeDue(token))
                 else { return nil }
                 return phrase
             }
@@ -163,6 +188,34 @@ struct TaskEditorDraft: Equatable {
             result = parser.parse(title, switchedOff: off, mode: mode)
         }
         return result
+    }
+
+    /// A stored reminder before the due time is read (brief 127): the task has a due time and no reminder before it.
+    static func wakesStoredReminder(on task: TaskItem) -> Bool {
+        task.hasDueTime && task.dueDate != nil && task.reminderOffsetMinutes == nil
+    }
+
+    static func isBeforeDue(_ token: QuickAddToken) -> Bool {
+        token.kind == .reminder && ReminderPhrase(token: token.text)?.isBeforeDue == true
+    }
+
+    /// The phrase lies inside the stored title's words, untyped in this editing session.
+    private func isStored(_ phrase: QuickAddDisabledPhrase) -> Bool {
+        untouched.contains { $0.lowerBound <= phrase.start && phrase.start + phrase.length <= $0.upperBound }
+    }
+
+    private func isStored(_ token: QuickAddToken) -> Bool {
+        QuickAddDisabledPhrase(token, in: title).map(isStored) ?? false
+    }
+
+    /// The title's last word reaches its end and is one of the stored title's.
+    private var endsInStoredWord: Bool {
+        let bytes = Array(title.utf8)
+        let isSpace = { (byte: UInt8) in byte == 0x20 || byte == 0x09 || byte == 0x0A || byte == 0x0D }
+        guard let last = bytes.last, !isSpace(last) else { return false }
+        var start = bytes.count - 1
+        while start > 0, !isSpace(bytes[start - 1]) { start -= 1 }
+        return untouched.contains { $0.lowerBound <= start && bytes.count <= $0.upperBound }
     }
 
     /// What the title's phrases set, read against `task` (`TitlePhrases`). `.final` (the default) is what Confirm
@@ -189,12 +242,13 @@ struct TaskEditorDraft: Equatable {
 
     /// A value picked in the editor replaces the typed phrases of its kinds (`include` narrows them): they leave
     /// the title, as a chip replaces its phrase in the quick-add card, one at a time so the stored title's words
-    /// keep their place.
+    /// keep their place. `keepingStored`: a woken stored reminder (brief 127) stays where it is, back to sleep (the
+    /// time is going), rather than leaving the title.
     mutating func removeTyped(_ kinds: Set<QuickAddToken.Kind>, _ parser: QuickAddParser, for task: TaskItem,
-                              where include: (QuickAddToken) -> Bool = { _ in true }) {
+                              keepingStored: Bool = false, where include: (QuickAddToken) -> Bool = { _ in true }) {
         let text = title
         let spans = parsed(parser, for: task, .final).tokens
-            .filter { kinds.contains($0.kind) && include($0) }
+            .filter { kinds.contains($0.kind) && include($0) && !(keepingStored && isStored($0)) }
             .compactMap { QuickAddDisabledPhrase($0, in: text).map { $0.start..<($0.start + $0.length) } }
             .sorted { $0.lowerBound > $1.lowerBound }
         for span in spans { title = Self.removing(span, from: title) }
