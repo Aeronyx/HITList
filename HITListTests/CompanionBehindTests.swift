@@ -64,6 +64,25 @@ final class CompanionBehindTests: XCTestCase {
         XCTAssertEqual(creature.opacity(.veil), CompanionInks.veilOpacity)
     }
 
+    /// Round 22: fallen snow's three inks are every creature's, so they are not among a creature's own colours
+    /// (the "4…6 colours" rule and the tests that pin a creature's inks never see them), and snow is never
+    /// see-through.
+    func testSnowInksAreNotACreaturesOwnColours() {
+        XCTAssertEqual(CompanionInk.snowInks, [.snow, .snowBlue, .snowShade])
+        XCTAssertEqual(CompanionCharacter.runs(of: ["sbc"]).map(\.ink), [.snow, .snowBlue, .snowShade])
+        for character in CompanionCharacter.all {
+            XCTAssertTrue(character.inks.isDisjoint(with: CompanionInk.snowInks), character.id)
+            XCTAssertEqual(character.inks, character.allInks.subtracting(CompanionInk.snowInks), character.id)
+            for ink in CompanionInk.snowInks { XCTAssertEqual(character.opacity(ink), 1, "\(character.id) \(ink)") }
+        }
+        for palette in ThemePalette.all {
+            let inks = CompanionInks(palette: palette)
+            XCTAssertEqual(inks.hex[.snow], CompanionInks.snowHex)
+            XCTAssertEqual(inks.hex[.snowBlue], CompanionInks.snowBlueHex)
+            XCTAssertEqual(inks.hex[.snowShade], CompanionInks.snowShadeHex)
+        }
+    }
+
     func testProblemsKnowTheNewMarks() {
         XCTAssertEqual(Self.creature().problems.filter { $0.contains("behind the host") || $0.contains("unknown") }, [],
                        "behind the host below the seat row is fine")

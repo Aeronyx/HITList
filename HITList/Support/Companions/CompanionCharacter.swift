@@ -73,6 +73,9 @@ enum CompanionInk: Character, CaseIterable {
     /// and its shaded side and lone flecks, a deeper blue. Snow is never see-through, on a ghost either.
     case snowShade = "c"
 
+    /// Fallen snow's three tones (round 22).
+    static let snowInks: Set<CompanionInk> = [.snow, .snowBlue, .snowShade]
+
     /// Clear.
     static let clear: Character = "."
 
@@ -603,8 +606,12 @@ struct CompanionCharacter: Identifiable {
         return out
     }
 
-    /// The inks the character uses anywhere.
-    var inks: Set<CompanionInk> { Set(frames.flatMap { Self.runs(of: $0.rows) }.map(\.ink)) }
+    /// The character's own colours: the inks it uses anywhere, without fallen snow's three (`CompanionInk.snowInks`),
+    /// which are the same on every creature and are not counted among a creature's "few colours from the theme".
+    var inks: Set<CompanionInk> { allInks.subtracting(CompanionInk.snowInks) }
+
+    /// Every ink in its frames, snow included.
+    var allInks: Set<CompanionInk> { Set(frames.flatMap { Self.runs(of: $0.rows) }.map(\.ink)) }
 
     /// How opaque `ink` is drawn for this character (brief 101): the veil always see-through, the eyes and glints
     /// solid, the rest at 1 − `seeThrough`.
