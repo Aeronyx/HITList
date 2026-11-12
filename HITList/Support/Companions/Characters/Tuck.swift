@@ -7,33 +7,32 @@ import HITListCore
 // Inks: . clear  k ink  d dark  m mid  l light  a accent  w warm  g glow (see `CompanionInk`).
 
 extension CompanionCharacter {
-    /// Tuck: Moss's companion (brief 88). A small white snail whose shell is a clay flowerpot with a seedling growing
-    /// in it, its two leaves in the theme's accent. It faces left with a smile, its big eyes up on stalks (brief 100:
-    /// round dark eyes, 4 × 4 with the corners off, a rim lit above and shadowed below, and one glint in the pupil's
-    /// upper corner that stays put; the shadow moves to the side it looks to: ahead, back at its pot, up at the sky;
-    /// half closed when it smiles), the same in
-    /// both places (on the "+" it sits further in, its foot on the flat of the button). Now and then (brief 105: slowly,
-    /// a snail's own) a blink, an eye stalk tipping out, one drawn in and back, both stretched up to the sky, a lean
-    /// ahead, a lean back toward its seedling as the leaf lifts; its eyes draw in one after the other; at a fright, half
-    /// a retreat under its pot's rim. Every so often it looks round at its seedling, which waves a leaf back; or it tucks its eyes
-    /// right in and peeks out with one; or its two eyes look two ways at once and then at each other; or a gust tips
-    /// its pot and it rights itself. Rare: its seedling flowers, a bud opening into a small white flower; it beams,
-    /// wiggles its eyes, a petal falls, and the flower folds shut. A tap makes it flinch. At night (brief 113, George: "Why
-    /// do the snail's eyes become lines at night?"; round 23, brief 119: "Tuck's eyes should still droop down far at
-    /// night ... He also shouldn't smile while sleeping, that's creepy") its stalks wilt forward like flower stems, each
-    /// a crook in the dark above its head, three up from its root, over and down, its shut eye hanging from the end (a
-    /// small pale ball, a dark lid line across it), and no mouth; its seedling's leaves fold up. Dreaming, the front
-    /// crook stirs up a pixel; breathing, the crooks and their hanging eyes rise with its shell; woken, the front stalk
-    /// straightens up as by day and its eye opens. It is the one that likes the rain: eyes up to the sky (brief 119: stretched a pixel taller, a
-    /// bead of rain on each eye's shoulder, a bead in the cup of its seedling's leaves), its leaves held up
-    /// to drink; a drop falls into a leaf and it shakes itself from head to tail, and rain drips off its pot's rim. In
-    /// snow its eyes come down and a little snow sits on its pot and leaves; a flake on its eye makes it shiver. A
-    /// start at thunder; on a clear day it basks. In snow (brief 113, COMMON's snow: powder in three tones, never a
-    /// cap) a dusting lies on its pot's rim where nothing hangs over it, on the tops of its leaves and its head, and a
-    /// fleck on the top of each eye; deeper it drifts, up to three deep at the rim's ends, its leaves still showing (brief 119: a little more
-    /// at each depth, on the rim, its head and the end of its tail behind the pot),
-    /// until it shrugs it all off in one go; asleep, it gathers on its folded seedling and shut eyes by morning. On a hot day its
-    /// seedling wilts and so does it: it pants, and tips its pot forward over its head for shade.
+    /// Tuck: Moss's companion (brief 88). A small white snail whose shell is a clay flowerpot with a seedling growing in
+    /// it, its two leaves in the theme's accent. It faces left with a smile, its big eyes up on stalks (brief 100: round
+    /// dark eyes, 4 × 4 with the corners off, a rim lit above and shadowed below, and one glint in the pupil's upper corner
+    /// that stays put; the shadow moves to the side it looks to: ahead, back at its pot, up at the sky; half closed when it
+    /// smiles), the same in both places (on the "+" it sits further in, its foot on the flat of the button). Now and then
+    /// (brief 105: slowly, a snail's own) a blink, an eye stalk tipping out, one drawn in and back, both stretched up to
+    /// the sky, a lean ahead, a lean back toward its seedling as the leaf lifts; its eyes draw in one after the other; at a
+    /// fright, half a retreat under its pot's rim. Every so often it looks round at its seedling, which waves a leaf back;
+    /// or it tucks its eyes right in and peeks out with one; or its two eyes look two ways at once and then at each other;
+    /// or a gust tips its pot and it rights itself. Rare: its seedling flowers, a bud opening into a small white flower; it
+    /// beams, wiggles its eyes, a petal falls, and the flower folds shut. A tap makes it flinch. At night (brief 113,
+    /// George: "Why do the snail's eyes become lines at night?"; round 23, brief 119: "Tuck's eyes should still droop down
+    /// far at night ... He also shouldn't smile while sleeping, that's creepy") its stalks wilt forward like flower stems,
+    /// each a crook in the dark above its head, three up from its root, over and down, its shut eye hanging from the end (a
+    /// small pale ball, a dark lid line across it), and no mouth; its seedling's leaves fold up. Dreaming, the front crook
+    /// stirs up a pixel; breathing, the crooks and their hanging eyes rise with its shell; woken, the front stalk
+    /// straightens up as by day and its eye opens. It is the one that likes the rain: eyes up to the sky (brief 119:
+    /// stretched a pixel taller, a bead of rain on each eye's shoulder, a bead in the cup of its seedling's leaves), its
+    /// leaves held up to drink; a drop falls into a leaf and it shakes itself from head to tail, and rain drips off its
+    /// pot's rim. In snow its eyes come down and a little snow sits on its pot and leaves; a flake on its eye makes it
+    /// shiver. A start at thunder; on a clear day it basks. In snow (brief 113, COMMON's snow: powder in three tones, never
+    /// a cap) a dusting lies on its pot's rim where nothing hangs over it, on the tops of its leaves and its head, and a
+    /// fleck on the top of each eye; deeper it drifts, up to three deep at the rim's ends, its leaves still showing (brief
+    /// 119: a little more at each depth, on the rim, its head and the end of its tail behind the pot), until it shrugs it
+    /// all off in one go; asleep, it gathers on its folded seedling and shut eyes by morning. On a hot day its seedling
+    /// wilts and so does it: it pants, and tips its pot forward over its head for shade.
     static let tuck: CompanionCharacter = CompanionCharacter(
         id: "tuck",
         name: "Tuck",
