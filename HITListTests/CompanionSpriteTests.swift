@@ -390,8 +390,9 @@ final class CompanionSpriteTests: XCTestCase {
 
     func testDrawnCrispWithOnlyItsOwnColours() throws {
         // At 3x, every device pixel is exactly a sprite ink or clear: nothing blurred or half-shifted. (A see-through
-        // character's pixels are checked at their opacity in `CompanionPhaseTests`.)
-        for character in CompanionCharacter.all where character.seeThrough == 0 && !character.inks.contains(.veil) {
+        // character's pixels are checked at their opacity in `CompanionPhaseTests`; round 24: a light's halo is checked
+        // in `CompanionLightTests`, so here the light is put out.)
+        for character in CompanionCharacter.all.map(\.unlit) where character.seeThrough == 0 && !character.inks.contains(.veil) {
             let inks = CompanionInks(palette: .slate)
             let allowed = Set(character.inks.map { CompanionInks.rgb(inks.hex[$0]!) })
             let flourish = character.field.flourish

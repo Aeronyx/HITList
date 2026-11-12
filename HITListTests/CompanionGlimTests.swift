@@ -466,10 +466,14 @@ final class CompanionGlimTests: XCTestCase {
                 let sprite = CompanionSprite(character: glim, pose: .init(frame: frame, mirrored: false), inks: inks)
                 let pixels = try render(sprite, scale: 3)
                 XCTAssertEqual(pixels.width, glim.width * 6)
+                // Round 24 (brief 121): its lantern glows; within two pixels of it the halo lies over the clear and the
+                // body. The lantern itself and its eyes stay exact.
+                let lit = (0..<glim.height).flatMap { y in (0..<glim.width).filter { rows[y][$0] == "w" }.map { (x: $0, y: y) } }
                 for y in 0..<glim.height {
                     for x in 0..<glim.width {
                         let px = pixels.at(x * 6 + 3, y * 6 + 3)
                         let c = rows[y][x]
+                        if !"wkl".contains(c), lit.contains(where: { abs($0.x - x) <= 2 && abs($0.y - y) <= 2 }) { continue }
                         guard let ink = CompanionInk(rawValue: c) else {
                             XCTAssertEqual(px.alpha, 0, "\(palette.id) \(name) (\(x), \(y))")
                             continue
