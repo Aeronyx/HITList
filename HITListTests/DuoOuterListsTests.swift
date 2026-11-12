@@ -67,6 +67,28 @@ final class DuoOuterListsTests: XCTestCase {
         XCTAssertGreaterThan(phone, phoneWide)
     }
 
+    // MARK: Item 4: the island's labels at every text size
+
+    func testTheUprightIslandsLabelsStayInsideTheirCells() {
+        XCTAssertEqual(IslandMetrics.labelSizeCap(.vertical), .large, "upright: the default size and no larger")
+        XCTAssertEqual(IslandMetrics.labelSizeCap(.horizontal), .xLarge, "the bottom island as before")
+        XCTAssertLessThanOrEqual(IslandMetrics.sideLabelWidestAtDefault, IslandMetrics.sideLabelRoom,
+                                 "\"Upcoming\" inside the pill's width")
+        #if os(iOS)
+        let font = try? XCTUnwrap(UIFont(name: HITFont.postScriptName(.semibold), size: 11))
+        if let font {
+            let widest = MobileTab.allCases.map { ($0.title as NSString).size(withAttributes: [.font: font]).width }.max() ?? 0
+            XCTAssertEqual(widest, IslandMetrics.sideLabelWidestAtDefault, accuracy: 0.6, "measured in Inter SemiBold 11")
+            XCTAssertLessThanOrEqual(widest, IslandMetrics.sideLabelRoom)
+            let xl = try? XCTUnwrap(UIFont(name: HITFont.postScriptName(.semibold), size: 13))
+            if let xl {
+                let atXL = ("Upcoming" as NSString).size(withAttributes: [.font: xl]).width
+                XCTAssertGreaterThan(atXL, IslandMetrics.sideLabelRoom, "why the cap: at XL it outgrew the cell")
+            }
+        }
+        #endif
+    }
+
     // MARK: Helpers
 
     private func crowdedTask(labels names: [String], crowded: Bool = true, hasTime: Bool = true) throws -> (ModelContainer, TaskItem) {

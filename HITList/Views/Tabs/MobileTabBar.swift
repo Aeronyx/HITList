@@ -88,6 +88,18 @@ enum IslandMetrics {
     static var sideChromeHeight: CGFloat { bottomGap + sideAddButtonSize.height + sideAddButtonGap + sideHeight }
     /// The narrowest bar column that holds the island with air on both sides.
     static var sideColumnWidth: CGFloat { sideWidth + 2 * 4 }
+
+    /// The largest text size a tab's label follows (brief 106). Upright the island is 66 pt wide: at the default size
+    /// "Upcoming" is 53.7 pt (Inter SemiBold 11), at XL 63.6, which ran to both of the island's edges, so the upright
+    /// labels keep the default size. At the bottom a tab's cell is about 87 pt on an iPhone 16 and XL's 63.6 fits.
+    static func labelSizeCap(_ axis: Axis) -> DynamicTypeSize {
+        axis == .vertical ? .large : .xLarge
+    }
+
+    /// The upright label's widest, "Upcoming", at the default size, and the room it has: the cell's width less the pill's
+    /// inset on both sides.
+    static let sideLabelWidestAtDefault: CGFloat = 53.7
+    static var sideLabelRoom: CGFloat { sidePillWidth }
 }
 
 /// Where the iPhone shell's island and "+" stand (brief 50). Apple's iPhone Duo guidelines: "Follow the
@@ -272,6 +284,11 @@ struct MobileTabBar: View {
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(selection == tab ? [.isButton, .isSelected] : .isButton)
             .accessibilityIdentifier("tab-\(tab.rawValue)")
+            // The labels stop growing (`labelSizeCap`); at an accessibility text size a long press shows the tab large,
+            // as the system's tab bars do.
+            .accessibilityShowsLargeContentViewer {
+                Label(tab.title, systemImage: tab.symbol)
+            }
         }
     }
 
@@ -315,7 +332,7 @@ struct MobileTabBar: View {
                 .lineLimit(1)
                 // Upright, "Flipboard" and "Upcoming" have the island's 66 pt and no more.
                 .minimumScaleFactor(axis == .vertical ? 0.75 : 1)
-                .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                .dynamicTypeSize(...IslandMetrics.labelSizeCap(axis))
         }
         .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
