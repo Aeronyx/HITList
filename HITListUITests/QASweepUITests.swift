@@ -474,19 +474,21 @@ final class QASweepUITests: XCTestCase {
         dismissPopover()
     }
 
-    /// Where a tap lands on a popover's or a menu's dismissal layer and on nothing else: the middle of the bar's
-    /// row, under the status bar. (The top corner, 6% down, is inside the status bar on an iPhone with a Dynamic
-    /// Island, where the system keeps the tap: on an iPhone 16 every card stayed open and the walk lost its way,
-    /// round 21.)
-    private static let dismissalPoint = CGVector(dx: 0.5, dy: 0.1)
-
     private func dismissPopover() {
-        app.coordinate(withNormalizedOffset: Self.dismissalPoint).tap()
+        // A tap in the top corner lands on the popover's dismissal layer, not on the card underneath.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.06)).tap()
         pause(0.8)
+        // On an iPhone with a Dynamic Island that corner is inside the status bar and the system keeps the tap (on an
+        // iPhone 16 every card stayed open and the walk lost its way, round 21): while the popover's own dismissal
+        // layer is still up, tap it under the status bar instead.
+        if app.otherElements["PopoverDismissRegion"].firstMatch.exists {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap()
+            pause(0.8)
+        }
     }
 
     private func dismissMenu() {
-        app.coordinate(withNormalizedOffset: Self.dismissalPoint).tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.06)).tap()
         pause(0.6)
     }
 
