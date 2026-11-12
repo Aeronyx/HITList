@@ -231,7 +231,8 @@ struct BoltTruth: Equatable {
     /// What a beat that iCloud answered found, from the comparison of this device with iCloud (nil while the first read
     /// of iCloud's records is still running) and the mirror's own state at the answer. A difference that its own recent
     /// change explains is not counted: the export that carries it may not have started.
-    /// - `oldestUnsentSave`: the oldest local save no export has covered (`SyncWatchdog`), and `unsentSaves` how many.
+    /// - `oldestUnsentSave`: the oldest local save no export has covered (`SyncWatchdog`), and `unsentSaves` how many
+    ///   records those saves changed (`SyncWatchdog.waitingRecords`: one save of 46 tasks is 46 changes).
     /// - A record here that iCloud lacks or holds older is excused while its own `updatedAt` is younger than the grace (a
     ///   new task, an edit, on its way out). Another record's save excuses nothing (16:13:36 on 2026-11-11: a profile merge
     ///   at launch once excused six old records, and the bolt filled).

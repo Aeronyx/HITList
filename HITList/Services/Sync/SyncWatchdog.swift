@@ -6,10 +6,13 @@ enum SyncSignal: Equatable, Sendable {
     case eventStarted(id: UUID, type: SyncEventType, at: Date)
     /// `startedAt` is the event's own start date (the start notification can be missed).
     case eventEnded(id: UUID, type: SyncEventType, startedAt: Date, succeeded: Bool, error: String?, at: Date)
-    /// A local save that changed at least one object, so an export has to follow.
-    case localSave(at: Date)
-    /// A CloudKit push for this app's container, so an import has to follow.
-    case push(at: Date)
+    /// A local save that changed at least one object, so an export has to follow. `records`: how many objects it
+    /// changed, for the words of what is waiting (brief 95: George's Mac saved 46 tasks in one save).
+    case localSave(at: Date, records: Int = 1)
+    /// A CloudKit push for this app's container, so an import has to follow. `inBackground`: it woke an iOS app in the
+    /// background, where iOS decides when the mirror imports (brief 95: all five "Import overdue" errors in George's
+    /// iPhone log were such pushes, each imported once the app was in front).
+    case push(at: Date, inBackground: Bool = false)
     /// The app became active after `idle` seconds away (nil: unknown, e.g. the first activation).
     case activated(at: Date, idle: TimeInterval?)
     case network(online: Bool, at: Date)
@@ -177,6 +180,8 @@ struct SyncWatchdog: Sendable {
     private struct Pending: Equatable, Sendable {
         /// Save or push times not yet covered, oldest first.
         var times: [Date]
+        /// How many records each of `times` changed (1 for a push), kept beside it.
+        var records: [Int] = []
         /// When it becomes overdue; nil while paused or once reported.
         var deadline: Date?
         var overdue = false
@@ -195,6 +200,11 @@ struct SyncWatchdog: Sendable {
     private(set) var accountAvailable: Bool?
     private(set) var accountDescription: String?
     private(set) var isSuspended = false
+    /// The pushes waiting arrived with the app in the background: past the 5 s they wait for the front without an error.
+    private(set) var importsWaitForFront = false
+
+    /// Why an import waits after a push that found the app in the background.
+    static let inBackgroundReason = "the app is in the background; iOS chooses when the mirror imports"
     private(set) var setup: Setup = .pending
     private var flights: [UUID: Flight] = [:]
     private var exports: Pending?
@@ -247,6 +257,8 @@ struct SyncWatchdog: Sendable {
 
     /// Saves and pushes not yet covered by an export or import.
     var waitingSaves: Int { exports?.times.count ?? 0 }
+    /// The records those saves changed: what the bolt's words count ("Sending 46 changes to iCloud…").
+    var waitingRecords: Int { exports?.records.reduce(0, +) ?? 0 }
     /// The oldest save no export has covered yet (brief 95: past the grace, the bolt isn't confirmed).
     var oldestWaitingSave: Date? { exports?.times.first }
     var waitingPushes: Int { imports?.times.count ?? 0 }
@@ -305,15 +317,16 @@ struct SyncWatchdog: Sendable {
             }
             return findings
 
-        case let .localSave(at):
+        case let .localSave(at, records):
             if exports == nil, let start = lastExportStart, let end = lastExportAt,
                start >= at.addingTimeInterval(-rules.exportSlack) {
                 return [.exportOnTime(latency: end.timeIntervalSince(at), saves: 1)]
             }
             let blocked = waitBlockedReason, window = rules.exportWithin, cap = rules.maxWaiting
-            return Self.add(at, to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
+            return Self.add(at, records: max(1, records), to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
 
-        case let .push(at):
+        case let .push(at, inBackground):
+            importsWaitForFront = inBackground
             if imports == nil, let start = lastImportStart, let end = lastImportAt,
                start >= at.addingTimeInterval(-rules.importSlack) {
                 return [.importAfterPush(latency: max(0, end.timeIntervalSince(at)), pushes: 1)]
@@ -322,6 +335,11 @@ struct SyncWatchdog: Sendable {
             return Self.add(at, to: &imports, wait: .import, window: window, blocked: blocked, cap: cap)
 
         case let .activated(at, idle):
+            // In front: a push that waited in the background gets its five seconds from now.
+            if importsWaitForFront {
+                importsWaitForFront = false
+                if waitBlockedReason == nil { Self.restart(&imports, at: at, window: rules.importWithin) }
+            }
             guard let idle, idle >= rules.activationMinimumIdle, waitBlockedReason == nil else { return [] }
             activation = (at, at.addingTimeInterval(rules.activationWindow))
             return []
@@ -366,10 +384,18 @@ struct SyncWatchdog: Sendable {
                                                context: context(now)))
             }
             if var pending = imports, !pending.overdue, let deadline = pending.deadline, deadline <= now {
-                pending.overdue = true
                 pending.deadline = nil
+                if importsWaitForFront {
+                    // Not an error: the clock starts again when the app is in front (`.activated`, `.resumed`).
+                    if !pending.reportedWaiting {
+                        pending.reportedWaiting = true
+                        findings.append(.waiting(.import, reason: Self.inBackgroundReason, count: pending.times.count))
+                    }
+                } else {
+                    pending.overdue = true
+                    findings.append(.importOverdue(pushes: pending.times.count, context: context(now)))
+                }
                 imports = pending
-                findings.append(.importOverdue(pushes: pending.times.count, context: context(now)))
             }
         }
         if let activation, activation.deadline <= now {
@@ -448,11 +474,15 @@ struct SyncWatchdog: Sendable {
 
     // MARK: Helpers
 
-    private static func add(_ at: Date, to pending: inout Pending?, wait: Wait, window: TimeInterval, blocked: String?,
-                            cap: Int) -> [Finding] {
+    private static func add(_ at: Date, records: Int = 1, to pending: inout Pending?, wait: Wait, window: TimeInterval,
+                            blocked: String?, cap: Int) -> [Finding] {
         var p = pending ?? Pending(times: [], clockFrom: blocked == nil ? at : nil)
         p.times.append(at)
-        if p.times.count > cap { p.times.remove(at: 1) }
+        p.records.append(records)
+        if p.times.count > cap {
+            p.times.remove(at: 1)
+            p.records.remove(at: 1)
+        }
         var findings: [Finding] = []
         if !p.overdue && p.deadline == nil {
             if let reason = blocked {
@@ -477,6 +507,7 @@ struct SyncWatchdog: Sendable {
         guard let oldest = covered.first else { return [] }
         let result = finding(endedAt.timeIntervalSince(oldest), p.overdue, covered.count)
         p.times.removeFirst(covered.count)
+        p.records.removeFirst(min(covered.count, p.records.count))
         if p.times.isEmpty {
             pending = nil
         } else {
