@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-19.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-21.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -53,6 +53,15 @@ How George works with you:
 - **George's phone is an iPhone 16** (393 × 852 pt); the suites run on an iPhone 17 simulator (402 × 874). Do the
   screenshot pass on an iPhone 16 simulator (`xcrun simctl create HITList-sup16 "iPhone 16"`): a screen that "fits an
   iPhone 17" has 22 pt less room on his.
+- **The iPhone Duo** (a friend's phone): `xcrun simctl create <name> "iPhone Duo"` boots folded, on the outer display
+  (about 466 × 678 pt, the system's bar column down its trailing edge); `simctl io <udid> screenshot
+  --display=primary` (it has two displays, so `--display` is required). The inner display (669 × 951 pt) needs Device
+  Hub's fold (`/Applications/Xcode.app/Contents/Applications/DeviceHub.app`; Xcode 27 has no Simulator app), which
+  lists simulators through CoreDevice: in round 21 its per-user service was stuck on an old list and the inner display
+  was never reached (`killall -u "$USER" CoreDeviceService` is George's to run; the procedure is
+  `108-duo-inner/unfold.sh` in the notes folder). Until then `-duoStandIn YES -duoStandInSize inner` on an iPad mini
+  draws the app at the inner display's size. Brief 93's walk (`QASweepUITests`, `TEST_RUNNER_HITLIST_QA=1`) photographs
+  every screen of whatever it runs on.
 - Simulator: iPhone 17, UDID `03F99117-3466-4810-A711-AF52514F6514`. Build with
   `xcodebuild build -project HITList.xcodeproj -scheme HITList -configuration Debug -destination
   'platform=iOS Simulator,id=03F99117-3466-4810-A711-AF52514F6514' -derivedDataPath build.noindex/sim
@@ -165,6 +174,17 @@ does not read at 1x). Deliver such a note with `stop_session`, or it waits until
 sessions still saturate the Mac once they all reach their suites. Before merging a session's early commit, build
 both platforms' test bundles (a Mac-only view in a test broke the iOS bundle for three siblings). Put a newcomer's
 swatch seat and any shared format flag on master yourself, early, so siblings never edit the same table.
+
+Lessons from round 21 (six sessions, overnight): **six sessions that each boot a fresh simulator at once are too
+many for the first half hour** (load 900, 15 GB of swap, SpringBoards crashing, crash dialogs left on George's
+screen): start the drawing sessions first and the simulator-heavy ones twenty minutes later, and tell each to boot
+one simulator at a time. Look at a device nobody has looked at for a week yourself before briefing it (brief 93's
+walk on a Duo simulator took sixteen minutes and turned "poorly designed for his phone" into six named defects). A
+drawing session's own pick can trade George's standard (a face that looks at you) for the brief's idea (reads as a
+gargoyle): send it back at the concept sheet, with a stop. Relay one session's finding to the sibling it concerns
+with a stop as well. `scripts/test.sh` builds into Xcode's default derived data: build the Debug Mac app with
+`-derivedDataPath build.noindex/…` before you look at it, or you are looking at an old one. What's New must name at
+least one real `Settings → Page → Row` path (`testWhatsNewPathsNameRealHomes`).
 
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
@@ -326,7 +346,37 @@ which George may reverse: the bolt's pace (15 s) and its red after two minutes a
 itself; day headers read "Nov 11 · Today · Wednesday"; the repeat menu keeps its seven choices before Custom…; the
 guide is a row in Browse, not a "?" beside the gear; Gargle rather than a redrawn Smudge.
 
-## 8. Where things stand (2026-11-11, round 20 merged)
+From 2026-11-12 (round 21, after 0.9.4): **a companion's moves and its seat are that creature's own.** No idle
+because a creature happens to have the limb for it ("don't be lazy and just have every creature with feet swing
+their feet"): Nod is sleepy, Quill is a cat, Tuck is slow, Hush listens, Glim tends a lantern, Phase is sudden,
+Button is a mushroom (it stands on top, bobs, puffs, rolls, lets go of spores), Gargle is a stone pup (he perches,
+his tail behind the bar, and plays statue). Hush and Nod still hang down over the front; a creature may be in front
+of or behind what it sits on ("great, but no need to overdo it"). Each creature's name is shown under its theme in
+Settings. On the iPhone Duo George gave leave to move and reorganise ("having the confidence to move/reorganize
+certain buttons or features"), and lighter testing per device ("don't feel the need to rerun rigorous tests for
+every version unless required") beside "ensure this is a solid build". "Create build 0.9.5 when ready" was read as
+every round before it: the build is prepared and proven, and George runs the release. The supervisor's own choices
+that round, which George may reverse: on the Duo's outer display a screen's controls sit beside its title and the
+title no longer scrolls away; the island hides while typing and its labels do not grow with the text size; a
+crowded row's labels shorten to "@first +N" before its Group moves to a line of its own (on every iPhone); picker
+cards open above or below their chip by the room; the editor opens at full height on a short screen; "Pick a
+Group" in Review Inbox; search in the sidebar and one gear on the open Duo; a companion on top of the Duo's tab
+island; Gargle's face toward you with the profile as his statue; Button's face in the cap's own rose; the first
+screen of Settings has its groups 20 pt apart to make room for the creatures' names.
+
+## 8. Where things stand (2026-11-12, round 21 merged)
+
+**2026-11-12, round 21 merged for 0.9.5 (Fable 5.2 supervisor), overnight after 0.9.4 (25) was released.** Briefs 103
+to 108 are merged on master (`dev/briefs/ROUND-21.md` has George's message): creatures whose idles are their own,
+Button redrawn small and standing, Gargle redrawn perched with his tail behind the bar (the format's "behind" layer),
+each creature's name under its theme, and the iPhone Duo: the outer display's bar column, its cards and pickers, a
+companion on its tab island, and the inner display's sidebar search, hinge and board (seen only on a stand-in). No
+schema change. George releases with `scripts/release.sh --version 0.9.5 --quick`. Open: the Duo's inner display
+has not been seen for real (CoreDeviceService); why "Shave" was on the iPhone and not the Mac (round 20; Check
+iCloud… on each device would name it). Details, leftovers and what was never seen running are in COMMON's Round 21
+record. The next brief number is 109.
+
+### Round 20 (kept for the record)
 
 **2026-11-11, round 20 merged for 0.9.4 (Fable 5.2 supervisor), the afternoon after 0.9.3 (24) was released.** Briefs
 95 to 102 are merged on master (`dev/briefs/ROUND-20.md` has George's message): the bolt's 30-second rule with the
