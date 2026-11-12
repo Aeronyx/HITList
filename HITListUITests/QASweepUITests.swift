@@ -490,6 +490,12 @@ final class QASweepUITests: XCTestCase {
     private func dismissMenu() {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.06)).tap()
         pause(0.6)
+        // On an iPhone with a Dynamic Island that corner is inside the status bar and the system may keep the tap (on
+        // an iPhone 16 quick add's + menu stayed open and the walk never reached Review Inbox, round 22): a second
+        // tap just under the status bar, in the screen's empty leading margin, closes a menu that is still open and
+        // lands on nothing when it is not.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.075)).tap()
+        pause(0.4)
     }
 
     private func openSettings() {

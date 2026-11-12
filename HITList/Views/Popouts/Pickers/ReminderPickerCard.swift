@@ -129,7 +129,16 @@ struct ReminderPickerCard: View {
                     HITChipRow { timeChips(icons: true) }
                 }
             } else {
-                HITChipRow { timeChips(icons: true) }
+                // The roomy layout: the four times on one row where they fit (the Mac's card), else in the two
+                // columns the choices above them keep (round 22: on an iPhone 16 "8 PM" sat alone on a second row).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { timeChips(icons: true) }
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
+                                        GridItem(.flexible(), alignment: .leading)],
+                              alignment: .leading, spacing: 6) {
+                        timeChips(icons: true)
+                    }
+                }
             }
             let fire = Self.fireText(day: day, time: time, offsetMinutes: offsetMinutes, now: now)
             let clears = time != nil || reminderDate != nil

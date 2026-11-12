@@ -309,7 +309,9 @@ struct InboxProcessView: View {
 
     /// From a tile's sides to its name (brief 115: "Pick a Group" came 6 pt from its tile's sides on the Duo's outer
     /// display): a name wider than that wraps onto a second line at the same size rather than nearing the border.
-    static let tileLabelInset: CGFloat = 10
+    /// 8 pt, the floor for a label inside a button: at 10 "Pick a Group" wrapped on an iPhone 16 as well, between two
+    /// names on one line; at 8 it wraps only on the Duo's narrower tiles.
+    static let tileLabelInset: CGFloat = 8
     static let tileIconHeight: CGFloat = 30
 
     private func action(_ title: String, _ symbol: String, key: String, tint: Color,
