@@ -141,8 +141,8 @@ struct TaskEditorDraft: Equatable {
     }
 
     /// The title as the parser reads it: phrases typed in this editing session, with the stored title's words and
-    /// the switched-off phrases left as plain text. `.live` (the default) is what the editor shows while typing
-    /// (a "!" phrase at the very end waits for a space); Confirm reads `.final`. A task with a time of its own
+    /// the switched-off phrases left as plain text. `.live` (the default) is what the title highlights while typing
+    /// (a "!" phrase at the very end waits for a space); the rows and Confirm read `.final`. A task with a time of its own
     /// lets "!15mb" count without one typed (`QuickAddParser.dueTimeIsSet`).
     func parsed(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live) -> QuickAddResult {
         var parser = parser
@@ -165,8 +165,11 @@ struct TaskEditorDraft: Equatable {
         return result
     }
 
-    /// What the title's phrases set, read against `task` (`TitlePhrases`).
-    func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live) -> TitlePhrases {
+    /// What the title's phrases set, read against `task` (`TitlePhrases`). `.final` (the default) is what Confirm
+    /// saves and so what the editor's rows and pills show while it is typed (brief 127: a friend's "!30mb" at the
+    /// very end of a timed task's title left the Reminder pill on "8:00 PM" until a space came, so it looked dead,
+    /// though Confirm saved it). Only the highlights wait for the space (`parsed(_:for:_:)`, `.live`).
+    func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .final) -> TitlePhrases {
         TitlePhrases(text: title, result: parsed(parser, for: task, mode), dueDate: task.dueDate,
                      hasDueTime: task.hasDueTime, calendar: parser.dateParser.calendar)
     }
