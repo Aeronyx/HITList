@@ -156,11 +156,14 @@ struct TaskRow: View {
                     .accessibilityLabel("Flipboard switch")
             } else if let due = task.dueDate {
                 let tint = task.isCompleted ? Theme.secondaryText : HITColor.due(due, hasTime: task.hasDueTime, now: now)
+                // The date gives way last: the labels after it shorten first on a crowded line (brief 106).
                 if !hidesDay {
                     MetaItem(DueFormatter.text(for: due, hasTime: task.hasDueTime, now: now),
                              systemImage: task.recurrence == nil ? "calendar" : "repeat", tint: tint)
+                        .layoutPriority(1)
                 } else if task.hasDueTime {
                     MetaItem(DueFormatter.timeText(for: due), systemImage: task.recurrence == nil ? "clock" : "repeat", tint: tint)
+                        .layoutPriority(1)
                 } else if task.recurrence != nil {
                     MetaItem(nil, systemImage: "repeat", tint: tint)
                         .accessibilityLabel("Repeats")

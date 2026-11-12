@@ -40,8 +40,10 @@ private struct VerticalBarEdgeReader: ViewModifier {
         if #available(iOS 27.1, *) {
             content.modifier(SystemVerticalBarEdge(windowHeight: windowHeight))
         } else {
-            content.environment(\.islandPlacement,
-                                IslandPlacement(verticalBarEdge: DuoDebug.verticalBarEdge, windowHeight: windowHeight))
+            content
+                .environment(\.islandPlacement,
+                             IslandPlacement(verticalBarEdge: DuoDebug.verticalBarEdge, windowHeight: windowHeight))
+                .environment(\.barColumnSide, BarColumnSide(edge: DuoDebug.verticalBarEdge))
         }
         #else
         content
@@ -56,8 +58,11 @@ private struct SystemVerticalBarEdge: ViewModifier {
     @Environment(\.toolbarVerticalEdge) private var edge
 
     func body(content: Content) -> some View {
-        content.environment(\.islandPlacement,
-                            IslandPlacement(verticalBarEdge: DuoDebug.verticalBarEdge ?? edge, windowHeight: windowHeight))
+        let column = DuoDebug.verticalBarEdge ?? edge
+        content
+            .environment(\.islandPlacement, IslandPlacement(verticalBarEdge: column, windowHeight: windowHeight))
+            // The column itself, wherever the island stands (brief 106: on its side the strips still stop at it).
+            .environment(\.barColumnSide, BarColumnSide(edge: column))
     }
 }
 #endif

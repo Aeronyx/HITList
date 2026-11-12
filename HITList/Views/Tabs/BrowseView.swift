@@ -48,7 +48,9 @@ struct BrowseView: View {
                 .submitLabel(.search)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .padding(.horizontal, HITSpacing.l)
+                // On the cards' edges (the system's margin: 16 pt on an iPhone 16, 20 on the Duo's outer display, where
+                // the field sat 4 pt outside the cards on the left and 15 inside them on the right; brief 106).
+                .listMarginPadding()
                 .padding(.top, HITSpacing.xs)
                 .padding(.bottom, HITSpacing.s)
                 .accessibilityIdentifier("browseSearch")
@@ -215,6 +217,7 @@ struct BrowseView: View {
         // `MobileShell` sets its bottom margin for: a `.scrollContent` margin here (0.8.1 to 0.9.0) took the place of
         // the shell's whole margin for this list, so its last row ended behind the island and the "+" (brief 73).
         .contentMargins(.top, 0, for: .automatic)
+        .modifier(CardsClearTheBarColumn())
         .slateList()
         .scrollDismissesKeyboard(.immediately)
     }
@@ -500,6 +503,7 @@ private struct SearchResults: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .modifier(CardsClearTheBarColumn())
             .slateList()
             .scrollDismissesKeyboard(.immediately)
         }
@@ -511,15 +515,15 @@ private struct SearchResults: View {
 /// they scrolled under the trailing status bar). The list's margin is its cards' (the system's, `followsSystemListMargin`).
 private struct ChipsReachTheSafeArea: ViewModifier {
     @Environment(\.listMargin) private var margin
-    /// Beside the Duo's bar column the chips stop at the cards' edge, faded there, rather than running under the battery
+    /// Beside the system's bar column the chips stop at the cards' edge, faded there, rather than running under the battery
     /// ring (brief 106).
-    @Environment(\.listIslandPlacement) private var placement
+    @Environment(\.barColumnSide) private var column
 
     func body(content: Content) -> some View {
         content
             .scrollClipDisabled()
             .mask {
-                if let edge = placement.barColumnEdge {
+                if let edge = column.stops {
                     HStack(spacing: 0) {
                         if edge == .leading { fade(towards: .leading) }
                         Rectangle()
@@ -537,6 +541,22 @@ private struct ChipsReachTheSafeArea: ViewModifier {
         LinearGradient(colors: [.black, .clear], startPoint: edge == .trailing ? .leading : .trailing,
                        endPoint: edge == .trailing ? .trailing : .leading)
             .frame(width: BrowseChipMetrics.fade)
+    }
+}
+
+/// Beside the Duo's bar column (brief 106) the system sets an inset-grouped card's trailing edge on the column itself, 3 pt
+/// from the island, against the 20 pt it leaves on the other side: the cards (and the chips over them) keep the list's
+/// margin on both, the search field's edges. The list stops there (a content margin moved nothing).
+private struct CardsClearTheBarColumn: ViewModifier {
+    @Environment(\.barColumnSide) private var column
+    @Environment(\.listMargin) private var margin
+
+    func body(content: Content) -> some View {
+        if let edge = column.stops {
+            content.padding(edge, margin)
+        } else {
+            content
+        }
     }
 }
 

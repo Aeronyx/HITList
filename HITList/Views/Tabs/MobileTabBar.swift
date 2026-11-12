@@ -126,10 +126,11 @@ enum IslandPlacement: Equatable {
     case side(HorizontalEdge)
 
     /// The window height (safe areas included, so the keyboard changes nothing) below which the column is too
-    /// short: the system's items take up to about 335 pt from the top, the island and the "+"
-    /// `IslandMetrics.sideChromeHeight` (326 pt since brief 63, 290 before) from the bottom, and the two may
-    /// meet in the bottom safe area's 25 or so (600 for the old 290). The outer display upright is 678 pt tall,
-    /// on its side 466.
+    /// short: the system's items took up to about 335 pt from the top while the screen's controls stood in the column,
+    /// the island and the "+" `IslandMetrics.sideChromeHeight` (326 pt since brief 63, 290 before) from the bottom, and
+    /// the two may meet in the bottom safe area's 25 or so (600 for the old 290). Since brief 106 the column holds only
+    /// the status, a call and Back (282 pt at most, `BarColumnBudget`), so the threshold has room to spare; it is kept,
+    /// so nothing changes where the island stands. The outer display upright is 678 pt tall, on its side 466.
     static var sideMinimumWindowHeight: CGFloat { 310 + IslandMetrics.sideChromeHeight }
 
     /// `windowHeight` 0 (not yet measured) goes by the edge alone.

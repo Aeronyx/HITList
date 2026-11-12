@@ -12,13 +12,14 @@ final class DuoOuterListsTests: XCTestCase {
     // MARK: Item 2: strips that scroll sideways stop at the column
 
     func testStripsStopAtTheBarColumnOnly() {
-        XCTAssertNil(IslandPlacement.bottom.barColumnEdge, "every other iPhone: the strips as they were")
-        XCTAssertEqual(IslandPlacement.side(.trailing).barColumnEdge, .trailing)
-        XCTAssertEqual(IslandPlacement.side(.leading).barColumnEdge, .leading)
-        XCTAssertEqual(IslandPlacement.bottom.stripBackgroundEdges, .all)
-        XCTAssertEqual(IslandPlacement.side(.trailing).stripBackgroundEdges, [.top, .bottom, .leading],
+        XCTAssertNil(BarColumnSide.none.stops, "every other iPhone, the iPad, the Mac: the strips as they were")
+        XCTAssertEqual(EnvironmentValues().barColumnSide, .none)
+        XCTAssertEqual(BarColumnSide(edge: .trailing).stops, .trailing, "the outer display upright")
+        XCTAssertEqual(BarColumnSide(edge: .leading).stops, .leading, "the outer display on its side")
+        XCTAssertEqual(BarColumnSide.none.stripBackgroundEdges, .all)
+        XCTAssertEqual(BarColumnSide(edge: .trailing).stripBackgroundEdges, [.top, .bottom, .leading],
                        "the week strip's band stops short of the clock and battery")
-        XCTAssertEqual(IslandPlacement.side(.leading).stripBackgroundEdges, [.top, .bottom, .trailing])
+        XCTAssertEqual(BarColumnSide(edge: .leading).stripBackgroundEdges, [.top, .bottom, .trailing])
         XCTAssertGreaterThan(BrowseChipMetrics.fade, 0)
     }
 
