@@ -55,6 +55,21 @@ final class DuoCardsTests: XCTestCase {
         XCTAssertTrue(PickerKind.reminder.isShort(room: reminder.room))
     }
 
+    func testCardsKeepTheSystemsDistanceFromAnEdgeWithNoSafeArea() {
+        // The Duo's outer display has no safe area above or below; the system kept its popovers 25 pt from both.
+        let outer = PhonePickerPlacement.area(in: CGRect(x: 0, y: 0, width: 466, height: 678),
+                                              top: 0, leading: 0, bottom: 0, trailing: 90)
+        XCTAssertEqual(outer, CGRect(x: 0, y: 15, width: 376, height: 648))
+        // Quick add's Reminder chip once the card has dropped, at 521: 482 pt above it, under the regular 491.
+        let reminder = PhonePickerPlacement.place(anchor: CGRect(x: 153, y: 521, width: 209, height: 30), area: outer)
+        XCTAssertEqual(reminder.room, 482)
+        XCTAssertTrue(PickerKind.reminder.isShort(room: reminder.room))
+        // An iPhone 16's own safe area is deeper than that and stays as it is.
+        let iPhone = PhonePickerPlacement.area(in: CGRect(x: 0, y: 0, width: 393, height: 852),
+                                               top: 59, leading: 0, bottom: 34, trailing: 0)
+        XCTAssertEqual(iPhone, iPhone16)
+    }
+
     func testEditorReminderCardGoesAboveItsPillAndShort() {
         let pill = CGRect(x: 160, y: 352, width: 120, height: 30)
         let placed = PhonePickerPlacement.place(anchor: pill, area: duo)

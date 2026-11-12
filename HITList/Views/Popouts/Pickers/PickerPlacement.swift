@@ -93,6 +93,18 @@ enum PhonePickerPlacement {
     static let arrow: CGFloat = 14
     /// The popover keeps this far from the screen's safe area.
     static let margin: CGFloat = 10
+    /// And this far (plus `margin`) from a screen edge with no safe area: on the iPhone Duo's outer display, which has
+    /// none above or below, the system kept its popovers 25 pt from the top and the foot (measured).
+    static let screenEdge: CGFloat = 15
+
+    /// Where a card may go: the screen inside its safe area, and never nearer its top or foot than `screenEdge`.
+    static func area(in screen: CGRect, top: CGFloat, leading: CGFloat, bottom: CGFloat, trailing: CGFloat) -> CGRect {
+        let top = max(top, screenEdge)
+        let bottom = max(bottom, screenEdge)
+        return CGRect(x: screen.minX + leading, y: screen.minY + top,
+                      width: max(0, screen.width - leading - trailing),
+                      height: max(0, screen.height - top - bottom))
+    }
 
     /// `anchor`: the chip; `settle`: how far it will move down before the card is up (quick add's card drops with the
     /// keyboard); `area`: the screen inside its safe area (on the Duo's outer display, without the bar column), in the

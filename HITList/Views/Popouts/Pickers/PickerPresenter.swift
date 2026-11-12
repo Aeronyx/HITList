@@ -256,7 +256,9 @@ final class PickerAnchorProbe {
     func placement(for kind: PickerKind, settleInset: CGFloat?) -> PhonePickerPlacement.Result? {
         guard let view, let window = view.window else { return nil }
         let anchor = view.convert(view.bounds, to: window)
-        let area = window.bounds.inset(by: window.safeAreaInsets)
+        let insets = window.safeAreaInsets
+        let area = PhonePickerPlacement.area(in: window.bounds, top: insets.top, leading: insets.left,
+                                             bottom: insets.bottom, trailing: insets.right)
         let keyboard = KeyboardObserver.shared.heightUnobserved
         let settle = settleInset.map { max(0, keyboard - $0) } ?? 0
         return PhonePickerPlacement.place(anchor: anchor, area: area, settle: settle)
