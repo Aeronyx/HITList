@@ -84,7 +84,10 @@ struct InlineDiscardRow: View {
                 }
             }
             .padding(.horizontal, padding)
-            .padding(.vertical, HITSpacing.m)
+            // Under the buttons the card's own padding, as above its title, so they sit clear of its rounded foot
+            // (brief 114; the Switchboard card's Discard and Delete rows match, brief 115).
+            .padding(.top, HITSpacing.m)
+            .padding(.bottom, padding)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Self.question)
