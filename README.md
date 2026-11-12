@@ -26,7 +26,8 @@ HITList is in beta on TestFlight.
 - **Filters.** `(p1 | p2) & next 7 days & !@waiting`, `#Work & no date`, `due before: next mon`. A saved
   filter is a list like any other.
 - **Views.** Inbox, Today, Upcoming (a list on iPhone, a seven-day board on Mac and iPad), Browse, and
-  Flipboard: a wall of switches for recurring chores that turn red again when they come due.
+  Flipboard: a wall of switches for recurring chores that turn red again when they come due, grouped into
+  Switchboards that scroll sideways with a light for every switch.
 - **Sub-tasks, repeats, reminders, deadlines.** Repeats keep their wall-clock time across daylight-saving
   changes and land on the right day at month ends. A task due on a day stays on that day in every time
   zone, and the lists catch up by themselves when the zone or the day changes.
@@ -38,8 +39,8 @@ HITList is in beta on TestFlight.
 - **System integration.** Siri and Shortcuts, Spotlight, local notifications, calendar events beside
   your tasks, and layouts for the foldable iPhone.
 - **Companions.** A small pixel creature for each of the eight themes sits on the search field or the
-  add button: it idles in its own way, sleeps at night and shows the weather outside on itself. They can
-  be switched off.
+  add button: it idles in its own way, sleeps at night and shows the weather outside on itself (rain beads
+  on it and pools at its feet). They can be switched off.
 
 ## How it is put together
 

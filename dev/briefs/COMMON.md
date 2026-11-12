@@ -577,6 +577,78 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 24 record (2026-11-12, 11:45 to about 15:20 Eastern; sessions 121–126 merged for 0.9.8)
+0.9.7 was held back; George's notes came at about 11:45 (`ROUND-24.md`). The three water inks went onto master at
+12:00, six sessions started at 12:02, the five drawing ones were in by 12:50 and the Flipboard's at 14:05. George
+asked for a pause at 13:00 for a meeting ("Come to a stopping point … we'll pick up in a bit and merge the
+Flipboard") and was back at 13:13; the sessions worked through it and nothing was merged meanwhile. No schema change.
+- **The supervisor's own**: `CompanionInk.water`, `.waterLight`, `.waterDeep` (`p` #4CA6FF, `h` #DDF1FF, `u`
+  #1F6FE0; `weatherInks` are never among a creature's own colours); sketches made in the sessions' first ten
+  minutes with `round-24/draw/sk.py` and sent as rows with a stop: Tuck asleep (his day head, the eye balls shut,
+  a row lower and a pixel further apart on one-pixel stalks), Nod's eyes (two pixels tall), Nod's rain (0.9.6's
+  canopy with a four-pixel handle; a longer shaft read as 0.9.7's wire again); every sheet forwarded to George;
+  `testFlipboardLightsStayOnTheirSwitches` rewritten for rows (one height everywhere, one width in the grid, one in
+  the rows); the notes.
+- **121 `phase-ether`** (xhigh, about 45 minutes, one note on the halo): the engine's `glow:` (inks that cast a
+  halo of their own colour about a pixel wide, over the body and under the crisp pixels, on a larger canvas laid out
+  at the sprite's size), `Frame(name:, fade:, light:, rows:)`, a see-through body thinning down its own rows,
+  Reduce Transparency drawing it solid, and a new ink `e` (the accent lightened). A character with no glow draws
+  as before (`CompanionLightTests`, Nod and Button pixel for pixel). Phase, pick b: 72% at the crown to under a
+  quarter at the hem, the hem's last row a checker of veil, the tail thinning to a wisp, the same eyes turned over
+  (lit, a dark pupil low) with the halo; his bob thins and fills him, a tap dips him twice, the phase fades him
+  from the hem up to his eyes alone and back; asleep at 0.8; one mound of snow; blue drops inside him and a puddle
+  under him. Glim: `glow: [.warm]`, halved asleep.
+- **122 `tuck-rest`** (xhigh, 25 minutes): the rain still is his `rest` with water only (a puddle lapping the front
+  of his foot, the pot brimming, beads on a leaf, his back and a stalk's root, one hanging under the rim); a drop
+  falls from a leaf into the pot; 0.9.7's stretch is one glad move in a routine; the 31 frames drawn for 0.9.7's
+  raised eyes are retired and his clearance is 34 pt again. Asleep is the supervisor's frame, with its breath, a
+  dream, the reply to a tap, the three snow depths and a rain still.
+- **123 `quill-nod`** (xhigh, about 48 minutes): 0.9.6's face on all 143 of Quill's frames, then three pixels
+  friendlier (the M's centre stroke gone, a small mouth); his rain wet, and a rain still asleep under his own tail.
+  Nod's eyes on the 57 frames where they are open; 0.9.6's canopy held, beads, a drop off the right tip; the puddle
+  is two tiny pools beside his seat (the supervisor's single puddle hung over the "+"'s curve); tip, peek, duck at
+  thunder; asleep under it. 0.9.7's dome, wire, twirl and gust are gone. Five idles each do not play in the rain.
+- **124 `gargle-button-rain`** (xhigh, 38 minutes): beads on Gargle's wing and snout, a drop that runs from the wing
+  tip over his nose to his chin, a puddle under his paws, `sleepRain`; `snow2` and `snow3` redrawn from `snow` so
+  that only the drifts grow (his back's hollow, the wing's slope, his nape, his toes) and his horns, brow, eye and
+  snout stay stone. Button: beads on the cap, a drop at each low point of the rim, a puddle round his boots (the
+  only flat under him), a second drop down his side, `sleepRain`. `ThemeCompanion.Placement.onFloor` and Button's
+  seat.
+- **125 `hush-glim-rain`** (xhigh, 33 minutes): Hush: beads on the hood, a drop off its right tip, a puddle round
+  his right foot in the deep tone with a glint; his thunder flick no longer drops the hood; asleep in the rain as he
+  sleeps. Glim: beads on an ear, his head and cheek, a drop off his left ear, a puddle on his left; never water on
+  or beside the lantern; asleep curled round it. 75 of Hush's frames stay pinned to `v0.9.6`.
+- **126 `flipboard-rows`** (xhigh, about two hours, one note): `SwitchRow` (a board is one sideways row resting on
+  tile edges, the dashed Add outline last, tiles sized by `FlipboardLayout.rowTileWidth`: whole tiles and a fifth
+  of the next, one and a half at the accessibility sizes), `BoardPanel` (the card surface at half strength, a
+  hairline, corners 30, a trace behind the tiles that is green when the board is all on), `BoardLightsStrip` (dots,
+  then segments, then a bar with a count, by the room the header has; a tap scrolls to the switch; rings and stubs
+  with Differentiate Without Color; one VoiceOver element), the "Ungrouped" header that folds the loose grid
+  (`AppGroup.defaults`), the switch card under its row on the Mac and iPad, a chevron that pages a row on the Mac.
+  The add jitter: `SwitchLanding` jumped to its start in a 1 ms linear keyframe and the spring after it took that
+  speed (the tile drew mirrored, double and tiny); now a `MoveKeyframe`, a softer spring, and on iPhone the tile
+  hidden until the card has gone. Also fixed: after Add the Mac's card reset to "No Switchboard".
+- **What worked**: the water recipe in this file (five sessions, one look); sending rows instead of words; all
+  drawing at xhigh; the UI suite on an integration checkout while the last session finished.
+- **What cost time**: nothing much. The first Flipboard design cut a tile at nine-tenths (the brief asked for two
+  things that collide); an older UI test pinned one tile width for the whole screen.
+- **Final counts** (on `775dc77`, the last code commit; only documents after it): core 704, Mac 1967 (1 skipped),
+  iOS 1930 (1 skipped). The UI suite (138 tests: 76 passed, 61 skipped as on demand or Duo only) ran on an
+  integration checkout whose tree is master's (`git diff` empty) and failed once, in
+  `testFlipboardLightsStayOnTheirSwitches`, which still asked for one tile width on the whole screen; rewritten, it
+  passes on the iPhone 16 and iPhone 17 simulators. On a Duo simulator `DuoCardsUITests`, `DuoColumnUITests`,
+  `ScreenInsetsUITests` and `CompanionIslandUITests` pass (20 tests, 10 skipped as on demand). A Release archive and export of both platforms pass the 44 checks
+  (`build.noindex/package-proof-143502`: iOS 16,589,233 bytes, macOS 32,241,654 bytes). The cast was photographed
+  in the app on an iPhone 16 simulator (0.9.7 beside 0.9.8: `build.noindex/round-24/handover/`) and in a Debug Mac
+  app on the search field.
+- **Never seen running**: any of it on a real phone; a row scrolled by trackpad or shift-wheel on a real Mac (the
+  chevron was); the Duo's inner display; the Flipboard on the Duo beyond the outer display in a simulator.
+- **Open in the code**: at the largest accessibility text size the ungrouped tiles' names and the floating switch
+  card still truncate (as before this round); Glim's heat bead and the drips in his snow `melt` are still in his own
+  inks; one Flipboard UI test waits a minute after each long press (the app does not report idle there).
+- **Side stores to delete by hand** (the Mac's app-group folder): `HITList-s121*`, `HITList-s123*` to
+  `HITList-s126*`, `HITList-sup24*`. Never `HITList.store`.
+
 ## Round 23 record (2026-11-12, 09:55 to about noon Eastern; sessions 116–120 merged for 0.9.7)
 0.9.6 (26) was released about 09:30; George's notes on its creatures came at 09:50 (`ROUND-23.md`). Five drawing
 sessions started at 10:00 and were all in by 10:45. **Drawings only**: since `v0.9.6` nothing changed outside

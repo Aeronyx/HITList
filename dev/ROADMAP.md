@@ -5,23 +5,28 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.7 (round 23, 2026-11-12, the morning 0.9.6 was released)
+## Now: 0.9.8 (round 24, 2026-11-12, the afternoon 0.9.7 was held back)
 
-George's notes on 0.9.6's creatures: keep what he has seen, change little, make the weather plainer.
+George's notes on 0.9.7 (never released; its work ships in 0.9.8): rain that is rain, a ghost you can see through,
+eyes that are not dots, and Switchboards in rows.
 
 | Brief | What | Status |
 |---|---|---|
-| 116 `glim-subtle` | Glim as 0.9.5 drew him, with nine pixels of new shading; his lantern held in his lap in rain and snow | merged, awaiting release |
-| 117 `gargle-pup` | Gargle awake as his night sprite with his eye open; under his wing in the rain | merged, awaiting release |
-| 118 `phase-sheet` | Phase as one floating sheet: no hands, no horn, a simpler face | merged, awaiting release |
-| 119 `tuck-quill` | Tuck asleep with his eyes hanging low and no smile; Quill's 0.9.5 face on his tabby coat | merged, awaiting release |
-| 120 `nod-button-weather` | Nod holds an umbrella up; Button pulls his cap down; deeper powder | merged, awaiting release |
-| supervisor | Hush pinned to 0.9.6's frames; Tuck's sleeping frame drawn by hand | merged, awaiting release |
+| 121 `phase-ether` | Phase see-through with glowing eyes and opacity in his moves; the engine's glow, fade and thinning; Glim's lantern alight | merged, awaiting release |
+| 122 `tuck-rest` | Tuck asleep at rest; in the rain, in a puddle with his pot brimming | merged, awaiting release |
+| 123 `quill-nod` | Quill's 0.9.6 face, three pixels friendlier; Nod's two-pixel eyes; Nod holds 0.9.6's canopy | merged, awaiting release |
+| 124 `gargle-button-rain` | Water on Gargle and Button; Gargle recognisable under deep snow; Button on the floor of his swatch | merged, awaiting release |
+| 125 `hush-glim-rain` | Water on Hush and Glim, nothing else of theirs | merged, awaiting release |
+| 126 `flipboard-rows` | Switchboards as sideways rows on panels with lights; "Ungrouped" folds; the add jitter fixed | merged, awaiting release |
+| supervisor | The three water inks; sketches for Tuck asleep, Nod's eyes and his held canopy; the one-size UI test | merged, awaiting release |
+
+Round 23's briefs (116 to 120: Glim as 0.9.5 drew him, Gargle awake as his night sprite, Phase a floating sheet,
+Hush pinned) are in the same release.
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's eye on round 23's creatures** (Tuck asleep and Phase most of all: both were the supervisor's
-   reading of a few words), **and his friend's on the Duo** (rounds 21 and 22: the title row's controls, the
+1. **George's eye on round 24's choices** (`dev/SUPERVISOR.md` §7: Nod's handle, Tuck asleep, the rows' narrower
+   tiles; a row scrolled by trackpad on a real Mac), **and his friend's on the Duo** (rounds 21 and 22: the title row's controls, the
    cards, the companion on the tab bar; whether the title should stay put while a list scrolls); quick add's chips
    on two or three lines.
 2. **The Duo's inner display, for real.** Nobody has seen it since October: Device Hub could not list the round's
