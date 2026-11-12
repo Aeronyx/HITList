@@ -21,6 +21,10 @@ struct CompanionInks: Equatable {
     static let snowHex = "#F3F7FF"
     static let snowBlueHex = "#BFD2F4"
     static let snowShadeHex = "#8CA5D8"
+    /// Water's three tones (round 24), the same in every theme: a clear rain blue, its glint, its deep edge.
+    static let waterHex = "#4CA6FF"
+    static let waterLightHex = "#DDF1FF"
+    static let waterDeepHex = "#1F6FE0"
 
     init(palette: ThemePalette) {
         let h = palette.hex
@@ -37,6 +41,8 @@ struct CompanionInks: Equatable {
             (.veil, Self.mix(h.accent, h.background, Self.veilDusk)),
             // Snow is snow in every theme (round 22): a lit crest, a pale blue body, a deeper blue shade.
             (.snow, Self.snowHex), (.snowBlue, Self.snowBlueHex), (.snowShade, Self.snowShadeHex),
+            // Water is water in every theme (round 24): rain reads as rain because it is blue.
+            (.water, Self.waterHex), (.waterLight, Self.waterLightHex), (.waterDeep, Self.waterDeepHex),
         ]
         hex = Dictionary(uniqueKeysWithValues: pairs)
         colors = Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, Color(hex: $0.1)) })

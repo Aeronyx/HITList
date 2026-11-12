@@ -24,6 +24,9 @@ import HITListCore
 // - Nothing is drawn in the air around a companion, except a single drop or flake it touches, and Button's puff of
 //   spores (round 21, George: "puff around"): at most three pixels within two of its cap, gone within a second,
 //   never in rain or snow, in a routine only.
+// - Water (round 24): in rain the still carries blue beads and a small puddle at the creature's feet in the three
+//   water inks (`p`, `h`, `u`), and now and then a drop runs off it (a gesture with `sky: .rain`); a single falling
+//   drop is the only thing ever drawn in the air.
 // - Snow piles up: in snow the still moves one frame deeper through `snowDeep` every 8 to 14 minutes of showing time,
 //   stopping at the last (kept in memory; it starts again when the sky leaves snow, at a new launch, when night and day
 //   change over). At a depth, what was drawn for `rest` or for `snow` plays only where it leaves that frame's extra
@@ -72,9 +75,20 @@ enum CompanionInk: Character, CaseIterable {
     case snowBlue = "b"
     /// and its shaded side and lone flecks, a deeper blue. Snow is never see-through, on a ghost either.
     case snowShade = "c"
+    /// Water (round 24; George: "the rain is … not blue enough to be clear that it's rain"), three tones that are the
+    /// same in every theme: a drop's or a puddle's body, a clear rain blue,
+    case water = "p"
+    /// its highlight, the glint on a bead or along a puddle,
+    case waterLight = "h"
+    /// and its deep tone: a puddle's shaded edge, the underside of a hanging drop. Water is never see-through.
+    case waterDeep = "u"
 
     /// Fallen snow's three tones (round 22).
     static let snowInks: Set<CompanionInk> = [.snow, .snowBlue, .snowShade]
+    /// Water's three tones (round 24): beads on a creature, a drop running off it, the puddle at its feet.
+    static let waterInks: Set<CompanionInk> = [.water, .waterLight, .waterDeep]
+    /// The weather's own inks, the same on every creature in every theme: never among a creature's own colours.
+    static let weatherInks: Set<CompanionInk> = snowInks.union(waterInks)
 
     /// Clear.
     static let clear: Character = "."
@@ -606,11 +620,12 @@ struct CompanionCharacter: Identifiable {
         return out
     }
 
-    /// The character's own colours: the inks it uses anywhere, without fallen snow's three (`CompanionInk.snowInks`),
-    /// which are the same on every creature and are not counted among a creature's "few colours from the theme".
-    var inks: Set<CompanionInk> { allInks.subtracting(CompanionInk.snowInks) }
+    /// The character's own colours: the inks it uses anywhere, without the weather's (`CompanionInk.weatherInks`:
+    /// fallen snow's three and water's three), which are the same on every creature and are not counted among a
+    /// creature's "few colours from the theme".
+    var inks: Set<CompanionInk> { allInks.subtracting(CompanionInk.weatherInks) }
 
-    /// Every ink in its frames, snow included.
+    /// Every ink in its frames, snow and water included.
     var allInks: Set<CompanionInk> { Set(frames.flatMap { Self.runs(of: $0.rows) }.map(\.ink)) }
 
     /// How opaque `ink` is drawn for this character (brief 101): the veil always see-through, the eyes and glints
@@ -618,7 +633,7 @@ struct CompanionCharacter: Identifiable {
     func opacity(_ ink: CompanionInk) -> Double {
         switch ink {
         case .veil: CompanionInks.veilOpacity
-        case .ink, .light, .snow, .snowBlue, .snowShade: 1
+        case .ink, .light, .snow, .snowBlue, .snowShade, .water, .waterLight, .waterDeep: 1
         case .dark, .mid, .accent, .warm, .glow, .accentDark: 1 - seeThrough
         }
     }
