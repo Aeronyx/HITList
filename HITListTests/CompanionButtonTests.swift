@@ -114,11 +114,14 @@ final class CompanionButtonTests: XCTestCase {
 
     /// Brief 109 (George, of 0.9.4's Button: "he has tiny stubs for feet and it makes no sense for his character's
     /// vibe"): no boot ever moves. In every frame it has, awake or asleep, in every weather and the flourish, the boots'
-    /// row is the resting one, and no idle or routine is named for a boot or a kick.
+    /// row is the resting one (in the rain with the water round them, brief 124: the puddle, a drop falling past), and
+    /// no idle or routine is named for a boot or a kick.
     func testItsBootsNeverSwing() {
         let boots = button.rows("rest")![button.seatRow - 1]
+        let water: Set<Character> = ["p", "h", "u"]
         for frame in button.frames {
-            XCTAssertEqual(frame.rows[button.seatRow - 1], boots, "\(frame.name): the boots planted")
+            let dry = String(frame.rows[button.seatRow - 1].map { water.contains($0) ? CompanionInk.clear : $0 })
+            XCTAssertEqual(dry, boots, "\(frame.name): the boots planted")
         }
         for place in CompanionPlace.allCases {
             let posture = button.posture(place)
@@ -335,7 +338,10 @@ final class CompanionButtonTests: XCTestCase {
                 XCTAssertTrue((3...6).contains(beads), "\(at): beads on the cap, a drop at each end of its rim")
                 for gesture in mode.gestures where gesture.sky == .rain {
                     XCTAssertLessThan(Double(gesture.ticks.count) / button.gestureFPS, 1, "\(at) \(gesture.name)")
-                    for tick in gesture.ticks { XCTAssertEqual(puddle(tick.frame), pool, "\(at) \(tick.frame): the puddle stays") }
+                    // A drop falling past the shoulder may touch the edge row there; the puddle on the flat stays.
+                    for tick in gesture.ticks {
+                        XCTAssertEqual(puddle(tick.frame).filter { (5...14).contains($0) }, pool, "\(at) \(tick.frame): the puddle stays")
+                    }
                 }
                 XCTAssertTrue(button.canDraw(mode.answer, in: .rain, mode: mode, depth: 0), "\(at): the reply to a tap")
             }

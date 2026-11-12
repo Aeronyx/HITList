@@ -314,7 +314,8 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertEqual(String(rain[1][8...13]), "dddddd", "its membrane")
         XCTAssertEqual(rain[5][0], "m", "its tip, down in front of his snout")
         XCTAssertEqual(String([rain[6][0], rain[7][0]]), "hp", "a drop hanging from it, blue (brief 124)")
-        let tops = (0..<gargle.width).map { x in (0..<gargle.height).first { rain[$0][x] != CompanionInk.clear } ?? 99 }
+        // The wing's outline (the beads standing on it, brief 124, are water, not wing).
+        let tops = (0..<gargle.width).map { x in (0..<gargle.height).first { rain[$0][x] != CompanionInk.clear && !"phu".contains(rain[$0][x]) } ?? 99 }
         XCTAssertEqual(tops[0...10].map { $0 }, tops[0...10].sorted(by: >), "it curves up from the tip to the crown")
         XCTAssertGreaterThanOrEqual(String(rain[2][0...16]).components(separatedBy: ".").filter { $0.contains("d") }.count, 3,
                                     "scallops along its lower edge")
