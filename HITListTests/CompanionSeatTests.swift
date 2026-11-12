@@ -222,9 +222,10 @@ final class CompanionSeatTests: XCTestCase {
         return rows.map { pose.mirrored ? Array($0.reversed()) : Array($0) }
     }
 
-    /// The lowest opaque row of a column, or nil.
+    /// The lowest opaque row of a column in front of the host, or nil (what lies behind the host, brief 104, rests on
+    /// nothing: it is drawn only where the host is not).
     static func lowest(_ rows: [[Character]], _ c: Int) -> Int? {
-        rows.indices.last { rows[$0][c] != CompanionInk.clear }
+        rows.indices.last { rows[$0][c] != CompanionInk.clear && !CompanionInk.isBehind(rows[$0][c]) }
     }
 
     /// Where a body overhangs its base flat: two or more columns just past either end of the base whose lowest pixel
