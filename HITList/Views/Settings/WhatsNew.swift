@@ -20,6 +20,16 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.5", items: [
+            "Each companion moves like itself: Nod nods off and rubs his eyes, Quill writes with his tail tip, Tuck leans toward his seedling, Hush listens with one ear, Glim tends his lantern, Phase pops up out of the button.",
+            "Button, Rosé's mushroom, is smaller and sweeter and stands on its feet. Now and then it bobs, puffs up, rolls along the bar or lets go a puff of spores.",
+            "Gargle, Graphite's gargoyle pup, is carved again: he perches on top with his tail tucked behind the bar, and plays statue when he thinks you're watching.",
+            "Each theme shows its companion's name under it in Settings.",
+            "iPhone Duo, closed: a screen's controls sit beside its title, so nothing is drawn on top of the tab bar, and the date and reminder cards open whole.",
+            "iPhone Duo, closed: a companion sits on top of the tab bar.",
+            "iPhone Duo, open: search is in the sidebar, the list and the editor meet at the fold, and Upcoming shows whole days.",
+            "A task's Group is never cut to a letter: on a crowded row it moves to a line of its own.",
+        ]),
         Entry(version: "0.9.4", items: [
             "The sync bolt is filled only when iCloud has confirmed, in the last 30 seconds, that this device and iCloud match. Otherwise it says what it is waiting for.",
             "Check iCloud… in Settings, under iCloud, shows what differs between this device and iCloud, task by task. It changes nothing unless you choose to.",
