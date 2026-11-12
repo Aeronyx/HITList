@@ -66,6 +66,61 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 21 (2026-11-11, overnight; briefs 103–108 in parallel; `ROUND-21.md` says why)
+0.9.4 (25) is released; this round is **0.9.5**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is asleep while you work ("Work freely
+overnight"): nobody answers a question or a system dialog tonight, so decide by your brief and George's principles,
+and write down what you decided. **No schema change this round**, in SwiftData or in CloudKit: a fix that needs one
+stops and reports.
+- Ownership, the creatures: 103 `button-stands` (xhigh) `Characters/Button.swift` and its tests. 104
+  `gargle-perched` (xhigh) `Characters/Gargle.swift` and its tests, and a "behind the host" layer in the format (the
+  frame parsing and `problems` in `CompanionCharacter.swift`, `Views/Companions/CompanionSprite.swift`, the figure,
+  seat and tap area in `CompanionPerch.swift`). 105 `cast-flavor` (xhigh) `Nod`, `Quill`, `Tuck`, `Hush`, `Glim`,
+  `Phase` and their tests.
+- Ownership, the iPhone Duo (George's friend uses one; `round-21/george/duo-outer-flipboard.png` in the shared
+  notes folder is his screenshot): 106 `duo-column` (xhigh) the outer display's shell: `Views/Tabs/MobileShell.swift`,
+  `MobileTabBar.swift`, `ScreenMenu.swift`, the lists and their rows, Browse, the Flipboard. 107 `duo-cards` (xhigh)
+  what opens over a list on the outer display: quick add, the editor, the pickers, the switch card, Review Inbox,
+  Settings and its pages, the sheets. 108 `duo-inner` (xhigh) the inner display: `ContentView.swift`,
+  `Views/Duo/*`, the sidebar shell and the editor column, the board, landscape and the half-open poses. Each
+  brief's own Ownership list is the contract; these lines are the map.
+- Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, the entries in `WhatsNew.swift`, the
+  `SettingsTests` What's New pin, the models' shape, `CompanionCast.swift`, `CompanionSky*.swift`, and the
+  supervisor's own tonight: `ThemeCompanion.swift` and `AppearanceSettingsSection.swift` (each creature's name
+  goes under its theme in Settings; a Duo session that finds the theme grid wrong reports it instead of editing).
+- **The shared notes folder** (outside git; every session can read and write it):
+  `/Users/gtrammell/Library/Application Support/Claude/side-session-notes/local_8995b93d-4779-400a-855f-77db7b4e0b1d/`.
+  Put your pictures and long tables in a folder named after your brief (`106-duo-column/`). This afternoon's
+  reports, pictures and the companions' workshops are there (`100-companions-alive/`, `102-rose-and-graphite/`,
+  `84-companion-routines/workshop/`).
+- **Six sessions share one Mac** (12 cores, 32 GB; eight at once saturated it this afternoon). Build once per
+  platform when you can, prefer `-only-testing` while you iterate, run the three suites once, at the end, and keep
+  your simulator shut down when you are not using it. The drawing sessions draw first and build late. Your own
+  derived data inside your worktree (`build.noindex/…`), your own simulator (`HITList-NN`), your own side store
+  (`HITLIST_STORE_SUFFIX=sNN`). Delete the simulator, quit your Debug Mac app and unregister its extensions
+  (`pluginkit -r`) when you finish.
+- **How much to test** (George tonight: "don't feel the need to rerun rigorous tests for every version unless
+  required", and "Ensure this is a solid build"): look at what you changed where it shows (a Duo session on its Duo
+  simulator, and on an iPhone 16 wherever the code is shared with every iPhone), run the three suites once at the
+  end, and leave the whole UI suite to the supervisor, who runs it on the merged tree. A UI test of your own goes in
+  a file of your own.
+- **George's phone is an iPhone 16** (393 × 852 pt); the suites use the iPhone 17 simulator (402 × 874). The Duo's
+  outer display is about 466 × 678 pt with the system's bar column on its trailing edge, its inner display about
+  669 × 951 pt. Nothing a Duo session changes may make an iPhone 16 or the Mac worse: show the same screen on an
+  iPhone 16 before and after wherever shared code changed.
+- **Pictures are part of the work.** George judges by looking. Every visible change comes with a before and an
+  after at real size, looked at by you, enlarged, as he would: left edges that share a pixel, one size of type
+  per role, a control that looks like what it is, nothing on top of anything else.
+- **A message to the supervisor** (the session that sent you your brief) is for what your brief asks for (a
+  commit's hash, a concept sheet) or for something that blocks you; reply to the message that started you. Carry
+  on meanwhile.
+- Everything in Round 20's, 19's, 18's and 17's blocks below still holds: the CI runner's older Swift (keep mixed
+  `Int`/`Double`/`CGFloat` expressions short, one step per line; guard 27-only symbols with `#if compiler(>=6.4)`),
+  data resilience over speed, no session answers a system dialog or changes a system permission, a Debug build
+  never asks for the location by itself, never a test that reads the wall clock or the device's time zone without
+  injecting it, touch only your own lines of `project.yml`, leave the Debug Mac app's window as you found it, never
+  touch George's `/Applications/HITList.app` or its store.
+
 ## Round 20 (2026-11-11, afternoon; briefs 95–102 in parallel, all eight at once; `ROUND-20.md` says why)
 0.9.3 (24) is released; this round is **0.9.4**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George said "work freely" and is not watching: nobody
