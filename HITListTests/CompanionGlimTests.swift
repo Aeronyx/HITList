@@ -247,9 +247,10 @@ final class CompanionGlimTests: XCTestCase {
     }
 
     /// Brief 91: the weather is told by Glim, not drawn round it. Every still it shows is one shape (nothing floating
-    /// beside it); its flickers add at most the single drop it lets fall. In snow the pile grows on its head and ears,
-    /// never on its warm lantern, keeps the line where it sits, and a shake-off from the deepest pile sends it off.
-    /// On a hot day its light is turned right down and its ears droop.
+    /// beside it); its flickers add at most the single drop it lets fall. In snow (brief 116, COMMON round 22's
+    /// powder) the pile grows on its ears and in the hollow of its hood between them, in the three snow inks, never on
+    /// the light in its lap, nothing hanging, and none of 0.9.5's snow in its own light ink; a shake-off from the
+    /// deepest pile sends it off. On a hot day its light is turned right down and its ears droop.
     func testTheWeatherIsOnIt() throws {
         let mode = glim.field.awake
         let asleep = glim.field.asleep
@@ -263,21 +264,41 @@ final class CompanionGlimTests: XCTestCase {
                 XCTAssertLessThanOrEqual(parts.dropFirst().map(\.count).reduce(0, +), 1, "\(tick.frame): one drop at most")
             }
         }
-        // The pile: a dusting, a cap, a heap, each with more snow on its head; nothing hangs, the light in its lap.
         XCTAssertEqual(mode.snowDeep, ["snowCap", "snowHeap"])
         XCTAssertEqual(asleep.snowDeep, ["sleepSnowCap", "sleepSnowHeap"])
-        let depths = [try XCTUnwrap(mode.snow)] + mode.snowDeep
-        var snowAbove: [Int] = []
-        for name in depths {
-            let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
-            snowAbove.append(rows[0..<7].joined().filter { $0 == "l" }.count)
-            for y in glim.seatRow..<glim.height {
-                XCTAssertEqual(String(rows[y]), String(repeating: ".", count: glim.width), "\(name) row \(y): tail in")
+        for (still, depths) in [("rest", [try XCTUnwrap(mode.snow)] + mode.snowDeep),
+                                ("sleep", [try XCTUnwrap(asleep.snow)] + asleep.snowDeep)] {
+            let plain = try XCTUnwrap(glim.rows(still)).map(Array.init)
+            var snow: [Int] = []
+            for name in depths {
+                let rows = try XCTUnwrap(glim.rows(name)).map(Array.init)
+                snow.append(rows.joined().filter { "sbc".contains($0) }.count)
+                let tones = Set(rows.joined().filter { "sbc".contains($0) })
+                XCTAssertEqual(tones, ["s", "b", "c"], "\(name): three tones")
+                XCTAssertEqual(rows[0..<8].joined().filter { $0 == "l" }.count,
+                               plain[0..<8].joined().filter { $0 == "l" }.count, "\(name): no snow in the light ink")
+                for y in glim.seatRow..<glim.height {
+                    XCTAssertEqual(String(rows[y]), String(repeating: ".", count: glim.width), "\(name) row \(y)")
+                }
+                // Nothing on the light or round it.
+                for y in 0..<glim.height {
+                    for x in 0..<glim.width where "wg".contains(rows[y][x]) {
+                        let around = [(x, y - 1), (x - 1, y), (x + 1, y)]
+                        for (nx, ny) in around where (0..<glim.width).contains(nx) && ny >= 0 {
+                            XCTAssertFalse("sbc".contains(rows[ny][nx]), "\(name) (\(nx), \(ny)): snow on the light")
+                        }
+                    }
+                }
+                // His ears' tips still show: the ears' top rows are his own dark, at every depth.
+                let top = still == "rest" ? 1 : 2
+                XCTAssertEqual(String(rows[top][1...3]), "ddd", "\(name): the left ear's tip")
+                XCTAssertEqual(String(rows[top][10...12]), "ddd", "\(name): the right ear's tip")
             }
-            XCTAssertEqual(String(rows[13][5...8]), "gwwg", "\(name): the light held, nothing on it")
+            XCTAssertEqual(snow, snow.sorted(), "\(still): the pile only grows")
+            XCTAssertEqual(Set(snow).count, snow.count, "\(still): each depth adds snow")
         }
-        XCTAssertEqual(snowAbove, snowAbove.sorted(), "the pile only grows")
-        XCTAssertEqual(Set(snowAbove).count, snowAbove.count, "each depth adds snow")
+        let held = try XCTUnwrap(glim.rows("snow"))[13]
+        XCTAssertEqual(String(held.dropFirst(5).prefix(4)), "gwwg", "the light held, dry")
         let shakeOff = try XCTUnwrap(mode.routines.first { $0.name == "shakeOff" })
         XCTAssertTrue(shakeOff.shakesOff)
         XCTAssertTrue(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 2), "from the heap")
