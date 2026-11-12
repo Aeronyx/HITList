@@ -20,11 +20,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.9.8", items: [
+        Entry(version: "0.9.9", items: [
+            "A reminder typed in a task's title works when the task has a time: type !30mb and the reminder shows before you confirm. One left in a title from before the task had a time lights up when you open the task. And \"tonight\" now means today.",
+            "Graphite has a new companion: Flint, a gryphon cub, in place of Gargle. He preens, pounces on his own tail and tries to fly.",
             "Rain looks like rain: blue drops bead on every companion, one runs off now and then, and a small puddle gathers at its feet, by day and asleep. To switch the weather off: Settings → Extras → Weather.",
-            "Phase is a ghost you can see through. His body thins toward the hem, his eyes glow, and now and then he fades until only his eyes are left. Glim's lantern glows too.",
-            "Nod has taller eyes and holds his little canopy by its handle in the rain. Tuck sleeps at rest with his eyes shut, and sits in a puddle with his pot brimming when it rains.",
-            "Gargle awake is the side-on pup he is asleep, and is still himself under deep snow. Glim is his old self again, and Quill is a touch friendlier.",
+            "Phase is a ghost you can see through, with black eyes: he thins toward the hem, fades and fills as he moves, and looks worried when the snow is deep. Glim's lantern glows.",
+            "Nod has taller eyes and a little canopy over his head in the rain. Tuck sleeps at peace, and sits in a puddle with his pot brimming when it rains. Quill is a touch friendlier.",
+            "Each companion sits its own way on its theme in Settings → Appearance → Themes: Quill asleep on a corner, Flint in the air, Glim with his lantern hanging down.",
             "Flipboard: each Switchboard is one row you scroll sideways, with a light for every switch so you can see at a glance what is still off. Tap a light to jump to its switch. Ungrouped switches fold away.",
         ]),
         Entry(version: "0.9.6", items: [
