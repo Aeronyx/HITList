@@ -68,13 +68,21 @@ final class CompanionTuckTests: XCTestCase {
         }
     }
 
-    /// At night its eyes are pulled right in and shut, and its seedling's leaves fold up; it is the one that likes the
-    /// rain (eyes up to the sky); in the snow its eyes come down and snow sits on its pot's rim.
+    /// At night its stalks lower and its eyes shut on them (brief 113: no marks on its face, which is its face by day),
+    /// and its seedling's leaves fold up; it is the one that likes the rain (eyes up to the sky); in the snow its eyes
+    /// come down and snow sits on its pot's rim.
     func testItsNightAndWeather() throws {
         let rest = try XCTUnwrap(tuck.rows("rest")), sleep = try XCTUnwrap(tuck.rows("sleep"))
         let rain = try XCTUnwrap(tuck.rows("rain")), snow = try XCTUnwrap(tuck.rows("snow"))
         XCTAssertTrue(rest.joined().contains("k"), "awake: its eyes open")
         XCTAssertFalse(sleep.joined().contains("k"), "asleep: no open eye")
+        // Brief 113 (George: "Why do the snail's eyes become lines at night?"): asleep its eyes stay on their stalks,
+        // shut under round lids above its head, and its face below them is its face by day, its smile and nothing else.
+        for y in 11...15 {
+            XCTAssertEqual(String(sleep[y].prefix(9)), String(rest[y].prefix(9)), "asleep row \(y): its face as by day")
+        }
+        let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<9), "asleep: its eyes up on their stalks")
+        XCTAssertLessThan(lids, 9, "asleep: its shut eyes stand above its head")
         XCTAssertLessThan(Self.width(of: "a", in: sleep), Self.width(of: "a", in: rest), "asleep: its leaves fold up")
         let eyesAtRest = try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10))
         XCTAssertLessThan(try XCTUnwrap(Self.topRow(of: "l", in: rain, columns: 0..<10)), eyesAtRest, "rain: eyes up")
