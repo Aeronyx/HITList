@@ -76,6 +76,37 @@ final class DuoColumnUITests: XCTestCase {
         XCTAssertFalse(tab.exists && tab.isHittable, "the island stepped aside")
     }
 
+    /// After the keyboard has come and gone the "+" is itself again: three tasks added one after another, each from
+    /// a "+" that reports its own frame. (Round 21's merge: with the column switched off and on in place the "+"
+    /// reported the whole column as its frame after the first add, and a second add in a row opened whatever lay
+    /// under the column's middle. The column is now taken out and put back new.)
+    func testThreeQuickAddsInARow() throws {
+        try launch()
+        go("inbox")
+        // Each first in priority, so its row is near the top of the Inbox and on screen for the last check.
+        for line in ["Probe one p1", "Probe two tomorrow 5pm p1", "Probe three today p1"] {
+            let plus = app.buttons["quickAddButton"].firstMatch
+            XCTAssertTrue(plus.waitForExistence(timeout: 8), "the + is back for \(line)")
+            XCTAssertLessThan(plus.frame.height, 70, "the + reports its own frame, not the column's (\(plus.frame))")
+            tap(plus)
+            let title = app.descendants(matching: .any)["quickAddTitle"].firstMatch
+            XCTAssertTrue(title.waitForExistence(timeout: 8), "the card opened for \(line)")
+            pause(0.6)
+            app.typeText(line + " ")
+            pause(0.8)
+            app.buttons["quickAddSave"].firstMatch.tap()
+            XCTAssertTrue(title.waitForNonExistence(timeout: 5), "the card closed after \(line)")
+            pause(0.6)
+        }
+        snap("three quick adds")
+        for name in ["Probe one", "Probe two", "Probe three"] {
+            let row = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+            XCTAssertTrue(row.exists, "\(name) was added")
+        }
+        let tab = app.buttons["tab-today"].firstMatch
+        XCTAssertTrue(tab.exists && tab.isHittable, "the island is back")
+    }
+
     // MARK: The walk
 
     /// Every tab's first screen, then Browse, a Group and Completed pushed from it.

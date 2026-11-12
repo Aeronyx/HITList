@@ -37,6 +37,9 @@ struct BrowseView: View {
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var settingsRequest: SettingsSheetRequest?
+    /// Where the island stands upright (the Duo's outer display) the profile, the bolt and the pill share the large
+    /// title's row: the profile is its picture alone there, so "Browse" keeps the size every other title has.
+    @Environment(\.islandPlacement) private var islandPlacement
 
     /// What the field holds: nothing, words to find, or a filter query (`SearchIntent`, brief 61).
     private var intent: SearchIntent { SearchIntent(search, now: now) }
@@ -113,7 +116,7 @@ struct BrowseView: View {
 
     /// The profile menu (brief 53): Account settings…, What's New, Send Beta Feedback… and the version.
     private var profileButton: some View {
-        BrowseProfileMenu { settingsRequest = SettingsSheetRequest(page: .account) }
+        BrowseProfileMenu(avatarOnly: islandPlacement.isSide) { settingsRequest = SettingsSheetRequest(page: .account) }
             .accessibilityIdentifier("browse-profile")
     }
 
@@ -364,6 +367,9 @@ struct BrowseView: View {
 /// shows its first word, then only the avatar; before a name is set, the empty avatar and "Add your name"
 /// (or "Add name" where that doesn't fit).
 struct BrowseProfileButton: View {
+    /// The picture alone, whatever the name: in the large title's row on the Duo's outer display (round 21), where a
+    /// name beside it made the system shrink "Browse" to three quarters of every other title.
+    var avatarOnly = false
     @Query private var profiles: [Profile]
 
     static let avatarSize: CGFloat = 28
@@ -414,7 +420,8 @@ struct BrowseProfileButton: View {
     var body: some View {
         // This iCloud account's profile; a record from another account is hidden (session 42).
         let profile = ProfileStore.shown(profiles)
-        let fit = Self.fit(name: profile?.displayName, maxWidth: Self.maxNameWidth, width: Self.textWidth)
+        let fit: Fit = avatarOnly ? .avatarOnly
+            : Self.fit(name: profile?.displayName, maxWidth: Self.maxNameWidth, width: Self.textWidth)
         HStack(spacing: HITSpacing.s) {
             ProfileAvatarView(imageData: profile?.avatarData, name: ProfileMenuModel.displayName(profile?.displayName) ?? "",
                               size: Self.avatarSize)

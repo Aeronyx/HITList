@@ -143,20 +143,26 @@ struct MobileShell: View {
             // is the safe area on that edge, so the stack steps out of it; where the column is narrower than the
             // island, the island keeps its width and the lists their margin (`listSideMargin`).
             let column = max(barColumnWidth(placement), IslandMetrics.sideColumnWidth)
-            VStack(spacing: IslandMetrics.sideAddButtonGap) {
-                tabBar(axis: .vertical)
-                    .overlay(alignment: CompanionPerch.alignment(.island)) { CompanionPerch.island(pushed: !(paths[tab]?.isEmpty ?? true)) }
-                IslandAddButton { popouts.openQuickAdd() }
+            // Out of the way while the keyboard is up (brief 106): the keys covered the "+" and most of the island.
+            // Taken out and put back new, as `IslandAddButton` is, never switched off and on in place: after
+            // `allowsHitTesting` and `accessibilityHidden` came back the "+" reported the whole column as its frame
+            // (a second quick add in a row opened whatever lay under the column's middle instead), and interactive
+            // glass ignores the first tap after hit testing returns.
+            ZStack {
+                if placement.showsChrome(keyboardUp: keyboardUp) {
+                    VStack(spacing: IslandMetrics.sideAddButtonGap) {
+                        tabBar(axis: .vertical)
+                            .overlay(alignment: CompanionPerch.alignment(.island)) { CompanionPerch.island(pushed: !(paths[tab]?.isEmpty ?? true)) }
+                        IslandAddButton { popouts.openQuickAdd() }
+                    }
+                    .transition(.opacity)
+                }
             }
             // On the system's centre line: under the camera, as its own controls are.
             .offset(x: IslandPlacement.sideOffset(columnWidth: column, cameraCentre: cameraCentre(placement)))
             .padding(.bottom, IslandMetrics.bottomGap + BarColumnDebug.statusPad)
             .frame(width: column)
             .ignoresSafeArea(.container, edges: edge == .leading ? .leading : .trailing)
-            // Out of the way while the keyboard is up (brief 106): the keys covered the "+" and most of the island.
-            .opacity(placement.showsChrome(keyboardUp: keyboardUp) ? 1 : 0)
-            .allowsHitTesting(placement.showsChrome(keyboardUp: keyboardUp))
-            .accessibilityHidden(!placement.showsChrome(keyboardUp: keyboardUp))
             .transition(.opacity)
         }
     }

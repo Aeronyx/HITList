@@ -570,6 +570,8 @@ private extension Binding where Value == ProfileMenuDestination? {
 /// popover, without Settings… (Browse's gear is beside it). Account settings… opens the Settings sheet,
 /// whose first group is Account.
 struct BrowseProfileMenu: View {
+    /// The picture alone (the Duo's outer display, where it shares the large title's row).
+    var avatarOnly = false
     var onAccountSettings: () -> Void
 
     @State private var isOpen = false
@@ -578,7 +580,7 @@ struct BrowseProfileMenu: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        Button { isOpen = true } label: { BrowseProfileButton() }
+        Button { isOpen = true } label: { BrowseProfileButton(avatarOnly: avatarOnly) }
             .buttonStyle(.plain)
             .popover(isPresented: $isOpen, attachmentAnchor: .rect(.bounds), arrowEdge: .top) {
                 ProfileMenuCard(state: AccountState.current, placement: .browse, chrome: false,
