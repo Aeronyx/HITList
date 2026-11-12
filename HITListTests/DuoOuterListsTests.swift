@@ -20,11 +20,15 @@ final class DuoOuterListsTests: XCTestCase {
         XCTAssertEqual(BarColumnSide(edge: .trailing).stripBackgroundEdges, [.top, .bottom, .leading],
                        "the week strip's band stops short of the clock and battery")
         XCTAssertEqual(BarColumnSide(edge: .leading).stripBackgroundEdges, [.top, .bottom, .trailing])
-        XCTAssertGreaterThan(BrowseChipMetrics.fade, 0)
+        #if os(iOS)
+        XCTAssertGreaterThan(BrowseChipMetrics.fade, 0, "Browse is the iPhone's")
+        #endif
     }
 
     // MARK: Item 3: a row's Group is never cut to a letter
 
+    #if os(iOS)
+    // The iPhone's rows (17 over 13 pt) at the Duo's and the iPhone 16's widths; the Mac's 14 over 12 fit these lines whole.
     /// The supervisor's "Frame the print" on the outer display's 382 pt list: a repeat, a date and time, a checklist and a
     /// label left the Group "W". Now the Group takes a line of its own under the rest: the row is a meta line taller.
     func testACrowdedRowPutsItsGroupOnALineOfItsOwn() throws {
@@ -33,6 +37,8 @@ final class DuoOuterListsTests: XCTestCase {
         let wide = try height(of: row(task), width: 900, container: container)
         XCTAssertGreaterThanOrEqual(narrow - wide, 14, "a second meta line on the Duo's list (\(narrow) against \(wide))")
     }
+
+    #endif
 
     func testARowThatFitsKeepsOneLine() throws {
         let container = ModelContainerFactory.preview()
@@ -55,6 +61,7 @@ final class DuoOuterListsTests: XCTestCase {
         XCTAssertEqual(medium, oneLine, accuracy: 0.5, "\"@errands +2\" and the Group fit on one line on the Duo's list")
     }
 
+    #if os(iOS)
     func testTheLargestOrdinaryTextSizeKeepsTheGroup() throws {
         // "Pay rent" at XL on the Duo: the supervisor saw "Fin…" (and "…", "Shared Ta…" on other rows).
         let (container, task) = try crowdedTask(labels: ["bills"], crowded: false)
@@ -67,6 +74,7 @@ final class DuoOuterListsTests: XCTestCase {
         let phoneWide = try height(of: row(crowded).dynamicTypeSize(.xLarge), width: 900, container: crowdedContainer)
         XCTAssertGreaterThan(phone, phoneWide)
     }
+    #endif
 
     // MARK: Item 4: the island's labels at every text size
 
