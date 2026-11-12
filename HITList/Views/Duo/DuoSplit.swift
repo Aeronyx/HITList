@@ -72,6 +72,19 @@ struct DuoDetail: View {
             guard columnVisibility != wanted else { return }
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { columnVisibility = wanted }
         }
+        // Unfolding with the editor open builds this split view afresh, and on its side the first change above came
+        // before the split view's first layout and was dropped: the sidebar stayed and squeezed the list between it and
+        // the editor (brief 108). Once laid out, the visibility is set again.
+        .task {
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !plan.showsSidebar else { return }
+            // The binding may already read .detailOnly with the sidebar on show: through .automatic, so it changes.
+            if columnVisibility == .detailOnly {
+                columnVisibility = .automatic
+                await Task.yield()
+            }
+            columnVisibility = .detailOnly
+        }
     }
 }
 
