@@ -711,7 +711,7 @@ struct TaskPopout: View {
         } else {
             removeTyped([.date])
         }
-        TaskActions.reschedule(task, to: day, in: context)
+        TaskEditorDraft.pickDay(day, for: task, in: context)
         rescheduleNotifications()
     }
 
