@@ -394,7 +394,23 @@ struct FlipSwitchFace<Rocker: View>: View {
     let reduceMotion: Bool
     @ViewBuilder var rocker: Rocker
 
-    static var padding: CGFloat { 14 }
+    /// From the tile's border to its words and lights (brief 115: 16 where there is room; on iPhone a tile is never
+    /// narrower than 150 pt). The Mac keeps its 14.
+    static var padding: CGFloat {
+        #if os(iOS)
+        16
+        #else
+        14
+        #endif
+    }
+    /// Between the name's last line and the interval under it: 2 pt put "every week" against a two-line name.
+    static var ruleGap: CGFloat {
+        #if os(iOS)
+        5
+        #else
+        2
+        #endif
+    }
     static var titleFont: Font { HITType.subheadlineSemibold.smallCaps() }
 
     var body: some View {
@@ -405,7 +421,7 @@ struct FlipSwitchFace<Rocker: View>: View {
             // stand-in sets the height alone. The title is drawn over it from the top and the interval at its foot, so
             // across a row every name starts on one line and every interval sits on one line, whether a name takes one
             // line or two (brief 96, the sweep: a wrapped name had put its interval a line lower than its neighbours').
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Self.ruleGap) {
                 Text(verbatim: "A").font(Self.titleFont).lineLimit(2, reservesSpace: true)
                 Text(verbatim: "a").font(HITType.caption2)
             }
