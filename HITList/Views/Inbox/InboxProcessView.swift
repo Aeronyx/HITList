@@ -319,9 +319,11 @@ struct InboxProcessView: View {
                 Image(systemName: symbol)
                     .font(.title2)
                     .foregroundStyle(tint)
+                    #if os(iOS)
                     // One height for the three symbols (the clock is taller than the calendar), so the names below
                     // them start on one line.
                     .frame(height: Self.tileIconHeight)
+                    #endif
                 Text(title)
                     .font(HITType.subheadlineMedium)
                     .foregroundStyle(.primary)
