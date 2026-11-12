@@ -228,20 +228,24 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.rain, "rain")
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
-        // Brief 120: asleep in the rain the umbrella is propped over it, its shaft on its shoulder; awake it holds it up.
+        // Brief 123: in the rain it holds 0.9.6's striped canopy on a short handle, wet; asleep it still holds it.
         XCTAssertEqual(nod.field.asleep.rain, "sleepRain")
         XCTAssertEqual(nod.plus.asleep.rain, "sleepRain")
         let rain = nod.rows("rain")!.map(Array.init)
-        XCTAssertTrue(rain[0...3].joined().contains("m"), "the canopy is a dome over its head")
-        XCTAssertTrue((4...13).allSatisfy { rain[$0][0] == "l" }, "the shaft stands beside it")
-        XCTAssertEqual(rain[12][1], "m", "its arm reaches out to hold the shaft")
+        XCTAssertEqual(String(rain[3]), "..m..m..m..m..m..m..", "the canopy's ribs, 0.9.6's")
+        XCTAssertTrue((4...7).allSatisfy { rain[$0][1] == "m" }, "a short handle under its left tip")
+        XCTAssertEqual(rain[8][1], "l", "its hand on the handle")
+        XCTAssertTrue(rain.allSatisfy { $0[0] == "." }, "no wire down its side (0.9.7's)")
+        XCTAssertTrue(rain[0...3].joined().contains("p"), "beads of water on the canopy")
+        XCTAssertEqual(Set(rain[nod.seatRow - 1].filter { "phu".contains($0) }), ["p", "h", "u"], "a puddle by its seat")
+        XCTAssertEqual(nod.rows("sleepRain")![0...3].joined(), rain[0...3].map { String($0) }.joined(), "asleep, the same canopy")
         // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
         XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
                                                               "rimDrip", "sweat"])
         XCTAssertEqual(nod.field.awake.flickers, Array(0...7), "brief 100: every one an idle, the weather's drip and sweat too")
         XCTAssertEqual(nod.field.awake.routines.filter(\.little).map(\.name), ["nodOff", "rubYawn", "dangle", "lampTap"])
         XCTAssertEqual(nod.plus.awake.gestures.map(\.name), nod.field.awake.gestures.map(\.name), "the same in both places")
-        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "murmur"])
+        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "murmur", "drip"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
         XCTAssertEqual(rest[13][17], "w")
