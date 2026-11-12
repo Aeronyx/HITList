@@ -429,6 +429,9 @@ final class DuoLayoutTests: XCTestCase {
     func testABarColumnOnTheLeadingEdgeMovesTheMiddleWithIt() {
         let leading = WindowGeometry(fullSize: innerOnItsSide, width: innerOnItsSide.width - 62, leadingInset: 62)
         XCTAssertEqual(leading.middle, innerOnItsSide.width / 2 - 62, "the columns' space starts after the bar column")
+        XCTAssertEqual(leading.trailingInset, 0)
+        XCTAssertEqual(book.trailingInset, 62, "the columns stop at most this far from the trailing edge")
+        XCTAssertEqual(WindowGeometry(fullSize: inner, width: inner.width).trailingInset, 0, "upright: no bar column")
     }
 
     func testPartlyOpenTheCreaseIsTheSplitAndUprightTheMiddleIsHalfTheWidth() {
@@ -488,5 +491,26 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertEqual(UpcomingBoard.compactHeader("Nov 11 · Today · Wed"), "Nov 11 · Today")
         XCTAssertEqual(UpcomingBoard.compactHeader("Nov 13 · Fri"), "Nov 13 · Fri", "a plain day keeps its weekday")
         XCTAssertEqual(UpcomingBoard.compactHeader("Jan 1, 2027 · Tomorrow · Fri"), "Jan 1, 2027 · Tomorrow")
+    }
+
+    func testTheEditorStartsAtTheHingeHoweverTheColumnIsInset() {
+        let hinge = innerOnItsSide.width / 2
+        // The system insets the split view's column from its bar column: the detail ends at it.
+        let inset = DuoColumns.editorWidth(planned: 445, detail: CGRect(x: 0, y: 0, width: 889, height: 669),
+                                           start: hinge, trailingBar: 0)
+        XCTAssertEqual(889 - inset, hinge, accuracy: 1, "the list is the left page")
+        // It does not: the detail runs under the column, and stops its columns at it.
+        let under = DuoColumns.editorWidth(planned: 445, detail: CGRect(x: 0, y: 0, width: 951, height: 669),
+                                           start: hinge, trailingBar: 62)
+        XCTAssertEqual(under, inset)
+        // Partly open: from the crease's far side.
+        let creased = DuoColumns.editorWidth(planned: 401, detail: CGRect(x: 0, y: 0, width: 889, height: 669),
+                                             start: 488, trailingBar: 0)
+        XCTAssertEqual(creased, 401)
+        XCTAssertEqual(DuoColumns.editorWidth(planned: 334, detail: .zero, start: 334, trailingBar: 0), 334,
+                       "before the detail is measured, the plan's")
+        XCTAssertEqual(DuoColumns.editorWidth(planned: 334, detail: CGRect(x: 0, y: 0, width: 669, height: 951),
+                                              start: 600, trailingBar: 0), DuoColumns.editorWidths.lowerBound,
+                       "never narrower than an editor")
     }
 }

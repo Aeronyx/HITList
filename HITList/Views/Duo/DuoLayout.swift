@@ -91,6 +91,9 @@ struct WindowGeometry: Equatable {
     /// areas was left of the hinge by half the column (31 pt with a 62 pt column).
     var middle: CGFloat { fullSize.width / 2 - leadingInset }
 
+    /// The window's trailing safe area: the system's bar column on its side, 0 upright and on every other phone.
+    var trailingInset: CGFloat { max(0, fullSize.width - width - leadingInset) }
+
     /// Where the list and the editor meet when the sidebar steps aside: the crease while partly open, else the
     /// display's middle (nil before the window is measured).
     var split: CGFloat? { fold ?? (fullSize.width > 0 ? middle : nil) }
@@ -297,6 +300,18 @@ struct DuoColumns: Equatable {
                               nextDaysWidth: clamp((detail * 0.42).rounded(), to: nextDaysWidths), sidebarWidth: sidebarWidth)
         }
         return DuoColumns(showsSidebar: true, editorWidth: nil, nextDaysWidth: nil, sidebarWidth: sidebarWidth)
+    }
+
+    /// The editor's width once the sidebar has stepped aside (brief 108), from the detail as it is laid out: from where
+    /// the editor starts in the window (past the crease while partly open, else the hinge) to the detail's trailing edge,
+    /// less the bar column where the system left it to us. Whether or not the system insets the split view's column
+    /// from its bars, the list ends at the hinge and the editor starts there.
+    static func editorWidth(planned: CGFloat, detail: CGRect, start: CGFloat, trailingBar: CGFloat) -> CGFloat {
+        guard detail.width > 0 else { return planned }
+        let end = detail.maxX - trailingBar
+        let fitted = (end - start).rounded()
+        let widest = max(editorWidths.lowerBound, end - detail.minX - minListWidth)
+        return min(max(fitted, editorWidths.lowerBound), widest)
     }
 
     private static func clamp(_ value: CGFloat, to range: ClosedRange<CGFloat>) -> CGFloat {
