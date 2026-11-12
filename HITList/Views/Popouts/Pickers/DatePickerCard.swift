@@ -95,17 +95,18 @@ struct DatePickerCard: View {
                         .padding([.horizontal, .top], HITSpacing.m)
                         .padding(.bottom, -HITSpacing.xs)
                 }
-                HStack(spacing: HITSpacing.xs) {
+                DatePresetRow(spacing: DatePresetRow.spacing) {
                     ForEach(DatePreset.all(now: now, weekStart: weekStart, clearTitle: clearTitle)) { preset in
                         DatePresetTile(preset: preset, isSelected: isPicked(preset), height: layout.presetHeight) { onPick(preset.date) }
                             .disabled(preset.kind == .none && (selected == nil || !canClear))
                     }
                 }
                 .padding(.horizontal, HITSpacing.m)
-                .padding(.vertical, layout.rowPadding)
+                .padding(.top, title == nil ? HITSpacing.m : layout.rowPadding)
+                .padding(.bottom, layout.rowPadding)
                 separator
                 HITCalendar(selection: selected, today: now, weekStart: weekStart, focusTrigger: focusRequest,
-                            daySize: layout.daySize) { day in
+                            daySize: layout.daySize, circlesOnEdges: true) { day in
                     onPick(day)
                 }
                 .padding(.horizontal, HITSpacing.m)
@@ -131,7 +132,9 @@ struct DatePickerCard: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, HITSpacing.m)
-                .padding(.vertical, layout.rowPadding)
+                .padding(.top, layout.rowPadding)
+                // The card's foot: 12 pt to its border, as every side (brief 114).
+                .padding(.bottom, HITSpacing.m)
             }
         }
     }
@@ -256,7 +259,7 @@ struct DatePickerCardLayout: Equatable {
 
     /// The regular layout's height: presets, calendar and, with `hasFoot`, the time row (and a title, a deadline's).
     static func regularHeight(hasFoot: Bool, hasTitle: Bool = false) -> CGFloat {
-        (hasFoot ? 370 : 309) + (hasTitle ? 24 : 0)
+        (hasFoot ? 378 : 313) + (hasTitle ? 24 : 0)
     }
 
     init(room: CGFloat?, hasFoot: Bool, hasTitle: Bool = false) {
@@ -385,6 +388,9 @@ private struct DatePresetTile: View {
                     // cut ("Tomorr…"). They keep the default size from there, as the tab island's names do (brief 94).
                     .dynamicTypeSize(...DynamicTypeSize.large)
             }
+            // The label 8 pt from the tile's sides at the least (brief 114: "Tomorrow" and "Next week" touched both);
+            // `DatePresetRow` gives each tile at least that.
+            .padding(.horizontal, DatePresetRow.labelInset)
             .frame(maxWidth: .infinity)
             .frame(height: height)
             .background(shape.fill(look.fill))
@@ -398,5 +404,56 @@ private struct DatePresetTile: View {
         .help(preset.date.map { $0.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) } ?? preset.title)
         .accessibilityLabel(preset.date.map { "\(preset.title), \($0.formatted(.dateTime.weekday(.wide).month(.wide).day()))" } ?? preset.title)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// The date card's five quick choices in one row (brief 114). Each tile is its label's width with 8 pt either side at
+/// the least; where the row has room they are as wide as each other, and where it has not the narrow ones still share
+/// one width and the wide ones ("Tomorrow", "Next week") take what their label needs. 6 pt apart.
+struct DatePresetRow: Layout {
+    static let spacing: CGFloat = 6
+    /// From a tile's side to its label.
+    static let labelInset: CGFloat = HITSpacing.s
+    var spacing: CGFloat = DatePresetRow.spacing
+
+    /// The tiles' widths in `available`, from what each wants (`ideal`). Pure, so tests pin it.
+    static func widths(ideal: [CGFloat], available: CGFloat, spacing: CGFloat) -> [CGFloat] {
+        guard !ideal.isEmpty else { return [] }
+        let gaps: CGFloat = spacing * CGFloat(ideal.count - 1)
+        let room: CGFloat = max(0, available - gaps)
+        let total: CGFloat = ideal.reduce(CGFloat(0), +)
+        // Not even their labels fit: each its share of what there is, by what it wants (the label shrinks a little).
+        guard total <= room else { return ideal.map { total > 0 ? room * $0 / total : room / CGFloat(ideal.count) } }
+        // One level for the narrow ones, raised until the room is used; a tile wider than it keeps its own width.
+        var fixed = Set<Int>()
+        while true {
+            let taken: CGFloat = fixed.reduce(CGFloat(0)) { $0 + ideal[$1] }
+            let left: CGFloat = room - taken
+            let level: CGFloat = left / CGFloat(ideal.count - fixed.count)
+            let wider = ideal.indices.filter { !fixed.contains($0) && ideal[$0] > level }
+            if wider.isEmpty || fixed.count + wider.count == ideal.count {
+                return ideal.indices.map { fixed.contains($0) ? ideal[$0] : level }
+            }
+            fixed.formUnion(wider)
+        }
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let widths: CGFloat = sizes.reduce(CGFloat(0)) { $0 + $1.width }
+        let gaps: CGFloat = spacing * CGFloat(max(0, sizes.count - 1))
+        let natural: CGFloat = widths + gaps
+        let height: CGFloat = sizes.map(\.height).max() ?? 0
+        return CGSize(width: proposal.width ?? natural, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let widths = Self.widths(ideal: ideal, available: bounds.width, spacing: spacing)
+        var x = bounds.minX
+        for (subview, width) in zip(subviews, widths) {
+            subview.place(at: CGPoint(x: x, y: bounds.minY), proposal: ProposedViewSize(width: width, height: bounds.height))
+            x += width + spacing
+        }
     }
 }

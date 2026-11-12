@@ -25,7 +25,9 @@ enum PickerKind: Hashable, CaseIterable {
         // iPhone and iPad: Custom… opens in the date card's place, and its Daily · Weekly · Monthly · Yearly need
         // 360 at the phone's control size (brief 97).
         #if os(macOS)
-        case .date, .deadline: 320
+        // The five quick choices with 8 pt beside each label and 6 between them (brief 114): 320 left "Tomorrow" and
+        // "Next week" touching their tiles' sides.
+        case .date, .deadline: 344
         #else
         case .date, .deadline: 360
         #endif
@@ -46,7 +48,7 @@ enum PickerKind: Hashable, CaseIterable {
     /// simulator); with less room beside its chip a card takes its short layout (`isShort`).
     var phoneHeight: CGFloat {
         switch self {
-        case .date: 370
+        case .date: 378
         case .deadline: 340
         case .reminder: 491
         case .priority: 90

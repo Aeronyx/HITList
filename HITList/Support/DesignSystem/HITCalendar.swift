@@ -31,7 +31,14 @@ struct HITCalendar: View {
     /// The day circles' side: `cellSize`, or less in a picker card's short layout (brief 107: the iPhone Duo's outer
     /// display, 678 pt tall, had no room for the editor's date card).
     var daySize: CGFloat
+    /// The first and last columns' circles on the calendar's own edges, under the month's name and the arrows, the
+    /// grid reaching out past them by the columns' spare room (brief 114: the date card's month and days did not share
+    /// a left edge). Off, the columns fill the width and each circle sits in the middle of its own.
+    var circlesOnEdges: Bool
     var onPick: (Date) -> Void
+
+    /// How far the grid reaches past each side with `circlesOnEdges`.
+    @State private var outset: CGFloat = 0
 
     @State private var month: Date
     /// The keyboard's selection before Return; nil follows `selection`.
@@ -41,13 +48,15 @@ struct HITCalendar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(selection: Date?, today: Date = Date(), weekStart: Int = 2, calendar: Calendar = .current,
-         focusTrigger: Int = 0, daySize: CGFloat = HITCalendar.cellSize, onPick: @escaping (Date) -> Void) {
+         focusTrigger: Int = 0, daySize: CGFloat = HITCalendar.cellSize, circlesOnEdges: Bool = false,
+         onPick: @escaping (Date) -> Void) {
         self.selection = selection.map { calendar.startOfDay(for: $0) }
         self.today = calendar.startOfDay(for: today)
         self.weekStart = weekStart
         self.calendar = calendar
         self.focusTrigger = focusTrigger
         self.daySize = daySize
+        self.circlesOnEdges = circlesOnEdges
         self.onPick = onPick
         _month = State(initialValue: Self.firstOfMonth(selection ?? today, calendar: calendar))
     }
@@ -85,6 +94,14 @@ struct HITCalendar: View {
         return (0..<7).map { symbols[(weekStart - 1 + $0) % 7] }
     }
 
+    /// With `circlesOnEdges`: how far the grid reaches past each side of a calendar `width` wide for the first and last
+    /// columns' circles to sit on its edges. A column is (width + 2 × outset) / 7 and its circle is in its middle, so
+    /// (column − daySize) / 2 = outset, which is (width − 7 × daySize) / 12.
+    static func outset(width: CGFloat, daySize: CGFloat) -> CGFloat {
+        let spare = width - 7 * daySize
+        return max(0, spare / 12)
+    }
+
     enum Move { case previousDay, nextDay, previousWeek, nextWeek }
 
     /// Where an arrow key takes the selection.
@@ -106,7 +123,11 @@ struct HITCalendar: View {
         VStack(spacing: HITSpacing.xs) {
             header
             grid
+                .padding(.horizontal, -outset)
         }
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            circlesOnEdges ? Self.outset(width: proxy.size.width, daySize: daySize) : 0
+        } action: { outset = $0 }
         .focusable()
         .focusEffectDisabled()
         .focused($isFocused)
@@ -119,7 +140,7 @@ struct HITCalendar: View {
     private var header: some View {
         let parts = calendar.dateComponents([.year, .month], from: month)
         let todayMonth = Self.firstOfMonth(today, calendar: calendar)
-        return HStack(spacing: HITSpacing.xs) {
+        return HStack(spacing: 6) {
             Text(month.formatted(.dateTime.month(.wide).year()))
                 .font(HITType.headline)
                 .foregroundStyle(HITColor.text)
