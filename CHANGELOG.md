@@ -5,33 +5,63 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.7
+## 0.9.8
 
-George's notes on 0.9.6's creatures, the same morning: a creature he has seen is his, and a good rework barely
-shows. Five sessions redrew what he sent back, each starting from the drawing he likes and changing the least that
-answers his words; he saw every sketch as it was made.
+0.9.7 was prepared and never released: George looked at its pictures at midday and wrote "we're getting closer to
+the final product, but … there's still a bit more work to be done". So this is everything since 0.9.6: the creatures
+as he sent them back twice in one day, and the Flipboard's Switchboards as rows. Eleven sessions over the two
+rounds; he saw every sketch as it was made.
 
-- Glim, Tokyo Night's mouse, is 0.9.5's drawing again, every frame. 0.9.6 had redrawn him paler, with bigger ears
-  and lit eyes, and he was "so much worse". On the old drawing he has nine pixels of new shading (soft lower lids,
-  a shade under his chin, paler rings down his tail, a rim of glow on his lantern), which nobody sees at real size
-  without looking for it. In rain and snow he still keeps his light dry, now on that body: the tail curled in, the
-  lantern in his lap in both paws, its glow on his chin.
-- Gargle, Graphite's stone pup, is awake what he is asleep: his side-on night sprite with his eye open. 0.9.6's
-  larger head turned toward you is gone ("a tad too big and not cute enough"). The night sprite itself is the same
-  pixel for pixel, and a test keeps it so. In the rain he lifts his wing over his head and peeks out from under it.
-- Phase, Mocha's ghost, is one floating sheet: a wavy drape with a wavy hem and a trailing corner, two soft dark
-  eyes and a tiny mouth. No head and body, nothing that reads as hands, no horn. It hovers over the bar. Rain falls
-  in at its crown and out under its hem; snow gathers in a drift on the bar beneath it.
-- Tuck, Moss's snail, sleeps with his eye stalks folded over and his eyes hanging at cheek level, shut. 0.9.6 left
-  them standing upright on their stalks, and left him smiling in his sleep; the smile is gone.
-- Quill, Midnight's cat, has 0.9.5's face back on 0.9.6's tabby coat: small dark eyes set wide and low, no dark M
-  that read as a frown, no narrowed bright eyes.
-- Rain and snow read at a glance. Nod holds an umbrella up over his head, with a handle in his hand (it was a flat
-  canopy on his cap), twirls it, rights it in a gust, and sleeps with it leaning on him. Button grips the rim of his
-  cap and pulls it down over his eyes, and lifts it now and then to look out. Snow lies about half as deep again
-  on Nod, Button, Gargle, Glim, Tuck and Quill, still as powder and never as a cap.
-- Hush is exactly as 0.9.6 drew it ("the perfect example of a good rework"), and a test pins every one of its
-  frames.
+The creatures:
+
+- Rain is rain. Water is blue now, three blues that are the same in every theme. In the rain every companion has
+  beads on it that stay, a drop that swells and runs off it now and then, and a small puddle at its feet, by day
+  and asleep (each has a rain still for the night now; only Nod had one). What each does about the rain is why it
+  is wet there: Nod holds his canopy, Gargle lifts his wing over his head, Button pulls his cap down to his cheeks,
+  Quill lays his ears back under his arched tail, Hush draws his ears up into a hood, and Glim curls his tail in and
+  holds his lantern in his lap to keep it dry (there is never a drop on it).
+- Phase, Mocha's ghost, is one floating sheet you can see through: a wavy drape with a wavy hem, no head and body,
+  nothing that reads as hands, no horn. His body thins from the crown down to a nearly clear hem and a tail that
+  ends in a wisp, his eyes are lit, and what he does is done with opacity: his bob thins and fills him, a tap makes
+  him flicker, and now and then he fades from the hem up until only his two eyes hang in the dark, then fills back
+  in from the crown. Rain falls through him to a puddle on the bar; snow gathers under him in one mound.
+- The companions can give real light. A creature names the inks that glow, and the app draws a soft halo of their
+  colour under the crisp pixels: Phase's eyes, and Glim's lantern (fainter in his lap, fainter still asleep). With
+  Reduce Transparency on, a see-through body is drawn solid.
+- Glim, Tokyo Night's mouse, is 0.9.5's drawing again, every frame; 0.9.6 had redrawn him and he was "so much
+  worse". He has nine pixels of new shading that nobody sees at real size without looking for them.
+- Gargle, Graphite's stone pup, is awake what he is asleep: his side-on night sprite with his eye open (0.9.6's
+  larger head was "a tad too big and not cute enough"); a test keeps the night sprite pixel for pixel. Under deep
+  snow he is still Gargle: the drifts grow on his back, his wing and at his feet, and his horns, brow, eye and
+  snout stay stone.
+- Tuck, Moss's snail, sleeps at rest: his daytime head, his eyes shut on short stalks that lean apart, and no
+  mouth (0.9.6 left him smiling in his sleep on upright stalks). In the rain he is himself, in a puddle that laps
+  at his foot, his pot brimming, and now and then a drop falls from a leaf into the pot.
+- Quill, Midnight's cat, keeps 0.9.6's face, three pixels friendlier: the centre stroke of the M on his brow, which
+  read as a frown, is gone, and he has a small mouth under his nose.
+- Nod has eyes two pixels tall; George: "an art style where none of the characters have just single-pixel dots for
+  eyes". In the rain he holds his little canopy by a short handle, with beads on it and a drop off its rim, and it
+  stays over him while he sleeps.
+- Button pulls his cap down over his eyes in the rain and lifts it now and then to look out. In Settings →
+  Appearance he stands on the floor of his swatch, so the eight sit eight ways.
+- Hush is as 0.9.6 drew it ("the perfect example of a good rework") but for the water in its rain, and a test pins
+  every other frame.
+- Snow lies about half as deep again on Nod, Button, Gargle, Glim, Tuck and Quill, still as powder and never as a
+  cap.
+
+The Flipboard:
+
+- A Switchboard is one row that scrolls sideways, on a quiet panel of its own, so its switches read as mounted on
+  one board. The row shows whole tiles and a part of the next, comes to rest on tile edges, and ends in the dashed
+  Add switch outline, which adds to that board. On the Mac a small chevron pages a long row.
+- Each board has lights: a strip of small dots beside its name, one a switch, in the row's order, green or red,
+  always in view however far the row has scrolled. Tapping a light brings its switch to the front of the row. When
+  there are too many for dots the strip becomes slimmer segments, and past that a bar with the count. A thin trace
+  joins the tiles behind the row and turns green when the whole board is on.
+- The ungrouped switches stay at the top, two across on iPhone, under an "Ungrouped" header with lights of its own
+  that folds them away to one line; folded is remembered on the device.
+- Adding a switch on iPhone no longer makes it flash large, mirrored and tiny before it settles. The landing
+  animation handed a spring an impossible speed; the new tile now appears once, in its place.
 
 ## 0.9.6 — build 26, 2026-11-12
 
