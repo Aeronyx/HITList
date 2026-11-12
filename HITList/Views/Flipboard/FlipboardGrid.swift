@@ -124,14 +124,23 @@ struct FlipboardGrid: Layout {
     }
 }
 
-/// A switch that has just been added (or saved from its card) settles into its place in the grid (brief 69): it
-/// comes in a touch small and springs to size with a little overshoot, like a part pressed into a panel.
-/// Reduce Motion: nothing moves.
+/// A switch that has just been added (or saved from its card) settles into its place (brief 69): it comes in a touch
+/// small and springs to size with one soft settle, like a part pressed into a panel. Reduce Motion: nothing moves.
+///
+/// Brief 126 (George, on 0.9.7: "Adding Switches on iOS makes them expand and contract like crazy for a moment before
+/// they settle"): the track used to jump to its start with a `LinearKeyframe` 1 ms long, and a `SpringKeyframe` takes
+/// the velocity it is handed: 0.14 in a millisecond, 140 sizes a second, flung the tile through zero (drawn mirrored),
+/// to twice its size and back for most of a second (filmed on an iPhone 16 simulator; the layout itself never changed
+/// size). Now the track starts with a `MoveKeyframe`, which hands the spring no velocity, and `KeyframeTests` samples
+/// the whole track. On iPhone a new switch also waits unseen while the card that added it goes (`Mark.waiting`), so it
+/// appears once, when the board is in view again, instead of fading in under the card and then landing.
 struct SwitchLanding: ViewModifier {
-    /// Which switch lands, and a count so the same switch can land again.
+    /// Which switch lands, and a count so the same switch can land again. `waiting`: the switch is in the store and on
+    /// the board, but the card that added it is still going: the tile is held unseen until its landing.
     struct Mark: Equatable {
         let id: UUID
         let generation: Int
+        var waiting = false
     }
 
     /// This tile's landing, or nil.
@@ -139,31 +148,116 @@ struct SwitchLanding: ViewModifier {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var trigger = 0
+    /// The tile came onto the board with its mark (a new switch, or one moved here): it fades in as it lands. One
+    /// already on show (an edit) only settles.
+    @State private var fadesIn = false
 
-    /// How small it starts and how its spring settles.
-    static let startScale: CGFloat = 0.86
-    static let spring = Spring(response: 0.42, dampingRatio: 0.55)
+    /// How small it starts and how its spring settles: one soft settle, under 2% past full size.
+    static let startScale: CGFloat = 0.92
+    static let spring = Spring(response: 0.36, dampingRatio: 0.8)
+    static let fadeDuration: TimeInterval = 0.14
+
+    struct Pose {
+        var scale: CGFloat = 1
+        var opacity: Double = 1
+    }
+
+    /// The landing's track, from its start to rest. Pure, so `KeyframeTests` samples it.
+    @KeyframesBuilder<Pose>
+    static func keyframes(fadesIn: Bool) -> some Keyframes<Pose> {
+        KeyframeTrack(\.scale) {
+            // A move hands the spring no velocity (a 1 ms linear jump handed it 140 sizes a second).
+            MoveKeyframe(startScale)
+            // The spring's own settling time: a segment cut short holds wherever the spring was then (a tile stayed
+            // at 93%). Then exactly full size.
+            SpringKeyframe(1, spring: spring)
+            MoveKeyframe(1)
+        }
+        KeyframeTrack(\.opacity) {
+            MoveKeyframe(fadesIn ? 0 : 1)
+            LinearKeyframe(1, duration: fadeDuration)
+        }
+    }
 
     func body(content: Content) -> some View {
         content
-            .keyframeAnimator(initialValue: CGFloat(1), trigger: trigger) { content, scale in
-                content.scaleEffect(scale)
+            .keyframeAnimator(initialValue: Pose(), trigger: trigger) { content, pose in
+                content
+                    .scaleEffect(pose.scale)
+                    .opacity(pose.opacity)
             } keyframes: { _ in
-                KeyframeTrack {
-                    LinearKeyframe(Self.startScale, duration: 0.001)
-                    // The spring's own settling time: a segment cut short holds wherever the spring was then
-                    // (a tile stayed at 93%). Then exactly full size.
-                    SpringKeyframe(1, spring: Self.spring)
-                    LinearKeyframe(1, duration: 0.001)
-                }
+                Self.keyframes(fadesIn: fadesIn)
             }
+            // Held unseen while the card that added it goes (iPhone); never animated.
+            .opacity(mark?.waiting == true ? 0 : 1)
             // A new tile appears already marked; an edited one is marked while on show.
-            .onAppear { if mark != nil { settle() } }
-            .onChange(of: mark) { _, new in if new != nil { settle() } }
+            .onAppear {
+                guard let mark else { return }
+                fadesIn = true
+                if !mark.waiting { settle() }
+            }
+            .onChange(of: mark) { _, new in
+                guard let new, !new.waiting else { return }
+                settle()
+            }
     }
 
     private func settle() {
-        guard !reduceMotion else { return }
+        guard !reduceMotion else {
+            fadesIn = false
+            return
+        }
         trigger += 1
+        let wasNew = fadesIn
+        if wasNew {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1))
+                fadesIn = false
+            }
+        }
+    }
+}
+
+extension FlipboardLayout {
+    /// A row's tiles are never narrower than this where they can help it (a two-line name, the largest type).
+    static let rowTileMinWidth: CGFloat = 140
+    /// How much of the next tile a row shows at rest, as a share of a tile.
+    static let rowPeekShare: CGFloat = 0.22
+
+    /// The width of a Switchboard's row tiles (brief 126, the supervisor on the first pictures: "A tile shown
+    /// nine-tenths … reads as a clipping fault"): from the panel's width, so that a whole number of tiles shows and a
+    /// clear part of the next, about a fifth of a tile. The most whole tiles for which a tile is still `rowTileMinWidth`
+    /// wide, never wider than the grid's tile; where no count does both (the Duo's outer display, a narrow window), the
+    /// most whole tiles with a fifth of the next at no less than 128 pt; failing that, one tile and half the next.
+    /// `width`: the panel's; `inset`: its first tile's distance from its edge.
+    /// `largeType` (the accessibility text sizes): one whole tile and half the next, whatever the grid's tile, so a
+    /// name has room for its words (at 145 pt the largest size broke "Brush" in the middle).
+    static func rowTileWidth(width: CGFloat, inset: CGFloat, spacing: CGFloat, gridTile: CGFloat,
+                             largeType: Bool = false) -> CGFloat {
+        let inner = width - inset
+        func tile(_ whole: Int, _ share: CGFloat) -> CGFloat {
+            (inner - CGFloat(whole) * spacing) / (CGFloat(whole) + share)
+        }
+        if largeType { return max(1, tile(1, 0.5)) }
+        for whole in stride(from: 16, through: 1, by: -1) {
+            let w = tile(whole, rowPeekShare)
+            if w >= rowTileMinWidth, w <= gridTile + 0.5 { return w }
+        }
+        for whole in stride(from: 16, through: 1, by: -1) {
+            let w = tile(whole, 0.2)
+            if w >= 128, w <= gridTile + 0.5 { return w }
+        }
+        return max(1, min(gridTile, tile(1, 0.5)))
+    }
+
+    /// How much of the next tile a Switchboard's row shows at its trailing edge, at rest on a tile edge (brief 126:
+    /// "the next tile shows at least a quarter of itself … so it is plain that the row scrolls"): the row is `width`
+    /// wide (the panel's), its first tile `inset` in, tiles `tile` wide and `spacing` apart. A fraction of a tile, 0 to 1.
+    static func rowPeek(width: CGFloat, tile: CGFloat, spacing: CGFloat, inset: CGFloat) -> CGFloat {
+        guard tile > 0 else { return 0 }
+        let visible = width - inset
+        let pitch = tile + spacing
+        let whole = ((visible + spacing) / pitch).rounded(.down)
+        return max(0, min(1, (visible - whole * pitch) / tile))
     }
 }

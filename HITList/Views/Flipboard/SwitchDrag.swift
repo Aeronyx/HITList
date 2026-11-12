@@ -125,11 +125,16 @@ struct SwitchDropDelegate: DropDelegate {
 
 /// A drop target taking a switch: the section under a soft accent wash and outline, a little outside its contents.
 struct SwitchDropHighlight: View {
+    /// `section`: the loose switches, a little outside them. `panel`: a Switchboard's panel, on its own edge (brief 126).
+    enum Style { case section, panel }
+    var style: Style = .section
+
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: 24, style: .continuous)
+        let shape = RoundedRectangle(cornerRadius: style == .panel ? BoardPanel.radius : 24,
+                                     style: .continuous)
         shape.fill(Theme.accent.opacity(0.08))
             .overlay(shape.strokeBorder(Theme.accent.opacity(0.6), lineWidth: 1.5))
-            .padding(-10)
+            .padding(style == .panel ? 0 : -10)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
