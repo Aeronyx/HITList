@@ -37,8 +37,11 @@ final class CompanionSeatTests: XCTestCase {
                                screenX: 402 - IslandMetrics.sideInset - FloatingAddButton.size.width)
     static let iPhone16 = Host(name: "iPhone 16", spot: .addButton, scale: 3,
                                screenX: 393 - IslandMetrics.sideInset - FloatingAddButton.size.width)
+    /// Brief 104, item 7: the crown of the iPhone Duo's upright island (a continuous capsule 66 pt across) on the outer
+    /// display, at 3x.
+    static let duoIsland = Host(name: "Duo island", spot: .island, scale: 3)
     static let hosts: [Host] = [iPhone17, iPhone16, Host(name: "iPad", spot: .addButton, scale: 2, circular: true),
-                                Host(name: "Mac", spot: .searchField, scale: 2)]
+                                Host(name: "Mac", spot: .searchField, scale: 2), duoIsland]
 
     /// The field's width in the scene (the Mac sidebar's is about this; only its trailing end matters).
     static let fieldWidth: CGFloat = 200
@@ -47,7 +50,11 @@ final class CompanionSeatTests: XCTestCase {
     static let hostTop: CGFloat = 44
 
     static func hostSize(_ host: Host) -> CGSize {
-        host.spot == .addButton ? FloatingAddButton.size : CGSize(width: fieldWidth, height: CompanionPerch.fieldHeight)
+        switch host.spot {
+        case .addButton: FloatingAddButton.size
+        case .searchField: CGSize(width: fieldWidth, height: CompanionPerch.fieldHeight)
+        case .island: CGSize(width: IslandMetrics.sideWidth, height: IslandMetrics.sideHeight)
+        }
     }
 
     static func sceneSize(_ host: Host) -> CGSize {
@@ -65,6 +72,11 @@ final class CompanionSeatTests: XCTestCase {
     static func spriteOrigin(_ character: CompanionCharacter, host: Host) -> CGPoint {
         let offset = CompanionPerch.offset(character, spot: host.spot)
         let spriteWidth: CGFloat = CGFloat(character.width) * CompanionCharacter.pointsPerPixel
+        if host.spot == .island {
+            // Aligned top centre (`CompanionPerch.alignment(.island)`).
+            let centred: CGFloat = hostLeft(host) + (hostSize(host).width - spriteWidth) / 2
+            return CGPoint(x: centred + offset.width, y: hostTop + offset.height)
+        }
         let right: CGFloat = hostLeft(host) + hostSize(host).width
         return CGPoint(x: right - spriteWidth + offset.width, y: hostTop + offset.height)
     }
@@ -111,6 +123,11 @@ final class CompanionSeatTests: XCTestCase {
                 }
             case .searchField:
                 let shape = RoundedRectangle(cornerRadius: CompanionPerch.fieldRadius, style: .continuous)
+                shape.fill(Color(hex: palette.hex.elevated))
+                    .overlay(shape.strokeBorder(Color(hex: palette.hex.separator).opacity(0.5), lineWidth: 1))
+            case .island:
+                // The island's glass, in a tone the measure tells from the background; its separator rim.
+                let shape = Capsule(style: .continuous)
                 shape.fill(Color(hex: palette.hex.elevated))
                     .overlay(shape.strokeBorder(Color(hex: palette.hex.separator).opacity(0.5), lineWidth: 1))
             }
@@ -278,10 +295,14 @@ final class CompanionSeatTests: XCTestCase {
         let origin = spriteOrigin(character, host: host)
         let p = CompanionCharacter.pointsPerPixel
         let spriteTop: Int = Int((origin.y * scale).rounded())
-        // As low as a column can draw: the sprite's box, or a pixel under the edge row where a seat goes.
-        let seated = Set(CompanionSeat.base(character, pose: pose).map(\.x))
+        // As low as a column can draw: the sprite's box, or as far under the edge row (on the island, under what hangs
+        // there) as its seat goes.
+        var seatFoot: [Int: Int] = [:]
+        for pixel in CompanionSeat.seated(character, pose: pose, spot: host.spot) {
+            seatFoot[pixel.x] = max(seatFoot[pixel.x] ?? 0, pixel.y + host.spot.seatDepth)
+        }
         for c in meeting(character, pose: pose) {
-            let rowsDown: Int = seated.contains(c) ? max(character.height, character.seatRow + 1) : character.height
+            let rowsDown: Int = max(character.height, seatFoot[c] ?? 0)
             let boxBottom: CGFloat = origin.y + CGFloat(rowsDown) * p
             let reach: Int = Int((boxBottom * scale).rounded())
             let left: CGFloat = origin.x + CGFloat(c) * p
@@ -425,7 +446,7 @@ final class CompanionSeatTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CompanionSeats", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for character in CompanionCharacter.all {
-            for host in [Self.hosts[0], Self.hosts[3]] {
+            for host in [Self.hosts[0], Self.hosts[3], Self.duoIsland] {
                 let palette = Self.home(character)
                 var strips: [CGImage] = []
                 for still in Self.stills(character, place: host.spot.place) {
@@ -440,7 +461,8 @@ final class CompanionSeatTests: XCTestCase {
                     }
                 }
                 let sheet = Self.stack(strips)
-                let name = "\(character.id)-\(host.spot == .addButton ? "plus" : "mac")-seat.png"
+                let kind: String = host.spot == .addButton ? "plus" : host.spot == .island ? "island" : "mac"
+                let name = "\(character.id)-\(kind)-seat.png"
                 try Self.writePNG(sheet, to: folder.appendingPathComponent(name))
             }
         }

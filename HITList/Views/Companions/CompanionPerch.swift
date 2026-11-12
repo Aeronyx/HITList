@@ -6,6 +6,10 @@ import SwiftUI
 /// iPhone and iPad, at its top right (it goes with the "+" when a card opens and comes back with it). Which
 /// companion is the theme's (`CompanionCast`).
 ///
+/// On the iPhone Duo's outer display, where the tab island stands upright in the system's bar column and the "+" under
+/// it has no room (brief 104, item 7), it sits on the crown of the island instead, with its "+" posture:
+/// `CompanionPerch.island(pushed:)`, and only while the column leaves it room.
+///
 /// It never changes its host's layout (it is drawn with an offset), takes no tap meant for the field or the "+"
 /// (only its own pixels above the edge it sits on), is hidden from VoiceOver, makes no sound, and is gone when
 /// Settings → Extras → Companions is off. Reduce Motion draws the still pose for the hour and the weather and runs
@@ -16,11 +20,14 @@ struct CompanionPerch: View {
         case searchField
         /// The iPhone's and iPad's floating "+".
         case addButton
+        /// The crown of the upright tab island on the iPhone Duo's outer display (brief 104, item 7): a dome, 66 pt
+        /// across, the companion on it in its "+" posture.
+        case island
 
         var place: CompanionPlace {
             switch self {
             case .searchField: .field
-            case .addButton: .plus
+            case .addButton, .island: .plus
             }
         }
 
@@ -37,25 +44,55 @@ struct CompanionPerch: View {
             switch self {
             case .searchField: 14
             case .addButton: 8
+            case .island: 0
             }
         }
+
+        /// How far its seat row sinks into the host's top, in points: on the island's dome the middle of the base
+        /// settles a point into the crown, so the curve falls away from under it less at its sides.
+        var sink: CGFloat { self == .island ? 1 : 0 }
+
+        /// How many sprite pixels the seat may carry a base pixel down to the host's curve: one on the "+"'s
+        /// shoulder and the field's corner; on the dome, which falls 3 pt 14 pt from the crown and 5 pt at 18, four.
+        var seatDepth: Int { self == .island ? 4 : 1 }
     }
 
     let spot: Spot
+    /// The clear room above its host, where only part of it may be free (the island under the system's items); nil:
+    /// as much as it needs.
+    var room: CGFloat? = nil
     @AppStorage(Preferences.companions, store: AppGroup.defaults) private var enabled = true
     @HITEffectsSetting private var effects
 
-    init(_ spot: Spot) {
+    init(_ spot: Spot, room: CGFloat? = nil) {
         self.spot = spot
+        self.room = room
+    }
+
+    /// The companion on the crown of the Duo's upright island, given whether a screen is pushed (the system's Back
+    /// stands in the column then) and the Debug stand-in for a call (`-duoStatusPad`, which moves the island up).
+    static func island(pushed: Bool) -> CompanionPerch {
+        let room: CGFloat = BarColumnBudget.clearRoom(pushed: pushed, call: false) - BarColumnDebug.statusPad
+        return CompanionPerch(.island, room: room)
+    }
+
+    /// The air it keeps above itself on the island: it shows only where the room is its height and this much more.
+    static let islandAir: CGFloat = 8
+
+    /// Whether `character` has room on its host: always, but on the island only where the clear room above it holds
+    /// its tallest still and `islandAir` (not on a pushed screen during a call, for one).
+    static func fits(_ character: CompanionCharacter, room: CGFloat?) -> Bool {
+        guard let room else { return true }
+        return room >= clearance(character) + islandAir
     }
 
     /// The overlay alignment that goes with `spot`.
-    static func alignment(_ spot: Spot) -> Alignment { .topTrailing }
+    static func alignment(_ spot: Spot) -> Alignment { spot == .island ? .top : .topTrailing }
 
     var body: some View {
-        if enabled {
-            let character = CompanionCast.current
-            CompanionLife(character: character, place: spot.place, still: effects.reduceMotion,
+        let character = CompanionCast.current
+        if enabled, Self.fits(character, room: room) {
+            CompanionLife(character: character, spot: spot, still: effects.reduceMotion,
                           calm: effects.reduceEffects)
                 .offset(Self.offset(character, spot: spot))
                 .accessibilityHidden(true)
@@ -78,6 +115,12 @@ struct CompanionPerch: View {
         let spriteWidth: CGFloat = CGFloat(character.width) * CompanionCharacter.pointsPerPixel
         let left: CGFloat = -spriteWidth + offset.width
         switch spot {
+        case .island:
+            // The upright island, a continuous capsule 66 pt across, the sprite centred over it (`alignment`).
+            let width: CGFloat = IslandMetrics.sideWidth
+            let spriteLeft: CGFloat = (width - spriteWidth) / 2 + offset.width
+            let rect = CGRect(x: -spriteLeft, y: -offset.height, width: width, height: IslandMetrics.sideHeight)
+            return Capsule(style: .continuous).path(in: rect)
         case .addButton:
             let size = FloatingAddButton.size
             let rect = CGRect(x: -size.width - left, y: -offset.height, width: size.width, height: size.height)
@@ -91,11 +134,22 @@ struct CompanionPerch: View {
     }
 
     /// The sprite's offset from the host's top-trailing corner: its resting pose's rightmost pixel `spot.trailing`
-    /// in from the edge (and the posture's own `inset` further), its seat row on the top edge.
+    /// in from the edge (and the posture's own `inset` further), its seat row on the top edge. On the island (aligned
+    /// top centre) the middle of its resting pose's base is on the crown, and its seat row sinks `spot.sink` into it.
     static func offset(_ character: CompanionCharacter, spot: Spot) -> CGSize {
         let p = CompanionCharacter.pointsPerPixel
         let posture = character.posture(spot.place)
         let rest = posture.awake.rest
+        if spot == .island {
+            let span = baseSpan(character, frame: rest)
+            let first: CGFloat = CGFloat(span.lowerBound)
+            let last: CGFloat = CGFloat(span.upperBound + 1)
+            let middle: CGFloat = (first + last) * p / 2
+            let spriteWidth: CGFloat = CGFloat(character.width) * p
+            let x: CGFloat = spriteWidth / 2 - middle
+            let y: CGFloat = -CGFloat(character.seatRow) * p + spot.sink
+            return CGSize(width: x, height: y)
+        }
         let clearColumns = character.width - 1 - character.rightmostColumn(rest)
         let inset: CGFloat = CGFloat(posture.inset) * p
         let clear: CGFloat = CGFloat(clearColumns) * p
@@ -103,23 +157,35 @@ struct CompanionPerch: View {
         let y: CGFloat = -CGFloat(character.seatRow) * p
         return CGSize(width: x, height: y)
     }
+
+    /// The columns its base spans in `frame`: the first and last pixel in front of the host on the edge row (or, for a
+    /// frame with nothing there, on any row).
+    static func baseSpan(_ character: CompanionCharacter, frame: String) -> ClosedRange<Int> {
+        let rows = (character.rows(frame) ?? []).map(Array.init)
+        let front = { (c: Character) in c != CompanionInk.clear && !CompanionInk.isBehind(c) }
+        let edge = character.seatRow - 1
+        var columns = rows.indices.contains(edge) ? rows[edge].indices.filter { front(rows[edge][$0]) } : []
+        if columns.isEmpty { columns = (0..<character.width).filter { x in rows.contains { $0.indices.contains(x) && front($0[x]) } } }
+        guard let first = columns.first, let last = columns.last else { return 0...(character.width - 1) }
+        return first...last
+    }
 }
 
 /// A companion on screen: registers with the director while it shows, and draws its pose on the clock's
 /// timeline while an act plays (only while the app is active and motion is allowed); a still picture otherwise.
 private struct CompanionLife: View {
     let character: CompanionCharacter
-    let place: CompanionPlace
+    let spot: CompanionPerch.Spot
     let still: Bool
     let calm: Bool
 
     var body: some View {
         let director = CompanionDirector.shared
         let clock = director.clock(for: character)
+        let place = spot.place
         let stage = director.stages[character.id]
             ?? CompanionStage(since: .now, place: place, look: director.look(at: .now))
         let rest = clock.restPose(at: .now, stage: stage)
-        let spot = CompanionPerch.Spot(place)
         Group {
             if !still, director.isAppActive, stage.act != nil {
                 TimelineView(CompanionTimeline(clock: clock, stage: stage)) { context in
@@ -129,8 +195,7 @@ private struct CompanionLife: View {
                 CompanionFigure(character: character, pose: rest, spot: spot)
             }
         }
-        .contentShape(TapArea(runs: character.drawn[rest.frame], width: character.width, seatRow: character.seatRow,
-                              mirrored: rest.mirrored))
+        .contentShape(TapArea(character: character, pose: rest, spot: spot))
         .onTapGesture { director.tap(character.id) }
         .onAppear { director.appear(character.id, place: place, still: still, calm: calm) }
         .onDisappear { director.disappear(character.id) }
@@ -194,7 +259,9 @@ struct CompanionFigure: View {
 /// the base is carried down to the host's edge in its own ink, so no background shows between them. What it adds is
 /// tucked behind the rim: one sprite pixel below each base pixel that has nothing hanging under it, clipped to above
 /// the host's shape (half a point into it, so the two edges meet without a seam). On the flat it is that half point;
-/// a base more than a pixel above the curve is the drawing's to fix (`CompanionSeatTests`). A see-through character's
+/// a base more than a pixel above the curve is the drawing's to fix (`CompanionSeatTests`). On the Duo's island
+/// (brief 104, item 7) the host is a dome falling away on both sides, so the seat carries a base pixel down as far as
+/// `Spot.seatDepth` pixels, to the curve. A see-through character's
 /// seat is as see-through as the pixel it goes under (`CompanionCharacter.opacity`), and a veil (Phase's hem, brief
 /// 101) gets none: a ghost's hem floats, and a solid bit under its points showed where the "+" curves away.
 struct CompanionSeat: View {
@@ -209,6 +276,33 @@ struct CompanionSeat: View {
     /// The base pixels a seat goes under: on the edge row, with nothing hanging below them in front of the host (x as
     /// drawn, mirrored or not). What lies behind the host (brief 104) is no base and hangs over nothing.
     static func base(_ character: CompanionCharacter, pose: CompanionPose) -> [(x: Int, ink: CompanionInk)] {
+        seated(character, pose: pose, spot: .addButton).map { ($0.x, $0.ink) }
+    }
+
+    /// Where the seat goes in `spot`: under each base pixel (from the row under the edge row), and on the island's dome
+    /// also under what hangs in front below the edge (an ear, a foot), from the row under its lowest pixel, so it
+    /// rests on the curve too. `y` is the first sprite row the seat fills.
+    static func seated(_ character: CompanionCharacter, pose: CompanionPose,
+                       spot: CompanionPerch.Spot) -> [(x: Int, y: Int, ink: CompanionInk)] {
+        let pixels = edgePixels(character, pose: pose)
+        guard spot == .island, character.drawn.indices.contains(pose.frame) else { return pixels }
+        let runs = character.drawn[pose.frame]
+        let edge = character.seatRow - 1
+        var lowest: [Int: (y: Int, ink: CompanionInk)] = [:]
+        for run in runs where run.y > edge && !run.behind {
+            for x in run.x..<(run.x + run.length) where (lowest[x]?.y ?? -1) < run.y { lowest[x] = (run.y, run.ink) }
+        }
+        // A ghost's hem too (brief 101 lets it float over the "+"): here it rests on the curve, as see-through as itself.
+        var out = pixels
+        for (x, pixel) in lowest {
+            let drawnX: Int = pose.mirrored ? character.width - 1 - x : x
+            out.append((drawnX, pixel.y + 1, pixel.ink))
+        }
+        return out
+    }
+
+    /// The edge row's base pixels with nothing in front hanging below them, as drawn, the seat starting a row lower.
+    private static func edgePixels(_ character: CompanionCharacter, pose: CompanionPose) -> [(x: Int, y: Int, ink: CompanionInk)] {
         guard character.drawn.indices.contains(pose.frame) else { return [] }
         let runs = character.drawn[pose.frame]
         let edge = character.seatRow - 1
@@ -216,11 +310,11 @@ struct CompanionSeat: View {
         for run in runs where run.y == edge + 1 && !run.behind {
             for x in run.x..<(run.x + run.length) { below.insert(x) }
         }
-        var out: [(x: Int, ink: CompanionInk)] = []
+        var out: [(x: Int, y: Int, ink: CompanionInk)] = []
         for run in runs where run.y == edge && run.ink != .veil && !run.behind {
             for x in run.x..<(run.x + run.length) where !below.contains(x) {
                 let drawnX: Int = pose.mirrored ? character.width - 1 - x : x
-                out.append((drawnX, run.ink))
+                out.append((drawnX, character.seatRow, run.ink))
             }
         }
         return out
@@ -229,34 +323,48 @@ struct CompanionSeat: View {
     var body: some View {
         let inks = inks ?? CompanionInks(palette: Theme.palette)
         let p = CompanionCharacter.pointsPerPixel
-        let base = Self.base(character, pose: pose)
+        let seated = Self.seated(character, pose: pose, spot: spot)
         let host = CompanionPerch.surface(character, spot: spot).offsetBy(dx: 0, dy: Self.overlap)
-        let top: CGFloat = CGFloat(character.seatRow) * p
+        let depth: Int = spot.seatDepth
+        let tall: CGFloat = CGFloat(depth) * p
+        let lowest: Int = seated.map(\.y).max() ?? character.seatRow
+        let rows: Int = max(character.height, lowest + depth)
         let character = character
         Canvas { context, _ in
             context.clip(to: host, options: .inverse)
-            for pixel in base {
+            for pixel in seated {
                 let left: CGFloat = CGFloat(pixel.x) * p
+                let top: CGFloat = CGFloat(pixel.y) * p
                 let alpha: Double = character.opacity(pixel.ink)
                 let color: Color = alpha < 1 ? inks[pixel.ink].opacity(alpha) : inks[pixel.ink]
-                context.fill(Path(CGRect(x: left, y: top, width: p, height: p)), with: .color(color))
+                context.fill(Path(CGRect(x: left, y: top, width: p, height: tall)), with: .color(color))
             }
         }
-        .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height + 1) * p)
+        .frame(width: CGFloat(character.width) * p, height: CGFloat(rows) * p)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 }
 
 /// The companion's own pixels above the edge it sits on (a pixel's slack around them): a tap below the edge is the
-/// field's or the "+"'s.
+/// field's or the "+"'s. On the island, whose dome its seat row sinks into, nothing inside the island's shape either:
+/// the Inbox cell under it takes its taps.
 private struct TapArea: Shape {
-    let runs: [CompanionCharacter.Run]
-    let width: Int
-    let seatRow: Int
-    let mirrored: Bool
+    let character: CompanionCharacter
+    let pose: CompanionPose
+    let spot: CompanionPerch.Spot
 
-    func path(in rect: CGRect) -> Path {
-        CompanionCharacter.tapShape(runs: runs, width: width, mirrored: mirrored, belowRow: seatRow)
+    func path(in rect: CGRect) -> Path { CompanionPerch.tapShape(character, pose: pose, spot: spot) }
+}
+
+extension CompanionPerch {
+    /// What of a pose takes taps, in the sprite's coordinates (`TapArea`): its own pixels above the edge it sits on,
+    /// with a pixel's slack; on the island, nothing inside the island's shape.
+    static func tapShape(_ character: CompanionCharacter, pose: CompanionPose, spot: Spot) -> Path {
+        let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
+        let shape = CompanionCharacter.tapShape(runs: runs, width: character.width, mirrored: pose.mirrored,
+                                                belowRow: character.seatRow)
+        guard spot == .island else { return shape }
+        return shape.subtracting(surface(character, spot: spot))
     }
 }
