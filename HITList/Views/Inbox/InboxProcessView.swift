@@ -560,8 +560,7 @@ struct InboxProcessView: View {
         }
     }
 
-    /// Applies the edited title the way quick add reads text: a date, priority, #project and @labels
-    /// are taken out and set on the task, the rest is the title. Returns whether that scheduled the
+    /// Applies the edited title the way quick add reads text (`ReviewTitleEdit`). Returns whether that scheduled the
     /// task or moved it to a Group, which counts as handling it.
     @discardableResult
     private func applyTitleEdit(to task: TaskItem) -> Bool {
@@ -569,30 +568,9 @@ struct InboxProcessView: View {
         titleFocused = false
         let text = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, text != task.title else { return false }
-        let parsed = parser.parse(text)
-        let title = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty { task.title = title }
-        var handled = false
-        if let due = parsed.dueDate {
-            task.dueDate = due
-            task.hasDueTime = parsed.hasDueTime
-            if let rule = parsed.recurrence { task.recurrenceRule = rule }
-            handled = true
-        }
-        if parsed.priority != .p4 { task.priorityValue = parsed.priority }
-        if let name = parsed.projectName, let project = try? TaskActions.findOrCreateProject(named: name, in: context) {
-            task.project = project
-            handled = true
-        }
-        for name in parsed.labelNames {
-            guard let label = try? TaskActions.findOrCreateLabel(named: name, in: context),
-                  !(task.labels ?? []).contains(where: { $0.id == label.id }) else { continue }
-            task.labels = (task.labels ?? []) + [label]
-        }
-        task.touch()
-        try? context.save()
-        if parsed.dueDate != nil { rescheduleNotifications() }
-        return handled
+        let edit = ReviewTitleEdit.apply(text, parser: parser, to: task, in: context)
+        if edit.touchesReminders { rescheduleNotifications() }
+        return edit.handled
     }
 
     private func rescheduleNotifications() {
@@ -850,5 +828,49 @@ private struct DeletedToast: View {
         .padding(.bottom, 12)
         // The text and a real Undo button, each reachable (a merged element took taps on its middle).
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// Review Inbox's title edit: a date, priority, #project, @labels and reminders are taken out and set on the task,
+/// the rest is the title. The reminders were taken out and dropped until brief 127: "Pay the bill 5pm !30mb" lost its
+/// "30 min before" and "Call mom !15m" its reminder, without a word. A task under review has no date, so a reminder
+/// before the due time counts only beside a typed time, as in quick add.
+enum ReviewTitleEdit {
+    struct Outcome: Equatable {
+        /// A date or a Group: the task has its place and leaves the review.
+        var handled: Bool
+        /// Its reminders may have moved: reschedule them.
+        var touchesReminders: Bool
+    }
+
+    @MainActor
+    @discardableResult
+    static func apply(_ text: String, parser: QuickAddParser, to task: TaskItem, in context: ModelContext) -> Outcome {
+        let parsed = parser.parse(text)
+        let title = parsed.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty { task.title = title }
+        var handled = false
+        if let due = parsed.dueDate {
+            task.dueDate = due
+            task.hasDueTime = parsed.hasDueTime
+            if let rule = parsed.recurrence { task.recurrenceRule = rule }
+            handled = true
+        }
+        if parsed.priority != .p4 { task.priorityValue = parsed.priority }
+        if let name = parsed.projectName, let project = try? TaskActions.findOrCreateProject(named: name, in: context) {
+            task.project = project
+            handled = true
+        }
+        for name in parsed.labelNames {
+            guard let label = try? TaskActions.findOrCreateLabel(named: name, in: context),
+                  !(task.labels ?? []).contains(where: { $0.id == label.id }) else { continue }
+            task.labels = (task.labels ?? []) + [label]
+        }
+        // "!at" (0) is the default, at the time.
+        if let minutes = parsed.reminderOffsetMinutes { task.reminderOffsetMinutes = minutes > 0 ? minutes : nil }
+        if let date = parsed.reminderDate { task.reminderDate = date }
+        task.touch()
+        try? context.save()
+        return Outcome(handled: handled, touchesReminders: parsed.dueDate != nil || parsed.reminderDate != nil)
     }
 }
