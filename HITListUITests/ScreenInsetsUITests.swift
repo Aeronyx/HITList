@@ -51,16 +51,55 @@ final class ScreenInsetsUITests: XCTestCase {
         let new = app.buttons["browseNew"].firstMatch
         XCTAssertTrue(profile.exists && bolt.exists && new.exists, "the picture, the bolt and the pill")
         attachTree("Browse")
-        // The pill's capsule starts `TitleRowControlMetrics.pillPadding` (4) before its first 44 pt target.
+        // As drawn: the picture is a 28 pt circle in the middle of its menu's frame, and the pill's capsule starts
+        // `TitleRowControlMetrics.pillPadding` (4) before its first 44 pt target.
+        let circleEnd = profile.frame.midX + 14
         let pillStart = new.frame.minX - 4
-        let before = bolt.frame.minX - profile.frame.maxX
+        let before = bolt.frame.minX - circleEnd
         let after = pillStart - bolt.frame.maxX
         XCTAssertEqual(profile.frame.midY, bolt.frame.midY, accuracy: 4, "the picture in the bolt's row")
-        XCTAssertEqual(before, after, accuracy: 2.5, "one gap either side of the bolt (\(before), \(after))")
+        XCTAssertEqual(before, after, accuracy: 1.5, "one gap either side of the bolt (\(before), \(after))")
         XCTAssertGreaterThanOrEqual(before, 4, "the picture clear of the bolt")
     }
 
+    /// Pictures of the four tabs and a Group, at the top and a page down, from the seeded tasks alone (brief 93's walk adds
+    /// three through quick add first, which on a busy Duo simulator sometimes leaves its card open and stops the walk).
+    /// On demand: `TEST_RUNNER_HITLIST_QA=1`.
+    func testPhotographTheLists() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["HITLIST_QA"] == "1", "pictures on demand (TEST_RUNNER_HITLIST_QA=1)")
+        for tab in ["inbox", "today", "upcoming", "flipboard"] {
+            go(tab)
+            snap("list \(tab)")
+            snapScrolled("list \(tab)")
+        }
+        go("inbox")
+        app.buttons["browseButton"].firstMatch.tap()
+        let work = app.staticTexts["Work"].firstMatch
+        if work.waitForExistence(timeout: 8) {
+            work.tap()
+            pause()
+            snap("a Group, Work")
+        }
+    }
+
     // MARK: Helpers
+
+    private func snap(_ name: String) {
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = name
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+
+    private func snapScrolled(_ name: String) {
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.75))
+        from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -380)))
+        pause(0.8)
+        snap("\(name), scrolled")
+        let back = app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.35))
+        back.press(forDuration: 0.05, thenDragTo: back.withOffset(CGVector(dx: 0, dy: 600)))
+        pause(0.6)
+    }
 
     private func go(_ tab: String) {
         let button = app.buttons["tab-\(tab)"]
