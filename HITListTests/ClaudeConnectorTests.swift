@@ -395,6 +395,27 @@ final class ClaudeToolTests: XCTestCase {
         XCTAssertTrue(task.hasDueTime)
     }
 
+    /// Brief 127's scan: a reminder before the due time leans on the time. A due with no time takes it away, so the
+    /// "minutes before" goes with it (stored, it would come back the day a time is set again); a reminder typed in the
+    /// due phrase ("fri 6pm !30mb") is read, not dropped.
+    func testUpdateKeepsRemindersHonestAboutTheTime() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
+        let task = try fetch("Buy milk")
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "fri 6pm !30mb"])
+        XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(task.reminderOffsetMinutes, 30, "read with the time beside it")
+
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "sat 9am"])
+        XCTAssertEqual(task.reminderOffsetMinutes, 30, "a new time keeps the reminder before it")
+
+        _ = try call(ClaudeTools.updateTask, ["id": id, "due": "tomorrow"])
+        XCTAssertFalse(task.hasDueTime)
+        XCTAssertNil(task.reminderOffsetMinutes, "no time: nothing to count from")
+
+        let (refused, _) = try call(ClaudeTools.updateTask, ["id": id, "due": "fri !30mb"])
+        XCTAssertTrue(refused.isError, "no time beside it: not a date phrase")
+    }
+
     func testABadFieldChangesNothing() throws {
         let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
         for bad: [String: JSONValue] in [["title": "Renamed", "due": "someday maybe"], ["title": "Renamed", "priority": 7],

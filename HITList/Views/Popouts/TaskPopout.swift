@@ -93,11 +93,12 @@ struct TaskPopout: View {
     }
 
     var body: some View {
-        // The title is read once per keystroke: its highlights, and every row and pill below, come from it.
+        // The title is read twice per keystroke: its highlights as it is typed (a "!" word at the very end waits for
+        // a space, brief 48), and every row and pill below as Confirm will save it (brief 127), so "!30mb" just
+        // typed reads "30 min before" on the Reminder pill at once.
         let parser = parser()
         let parsed = draft.parsed(parser, for: task)
-        let phrases = TitlePhrases(text: draft.title, result: parsed, dueDate: task.dueDate, hasDueTime: task.hasDueTime,
-                                   calendar: parser.dateParser.calendar)
+        let phrases = draft.phrases(parser, for: task)
         let shown = EditorFields(task: task).applying(phrases)
         VStack(spacing: 0) {
             VStack(spacing: 0) {
@@ -638,7 +639,7 @@ struct TaskPopout: View {
     private func confirm() {
         guard !isClosing else { return }
         isClosing = true
-        commitDraft()
+        commitDraft(confirming: true)
         popouts.closeTask()
     }
 
@@ -669,10 +670,14 @@ struct TaskPopout: View {
         popouts.closeTask()
     }
 
-    private func commitDraft() {
+    /// `confirming`: Confirm (or Return on the Mac), which alone sets a woken stored reminder (brief 127); completing,
+    /// duplicating and moving the task save only the typing.
+    private func commitDraft(confirming: Bool = false) {
         // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
         guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
-        if (try? draft.commit(to: task, in: context, parser: parser())) == true { rescheduleNotifications() }
+        if (try? draft.commit(to: task, in: context, parser: parser(), confirming: confirming)) == true {
+            rescheduleNotifications()
+        }
     }
 
     // MARK: Changes
@@ -695,19 +700,22 @@ struct TaskPopout: View {
     }
 
     /// The title's reminder phrases of one sort: before the due time ("!15mb", "!at") or from now ("!15m").
-    private func removeTypedReminders(beforeDue: Bool) {
-        removeTyped([.reminder]) { ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue }
+    /// `keepingStored`: the time is going, so a stored one woken by it (brief 127) goes back to sleep where it is.
+    private func removeTypedReminders(beforeDue: Bool, keepingStored: Bool = false) {
+        draft.removeTyped([.reminder], parser(), for: task, keepingStored: keepingStored) {
+            ReminderPhrase(token: $0.text)?.isBeforeDue == beforeDue
+        }
     }
 
     /// A new day keeps the time of day; nil removes the date (and with it the time).
     private func setDate(_ day: Date?) {
         if day == nil {
             removeTyped([.date, .time, .recurrence])
-            removeTypedReminders(beforeDue: true)
+            removeTypedReminders(beforeDue: true, keepingStored: true)
         } else {
             removeTyped([.date])
         }
-        TaskActions.reschedule(task, to: day, in: context)
+        TaskEditorDraft.pickDay(day, for: task, in: context)
         rescheduleNotifications()
     }
 
@@ -723,7 +731,7 @@ struct TaskPopout: View {
 
     private func clearTime() {
         removeTyped([.time])
-        removeTypedReminders(beforeDue: true)
+        removeTypedReminders(beforeDue: true, keepingStored: true)
         if let due = task.dueDate { task.dueDate = Calendar.current.startOfDay(for: due) }
         task.hasDueTime = false
         task.reminderOffsetMinutes = nil
