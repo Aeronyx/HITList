@@ -3,7 +3,8 @@ import SwiftData
 import HITListCore
 
 /// On the Duo's inner display, beside Today where it fits (`DuoColumns.plan`): Upcoming's next days,
-/// tomorrow through a week out, each day under its header ("Tomorrow", "Friday, Nov 6"). A tap opens the
+/// tomorrow through a week out, each day under its header in the lists' one form ("Nov 12 · Tomorrow · Thursday",
+/// brief 108; it was "Tomorrow", "Friday, Nov 13" in the system's header style beside Today's own). A tap opens the
 /// task in the editor column; the circle completes it, as in Browse's search results.
 struct DuoNextDays: View {
     @Environment(\.modelContext) private var context
@@ -65,12 +66,15 @@ struct DuoNextDays: View {
                                     .slateRow()
                             }
                         } header: {
-                            Text(DueFormatter.sectionTitle(for: day.day, now: now))
-                                .foregroundStyle(DueFormatter.sectionColor(for: day.day, now: now))
+                            // The lists' one day form and header style (brief 99), as Today beside it writes its own day.
+                            DayHeadingLine(full: DueFormatter.dayHeading(for: day.day, now: now),
+                                           short: DueFormatter.dayHeading(for: day.day, now: now, shortWeekday: true))
+                                .taskSectionHeader(color: DueFormatter.sectionColor(for: day.day, now: now))
                         }
                     }
                 }
                 .listStyle(.plain)
+                .environment(\.defaultMinListHeaderHeight, 0)
                 .slateList()
             }
         }
