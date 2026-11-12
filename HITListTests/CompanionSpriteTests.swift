@@ -228,16 +228,35 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.rain, "rain")
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
-        // Brief 123: in the rain it holds 0.9.6's striped canopy on a short handle, wet; asleep it still holds it.
+        // Brief 130 (George: "just restore his 0.9.6 canopy. It'll just be a little floating canopy over his head"): in
+        // the rain 0.9.6's striped canopy floats over its cap with nothing holding it, wet (round 24's beads, drop and
+        // pools); asleep the same.
         XCTAssertEqual(nod.field.asleep.rain, "sleepRain")
         XCTAssertEqual(nod.plus.asleep.rain, "sleepRain")
         let rain = nod.rows("rain")!.map(Array.init)
-        XCTAssertEqual(String(rain[3]), "..m..m..m..m..m..m..", "the canopy's ribs, 0.9.6's")
-        XCTAssertTrue((4...7).allSatisfy { rain[$0][1] == "m" }, "a short handle under its left tip")
-        XCTAssertEqual(rain[8][1], "l", "its hand on the handle")
-        XCTAssertTrue(rain.allSatisfy { $0[0] == "." }, "no wire down its side (0.9.7's)")
+        let canopy096 = [".........ll.........", "......mllllllm......", "...mmllllllllllmm...", "..m..m..m..m..m..m.."].map(Array.init)
+        for y in 0...3 {
+            for x in 0..<20 {
+                if "phu".contains(rain[y][x]) {
+                    XCTAssertNotEqual(canopy096[y][x], ".", "rain \(x), \(y): water sits on the canopy")
+                } else {
+                    XCTAssertEqual(rain[y][x], canopy096[y][x], "rain \(x), \(y): 0.9.6's canopy, the water aside")
+                }
+            }
+        }
+        let water: Set<Character> = ["p", "h", "u"]
+        let wet = nod.frames.filter { frame in frame.rows.count == 20 && frame.rows[0...4].joined().contains { water.contains($0) } }
+        XCTAssertGreaterThanOrEqual(wet.count, 20, "every frame drawn for the rain")
+        for frame in wet {
+            let rows = frame.rows.map(Array.init)
+            XCTAssertTrue((4...15).allSatisfy { rows[$0][0] == "." && rows[$0][1] == "." },
+                          "\(frame.name): nothing between the canopy and its hand (0.9.8's handle, 0.9.7's wire)")
+        }
+        let resting = nod.rows("rest")!.map(Array.init)
+        XCTAssertEqual(rain[nod.seatRow - 1][3], resting[nod.seatRow - 1][3], "its left hand where it rests")
         XCTAssertTrue(rain[0...3].joined().contains("p"), "beads of water on the canopy")
-        XCTAssertEqual(Set(rain[nod.seatRow - 1].filter { "phu".contains($0) }), ["p", "h", "u"], "a puddle by its seat")
+        // The "+" is flat beside its hands only (columns 2 and 15): a pool of water by one, its glint by the other.
+        XCTAssertEqual(Set(rain[nod.seatRow - 1].filter { water.contains($0) }), ["p", "h"], "a puddle by its seat")
         XCTAssertEqual(nod.rows("sleepRain")![0...3].joined(), rain[0...3].map { String($0) }.joined(), "asleep, the same canopy")
         // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
         XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
