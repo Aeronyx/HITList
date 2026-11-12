@@ -81,7 +81,9 @@ final class CompanionSpriteTests: XCTestCase {
                     guard let w else { continue }
                     // One prop or one change: an umbrella, a dusting, a tail or a pair of ears drawn up into a hood.
                     let change = character.difference(w, posture.awake.rest)
-                    XCTAssertTrue((4...120).contains(change), "\(at) \(w): \(change) pixels")
+                    // Brief 120: Button's one change is his whole cap pulled three rows down over his eyes.
+                    let most = character.id == "button" && w == posture.awake.rain ? 200 : 120
+                    XCTAssertTrue((4...most).contains(change), "\(at) \(w): \(change) pixels")
                 }
                 XCTAssertGreaterThanOrEqual(posture.awake.gestures.count, 3, "\(at): three small gestures")
                 XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 1, "\(at): a stir")
