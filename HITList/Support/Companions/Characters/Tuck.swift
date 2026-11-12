@@ -1931,7 +1931,7 @@ extension CompanionCharacter {
             Frame(name: "sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 ".............cs.....",
                 "..s...c......ba.....",
                 ".mm...mm.....aa.....",
@@ -5081,7 +5081,7 @@ extension CompanionCharacter {
             Frame(name: "dream@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 "...s.........cs.....",
                 "..mm..c......ba.....",
                 ".mllm.mm.....aa.....",
@@ -5147,7 +5147,7 @@ extension CompanionCharacter {
             Frame(name: "sleepLeaf@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 ".............cs.....",
                 "..s...c......ba.....",
                 ".mm...mm.....aaa....",
@@ -5213,7 +5213,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeek@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 "...s.........cs.....",
                 "..mm..c......ba.....",
                 ".dddd.mm.....aa.....",
@@ -5279,7 +5279,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeekLook@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 "...s.........cs.....",
                 "..mm..c......ba.....",
                 ".mlkm.mm.....aa.....",
@@ -5345,7 +5345,7 @@ extension CompanionCharacter {
             Frame(name: "sleepPeekShut@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 "...s.........cs.....",
                 "..mm..c......ba.....",
                 ".mllm.mm.....aa.....",
@@ -5411,7 +5411,7 @@ extension CompanionCharacter {
             Frame(name: "sleepBreath@sleepSnowDeep2", rows: [
                 "....................",
                 "....................",
-                "..............c.....",
+                "....................",
                 "..s...c......cs.....",
                 ".mm...mm.....ba.....",
                 "mllm.mllm....aa.....",
