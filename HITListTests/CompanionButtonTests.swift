@@ -60,7 +60,7 @@ final class CompanionButtonTests: XCTestCase {
     /// three pixels a side, pale spots on it, a pale face on the stem with two big round eyes, each with a glint, rosy
     /// cheeks, and two boots of a pixel's height standing on the edge (brief 109: seat row 19, the soles on the host).
     func testItIsAMushroomInTheThemesRose() {
-        XCTAssertEqual(button.inks, [.ink, .dark, .mid, .light, .accent, .accentDark])
+        XCTAssertEqual(button.inks.subtracting([.snow, .snowBlue, .snowShade]), [.ink, .dark, .mid, .light, .accent, .accentDark])
         XCTAssertEqual(button.seatRow, 19)
         let rest = button.rows("rest")!.map(Array.init)
         func count(_ ink: Character, _ rows: ArraySlice<[Character]>) -> Int { rows.joined().filter { $0 == ink }.count }
@@ -108,6 +108,131 @@ final class CompanionButtonTests: XCTestCase {
             XCTAssertGreaterThan(button.flourishDuration(place), 1.8, at)
         }
         XCTAssertEqual(button.plus.awake.routines.map(\.name), button.field.awake.routines.map(\.name))
+    }
+
+    /// Brief 109 (George, of 0.9.4's Button: "he has tiny stubs for feet and it makes no sense for his character's
+    /// vibe"): no boot ever moves. In every frame it has, awake or asleep, in every weather and the flourish, the boots'
+    /// row is the resting one, and no idle or routine is named for a boot or a kick.
+    func testItsBootsNeverSwing() {
+        let boots = button.rows("rest")![button.seatRow - 1]
+        for frame in button.frames {
+            XCTAssertEqual(frame.rows[button.seatRow - 1], boots, "\(frame.name): the boots planted")
+        }
+        for place in CompanionPlace.allCases {
+            let posture = button.posture(place)
+            for mode in [posture.awake, posture.asleep] {
+                let names = mode.gestures.map(\.name) + mode.routines.map(\.name) + [mode.answer.name]
+                for name in names {
+                    XCTAssertFalse(name.lowercased().contains("boot") || name.lowercased().contains("kick"), "\(place) \(name)")
+                }
+            }
+        }
+    }
+
+    /// Brief 109's idles, a mushroom's, drawn on 0.9.4's body: its cap bobs (the crown squashes a pixel and springs up a
+    /// pixel), it puffs (cheeks out, the cap lifted a pixel, then the breath let go), its cap wobbles; and among its
+    /// routines the spore puff. Each little loop starts and ends a step from the still.
+    func testItHasAMushroomsIdles() {
+        for place in CompanionPlace.allCases {
+            let awake = button.posture(place).awake
+            for name in ["bob", "puffUp", "capWobble"] {
+                let loop = awake.routines.first { $0.name == name }
+                XCTAssertNotNil(loop, "\(place) \(name)")
+                XCTAssertEqual(loop?.little, true, "\(place) \(name)")
+                XCTAssertTrue(loop.map { button.plays($0, in: .plain, mode: awake) } ?? false, "\(place) \(name)")
+            }
+            XCTAssertTrue(awake.routines.contains { $0.name == "sporePuff" && !$0.little }, "\(place)")
+        }
+        let rest = button.rows("rest")!.map(Array.init)
+        let squash = button.rows("squash")!.map(Array.init)
+        XCTAssertTrue(squash[1].allSatisfy { $0 == CompanionInk.clear }, "the crown down a pixel")
+        XCTAssertEqual(squash[2], rest[1])
+        XCTAssertEqual(Array(squash[6...]), Array(rest[6...]), "only the crown moves")
+        let puff = button.rows("puff")!.map(Array.init)
+        XCTAssertEqual(puff[0], rest[1], "the cap lifted a pixel")
+        XCTAssertGreaterThan(puff[15].filter { $0 != CompanionInk.clear }.count, rest[15].filter { $0 != CompanionInk.clear }.count,
+                             "cheeks out")
+        XCTAssertFalse(puff[16].contains("k"), "the breath held")
+        XCTAssertGreaterThan(button.rows("blow")![16].filter { $0 == "k" }.count, rest[16].filter { $0 == "k" }.count, "and let go")
+    }
+
+    /// The pixels of a frame not joined to the rest of it (side by side or corner to corner): what it lets go into
+    /// the air.
+    private func loose(_ frame: String) -> [(x: Int, y: Int)] {
+        let rows = button.rows(frame)!.map(Array.init)
+        var piece: [Int: Int] = [:]
+        var sizes: [Int] = []
+        for y in rows.indices {
+            for x in rows[y].indices where rows[y][x] != CompanionInk.clear && piece[y * 100 + x] == nil {
+                let id = sizes.count
+                var queue = [(x, y)]
+                piece[y * 100 + x] = id
+                var size = 0
+                while let (px, py) = queue.popLast() {
+                    size += 1
+                    for dy in -1...1 {
+                        for dx in -1...1 {
+                            let nx = px + dx, ny = py + dy
+                            guard rows.indices.contains(ny), rows[ny].indices.contains(nx) else { continue }
+                            guard rows[ny][nx] != CompanionInk.clear, piece[ny * 100 + nx] == nil else { continue }
+                            piece[ny * 100 + nx] = id
+                            queue.append((nx, ny))
+                        }
+                    }
+                }
+                sizes.append(size)
+            }
+        }
+        guard let body = sizes.indices.max(by: { sizes[$0] < sizes[$1] }) else { return [] }
+        var out: [(x: Int, y: Int)] = []
+        for (key, id) in piece where id != body { out.append((key % 100, key / 100)) }
+        return out.sorted { ($0.y, $0.x) < ($1.y, $1.x) }
+    }
+
+    /// Its spore puff, Button's own exception to "nothing in the air" (the format's header): a few spores let go from
+    /// under its cap that drift up and fade, at most three pixels at a time, pale or fading, each within two pixels of
+    /// its cap, gone within a second; never in the rain or snow, and only in its one routine. Elsewhere nothing is
+    /// loose but the rain's own drop.
+    func testItsSporePuffIsSmallAndBrief() {
+        let awake = button.plus.awake
+        let puff = awake.routines.first { $0.name == "sporePuff" }!
+        let ticks = awake.ticks(of: puff).map(\.tick.frame)
+        var run = 0
+        var longest = 0
+        var seen = 0
+        for frame in ticks {
+            let spores = loose(frame)
+            let changed = button.difference(frame, "rest")
+            if spores.isEmpty && !frame.hasPrefix("spore") { run = 0; continue }
+            seen += spores.count
+            run += 1
+            longest = max(longest, run)
+            XCTAssertLessThanOrEqual(changed, 3, "\(frame): a few spores, nothing else")
+            let rows = button.rows(frame)!.map(Array.init)
+            for spore in spores {
+                XCTAssertTrue(["l", "m"].contains(rows[spore.y][spore.x]), "\(frame): a pale spore")
+                var near = false
+                for y in max(0, spore.y - 2)...min(button.height - 1, spore.y + 2) {
+                    for x in max(0, spore.x - 2)...min(button.width - 1, spore.x + 2) where rows[y][x] == "a" || rows[y][x] == "r" {
+                        near = true
+                    }
+                }
+                XCTAssertTrue(near, "\(frame): spore at \(spore) within two pixels of its cap")
+            }
+        }
+        XCTAssertGreaterThan(seen, 0, "it does let some go")
+        XCTAssertLessThan(Double(longest) / button.gestureFPS, 1, "gone within a second")
+        for depth in 0...awake.deepest {
+            XCTAssertFalse(button.plays(puff, in: .snow, mode: awake, depth: depth), "not in the snow (\(depth))")
+        }
+        XCTAssertFalse(button.plays(puff, in: .rain, mode: awake))
+        var elsewhere: [String] = []
+        for gesture in awake.gestures + [awake.answer] where gesture.sky == nil { elsewhere += gesture.ticks.map(\.frame) }
+        for routine in awake.routines where routine.name != "sporePuff" && routine.sky == nil {
+            elsewhere += awake.ticks(of: routine).map(\.tick.frame)
+        }
+        elsewhere += button.plus.flourish.map(\.frame)
+        for frame in Set(elsewhere) { XCTAssertTrue(loose(frame).isEmpty, "\(frame): nothing in the air") }
     }
 
     /// Its flourish: it spins its cap like a parasol, the pale spots going round it.
