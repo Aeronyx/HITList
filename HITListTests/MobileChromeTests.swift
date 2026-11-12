@@ -95,6 +95,72 @@ final class MobileChromeTests: XCTestCase {
                        "a column too short for the taller island and the system's items")
     }
 
+    // MARK: The Duo's bar column (brief 106)
+
+    func testTheScreensControlsLeaveTheColumnForTheTitlesRow() {
+        // Where the island stands upright the column is the system's status, Back, the island and the "+".
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: .side(.trailing), isPhoneShell: true), .titleRow)
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: .side(.leading), isPhoneShell: true), .titleRow)
+        XCTAssertFalse(ScreenControlsPlacement.titleRow.inSystemColumn)
+        // Every other iPhone, the outer display on its side (the island at the bottom), the iPad and the Mac: unchanged.
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: .bottom, isPhoneShell: true), .toolbar)
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: .bottom, isPhoneShell: false), .toolbar)
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: .side(.trailing), isPhoneShell: false), .toolbar,
+                       "outside the phone shell (the iPad, the Duo's sidebar layout) the toolbar keeps them")
+    }
+
+    func testNothingInTheColumnTouchesAnythingElse() {
+        // The outer display upright, top to bottom: the system's status (a call pushes it 60 pt down), Back on a pushed
+        // screen, clear room, the island and the "+" on the home indicator's gap. Summed against its 678 pt.
+        XCTAssertEqual(BarColumnBudget.displayHeight, 678)
+        XCTAssertEqual(BarColumnBudget.islandTop + IslandMetrics.sideChromeHeight + BarColumnBudget.bottomSafeArea,
+                       BarColumnBudget.displayHeight, "the island and the + stand on the home indicator's gap")
+        for pushed in [false, true] {
+            for call in [false, true] {
+                let room = BarColumnBudget.clearRoom(pushed: pushed, call: call)
+                XCTAssertGreaterThanOrEqual(room, BarColumnBudget.minimumGap,
+                                            "pushed \(pushed), call \(call): \(room) pt between the system's items and the island")
+            }
+        }
+        XCTAssertEqual(BarColumnBudget.islandTop, 318, "measured: the island's top on the simulator")
+        XCTAssertEqual(BarColumnBudget.clearRoom(pushed: false, call: false), 166, "a tab's first screen")
+        XCTAssertEqual(BarColumnBudget.clearRoom(pushed: true, call: false), 96, "a pushed screen: Back")
+        XCTAssertEqual(BarColumnBudget.clearRoom(pushed: true, call: true), 36, "a pushed screen during a call")
+        // Why the controls left: the system's pill under Back landed on the island's top cell on every pushed screen, and
+        // during a call on every first screen (the friend's Flipboard).
+        XCTAssertLessThan(BarColumnBudget.clearRoom(pushed: true, call: false) - BarColumnBudget.systemPill, 0)
+        XCTAssertLessThan(BarColumnBudget.clearRoom(pushed: false, call: true) - BarColumnBudget.systemPill, 0)
+        XCTAssertGreaterThan(BarColumnBudget.clearRoom(pushed: false, call: false) - BarColumnBudget.systemPill, 0,
+                             "a tab's first screen without a call just cleared it, as the supervisor saw")
+    }
+
+    func testTheTitleRowsControlsAreTheToolbarsGroupAtItsIPhoneSize() {
+        XCTAssertEqual(TitleRowControlMetrics.control, 44, "a toolbar item's target")
+        XCTAssertEqual(TitleRowControlMetrics.pillWidth, 2 * 44 + 2 * 4)
+        XCTAssertEqual(TitleRowControlMetrics.pillHeight, 44)
+        XCTAssertEqual(TitleRowControlMetrics.glyphSize, 17, "the system toolbar's glyphs")
+        XCTAssertEqual(TitleRowControlMetrics.width, SyncBolt.frame.width + 6 + 96 + 12, "the bolt, its gap, the pill, the room after it")
+        // The content keeps the 382 pt left of the 84 pt column: the longest built-in title ("Shared Tasks", 224 pt in
+        // Inter Bold 34) after the 20 pt margin, then the item, fit with 8 pt between; the system shortens a longer
+        // Group's name before the bolt.
+        XCTAssertLessThanOrEqual(20 + 224 + 8 + TitleRowControlMetrics.width, 382)
+        // The title's row stays while the list scrolls: only there, and a point is all it takes.
+        XCTAssertTrue(ScreenControlsPlacement.titleRow.pinsTitleRow)
+        XCTAssertFalse(ScreenControlsPlacement.toolbar.pinsTitleRow, "every other iPhone folds its large title as before")
+        XCTAssertEqual(ScreenControlsPlacement.titleRowAnchor, 1)
+    }
+
+    func testTheIslandStillFallsToTheBottomOnItsSide() {
+        // On its side the outer display is 466 pt tall: no room for the island under the system's items.
+        XCTAssertGreaterThan(IslandPlacement.sideMinimumWindowHeight, 466)
+        XCTAssertLessThanOrEqual(IslandPlacement.sideMinimumWindowHeight, BarColumnBudget.displayHeight)
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: 466), .bottom)
+        XCTAssertEqual(IslandPlacement(verticalBarEdge: .trailing, windowHeight: BarColumnBudget.displayHeight), .side(.trailing))
+        XCTAssertEqual(ScreenControlsPlacement(islandPlacement: IslandPlacement(verticalBarEdge: .trailing, windowHeight: 466),
+                                               isPhoneShell: true), .toolbar,
+                       "on its side the system's column holds Back and the pill, with nothing of ours under them")
+    }
+
     func testIslandRendersOnBothAxes() {
         for axis in [Axis.horizontal, .vertical] {
             let bar = MobileTabBar(selection: .constant(.upcoming), day: 7, axis: axis)
