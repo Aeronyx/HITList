@@ -189,6 +189,51 @@ final class SyncWatchdogTests: XCTestCase {
         XCTAssertEqual(dog.handle(ended(importID, .importing, from: 39, at: 40)), [.importLate(latency: 40, pushes: 1)])
     }
 
+    /// Brief 95, George's iPhone at 13:36:01 on 2026-11-11 (I2259–2268): a push with the app in the background, no
+    /// import while it stayed there, "Import overdue" as an error at 5 s; the import came 1.4 s after he brought the app
+    /// to the front. All five "Import overdue" errors in his phone's log were this: iOS decides when the mirror imports
+    /// while the app is in the background. Here 0 s is the push.
+    func testAPushInTheBackgroundWaitsForTheFrontWithoutAnError() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.suspended(at: at(-65)))
+        _ = dog.handle(.resumed(at: at(0)))  // woken for the push (`CloudSyncMonitor.pushReceived`)
+        _ = dog.handle(.push(at: at(0), inBackground: true))
+        let waiting = dog.tick(at(5))
+        XCTAssertEqual(waiting, [.waiting(.import, reason: SyncWatchdog.inBackgroundReason, count: 1)])
+        XCTAssertEqual(waiting.first?.level, .info)
+        XCTAssertEqual(waiting.first?.message(rules: dog.rules),
+                       "Import waiting: the app is in the background; iOS chooses when the mirror imports")
+        XCTAssertNil(dog.nextDeadline(after: at(5)), "no clock runs until the app is in front")
+        XCTAssertEqual(dog.tick(at(17)), [])
+        _ = dog.handle(.resumed(at: at(18)))
+        _ = dog.handle(.activated(at: at(18), idle: 84))
+        XCTAssertEqual(dog.nextDeadline(after: at(18)), at(23), "five seconds from coming to the front")
+        _ = dog.handle(started(importID, .importing, 18.25))
+        let findings = dog.handle(ended(importID, .importing, from: 18.25, at: 19.4))
+        XCTAssertEqual(findings.first, .importAfterPush(latency: 19.4, pushes: 1), "on time: within five seconds of the front")
+        guard case .importAfterActivation? = findings.last, findings.count == 2 else {
+            return XCTFail("and, as at I2269, how long after the app came to the front: \(findings)")
+        }
+        XCTAssertFalse(findings.contains { $0.level == .error })
+    }
+
+    func testAPushInTheBackgroundImportedThereSaysNothingMore() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.push(at: at(0), inBackground: true))
+        _ = dog.handle(started(importID, .importing, 0.01))
+        XCTAssertEqual(dog.handle(ended(importID, .importing, from: 0.01, at: 0.7)), [.importAfterPush(latency: 0.7, pushes: 1)])
+        XCTAssertEqual(dog.tick(at(10)), [])
+    }
+
+    func testInFrontAPushStillHasFiveSeconds() {
+        var dog = makeWatchdog()
+        _ = dog.handle(.push(at: at(-30), inBackground: true))
+        _ = dog.tick(at(-25))
+        _ = dog.handle(.activated(at: at(0), idle: 120))
+        let overdue = dog.tick(at(5))
+        guard case .importOverdue(1, _)? = overdue.first else { return XCTFail("in front and nothing imported: \(overdue)") }
+    }
+
     func testAnImportThatStartedJustBeforeThePushArrivedCounts() {
         var dog = makeWatchdog()
         _ = dog.handle(started(importID, .importing, -1.5))
@@ -451,7 +496,7 @@ final class SyncWatchdogTests: XCTestCase {
 
     private func signalTime(_ signal: SyncSignal) -> Date {
         switch signal {
-        case let .eventStarted(_, _, at), let .eventEnded(_, _, _, _, _, at), let .localSave(at, _), let .push(at),
+        case let .eventStarted(_, _, at), let .eventEnded(_, _, _, _, _, at), let .localSave(at, _), let .push(at, _),
              let .activated(at, _), let .network(_, at), let .account(_, _, at), let .suspended(at), let .resumed(at):
             return at
         }

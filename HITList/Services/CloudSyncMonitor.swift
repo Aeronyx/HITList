@@ -774,8 +774,10 @@ final class CloudSyncMonitor {
         let now = Date()
         #if os(iOS)
         if appState == "background" { watch(.resumed(at: now)) }
-        #endif
+        watch(.push(at: now, inBackground: appState == "background"))
+        #else
         watch(.push(at: now))
+        #endif
     }
 
     /// The iOS push handler is done: an app still in the background is suspended again.
