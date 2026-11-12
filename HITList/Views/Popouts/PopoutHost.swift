@@ -407,6 +407,9 @@ struct PopoutHost: ViewModifier {
                         }
                         card
                             .ovalCardChrome()
+                            // A chip's card opens for where the chip will be once the keyboard has stepped aside and
+                            // the card has dropped with it, by `aboveKeyboard` (brief 107).
+                            .environment(\.pickerSettleInset, geo.safeAreaInsets.bottom)
                             // A first-run tip floats above the card over the dimmed list, never inside it.
                             .floatingQuickAddTip(isHidden: confirmingDiscard)
                             // A tap on the card itself also means "keep editing".
@@ -441,15 +444,23 @@ struct PopoutHost: ViewModifier {
 #if os(iOS)
 /// The iPhone editor sheet's opening height (brief 36, George: "give the Edit task pane some more screen
 /// space"): `EditorMetrics.sheetOpeningHeight`, so the title card, the pills, two sub-tasks and the Confirm
-/// pill fit with air above it, but never more than 85% of what the sheet can take, so a short screen
-/// still shows a strip of the list. The large detent stays above it.
+/// pill fit with air above it, but never more than 85% of what the sheet can take, so the screen still shows a
+/// strip of the list. The large detent stays above it.
+///
+/// A screen that cannot give the sheet its opening height and keep a strip of the list worth the name
+/// (`minimumStrip`) opens the editor at its full height instead (brief 107): on the iPhone Duo's outer display, 678 pt
+/// tall, the strip was the list's title alone, and the editor's date card had 306 pt below its row for a 370 pt card.
 struct EditorOpeningDetent: CustomPresentationDetent {
     static func height(in context: Context) -> CGFloat? {
         openingHeight(maxDetentValue: context.maxDetentValue)
     }
 
+    /// The least of the list worth showing above the sheet: about two rows.
+    static let minimumStrip: CGFloat = 150
+
     static func openingHeight(maxDetentValue: CGFloat) -> CGFloat {
-        min(EditorMetrics.sheetOpeningHeight, (maxDetentValue * 0.85).rounded())
+        if maxDetentValue - EditorMetrics.sheetOpeningHeight < minimumStrip { return maxDetentValue }
+        return min(EditorMetrics.sheetOpeningHeight, (maxDetentValue * 0.85).rounded())
     }
 }
 #endif

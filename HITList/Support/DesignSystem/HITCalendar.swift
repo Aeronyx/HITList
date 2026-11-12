@@ -28,6 +28,9 @@ struct HITCalendar: View {
     var calendar: Calendar
     /// Changing it gives the calendar keyboard focus (a picker card passes its focus request).
     var focusTrigger: Int
+    /// The day circles' side: `cellSize`, or less in a picker card's short layout (brief 107: the iPhone Duo's outer
+    /// display, 678 pt tall, had no room for the editor's date card).
+    var daySize: CGFloat
     var onPick: (Date) -> Void
 
     @State private var month: Date
@@ -38,12 +41,13 @@ struct HITCalendar: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(selection: Date?, today: Date = Date(), weekStart: Int = 2, calendar: Calendar = .current,
-         focusTrigger: Int = 0, onPick: @escaping (Date) -> Void) {
+         focusTrigger: Int = 0, daySize: CGFloat = HITCalendar.cellSize, onPick: @escaping (Date) -> Void) {
         self.selection = selection.map { calendar.startOfDay(for: $0) }
         self.today = calendar.startOfDay(for: today)
         self.weekStart = weekStart
         self.calendar = calendar
         self.focusTrigger = focusTrigger
+        self.daySize = daySize
         self.onPick = onPick
         _month = State(initialValue: Self.firstOfMonth(selection ?? today, calendar: calendar))
     }
@@ -161,7 +165,7 @@ struct HITCalendar: View {
                         .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: 16)
+            .frame(height: daySize < Self.cellSize ? 14 : 16)
             .accessibilityHidden(true)
             ForEach(weeks, id: \.first!.date) { week in
                 HStack(spacing: 0) {
@@ -183,7 +187,7 @@ struct HITCalendar: View {
                 .monospacedDigit()
                 .foregroundStyle(isSelected ? HITColor.onAccent : isToday ? Theme.accent : HITColor.text)
                 .opacity(dim)
-                .frame(width: Self.cellSize, height: Self.cellSize)
+                .frame(width: daySize, height: daySize)
                 .background(Circle().fill(isSelected ? Theme.accent : isHovered ? Theme.elevated : .clear))
                 .overlay(Circle().strokeBorder(Theme.accent, lineWidth: isToday && !isSelected ? 1.5 : 0))
                 // The keyboard's place, while the calendar has focus.

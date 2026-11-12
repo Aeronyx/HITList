@@ -320,6 +320,9 @@ private struct BoltStyleRow: View {
     @AppStorage(BoltStyle.key, store: AppGroup.defaults) private var style: BoltStyle = .fallback
     @State private var player = BoltPlayer()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Strike · Slam: 136 pt at the default size, wider with the text (brief 107: at XL on a phone "Strike" read
+    /// "Stri…"; the segments share the width equally); the words beside it wrap instead.
+    @ScaledMetric(relativeTo: .body) private var controlWidth: CGFloat = 136
 
     var body: some View {
         HStack(spacing: HITSpacing.m) {
@@ -336,7 +339,7 @@ private struct BoltStyleRow: View {
                 .foregroundStyle(HITColor.text)
             Spacer(minLength: HITSpacing.s)
             HITSegmented(selection: $style, segments: BoltStyle.allCases.map { HITSegment($0, $0.title) })
-                .frame(width: 136)
+                .frame(width: controlWidth)
                 .accessibilityIdentifier("boltStyle")
         }
         .hitRowPadding()

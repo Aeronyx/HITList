@@ -67,3 +67,52 @@ enum PickerPlacement {
         max(low, min(value, max(low, high)))
     }
 }
+
+/// iPhone and iPad: which side of its chip a picker card opens on, and how tall it may be there (brief 107). Keyed on
+/// the room there is, never on the device: pure, so tests pin it against the phones' screens, the iPhone Duo's short
+/// outer display (376 × 678 pt of content beside the system's bar column) and its inner display held on its side
+/// (951 × 669, regular width) among them.
+///
+/// The card is a system popover. Left to itself the system took the roomier side of the chip, as this does, but put a
+/// card too tall for either side beside its chip, past the screen's edge (the editor's Reminder card on the Duo started
+/// 12 pt left of the display), and chose the side before a chip moved (quick add's Date card: chosen with the keyboard
+/// up, it stayed below the chip after the card dropped with the keyboard, 102 pt tall, its calendar off the display).
+/// So the side is ours: the roomier of above and below for where the chip will be (`settle`), never beside (a phone is
+/// not wide enough for a 280–360 pt card beside a chip). `room` is the height the card has there; a taller card takes
+/// its short layout and scrolls inside rather than being cut (`pickerRoom`).
+enum PhonePickerPlacement {
+    enum Edge: Equatable { case below, above }
+
+    struct Result: Equatable {
+        var edge: Edge
+        /// The card's tallest on that side, its arrow and margins taken off.
+        var room: CGFloat
+    }
+
+    /// What the system's popover takes between the chip and the card: its arrow (13 pt on iOS 27) and a hairline.
+    static let arrow: CGFloat = 14
+    /// The popover keeps this far from the screen's safe area.
+    static let margin: CGFloat = 10
+    /// And this far (plus `margin`) from a screen edge with no safe area: on the iPhone Duo's outer display, which has
+    /// none above or below, the system kept its popovers 25 pt from the top and the foot (measured).
+    static let screenEdge: CGFloat = 15
+
+    /// Where a card may go: the screen inside its safe area, and never nearer its top or foot than `screenEdge`.
+    static func area(in screen: CGRect, top: CGFloat, leading: CGFloat, bottom: CGFloat, trailing: CGFloat) -> CGRect {
+        let top = max(top, screenEdge)
+        let bottom = max(bottom, screenEdge)
+        return CGRect(x: screen.minX + leading, y: screen.minY + top,
+                      width: max(0, screen.width - leading - trailing),
+                      height: max(0, screen.height - top - bottom))
+    }
+
+    /// `anchor`: the chip; `settle`: how far it will move down before the card is up (quick add's card drops with the
+    /// keyboard); `area`: the screen inside its safe area (on the Duo's outer display, without the bar column), in the
+    /// same coordinates.
+    static func place(anchor: CGRect, area: CGRect, settle: CGFloat = 0) -> Result {
+        let chip = anchor.offsetBy(dx: 0, dy: settle)
+        let below = max(0, area.maxY - chip.maxY - arrow - margin)
+        let above = max(0, chip.minY - area.minY - arrow - margin)
+        return below >= above ? Result(edge: .below, room: below) : Result(edge: .above, room: above)
+    }
+}

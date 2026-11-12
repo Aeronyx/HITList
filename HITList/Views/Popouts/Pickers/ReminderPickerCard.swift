@@ -27,8 +27,16 @@ struct ReminderPickerCard: View {
     var onMoment: ((ReminderMomentPick?) -> Void)? = nil
 
     @Environment(\.pickerFocusRequest) private var focusRequest
+    /// iPhone: the height the card has beside its chip (`PhonePickerPlacement`).
+    @Environment(\.pickerRoom) private var pickerRoom
     /// "Later today…" was tapped: its time field shows.
     @State private var picksLater = false
+
+    /// The short layout (brief 107): the regular card is about 490 pt tall, and beside the editor's Reminder pill on the
+    /// iPhone Duo's outer display there are about 330. Wider (`PickerKind.width(room:)`), three offsets to a row and the
+    /// "from now" choices and the times on one row each, the "Time" header left to the field's own "Add time", tighter
+    /// spacing: about 325 pt.
+    private var isShort: Bool { PickerKind.reminder.isShort(room: pickerRoom) }
 
     /// The "from now" spans offered as chips.
     static let fromNowPresets: [ReminderSpan] = [ReminderSpan(minutes: 15), ReminderSpan(minutes: 60)]
@@ -39,9 +47,9 @@ struct ReminderPickerCard: View {
         return today > now ? today : time.on(calendar.date(byAdding: .day, value: 1, to: now) ?? now, calendar: calendar)
     }
 
-    /// "In 15 minutes", "In 1 hour".
-    static func fromNowTitle(_ span: ReminderSpan) -> String {
-        span.totalMinutes == 60 ? "In 1 hour" : span.totalMinutes == 15 ? "In 15 minutes" : "In " + span.text
+    /// "In 15 minutes", "In 1 hour"; "In 15 min" in the short layout, for the three to share a row.
+    static func fromNowTitle(_ span: ReminderSpan, short: Bool = false) -> String {
+        span.totalMinutes == 60 ? "In 1 hour" : span.totalMinutes == 15 ? (short ? "In 15 min" : "In 15 minutes") : "In " + span.text
     }
 
     /// The offsets, in minutes before the time.
@@ -83,29 +91,29 @@ struct ReminderPickerCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: HITSpacing.s) {
+        let short = isShort
+        VStack(alignment: .leading, spacing: short ? 5 : HITSpacing.s) {
             if let onMoment {
                 fromNowSection(onMoment)
-                Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, HITSpacing.xs)
+                sectionRule
             }
             if let onOffset {
                 header("Remind me before the time")
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
-                                    GridItem(.flexible(), alignment: .leading)],
-                          alignment: .leading, spacing: 6) {
-                    ForEach(Self.offsetPresets, id: \.self) { minutes in
-                        HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
-                                tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
-                                action: { onOffset(minutes == 0 ? nil : minutes) })
-                            .accessibilityLabel(ReminderOffset.label(minutes: minutes))
-                            .help(ReminderOffset.label(minutes: minutes))
-                            .accessibilityIdentifier("reminderOffset\(minutes)")
+                if short {
+                    shortOffsets(onOffset)
+                } else {
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
+                                        GridItem(.flexible(), alignment: .leading)],
+                              alignment: .leading, spacing: 6) {
+                        ForEach(Self.offsetPresets, id: \.self) { minutes in offsetChip(minutes, onOffset) }
+                        CustomOffsetField(minutes: isCustomOffset ? offsetMinutes : nil, onCommit: onOffset)
                     }
-                    CustomOffsetField(minutes: isCustomOffset ? offsetMinutes : nil, onCommit: onOffset)
                 }
-                Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, HITSpacing.xs)
+                sectionRule
             }
-            header(onOffset == nil ? "Remind me at" : "Time")
+            if onOffset == nil || !short {
+                header(onOffset == nil ? "Remind me at" : "Time")
+            }
             PickerTimeField(time: time, focusTrigger: focusRequest, onCommit: onTime)
             HITChipRow {
                 ForEach(Self.timePresets, id: \.0) { preset in
@@ -135,13 +143,43 @@ struct ReminderPickerCard: View {
                         .buttonStyle(HITButtonStyle(.destructive, size: .small))
                 }
             }
-            .padding(.top, HITSpacing.xs)
+            .padding(.top, short ? 2 : HITSpacing.xs)
         }
-        .padding(HITSpacing.m)
+        .padding(.horizontal, short ? HITSpacing.s : HITSpacing.m)
+        .padding(.vertical, short ? HITSpacing.s + 2 : HITSpacing.m)
     }
 
     private func header(_ title: String) -> some View {
         Text(title).font(HITType.sectionHeader).foregroundStyle(Theme.secondaryText)
+    }
+
+    /// The hairline between the sections.
+    private var sectionRule: some View {
+        Rectangle().fill(Theme.separator).frame(height: 1).padding(.vertical, isShort ? 2 : HITSpacing.xs)
+    }
+
+    private func offsetChip(_ minutes: Int, _ onOffset: @escaping (Int?) -> Void) -> some View {
+        HITChip(Self.chipTitle(minutes: minutes), systemImage: minutes == 0 ? "bell" : "bell.badge",
+                tint: Theme.accent, isSelected: (offsetMinutes ?? 0) == minutes,
+                action: { onOffset(minutes == 0 ? nil : minutes) })
+            .accessibilityLabel(ReminderOffset.label(minutes: minutes))
+            .help(ReminderOffset.label(minutes: minutes))
+            .accessibilityIdentifier("reminderOffset\(minutes)")
+    }
+
+    /// The short layout's offsets: three to a row, the custom minutes after "1 day" taking the rest of its row.
+    private func shortOffsets(_ onOffset: @escaping (Int?) -> Void) -> some View {
+        let presets = Self.offsetPresets
+        return Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 5) {
+            GridRow { ForEach(presets[0..<3], id: \.self) { offsetChip($0, onOffset) } }
+            GridRow { ForEach(presets[3..<6], id: \.self) { offsetChip($0, onOffset) } }
+            GridRow {
+                offsetChip(presets[6], onOffset)
+                CustomOffsetField(minutes: isCustomOffset ? offsetMinutes : nil, onCommit: onOffset)
+                    .gridCellColumns(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// "Remind me from now": the spans, "Later today…" and its time field, and when it goes off.
@@ -149,12 +187,10 @@ struct ReminderPickerCard: View {
     private func fromNowSection(_ onMoment: @escaping (ReminderMomentPick?) -> Void) -> some View {
         let picked = reminderDate != nil && !Self.fromNowPresets.contains { $0 == fromNow }
         header("Remind me from now")
-        LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
-                            GridItem(.flexible(), alignment: .leading)],
-                  alignment: .leading, spacing: 6) {
+        let chips = Group {
             ForEach(Self.fromNowPresets, id: \.self) { span in
                 let selected = reminderDate != nil && fromNow == span
-                HITChip(Self.fromNowTitle(span), systemImage: "timer", tint: Theme.accent, isSelected: selected,
+                HITChip(Self.fromNowTitle(span, short: isShort), systemImage: "timer", tint: Theme.accent, isSelected: selected,
                         action: { onMoment(selected ? nil : .span(span)) })
                     .accessibilityIdentifier("reminderFromNow\(span.totalMinutes)")
             }
@@ -163,6 +199,16 @@ struct ReminderPickerCard: View {
                         if picked { onMoment(nil); picksLater = false } else { picksLater.toggle() }
                     })
                 .accessibilityIdentifier("reminderLaterToday")
+        }
+        if isShort {
+            // One row in the short layout's width.
+            HITChipRow { chips }
+        } else {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 6, alignment: .leading),
+                                GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 6) {
+                chips
+            }
         }
         if picksLater || picked {
             PickerTimeField(time: picked ? reminderDate.map { PickerTime($0) } : nil, placeholder: "Remind at…") { time in

@@ -18,6 +18,10 @@ final class KeyboardObserver {
     /// The height the latest notification asked for, which `height` reaches a moment later.
     @ObservationIgnored private var target: CGFloat = 0
 
+    /// Where the keyboard is going, read without observing it: a picker card asks once, as it opens (brief 107), and
+    /// must not redraw its chip on every keyboard move.
+    var heightUnobserved: CGFloat { target }
+
     /// The keyboard's own curve over `duration` (the notification's, 0.383 s on iOS 26 and 27).
     static func follow(duration: TimeInterval) -> Animation { Animation(Follow(duration: duration)) }
 
