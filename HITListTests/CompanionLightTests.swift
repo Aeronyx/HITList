@@ -64,11 +64,13 @@ final class CompanionLightTests: XCTestCase {
         }
     }
 
-    /// Light is Phase's eyes and Glim's lantern this round, nobody else's (COMMON, round 24).
-    func testOnlyPhaseAndGlimGiveLight() {
-        XCTAssertEqual(CompanionCharacter.phase.glow, [.light])
+    /// Light is Glim's lantern, nobody else's (COMMON, round 24; round 25, brief 129: Phase's eyes are black again and
+    /// give no light).
+    func testOnlyGlimGivesLight() {
+        XCTAssertEqual(CompanionCharacter.phase.glow, [], "Phase's black eyes give no light")
+        XCTAssertEqual(CompanionCharacter.phase.haloStrength(pose: CompanionCharacter.phase.index["gone"]!), 0)
         XCTAssertEqual(CompanionCharacter.glim.glow, [.warm])
-        for character in CompanionCharacter.all where !["phase", "glim"].contains(character.id) {
+        for character in CompanionCharacter.all where !["glim"].contains(character.id) {
             XCTAssertTrue(character.glow.isEmpty, character.id)
         }
         // Glim's lantern is lit awake and turned down asleep.
