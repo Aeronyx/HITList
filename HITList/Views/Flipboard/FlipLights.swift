@@ -346,8 +346,9 @@ enum BoardLights {
     }
 
     /// What VoiceOver reads for the whole strip, as one element: "3 of 5 on. Off: Brush teeth, Floss." Every switch on:
-    /// "All 5 on."
+    /// "All 5 on." None at all: "No switches."
     static func accessibilityLabel(_ lights: [BoardLight]) -> String {
+        guard !lights.isEmpty else { return "No switches." }
         let on = lights.filter(\.isOn).count
         guard on < lights.count else { return lights.count == 1 ? "On." : "All \(lights.count) on." }
         let off = lights.filter { !$0.isOn }.map(\.title).joined(separator: ", ")

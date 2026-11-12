@@ -170,6 +170,7 @@ final class FlipboardLightsTests: XCTestCase {
         }
         XCTAssertEqual(BoardLights.accessibilityLabel(five), "3 of 5 on. Off: Brush teeth, Floss.")
         XCTAssertEqual(BoardLights.accessibilityLabel(lights(4) { _ in true }), "All 4 on.")
+        XCTAssertEqual(BoardLights.accessibilityLabel([]), "No switches.")
         XCTAssertEqual(BoardLights.count(lights(24) { $0 < 17 }), "17 of 24")
     }
 

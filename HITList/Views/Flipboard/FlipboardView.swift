@@ -369,7 +369,7 @@ struct FlipboardView: View {
                         .frame(width: rowTileWidth)
                         .frame(maxHeight: .infinity)
                 }
-                AddSwitchTile { openCard(.addTo(board)) }
+                AddSwitchTile(board: board.name) { openCard(.addTo(board)) }
                     .allowsHitTesting(!hasInlineCard)
                     .frame(width: rowTileWidth)
                     .frame(maxHeight: .infinity)
@@ -1075,6 +1075,8 @@ enum FlipboardLayout {
 /// hairline (the plate, a smaller dashed rocker in it) and a large accent "+", in the tiles' 18 pt shape, the size of a
 /// real switch whether switches stand beside it or not. Tapping it opens the switch card in its place (brief 69).
 struct AddSwitchTile: View {
+    /// The Switchboard it adds to, at the end of the board's row (brief 126); nil: a loose switch.
+    var board: String?
     var action: () -> Void
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1115,8 +1117,8 @@ struct AddSwitchTile: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .animation(HITMotion.quick(reduceMotion: reduceMotion), value: hovered)
-        .accessibilityLabel("Add switch")
-        .accessibilityIdentifier("addSwitchTile")
+        .accessibilityLabel(board.map { "Add a switch to \($0)" } ?? "Add switch")
+        .accessibilityIdentifier(board == nil ? "addSwitchTile" : "switchboardAdd")
     }
 }
 
