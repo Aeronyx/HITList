@@ -272,9 +272,10 @@ final class CompanionButtonTests: XCTestCase {
             for tick in drip.ticks { XCTAssertEqual(button.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
             XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "shake", at)
             var previous = awake.snow!
+            let snowInks: Set<Character> = ["s", "b", "c"]
             for deep in awake.snowDeep {
-                let more = button.rows(deep)!.joined().filter { $0 == "l" }.count
-                let less = button.rows(previous)!.joined().filter { $0 == "l" }.count
+                let more = button.rows(deep)!.joined().filter { snowInks.contains($0) }.count
+                let less = button.rows(previous)!.joined().filter { snowInks.contains($0) }.count
                 XCTAssertGreaterThan(more, less, "\(at) \(deep)")
                 previous = deep
             }
@@ -289,6 +290,64 @@ final class CompanionButtonTests: XCTestCase {
             // The lifted cap: its top row is the sprite's first on a hot day, its neck shows under the rim.
             XCTAssertTrue(button.rows("heat")![0].contains("r"))
             XCTAssertFalse(button.rows("rest")![0].contains("r"))
+        }
+    }
+
+    /// Round 22's snow (COMMON; George: "more like powdery, pixelated fallen snow than just white globs … add some blue
+    /// hues"): every snow still, awake and asleep, is its body with only the three snow inks added (none of the old
+    /// light-ink snow), all three in each, no block of one snow ink past 2 × 3, at most three deep in any column, the
+    /// seat untouched; the first a dusting with gaps in it, not one band; the cap's pale spots showing at every depth.
+    func testItsSnowIsPowder() {
+        let snowInks: Set<Character> = ["s", "b", "c"]
+        let posture = button.plus
+        let stills: [(String, String)] = [(posture.awake.snow!, "rest")] + posture.awake.snowDeep.map { ($0, "rest") }
+            + [(posture.asleep.snow!, "sleep")] + posture.asleep.snowDeep.map { ($0, "sleep") }
+        for (name, bodyName) in stills {
+            let rows = button.rows(name)!.map(Array.init)
+            let body = button.rows(bodyName)!.map(Array.init)
+            var used = Set<Character>()
+            var depth = [Int](repeating: 0, count: button.width)
+            for y in rows.indices {
+                for x in rows[y].indices where rows[y][x] != body[y][x] {
+                    XCTAssertTrue(snowInks.contains(rows[y][x]), "\(name) row \(y) column \(x): only snow is added")
+                    used.insert(rows[y][x])
+                    depth[x] += 1
+                }
+            }
+            XCTAssertEqual(used, snowInks, "\(name): three tones")
+            XCTAssertLessThanOrEqual(depth.max() ?? 0, 3, "\(name): at most three deep")
+            XCTAssertEqual(rows[button.seatRow - 1], body[button.seatRow - 1], "\(name): the seat untouched")
+            // The cap's pale spots (light ink on rows 3 to 7 of the awake cap) all still show.
+            let spotRows = bodyName == "rest" ? 3...7 : 6...10
+            for y in spotRows {
+                for x in body[y].indices where body[y][x] == "l" { XCTAssertEqual(rows[y][x], "l", "\(name): the spot at \(x), \(y)") }
+            }
+            for ink in snowInks {
+                for y in rows.indices {
+                    for x in rows[y].indices {
+                        var run = 0
+                        while x + run < rows[y].count, rows[y][x + run] == ink { run += 1 }
+                        XCTAssertLessThanOrEqual(run, 3, "\(name) row \(y): a run of \(ink)")
+                        var tall = 0
+                        while y + tall < rows.count, rows[y + tall][x] == ink { tall += 1 }
+                        XCTAssertLessThanOrEqual(tall, 3, "\(name) column \(x): a column of \(ink)")
+                        if x + 2 < rows[y].count, y + 2 < rows.count {
+                            let block = (0...2).allSatisfy { dy in (0...2).allSatisfy { dx in rows[y + dy][x + dx] == ink } }
+                            XCTAssertFalse(block, "\(name): a 3 x 3 block of \(ink) at \(x), \(y)")
+                        }
+                    }
+                }
+            }
+        }
+        // The dusting: on the crown's own row the snow has gaps, the cap's rim showing between.
+        let dust = button.rows(posture.awake.snow!)!.map(Array.init)
+        let crown = dust[1].filter { $0 != CompanionInk.clear }
+        XCTAssertTrue(crown.contains("r") && crown.contains { snowInks.contains($0) }, "a dusting with gaps")
+        XCTAssertTrue(dust[0].allSatisfy { $0 == CompanionInk.clear }, "a dusting adds no height")
+        // Nothing of the old light-ink snow in any frame of the snow's routine or the snow's breath.
+        for name in ["tip1", "tip2", "tip3", "tipGone", "breathe@sleepSnow", "breathe@sleepSnow2", "sleepPeek@sleepSnow"] {
+            let rows = button.rows(name)!
+            XCTAssertTrue(rows[0...10].joined().contains { snowInks.contains($0) }, "\(name): its snow is the new snow")
         }
     }
 
