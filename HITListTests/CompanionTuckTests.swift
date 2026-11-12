@@ -68,19 +68,28 @@ final class CompanionTuckTests: XCTestCase {
         }
     }
 
-    /// At night its eyes are pulled right in and shut, and its seedling's leaves fold up; it is the one that likes the
-    /// rain (eyes up to the sky); in the snow its eyes come down and snow sits on its pot's rim.
+    /// At night its stalks lower and its eyes shut on them (brief 113: no marks on its face, which is its face by day),
+    /// and its seedling's leaves fold up; it is the one that likes the rain (eyes up to the sky); in the snow its eyes
+    /// come down and snow sits on its pot's rim.
     func testItsNightAndWeather() throws {
         let rest = try XCTUnwrap(tuck.rows("rest")), sleep = try XCTUnwrap(tuck.rows("sleep"))
         let rain = try XCTUnwrap(tuck.rows("rain")), snow = try XCTUnwrap(tuck.rows("snow"))
         XCTAssertTrue(rest.joined().contains("k"), "awake: its eyes open")
         XCTAssertFalse(sleep.joined().contains("k"), "asleep: no open eye")
+        // Brief 113 (George: "Why do the snail's eyes become lines at night?"): asleep its eyes stay on their stalks,
+        // shut under round lids above its head, and its face below them is its face by day, its smile and nothing else.
+        for y in 11...15 {
+            XCTAssertEqual(String(sleep[y].prefix(9)), String(rest[y].prefix(9)), "asleep row \(y): its face as by day")
+        }
+        let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<9), "asleep: its eyes up on their stalks")
+        XCTAssertLessThan(lids, 9, "asleep: its shut eyes stand above its head")
         XCTAssertLessThan(Self.width(of: "a", in: sleep), Self.width(of: "a", in: rest), "asleep: its leaves fold up")
         let eyesAtRest = try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10))
         XCTAssertLessThan(try XCTUnwrap(Self.topRow(of: "l", in: rain, columns: 0..<10)), eyesAtRest, "rain: eyes up")
         XCTAssertGreaterThan(try XCTUnwrap(Self.topRow(of: "l", in: snow, columns: 0..<10)), eyesAtRest, "snow: eyes down")
         let rim = try XCTUnwrap(rest.firstIndex { $0.contains("dddddddddd") })
-        XCTAssertTrue(snow[rim].contains("llllllllll"), "snow on the rim")
+        XCTAssertTrue(snow[rim - 1].contains { "sbc".contains($0) }, "snow on the rim")
+        XCTAssertEqual(String(snow[rim].dropFirst(9)), String(rest[rim].dropFirst(9)), "the rim's own line still shows")
         for place in CompanionPlace.allCases {
             let posture = tuck.posture(place)
             XCTAssertGreaterThanOrEqual(tuck.difference(posture.asleep.rest, posture.awake.rest), 8)
@@ -97,22 +106,27 @@ final class CompanionTuckTests: XCTestCase {
         }
     }
 
-    /// Snow piles up on its pot (brief 91): a dusting, a cap that half buries its seedling, a heap with one leaf tip
-    /// sticking out, the line it sits on the same at every depth. Its flickers and its eye-only routines play over the
-    /// pile; the snow's own flake too; it shrugs the heap off only from the deepest, and is back to the dusting.
+    /// Snow piles up on its pot (brief 91; brief 113, COMMON's snow: powder in three tones, never a cap): more at each
+    /// depth on the rim, the leaves' tops, its head and the tops of its eyes, its leaves still showing at every depth,
+    /// the line it sits on the same. Its flickers and its eye-only routines play over the pile; the snow's own flake
+    /// too; it shrugs the pile off only from the deepest, and is back to the dusting.
     func testSnowPilesUpOnItsPotAndItShrugsItOff() throws {
         let awake = tuck.field.awake
         XCTAssertEqual((0...3).map { awake.still(.snow, depth: $0) }, ["snow", "snowDeep1", "snowDeep2", "snowDeep2"])
-        // Deeper, its seedling disappears under the pile, a leaf tip still sticking out of the heap.
-        var leaf = Int.max
-        for still in ["snow", "snowDeep1", "snowDeep2"] {
+        // Deeper, more powder, and its leaves still show: it lies on them, it does not bury them.
+        var snowfall = 0
+        let leaves = try XCTUnwrap(tuck.rows("snow")).joined().filter { $0 == "a" }.count
+        for still in ["snow", "snowDeep1", "snowDeep2", "sleepSnow", "sleepSnowDeep1", "sleepSnowDeep2"] {
             let rows = try XCTUnwrap(tuck.rows(still))
-            let showing = rows.joined().filter { $0 == "a" }.count
-            XCTAssertLessThan(showing, leaf, "\(still): deeper")
-            leaf = showing
+            let fallen = rows.joined().filter { "sbc".contains($0) }.count
+            if still.hasPrefix("sleep") == false {
+                XCTAssertGreaterThan(fallen, snowfall, "\(still): deeper")
+                snowfall = fallen
+                XCTAssertEqual(rows.joined().filter { $0 == "a" }.count, leaves, "\(still): its leaves still show")
+            }
+            XCTAssertEqual(Set(rows.joined().filter { "sbc".contains($0) }), ["s", "b", "c"], "\(still): three tones")
             XCTAssertEqual(rows[(tuck.seatRow - 1)...], try XCTUnwrap(tuck.rows("snow"))[(tuck.seatRow - 1)...])
         }
-        XCTAssertTrue((1...2).contains(leaf), "a leaf tip sticks out of the heap")
         let routine = { (name: String) in try XCTUnwrap(awake.routines.first { $0.name == name }) }
         let shrug = try routine("shrug")
         XCTAssertTrue(shrug.shakesOff)
