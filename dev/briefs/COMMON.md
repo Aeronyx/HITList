@@ -66,6 +66,49 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 23 (2026-11-12, mid-morning; briefs 116–120 in parallel, all five drawing; `ROUND-23.md` says why)
+0.9.6 (26) is released; this round is **0.9.7**: the creatures, a third time. Sessions are Opus 5.5 (commits end
+`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is awake and
+has said "Please work freely to iterate on these creatures": nobody waits for him, and the supervisor forwards
+your concept sheet to him the moment it arrives. **No schema change, no engine change.**
+- **The rule this round: change the least that answers his words.** George on 0.9.6: "Hush is actually the perfect
+  example of a good rework; you kept his vibe without changing much, just slight improvements to coloration and
+  design"; and of a creature redrawn freely: "so much worse". A creature he has seen is his. Start from the
+  drawing he likes (your brief names it), keep its outline, its eyes, its size and its pose unless his words are
+  about exactly those, and judge every change **at 1x beside the drawing he likes**: if a stranger would say "a
+  different creature", it is wrong, however well drawn.
+- **Not to be touched by anyone**: `Characters/Hush.swift` ("Keep the new Hush"), Button's plain, heat and asleep
+  stills (pinned to `v0.9.4`), Gargle's asleep stills (the night sprite he adores), Nod's plain drawing.
+- Ownership (a session owns its characters' files, their own test files, their own line in
+  `ThemeCompanion.seats` and their own cases in the shared companion tests; nothing else): 116 `glim-subtle`
+  (xhigh) `Characters/Glim.swift`. 117 `gargle-pup` (xhigh) `Characters/Gargle.swift`. 118 `phase-sheet` (xhigh)
+  `Characters/Phase.swift`. 119 `tuck-quill` (xhigh) `Characters/Tuck.swift`, `Characters/Quill.swift`. 120
+  `nod-button-weather` (high) `Characters/Nod.swift`, `Characters/Button.swift`. In a shared test file change only
+  the lines that name your creature.
+- **The clock**: your brief names when your sheet and your report are due, counted from your start
+  (`TZ=America/New_York date`). Work in the brief's order, commit each item as it becomes whole; ten minutes
+  before the report time stop starting things, run your tests, write the report. Fewer moves, all good, beats many.
+- **The sheet**: small, and at real size. Each candidate at 1x, 2x and 3x on the "+" in its own theme **beside
+  the drawing George likes** and beside Hush, and one on the Mac's field. Send the supervisor its path and your
+  pick with one line of why (reply to the message that started you), and carry on with your pick; the supervisor
+  stops you only if it is the wrong one.
+- **Weather, a little more obvious** (George: "Snow and rain need to be slightly more obvious on most of these
+  creatures"): in rain and in snow the creature **does something about it that reads at a glance at 1x** (an
+  umbrella held up, a wing held over the head, a cap pulled down, a light kept dry). Round 19's rule still holds:
+  the weather shows on the creature and what it holds, never as effects in the air around it; a drop on it or
+  running off it is on it. Snow is still round 22's powder in the three snow inks (`s`, `b`, `c`; the recipe is in
+  the Round 22 block below), a little more of it at each depth, never a cap. Phase alone stays untouched by both.
+- The format's limits you will meet: sprites are 20 × 20; a creature uses 4 to 6 inks of its own (the snow inks
+  do not count); the accent and the warm ink never both; a small gesture changes 16 pixels at most; a frame drawn
+  nowhere is an error (`problems`). `105-cast-flavor/dump.sh` and the workshops in the notes folder
+  (`110-phase-cloth/workshop`, `111-gargle-dragon/workshop`, `112-hush-quill/workshop`, `113-glim-tuck/workshop`,
+  `109-button-back/workshop`) render frames on the real "+" profile.
+- Everything in Round 22's block below still holds: creature sessions build little and use no simulator (draw
+  with the workshops, look at 1x, one `scripts/test.sh macos` at the end, one look in a Debug Mac app of your own
+  with `HITLIST_STORE_SUFFIX=sNN` if the clock allows, quit it and unregister its extensions), original
+  characters only, the shared notes folder (`round-23/study.png` is the app enlarged, 0.9.5 beside 0.9.6), never
+  touch George's `/Applications/HITList.app`, never push or merge.
+
 ## Round 22 (2026-11-12, before dawn; briefs 109–115 in parallel, all seven at once; `ROUND-22.md` says why)
 0.9.5 was prepared and never released (George: "I'm not quite satisfied with it yet"); this round is **0.9.6**, and
 George wants it **by 09:00 Eastern today**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
