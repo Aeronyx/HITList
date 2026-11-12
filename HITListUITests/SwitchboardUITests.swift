@@ -1,7 +1,8 @@
 import XCTest
 
 /// Brief 72 on iPhone: Switchboards. The demo week's "Before Bed" (daily, 04:00, four switches, one at 21:00, two
-/// flipped) and "Deep Clean" (weekly, three) as sections under the loose switches; the board's clock either side of
+/// flipped) and "Deep Clean" (weekly, three) on panels under the loose switches, each one row (brief 126) with its
+/// lights ("2 of 4 on"); the board's clock either side of
 /// its reset (`-flipboardNow`); a new Switchboard from the Flipboard's menu and a switch added to it with a time and
 /// "Overdue becomes task"; a board's card from its name, and Delete keeping its switches. Each launch has a store of
 /// its own (`HITLIST_STORE_SUFFIX`), sync off, no tips. Screenshots land in the .xcresult.
@@ -26,10 +27,11 @@ final class SwitchboardUITests: XCTestCase {
         XCTAssertTrue(bed.waitForExistence(timeout: 5))
         XCTAssertTrue(bed.frame.minY > switchTile("Water the plants").frame.maxY, "the boards come after the loose switches")
         XCTAssertTrue(line(containing: "Daily · resets").exists)
-        XCTAssertTrue(line(containing: "2 of 4").exists, "how many of Before Bed's are done")
+        XCTAssertTrue(lights("2 of 4 on. Off: Take meds, Read 20 minutes.").exists, "Before Bed's lights, in its order")
         snapshot("1 Flipboard, loose switches first")
-        // Before Bed's order: the timed switch first, then the rest in the order they were added.
-        XCTAssertLessThan(switchTile("Take meds").frame.minY, switchTile("Read 20 minutes").frame.minY)
+        // Before Bed's order, along its row: the timed switch first, then the rest in the order they were added.
+        XCTAssertLessThan(switchTile("Take meds").frame.minX, switchTile("Read 20 minutes").frame.minX)
+        XCTAssertEqual(switchTile("Take meds").frame.midY, switchTile("Read 20 minutes").frame.midY, accuracy: 1, "one row")
         // "Due 9:00 PM" (with the narrow space iOS puts before PM), or "Due 21:00" on a 24-hour clock.
         let caption = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Due' AND (label CONTAINS '9:00' OR label CONTAINS '21:00')"))
         XCTAssertTrue(caption.firstMatch.exists, "the timed switch's caption")
@@ -38,17 +40,22 @@ final class SwitchboardUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(clean.waitForExistence(timeout: 5))
         XCTAssertTrue(line(containing: "Weekly · resets").exists)
-        XCTAssertTrue(line(containing: "1 of 3").exists)
+        XCTAssertTrue(lights("1 of 3 on").exists)
         snapshot("3 Deep Clean")
 
-        // Every switch tile on the screen is one size.
+        // Every switch tile on the screen is one height; the loose ones one width, and a row's tiles another (sized so
+        // whole tiles show and a fifth of the next, brief 126).
         let tiles = app.descendants(matching: .any).matching(identifier: "flipSwitchTile").allElementsBoundByIndex
         XCTAssertEqual(tiles.count, 9)
         let size = try XCTUnwrap(tiles.first).frame.size
         for tile in tiles {
-            XCTAssertEqual(tile.frame.width, size.width, accuracy: 0.5)
             XCTAssertEqual(tile.frame.height, size.height, accuracy: 0.5)
         }
+        let rowWidth = switchTileFrame("Take meds").width
+        for title in ["Brush teeth", "Floss", "Read 20 minutes", "Vacuum", "Clean the bathroom", "Change the sheets"] {
+            XCTAssertEqual(switchTileFrame(title).width, rowWidth, accuracy: 0.5, title)
+        }
+        XCTAssertEqual(switchTileFrame("Water the plants").width, switchTileFrame("Take out the recycling").width, accuracy: 0.5)
     }
 
     /// The same board just before Before Bed's 04:00 reset and just after it: before, the two flipped last evening are
@@ -71,7 +78,7 @@ final class SwitchboardUITests: XCTestCase {
         app.launch()
         openFlipboard()
         XCTAssertTrue(header("Before Bed").waitForExistence(timeout: 10))
-        XCTAssertTrue(line(containing: "2 of 4").waitForExistence(timeout: 5), "03:30: still yesterday evening's board day")
+        XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "03:30: still yesterday evening's board day")
         scrollToBeforeBed()
         snapshot("1 Before the reset, 03:30")
         app.terminate()
@@ -82,7 +89,7 @@ final class SwitchboardUITests: XCTestCase {
         app.launch()
         openFlipboard()
         XCTAssertTrue(header("Before Bed").waitForExistence(timeout: 10))
-        XCTAssertTrue(line(containing: "0 of 4").waitForExistence(timeout: 5), "04:30: every switch red again")
+        XCTAssertTrue(lights("0 of 4 on").waitForExistence(timeout: 5), "04:30: every switch red again")
         scrollToBeforeBed()
         snapshot("2 After the reset, 04:30")
     }
@@ -113,8 +120,11 @@ final class SwitchboardUITests: XCTestCase {
         XCTAssertTrue(header("Before Bed").waitForExistence(timeout: 5))
         XCTAssertTrue(line(containing: "Daily · resets").exists)
 
-        // Its "+": the switch card on the board, a time typed into the name, Overdue becomes task on.
-        app.buttons["switchboardAdd"].firstMatch.tap()
+        // The Add switch outline at the end of its row (brief 126; it was a "+" by the name): the switch card on the
+        // board, a time typed into the name, Overdue becomes task on.
+        let add = app.buttons["switchboardAdd"].firstMatch
+        XCTAssertEqual(add.label, "Add a switch to Before Bed")
+        add.tap()
         let switchName = app.descendants(matching: .any)["switchName"].firstMatch
         XCTAssertTrue(switchName.waitForExistence(timeout: 5), "the switch card")
         XCTAssertTrue(app.descendants(matching: .any)["switchBoardLine"].waitForExistence(timeout: 3),
@@ -126,7 +136,7 @@ final class SwitchboardUITests: XCTestCase {
         app.buttons["switchSave"].tap()
         XCTAssertTrue(switchName.waitForNonExistence(timeout: 5))
         XCTAssertTrue(switchTile("Take meds").waitForExistence(timeout: 5), "on the board")
-        XCTAssertTrue(line(containing: "0 of 1").exists)
+        XCTAssertTrue(lights("0 of 1 on").exists)
         snapshot("3 The new switch on Before Bed")
 
         // A loose switch opted in, with a time already past today: it is in Today as today's task.
@@ -197,6 +207,17 @@ final class SwitchboardUITests: XCTestCase {
 
     private func header(_ name: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier == 'switchboardHeader' AND label == %@", name)).firstMatch
+    }
+
+    /// A board's lights, read as one element: "2 of 4 on. Off: …".
+    private func lights(_ prefix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'boardLights' AND label BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// A switch's whole tile.
+    private func switchTileFrame(_ title: String) -> CGRect {
+        app.descendants(matching: .any).matching(identifier: "flipSwitchTile")
+            .containing(NSPredicate(format: "label == %@", title)).firstMatch.frame
     }
 
     private func line(containing text: String) -> XCUIElement {
