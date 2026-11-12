@@ -289,3 +289,160 @@ struct FractionCapsule: Shape {
         return Path(roundedRect: filled, cornerRadius: rect.height / 2, style: .continuous)
     }
 }
+
+// MARK: A board's lights (brief 126)
+
+/// One switch's light in a board's strip: on (green) or off (red, due), in the row's order.
+struct BoardLight: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let isOn: Bool
+}
+
+/// How a board's strip draws its lights in the width its header has (George: "small red and green dots in a row would
+/// do it; if there's too many switches to display with dots on that Switchboard, have a backup UI plan"): dots, one a
+/// switch; where they don't fit, the same strip as slimmer segments; past what those fit, a two-tone bar with the count
+/// beside it ("17 of 24"). Never two lines, never cut-off dots. Pure, so tests pin it.
+enum BoardLights {
+    enum Mode: Equatable { case dots, segments, bar }
+
+    static let dot: CGFloat = 7
+    static let dotGap: CGFloat = 4
+    static let segment: CGFloat = 3
+    static let segmentGap: CGFloat = 2
+    /// The segments stand a little taller than a dot, so the slimmer strip still reads as lights.
+    static let segmentHeight: CGFloat = 10
+    /// The bar's own length, before its count.
+    static let barWidth: CGFloat = 52
+    static let barHeight: CGFloat = 5
+    /// The strip's line: room for a dot's glow and a finger.
+    static let lineHeight: CGFloat = 14
+
+    static func dotsWidth(_ count: Int) -> CGFloat { strip(count, dot, dotGap) }
+    static func segmentsWidth(_ count: Int) -> CGFloat { strip(count, segment, segmentGap) }
+
+    private static func strip(_ count: Int, _ size: CGFloat, _ gap: CGFloat) -> CGFloat {
+        count <= 0 ? 0 : CGFloat(count) * size + CGFloat(count - 1) * gap
+    }
+
+    /// The first way of drawing `count` lights that fits `width`; the bar always does (its count beside it).
+    static func mode(count: Int, width: CGFloat) -> Mode {
+        if dotsWidth(count) <= width + 0.5 { return .dots }
+        if segmentsWidth(count) <= width + 0.5 { return .segments }
+        return .bar
+    }
+
+    /// Which light a tap at `x` along a strip of `count` lights drawn as `mode` is nearest to.
+    static func index(at x: CGFloat, count: Int, mode: Mode) -> Int? {
+        guard count > 0, mode != .bar else { return nil }
+        let pitch = mode == .dots ? dot + dotGap : segment + segmentGap
+        let size = mode == .dots ? dot : segment
+        return min(count - 1, max(0, Int(((x - size / 2) / pitch).rounded())))
+    }
+
+    /// "17 of 24": how many are on, of all of them.
+    static func count(_ lights: [BoardLight]) -> String {
+        "\(lights.filter(\.isOn).count) of \(lights.count)"
+    }
+
+    /// What VoiceOver reads for the whole strip, as one element: "3 of 5 on. Off: Brush teeth, Floss." Every switch on:
+    /// "All 5 on."
+    static func accessibilityLabel(_ lights: [BoardLight]) -> String {
+        let on = lights.filter(\.isOn).count
+        guard on < lights.count else { return lights.count == 1 ? "On." : "All \(lights.count) on." }
+        let off = lights.filter { !$0.isOn }.map(\.title).joined(separator: ", ")
+        return "\(on) of \(lights.count) on. Off: \(off)."
+    }
+}
+
+/// A board's strip of lights (brief 126), in its header: one a switch, in the row's order, green while on and red while
+/// due, drawn as dots, slimmer segments or a two-tone bar by the width it is given (`ViewThatFits`, `BoardLights.mode`).
+/// With Differentiate Without Color on, an off light is also a different shape: a ring for a dot, a stub for a
+/// segment, an outline for the bar's red. Tapping a light asks the row to bring its switch into view. VoiceOver reads it
+/// as one element.
+struct BoardLightsStrip: View {
+    let lights: [BoardLight]
+    var onSelect: (Int) -> Void = { _ in }
+
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var shapes
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            strip(.dots)
+            strip(.segments)
+            bar
+        }
+        .frame(height: BoardLights.lineHeight)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: lights.map(\.isOn))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(BoardLights.accessibilityLabel(lights))
+        .accessibilityIdentifier("boardLights")
+    }
+
+    private func strip(_ mode: BoardLights.Mode) -> some View {
+        HStack(spacing: mode == .dots ? BoardLights.dotGap : BoardLights.segmentGap) {
+            ForEach(lights) { light in
+                if mode == .dots { dot(light) } else { segment(light) }
+            }
+        }
+        .fixedSize()
+        .frame(height: BoardLights.lineHeight)
+        .contentShape(Rectangle().inset(by: -6))
+        .onTapGesture(coordinateSpace: .local) { point in
+            if let index = BoardLights.index(at: point.x, count: lights.count, mode: mode) { onSelect(index) }
+        }
+    }
+
+    private func colour(_ light: BoardLight) -> Color { light.isOn ? FlipLightStyle.green : FlipLightStyle.red }
+
+    @ViewBuilder
+    private func dot(_ light: BoardLight) -> some View {
+        let size = BoardLights.dot
+        if shapes && !light.isOn {
+            Circle().strokeBorder(colour(light), lineWidth: 1.6).frame(width: size, height: size)
+        } else {
+            Circle()
+                .fill(colour(light).opacity(light.isOn ? FlipLightStyle.doneLevel + 0.13 : 1))
+                .frame(width: size, height: size)
+                .shadow(color: colour(light).opacity(0.5), radius: 1.5)
+        }
+    }
+
+    private func segment(_ light: BoardLight) -> some View {
+        let height = shapes && !light.isOn ? BoardLights.segmentHeight * 0.45 : BoardLights.segmentHeight
+        return Capsule(style: .continuous)
+            .fill(colour(light).opacity(light.isOn ? FlipLightStyle.doneLevel + 0.13 : 1))
+            .frame(width: BoardLights.segment, height: height)
+            .frame(height: BoardLights.segmentHeight)
+    }
+
+    /// The backup's backup: green for what is on, red for the rest, and the count beside it.
+    private var bar: some View {
+        let on = lights.filter(\.isOn).count
+        let fraction = lights.isEmpty ? 0 : CGFloat(on) / CGFloat(lights.count)
+        return HStack(spacing: 6) {
+            ZStack(alignment: .leading) {
+                if shapes {
+                    Capsule(style: .continuous).strokeBorder(FlipLightStyle.red, lineWidth: 1)
+                } else {
+                    Capsule(style: .continuous).fill(FlipLightStyle.red)
+                }
+                FractionCapsule(fraction: fraction).fill(FlipLightStyle.green)
+            }
+            .frame(width: BoardLights.barWidth, height: BoardLights.barHeight)
+            Text(BoardLights.count(lights))
+                .font(HITType.caption.monospacedDigit())
+                .foregroundStyle(Theme.secondaryText)
+                .lineLimit(1)
+                .fixedSize()
+                .contentTransition(.numericText())
+        }
+        .fixedSize()
+        .contentShape(Rectangle().inset(by: -6))
+        .onTapGesture {
+            // The bar has no single light to point at: the first switch still to flip.
+            if let first = lights.firstIndex(where: { !$0.isOn }) { onSelect(first) }
+        }
+    }
+}
