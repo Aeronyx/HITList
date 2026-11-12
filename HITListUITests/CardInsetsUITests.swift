@@ -184,7 +184,8 @@ final class CardInsetsUITests: XCTestCase {
             let top = glyph.minY - bounds.minY, bottom = bounds.maxY - glyph.maxY
             var problems: [String] = []
             // A row of the card's full width on purpose (a menu's rows) keeps its text in by its own padding.
-            let fullWidth = left < 1 && right < 1
+            // (Never a sideways row of chips: running border to border is what cut their words.)
+            let fullWidth = item.kind != "row" && left < 1 && right < 1
             if !item.inRow && !fullWidth {
                 if left < Self.borderFloor - Self.slack { problems.append(String(format: "L %.1f", left)) }
                 if right < Self.borderFloor - Self.slack { problems.append(String(format: "R %.1f", right)) }
