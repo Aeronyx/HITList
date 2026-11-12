@@ -351,6 +351,14 @@ the button; Tuck's first new eyes were still hollow squares). A stop is needed t
 session. What cost time: eight sessions saturated the Mac again once they all reached their suites (load near 1000,
 20 GB of swap); the seat test used a macOS-only view and broke the iOS test bundle on master until a sibling found
 it (build both platforms' test bundles before merging an early commit).
+On the final tree (f52ba60 and this record): core 704, Mac 1871 (1 skipped), iOS 1831 (1 skipped), UI 102 with 0
+failures (31 on demand) on a fresh iPhone 17 simulator; a Release archive and export of both platforms pass
+`release.sh`'s checks (iOS 16.2 MB, Mac 31.6 MB); GitHub Actions green. In the first full UI run
+`testReviewInboxSwipes` failed after twenty minutes of waiting and passed alone and in the second full run (the
+fresh simulator again), and `testSortByOnTheInboxAndToday` needed the one day format. Session 95's second pass (both
+of George's logs): nothing either device saved since 2 November failed to reach the other; the stores differed
+before the logs' evidence begins (44 and 46 dated tasks counted at 0.9.3's first launch); three fixes (the bolt's
+words count records, one log line per retry storm, a background push is a note).
 Never seen running, for the hand-over: a real sign-out and the new bolt on Production; Low Power Mode; a large first
 read of the zone; a switch dragged through to a drop on the Mac; the Mac's summary-time field; the feedback card's
 Done; the iPad's moved menu items; the Duo's inner display; macOS 27.

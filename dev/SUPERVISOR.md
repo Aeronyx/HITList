@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.3: core 647, Mac about 1730, iOS about 1690, and about 70 UI tests
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.4: core 704, Mac 1871, iOS 1831, and 102 UI tests (31 of them on demand)
   (`scripts/test.sh ui`, half an hour on a fresh simulator; run it on the merged tree, not only per branch). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
