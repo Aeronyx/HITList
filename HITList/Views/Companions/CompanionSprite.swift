@@ -41,7 +41,8 @@ struct CompanionInks: Equatable {
             (.accentDark, Self.mix(h.accent, h.background, Self.accentDarkMix)),
             // The accent dimmed toward the background; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
             (.veil, Self.mix(h.accent, h.background, Self.veilDusk)),
-            // The accent lightened toward the text, as `accentDark` darkens it (round 24): a lit edge, see-through with the body.
+            // The accent lightened toward the text, as `accentDark` darkens it (round 24): a lit edge, see-through
+            // with the body.
             (.accentLight, Self.mix(h.accent, h.text, Self.accentLightMix)),
             // Snow is snow in every theme (round 22): a lit crest, a pale blue body, a deeper blue shade.
             (.snow, Self.snowHex), (.snowBlue, Self.snowBlueHex), (.snowShade, Self.snowShadeHex),
@@ -84,9 +85,9 @@ struct CompanionInks: Equatable {
 /// isn't drawn: it is all below the seat row, where the host would be.
 /// Round 24 (brief 121): a body thins down its rows and fades with its frame (`opacity(_:pose:row:)`), and an ink that
 /// gives light (`glow`) casts a soft halo, blurred, over the body and under the solid pixels (eyes, pupils, glints, the
-/// weather) and its own, which stay crisp. The halo may
-/// reach `haloMargin` pixels past the sprite's frame: a character with a glow is drawn on a canvas that much larger,
-/// laid out at the sprite's own size (so its place and its tap shape are unchanged); one with none, exactly as before.
+/// weather) and its own, which stay crisp. The halo may reach `haloMargin` pixels past the sprite's frame: a character
+/// with a glow is drawn on a canvas that much larger, laid out at the sprite's own size (so its place and its tap shape
+/// are unchanged; the perch's tap area bounds what takes a tap); one with none, exactly as before.
 struct CompanionSprite: View {
     let character: CompanionCharacter
     let pose: CompanionPose
@@ -107,7 +108,7 @@ struct CompanionSprite: View {
                 drawing(margin: 0)
                     .frame(width: size.width, height: size.height)
             } else {
-                // Drawn on a larger canvas so the halo is never cut at the sprite's edge, laid out at the sprite's size.
+                // A larger canvas, so the halo is never cut at the sprite's edge, laid out at the sprite's size.
                 let margin: CGFloat = CGFloat(CompanionCharacter.haloMargin) * p
                 drawing(margin: margin)
                     .frame(width: size.width + 2 * margin, height: size.height + 2 * margin)
