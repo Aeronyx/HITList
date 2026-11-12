@@ -780,7 +780,9 @@ final class HITListUITests: XCTestCase {
     /// With a switch of every look on the board (`-seedFlipboardStates`: overdue, chargers, green, a long title):
     /// Today → Flipboard, with a burst of screenshots through the first second and a half (the lights sit on their
     /// switches from the first frame; an overdue one used to drift in across its title), and every tile, the + tile
-    /// included, is one size.
+    /// included, is one size. From round 24 (George: "Switchboards should grow/scroll horizontally") a Switchboard is
+    /// a row whose tiles are a little narrower than the ungrouped grid's, so that a part of the next tile shows:
+    /// one width in the grid, one width in the rows, and one height everywhere.
     func testFlipboardLightsStayOnTheirSwitches() throws {
         app.launchArguments += ["-seedDemoData", "-seedFlipboardStates"]
         app.launch()
@@ -804,13 +806,23 @@ final class HITListUITests: XCTestCase {
         }
         XCTAssertGreaterThan(shots, 3)
 
-        // Every switch and the + tile: one width, one height.
+        // Every switch and the + tile: one height; one width in the ungrouped grid and one, no wider, in the rows.
         let tiles = app.descendants(matching: .any).matching(identifier: "flipSwitchTile").allElementsBoundByIndex
         XCTAssertEqual(tiles.count, 15, "the demo's two loose switches, its seven on two Switchboards, and the six seeded")
         let size = try XCTUnwrap(tiles.first).frame.size
-        for tile in tiles {
-            XCTAssertEqual(tile.frame.width, size.width, accuracy: 0.5, "every switch is as wide as the first")
-            XCTAssertEqual(tile.frame.height, size.height, accuracy: 0.5, "every switch is as tall as the first")
+        let frames = tiles.map(\.frame)
+        for frame in frames {
+            XCTAssertEqual(frame.height, size.height, accuracy: 0.5, "every switch is as tall as the first")
+        }
+        // The first tile is an ungrouped one: the grid's width. Whatever is not that width is on a Switchboard's row.
+        // (On a width where a row's tile is the grid's own, there is one width and nothing more to check.)
+        let onRows = frames.filter { abs($0.width - size.width) > 0.5 }
+        if let rowWidth = onRows.first?.width {
+            XCTAssertEqual(frames.count - onRows.count, 8, "the eight ungrouped switches are as wide as the first")
+            XCTAssertLessThan(rowWidth, size.width, "a row's tiles are narrower than the grid's, never wider")
+            for frame in onRows {
+                XCTAssertEqual(frame.width, rowWidth, accuracy: 0.5, "every switch on a Switchboard is as wide as the next")
+            }
         }
         let add = app.buttons["addSwitchTile"]
         XCTAssertEqual(add.frame.width, size.width, accuracy: 0.5, "the + tile too")
