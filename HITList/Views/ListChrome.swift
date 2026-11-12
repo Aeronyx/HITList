@@ -303,6 +303,26 @@ extension View {
     /// system's controls). Clipped to its own frame on that side only; wherever the bars are horizontal (every other
     /// iPhone, the iPad, the Mac) it is left as it was.
     func endsBeforeTheBarColumn() -> some View { modifier(EndsBeforeTheBarColumn()) }
+
+    /// A row's hairline ends where its words do on the bar column's side (brief 115: on the Duo's outer display the
+    /// system ran it on to 3 pt from the island, 35 pt past the Group's dot). Elsewhere the system's hairline is kept.
+    func separatorClearsTheBarColumn() -> some View { modifier(SeparatorClearsTheBarColumn()) }
+}
+
+private struct SeparatorClearsTheBarColumn: ViewModifier {
+    @Environment(\.barColumnSide) private var column
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        if column.stops == .trailing {
+            content.alignmentGuide(.listRowSeparatorTrailing) { $0.width }
+        } else {
+            content
+        }
+        #else
+        content
+        #endif
+    }
 }
 
 private struct EndsBeforeTheBarColumn: ViewModifier {
