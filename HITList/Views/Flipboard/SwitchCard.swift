@@ -503,7 +503,9 @@ struct SwitchDiscardRow: View {
                 }
             }
             .padding(.horizontal, padding)
-            .padding(.vertical, HITSpacing.m)
+            .padding(.top, HITSpacing.m)
+            // The card's own padding below the buttons (brief 115: 12 pt set them by the card's rounded foot).
+            .padding(.bottom, padding)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(question)

@@ -23,7 +23,14 @@ struct FlipboardView: View {
     @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.recurrence != nil }) private var recurring: [TaskItem]
     @Query private var allBoards: [Switchboard]
     @State private var now = FlipboardView.clockNow()
-    @State private var width: CGFloat = 0
+    /// The board's whole width; `width` is what is left inside its margins.
+    @State private var boardWidth: CGFloat = 0
+    /// The board's side margin: the large title's (the system's, `followsSystemListMargin`), never under 16. 16 on an
+    /// iPhone 16, the iPad and the Mac, as before; 20 on the Duo's outer display, where a fixed 16 set the tiles and
+    /// the Switchboards' names 4 pt left of "Flipboard" (brief 115).
+    @State private var margin: CGFloat = FlipboardView.minimumMargin
+    static let minimumMargin: CGFloat = 16
+    private var width: CGFloat { max(0, boardWidth - 2 * margin) }
     /// The switch card open in the grid (Mac and iPad, brief 69): adding, or editing a switch.
     @State private var inlineCard: SwitchCardRequest?
     /// The Switchboard card open in place (Mac and iPad, brief 72): a new board at the foot, or a board's in place of
@@ -150,7 +157,8 @@ struct FlipboardView: View {
                             .allowsHitTesting(!hasInlineCard)
                     }
                 }
-                .padding(16)
+                .padding(.vertical, 16)
+                .padding(.horizontal, margin)
                 .animation(.snappy(duration: 0.35), value: switches.map(\.id))
                 .animation(.snappy(duration: 0.35), value: boards.map(\.id))
             }
@@ -178,8 +186,15 @@ struct FlipboardView: View {
                 }
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width - 32 } action: { width = $0 }
+        .background {
+            BoardMarginReader { measured in
+                let next = max(Self.minimumMargin, measured)
+                if next != margin { margin = next }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { boardWidth = $0 }
         .background(Theme.background)
+        .followsSystemListMargin()
         .navigationTitle("Flipboard")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.large)
@@ -550,7 +565,7 @@ struct SwitchboardHeader: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
+            HStack(spacing: HITSpacing.s) {
                 Button(action: onEdit) {
                     Text(board.name)
                         .font(HITType.listSectionHeader)
@@ -588,6 +603,20 @@ struct SwitchboardHeader: View {
             Divider()
             Button(role: .destructive, action: onDelete) { Label("Delete…", systemImage: "trash") }
         }
+    }
+}
+
+/// Hands the board the list margin its screen follows (`followsSystemListMargin`).
+private struct BoardMarginReader: View {
+    @Environment(\.listMargin) private var listMargin
+    var report: (CGFloat) -> Void
+
+    var body: some View {
+        Color.clear
+            .onAppear { report(listMargin) }
+            .onChange(of: listMargin) { _, margin in report(margin) }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

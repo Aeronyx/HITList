@@ -135,7 +135,13 @@ struct SharedTaskListRow: View {
                 TaskRowNotes(notes: task.notes.value)
                 metaLine
             }
+            #if os(iOS)
+            // To the row's trailing inset, as `TaskRow`'s (brief 115).
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #endif
+            #if os(macOS)
             Spacer(minLength: 0)
+            #endif
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
         .taskRowSpeech(label: task.title.value, value: TaskRowSpeech.value(speechParts),

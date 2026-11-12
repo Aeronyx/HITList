@@ -89,6 +89,9 @@ struct IntervalChoiceStrip: View {
             .lineLimit(1)
             // Only when the card is too narrow for every choice's words, and then each by the same ratio.
             .minimumScaleFactor(0.75)
+            // The highlight never closer than 8 pt to the words, either side (brief 115: on the Duo the lit choice's
+            // capsule came 6 pt from its words, and the next choice's words 7 pt from the capsule).
+            .padding(.horizontal, ChoiceStripLayout.labelRoom)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
             .background {
@@ -121,13 +124,30 @@ struct IntervalChoiceStrip: View {
 /// highlight sits around every one with the same room either side of its words; too narrow even for the words, each
 /// narrows by the same ratio. Rows fill the height given (the strip's 30 pt).
 struct ChoiceStripLayout: Layout {
-    /// Each choice's width in `total`, from its words' widths.
-    static func widths(ideal: [CGFloat], total: CGFloat) -> [CGFloat] {
+    /// The room either side of a choice's words, inside its part of the strip (and so inside the highlight). The Mac's
+    /// strip is left as it was (its inline card can be 270 pt narrow, where the room would shrink its 13 pt words).
+    static var labelRoom: CGFloat {
+        #if os(iOS)
+        8
+        #else
+        0
+        #endif
+    }
+
+    /// Each choice's width in `total`, from its ideal widths (its words and `room` either side). Too narrow for them
+    /// all, the room stays and only the words narrow, every choice's by the same ratio, so they stay one size.
+    static func widths(ideal: [CGFloat], total: CGFloat, room: CGFloat = 0) -> [CGFloat] {
         guard !ideal.isEmpty else { return [] }
         let count = CGFloat(ideal.count)
         let sum = ideal.reduce(0, +)
         guard sum > 0 else { return ideal.map { _ in total / count } }
-        guard total >= sum else { return ideal.map { $0 * total / sum } }
+        guard total >= sum else {
+            let fixed = 2 * room * count
+            let words = sum - fixed
+            guard words > 0, total > fixed else { return ideal.map { $0 * total / sum } }
+            let ratio = (total - fixed) / words
+            return ideal.map { 2 * room + ($0 - 2 * room) * ratio }
+        }
         let spare = (total - sum) / count
         return ideal.map { $0 + spare }
     }
@@ -141,7 +161,7 @@ struct ChoiceStripLayout: Layout {
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let ideal = subviews.map { $0.sizeThatFits(.unspecified).width }
         var x = bounds.minX
-        for (subview, width) in zip(subviews, Self.widths(ideal: ideal, total: bounds.width)) {
+        for (subview, width) in zip(subviews, Self.widths(ideal: ideal, total: bounds.width, room: Self.labelRoom)) {
             subview.place(at: CGPoint(x: x, y: bounds.minY), anchor: .topLeading,
                           proposal: ProposedViewSize(width: width, height: bounds.height))
             x += width

@@ -214,6 +214,7 @@
 		608C4039A4C1816B43354830 /* SettingsRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 184C37C143DA7F89F0707031 /* SettingsRouter.swift */; };
 		61010CF79682849CCDD460E9 /* GroupReorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090C52CC3478D18601777A88 /* GroupReorder.swift */; };
 		61831C0E8289C22D284E4030 /* SidebarSearchField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 081EE4B9DD813C95B28A4AFB /* SidebarSearchField.swift */; };
+		6191AC791598CB625D158BFE /* ScreenInsetsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BA794F92D76698D54044E7 /* ScreenInsetsUITests.swift */; };
 		61F4B36E4A5492285316B454 /* WidgetCompletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24410C4333F1AD0524BF08A4 /* WidgetCompletionTests.swift */; };
 		6265C5D0756EA9B1DB39BAB4 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */; };
 		63DFDD00010B0BD42F7E29E6 /* HolidayEffectsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E560EB0588544BDE7C47FAB /* HolidayEffectsTests.swift */; };
@@ -729,6 +730,7 @@
 		4232FDAE8D59CD8804FC62FC /* Inter_18pt-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Inter_18pt-Regular.ttf"; sourceTree = "<group>"; };
 		4299F6AC9EE42F44E5EE3546 /* GeocoderZoneSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeocoderZoneSource.swift; sourceTree = "<group>"; };
 		42AC4E971C5262969197F1F3 /* TaskRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRow.swift; sourceTree = "<group>"; };
+		42BA794F92D76698D54044E7 /* ScreenInsetsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenInsetsUITests.swift; sourceTree = "<group>"; };
 		430C53233DBC58D5311A9305 /* DuoSplit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoSplit.swift; sourceTree = "<group>"; };
 		43685282BB59BB5A3F3DD659 /* KeyboardObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
 		443183B5EE4B7772E52AF465 /* SharedTasksCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksCenter.swift; sourceTree = "<group>"; };
@@ -1544,6 +1546,7 @@
 				FFECF46968417C8C6D48C8C9 /* QuickAddGuideUITests.swift */,
 				5A323EAA03324E42F9B45926 /* RepeatPhraseUITests.swift */,
 				CCB8433A7D2C8CEE6F362F61 /* RepeatPickerUITests.swift */,
+				42BA794F92D76698D54044E7 /* ScreenInsetsUITests.swift */,
 				EE874329A609F401C90AEE96 /* ScreenTourUITests.swift */,
 				DACD23C3CE315DB27A101BC8 /* SettingsTidyUITests.swift */,
 				DCB76AF4D5676AE6F706E206 /* ShareExtensionUITests.swift */,
@@ -2370,6 +2373,7 @@
 				783B3276F2D1FCE8AABA79FA /* QuickAddGuideUITests.swift in Sources */,
 				F8D402AC7AD510F09615293C /* RepeatPhraseUITests.swift in Sources */,
 				5DF15A3C12EC8DD5DF109718 /* RepeatPickerUITests.swift in Sources */,
+				6191AC791598CB625D158BFE /* ScreenInsetsUITests.swift in Sources */,
 				0AC460CA744488B40EE66866 /* ScreenTourUITests.swift in Sources */,
 				E2FAA51761481A222F151CE0 /* SettingsTidyUITests.swift in Sources */,
 				84FF1E12F4EAB33D5B5CCB6E /* ShareExtensionUITests.swift in Sources */,
