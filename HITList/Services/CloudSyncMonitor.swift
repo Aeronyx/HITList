@@ -774,8 +774,10 @@ final class CloudSyncMonitor {
         let now = Date()
         #if os(iOS)
         if appState == "background" { watch(.resumed(at: now)) }
-        #endif
+        watch(.push(at: now, inBackground: appState == "background"))
+        #else
         watch(.push(at: now))
+        #endif
     }
 
     /// The iOS push handler is done: an app still in the background is suspended again.
@@ -858,12 +860,15 @@ final class CloudSyncMonitor {
 
     @ObservationIgnored private var pendingSaves: PendingSaves?
     @ObservationIgnored private var saveFlush: Task<Void, Never>?
+    /// The mirror's retries at once, one line per run (`SyncRetryBursts`), and the timer for a quiet run's line.
+    @ObservationIgnored private var bursts = SyncRetryBursts()
+    @ObservationIgnored private var burstTimer: Task<Void, Never>?
     /// Saves closer together than this share a log line (any other line written first flushes them).
     static let saveGathering: Duration = .seconds(1)
 
     private func localSaved(_ summary: SaveSummary, deleted: [PersistentIdentifier] = [], at: Date) {
         // Gathered into the log's line first, so a "waiting: offline" finding follows the save it is about.
-        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at)) } }
+        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at, records: summary.total)) } }
         // Brief 95: what the next beat compares with iCloud has changed; a deleted record is named by its id.
         lastLocalSaveAt = max(at, lastLocalSaveAt ?? at)
         inventoryIsStale = true
@@ -1071,7 +1076,7 @@ final class CloudSyncMonitor {
             let now = Date()
             pruneDeletions(now)
             return .answered(BoltTruth.findings(
-                comparison: result, unsentSaves: watchdog.waitingSaves, oldestUnsentSave: watchdog.oldestWaitingSave,
+                comparison: result, unsentSaves: watchdog.waitingRecords, oldestUnsentSave: watchdog.oldestWaitingSave,
                 lastLocalSaveAt: lastLocalSaveAt, deletedHere: deletedHere, inFlight: isSyncing, now: now))
         }
     }
@@ -1221,13 +1226,33 @@ final class CloudSyncMonitor {
         accountNotice = notice
     }
 
+    /// Event lines through `SyncRetryBursts`: each at its own time, after any saves still being gathered; and a timer
+    /// for the line of a run of retries that has gone quiet.
+    private func writeEventLines(_ lines: [SyncRetryBursts.Line]) {
+        for line in lines {
+            flushSaves()
+            syncLog.record(.event, line.message, level: line.level, date: line.date, fields: line.fields)
+        }
+        burstTimer?.cancel()
+        burstTimer = nil
+        guard let deadline = bursts.deadline else { return }
+        burstTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(max(0.01, deadline.timeIntervalSinceNow) + 0.05))
+            guard !Task.isCancelled, let self else { return }
+            self.writeEventLines(self.bursts.expire(now: Date()))
+        }
+    }
+
     private func record(_ event: NSPersistentCloudKitContainer.Event) {
         let type = SyncEventType(event.type)
         let shortID = String(event.identifier.uuidString.prefix(8))
         guard let end = event.endDate else {
             inFlight[event.identifier] = event.startDate
             if event.type == .import { inFlightImports.insert(event.identifier) }
-            write(.event, "\(type.title) started", fields: ["id": shortID])
+            let started = Date()
+            writeEventLines(bursts.started(event.identifier, type: type, at: started,
+                                           line: SyncRetryBursts.Line(date: started, message: "\(type.title) started",
+                                                                      level: .info, fields: ["id": shortID])))
             watch(.eventStarted(id: event.identifier, type: type, at: event.startDate))
             return
         }
@@ -1270,8 +1295,12 @@ final class CloudSyncMonitor {
             lastErrorReason = reason
             lastErrorAt = now
             fields.merge(SyncLogFormat.errorFields(error)) { $1 }
-            write(.event, "\(type.title) failed after \(duration): \(reason)",
-                  level: Self.isExpected(failureReason: reason, account: rawAccountStatus) ? .notice : .error, fields: fields)
+            // The mirror's own retries at once (brief 95: 56 in 1.1 s on George's iPhone) share one line per run.
+            let line = SyncRetryBursts.Line(date: Date(), message: "\(type.title) failed after \(duration): \(reason)",
+                                            level: Self.isExpected(failureReason: reason, account: rawAccountStatus) ? .notice : .error,
+                                            fields: fields)
+            writeEventLines(bursts.failed(event.identifier, type: type, key: fields["ckError"] ?? fields["error"] ?? reason,
+                                          reason: reason, at: line.date, line: line))
             if event.type == .import { importWaiter.importEnded(startedAt: event.startDate, at: end, outcome: .failed) }
         } else {
             switch event.type {
@@ -1291,7 +1320,9 @@ final class CloudSyncMonitor {
                 lastChangeAt = now
                 lastChangePhase = phase
             }
-            write(.event, "\(type.title) finished in \(duration)", fields: fields)
+            writeEventLines(bursts.finished(event.identifier, type: type, at: now,
+                                            line: SyncRetryBursts.Line(date: Date(), message: "\(type.title) finished in \(duration)",
+                                                                       level: .info, fields: fields)))
             // A good sync while iCloud last said the account was unavailable: it is back, so ask (at most every 10 s).
             if let account = rawAccountStatus, AccountSteadiness.isBlip(account),
                lastAccountCheck.map({ now.timeIntervalSince($0) >= 10 }) ?? true {
