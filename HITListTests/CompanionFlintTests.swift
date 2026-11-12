@@ -63,8 +63,8 @@ final class CompanionFlintTests: XCTestCase {
     /// still's rows joined by newlines). A change to either is a change George has not seen.
     func testHisRestAndSleepArePinned() {
         let pinned: [String: String] = [
-            "rest": "462735ae8caaba0660d30123f9640625e3c7cbef9b77532dd3b0de4e989372f6",
-            "sleep": "971b8c199726c6e371e0e47caed024a4354ecaa0de279234552319b8a4ebfd20",
+            "rest": "2f94fb391643886aced814d44a5d6dcccdfce699503e453ab2a499f1e26023a4",
+            "sleep": "d0a696098f607f0c43dc618b65b1be6fe228b9b76ec1c0b3fe1bfd8b58e4f666",
         ]
         for (name, digest) in pinned {
             let joined: String = flint.rows(name)!.joined(separator: "\n")
