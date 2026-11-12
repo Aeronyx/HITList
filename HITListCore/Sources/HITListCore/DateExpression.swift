@@ -228,7 +228,8 @@ public struct DateExpressionParser: Sendable {
         func d(_ date: Date) -> ParsedDate { ParsedDate(date: startOfDay(date), hasTime: false) }
 
         switch w {
-        case "today", "tod":
+        // "tonight" is today, a day with no time of its own (brief 127): no hour is made up for it.
+        case "today", "tod", "tonight":
             return (d(today), 1)
         case "tomorrow", "tom", "tmr", "tmrw":
             return (d(day(1)), 1)

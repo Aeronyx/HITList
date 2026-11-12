@@ -82,6 +82,9 @@ enum QuickAddGuide {
                         claims: [.title("team lunch"), .day(nextMonday)]),
                 Example(typed: "standup tom 9", caption: "Tomorrow 09:00; 24-hour unless am or pm",
                         claims: [.title("standup"), .moment(dates.at(dates.day(1), 9))]),
+                // Brief 127: "tonight" is today, with no hour of its own.
+                Example(typed: "dinner tonight 8pm", caption: "Today 8 PM; tonight is a day, not a time",
+                        claims: [.title("dinner"), .moment(dates.at(dates.day(0), 20))]),
                 Example(typed: "call back in 2 hours", caption: "Two hours from now",
                         claims: [.title("call back"), .moment(dates.minute.addingTimeInterval(2 * 3600))]),
             ]),

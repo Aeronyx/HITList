@@ -435,4 +435,28 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(ReminderOffset.duration(minutes: 1500), "1 day 1 hr")
         XCTAssertEqual(ReminderOffset.duration(minutes: 2880), "2 days")
     }
+
+    /// Brief 127: "tonight" is today, a day and no time (no hour is made up for it), like "today". A friend typed
+    /// "PNHP Working Group tonight !30mb" and nothing read the word. A time beside it is its time; a bare number
+    /// after it is not ("tonight 9" would read 09:00 on the 24-hour rule), it stays in the title.
+    func testTonightIsToday() {
+        let r = parser.parse("PNHP Working Group tonight")
+        XCTAssertEqual(r.title, "PNHP Working Group")
+        assertDate(r.dueDate, 2026, 10, 21)
+        XCTAssertFalse(r.hasDueTime)
+        XCTAssertEqual(r.tokens.map(\.kind), [.date])
+
+        let timed = parser.parse("Dinner tonight 8pm !30mb")
+        XCTAssertEqual(timed.title, "Dinner")
+        assertDate(timed.dueDate, 2026, 10, 21, 20, 0)
+        XCTAssertEqual(timed.reminderOffsetMinutes, 30)
+        XCTAssertEqual(parser.parse("Dinner 7:30pm Tonight").title, "Dinner")
+        assertDate(parser.parse("Dinner 7:30pm Tonight").dueDate, 2026, 10, 21, 19, 30)
+
+        let bare = parser.parse("Call tonight 9")
+        XCTAssertEqual(bare.title, "Call 9")
+        XCTAssertFalse(bare.hasDueTime)
+        XCTAssertNil(parser.parse("Call tonight !30mb").reminderOffsetMinutes, "a day only: no time to count from")
+        XCTAssertEqual(parser.parse("Call \"tonight\"").title, "Call tonight", "quotes keep it a word")
+    }
 }

@@ -188,10 +188,12 @@ public struct QuickAddParser: Sendable {
             }
             // Date (a plain day drops the moment of an earlier "in 2 hours"); "starting friday" too
             if let (pd, n, isStart) = matchDateOrStart(lowers, at: i) {
+                let isTonight = DateExpressionParser.normalize(lowers[i + n - 1]) == "tonight"
                 date = pd.date; moment = nil; dateIsStart = isStart; win(i, n, .date); i += n
                 // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
-                // Only when no time is typed yet: a bare number is too weak to override "5pm".
-                if time == nil, i < words.count, !consumed[i],
+                // Only when no time is typed yet: a bare number is too weak to override "5pm". Not after "tonight",
+                // where "9" would read 09:00 (brief 127): it stays in the title.
+                if time == nil, !isTonight, i < words.count, !consumed[i],
                    let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true) {
                     time = (t.hour, t.minute); win(i, t.consumed, .time); i += t.consumed
                 }
