@@ -2150,19 +2150,17 @@ extension CompanionCharacter {
             inset: 5)
     )
 
-    /// Nod's idles (brief 105), the same in both places. Sleepy is the whole of it: its lids grow heavy; its head droops
-    /// and jerks up, the bobble swinging a beat behind; it rubs an eye; it yawns; its lamp flickers; and now and then one
-    /// leg swings, slowly, the other a beat behind (a tired child's, never a brisk kick). The weather's own: a drop
+    /// Nod's flickers (brief 105), the same in both places, each a few pixels: its lids grow heavy; it rubs an eye; it
+    /// yawns; its lamp flickers; now and then one leg swings, slowly (a tired child's, never a brisk kick). Its head
+    /// drooping and jerking up is a little loop (`nodOff`), too big for a flicker. The weather's own: a drop
     /// gathers on the umbrella's rim and falls; a bead of sweat on a hot day.
     static let nodIdles: [Gesture] = [
         Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
         Gesture(name: "heavyBlink", weight: 2, ticks: Self.ticks(("heavy", 3), ("blink", 2), ("heavy", 2)), flicker: true),
-        Gesture(name: "nod", weight: 2, ticks: Self.ticks(("heavy", 1), ("droop", 1), ("droop2", 1), ("jerk", 1), ("swayOut", 2)), flicker: true),
         Gesture(name: "rub", ticks: Self.ticks(("rubA", 2), ("rubB", 2), ("rubA", 2)), flicker: true),
         Gesture(name: "yawn", ticks: Self.ticks(("yawn1", 2), ("yawn2", 4), ("yawn1", 1)), flicker: true),
         Gesture(name: "lampFlicker", ticks: Self.ticks(("lampDim", 1), ("rest", 1), ("lampDim", 1)), flicker: true),
         Gesture(name: "swing", ticks: Self.ticks(("leftKick", 5)), flicker: true),
-        Gesture(name: "swingRight", ticks: Self.ticks(("rightKick", 5)), flicker: true),
         Gesture(name: "rimDrip", ticks: Self.ticks(("rimA", 2), ("rimB", 2), ("rimC", 1)), flicker: true, sky: .rain),
         Gesture(name: "sweat", ticks: Self.ticks(("sweatA", 2), ("sweatB", 3)), flicker: true, sky: .heat),
     ]
@@ -2203,9 +2201,9 @@ extension CompanionCharacter {
         // Its little loops (briefs 100 and 105; an idle now and then, a second or two): it nods off and jerks awake, the
         // bobble swinging after; it rubs an eye and yawns; one leg dangles, then the other, slowly; a tap to brighten its
         // lamp.
-        Routine(name: "nodOff", little: true, steps: [.play(("heavy", 4), ("droop", 2), ("droop2", 5)), .play(("jerk", 2)), .play(("swayOut", 2)), .hold(1), .gesture("blink")]),
+        Routine(name: "nodOff", weight: 2, little: true, steps: [.play(("heavy", 4), ("droop", 2), ("droop2", 5)), .play(("jerk", 2)), .play(("swayOut", 2)), .hold(1), .gesture("blink")]),
         Routine(name: "rubYawn", little: true, steps: [.gesture("rub"), .hold(1), .gesture("yawn"), .hold(1)]),
-        Routine(name: "dangle", little: true, steps: [.gesture("swing"), .hold(3), .gesture("swingRight"), .hold(2)]),
+        Routine(name: "dangle", little: true, steps: [.gesture("swing"), .hold(3), .play(("rightKick", 5)), .hold(2)]),
         Routine(name: "lampTap", little: true, steps: [.play(("lampDim", 3)), .play(("tap", 2)), .play(("glowUp", 2)), .hold(1)]),
         Routine(name: "bask", sky: .clear, steps: [
             .play(("lampDim", 2)), .play(("baskA", 4)), .play(("baskL", 3)), .play(("baskA", 2)), .play(("baskR", 3)), .play(("baskA", 4)), .play(("lampDim", 3)), .hold(4), .gesture("blink"), .hold(4)]),
