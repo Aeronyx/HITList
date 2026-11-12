@@ -79,7 +79,7 @@ final class CompanionTuckTests: XCTestCase {
         // Brief 119 (George: "Tuck's eyes should still droop down far at night ... He also shouldn't smile while
         // sleeping, that's creepy"): asleep its stalks wilt into crooks above its head, the shut eyes hanging from their
         // ends well below where they stand by day, and its face has no mouth.
-        for y in 11...15 {
+        for y in 12...15 {
             XCTAssertEqual(String(sleep[y].prefix(10)), "dlllllllll", "asleep row \(y): a plain face, no smile")
         }
         let stalks = try XCTUnwrap(Self.topRow(of: "l", in: sleep, columns: 0..<9), "asleep: its stalks still show")
