@@ -31,7 +31,13 @@ enum PickerKind: Hashable, CaseIterable {
         #else
         case .date, .deadline: 360
         #endif
+        // iPhone: the regular layout's two columns hold "In 15 minutes" and "Later today…" whole inside its 16 pt insets
+        // (brief 114; at 300 they were cut to "In 15 minut…"). The Mac's smaller type fits 300.
+        #if os(macOS)
         case .reminder: 300
+        #else
+        case .reminder: 320
+        #endif
         case .location: 300
         case .priority, .group, .labels: 280
         // The Repeat menu's longest choices ("Every 2 weeks on Wednesday") and Custom's Daily · Weekly · Monthly ·
