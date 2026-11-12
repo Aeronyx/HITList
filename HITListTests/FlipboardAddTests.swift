@@ -590,11 +590,40 @@ final class FlipboardAddTests: XCTestCase {
     func testANewTileSettlesWithASmallSpring() {
         XCTAssertGreaterThanOrEqual(SwitchLanding.startScale, 0.8, "a touch small, not popping out of nothing")
         XCTAssertLessThan(SwitchLanding.startScale, 1)
-        XCTAssertGreaterThan(SwitchLanding.spring.dampingRatio, 0.4, "settles, doesn't bounce")
+        XCTAssertGreaterThan(SwitchLanding.spring.dampingRatio, 0.7, "one soft settle, not a bounce (brief 126)")
         XCTAssertLessThan(SwitchLanding.spring.dampingRatio, 1, "a little overshoot, so it lands")
         XCTAssertLessThanOrEqual(SwitchLanding.spring.settlingDuration, 1.2)
         let id = UUID()
         XCTAssertNotEqual(SwitchLanding.Mark(id: id, generation: 1), SwitchLanding.Mark(id: id, generation: 2))
+        XCTAssertNotEqual(SwitchLanding.Mark(id: id, generation: 1, waiting: true), SwitchLanding.Mark(id: id, generation: 1),
+                          "a tile held unseen lands when the card has gone")
+    }
+
+    /// Brief 126 (George: "Adding Switches on iOS makes them expand and contract like crazy for a moment before they
+    /// settle"): the landing jumped to its start with a 1 ms linear keyframe, and the spring after it took that jump's
+    /// speed (140 sizes a second): filmed on an iPhone 16 simulator, the new tile drew mirrored, twice its size and tiny
+    /// before it settled. The whole track, sampled every frame: it starts at its start, never goes under it, never more
+    /// than 2% past full size, and ends at exactly full size; a new tile fades in once.
+    func testTheLandingSettlesOnceWithoutBeingFlung() {
+        for fadesIn in [true, false] {
+            let timeline = KeyframeTimeline(initialValue: SwitchLanding.Pose()) { SwitchLanding.keyframes(fadesIn: fadesIn) }
+            XCTAssertLessThanOrEqual(timeline.duration, 1.2, "lands within the second")
+            XCTAssertEqual(timeline.value(time: 0).scale, SwitchLanding.startScale, accuracy: 0.001)
+            XCTAssertEqual(timeline.value(time: 0).opacity, fadesIn ? 0 : 1, accuracy: 0.001)
+            var peak: CGFloat = 0, low: CGFloat = 10, turns = 0, rising = true, last = SwitchLanding.startScale
+            for frame in 0...Int(timeline.duration * 120) {
+                let scale = timeline.value(time: Double(frame) / 120).scale
+                peak = max(peak, scale)
+                low = min(low, scale)
+                if rising, scale < last - 0.0005 { turns += 1; rising = false } else if !rising, scale > last + 0.0005 { turns += 1; rising = true }
+                last = scale
+            }
+            XCTAssertGreaterThanOrEqual(low, SwitchLanding.startScale - 0.001, "never smaller than it starts, never mirrored")
+            XCTAssertLessThanOrEqual(peak, 1.02, "one soft settle: under 2% past full size")
+            XCTAssertLessThanOrEqual(turns, 2, "one overshoot and back, no more")
+            XCTAssertEqual(timeline.value(time: timeline.duration).scale, 1, accuracy: 0.0001, "exactly full size at rest")
+            XCTAssertEqual(timeline.value(time: timeline.duration).opacity, 1, accuracy: 0.0001)
+        }
     }
 
     // MARK: The grid

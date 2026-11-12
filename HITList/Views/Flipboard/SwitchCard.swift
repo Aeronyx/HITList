@@ -437,9 +437,10 @@ struct SwitchCard: View {
             Task { await NotificationScheduler.reschedule(context: context) }
             if editing == nil, duplicating == nil, style == .inline {
                 // The Mac and iPad card stays open, empty, for the next switch (as the board's Add task card); a
-                // duplicate's closes once it is added.
+                // duplicate's closes once it is added. The next goes where this one went (brief 126: the card under a
+                // Switchboard's row reset to No Switchboard, and its next switch landed loose).
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-                    draft = SwitchDraft()
+                    draft = SwitchDraft(boardID: task.switchboard?.id)
                     added = "Added ‘\(task.title)’"
                 }
                 addedGeneration += 1

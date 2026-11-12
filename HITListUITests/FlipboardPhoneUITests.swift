@@ -106,7 +106,7 @@ final class FlipboardPhoneUITests: XCTestCase {
         XCTAssertTrue(water.waitForExistence(timeout: 10))
         let bed = boardHeader("Before Bed")
         XCTAssertTrue(bed.waitForExistence(timeout: 5))
-        XCTAssertTrue(boardLine(containing: "2 of 4").exists)
+        XCTAssertTrue(lights("2 of 4 on").exists)
 
         // Held still: the menu, as before.
         water.press(forDuration: 1.0)
@@ -117,31 +117,69 @@ final class FlipboardPhoneUITests: XCTestCase {
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.08, dy: 0.5)).tap()
         XCTAssertTrue(menu.waitForNonExistence(timeout: 3), "the menu closed")
 
-        // The loose switches' first row and Before Bed's together on the screen.
-        scroll(by: 0.2)
-        // Held until it lifts, then moved at once onto Before Bed (moving while the menu shows, a finger that crosses
-        // the menu picks an item instead), and held there a moment before letting go.
-        water.press(forDuration: 0.6, thenDragTo: bed, withVelocity: .default, thenHoldForDuration: 2)
-        XCTAssertTrue(boardLine(containing: "2 of 5").waitForExistence(timeout: 5), "on Before Bed now")
+        // Held until it lifts, then moved at once onto Before Bed's panel (moving while the menu shows, a finger that
+        // crosses the menu picks an item instead), and held there a moment before letting go.
+        drag(water, onto: bed)
+        XCTAssertTrue(lights("2 of 5 on").waitForExistence(timeout: 5), "on Before Bed now")
         snapshot("2 Dropped on Before Bed")
 
-        // Back off it: dragged onto the loose switches' + tile, which stands just above Before Bed, once both are clear
-        // of the bars (the board has centred the switch where it landed).
+        // Back off it: from near the top of its tile, now on Before Bed's row, onto the lower part of the loose switches'
+        // Add outline, which stands just above the panel: both held clear of the screen's edges, where a held drag
+        // scrolls the board (brief 126: the panel's header between them made the old centre-to-centre drag too long).
         let addTile = app.buttons["addSwitchTile"]
-        let moved = switchTile("Water the plants")
+        let moved = tile("Water the plants")
         XCTAssertTrue(moved.waitForExistence(timeout: 3))
-        for _ in 0..<4 {
-            if addTile.frame.minY < 120 {
-                scroll(by: -0.12)
-            } else if moved.frame.maxY > app.frame.height - 110 {
-                scroll(by: 0.1)
+        let height = app.frame.height
+        for _ in 0..<6 {
+            let drop = addTile.frame.minY + addTile.frame.height * 0.85, lift = moved.frame.minY + moved.frame.height * 0.15
+            if drop < height * 0.3 {
+                scroll(by: -0.06)
+            } else if lift > height * 0.7 {
+                scroll(by: 0.06)
             } else {
                 break
             }
         }
-        moved.press(forDuration: 0.6, thenDragTo: addTile, withVelocity: .default, thenHoldForDuration: 1.0)
-        XCTAssertTrue(boardLine(containing: "2 of 4").waitForExistence(timeout: 5), "off Before Bed again")
+        moved.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15))
+            .press(forDuration: 0.6, thenDragTo: addTile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)),
+                   withVelocity: .default, thenHoldForDuration: 1.0)
+        XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "off Before Bed again")
         snapshot("3 Dragged back onto the loose switches")
+
+        // Brief 126: with the loose switches folded away, their header takes the drop.
+        drag(switchTile("Water the plants"), onto: bed)
+        XCTAssertTrue(lights("2 of 5 on").waitForExistence(timeout: 5), "on Before Bed again")
+        // Back at the top of the board (where a held drag can't scroll it further), folded, and onto the header.
+        app.swipeDown()
+        app.swipeDown()
+        let ungrouped = element("ungroupedHeader")
+        XCTAssertTrue(ungrouped.waitForExistence(timeout: 3))
+        ungrouped.tap()
+        XCTAssertTrue(addTile.waitForNonExistence(timeout: 3), "folded")
+        let onBoard = tile("Water the plants")
+        XCTAssertTrue(onBoard.waitForExistence(timeout: 3))
+        onBoard.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.6, thenDragTo: ungrouped.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)),
+                   withVelocity: .default, thenHoldForDuration: 1.2)
+        XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "dropped on the folded header: off Before Bed")
+        snapshot("4 Dropped on the folded Ungrouped header")
+    }
+
+    /// A loose switch held until it lifts and moved onto a board's panel (its header, at the panel's top). The board is
+    /// first scrolled so the header stands clear of the foot of the screen, where a held drag scrolls the board on
+    /// (brief 126: the panel sets the header 44 pt lower than the old section did, into that zone), with the switch
+    /// still clear of the bars; the press starts low on the tile, under its rocker.
+    private func drag(_ rocker: XCUIElement, onto header: XCUIElement) {
+        // The whole tile, pressed by its caption, well under the rocker: the tile and the panel's header are farther
+        // apart than the screen's middle holds otherwise.
+        let whole = tile(rocker.label)
+        let press = { whole.frame.minY + whole.frame.height * 0.92 }
+        for _ in 0..<10 where header.frame.minY > app.frame.height * 0.6 && press() > 200 {
+            scroll(by: 0.05)
+        }
+        whole.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.92))
+            .press(forDuration: 0.6, thenDragTo: header.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5)),
+                   withVelocity: .default, thenHoldForDuration: 1.2)
     }
 
     /// Scrolls the board by `fraction` of the screen's height (positive: further down the board), from the screen's
@@ -193,8 +231,66 @@ final class FlipboardPhoneUITests: XCTestCase {
         XCTAssertTrue(name.waitForNonExistence(timeout: 5))
         XCTAssertTrue(switchTile("Take vitamins").waitForExistence(timeout: 5), "the copy")
         XCTAssertTrue(switchTile("Take meds").exists, "the original")
-        XCTAssertTrue(boardLine(containing: "2 of 5").exists, "both on Before Bed")
+        XCTAssertTrue(lights("2 of 5 on").exists, "both on Before Bed")
         snapshot("2 The copy beside the original")
+    }
+
+    // MARK: Switchboards in rows (brief 126)
+
+    /// The demo week: a switch added to Before Bed from the Add switch outline at the end of its row, with a time and a
+    /// name that wraps, appears once, in the row's order, and the row scrolls to show it; every tile on the row is one
+    /// size, and the board's lights count it. (Item 5, the jitter, is pinned by `FlipboardAddTests`; this is its film.)
+    func testASwitchAddedToABoardAppearsInItsRow() throws {
+        app.launchArguments += ["-seedDemoData"]
+        app.launch()
+        openFlipboard()
+        XCTAssertTrue(switchTile("Water the plants").waitForExistence(timeout: 10))
+        XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "Before Bed's lights")
+        let add = app.buttons.matching(NSPredicate(format: "identifier == 'switchboardAdd' AND label == 'Add a switch to Before Bed'")).firstMatch
+        XCTAssertTrue(add.exists, "the Add switch outline at the end of Before Bed's row")
+        add.tap()
+        XCTAssertTrue(element("switchName").waitForExistence(timeout: 5), "the card")
+        XCTAssertTrue(element("switchBoardLine").waitForExistence(timeout: 3), "on Before Bed")
+        settle()
+        app.typeText("Lay out tomorrow's clothes and pack the bag")
+        setTime("10pm")
+        app.buttons["switchSave"].tap()
+        let added = switchTile("Lay out tomorrow's clothes and pack the bag")
+        XCTAssertTrue(added.waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 1.5)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", added.label)).count, 1, "once")
+        XCTAssertTrue(added.isHittable, "the row scrolled to show it")
+        XCTAssertTrue(lights("2 of 5 on").exists, "the lights count it")
+        // After Take meds (21:00), before the untimed ones.
+        XCTAssertLessThan(switchTile("Take meds").frame.minX, added.frame.minX)
+        XCTAssertLessThan(added.frame.minX, switchTile("Brush teeth").frame.minX)
+        let row = ["Take meds", "Lay out tomorrow's clothes and pack the bag", "Brush teeth", "Floss", "Read 20 minutes"]
+        let size = tile("Take meds").frame.size
+        for title in row {
+            XCTAssertEqual(tile(title).frame.width, size.width, accuracy: 0.5, title)
+            XCTAssertEqual(tile(title).frame.height, size.height, accuracy: 0.5, title)
+        }
+        snapshot("1 Added to Before Bed, the row scrolled to it")
+    }
+
+    /// The demo week: "Ungrouped" over the loose switches folds them away to its one line and back; the boards stay.
+    func testUngroupedFoldsAwayAndBack() throws {
+        app.launchArguments += ["-seedDemoData"]
+        app.launch()
+        openFlipboard()
+        let water = switchTile("Water the plants")
+        XCTAssertTrue(water.waitForExistence(timeout: 10))
+        let header = element("ungroupedHeader")
+        XCTAssertTrue(header.exists, "a header over the loose switches once there is a board")
+        XCTAssertTrue(lights("0 of 2 on").exists, "their lights")
+        snapshot("1 Ungrouped, open")
+        header.tap()
+        XCTAssertTrue(water.waitForNonExistence(timeout: 3), "folded away")
+        XCTAssertTrue(boardHeader("Before Bed").exists, "the boards stay")
+        XCTAssertTrue(lights("0 of 2 on").exists, "its lights stay in view")
+        snapshot("2 Ungrouped, folded")
+        header.tap()
+        XCTAssertTrue(water.waitForExistence(timeout: 3), "back")
     }
 
     // MARK: Helpers
@@ -203,8 +299,15 @@ final class FlipboardPhoneUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "identifier == 'switchboardHeader' AND label == %@", name)).firstMatch
     }
 
-    private func boardLine(containing text: String) -> XCUIElement {
-        app.staticTexts.matching(NSPredicate(format: "identifier == 'switchboardLine' AND label CONTAINS %@", text)).firstMatch
+    /// A board's lights (or the loose switches'), read as one element: "2 of 4 on. Off: …".
+    private func lights(_ prefix: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier == 'boardLights' AND label BEGINSWITH %@", prefix)).firstMatch
+    }
+
+    /// A switch's whole tile.
+    private func tile(_ title: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "flipSwitchTile")
+            .containing(NSPredicate(format: "label == %@", title)).firstMatch
     }
 
     /// The time: the compact time control, whose tap opens a field in its place.
@@ -239,9 +342,16 @@ final class FlipboardPhoneUITests: XCTestCase {
     }
 
     private func snapshot(_ name: String) {
-        let shot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = app.screenshot()
+        let shot = XCTAttachment(screenshot: screenshot)
         shot.name = name
         shot.lifetime = .keepAlways
         add(shot)
+        // A session's pictures: `TEST_RUNNER_PICTURES_DIR=<folder> xcodebuild test …` writes each one there too.
+        if let folder = ProcessInfo.processInfo.environment["PICTURES_DIR"] {
+            let device = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] ?? "simulator"
+            let file = "\(device)-\(name.replacingOccurrences(of: " ", with: "-")).png"
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: folder).appendingPathComponent(file))
+        }
     }
 }

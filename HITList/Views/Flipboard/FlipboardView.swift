@@ -4,11 +4,12 @@ import Combine
 import HITListCore
 
 /// The Task Flipboard: a wall of rocker switches, one per recurring chore, and a calm status check rather than a
-/// second to-do list (brief 72). Loose switches come first, exactly as before Switchboards: red ones (due or overdue)
-/// at the top, most overdue first; green ones follow, soonest due first. Then each Switchboard as a section in its
-/// order: its name in the list section header style with a "+" 6 pt after it, its cadence line ("Daily · resets
-/// 04:00") and how many are done ("3 of 5"), then its switches, the timed ones by their time, then the rest. Every
-/// tile on the screen is one size.
+/// second to-do list (brief 72). Loose switches come first, in a grid, exactly as before Switchboards: red ones (due or
+/// overdue) at the top, most overdue first; green ones follow, soonest due first. With a Switchboard on the board they
+/// sit under an "Ungrouped" header with their lights, which folds them away (brief 126). Then each Switchboard in its
+/// order, on a panel of its own (`SwitchboardPanel`): its name, its lights (one a switch, in the row's order) and its
+/// cadence line ("Daily · resets 04:00"), then its switches in one row that scrolls sideways, the timed ones by their
+/// time, then the rest, and the Add switch outline last. Every tile on the screen is one size.
 struct FlipboardView: View {
     @Binding var selectedTask: TaskItem?
 
@@ -57,12 +58,18 @@ struct FlipboardView: View {
     @State private var deleted: Flipboard.DeletedSwitch?
     @State private var deleteGeneration = 0
     @AppStorage(FlipSound.key, store: AppGroup.defaults) private var soundOn = true
+    /// The loose switches folded away under their header (brief 126), remembered on this device.
+    @AppStorage(FlipboardView.ungroupedFoldedKey, store: AppGroup.defaults) private var ungroupedFolded = false
+    static let ungroupedFoldedKey = "flipboard.ungroupedFolded"
+    /// Where each board's row was last asked to scroll (a light tapped, a switch added or opened), by board.
+    @State private var rowScroll: [UUID: SwitchRowRequest] = [:]
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-    private static let spacing: CGFloat = 14
+    static let spacing: CGFloat = 14
     /// Between the loose switches and the first board, and between boards.
-    private static let sectionSpacing: CGFloat = 28
+    private static let sectionSpacing: CGFloat = 20
 
     /// The board's clock: now, or in a Debug build the moment `-flipboardNow` names (screenshots either side of a
     /// reset).
@@ -112,6 +119,12 @@ struct FlipboardView: View {
         return (width - CGFloat(columns - 1) * Self.spacing) / CGFloat(max(1, columns))
     }
 
+    /// A Switchboard row's tiles: whole ones and about a fifth of the next (`FlipboardLayout.rowTileWidth`).
+    private var rowTileWidth: CGFloat {
+        FlipboardLayout.rowTileWidth(width: width, inset: BoardPanel.inset, spacing: Self.spacing, gridTile: cellWidth,
+                                     largeType: dynamicTypeSize.isAccessibilitySize)
+    }
+
     /// The columns the inline card takes (`FlipboardLayout.cardSpan`).
     private var cardSpan: Int {
         FlipboardLayout.cardSpan(columns: columnCount, cellWidth: cellWidth, spacing: Self.spacing)
@@ -144,9 +157,9 @@ struct FlipboardView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: Self.sectionSpacing) {
-                    looseGrid(loose, tip: tip, tipID: tipID)
+                    looseSection(loose, hasBoards: !boards.isEmpty, tip: tip, tipID: tipID, proxy: proxy)
                     ForEach(Array(zip(boards, onBoards)), id: \.0.id) { board, onBoard in
-                        section(board, switches: onBoard, tip: tip, tipID: tipID)
+                        panel(board, switches: onBoard, tip: tip, tipID: tipID)
                     }
                     if boardCard == .new {
                         inlineBoardCard(.new)
@@ -174,10 +187,14 @@ struct FlipboardView: View {
                 }
             }, including: hasInlineCard ? .all : .subviews)
             .coordinateSpace(.named(Self.boardSpace))
-            // iPhone: the new switch may sort above the fold; bring it into view as it settles.
+            // iPhone: the new switch may sort out of view; bring it (or its board) into view as it lands, by the
+            // least scroll that shows it whole (a centred scroll near the top pulled the board under the large
+            // title and let it spring back).
             .onChange(of: landing) { _, mark in
-                guard cardFloats, let mark else { return }
-                withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: .center) }
+                guard cardFloats, let mark, !mark.waiting else { return }
+                let target: AnyHashable = switches.first { $0.id == mark.id }.flatMap { boardID(of: $0) }
+                    .map { AnyHashable(Self.panelID($0)) } ?? AnyHashable(mark.id)
+                withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(target, anchor: nil) }
             }
             .onChange(of: inlineCard?.id ?? boardCard?.id) { _, id in
                 guard let id else { return }
@@ -210,7 +227,11 @@ struct FlipboardView: View {
             .help(soundOn ? "Flip sound on" : "Flip sound off")
             .accessibilityIdentifier("flipSound")
         } menu: {
-            Button { openCard(.add) } label: { Label("Add Switch…", systemImage: "plus") }
+            Button {
+                // Brief 126: adding an ungrouped switch from the menu unfolds them.
+                setFolded(false)
+                openCard(.add)
+            } label: { Label("Add Switch…", systemImage: "plus") }
             if offersBoard {
                 Button { openBoardCard(.new) } label: { Label("New Switchboard…", systemImage: "square.grid.2x2") }
             }
@@ -231,17 +252,21 @@ struct FlipboardView: View {
             FlipSound.prepare()
             #if DEBUG
             FlipboardDebug.seedStatesIfRequested(in: context)
+            FlipboardDebug.seedRowsIfRequested(in: context)
             #endif
         }
         .completionToast(deleted.map { "Deleted ‘\($0.title)’" }, onUndo: undoDelete,
                          onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
         #if os(iOS)
         .fullScreenCover(item: $floatingCard) { request in
-            FloatingSwitchCard(request: request) { saved in
+            FloatingSwitchCard(request: request, onFinished: { saved in
                 withoutAnimation { floatingCard = nil }
                 // The board is in view again: the switch settles into its place.
                 if let saved { land(saved) }
-            }
+            }, onAdded: { added in
+                // Brief 126: on the board already, held unseen until the card has gone, so it appears once.
+                land(added, waiting: true)
+            })
             .presentationBackground(.clear)
         }
         #endif
@@ -249,64 +274,139 @@ struct FlipboardView: View {
 
     // MARK: Sections
 
-    /// The loose switches, exactly as the board was before Switchboards, with the + tile (or the card) last. A switch
-    /// dragged here leaves its Switchboard (brief 96).
-    private func looseGrid(_ loose: [TaskItem], tip: HITTip?, tipID: UUID?) -> some View {
-        FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
-            ForEach(loose) { task in
-                cell(for: task, tip: task.id == tipID ? tip : nil)
-            }
-            // The last cell adds a switch: a dashed outline of one, with a big +; on the Mac and iPad the card
-            // opens in its place (adding, or duplicating a loose switch).
-            if let request = inlineCard, cardPlace(request) == .some(nil) {
-                inlineCardView(request)
-            } else {
-                AddSwitchTile { openCard(.add) }
+    /// The loose switches, exactly as the board was before Switchboards, with the + tile (or the card) last. With a
+    /// Switchboard on the board an "Ungrouped" header with their lights sits over them and folds them away (brief
+    /// 126). A switch dragged here, or onto the folded header, leaves its Switchboard (brief 96).
+    private func looseSection(_ loose: [TaskItem], hasBoards: Bool, tip: HITTip?, tipID: UUID?,
+                              proxy: ScrollViewProxy) -> some View {
+        let folded = hasBoards && ungroupedFolded
+        return VStack(alignment: .leading, spacing: 10) {
+            if hasBoards {
+                UngroupedHeader(lights: lights(loose), folded: folded, onToggle: { setFolded(!ungroupedFolded) },
+                                onSelectLight: { index in
+                                    guard loose.indices.contains(index) else { return }
+                                    setFolded(false)
+                                    let id = loose[index].id
+                                    Task { @MainActor in
+                                        withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(id, anchor: nil) }
+                                    }
+                                })
                     .allowsHitTesting(!hasInlineCard)
+            }
+            if !folded {
+                looseGrid(loose, tip: tip, tipID: tipID)
+                    .transition(.opacity)
             }
         }
         .switchDropTarget(.loose, dragging: dragging, lit: $dropTarget) { drop($0, onto: .loose) }
     }
 
-    /// A Switchboard: its header (or its card, in place), then its switches. An empty board shows the + tile, so it
-    /// is never just a header.
-    private func section(_ board: Switchboard, switches: [TaskItem], tip: HITTip?, tipID: UUID?) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func looseGrid(_ loose: [TaskItem], tip: HITTip?, tipID: UUID?) -> some View {
+        FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
+            ForEach(loose) { task in
+                cell(for: task, tip: task.id == tipID ? tip : nil, inGrid: true)
+            }
+            // The last cell adds a switch: a dashed outline of one, with a big +; on the Mac and iPad the card
+            // opens in its place (adding, or duplicating a loose switch).
+            if let request = inlineCard, cardPlace(request) == .some(nil) {
+                inlineCardView(request)
+                    .flipboardGridSpan(cardSpan)
+                    .flipboardGridKeepsOwnHeight()
+            } else {
+                AddSwitchTile { openCard(.add) }
+                    .allowsHitTesting(!hasInlineCard)
+            }
+        }
+    }
+
+    /// Folds the loose switches away or back.
+    private func setFolded(_ folded: Bool) {
+        guard folded != ungroupedFolded else { return }
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { ungroupedFolded = folded }
+    }
+
+    /// Each switch's light, in the order the switches stand.
+    private func lights(_ switches: [TaskItem]) -> [BoardLight] {
+        switches.map { BoardLight(id: $0.id, title: $0.title, isOn: Flipboard.side(of: $0, now: now) == .green) }
+    }
+
+    static func panelID(_ board: UUID) -> String { "board-\(board.uuidString)" }
+
+    /// A Switchboard on its panel (brief 126): its header (or its card, in place), its row of switches with the Add
+    /// switch outline at the end, and on the Mac and iPad the switch card under the row when it opens for this board.
+    private func panel(_ board: Switchboard, switches: [TaskItem], tip: HITTip?, tipID: UUID?) -> some View {
+        let lights = lights(switches)
+        let request = inlineRequest(on: board)
+        let editing = request?.task?.id
+        return SwitchboardPanel {
             if let request = boardCard, request.board?.id == board.id {
                 inlineBoardCard(request)
             } else {
-                SwitchboardHeader(board: board, line: SwitchboardDraft.cadenceLine(board),
-                                  done: switches.isEmpty ? nil : SwitchboardDraft.doneCount(switches, now: now),
+                SwitchboardHeader(board: board, line: SwitchboardDraft.cadenceLine(board), lights: lights,
                                   isFirst: board.id == boards.first?.id, isLast: board.id == boards.last?.id,
                                   onAdd: { openCard(.addTo(board)) },
                                   onEdit: { openBoardCard(.edit(board)) },
                                   onMove: { offset in withAnimation(.snappy) { Flipboard.moveSwitchboard(board, by: offset, in: context) } },
-                                  onDelete: { openBoardCard(.delete(board)) })
+                                  onDelete: { openBoardCard(.delete(board)) },
+                                  onSelectLight: { index in
+                                      guard switches.indices.contains(index) else { return }
+                                      scrollRow(board.id, to: switches[index].id)
+                                  })
                     .allowsHitTesting(!hasInlineCard)
             }
-            let adding = inlineCard.flatMap { cardPlace($0) == .some(board.id) ? $0 : nil }
-            if !switches.isEmpty || adding != nil {
-                FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
-                    ForEach(switches) { task in cell(for: task, tip: task.id == tipID ? tip : nil) }
-                    if let adding { inlineCardView(adding) }
+        } row: {
+            SwitchRow(tileWidth: rowTileWidth, spacing: Self.spacing, inset: BoardPanel.inset,
+                      ids: switches.map(\.id) + [board.id], trace: switches.isEmpty ? nil : lights.allSatisfy(\.isOn),
+                      request: rowScroll[board.id]) {
+                ForEach(switches) { task in
+                    cell(for: task, tip: task.id == tipID ? tip : nil, inGrid: false)
+                        .overlay {
+                            // The switch the card under the row edits (Mac and iPad).
+                            if editing == task.id {
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .strokeBorder(Theme.accent.opacity(0.8), lineWidth: 1.5)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .frame(width: rowTileWidth)
+                        .frame(maxHeight: .infinity)
                 }
-            } else {
-                FlipboardGrid(columns: columnCount, spacing: Self.spacing) {
-                    AddSwitchTile { openCard(.addTo(board)) }
-                        .allowsHitTesting(!hasInlineCard)
-                }
+                AddSwitchTile(board: board.name) { openCard(.addTo(board)) }
+                    .allowsHitTesting(!hasInlineCard)
+                    .frame(width: rowTileWidth)
+                    .frame(maxHeight: .infinity)
+                    .id(board.id)
+            }
+        } card: {
+            if let request {
+                inlineCardView(request)
+                    .frame(width: min(max(0, width - 2 * BoardPanel.inset), cardUnderRowWidth))
             }
         }
         // Brief 96: a switch dragged over the board lights it; let go, and it is on the board.
-        .switchDropTarget(.board(board.id), dragging: dragging, lit: $dropTarget) { drop($0, onto: .board(board.id)) }
-        .id("board-\(board.id.uuidString)")
+        .switchDropTarget(.board(board.id), dragging: dragging, lit: $dropTarget, style: .panel) {
+            drop($0, onto: .board(board.id))
+        }
+        .id(Self.panelID(board.id))
     }
 
-    /// A switch's tile, or the card editing it.
+    /// The switch card under a board's row (Mac and iPad): two tiles wide, as in the grid, never under its narrowest.
+    private var cardUnderRowWidth: CGFloat {
+        max(FlipboardLayout.cardMinWidth, CGFloat(cardSpan) * cellWidth + CGFloat(cardSpan - 1) * Self.spacing)
+    }
+
+    /// The board's row scrolls to `id` (a switch, or the board's own id for its Add switch outline).
+    private func scrollRow(_ board: UUID, to id: UUID) {
+        rowScroll[board] = SwitchRowRequest(target: id, generation: (rowScroll[board]?.generation ?? 0) + 1)
+    }
+
+    /// A switch's tile, or (in the loose grid) the card editing it.
     @ViewBuilder
-    private func cell(for task: TaskItem, tip: HITTip?) -> some View {
-        if inlineCard == .edit(task) {
+    private func cell(for task: TaskItem, tip: HITTip?, inGrid: Bool) -> some View {
+        if inGrid, inlineCard == .edit(task) {
             inlineCardView(.edit(task))
+                .flipboardGridSpan(cardSpan)
+                .flipboardGridKeepsOwnHeight()
         } else {
             FlipSwitchTile(task: task, now: now, onEdit: { openCard(.edit(task)) },
                            onOpen: { open(task) }, onDelete: { delete(task) },
@@ -350,8 +450,6 @@ struct FlipboardView: View {
                    onKeepEditing: keepEditing)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.boardSpace)) } action: { cardFrame = $0 }
             .id(request.id)
-            .flipboardGridSpan(cardSpan)
-            .flipboardGridKeepsOwnHeight()
             .transition(cardTransition)
     }
 
@@ -362,6 +460,13 @@ struct FlipboardView: View {
 
     /// The + tile, the toolbar's Add Switch…, a board's "+" or a tile's menu: the card, in the grid or over the board.
     private func openCard(_ request: SwitchCardRequest) {
+        // The row brings the switch a card opens for into view (its Add switch outline when adding to it).
+        switch request {
+        case .addTo(let board): scrollRow(board.id, to: board.id)
+        case .edit(let task), .duplicate(let task):
+            if let board = boardID(of: task) { scrollRow(board, to: task.id) }
+        case .add: break
+        }
         if cardFloats {
             withoutAnimation { floatingCard = .switchCard(request) }
             return
@@ -457,13 +562,39 @@ struct FlipboardView: View {
 
     /// A switch was added or saved: its tile settles into the grid (a new one lands as the board's own
     /// animation inserts it).
-    private func land(_ task: TaskItem) {
-        let mark = SwitchLanding.Mark(id: task.id, generation: (landing?.generation ?? 0) + 1)
+    /// `waiting` (iPhone, brief 126): the switch is in, the card that added it still going; its tile is held unseen
+    /// until it lands (and lands on its own if the card never says it has gone).
+    private func land(_ task: TaskItem, waiting: Bool = false) {
+        let mark = SwitchLanding.Mark(id: task.id, generation: (landing?.generation ?? 0) + 1, waiting: waiting)
         landing = mark
+        if waiting {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                if landing == mark { land(task) }
+            }
+            return
+        }
+        // Its row scrolls to show it; a loose one folded away comes back into view.
+        if let board = boardID(of: task) {
+            scrollRow(board, to: task.id)
+        } else {
+            setFolded(false)
+        }
         // Landed: the mark goes, so the tile doesn't settle again when the board comes back on screen.
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             if landing == mark { landing = nil }
+        }
+    }
+
+    /// The card open for a switch on this board (Mac and iPad), which opens under its row: adding to it, or
+    /// editing or duplicating one of its switches.
+    private func inlineRequest(on board: Switchboard) -> SwitchCardRequest? {
+        guard let request = inlineCard else { return nil }
+        switch request {
+        case .addTo(let target): return target.id == board.id ? request : nil
+        case .edit(let task), .duplicate(let task): return boardID(of: task) == board.id ? request : nil
+        case .add: return nil
         }
     }
 
@@ -547,50 +678,44 @@ struct FlipboardView: View {
     }
 }
 
-/// A Switchboard's header (brief 72): its name in the list section header style, a "+" 6 pt after it that adds a switch
-/// to the board (the pattern of the sidebar's "Groups +"), then its cadence line and how many are done ("3 of 5"). The
-/// name opens the board's card; a long press (iPhone) or right-click (Mac) offers Edit…, Move Up, Move Down and Delete….
-/// No overdue colours, no counts of what is late: the Flipboard is a calm status check.
+/// A Switchboard's header (brief 72; brief 126): its name in the list section header style, its lights on the name's
+/// line at the trailing end (`BoardLightsStrip`, one a switch in the row's order, in place of the "3 of 5" it had), and
+/// its cadence line under the name ("Daily · resets 04:00"). The name opens the board's card; a long press (iPhone) or
+/// right-click (Mac) offers Edit…, Add Switch…, Move Up, Move Down and Delete… (the "+" by the name went: the row ends
+/// in the Add switch outline). No overdue colours, no counts of what is late: the Flipboard is a calm status check.
 struct SwitchboardHeader: View {
     let board: Switchboard
     let line: String
-    /// "3 of 5"; nil for a board with no switches yet.
-    let done: String?
+    let lights: [BoardLight]
     let isFirst: Bool
     let isLast: Bool
     var onAdd: () -> Void
     var onEdit: () -> Void
     var onMove: (Int) -> Void
     var onDelete: () -> Void
+    var onSelectLight: (Int) -> Void = { _ in }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: HITSpacing.s) {
-                Button(action: onEdit) {
-                    Text(board.name)
-                        .font(HITType.listSectionHeader)
-                        .foregroundStyle(HITColor.text)
-                        .lineLimit(1)
-                }
-                .buttonStyle(.plain)
-                .help("Edit \(board.name)")
-                .accessibilityHint("Opens the Switchboard")
-                .accessibilityIdentifier("switchboardHeader")
-                Button(action: onAdd) { Image(systemName: "plus") }
-                    .buttonStyle(HITIconButtonStyle(font: .system(size: 13, weight: .semibold), alignment: .leading))
-                    .help("Add a switch to \(board.name)")
-                    .accessibilityLabel("Add a switch to \(board.name)")
-                    .accessibilityIdentifier("switchboardAdd")
-                Spacer(minLength: 0)
+        BoardHeaderLayout {
+            Button(action: onEdit) {
+                Text(board.name)
+                    .font(HITType.listSectionHeader)
+                    .foregroundStyle(HITColor.text)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            Text([line, done].compactMap { $0 }.joined(separator: " · "))
+            .buttonStyle(.plain)
+            .help("Edit \(board.name)")
+            .accessibilityHint("Opens the Switchboard")
+            .accessibilityIdentifier("switchboardHeader")
+            BoardLightsStrip(lights: lights, onSelect: onSelectLight)
+            Text(line)
                 .font(HITType.caption.monospacedDigit())
                 .foregroundStyle(Theme.secondaryText)
-                .lineLimit(1)
-                .contentTransition(.numericText())
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("switchboardLine")
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .contextMenu {
             Button(action: onEdit) { Label("Edit…", systemImage: "slider.horizontal.3") }
@@ -604,6 +729,282 @@ struct SwitchboardHeader: View {
             Button(role: .destructive, action: onDelete) { Label("Delete…", systemImage: "trash") }
         }
     }
+}
+
+/// The header over the loose switches once there is a Switchboard (brief 126, George: "Ungrouped"): the section-header
+/// style (`HITSectionHeader`'s type in grey, on the tiles' edge) with a chevron that turns down while they show, and
+/// their lights at the trailing end. Tapping it folds the grid away to this one line, and back.
+struct UngroupedHeader: View {
+    let lights: [BoardLight]
+    let folded: Bool
+    var onToggle: () -> Void
+    var onSelectLight: (Int) -> Void = { _ in }
+
+    var body: some View {
+        BoardHeaderLayout {
+            Button(action: onToggle) {
+                HStack(spacing: 6) {
+                    Text("Ungrouped")
+                        .font(HITType.listSectionHeader)
+                        .foregroundStyle(Theme.secondaryText)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.secondaryText)
+                        .rotationEffect(.degrees(folded ? 0 : 90))
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity, minHeight: HITSectionHeader.minHeight, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help(folded ? "Show the switches on no Switchboard" : "Fold away the switches on no Switchboard")
+            .accessibilityLabel("Ungrouped")
+            .accessibilityValue(folded ? "Folded" : "Open")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityIdentifier("ungroupedHeader")
+            BoardLightsStrip(lights: lights, onSelect: onSelectLight)
+        }
+    }
+}
+
+/// A header's line (brief 126): the title on the left, the lights at the trailing end on the title's first line, and
+/// any third view (the cadence) under the title. Where the lights don't fit beside the title, even as segments or the
+/// bar (a long name, the largest type), they take a line of their own under the rest, leading. The lights are offered
+/// the width the title leaves them, so `BoardLightsStrip` picks dots, segments or the bar by the room it really has.
+struct BoardHeaderLayout: Layout {
+    var gap: CGFloat = HITSpacing.m
+    var lineSpacing: CGFloat = 3
+
+    /// Where the title, the lights and the line under the title go, and the header's size.
+    struct Arrangement: Equatable {
+        var title: CGRect
+        var lights: CGRect
+        var below: CGRect?
+        var size: CGSize
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(width: proposal.width ?? 360, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let arrangement = arrange(width: bounds.width, subviews: subviews)
+        let frames = [arrangement.title, arrangement.lights] + (arrangement.below.map { [$0] } ?? [])
+        for (subview, frame) in zip(subviews, frames) {
+            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY), anchor: .topLeading,
+                          proposal: ProposedViewSize(width: frame.width, height: frame.height))
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> Arrangement {
+        guard subviews.count >= 2 else { return Arrangement(title: .zero, lights: .zero, size: .zero) }
+        let title = subviews[0], lights = subviews[1]
+        let below = subviews.count > 2 ? subviews[2] : nil
+        func offered(_ view: LayoutSubview) -> (CGFloat) -> CGSize {
+            { view.sizeThatFits(ProposedViewSize(width: $0, height: nil)) }
+        }
+        return Self.arrange(width: width, gap: gap, lineSpacing: lineSpacing, titleIdeal: title.sizeThatFits(.unspecified),
+                            title: offered(title), lights: offered(lights), below: below.map(offered))
+    }
+
+    /// The arithmetic, from what each part answers when offered a width. Pure, so tests pin it.
+    static func arrange(width: CGFloat, gap: CGFloat, lineSpacing: CGFloat, titleIdeal: CGSize,
+                        title: (CGFloat) -> CGSize, lights: (CGFloat) -> CGSize,
+                        below: ((CGFloat) -> CGSize)?) -> Arrangement {
+        let room = max(0, width - min(titleIdeal.width, width) - gap)
+        let fitted = lights(room)
+        if fitted.width <= room + 0.5 {
+            // One line: the lights beside the title, centred on its first line.
+            let titleWidth = width - fitted.width - gap
+            let titleSize = title(titleWidth)
+            let firstLine = min(titleSize.height, titleIdeal.height)
+            let lightsFrame = CGRect(x: width - fitted.width, y: (firstLine - fitted.height) / 2,
+                                     width: fitted.width, height: fitted.height)
+            var top = max(titleSize.height, lightsFrame.maxY)
+            var belowFrame: CGRect?
+            if let below {
+                belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: below(width).height)
+                top = belowFrame!.maxY
+            }
+            return Arrangement(title: CGRect(x: 0, y: 0, width: titleWidth, height: titleSize.height), lights: lightsFrame,
+                               below: belowFrame, size: CGSize(width: width, height: top))
+        }
+        // The lights on a line of their own, under the title and the cadence.
+        let titleSize = title(width)
+        var top = titleSize.height
+        var belowFrame: CGRect?
+        if let below {
+            belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: below(width).height)
+            top = belowFrame!.maxY
+        }
+        let own = lights(width)
+        let lightsFrame = CGRect(x: 0, y: top + HITSpacing.xs, width: min(own.width, width), height: own.height)
+        return Arrangement(title: CGRect(x: 0, y: 0, width: width, height: titleSize.height), lights: lightsFrame,
+                           below: belowFrame, size: CGSize(width: width, height: lightsFrame.maxY))
+    }
+}
+
+/// A Switchboard panel's measures.
+enum BoardPanel {
+    /// From the panel's edge to its header and its first tile (the floor for text by a border, round 22).
+    static let inset: CGFloat = HITSpacing.m
+    /// The tiles' corners (18) and the inset: the panel's corners run round the tiles' at an even distance.
+    static let radius: CGFloat = 18 + inset
+}
+
+/// A Switchboard's board (brief 126, George: "some kind of mild background UI so that they actually feel like they're a
+/// part of the same circuitboard rather than just switches in a group"): one quiet surface, the design system's card
+/// surface and hairline (`HITGroup`'s), holding the header, the row of switches and, on the Mac and iPad, the switch
+/// card under the row. The row runs to the panel's edges and scrolls under them; everything else stands `inset` in.
+struct SwitchboardPanel<Header: View, Row: View, Card: View>: View {
+    @ViewBuilder var header: Header
+    @ViewBuilder var row: Row
+    @ViewBuilder var card: Card
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: BoardPanel.radius, style: .continuous)
+        VStack(alignment: .leading, spacing: HITSpacing.m) {
+            header
+                .padding(.horizontal, BoardPanel.inset)
+            row
+            card
+                .padding(.horizontal, BoardPanel.inset)
+        }
+        .padding(.top, HITSpacing.m + 2)
+        .padding(.bottom, BoardPanel.inset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(shape.fill(Theme.surface.opacity(0.5)))
+        .overlay(shape.strokeBorder(Theme.separator.opacity(0.6), lineWidth: 1).allowsHitTesting(false))
+        .clipShape(shape)
+    }
+}
+
+/// A board's row asked to scroll to `target`: a light tapped, a switch added or opened.
+struct SwitchRowRequest: Equatable {
+    let target: UUID
+    let generation: Int
+}
+
+/// A Switchboard's switches in one row that scrolls sideways (brief 126, George: "Switchboards should grow/scroll
+/// horizontally, not vertically, and the "Add switch" button outline should appear at the right end of each Switchboard
+/// scroll"). Tiles sized so whole ones show and about a fifth of the next (`FlipboardLayout.rowTileWidth`); the row
+/// runs to the panel's edges, its first tile `inset` in, and comes to rest on tile edges. Behind the tiles, at the
+/// rockers' height, one thin trace joins them from the first to the last switch: the separator's grey, green when every switch on the board is on. On the Mac, while the pointer is over a
+/// row with more to one side, a small chevron at that end pages it; a trackpad and shift-wheel scroll it.
+struct SwitchRow<Content: View>: View {
+    let tileWidth: CGFloat
+    let spacing: CGFloat
+    let inset: CGFloat
+    /// The tiles' ids in order (the Add switch outline last, under the board's id).
+    let ids: [UUID]
+    /// The trace: nil without a switch; true when every switch is on.
+    let trace: Bool?
+    let request: Request?
+    @ViewBuilder var content: Content
+
+    typealias Request = SwitchRowRequest
+
+    struct Edges: Equatable {
+        var leading = false
+        var trailing = false
+    }
+
+    @State private var position = ScrollPosition(idType: UUID.self)
+    @State private var edges = Edges()
+    @State private var leadingIndex = 0
+    @State private var hovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    static var traceWidth: CGFloat { 1.5 }
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: spacing) { content }
+                .fixedSize(horizontal: false, vertical: true)
+                .scrollTargetLayout()
+                .background(alignment: .leading) { traceLine }
+        }
+        .scrollPosition($position, anchor: .leading)
+        .contentMargins(.horizontal, inset, for: .scrollContent)
+        .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+        .scrollIndicators(.hidden)
+        .scrollClipDisabled()
+        .onScrollGeometryChange(for: Edges.self) { geometry in
+            let visible = geometry.visibleRect
+            return Edges(leading: visible.minX > -geometry.contentInsets.leading + 1,
+                         trailing: visible.maxX < geometry.contentSize.width + geometry.contentInsets.trailing - 1)
+        } action: { _, new in edges = new }
+        .onScrollGeometryChange(for: Int.self) { geometry in
+            Int(((geometry.visibleRect.minX + geometry.contentInsets.leading) / (tileWidth + spacing)).rounded())
+        } action: { _, new in leadingIndex = new }
+        #if os(macOS)
+        .overlay { chevrons }
+        .onHover { hovering = $0 }
+        #endif
+        .onChange(of: request) { _, request in
+            guard let request else { return }
+            withAnimation(reduceMotion ? nil : .snappy) { position.scrollTo(id: request.target, anchor: .leading) }
+        }
+    }
+
+    /// From the first tile to the middle of the last switch, behind the tiles, at the rockers' height: it shows between
+    /// the tiles only, never poking in from the panel's edge.
+    @ViewBuilder
+    private var traceLine: some View {
+        if let allOn = trace {
+            let switches = max(0, ids.count - 1)
+            let length = CGFloat(max(0, switches - 1)) * (tileWidth + spacing) + tileWidth / 2
+            Capsule(style: .continuous)
+                .fill(allOn ? FlipLightStyle.green.opacity(0.75) : Theme.separator)
+                .shadow(color: allOn ? FlipLightStyle.green.opacity(0.5) : .clear, radius: 2)
+                .frame(width: length, height: Self.traceWidth)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: allOn)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    #if os(macOS)
+    /// Pages the row by the tiles it shows whole: the one cut by the edge comes first.
+    private func page(_ direction: Int) {
+        guard !ids.isEmpty else { return }
+        let step = visibleTiles
+        let index = min(ids.count - 1, max(0, leadingIndex + direction * step))
+        withAnimation(reduceMotion ? nil : .snappy) { position.scrollTo(id: ids[index], anchor: .leading) }
+    }
+
+    @State private var rowWidth: CGFloat = 0
+    private var visibleTiles: Int { max(1, Int(((rowWidth - inset) / (tileWidth + spacing)).rounded(.down))) }
+
+    private var chevrons: some View {
+        HStack {
+            if hovering && edges.leading { chevron("chevron.left", label: "Scroll back") { page(-1) } }
+            Spacer(minLength: 0)
+            if hovering && edges.trailing { chevron("chevron.right", label: "Scroll on") { page(1) } }
+        }
+        .padding(.horizontal, 6)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
+        .animation(HITMotion.quick, value: hovering && edges.leading)
+        .animation(HITMotion.quick, value: hovering && edges.trailing)
+    }
+
+    private func chevron(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(HITColor.text)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Theme.elevated))
+                .overlay(Circle().strokeBorder(Theme.separator, lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
+        .transition(.opacity)
+    }
+    #endif
 }
 
 /// Hands the board the list margin its screen follows (`followsSystemListMargin`).
@@ -684,6 +1085,8 @@ enum FlipboardLayout {
 /// hairline (the plate, a smaller dashed rocker in it) and a large accent "+", in the tiles' 18 pt shape, the size of a
 /// real switch whether switches stand beside it or not. Tapping it opens the switch card in its place (brief 69).
 struct AddSwitchTile: View {
+    /// The Switchboard it adds to, at the end of the board's row (brief 126); nil: a loose switch.
+    var board: String?
     var action: () -> Void
     @State private var hovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -724,8 +1127,8 @@ struct AddSwitchTile: View {
         .buttonStyle(.plain)
         .onHover { hovered = $0 }
         .animation(HITMotion.quick(reduceMotion: reduceMotion), value: hovered)
-        .accessibilityLabel("Add switch")
-        .accessibilityIdentifier("addSwitchTile")
+        .accessibilityLabel(board.map { "Add a switch to \($0)" } ?? "Add switch")
+        .accessibilityIdentifier(board == nil ? "addSwitchTile" : "switchboardAdd")
     }
 }
 
@@ -740,10 +1143,15 @@ extension View {
     /// A board section (or the loose switches) as a place to drop a switch: lit while a switch it would take is over
     /// it, the drop handed to `perform` as the switch's id.
     func switchDropTarget(_ target: SwitchDrop.Target, dragging: DraggedSwitch?, lit: Binding<SwitchDrop.Target?>,
+                          style: SwitchDropHighlight.Style = .section,
                           perform: @escaping (UUID) -> Void) -> some View {
         let isLit = lit.wrappedValue == target
-        return background {
-            if isLit { SwitchDropHighlight().transition(.opacity) }
+        return overlay {
+            // A board's panel lights on its own edge; the loose switches under a wash a little outside them.
+            if isLit, style == .panel { SwitchDropHighlight(style: .panel).transition(.opacity) }
+        }
+        .background {
+            if isLit, style == .section { SwitchDropHighlight().transition(.opacity) }
         }
         .animation(HITMotion.quick, value: isLit)
         .onDrop(of: [SwitchDrag.type], delegate: SwitchDropDelegate(target: target, draggedFrom: dragging.map(\.board),
