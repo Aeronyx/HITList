@@ -446,6 +446,29 @@ final class CompanionGargleTests: XCTestCase {
                        "only snow on him: no hat, no pose of its own")
     }
 
+    /// Brief 124 (George: "He looks barely recognizable in deep snow"): deeper, only the drifts grow. Every pixel of him that
+    /// the first dusting leaves stone stays stone at every depth (his horn tips, his brow, his eye, his snout's tip, the
+    /// wing's outline), so at 1x beside `rest` he is still Gargle; the snow lies along his back, the wing's slope and elbow,
+    /// his nape and against his toes, and the drift in his back's hollow is the deepest.
+    func testDeepSnowLeavesHimHisOwnStone() {
+        let awake = gargle.plus.awake
+        let rest = rows(awake.rest)
+        let dusting = rows(awake.snow!)
+        for deep in awake.snowDeep {
+            let pile = rows(deep)
+            for y in 0..<gargle.height {
+                for x in 0..<gargle.width where rest[y][x] != CompanionInk.clear {
+                    XCTAssertEqual(pile[y][x], dusting[y][x], "\(deep) \(x),\(y): more of him covered")
+                }
+            }
+            XCTAssertTrue(pile[4...8].allSatisfy { row in !row[2...6].contains { "sbc".contains($0) } }, "\(deep): his brow and eye are clear")
+        }
+        let deepest = rows(awake.snowDeep.last!)
+        let hollow = (9...11).filter { y in (10...12).contains { "sbc".contains(deepest[y][$0]) } }
+        XCTAssertEqual(hollow.count, 3, "three deep in his back's hollow")
+        XCTAssertEqual(gargle.field.awake.snowDeep, awake.snowDeep)
+    }
+
     /// Brief 100: an idle can be drawn over every still it may show, so it is never still for long whatever the sky.
     func testAnIdleDrawsOverEveryStill() {
         for place in CompanionPlace.allCases {
