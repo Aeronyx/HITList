@@ -23,6 +23,14 @@ Flipboard on the phone, and the answers to the screen-by-screen sweep.
   and not in iCloud was either never sent or was deleted elsewhere, and only you know which, so you choose Send to
   iCloud or Remove from this device, after a backup. The sync log now records how many of each thing the store
   holds at launch and at every account change, never a title.
+- From George's two sync logs (both devices, 4,120 entries, read end to end): every change either device saved
+  since 2 November reached the other, usually within a second, and nothing was deleted; the Mac was held out of
+  iCloud for sixteen hours and caught up within a second of signing back in. So the bolt's words now count every
+  change waiting to go ("Sending 46 changes to iCloud…" after a launch that rewrote 46 dates); when iCloud is busy
+  and the system retries dozens of times in a second, the sync log keeps one line for the run instead of a hundred;
+  and on iPhone a sync notification that arrives while HITList is in the background is a note, not an "Import
+  overdue" error. Why the two Inboxes differed is older than those logs and still open: the two stores counted 44
+  and 46 dated tasks that morning with nothing changed between them. Check iCloud… on each device will name it.
 - Companions are alive. Every 6 to 36 seconds on screen a companion blinks, glances, swings a foot or plays a
   little loop of two to four moves, the first within a few seconds of appearing; asleep it breathes at the same
   pace. The longer routines come every three to eight minutes of showing time, and the flourish is as rare as
