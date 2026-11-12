@@ -131,6 +131,143 @@ final class CompanionButtonTests: XCTestCase {
         }
     }
 
+    /// Round 20's pace (brief 100) and brief 103's list: awake at least six flickers (the blink the heaviest) and four
+    /// little loops, four long routines of every day (the roll and the spore puff among them), a flourish and an answer;
+    /// asleep at least two breaths. The same in both places.
+    func testItIsAliveAtTheNewPace() {
+        for place in CompanionPlace.allCases {
+            let posture = button.posture(place)
+            let awake = posture.awake
+            let at = "\(place)"
+            let flickers = awake.flickers.map { awake.gestures[$0] }.filter { $0.sky == nil }
+            XCTAssertGreaterThanOrEqual(flickers.count, 6, at)
+            XCTAssertEqual(flickers.max { $0.weight < $1.weight }?.name, "blink", at)
+            XCTAssertGreaterThanOrEqual(awake.routines.filter(\.little).count, 4, at)
+            let everyday = awake.routines.filter { !$0.little && $0.sky == nil }
+            XCTAssertGreaterThanOrEqual(everyday.count, 4, at)
+            XCTAssertTrue(everyday.contains { $0.name == "roll" }, at)
+            XCTAssertTrue(everyday.contains { $0.name == "sporePuff" }, at)
+            for routine in awake.routines where routine.little {
+                XCTAssertLessThanOrEqual(button.duration(of: routine, mode: awake), 2.5, "\(at) \(routine.name)")
+                XCTAssertTrue((2...4).contains(routine.moves), "\(at) \(routine.name)")
+            }
+            XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 2, at)
+            XCTAssertTrue(posture.asleep.routines.isEmpty, at)
+            XCTAssertGreaterThan(button.flourishDuration(place), 1.8, at)
+        }
+        XCTAssertEqual(button.plus.awake.routines.map(\.name), button.field.awake.routines.map(\.name))
+    }
+
+    /// George's roll: it ducks under its cap, tucks into a ball, rolls along the bar (toward the middle of the "+",
+    /// where it is flat) and back, pops upright and is dizzy for a beat. The ball stays on the bar and inside its box.
+    func testItRollsAlongTheBarAndBack() {
+        let awake = button.plus.awake
+        let roll = awake.routines.first { $0.name == "roll" }!
+        let frames = awake.ticks(of: roll).map(\.tick.frame)
+        let balls = frames.filter { $0.hasPrefix("roll") }
+        XCTAssertGreaterThanOrEqual(Set(balls).count, 4, "it turns as it rolls")
+        func left(_ frame: String) -> Int {
+            let rows = button.rows(frame)!.map(Array.init)
+            var best = button.width
+            for row in rows { if let x = row.firstIndex(where: { $0 != CompanionInk.clear }) { best = min(best, x) } }
+            return best
+        }
+        let xs = balls.map(left)
+        let far = xs.min()!
+        XCTAssertLessThanOrEqual(far, xs.first! - 3, "a few pixels along the bar")
+        XCTAssertEqual(xs.last, xs.first, "and back")
+        let turn = xs.firstIndex(of: far)!
+        XCTAssertEqual(xs[...turn].map { $0 }, xs[...turn].sorted(by: >), "out")
+        XCTAssertEqual(xs[turn...].map { $0 }, xs[turn...].sorted(), "and back")
+        for frame in Set(balls) {
+            let rows = button.rows(frame)!
+            XCTAssertTrue(rows[button.seatRow - 1].contains("a") || rows[button.seatRow - 1].contains("r"), "\(frame) on the bar")
+        }
+        // Ducked under its cap first; dizzy after.
+        XCTAssertLessThan(frames.firstIndex(of: "duck2")!, frames.firstIndex(of: "roll0")!)
+        XCTAssertGreaterThan(frames.firstIndex(of: "dizzy1")!, frames.lastIndex(of: "roll0")!)
+        XCTAssertEqual(frames.last, awake.rest)
+    }
+
+    /// The pixels of a frame that are not joined to the rest of it (side by side or corner to corner): what it lets
+    /// go into the air. The mushroom is its largest piece (on the bar or, mid-hop, above it).
+    private func loose(_ frame: String) -> [(x: Int, y: Int)] {
+        let rows = button.rows(frame)!.map(Array.init)
+        var piece: [Int: Int] = [:]
+        var sizes: [Int] = []
+        for y in rows.indices {
+            for x in rows[y].indices where rows[y][x] != CompanionInk.clear && piece[y * 100 + x] == nil {
+                let id = sizes.count
+                var queue = [(x, y)]
+                piece[y * 100 + x] = id
+                var size = 0
+                while let (px, py) = queue.popLast() {
+                    size += 1
+                    for dy in -1...1 {
+                        for dx in -1...1 {
+                            let nx = px + dx, ny = py + dy
+                            guard rows.indices.contains(ny), rows[ny].indices.contains(nx) else { continue }
+                            guard rows[ny][nx] != CompanionInk.clear, piece[ny * 100 + nx] == nil else { continue }
+                            piece[ny * 100 + nx] = id
+                            queue.append((nx, ny))
+                        }
+                    }
+                }
+                sizes.append(size)
+            }
+        }
+        guard let body = sizes.indices.max(by: { sizes[$0] < sizes[$1] }) else { return [] }
+        var out: [(x: Int, y: Int)] = []
+        for (key, id) in piece where id != body { out.append((key % 100, key / 100)) }
+        return out.sorted { ($0.y, $0.x) < ($1.y, $1.x) }
+    }
+
+    /// George's puff, Button's own exception to "nothing in the air" (brief 103): at most three spores, pale, each within
+    /// two pixels of its cap, gone within a second; never in the rain or snow (it can't be drawn over them), and only in
+    /// its one routine, never in an idle.
+    func testItsSporePuffIsSmallAndBrief() {
+        let awake = button.plus.awake
+        let puff = awake.routines.first { $0.name == "sporePuff" }!
+        let ticks = awake.ticks(of: puff).map(\.tick.frame)
+        var run = 0
+        var longest = 0
+        var seen = 0
+        for frame in ticks {
+            let spores = loose(frame)
+            if spores.isEmpty { run = 0; continue }
+            seen += 1
+            run += 1
+            longest = max(longest, run)
+            XCTAssertLessThanOrEqual(spores.count, 3, frame)
+            let rows = button.rows(frame)!.map(Array.init)
+            for spore in spores {
+                XCTAssertEqual(rows[spore.y][spore.x], "l", "\(frame): a pale spore")
+                // Within two pixels of the cap (above the stem, which starts on row 14 at most).
+                var near = false
+                for y in max(0, spore.y - 2)...min(13, spore.y + 2) {
+                    for x in max(0, spore.x - 2)...min(button.width - 1, spore.x + 2) where !(x == spore.x && y == spore.y) {
+                        if rows[y][x] == "a" || rows[y][x] == "r" { near = true }
+                    }
+                }
+                XCTAssertTrue(near, "\(frame): spore at \(spore) within two pixels of its cap")
+            }
+        }
+        XCTAssertGreaterThan(seen, 0, "it does let some go")
+        XCTAssertLessThan(Double(longest) / button.gestureFPS, 1, "gone within a second")
+        for depth in 0...awake.deepest {
+            XCTAssertFalse(button.plays(puff, in: .snow, mode: awake, depth: depth), "not in the snow (\(depth))")
+        }
+        XCTAssertFalse(button.plays(puff, in: .rain, mode: awake))
+        // Nothing loose in any idle, the answer, the flourish, or any other routine.
+        var elsewhere: [String] = []
+        for gesture in awake.gestures + [awake.answer] { elsewhere += gesture.ticks.map(\.frame) }
+        for routine in awake.routines where routine.name != "sporePuff" { elsewhere += awake.ticks(of: routine).map(\.tick.frame) }
+        elsewhere += button.plus.flourish.map(\.frame)
+        for frame in Set(elsewhere) {
+            XCTAssertTrue(loose(frame).isEmpty, "\(frame): nothing in the air")
+        }
+    }
+
     /// Its flourish: it spins its cap like a top, eyes shut with joy, the pale spots going round it, the cap rising as
     /// it goes; it ends where it began.
     func testItSpinsItsCapLikeATop() {
@@ -172,6 +309,47 @@ final class CompanionButtonTests: XCTestCase {
                        "woken: one eye, its glint")
         // A breath lifts the cap off two shut eyes.
         XCTAssertTrue(button.rows("breathe")![16].contains("k"))
+    }
+
+    /// Brief 103's weather: in the rain it stands a pixel taller and happier (a smile), a drop on its cap's rim (a flicker
+    /// that drips it) and a routine of being glad of it; snow dusts and piles twice over (more snow each time, the seat
+    /// untouched) until it tips its cap and the heap slides off, from the heap only; on a hot day it wilts (shorter, its
+    /// rim hanging), a bead of sweat runs down, and it wilts further, rallies and wilts again.
+    func testTheWeatherShowsOnIt() {
+        for place in CompanionPlace.allCases {
+            let awake = button.posture(place).awake
+            let at = "\(place)"
+            let rest = button.rows("rest")!.map(Array.init)
+            let rain = button.rows(awake.rain!)!.map(Array.init)
+            // Taller by a pixel, smiling, a drop under the rim's left end.
+            XCTAssertEqual(rain[7].filter { $0 != CompanionInk.clear }.count, rest[8].filter { $0 != CompanionInk.clear }.count)
+            XCTAssertEqual(rain[17][9], "r")
+            XCTAssertEqual(rain[17][12], "r")
+            XCTAssertEqual(rain[12][4], "l", "\(at): a drop on the rim")
+            XCTAssertEqual(rain[11][4], "r")
+            let drip = awake.gesture(named: "drip")!
+            XCTAssertEqual(drip.sky, .rain)
+            XCTAssertTrue(drip.flicker)
+            for tick in drip.ticks { XCTAssertEqual(button.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
+            XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "glad", at)
+            var previous = awake.snow!
+            for deep in awake.snowDeep {
+                let more = button.rows(deep)!.joined().filter { $0 == "l" }.count
+                let less = button.rows(previous)!.joined().filter { $0 == "l" }.count
+                XCTAssertGreaterThan(more, less, "\(at) \(deep)")
+                previous = deep
+            }
+            XCTAssertEqual(awake.snowDeep.count, 2, at)
+            let tip = awake.routines.first { $0.shakesOff }!
+            XCTAssertEqual(tip.sky, .snow)
+            XCTAssertTrue(button.canDraw(tip, in: .snow, mode: awake, depth: awake.deepest), at)
+            XCTAssertFalse(button.canDraw(tip, in: .snow, mode: awake, depth: 0), at)
+            XCTAssertEqual(awake.heat, "heat")
+            let heat = button.rows("heat")!
+            XCTAssertLessThan(Self.extent(heat).height, Self.extent(button.rows("rest")!).height, "\(at): wilted")
+            XCTAssertTrue(awake.gestures.contains { $0.sky == .heat && $0.flicker }, at)
+            XCTAssertEqual(awake.routines.first { $0.sky == .heat }?.name, "wilt", at)
+        }
     }
 
     /// Brief 100: an idle can be drawn over every still it may show (each depth of snow, the heat, asleep in the snow),
