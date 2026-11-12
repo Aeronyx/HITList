@@ -284,7 +284,7 @@ struct InboxProcessView: View {
 
     /// The three big buttons under the card.
     private func actions(_ task: TaskItem) -> some View {
-        HStack(spacing: HITSpacing.m) {
+        HStack(alignment: .top, spacing: HITSpacing.m) {
             action("Pick a date", "calendar", key: "D", tint: HITColor.dueTomorrow,
                    shortcut: KeyboardShortcut("d", modifiers: []), id: "reviewPickDate") {
                 open(.date)
@@ -303,7 +303,13 @@ struct InboxProcessView: View {
                 withAnimation(stepAnimation) { queue.later() }
             }
         }
+        // Every tile as tall as the tallest (a name on two lines makes its tile a line taller).
+        .fixedSize(horizontal: false, vertical: true)
     }
+
+    /// From a tile's sides to its name (brief 115: "Pick a Group" came 6 pt from its tile's sides on the Duo's outer
+    /// display): a name wider than that wraps onto a second line at the same size rather than nearing the border.
+    static let tileLabelInset: CGFloat = 10
 
     private func action(_ title: String, _ symbol: String, key: String, tint: Color,
                         shortcut: KeyboardShortcut, id: String, perform: @escaping () -> Void) -> some View {
@@ -315,14 +321,21 @@ struct InboxProcessView: View {
                 Text(title)
                     .font(HITType.subheadlineMedium)
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 #if os(macOS)
                 KeyCap(key)
                 #endif
             }
-            .padding(.horizontal, HITSpacing.xs)
-            .frame(maxWidth: .infinity, minHeight: 84)
+            .padding(.horizontal, Self.tileLabelInset)
+            #if os(iOS)
+            // The icons on one line and the names' first lines on one line, across the three tiles.
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, minHeight: 84, maxHeight: .infinity, alignment: .top)
+            #else
+            .frame(maxWidth: .infinity, minHeight: 84, maxHeight: .infinity)
+            #endif
             .contentShape(RoundedRectangle(cornerRadius: HITRadius.card, style: .continuous))
         }
         .buttonStyle(ReviewButtonStyle())
