@@ -19,6 +19,8 @@ struct WeekStripView: View {
     var onSelect: (Date) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The Duo's outer display: the strip and its band stop at the system's bar column.
+    @Environment(\.listIslandPlacement) private var islandPlacement
 
     private var shownWeek: Int { visibleWeek ?? 0 }
 
@@ -70,10 +72,12 @@ struct WeekStripView: View {
             // horizontal and 64 pt tall, so that margin would push its days out of view.
             .contentMargins(.bottom, 0, for: .automatic)
             .frame(height: 64)
+            // Beside the Duo's bar column the next week's first day ran under the battery ring (brief 106).
+            .endsBeforeTheBarColumn()
         }
         .padding(.top, 8)
         .padding(.bottom, 6)
-        .background(Theme.surface)
+        .background(Theme.surface, ignoresSafeAreaEdges: islandPlacement.stripBackgroundEdges)
     }
 
     private func show(week: Int) {

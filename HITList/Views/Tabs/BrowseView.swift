@@ -511,11 +511,38 @@ private struct SearchResults: View {
 /// they scrolled under the trailing status bar). The list's margin is its cards' (the system's, `followsSystemListMargin`).
 private struct ChipsReachTheSafeArea: ViewModifier {
     @Environment(\.listMargin) private var margin
+    /// Beside the Duo's bar column the chips stop at the cards' edge, faded there, rather than running under the battery
+    /// ring (brief 106).
+    @Environment(\.listIslandPlacement) private var placement
 
     func body(content: Content) -> some View {
         content
             .scrollClipDisabled()
-            .mask { Rectangle().padding(.horizontal, -margin) }
+            .mask {
+                if let edge = placement.barColumnEdge {
+                    HStack(spacing: 0) {
+                        if edge == .leading { fade(towards: .leading) }
+                        Rectangle()
+                        if edge == .trailing { fade(towards: .trailing) }
+                    }
+                    .padding(edge == .leading ? .trailing : .leading, -margin)
+                } else {
+                    Rectangle().padding(.horizontal, -margin)
+                }
+            }
     }
+
+    /// The last chips fade out over the cards' last points, so one cut at the edge reads as "more this way".
+    private func fade(towards edge: HorizontalEdge) -> some View {
+        LinearGradient(colors: [.black, .clear], startPoint: edge == .trailing ? .leading : .trailing,
+                       endPoint: edge == .trailing ? .trailing : .leading)
+            .frame(width: BrowseChipMetrics.fade)
+    }
+}
+
+/// Browse's saved filters beside the Duo's bar column (brief 106).
+enum BrowseChipMetrics {
+    /// The width over which the row of chips fades out at the column's side.
+    static let fade: CGFloat = 24
 }
 #endif
