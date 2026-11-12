@@ -424,4 +424,11 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(SidebarSearchField.height, 36, "the Mac's 28 pt is a pointer's")
     }
     #endif
+
+    func testTheInnerDisplayHasOneGearTheListsAndTheIPadKeepsTheSidebars() {
+        XCTAssertFalse(AppShell.sidebarHasSettingsGear(.duo),
+                       "the list's gear beside its view options is on every screen; the sidebar steps aside for the editor")
+        XCTAssertTrue(AppShell.sidebarHasSettingsGear(.split), "the iPad as it was")
+        XCTAssertTrue(AppShell.sidebarHasSettingsGear(nil), "offscreen renders as they were")
+    }
 }

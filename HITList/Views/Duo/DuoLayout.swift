@@ -52,6 +52,12 @@ enum AppShell: Equatable {
     #else
     static let currentIdiom = Idiom.mac
     #endif
+
+    /// The sidebar's own gear in its toolbar (brief 108): the iPad's, not the Duo's inner display's, where the list's gear
+    /// beside its view options is on every screen and the sidebar steps aside while the editor is open.
+    static func sidebarHasSettingsGear(_ shell: AppShell?) -> Bool {
+        shell != .duo
+    }
 }
 
 extension EnvironmentValues {
