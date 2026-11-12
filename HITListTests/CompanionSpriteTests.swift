@@ -335,7 +335,7 @@ final class CompanionSpriteTests: XCTestCase {
     func testFewColoursFromTheTheme() {
         XCTAssertEqual(CompanionCharacter.nod.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         XCTAssertEqual(CompanionCharacter.quill.inks, [.ink, .dark, .mid, .light, .accent])
-        XCTAssertEqual(CompanionCharacter.hush.inks, [.ink, .dark, .mid, .light, .accent])
+        XCTAssertEqual(CompanionCharacter.hush.inks, [.ink, .dark, .mid, .light, .accent, .accentDark])
         let slate = CompanionInks(palette: .slate)
         XCTAssertEqual(slate.hex[.ink], ThemePalette.slate.hex.background)
         XCTAssertEqual(slate.hex[.mid], ThemePalette.slate.hex.secondaryText)
