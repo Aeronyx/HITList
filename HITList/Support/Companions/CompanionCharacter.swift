@@ -41,6 +41,12 @@ import HITListCore
 //   over the "+", a ghost phasing); `seeThrough:` (0 to 0.5) makes the body's inks see-through, eyes and glints solid.
 // - Behind the host (brief 104): a capital ink letter is that ink behind the host (`M` is `m` behind), drawn only where
 //   the host's shape is not (a tail dropped behind the "+" shows down to its curve); only below the seat row.
+// - Light and fade (round 24, brief 121): `glow:` names inks that give light (Phase's eyes, Glim's lantern); each run of
+//   one casts a soft halo of its own colour over the creature, drawn outside the sprite's frame where it reaches, never
+//   laid out or tapped; a frame dims or swells it (`Frame(…, light:)`, 1 by default; asleep it is halved). A frame says
+//   how much of the body is there (`Frame(…, fade:)`, 1 by default): it multiplies the body's inks and the veil, never
+//   the eyes, glints or the weather. `thinning:` clears a see-through body down its rows. With Reduce Transparency the
+//   body is solid and fades no lower than half; the light stays.
 // `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
 
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
@@ -68,6 +74,9 @@ enum CompanionInk: Character, CaseIterable {
     /// Over the "+" (the accent) it is the body's own dusky tone with the button showing through; over the window
     /// or the Mac's field it is fainter, and what is behind shows through.
     case veil = "v"
+    /// The accent lightened toward the text colour, as `accentDark` is the accent darkened (round 24, brief 121): a lit
+    /// edge on a body drawn in the accent (the top of Phase's crown). Part of the body: see-through with it.
+    case accentLight = "e"
     /// Fallen snow (round 22; George: "powdery, pixelated fallen snow … add some blue hues"), three tones that are the
     /// same in every theme: the lit crest of the powder,
     case snow = "s"
@@ -154,6 +163,28 @@ struct CompanionCharacter: Identifiable {
     struct Frame {
         let name: String
         let rows: [String]
+        /// How much of the body is there (round 24, brief 121): 1 all of it, 0 none. It multiplies the opacity of the
+        /// body's inks (the ones `seeThrough` thins) and of the veil; eyes, glints and the weather's inks stay solid.
+        var fade: Double = 1
+        /// How bright its light is (round 24): the strength of the halo its glowing inks cast (`glow`), 1 as drawn, 0
+        /// put out, up to 2 flared. Pixels in those inks stay crisp and solid whatever it is.
+        var light: Double = 1
+
+        /// `Frame(name: "thin", fade: 0.5, rows: [...])`: the rows last, so a frame reads as before.
+        init(name: String, fade: Double = 1, light: Double = 1, rows: [String]) {
+            self.name = name
+            self.rows = rows
+            self.fade = fade
+            self.light = light
+        }
+    }
+
+    /// How a drawn pose is lit (round 24): its frame's `fade` and `light` (a composite's are its gesture frame's), and
+    /// the rows its body spans, top to lowest, over which `thinning` clears it.
+    struct Look: Equatable {
+        var fade: Double = 1
+        var light: Double = 1
+        var body: ClosedRange<Int>? = nil
     }
 
     /// One tick of an animation: a frame, drawn mirrored or not (relative to the way the companion faces).
@@ -432,6 +463,30 @@ struct CompanionCharacter: Identifiable {
     /// `accent`, `warm` and `glow` pixels are drawn at 1 − seeThrough, so a list row scrolling behind the "+" shows
     /// faintly through it; its eyes and glints (`ink`, `light`) stay solid. The veil is see-through in any character.
     let seeThrough: Double
+    /// How much more see-through its body grows down its rows (round 24, brief 121), 0 (the same all over, every
+    /// companion before) to 0.9: a body pixel `t` of the way from its top row to its lowest is drawn at
+    /// (1 − seeThrough) × (1 − thinning × t²), so a ghost is full at the crown and nearly clear at the hem. The veil
+    /// thins with it.
+    let thinning: Double
+    /// The inks that give light (round 24, brief 121): each run of one casts a soft halo of its own colour, drawn over
+    /// the creature's body and under its solid pixels (eyes, pupils, the weather) and the glowing ones, which stay
+    /// crisp. Empty (every companion before): the sprite is drawn exactly as it was, at no cost.
+    let glow: Set<CompanionInk>
+    /// How each entry of `drawn` is lit, by the same index.
+    let looks: [Look]
+
+    /// The inks a body is made of: drawn at 1 − `seeThrough`, thinned by `thinning` and faded by a frame's `fade`.
+    static let bodyInks: Set<CompanionInk> = [.dark, .mid, .accent, .warm, .glow, .accentDark, .accentLight]
+    /// A halo's strength at a frame's `light` of 1: its blurred pixels at this opacity (above 1, drawn again).
+    static let glowStrength: Double = 0.8
+    /// A halo's spread, in sprite pixels: the blur's radius (about a pixel of light round each glowing pixel).
+    static let haloRadius: CGFloat = 0.6
+    /// How far round the sprite a halo may reach, in sprite pixels, drawn outside its frame (never laid out).
+    static let haloMargin = 3
+    /// Asleep the light is turned down: a frame drawn only asleep casts its halo at this times its `light`.
+    static let asleepLight: Double = 0.5
+    /// With Reduce Transparency on, no body is drawn fainter than this, however it fades.
+    static let leastFade: Double = 0.5
 
     /// Frame name → index into `drawn`.
     let index: [String: Int]
@@ -444,9 +499,12 @@ struct CompanionCharacter: Identifiable {
     let undrawable: Set<String>
 
     init(id: String, name: String, width: Int, height: Int, seatRow: Int, frames: [Frame], gestureFPS: Double,
-         flourishFPS: Double, flourishTurns: Bool, field: Posture, plus: Posture, seeThrough: Double = 0) {
+         flourishFPS: Double, flourishTurns: Bool, field: Posture, plus: Posture, seeThrough: Double = 0,
+         thinning: Double = 0, glow: Set<CompanionInk> = []) {
         self.id = id
         self.seeThrough = seeThrough
+        self.thinning = thinning
+        self.glow = glow
         self.name = name
         self.width = width
         self.height = height
@@ -461,6 +519,14 @@ struct CompanionCharacter: Identifiable {
         for (i, frame) in frames.enumerated() where index[frame.name] == nil { index[frame.name] = i }
         self.index = index
         var drawn = frames.map { Self.runs(of: $0.rows) }
+        // Round 24: how each is lit. A frame drawn only asleep has its light turned down.
+        let asleepOnly = Self.names(drawnIn: [field.asleep, plus.asleep], flourishes: [])
+            .subtracting(Self.names(drawnIn: [field.awake, plus.awake], flourishes: [field.flourish, plus.flourish]))
+        func look(_ frame: Frame, runs: [Run]) -> Look {
+            let dim: Double = asleepOnly.contains(frame.name) ? Self.asleepLight : 1
+            return Look(fade: frame.fade, light: frame.light * dim, body: Self.bodyRows(runs))
+        }
+        var looks = zip(frames, drawn).map { look($0.0, runs: $0.1) }
         var composites: [String: Int] = [:]
         var undrawable = Set<String>()
         let rows = Dictionary(frames.map { ($0.name, $0.rows) }, uniquingKeysWith: { a, _ in a })
@@ -473,7 +539,11 @@ struct CompanionCharacter: Identifiable {
             guard let g = rows[frame], let r = rows[reference], let b = rows[base] else { return }
             if Self.overlap(gesture: g, rest: r, base: b) > 0 { undrawable.insert(key) }
             composites[key] = drawn.count
-            drawn.append(Self.runs(of: Self.composite(gesture: g, rest: r, base: b)))
+            let runs = Self.runs(of: Self.composite(gesture: g, rest: r, base: b))
+            drawn.append(runs)
+            // A composite is lit as its gesture frame is (its fade, its light).
+            let gesture = index[frame].map { frames[$0] } ?? Frame(name: frame, rows: [])
+            looks.append(look(gesture, runs: runs))
         }
         for posture in [field, plus] {
             for mode in [posture.awake, posture.asleep] {
@@ -496,7 +566,29 @@ struct CompanionCharacter: Identifiable {
         }
         self.undrawable = undrawable
         self.drawn = drawn
+        self.looks = looks
         self.composites = composites
+    }
+
+    /// Every frame a set of modes (and flourishes) draws: their stills, gestures, answers and routines' frames.
+    static func names(drawnIn modes: [Mode], flourishes: [[Tick]]) -> Set<String> {
+        var out = Set<String>()
+        for mode in modes {
+            out.formUnion(mode.stills)
+            for gesture in mode.gestures + [mode.answer] { for tick in gesture.ticks { out.insert(tick.frame) } }
+            for routine in mode.routines {
+                for entry in mode.ticks(of: routine) { out.insert(entry.tick.frame) }
+            }
+        }
+        for flourish in flourishes { for tick in flourish { out.insert(tick.frame) } }
+        return out
+    }
+
+    /// The rows a frame's body spans (its body inks and the veil), top to lowest; nil with no body.
+    static func bodyRows(_ runs: [Run]) -> ClosedRange<Int>? {
+        let ys = runs.filter { $0.ink == .veil || bodyInks.contains($0.ink) }.map(\.y)
+        guard let top = ys.min(), let lowest = ys.max() else { return nil }
+        return top...lowest
     }
 
     func posture(_ place: CompanionPlace) -> Posture {
@@ -634,8 +726,38 @@ struct CompanionCharacter: Identifiable {
         switch ink {
         case .veil: CompanionInks.veilOpacity
         case .ink, .light, .snow, .snowBlue, .snowShade, .water, .waterLight, .waterDeep: 1
-        case .dark, .mid, .accent, .warm, .glow, .accentDark: 1 - seeThrough
+        case .dark, .mid, .accent, .warm, .glow, .accentDark, .accentLight: 1 - seeThrough
         }
+    }
+
+    /// How opaque `ink` is drawn on `row` of the drawn pose `pose` (an index into `drawn`; round 24, brief 121): the
+    /// body's inks and the veil at `opacity(ink)`, thinned down the body's rows (`thinning`) and times the frame's
+    /// `fade`; everything else solid. With Reduce Transparency the body is solid and fades no lower than `leastFade`.
+    /// A character with no thinning and frames that don't fade gets `opacity(ink)` exactly.
+    func opacity(_ ink: CompanionInk, pose: Int, row: Int, reduceTransparency: Bool = false) -> Double {
+        let base = opacity(ink)
+        guard fades(ink) else { return base }
+        let look = looks.indices.contains(pose) ? looks[pose] : Look()
+        if reduceTransparency { return min(1, max(Self.leastFade, look.fade)) }
+        var thin: Double = 1
+        if thinning > 0, let body = look.body, body.upperBound > body.lowerBound {
+            let span = Double(body.upperBound - body.lowerBound)
+            let t: Double = min(1, max(0, Double(row - body.lowerBound) / span))
+            thin = 1 - thinning * t * t
+        }
+        return base * thin * look.fade
+    }
+
+    /// Whether `ink` is part of the body: see-through with it, thinned and faded (the body's inks and the veil); the
+    /// eyes, glints and the weather's inks never are.
+    func fades(_ ink: CompanionInk) -> Bool { ink == .veil || Self.bodyInks.contains(ink) }
+
+    /// The strength of the halo the drawn pose `pose` casts from its glowing inks: `glowStrength` times its light (0
+    /// with no ink that glows).
+    func haloStrength(pose: Int) -> Double {
+        guard !glow.isEmpty else { return 0 }
+        let light = looks.indices.contains(pose) ? looks[pose].light : 1
+        return Self.glowStrength * light
     }
 
     /// Pixels that differ between two frames (mirroring the second when asked).
@@ -779,11 +901,22 @@ struct CompanionCharacter: Identifiable {
         if !(8...10).contains(flourishFPS) { out.append("\(id): flourish at \(flourishFPS) fps, not 8…10") }
         let inks = inks
         if !(4...6).contains(inks.count) { out.append("\(id): \(inks.count) colours, not 4…6") }
-        let accented = inks.contains(.accent) || inks.contains(.veil)
+        let accented = inks.contains(.accent) || inks.contains(.veil) || inks.contains(.accentLight)
         if accented && (inks.contains(.warm) || inks.contains(.glow)) {
             out.append("\(id): both an accent and a warm detail")
         }
         if !(0...0.5).contains(seeThrough) { out.append("\(id): see-through \(seeThrough), not 0…0.5") }
+        // Round 24 (brief 121): a body that thins down its rows and fades, and inks that give light.
+        if !(0...0.9).contains(thinning) { out.append("\(id): thinning \(thinning), not 0…0.9") }
+        for frame in frames {
+            if !(0...1).contains(frame.fade) { out.append("\(id).\(frame.name): fade \(frame.fade), not 0…1") }
+            if !(0...2).contains(frame.light) { out.append("\(id).\(frame.name): light \(frame.light), not 0…2") }
+        }
+        let drawnInks = allInks
+        for ink in glow.sorted(by: { $0.rawValue < $1.rawValue }) {
+            if CompanionInk.weatherInks.contains(ink) { out.append("\(id): the weather's \(ink) gives no light") }
+            else if !drawnInks.contains(ink) { out.append("\(id): glows in \(ink), which it never draws") }
+        }
         if !(1...height).contains(seatRow) { out.append("\(id): seat row \(seatRow) outside the sprite") }
         return out
     }
