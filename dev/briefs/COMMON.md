@@ -78,12 +78,20 @@ stops and reports.
   seat and tap area in `CompanionPerch.swift`). 105 `cast-flavor` (xhigh) `Nod`, `Quill`, `Tuck`, `Hush`, `Glim`,
   `Phase` and their tests.
 - Ownership, the iPhone Duo (George's friend uses one; `round-21/george/duo-outer-flipboard.png` in the shared
-  notes folder is his screenshot): 106 `duo-column` (xhigh) the outer display's shell: `Views/Tabs/MobileShell.swift`,
-  `MobileTabBar.swift`, `ScreenMenu.swift`, the lists and their rows, Browse, the Flipboard. 107 `duo-cards` (xhigh)
-  what opens over a list on the outer display: quick add, the editor, the pickers, the switch card, Review Inbox,
-  Settings and its pages, the sheets. 108 `duo-inner` (xhigh) the inner display: `ContentView.swift`,
-  `Views/Duo/*`, the sidebar shell and the editor column, the board, landscape and the half-open poses. Each
+  notes folder is his screenshot, `round-21/duo-walk-before/` the supervisor's 81 pictures of 0.9.4 on the outer
+  display): 106 `duo-column` (xhigh) the outer display's shell: `Views/Tabs/*` (`MobileShell`, `MobileTabBar`,
+  `ScreenMenu`, `BrowseView`), `Views/Duo/VerticalBar.swift`, the lists and their rows, the Flipboard's board and
+  tiles, the completion toast. 107 `duo-cards` (xhigh) what opens over a list there: `Views/Popouts/*`, the
+  Flipboard's cards, Review Inbox, `SettingsView` and `Views/Settings/*`, `Views/Help/*`, the sheets, the tips. 108
+  `duo-inner` (xhigh) the inner display: `ContentView.swift`, the rest of `Views/Duo/*`, `SidebarView.swift`,
+  `Views/Search/*`, the board, the `.duo` column in `PopoutHost.swift`, and Device Hub (only 108 opens it). Each
   brief's own Ownership list is the contract; these lines are the map.
+- **The Duo simulator**: `xcrun simctl create "HITList-NN" "iPhone Duo"`. It boots folded, on the outer display
+  (about 466 × 678 pt, the system's bar column down its trailing edge); the inner display (about 669 × 951 pt)
+  needs Device Hub's fold (`/Applications/Xcode.app/Contents/Applications/DeviceHub.app`; there is no Simulator
+  app in Xcode 27). `xcrun simctl io <udid> screenshot --display=primary <file>` (it has two displays, so
+  `--display` is required). Brief 93's walk (`HITListUITests/QASweepUITests`, `TEST_RUNNER_HITLIST_QA=1`)
+  photographs every screen of whatever it runs on in about sixteen minutes.
 - Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, the entries in `WhatsNew.swift`, the
   `SettingsTests` What's New pin, the models' shape, `CompanionCast.swift`, `CompanionSky*.swift`, and the
   supervisor's own tonight: `ThemeCompanion.swift` and `AppearanceSettingsSection.swift` (each creature's name
