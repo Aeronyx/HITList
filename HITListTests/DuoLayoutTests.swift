@@ -407,4 +407,21 @@ final class DuoLayoutTests: XCTestCase {
                        "half the display while partly open")
         XCTAssertEqual(FlipboardLayout.columnCount(width: 397, compact: false, spacing: spacing), 3, "iPad and Mac as before")
     }
+
+    // MARK: Brief 108: the inner display looked at again
+
+    func testTheInnerDisplaySearchesInItsSidebarAndTheIPadIsAsItWas() {
+        XCTAssertTrue(AppShell.searchesInSidebar(.duo, idiom: .phone),
+                      "the inner display's sidebar stands where Browse would: without it there was no search there")
+        XCTAssertFalse(AppShell.searchesInSidebar(.tabs, idiom: .phone), "the outer display searches in Browse")
+        XCTAssertFalse(AppShell.searchesInSidebar(.split, idiom: .phone), "a Max on its side is as it was")
+        XCTAssertFalse(AppShell.searchesInSidebar(.split, idiom: .pad), "the iPad is as it was")
+        XCTAssertTrue(AppShell.searchesInSidebar(.split, idiom: .mac), "the Mac's field (brief 66)")
+    }
+
+    #if os(iOS)
+    func testTheSidebarSearchFieldIsAFingersHeightOnIOS() {
+        XCTAssertGreaterThanOrEqual(SidebarSearchField.height, 36, "the Mac's 28 pt is a pointer's")
+    }
+    #endif
 }

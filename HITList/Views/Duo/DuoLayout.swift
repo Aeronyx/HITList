@@ -37,6 +37,13 @@ enum AppShell: Equatable {
         }
     }
 
+    /// Where search is (brief 108): Browse's field on the phone's tabs; the sidebar's own field on the Mac (brief 66)
+    /// and on the Duo's inner display, whose sidebar stands where Browse would (without it the inner display had no
+    /// search at all). The iPad is as it was.
+    static func searchesInSidebar(_ shell: AppShell, idiom: Idiom) -> Bool {
+        idiom == .mac || shell == .duo
+    }
+
     #if os(iOS)
     static var currentIdiom: Idiom {
         if DuoDebug.standIn { return .phone }
