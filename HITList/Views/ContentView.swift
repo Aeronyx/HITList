@@ -112,6 +112,8 @@ struct ContentView: View {
         .containerBackground(Theme.background, for: .window)
         .frame(minWidth: 760, minHeight: 560)
         #endif
+        // Debug `-duoStandInSize inner`: an iPad draws the app at the inner display's size (brief 108).
+        .duoStandInFrame()
     }
 }
 
