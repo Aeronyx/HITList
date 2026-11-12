@@ -198,6 +198,11 @@ final class FlipboardLightsTests: XCTestCase {
         let phone = FlipboardLayout.rowTileWidth(width: 361, inset: inset, spacing: spacing, gridTile: (361 - spacing) / 2)
         XCTAssertEqual(phone, 144.6, accuracy: 0.5)
         XCTAssertEqual(FlipboardLayout.rowPeek(width: 361, tile: phone, spacing: spacing, inset: inset), 0.22, accuracy: 0.01)
+        // The accessibility text sizes: one whole tile and half the next, so a name keeps its words whole.
+        let large = FlipboardLayout.rowTileWidth(width: 361, inset: inset, spacing: spacing, gridTile: (361 - spacing) / 2,
+                                                 largeType: true)
+        XCTAssertEqual(large, 223.3, accuracy: 0.5)
+        XCTAssertEqual(FlipboardLayout.rowPeek(width: 361, tile: large, spacing: spacing, inset: inset), 0.5, accuracy: 0.01)
     }
 
     /// Whatever room the header leaves it, the strip draws within it on one line (dots, segments or the bar, chosen by

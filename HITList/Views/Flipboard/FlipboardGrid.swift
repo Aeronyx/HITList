@@ -230,11 +230,15 @@ extension FlipboardLayout {
     /// wide, never wider than the grid's tile; where no count does both (the Duo's outer display, a narrow window), the
     /// most whole tiles with a fifth of the next at no less than 128 pt; failing that, one tile and half the next.
     /// `width`: the panel's; `inset`: its first tile's distance from its edge.
-    static func rowTileWidth(width: CGFloat, inset: CGFloat, spacing: CGFloat, gridTile: CGFloat) -> CGFloat {
+    /// `largeType` (the accessibility text sizes): one whole tile and half the next, whatever the grid's tile, so a
+    /// name has room for its words (at 145 pt the largest size broke "Brush" in the middle).
+    static func rowTileWidth(width: CGFloat, inset: CGFloat, spacing: CGFloat, gridTile: CGFloat,
+                             largeType: Bool = false) -> CGFloat {
         let inner = width - inset
         func tile(_ whole: Int, _ share: CGFloat) -> CGFloat {
             (inner - CGFloat(whole) * spacing) / (CGFloat(whole) + share)
         }
+        if largeType { return max(1, tile(1, 0.5)) }
         for whole in stride(from: 16, through: 1, by: -1) {
             let w = tile(whole, rowPeekShare)
             if w >= rowTileMinWidth, w <= gridTile + 0.5 { return w }
