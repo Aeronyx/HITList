@@ -315,8 +315,15 @@ final class CompanionButtonTests: XCTestCase {
             let body = button.rows(bodyName)!.map(Array.init)
             var used = Set<Character>()
             var depth = [Int](repeating: 0, count: button.width)
+            // Brief 120: at the deepest its cheeks go redder (the blush a pixel wider each side), the one change but snow.
+            let deepest = name == posture.awake.snowDeep.last || name == posture.asleep.snowDeep.last
+            if deepest {
+                XCTAssertEqual(rows[16][7], "a", "\(name): its cheeks redder")
+                XCTAssertEqual(rows[16][12], "a", "\(name): both")
+            }
             for y in rows.indices {
                 for x in rows[y].indices where rows[y][x] != body[y][x] {
+                    if deepest, y == 16, x == 7 || x == 12 { continue }
                     XCTAssertTrue(snowInks.contains(rows[y][x]), "\(name) row \(y) column \(x): only snow is added")
                     used.insert(rows[y][x])
                     depth[x] += 1
