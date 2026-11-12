@@ -21,7 +21,7 @@ enum WhatsNew {
 
     static let entries: [Entry] = [
         Entry(version: "0.9.6", items: [
-            "Button the mushroom is back as you knew him, big eyes and rosy cheeks, now standing on top of the bar. His idle moves are a mushroom's: a bob, a puff, a wobble of his cap, a few spores.",
+            "Button the mushroom stands on top of the bar now instead of dangling his boots, and his idle moves are a mushroom's: a bob, a puff, a wobble of his cap, a few spores.",
             "Phase is a little cloth ghost with pale glowing eyes. It hovers on top of the +, rain falls straight through it, and snow piles up underneath it.",
             "Gargle is more of a dragon: a snout, warm reptile eyes, a puff of smoke now and then. Hush, Quill and Glim are drawn with more care, and Glim keeps his light out of the rain.",
             "Snow settles on the companions as powder with blue in its shade, not as a white hat. Each one moves like itself, and Tuck sleeps with his eyes shut on their stalks.",
