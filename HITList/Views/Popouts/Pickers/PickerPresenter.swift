@@ -218,6 +218,9 @@ private struct PickerPopoverCard<Card: View>: View {
         .background(Theme.surface)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
+        // The card's own frame, without the popover's arrow: what brief 114's inset test measures against.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pickerCard")
     }
 }
 
