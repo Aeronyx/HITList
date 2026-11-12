@@ -15,10 +15,14 @@ struct DuoDetail: View {
 
     @Environment(PopoutController.self) private var popouts
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The trailing safe area where the columns meet it: the system's bar column on its side (brief 108). The editor
+    /// and the next days, the trailing columns, stop there, as Upcoming's board does (brief 56); the background
+    /// still runs under it.
+    @State private var trailingBar: CGFloat = 0
 
     private var plan: DuoColumns {
         DuoColumns.plan(width: geometry.width, sidebarWidth: DuoSplit.sidebarWidth,
-                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.fold,
+                        editorOpen: popouts.task != nil, showsToday: item == .today, fold: geometry.split,
                         crease: geometry.crease)
     }
 
@@ -42,6 +46,10 @@ struct DuoDetail: View {
         }
         // Partly open, the sidebar ends at a top-to-bottom crease; the detail's content starts past it (brief 50).
         .padding(.leading, plan.detailLeadingInset)
+        // On its side the system's bars stand in a column down the trailing edge: the editor's "…" and Confirm, the
+        // next days' Groups, were under it.
+        .padding(.trailing, trailingBar)
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingBar = $0 }
         .background(Theme.background)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: popouts.state.taskID)
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: plan)

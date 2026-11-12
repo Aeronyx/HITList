@@ -79,12 +79,26 @@ struct WindowGeometry: Equatable {
     /// keep (brief 50). Nil open flat, closed, on its side, and on every other device.
     var crease: CGRect?
 
+    /// The safe area's leading inset (the system's bar column, when it stands on the leading edge), so the display's
+    /// middle can be found in the columns' space.
+    var leadingInset: CGFloat = 0
+
     /// The fold's x, for the columns that meet there (brief 45).
     var fold: CGFloat? { crease?.midX }
 
-    init(fullSize: CGSize = .zero, width: CGFloat = 0, crease: CGRect? = nil) {
+    /// The display's middle in the columns' space (inside the safe areas): where the hinge is, open flat, held like a
+    /// book (brief 108). On its side the system's bar column takes the trailing edge, so half the width inside the safe
+    /// areas was left of the hinge by half the column (31 pt with a 62 pt column).
+    var middle: CGFloat { fullSize.width / 2 - leadingInset }
+
+    /// Where the list and the editor meet when the sidebar steps aside: the crease while partly open, else the
+    /// display's middle (nil before the window is measured).
+    var split: CGFloat? { fold ?? (fullSize.width > 0 ? middle : nil) }
+
+    init(fullSize: CGSize = .zero, width: CGFloat = 0, leadingInset: CGFloat = 0, crease: CGRect? = nil) {
         self.fullSize = fullSize
         self.width = width
+        self.leadingInset = leadingInset
         self.crease = crease
     }
 
@@ -93,6 +107,7 @@ struct WindowGeometry: Equatable {
         self.init(fullSize: CGSize(width: proxy.size.width + insets.leading + insets.trailing,
                                    height: proxy.size.height + insets.top + insets.bottom),
                   width: proxy.size.width,
+                  leadingInset: insets.leading,
                   crease: Self.verticalCrease(among: Self.activeDivisions(in: proxy), in: proxy.size))
     }
 
