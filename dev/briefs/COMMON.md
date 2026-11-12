@@ -497,6 +497,54 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 23 record (2026-11-12, 09:55 to about noon Eastern; sessions 116–120 merged for 0.9.7)
+0.9.6 (26) was released about 09:30; George's notes on its creatures came at 09:50 (`ROUND-23.md`). Five drawing
+sessions started at 10:00 and were all in by 10:45. **Drawings only**: since `v0.9.6` nothing changed outside
+`Characters/*.swift`, their tests, one comment in `ThemeCompanion.swift` and the notes. No schema change.
+- **116 `glim-subtle`** (xhigh, 37 minutes): every frame of `f3da1e6`'s Glim back, his plain stills pinned by
+  digest; touch-up "B" (nine pixels on `rest`, three asleep: lower lids, the hood's shade at the face's top corners
+  and under the chin, two pale rings down the tail, one glow pixel on the lantern), carried onto all 110 frames by
+  `116-glim-subtle/workshop/carry.py`; in rain, snow and thunder the tail curls in and the lantern is held in his
+  lap in both paws, all of it lit, its glow on his chin (`warm` in snow); powder on his ear tops and between them.
+- **117 `gargle-pup`** (xhigh, 25 minutes, one note): every awake frame starts from v0.9.6's `sleepBreathe` (the
+  sleep frame, head up a pixel) with an open eye (dark, a light, a warm glint under it), the mouth's corner up and
+  no tooth; 247 pixels against 265. Asleep stills pinned to `v0.9.6`. Rain: the wing rises from his shoulder in a
+  curve over his crown to a point before his snout (`peek`, and `duck` at thunder). Six moves that needed the
+  three-quarter head are gone (tilts, sniffs, scratch, crumb, chase, flop); horn flick, spade wag are new.
+- **118 `phase-sheet`** (xhigh, 34 minutes): one drape (concept C, face 1): a round crown leaning two pixels, soft
+  S sides, a hem of four unequal waves with its tail trailing left; two dark 2 × 3 holes with a light low in each,
+  a one-pixel mouth; hovering two pixels over the bar; asleep hovering low and slack. 149 frames from
+  `118-phase-sheet/workshop/build.py` (the face is one part in `gen.py`: the glowing ovals swap in by one line).
+  `testNothingSticksOutAboveTheHem`. Its last-snow sweep puffs six flecks into the air for under a second.
+- **119 `tuck-quill`** (xhigh, 45 minutes, three passes on Tuck): Quill's 0.9.5 face on all 139 frames of the
+  tabby; in rain his ears lie back and a drop hangs off his tail's tip. Tuck asleep is the supervisor's drawing
+  (stalks folded flat at the head's top corners, each eye a shut grey ball at cheek level, no mouth; breathing
+  sways the balls; a tap lifts one stalk and opens its eye); in rain he stretches a pixel taller with a bead on each
+  eye (his clearance above the "+" is 36 pt, was 34). Not done: Quill's tail round his feet in snow; Tuck drawn
+  half down in snow.
+- **120 `nod-button-weather`** (high, 32 minutes, two notes on the umbrella): Nod holds a domed umbrella (13 × 4,
+  a ferrule, a scalloped edge, drawn over the top-left of his cap; the shaft a pixel clear of his side, his arm out
+  to it); twirl, gust, peek, duck at thunder; asleep in rain it leans on him. Button's cap comes three rows down to
+  his cheeks, bent where he grips it, eyes peeking; a peek routine. Snow half as deep again on both (15/28/45 and
+  14/27/44 pixels). While a creature holds its umbrella or cap a few idles do not play in the rain.
+- **The supervisor's own**: `CompanionKeptTests` (every frame of Hush pinned to v0.9.6); Tuck's sleeping frame,
+  sketched in `round-23/draw/` after three passes by text; every sheet forwarded to George as it arrived; the notes.
+- **What worked**: starting each session from the drawing George likes; small sheets within 25 minutes; looking at
+  a session's current frames with `round-23/draw/view.py` instead of waiting; the cast photographed in the app.
+- **What cost time**: Tuck asleep (three text passes that made hooks and ears before the supervisor drew it); the
+  supervisor's earlier rule about faces, which had pushed Gargle away from the profile George likes.
+- **Final counts** (on `5216132`, the last code commit; only documents after it): core 704, Mac 1945 (1 skipped),
+  iOS 1908 (1 skipped). The companion UI classes pass on an iPhone 16 simulator (`CompanionsUITests` 8,
+  `CompanionPhaseUITests`, `CompanionListEndUITests`) and `CompanionIslandUITests` on a Duo simulator; **the whole
+  UI suite was not rerun**: nothing but drawings changed since `v0.9.6`, where it passed (136 tests). The cast was
+  photographed in the app on an iPhone 16 simulator (0.9.6 beside 0.9.7: `build.noindex/round-23/handover/`) and on
+  the Mac's search field. A Release archive and export of both platforms pass the 44 checks
+  (`build.noindex/package-proof-105424`: iOS 16,452,298 bytes, macOS 31,941,347 bytes).
+- **Never seen running**: any of it on a real phone; the new creatures on the Duo's tab bar in a simulator (their
+  seat and island tests pass); Phase's swatch in Settings on a device.
+- **Side stores to delete by hand** (the Mac's app-group folder): `HITList-s116*` to `HITList-s120*`,
+  `HITList-cast*` is the simulator's own. Never `HITList.store`.
+
 ## Round 22 record (2026-11-12, 05:00 to 09:00 Eastern; sessions 109–115 merged for 0.9.6)
 0.9.5 was handed over at 04:30 and sent back at 04:55 from its pictures (`ROUND-22.md`). Seven sessions started at
 05:09 and were all in by 06:34, each with a clock in its brief; master carries their branches and the supervisor's
