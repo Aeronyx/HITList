@@ -20,12 +20,12 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.9.7", items: [
-            "Glim is his old self again, with only a touch of new shading. In rain and snow he curls his tail in and holds his lantern in his lap.",
-            "Gargle awake is the little side-on pup he is asleep, with his eye open. In the rain he hides under his wing.",
-            "Phase is a floating sheet now: a wavy drape with two soft dark eyes. Rain falls through it and snow piles up underneath.",
-            "Tuck sleeps with his eye stalks folded and his eyes hanging low, and no longer smiles in his sleep. Quill has his derpy face back.",
-            "Rain and snow show more plainly: Nod holds up an umbrella, Button pulls his cap down over his eyes, and the snow lies deeper. To switch the weather off: Settings → Extras → Weather.",
+        Entry(version: "0.9.8", items: [
+            "Rain looks like rain: blue drops bead on every companion, one runs off now and then, and a small puddle gathers at its feet, by day and asleep. To switch the weather off: Settings → Extras → Weather.",
+            "Phase is a ghost you can see through. His body thins toward the hem, his eyes glow, and now and then he fades until only his eyes are left. Glim's lantern glows too.",
+            "Nod has taller eyes and holds his little canopy by its handle in the rain. Tuck sleeps at rest with his eyes shut, and sits in a puddle with his pot brimming when it rains.",
+            "Gargle awake is the side-on pup he is asleep, and is still himself under deep snow. Glim is his old self again, and Quill is a touch friendlier.",
+            "Flipboard: each Switchboard is one row you scroll sideways, with a light for every switch so you can see at a glance what is still off. Tap a light to jump to its switch. Ungrouped switches fold away.",
         ]),
         Entry(version: "0.9.6", items: [
             "Button the mushroom stands on top of the bar now instead of dangling his boots, and his idle moves are a mushroom's: a bob, a puff, a wobble of his cap, a few spores.",
