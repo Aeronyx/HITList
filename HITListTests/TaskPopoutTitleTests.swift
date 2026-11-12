@@ -378,6 +378,28 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(draft.title, "Call Sam !30mb")
     }
 
+    /// Brief 127's scan: "starting <day>" leans on a repeat, typed or the task's own. On a task that repeats every Monday
+    /// at 8, "starting nov 10" (a Tuesday) starts it on the Monday after, as quick add starts a typed repeat; a plain day
+    /// typed is kept as typed, as before.
+    func testStartingLeansOnTheTasksOwnRepeat() throws {
+        let (task, context) = task("Standup", due: day(2, hour: 8), hasTime: true)
+        let monday = RecurrenceRule(frequency: .weekly, weekdays: [2])
+        task.recurrenceRule = monday.anchored(to: day(2, hour: 8), calendar: calendar)
+            .timed(to: day(2, hour: 8), hasTime: true, calendar: calendar)
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " starting nov 10"
+        // Saturday 31 October: Tuesday 10 November, so the Monday after is 16 November (day 16).
+        XCTAssertEqual(shown(draft, task).dueDate, day(16, hour: 8))
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.dueDate, day(16, hour: 8))
+        XCTAssertEqual(task.recurrenceRule?.weekdays, [2])
+        XCTAssertEqual(task.title, "Standup")
+
+        var plain = TaskEditorDraft(task: task)
+        plain.title += " nov 10"
+        XCTAssertEqual(shown(plain, task).dueDate, day(10, hour: 8), "a plain day is kept as typed")
+    }
+
     /// Brief 127's scan: "No date" takes the time away, and with it the reminder before the time, as clearing the time
     /// does; stored, it would come back the day a time is set again.
     func testNoDateTakesTheReminderBeforeTheTimeWithIt() {
