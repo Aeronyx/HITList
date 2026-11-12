@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-23.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-24.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.7: core 704, Mac 1945, iOS 1908, and 136 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.8: core 704, Mac 1967, iOS 1930, and 138 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -225,6 +225,33 @@ waiting for their sheets. Give exact rows, not coordinates in prose. Drawing ses
 25 to 45 minutes; a stop delivers a note at once, and a message to an idle session starts a new turn by itself (do
 not stop it after).
 
+Lessons from round 24 (six sessions in an afternoon; the creatures' fourth send-back, and the Flipboard): **when
+George names a piece of a past build, start from those pixels.** He had liked 0.9.6's little canopy over Nod and
+asked for it to be held; round 23 drew a new umbrella instead (an outlined dome with a hooked wire, which the
+supervisor had pushed a session toward) and he called it "terrible". The answer was 0.9.6's canopy pixel for pixel
+with a four-pixel handle. A long one-pixel line beside a creature reads as a wire at real size, whatever it is meant
+to be. **Asleep is not limp**: eyes hanging straight down at cheek level read as "extremely depressed"; what read as
+resting was the daytime drawing with the lids shut and the stalks a little shorter, leaning apart. **Every drawing
+session at xhigh**: the one run at high in round 23 made the umbrella. **Shared engine pieces go on master before
+any session starts** (the three water inks, as the snow inks in round 22), and exactly one session owns the engine
+when it must change (121: glow, fade, thinning), with a test that every other creature draws as before. **A recipe
+in COMMON makes five sessions' work one thing**: the water recipe (beads, a drop that runs off, a puddle, asleep
+too, blue only) came back consistent from five sessions in under forty minutes each; where it broke was the
+puddle's place, because the "+" is flat only in its middle (the seat tests caught every case; tell a session to
+look at the profile before it picks a place). **Sketch in the sessions' first ten minutes and send rows with a
+stop**: the sheet that comes back is already built on them. **A design brief can contradict itself**: 126's asked
+for row tiles at the grid's size and for the next tile to show a quarter of itself; on an iPhone the result was a
+tile cut at nine-tenths. Say which rule wins. And a session runs only its own UI classes: a test elsewhere that
+pins the old behaviour (`testFlipboardLightsStayOnTheirSwitches` asked for one tile width on the whole screen) fails
+only in the merged run, and is the supervisor's to rewrite. **Run the long UI suite on an integration checkout**
+(`git worktree add -b integ-24 build.noindex/integ24 master`, merge the unfinished branch there, run
+`scripts/test.sh ui` in a subshell) while the last session finishes: when its tip is what you merged, the run
+counts for the final tree (`git diff integ-24 master` is empty). **A `cd` inside a compound command moves this
+session's working directory**: run things in another checkout in a subshell. **George may ask for a stop** ("Come to
+a stopping point … we'll pick up in a bit"): finish what is in flight, shut the simulators down, write the state
+where the next context finds it (`round-24/STATE.md` in the notes folder), leave the sessions working unless he
+says otherwise, and merge nothing until he is back.
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -246,6 +273,11 @@ files" is obeyed; one that does not produces merge conflicts.
 - Model: `Models/Models.swift`, `SchemaVersions.swift`, frozen `SchemaV1Models.swift`, `SchemaV2Models.swift`.
 - Settings: `SettingsView.swift`, `Views/Settings/*` (+ `Mac/`), `WhatsNew.swift`, `Support/Preferences.swift`.
 - Design system: `Support/DesignSystem/*` (`HITTokens.swift` = fonts/spacing/colours; README).
+- Companions: `Support/Companions/*` (the engine: `CompanionCharacter` holds frames, modes and inks, with snow's
+  `s b c` and water's `p h u` the same in every theme, `glow:` for inks that give light, `Frame(fade:, light:)`,
+  a see-through body thinning down its rows; `CompanionDirector`, `CompanionSchedule`, `CompanionClock`),
+  `Support/Companions/Characters/*.swift` (one file a creature), `Views/Companions/*` (`CompanionSprite` draws,
+  `CompanionPerch` seats), `Views/Settings/ThemeCompanion.swift` (the swatches' seats).
 - Delight: `Support/Delight/*` (sounds, haptics `TapHaptic`), `Views/Delight/*` (completion motion, toast).
 - Notifications: `Services/NotificationScheduler.swift`, `Services/Notifications/*`.
 - Nobody but the supervisor: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`
@@ -433,7 +465,47 @@ were shown); Phase's eyes are dark holes (glowing ovals are one line in its work
 glint under its light; Nod's umbrella is drawn over the top-left of his cap; Glim's touches are the nine-pixel "B";
 while a creature holds its umbrella or its cap a few idles do not play.
 
-## 8. Where things stand (2026-11-12, round 23 merged)
+From 2026-11-12 (round 24, on 0.9.7, which he did not release): **rain is water, on the creature and at its feet.**
+"The rain is both not blue enough to be clear that it's rain and also many of the characters don't even get rain on
+them to begin with. During rain, they should have little droplets bead off of them every once in a while, and have
+some droplets stick around or tiny puddles pool around their feet": three water inks (`p` `h` `u`), the same blues
+in every theme. "Glim: done." "Hush: done for now." "Button: done for now", standing on the floor of his swatch in
+Settings "for variety's sake". "Gargle: much better. Can be largely left alone", and recognisable under deep snow.
+Phase is "a cool, slightly-transparent ghost creature": see-through, opacity "shifting" in his moves, "tiny
+adjustments to his body (not his face!)", "I really do like him so don't ruin him", one mound of snow, eyes that
+glow; "Can you also make Glim's tail glow": yes, the engine draws real light. Tuck asleep must look "relaxed … his
+eyes slightly bowed apart" (0.9.7's hanging eyes were "extremely depressed"), and in the rain sits "in a little
+puddle" with "water pool[ed] up in his pot". Quill has 0.9.6's face ("a tad more friendly … but be careful"). Nod:
+"I love his character and he's essentially done apart from his eyes"; **no creature has a single pixel for an open
+eye** ("an art style where none of the characters have just single-pixel dots for eyes"); his rain is 0.9.6's
+canopy, held ("the new umbrella in 0.9.7 is terrible"). The Flipboard: "Switchboards should grow/scroll
+horizontally, not vertically", the Add switch outline "at the right end of each Switchboard scroll", the ungrouped
+switches two across at the top and "collapsible", "some kind of mild background UI" per board that shows "at all
+times when the board is fully green/which switches in the order are red … small red and green dots in a row", with
+"a backup UI plan" for many switches. The supervisor's own choices that round, which George may reverse: Nod's
+handle is four pixels with his hand on its end (without it: one line in `123-quill-nod/workshop/nbuild.py`); Tuck
+asleep keeps his daytime head with his shut eyes one row lower (the alternate shown was a taller V); Quill's three
+friendlier pixels; Phase's tail thins to a wisp, his crown is 72% there and his hem a quarter, the halo is a pixel
+wide; water is #4CA6FF, #DDF1FF and #1F6FE0; a row's tiles are narrower than the ungrouped grid's so that a part of
+the next shows (two whole and a fifth on an iPhone 16), which sets aside his 2026-11-08 "all switches should be
+the same width" between the grid and the rows (one height everywhere, one width in each); the switch card opens
+under a row on the Mac and iPad; the loose switches' header says "Ungrouped"; five idles each that Nod and Quill do
+not play in the rain.
+
+## 8. Where things stand (2026-11-12, round 24 merged)
+
+**2026-11-12, round 24 merged for 0.9.8 (Fable 5.2 supervisor), the afternoon 0.9.7 was held back.** Briefs 121 to
+126 are merged on master (`dev/briefs/ROUND-24.md` has George's message): rain as blue water on all eight (beads,
+a drop that runs off, a puddle, a rain still asleep), Phase see-through with glowing eyes and opacity in his moves,
+the engine's glow, fade and thinning, Glim's lantern alight, Tuck asleep at rest and in a puddle in the rain,
+Quill's 0.9.6 face, Nod's two-pixel eyes and held canopy, Gargle under deep snow, Button on the floor of his
+swatch; and the Flipboard's Switchboards as sideways rows on panels with lights, the ungrouped switches folding
+away, the add jitter fixed. 0.9.7 was never uploaded: its section in `CHANGELOG.md` became 0.9.8's. No schema
+change. George releases with `scripts/release.sh --version 0.9.8 --quick`. Open: George's eye on the choices in §7;
+a row scrolled by trackpad and shift-wheel on a real Mac; the Duo's inner display (CoreDeviceService); "Shave"
+(round 20). Details in COMMON's Round 24 record. The next brief number is 127.
+
+### Round 23 (kept for the record; 0.9.7, prepared and not released)
 
 **2026-11-12, round 23 merged for 0.9.7 (Fable 5.2 supervisor), the morning 0.9.6 (26) was released.** Briefs 116 to
 120 are merged on master (`dev/briefs/ROUND-23.md` has George's message): Glim as 0.9.5 drew him with small
