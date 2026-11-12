@@ -146,7 +146,7 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertTrue(frames.contains("boo") && frames.contains("giggle"))
         let boo = rows("boo")
         XCTAssertEqual(boo[11].filter { $0 == "l" }.count, 2, "two fangs")
-        XCTAssertTrue(boo[0][3...6].contains("d"), "the far wing up behind his head")
+        XCTAssertTrue(boo[0...2].contains { $0[10...12].contains("d") }, "the far wing up beside the near one")
         XCTAssertEqual(gargle.flourishDuration(.plus), gargle.flourishDuration(.field))
     }
 
