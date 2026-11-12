@@ -52,6 +52,10 @@ struct ReminderPickerCard: View {
         span.totalMinutes == 60 ? "In 1 hour" : span.totalMinutes == 15 ? (short ? "In 15 min" : "In 15 minutes") : "In " + span.text
     }
 
+    /// "Later today…"; "Later…" in the short layout, where the three choices share a row 336 pt wide at the most and
+    /// "Later today…" left them 6 pt short of it with the chips' own padding (brief 114).
+    static func laterTitle(short: Bool) -> String { short ? "Later…" : "Later today…" }
+
     /// The offsets, in minutes before the time.
     static let offsetPresets: [Int] = [0, 5, 10, 15, 30, 60, 1440]
 
@@ -92,7 +96,7 @@ struct ReminderPickerCard: View {
 
     var body: some View {
         let short = isShort
-        VStack(alignment: .leading, spacing: short ? 5 : HITSpacing.s) {
+        VStack(alignment: .leading, spacing: short ? 6 : HITSpacing.s) {
             if let onMoment {
                 fromNowSection(onMoment)
                 sectionRule
@@ -121,32 +125,40 @@ struct ReminderPickerCard: View {
                             action: { onTime(preset.1) })
                 }
             }
-            HStack(alignment: .center, spacing: HITSpacing.s) {
-                if let fire = Self.fireText(day: day, time: time, offsetMinutes: offsetMinutes, now: now) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bell.fill").font(.system(size: 10, weight: .semibold))
-                        Text(fire).font(HITType.captionBold)
+            let fire = Self.fireText(day: day, time: time, offsetMinutes: offsetMinutes, now: now)
+            let clears = time != nil || reminderDate != nil
+            // The short layout keeps its room for the choices (brief 114): the general note goes, the hint that an offset
+            // needs a time stays; with neither, nor "Fires…" or "No reminder", the foot takes no room at all.
+            let notes = (offsetMinutes ?? 0) > 0 || !short
+            if fire != nil || clears || notes {
+                HStack(alignment: .center, spacing: HITSpacing.s) {
+                    if let fire {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bell.fill").font(.system(size: 10, weight: .semibold))
+                            Text(fire).font(HITType.captionBold)
+                        }
+                        .foregroundStyle(Theme.accent)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("reminderFires")
+                    } else if notes {
+                        Text((offsetMinutes ?? 0) > 0 ? "Pick a time too: the reminder counts back from it."
+                                                      : "Reminders arrive at the task’s time when notifications are on.")
+                            .font(HITType.caption)
+                            .foregroundStyle(Theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .foregroundStyle(Theme.accent)
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("reminderFires")
-                } else {
-                    Text((offsetMinutes ?? 0) > 0 ? "Pick a time too: the reminder counts back from it."
-                                                  : "Reminders arrive at the task’s time when notifications are on.")
-                        .font(HITType.caption)
-                        .foregroundStyle(Theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    if clears {
+                        Button("No reminder", role: .destructive, action: onClear)
+                            .buttonStyle(HITButtonStyle(.destructive, size: .small))
+                    }
                 }
-                Spacer(minLength: 0)
-                if time != nil || reminderDate != nil {
-                    Button("No reminder", role: .destructive, action: onClear)
-                        .buttonStyle(HITButtonStyle(.destructive, size: .small))
-                }
+                .padding(.top, short ? 2 : HITSpacing.xs)
             }
-            .padding(.top, short ? 2 : HITSpacing.xs)
         }
-        .padding(.horizontal, short ? HITSpacing.s : HITSpacing.m)
-        .padding(.vertical, short ? HITSpacing.s + 2 : HITSpacing.m)
+        // Brief 114: text and chips 12 pt from the card's border at the least, 16 where the card has the room.
+        .padding(.horizontal, short ? ReminderCardMetrics.shortInset : ReminderCardMetrics.inset)
+        .padding(.vertical, short ? ReminderCardMetrics.shortInset : ReminderCardMetrics.inset)
     }
 
     private func header(_ title: String) -> some View {
@@ -170,7 +182,7 @@ struct ReminderPickerCard: View {
     /// The short layout's offsets: three to a row, the custom minutes after "1 day" taking the rest of its row.
     private func shortOffsets(_ onOffset: @escaping (Int?) -> Void) -> some View {
         let presets = Self.offsetPresets
-        return Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 5) {
+        return Grid(alignment: .leading, horizontalSpacing: 6, verticalSpacing: 6) {
             GridRow { ForEach(presets[0..<3], id: \.self) { offsetChip($0, onOffset) } }
             GridRow { ForEach(presets[3..<6], id: \.self) { offsetChip($0, onOffset) } }
             GridRow {
@@ -194,7 +206,7 @@ struct ReminderPickerCard: View {
                         action: { onMoment(selected ? nil : .span(span)) })
                     .accessibilityIdentifier("reminderFromNow\(span.totalMinutes)")
             }
-            HITChip("Later today…", systemImage: "clock", tint: Theme.accent, isSelected: picked || picksLater,
+            HITChip(Self.laterTitle(short: isShort), systemImage: "clock", tint: Theme.accent, isSelected: picked || picksLater,
                     action: {
                         if picked { onMoment(nil); picksLater = false } else { picksLater.toggle() }
                     })
@@ -231,6 +243,12 @@ struct ReminderPickerCard: View {
     }
 }
 
+/// The card's insets (brief 114): 16 pt in the regular layout, 12 in the short one, never less.
+enum ReminderCardMetrics {
+    static let inset: CGFloat = HITSpacing.l
+    static let shortInset: CGFloat = HITSpacing.m
+}
+
 /// The offsets' last cell: a chip-sized box holding "[ 45 ] min" (before); Return sets it.
 private struct CustomOffsetField: View {
     /// The current offset when it isn't one of the presets.
@@ -250,7 +268,9 @@ private struct CustomOffsetField: View {
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: HITRadius.chip, style: .continuous)
         let selected = minutes != nil
-        HStack(spacing: 4) {
+        // Laid out as its neighbours are (brief 114): the icon, 5 pt, then "N min" as one label, the number's box as wide
+        // as what is typed in it, so "N" sits where "5" does in "5 min".
+        HStack(spacing: 5) {
             Image(systemName: "timer")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.accent)
@@ -258,8 +278,8 @@ private struct CustomOffsetField: View {
                 .textFieldStyle(.plain)
                 .font(HITType.control)
                 .monospacedDigit()
-                .multilineTextAlignment(.trailing)
-                .frame(width: 36)
+                .multilineTextAlignment(.leading)
+                .fixedSize()
                 .focused($isFocused)
                 .onSubmit(commit)
                 .accessibilityLabel("Custom minutes before")
@@ -268,8 +288,16 @@ private struct CustomOffsetField: View {
                 .font(HITType.control)
                 .foregroundStyle(selected ? Theme.accent : Theme.secondaryText)
                 .lineLimit(1)
+                // A word space after the number, as in "5 min": the Mac's field pads its text by a few points more.
+                #if os(macOS)
+                .padding(.leading, -4)
+                #else
+                .padding(.leading, -1)
+                #endif
         }
         .padding(.horizontal, HITSpacing.s + 2)
+        .contentShape(shape)
+        .onTapGesture { isFocused = true }
         .frame(height: HITChip.Size.regular.height)
         .background(shape.fill(selected ? Theme.accent.opacity(0.16) : .clear))
         .overlay(shape.strokeBorder(invalid ? HITColor.danger : isFocused ? Theme.accent : selected ? Theme.accent.opacity(0.45) : Theme.separator,

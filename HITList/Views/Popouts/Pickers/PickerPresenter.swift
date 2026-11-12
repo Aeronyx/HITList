@@ -184,7 +184,7 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
             // `arrowEdge` is the card's own edge that carries the arrow: its top for a card below the chip (measured on
             // the iPhone Duo simulator, iOS 27.1).
             .popover(isPresented: $isPresented, arrowEdge: placement.map { $0.edge == .below ? .top : .bottom }) {
-                PickerPopoverCard(kind: kind, room: placement?.room, card: card)
+                PickerPopoverCard(kind: kind, room: placement?.room, widest: placement?.width, card: card)
                     .presentationBackground(Theme.surface)
                     .presentationCompactAdaptation(.popover)
             }
@@ -200,18 +200,22 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 private struct PickerPopoverCard<Card: View>: View {
     let kind: PickerKind
     let room: CGFloat?
+    /// The screen's room across (`PhonePickerPlacement.Result.width`); nil: the card's own width.
+    let widest: CGFloat?
     let card: () -> Card
+
+    private var width: CGFloat { min(kind.width(room: room), widest ?? .infinity) }
 
     var body: some View {
         Group {
             if let room, !kind.selfScrolls {
                 ScrollView(.vertical) {
-                    card().frame(width: kind.width(room: room))
+                    card().frame(width: width)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .frame(maxHeight: room)
             } else {
-                card().frame(width: kind.width(room: room))
+                card().frame(width: width)
             }
         }
         .environment(\.pickerRoom, room)
