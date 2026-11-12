@@ -285,7 +285,8 @@ final class DuoCardsUITests: XCTestCase {
 
     func testWalk8SettingsPages() throws {
         try XCTSkipUnless(walks, "brief 107's walk runs only on demand (TEST_RUNNER_HITLIST_DUO_WALK=1)")
-        let pages: [(page: String, row: String, name: String)] = [
+        let pages: [(page: String, row: String?, name: String)] = [
+            ("settings-page-extras", nil, "Extras"),
             ("settings-page-iCloud", "settings-sync-log-row", "Sync log"),
             ("settings-page-iCloud", "settings-check-icloud", "Check iCloud"),
             ("settings-page-general", "settings-quick-add-guide", "Quick add guide"),
@@ -294,24 +295,24 @@ final class DuoCardsUITests: XCTestCase {
             ("settings-page-about", "settings-feedback", "Feedback"),
         ]
         for (size, name) in [("UICTContentSizeCategoryL", "default"), ("UICTContentSizeCategoryXL", "XL")] {
-            launch(extra: ["-UIPreferredContentSizeCategoryName", size])
+            // A fresh launch for each page: a card or sheet left over the last one (the feedback card) cannot stand in
+            // the way.
             for entry in pages {
+                launch(extra: ["-UIPreferredContentSizeCategoryName", size])
                 openSettings()
                 let page = element(entry.page)
-                guard scrollTo(page) else { note("no \(entry.page)"); closeSettings(); continue }
+                guard scrollTo(page) else { note("no \(entry.page)"); app.terminate(); continue }
                 page.tap()
                 pause()
-                let row = element(entry.row)
-                guard scrollTo(row) else { note("no \(entry.row)"); closeSettings(); continue }
-                row.tap()
-                pause(entry.name == "Check iCloud" ? 4 : 1.2)
+                if let id = entry.row {
+                    let row = element(id)
+                    guard scrollTo(row) else { note("no \(id)"); app.terminate(); continue }
+                    row.tap()
+                    pause(entry.name == "Check iCloud" ? 4 : 1.2)
+                }
                 shotDown("\(entry.name) \(name)")
-                closeSettings()
-                // A card or sheet over Settings (the feedback card) closes with its own Cancel or a tap above it.
-                tapIfExists(app.buttons["Cancel"].firstMatch, timeout: 1)
-                if element("settings-profile").exists { closeSettings() }
+                app.terminate()
             }
-            app.terminate()
         }
     }
 
