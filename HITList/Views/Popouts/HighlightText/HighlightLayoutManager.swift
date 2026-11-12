@@ -29,6 +29,17 @@ final class HighlightLayoutManager: NSLayoutManager {
     /// Called when the boxes change, so the view can redraw and refresh its cursor rects or pointer regions.
     var onRunsChange: (() -> Void)?
 
+    override init() {
+        super.init()
+        // Its own delegate, for where a line may break (`HighlightLineBreaks`).
+        delegate = self
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        delegate = self
+    }
+
     /// The runs that are drawn and can be hit: not inside the text being composed.
     var visibleRuns: [Int] {
         runs.indices.filter { index in
@@ -80,5 +91,23 @@ final class HighlightLayoutManager: NSLayoutManager {
             run.range = moved
             return run
         }
+    }
+}
+
+extension HighlightLayoutManager: NSLayoutManagerDelegate {
+    func layoutManager(_ layoutManager: NSLayoutManager, shouldBreakLineByWordBeforeCharacterAt charIndex: Int) -> Bool {
+        HighlightLineBreaks.allowsBreak(before: charIndex, in: (textStorage?.string ?? "") as NSString)
+    }
+}
+
+/// Where the title may wrap. TextKit takes a "!" for the end of a word, so "!30mb" at a line's end left the "!" on
+/// one line and "30mb" on the next, its highlight in two pieces (round 25, on the iPhone, in the very title a friend
+/// had typed). A "!" stays with the word it starts ("!30mb", "!at", "!!1"): the line breaks before the "!" instead.
+/// A "!" that ends a sentence has a space after it and wraps as it always did.
+enum HighlightLineBreaks {
+    static func allowsBreak(before index: Int, in text: NSString) -> Bool {
+        guard index > 0, index < text.length, text.character(at: index - 1) == 0x21 else { return true }
+        guard let next = Unicode.Scalar(text.character(at: index)) else { return false }
+        return CharacterSet.whitespacesAndNewlines.contains(next)
     }
 }
