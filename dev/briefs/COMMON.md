@@ -66,6 +66,86 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 24 (2026-11-12, midday; briefs 121–126 in parallel, all six at once; `ROUND-24.md` says why)
+0.9.7 was prepared and not released; this round is **0.9.8**: rain that is rain, a ghost you can see through, eyes
+that are not dots, and Switchboards in rows. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is awake and has said "Please work freely":
+nobody waits for him, and the supervisor forwards your sheet to him the moment it arrives. **No schema change.**
+- **The rule of four rounds: change the least that answers his words.** A creature George has seen is his. Of
+  0.9.7 he wrote "Glim: done", "Hush: done for now", "Button: done for now", "Gargle: much better. Can be largely
+  left alone", "Phase: almost there … I really do like him so don't ruin him please", "Tuck: almost done", "Be
+  careful with Nod too please as I love his character and he's essentially done apart from his eyes". So: outside
+  what your brief names, no pixel of a plain, heat, snow or asleep frame changes, and you say in your report that
+  none did. Judge every change **at 1x beside 0.9.7's frame**.
+- Ownership (a session owns its characters' files, their own test files, their own line in `ThemeCompanion.seats`
+  and their own cases in the shared companion tests; nothing else): 121 `phase-ether` `Characters/Phase.swift`,
+  **the engine** (`CompanionCharacter.swift`, `CompanionSprite.swift` and what the glow and the fade need in
+  `CompanionPerch`/`CompanionDirector`; nobody else touches these) and the one `glow:` argument of Glim's
+  `CompanionCharacter(` call. 122 `tuck-rest` `Characters/Tuck.swift`. 123 `quill-nod` `Characters/Quill.swift`,
+  `Characters/Nod.swift`. 124 `gargle-button-rain` `Characters/Gargle.swift`, `Characters/Button.swift`, and the new
+  placement in `Views/Settings/ThemeCompanion.swift` with its tests. 125 `hush-glim-rain` `Characters/Hush.swift`,
+  `Characters/Glim.swift` (its frames and modes; not the `CompanionCharacter(` call's arguments). 126
+  `flipboard-rows` `Views/Flipboard/*`, the Flipboard's tests and UI tests. In a shared test file change only the
+  lines that name your creature. Nobody: `scripts/`, `dev/`, `CHANGELOG.md`, `WhatsNew.swift`, the What's New pin,
+  the models' shape.
+- **Water, for every creature session.** George: "Their rain interactions don't make much visual sense, as the rain
+  is both not blue enough to be clear that it's rain and also many of the characters don't even get rain on them to
+  begin with. During rain, they should have little droplets bead off of them every once in a while, and have some
+  droplets stick around or tiny puddles pool around their feet so it's clearer why they're cowering/hiding." Three
+  inks are on master for it, the same in every theme, never see-through, not counted among a creature's 4 to 6
+  colours: `p` water, a clear rain blue (#4CA6FF); `h` its glint (#DDF1FF); `u` its deep tone (#1F6FE0)
+  (`CompanionInk.water`, `.waterLight`, `.waterDeep`; add them to your workshop's palette). What each creature does
+  about the rain (round 23: Nod's umbrella, Gargle's wing, Button's cap, Quill's tail, Hush's hood, Glim's lantern
+  in his lap) stays; the water is why it does it. In every rain still, awake and asleep, both places:
+  1. **Wet.** Two to four beads that stay: single `p` pixels (one that hangs is two tall, `p` over `u`; where the
+     light catches, `h` over `p`) where water would sit or hang: along the top of what shelters it, on a brow, a
+     nose, an ear tip, a shoulder, a rim. Not in a row, not mirror-symmetric, never on an eye or a mouth, never on
+     a pixel a blink, a glance or the reply to a tap changes (a gesture plays over the rain still only where it
+     leaves the still's own pixels alone: after your change the blink, the reply to a tap and most idles must still
+     play in the rain; say which no longer do).
+  2. **A puddle at its feet.** On the surface it sits on (the last row above `seatRow`), beside or around its
+     feet: four to eight pixels wide and one high (two where it pools), `p` with one `h` glint and a `u` pixel at
+     an end or in the creature's shadow, its ends ragged. A puddle, not a plinth: never a band under the whole
+     creature, never wider than the creature, no pixel hanging in the air past the shoulder of the "+" (look on the
+     real "+" profile, `CompanionSeatTests` and the workshops model it, and on the Mac's field). Where the creature
+     sits is unchanged (`CompanionPerch` lines it up by its plain `rest` frame).
+  3. **A drop runs off, now and then.** A gesture with `sky: .rain`, marked `flicker` (asleep every gesture is
+     one), under a second: a bead swells at an edge (a rib of the canopy, a wing tip, the cap's rim, an ear, a
+     nose), lets go, falls (one drop, `h` over `p` or a single `p`; the only thing ever in the air, and only one at
+     a time), lands in the puddle, whose glint jumps or which widens a pixel for a tick, and the still is back. A
+     rarer second one may run down the creature itself.
+  4. **Nothing blinks out.** Every frame drawn whole for the rain (the rain routines' own frames, gestures with a
+     sky) carries the puddle, and the beads where that surface is still there. Stamp them with a script.
+  5. **Blue only.** No drop anywhere is left in `l`, `m`, `a`, `w` or a snow ink: recolour the ones already drawn.
+  6. **Asleep in the rain** every creature has a still of its own (`Mode(rain:)` in the asleep mode; today only Nod
+     has one): the asleep pose, sheltered its own way where that makes sense asleep, beads, the puddle, and the
+     drop that runs off, slower.
+  7. It must read at real size: on the "+" and on the Mac's field at 1x, beside 0.9.7's rain still, a stranger
+     says "it is raining on it". Snow is not touched this round except where a brief names it.
+- **Eyes.** George: "an art style where none of the characters have just single-pixel dots for eyes". No creature's
+  open eye is one pixel. Round 22's rule stands: the large round black eye with a glint is Button's alone.
+- **A real glow** (121 builds it): a creature may name inks that cast a soft halo of their own colour (Phase's
+  eyes, Glim's lantern). Nobody else draws light with it this round.
+- **The clock**: your brief names when your sheet and your report are due, counted from your start
+  (`TZ=America/New_York date`). Work in the brief's order, commit each item as it becomes whole; ten minutes before
+  the report time stop starting things, run your tests, write the report. Fewer moves, all good, beats many.
+- **The sheet**: small, and at real size. Before and after (0.9.7's frame beside yours) at 1x, 2x and 3x on the
+  "+" in the creature's own theme and once on the Mac's field. Send the supervisor its path and your pick with one
+  line of why (reply to the message that started you), and carry on with your pick; the supervisor stops you only
+  if it is wrong. The supervisor may send you rows it has drawn itself: they are the starting point, not a
+  suggestion.
+- The supervisor's tools, for any session: `round-23/draw/kit.py` (rows to a picture on a "+" at 1x to 3x) and
+  `round-23/draw/view.py <Swift file> <theme> <seatRow> <out.png> frame…` in the shared notes folder; round 23's
+  workshops there (`116-glim-subtle/workshop`: `carry.py` stamps touches onto every frame without moving a pose,
+  `plays.py`/`ticks.py` say what still plays in a weather; `117-gargle-pup/workshop`, `118-phase-sheet/workshop`,
+  `119-tuck-quill/workshop`, `120-nod-button-weather/workshop`).
+- Everything in Round 23's and Round 22's blocks below still holds: the format's limits (20 × 20, 4 to 6 own inks,
+  accent and warm never both, a small gesture changes 16 pixels at most, a frame drawn nowhere is an error),
+  creature sessions build little and use no simulator (one `scripts/test.sh macos` at the end, one look in a Debug
+  Mac app of your own with `HITLIST_STORE_SUFFIX=sNN` if the clock allows, quit it and unregister its extensions),
+  original characters only, the shared notes folder (your pictures in a folder named after your brief), never touch
+  George's `/Applications/HITList.app`, never push or merge.
+
 ## Round 23 (2026-11-12, mid-morning; briefs 116–120 in parallel, all five drawing; `ROUND-23.md` says why)
 0.9.6 (26) is released; this round is **0.9.7**: the creatures, a third time. Sessions are Opus 5.5 (commits end
 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is awake and
