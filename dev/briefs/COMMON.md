@@ -414,7 +414,16 @@ change.
   the days beside Today use the lists' headers and rows, the sidebar steps aside after an unfold with the editor
   open. `-duoStandInSize inner` draws the app at 669 × 951 on an iPad mini; `DuoInnerUITests` (on demand).
 - **The supervisor**: each creature's name under its theme (`ThemeSwatchButton`; the grid and the first screen's
-  group spacing give back the height, 719.7 of 720 pt); the format's header line for Button's spores.
+  group spacing give back the height, 719.7 of 720 pt); the format's header line for Button's spores. **Found on
+  the merged tree by brief 93's walk on the Duo simulator, not by any session's tests:** after one quick add a
+  second in a row did not open. 106 hid the upright island while the keyboard was up by switching its opacity, hit
+  testing and accessibility off and on in place; once the keyboard had gone the "+" reported the whole column as its
+  frame (a tap aimed at it landed on whatever lay under the column's middle), and `IslandAddButton`'s own comment
+  already warned that interactive glass ignores the first tap after hit testing returns. The column is now taken
+  out and put back new (`MobileShell`), with `DuoColumnUITests.testThreeQuickAddsInARow`. Also there: Browse's
+  profile is its picture alone in the title's row, because with a name beside it the system shrank "Browse" to
+  three quarters of every other title. The walk's text notes ("no card for…", "no + for…") were the evidence: read
+  them, not only its pictures.
 What worked: concept sheets again. Button's pick was right the first time; Gargle's first pick (a profile, one eye,
 "the only one that reads as a gargoyle") was sent back within minutes with a stop: the three-quarter pup with his
 face toward you is the resting pose and the profile is his statue. A note between sessions (108 to 107: the open
