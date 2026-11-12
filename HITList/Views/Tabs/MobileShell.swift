@@ -138,7 +138,7 @@ struct MobileShell: View {
             }
             // On the system's centre line: under the camera, as its own controls are.
             .offset(x: IslandPlacement.sideOffset(columnWidth: column, cameraCentre: cameraCentre(placement)))
-            .padding(.bottom, IslandMetrics.bottomGap)
+            .padding(.bottom, IslandMetrics.bottomGap + BarColumnDebug.statusPad)
             .frame(width: column)
             .ignoresSafeArea(.container, edges: edge == .leading ? .leading : .trailing)
             .transition(.opacity)

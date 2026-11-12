@@ -20,7 +20,9 @@ struct AppearanceSettingsSection: View {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { store.select(palette) }
             }
             .padding(.horizontal, HITSpacing.l)
-            .padding(.bottom, HITSpacing.m)
+            // Each theme has two names under it since round 21 (its own and its companion's): the grid gives back
+            // what it can (here, between its rows and above them) so the iPhone's first screen still fits.
+            .padding(.bottom, HITSpacing.s)
             Toggle(isOn: $reduceEffects) {
                 HITMenuRowLabel("Reduce effects", subtitle: Self.reduceEffectsSubtitle, systemImage: "sparkles")
             }
@@ -46,10 +48,14 @@ struct ThemeSwatchRow: View {
     @AppStorage(Preferences.companions, store: AppGroup.defaults) private var companionsOn = true
 
     static let columns = 4
+    /// Between a row's names and the next row's swatches (more where a companion rises there), and above the first
+    /// row's highest companion.
+    static let rowSpacing: CGFloat = 6
+    static let companionTop: CGFloat = 6
 
     var body: some View {
-        ThemeSwatchGrid(columns: Self.columns, spacing: HITSpacing.s, rowSpacing: HITSpacing.s,
-                        cellContentWidth: ThemeSwatch.outerSide(side))
+        ThemeSwatchGrid(columns: Self.columns, spacing: HITSpacing.s, rowSpacing: Self.rowSpacing,
+                        cellContentWidth: ThemeSwatch.outerSide(side), companionTop: Self.companionTop)
         {
             ForEach(palettes) { palette in
                 let companion = companionsOn ? ThemeCompanion.character(for: palette, among: palettes) : nil
@@ -156,13 +162,18 @@ struct ThemeSwatchGrid: Layout {
     }
 }
 
-/// One theme to pick: the swatch (with its companion, if any) and its name under it, pressed down a little while
-/// clicked. The companion is part of the picture, never of the button's words.
+/// One theme to pick: the swatch (with its companion, if any), its name under it and, under that, the name of the
+/// companion that lives there (George, round 21: "display creature names next to/under each Theme name in small
+/// font"), pressed down a little while clicked. With companions off there is no creature and no second name.
 struct ThemeSwatchButton: View {
     /// A theme's name wraps onto a second line rather than truncating; a single word too long for its cell shrinks a
     /// little instead (at the largest text size every name's longest word fits a 76 pt cell, "Midnight" 72 pt).
     static let nameLines = 2
     static let nameMinimumScale: CGFloat = 0.85
+    /// Between the theme's name and its companion's: the two read as one label, the creature's the quieter line.
+    static let companionNameGap: CGFloat = -1
+    /// How much quieter: the secondary text, dimmed, so it is never mistaken for a second theme name.
+    static let companionNameOpacity: Double = 0.72
 
     let palette: ThemePalette
     let isSelected: Bool
@@ -172,23 +183,44 @@ struct ThemeSwatchButton: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: HITSpacing.xs) {
+            VStack(spacing: Self.swatchGap) {
                 ThemeSwatch(palette: palette, isSelected: isSelected, side: side, companion: companion)
-                // Two lines when the text size needs them (brief 99: "Tokyo Night" truncated under its swatch at XL);
-                // every name is one line at the default size, so nothing moves there.
-                Text(palette.name)
-                    .font(isSelected ? HITType.caption2Semibold : HITType.caption2)
-                    .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(Self.nameLines)
-                    .minimumScaleFactor(Self.nameMinimumScale)
+                VStack(spacing: Self.companionNameGap) {
+                    // Two lines when the text size needs them (brief 99: "Tokyo Night" truncated under its swatch at
+                    // XL); every name is one line at the default size, so nothing moves there.
+                    Text(palette.name)
+                        .font(isSelected ? HITType.caption2Semibold : HITType.caption2)
+                        .foregroundStyle(isSelected ? HITColor.text : Theme.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(Self.nameLines)
+                        .minimumScaleFactor(Self.nameMinimumScale)
+                    if let companion {
+                        Text(companion.name)
+                            .font(HITType.caption2)
+                            .foregroundStyle(Theme.secondaryText.opacity(Self.companionNameOpacity))
+                            .lineLimit(1)
+                            .minimumScaleFactor(Self.nameMinimumScale)
+                            .accessibilityIdentifier("theme-companion-\(palette.id)")
+                    }
+                }
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(ThemeSwatchPressStyle())
+        // The label stays "Slate theme" (tests and Voice Control find it by that); the creature is its value.
         .accessibilityLabel("\(palette.name) theme")
+        .accessibilityValue(Self.accessibilityValue(companion: companion))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// Between the swatch's ring and the names under it.
+    static let swatchGap: CGFloat = 2
+
+    /// What VoiceOver says after "Slate theme": "Companion: Nod" (nothing with companions off).
+    static func accessibilityValue(companion: CompanionCharacter?) -> String {
+        guard let companion else { return "" }
+        return "Companion: \(companion.name)"
     }
 }
 
