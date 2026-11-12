@@ -45,16 +45,17 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertGreaterThan(warmPixels("sleepDream"), ember, "a dream brightens it")
     }
 
-    /// Its flickers are a blink and its light flickering, and one for each of rain and heat (a drop off its lantern,
-    /// a bead of sweat); everything else plays inside its routines.
+    /// Its flickers are a blink and its light flickering, a mouse's sniffs and a lamplighter's small moves (brief 105:
+    /// a paw steadying the lantern, its flame cupped back to life), and one for each of rain and heat (a drop off its
+    /// lantern, a bead of sweat); its glances play only inside its routines.
     func testItsFlickersAreABlinkAndItsLight() throws {
         for place in CompanionPlace.allCases {
             let mode = glim.posture(place).awake
-            // Brief 100: its glances, sniff and ear are idles too.
             XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name },
-                           ["blink", "flicker", "glance", "lookDown", "sniff", "ear", "lookUp", "drop", "sweat"], "\(place)")
+                           ["blink", "flicker", "sniff", "air", "paw", "cup", "drop", "sweat"], "\(place)")
             let skies = mode.gestures.filter(\.flicker).map { $0.sky?.rawValue ?? "every sky" }
-            XCTAssertEqual(skies, Array(repeating: "every sky", count: 7) + ["rain", "heat"], "\(place)")
+            XCTAssertEqual(skies, Array(repeating: "every sky", count: 6) + ["rain", "heat"], "\(place)")
+            XCTAssertEqual(mode.routines.filter(\.little).map(\.name), ["gutter", "swingStill", "sniffPeer", "lightCheck"], "\(place)")
             XCTAssertGreaterThanOrEqual(mode.gestures.count, 5, "\(place): five gestures or more")
         }
         // The flicker changes only the lantern's own warm pixels: the light dims, nothing else moves.
@@ -143,12 +144,8 @@ final class CompanionGlimTests: XCTestCase {
                                    act: CompanionAct(kind: .gesture(flicker), start: start))
         let pose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: stage)
         XCTAssertEqual(pose.frame, glim.index["dim@rain"])
-        // Its ear in the snow is drawn with the dusting on it, too.
-        let ear = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "ear" })
-        let snowStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .snow),
-                                       act: CompanionAct(kind: .gesture(ear), start: start))
-        let earPose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: snowStage)
-        XCTAssertEqual(earPose.frame, glim.index["ear@snow"])
+        // Its ear in the snow (in its wash, brief 105) is drawn with the dusting on it, too.
+        XCTAssertEqual(glim.drawnIndex("ear", over: "snow", rest: "rest"), glim.index["ear@snow"])
         // The rain's own flicker, a drop gathering under the lantern it holds, is drawn whole.
         let drop = try XCTUnwrap(mode.gestures.firstIndex { $0.name == "drop" })
         let dropStage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: false, weather: .rain),

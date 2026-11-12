@@ -85,10 +85,11 @@ final class CompanionPhaseTests: XCTestCase {
             XCTAssertNotEqual(posture.asleep.answer.ticks, awake.answer.ticks, "\(at): woken, not just looking")
         }
         XCTAssertFalse(phase.flourishTurns)
+        // Brief 105: sudden, and no glance about: it pops out of the button and ducks back to its eyes.
         XCTAssertEqual(phase.plus.awake.gestures.filter(\.flicker).filter { $0.sky == nil }.map(\.name),
                        ["blink", "slowBlink", "sly", "grin", "tongue", "wink", "flick"])
         XCTAssertEqual(phase.plus.awake.routines.map(\.name),
-                       ["peek", "blinkOut", "sideEye", "wisp", "glance", "teehee", "popUp", "slip", "boo", "sneak",
+                       ["peek", "blinkOut", "sideEye", "wisp", "popOut", "duck", "teehee", "popUp", "slip", "boo", "sneak",
                         "float", "catch", "thunder", "flake", "phaseOff", "cool"])
     }
 
