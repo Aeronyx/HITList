@@ -46,7 +46,7 @@ enum ThemeCompanion {
         "hush": Seat(placement: .peeking, along: 0.4),
         // Tokyo Night: Glim on the card, its lantern hanging over the card's edge.
         "glim": Seat(placement: .onCard, along: 0.3),
-        // Mocha: Phase asleep on the accent dot, a soft heap of cloth, its point flopped over (round 22).
+        // Mocha: Phase asleep over the accent dot, the sheet hovering low and slack a pixel above it (round 23).
         "phase": Seat(placement: .asleepOnDot, along: 0.7),
         // Rosé: Button stands on the card's edge on its boots, left of the dot (round 22: 0.9.4's drawing, standing).
         "button": Seat(placement: .onCard, along: 0.3),
