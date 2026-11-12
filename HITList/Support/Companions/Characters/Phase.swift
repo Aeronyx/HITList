@@ -2055,6 +2055,10 @@ extension CompanionCharacter {
             Gesture(name: "tongue", ticks: Self.ticks(("tongue", 5)), flicker: true),
             Gesture(name: "wink", ticks: Self.ticks(("wink", 4)), flicker: true),
             Gesture(name: "flick", ticks: Self.ticks(("flick", 2), ("rest", 1), ("flick", 2)), flicker: true),
+            // Brief 105: sudden. It snaps down to its eyes and back up grinning; for a moment it goes a shade more
+            // see-through.
+            Gesture(name: "duck", ticks: Self.ticks(("peek", 3), ("grin", 4)), flicker: true),
+            Gesture(name: "shade", ticks: Self.ticks(("fadeHalf", 5)), flicker: true),
             Gesture(name: "half", ticks: Self.ticks(("half", 3))),
             Gesture(name: "fall", ticks: Self.ticks(("rainFall1", 1), ("rainFall2", 1), ("rainFall3", 1), ("rainFall4", 1)), flicker: true, sky: .rain),
             Gesture(name: "drip", ticks: Self.ticks(("heatDrip1", 2), ("heatDrip2", 2)), flicker: true, sky: .heat),
@@ -2102,11 +2106,8 @@ extension CompanionCharacter {
             .play(("curl", 3), ("curl2", 2), ("curl", 2)),
             .gesture("blink"),
         ]),
-        Routine(name: "glance", little: true, steps: [
-            .gesture("blink"),
-            .play(("lookL", 4), ("lookR", 4)),
-            .gesture("blink"),
-        ]),
+        // Brief 105, sudden: a blink's worth of sinking and it pops right up out of the button, and drops back grinning.
+        Routine(name: "popOut", little: true, steps: [.play(("half", 1), ("peek", 2)), .play(("risen", 3)), .play(("grin", 3)), .hold(1)]),
         Routine(name: "teehee", little: true, steps: [
             .gesture("tongue"),
             .gesture("wink"),
