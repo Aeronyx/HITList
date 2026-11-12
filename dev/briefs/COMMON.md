@@ -66,6 +66,59 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 25 (2026-11-12, late afternoon; briefs 127–131 in parallel, all five at once; `ROUND-25.md` says why)
+0.9.8 was prepared and not released; this round is **0.9.9**: a reminder a friend could not set from the editor, a
+gryphon cub in Gargle's place, Phase's black eyes, Nod's canopy without its handle, Tuck asleep with a mouth, and
+new seats on the theme boxes in Settings. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George has the build in hand and is not waiting:
+nobody waits for him, and the supervisor forwards your sheet to him the moment it arrives. **No schema change.**
+- **Gargle is Flint.** Renamed on master before you were started: `id: "flint"`, `Characters/Flint.swift`,
+  `CompanionFlintTests.swift`, `-companion flint`. Notes-folder paths with "gargle" in them are old folders and
+  keep their names.
+- **The rule of five rounds: change the least that answers his words.** Of 0.9.8 he wrote: "Hush, Quill, Glim, and
+  Button are all looking good along with the new weather effects"; of Phase "The other opacity and design changes
+  you made for him are great"; of Tuck "I just want him to look at peace". So outside what your brief names, no
+  pixel of any frame changes, and your report says none did. Judge every change **at 1x beside 0.9.8's frame**
+  (master as you were cut from it) and beside the build he names.
+- Ownership (a creature session owns its characters' files, their own test files and their own cases in the shared
+  companion tests; nothing else): 127 `phrases-on-a-task` the quick-add parser, the task editor's title and every
+  parser call site its brief lists, with their tests. 128 `flint` `Characters/Flint.swift`, `CompanionFlintTests`,
+  the one comment in `CompanionCast.swift`. 129 `phase-eyes` `Characters/Phase.swift`, `CompanionPhaseTests`,
+  Phase's cases in `CompanionLightTests`. 130 `nod-tuck` `Characters/Nod.swift`, `Characters/Tuck.swift`,
+  `CompanionTuckTests`. 131 `swatch-seats` `Views/Settings/ThemeCompanion.swift` (every seat, Flint's and Tuck's
+  included), what `AppearanceSettingsSection.swift` needs for a sprite to hang outside its box, the `ThemeCompanion`
+  tests in `SettingsTests.swift`, and swatch-only frames appended to `Quill.swift` and `Glim.swift`. **Nobody
+  touches the engine** (`CompanionCharacter.swift`, `CompanionSprite.swift`, `CompanionPerch`, `CompanionDirector`):
+  if you think you must, stop and tell the supervisor. In a shared test file change only the lines that name your
+  creature. Nobody: `scripts/`, `dev/`, `CHANGELOG.md`, `WhatsNew.swift`, the What's New pin, the models' shape.
+- **Everything in Round 24's block below still holds**: the water recipe (three inks `p h u`, beads that stay, a
+  puddle on the flat of the "+", a drop that runs off, every whole rain frame carrying the water, blue only, a
+  rain still asleep), no open eye is a single pixel, the large round black eye with a glint is Button's alone, a
+  real glow only where a brief says, the format's limits (20 × 20, 4 to 6 own inks, accent and warm never both, a
+  small gesture changes 16 pixels at most, a frame drawn nowhere is an error), original characters only.
+- **The clock**: your brief names when your sheet and your report are due, counted from your start
+  (`TZ=America/New_York date`). Work in the brief's order, commit each item as it becomes whole; ten minutes before
+  the report time stop starting things, run your tests, write the report. Fewer moves, all good, beats many.
+- **The sheet**: small, and at real size: before and after at 1x, 2x and 3x on the "+" in the creature's own theme
+  and once on the Mac's field. Send the supervisor its path and your pick with one line of why
+  (`mcp__ccd_session_mgmt__send_message`, `session_id: "parent"`), and carry on with your pick; the supervisor
+  stops you only if it is wrong. The supervisor may send you rows it has drawn itself: they are the starting
+  point, not a suggestion.
+- **Tools**, in the shared notes folder: `round-25/draw/kit.py` (rows to a picture on a "+" at 1x to 3x, water inks
+  included), `view.py <Swift file> <theme> <seatRow> <out.png> frame…`, `cast.py <out.png> Name:theme:seatRow:frame…`
+  (several creatures side by side, each in its own theme: the line-up); `round-25/cast-rest.png` and
+  `round-25/settings-grid-0.9.8.png` are what the supervisor looked at. Earlier workshops are there by brief
+  (`116-glim-subtle/workshop/carry.py` stamps touches onto every frame without moving a pose, `plays.py` and
+  `ticks.py` say what still plays in a weather; `121-phase-ether`, `122-tuck-rest`, `123-quill-nod`,
+  `124-gargle-button-rain` hold round 24's generators). Themes and seat rows: slate nod 17, graphite flint 18,
+  midnight quill 16, moss tuck 20, nord hush 17, tokyo glim 15, mocha phase 20, rose button 19.
+- **The machine**: creature sessions (128, 129, 130) draw first, build little and use no simulator: one
+  `scripts/test.sh macos` at the end, one look in a Debug Mac app of your own with `HITLIST_STORE_SUFFIX=sNN` if
+  the clock allows (build it with `-derivedDataPath build.noindex/mac-sNN`, `open -g -n`, quit it by its pid,
+  never George's `/Applications/HITList.app`). 127 and 131 each make one simulator of their own (`HITList-NN`),
+  boot it only when they first need it, and delete it at the end. Find your own processes with `pgrep -x HITList`,
+  never `pgrep -f`. Your pictures go in a folder named after your brief in the notes folder. Never push or merge.
+
 ## Round 24 (2026-11-12, midday; briefs 121–126 in parallel, all six at once; `ROUND-24.md` says why)
 0.9.7 was prepared and not released; this round is **0.9.8**: rain that is rain, a ghost you can see through, eyes
 that are not dots, and Switchboards in rows. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
