@@ -161,6 +161,20 @@ final class DuoCardsTests: XCTestCase {
         XCTAssertFalse(PickerKind.date.selfScrolls)
     }
 
+    // MARK: Cards that grow
+
+    func testTheSwitchCardsQuestionMakesTheKeyboardStepAsideOnTheDuo() {
+        // The Duo's outer display: the card's top at 74 over the keyboard; with the question it reached -6.
+        XCTAssertFalse(FloatingCardFit.questionFits(cardTop: 74, areaTop: 0, inset: 12))
+        // Dropped to the foot of the screen with the keyboard, its top at 362: room.
+        XCTAssertTrue(FloatingCardFit.questionFits(cardTop: 362, areaTop: 0, inset: 12))
+    }
+
+    func testOnAnIPhone16TheKeyboardStaysUpForTheQuestion() {
+        // George's iPhone 16: the card's top at 227 under a 59 pt status bar; with the question at 147.
+        XCTAssertTrue(FloatingCardFit.questionFits(cardTop: 227, areaTop: 59, inset: 12))
+    }
+
     // MARK: Review Inbox
 
     func testReviewCalendarHangsUnderTheTitleOnTheDuo() {

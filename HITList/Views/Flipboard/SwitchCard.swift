@@ -38,6 +38,10 @@ struct SwitchCard: View {
     var isClosing = false
     /// The name has the keyboard when the card opens (adding; editing on the Mac).
     var focusesName = true
+    /// The keyboard has stepped aside for the Discard question (brief 107): the name does not ask for it meanwhile.
+    var keyboardSteppedAside = false
+    /// Bumped by the host to give the name the keyboard again (it stepped aside for the Discard question; brief 107).
+    var nameFocusRequest = 0
     /// × or Escape: the host decides (close, ask, or discard).
     var onClose: () -> Void
     /// Add or Save wrote this switch.
@@ -73,7 +77,9 @@ struct SwitchCard: View {
 
     init(editing: TaskItem?, style: Style, board: Switchboard? = nil, duplicating: TaskItem? = nil,
          isConfirmingDiscard: Bool = false, isClosing: Bool = false,
-         focusesName: Bool = true, onClose: @escaping () -> Void, onSaved: @escaping (TaskItem) -> Void,
+         focusesName: Bool = true, keyboardSteppedAside: Bool = false, nameFocusRequest: Int = 0,
+         onClose: @escaping () -> Void,
+         onSaved: @escaping (TaskItem) -> Void,
          onDraftChange: @escaping (Bool) -> Void = { _ in }, onDiscard: @escaping () -> Void = {},
          onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
@@ -83,6 +89,8 @@ struct SwitchCard: View {
         self.isConfirmingDiscard = isConfirmingDiscard
         self.isClosing = isClosing
         self.focusesName = focusesName
+        self.keyboardSteppedAside = keyboardSteppedAside
+        self.nameFocusRequest = nameFocusRequest
         self.onClose = onClose
         self.onSaved = onSaved
         self.onDraftChange = onDraftChange
@@ -184,6 +192,7 @@ struct SwitchCard: View {
         // again mid-update. The card's owner drops the keyboard from its action when the card goes:
         // `SwitchCard.dropKeyboard()`.)
         .onChange(of: isClosing) { _, closing in if closing { Self.dropKeyboard() } }
+        .onChange(of: nameFocusRequest) { _, _ in if !makingBoard, !isClosing { nameFocused = true } }
     }
 
     /// Takes the keyboard from whatever has it, at once. Call it from an action (a tap, a button), never from
@@ -224,7 +233,7 @@ struct SwitchCard: View {
         // The draft's own binding, as quick add's: typing fast lost a letter through a hand-made Binding.
         // After an Add on the Mac the empty name says what was added, until the next switch is typed or 3 s pass.
         TokenHighlightField(placeholder: added ?? "Switch name", text: $draft.text,
-                            tokens: read.tokens, priority: .p4, focus: $nameFocused, bordered: false,
+                            tokens: read.tokens, priority: .p4, focus: nameFocus, bordered: false,
                             onDisable: { token in
                                 withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.switchOff(token) }
                             },
@@ -233,6 +242,11 @@ struct SwitchCard: View {
                             },
                             onSubmit: save)
             .accessibilityIdentifier("switchName")
+    }
+
+    /// The name's focus, false while the keyboard has stepped aside for the Discard question.
+    private var nameFocus: Binding<Bool> {
+        Binding(get: { nameFocused && !keyboardSteppedAside }, set: { nameFocused = $0 })
     }
 
     /// "Every ‹3› days ⌄": the interval's number and unit.
