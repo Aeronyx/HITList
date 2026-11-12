@@ -773,7 +773,8 @@ struct BoardHeaderLayout: Layout {
     var gap: CGFloat = HITSpacing.m
     var lineSpacing: CGFloat = 3
 
-    private struct Arrangement {
+    /// Where the title, the lights and the line under the title go, and the header's size.
+    struct Arrangement: Equatable {
         var title: CGRect
         var lights: CGRect
         var below: CGRect?
@@ -797,37 +798,44 @@ struct BoardHeaderLayout: Layout {
         guard subviews.count >= 2 else { return Arrangement(title: .zero, lights: .zero, size: .zero) }
         let title = subviews[0], lights = subviews[1]
         let below = subviews.count > 2 ? subviews[2] : nil
-        let ideal = title.sizeThatFits(.unspecified)
-        let room = max(0, width - min(ideal.width, width) - gap)
-        let fitted = lights.sizeThatFits(ProposedViewSize(width: room, height: nil))
+        func offered(_ view: LayoutSubview) -> (CGFloat) -> CGSize {
+            { view.sizeThatFits(ProposedViewSize(width: $0, height: nil)) }
+        }
+        return Self.arrange(width: width, gap: gap, lineSpacing: lineSpacing, titleIdeal: title.sizeThatFits(.unspecified),
+                            title: offered(title), lights: offered(lights), below: below.map(offered))
+    }
+
+    /// The arithmetic, from what each part answers when offered a width. Pure, so tests pin it.
+    static func arrange(width: CGFloat, gap: CGFloat, lineSpacing: CGFloat, titleIdeal: CGSize,
+                        title: (CGFloat) -> CGSize, lights: (CGFloat) -> CGSize,
+                        below: ((CGFloat) -> CGSize)?) -> Arrangement {
+        let room = max(0, width - min(titleIdeal.width, width) - gap)
+        let fitted = lights(room)
         if fitted.width <= room + 0.5 {
             // One line: the lights beside the title, centred on its first line.
             let titleWidth = width - fitted.width - gap
-            let titleSize = title.sizeThatFits(ProposedViewSize(width: titleWidth, height: nil))
-            let firstLine = min(titleSize.height, ideal.height)
-            var top = max(titleSize.height, (firstLine + fitted.height) / 2)
+            let titleSize = title(titleWidth)
+            let firstLine = min(titleSize.height, titleIdeal.height)
             let lightsFrame = CGRect(x: width - fitted.width, y: (firstLine - fitted.height) / 2,
                                      width: fitted.width, height: fitted.height)
-            let titleFrame = CGRect(x: 0, y: 0, width: titleWidth, height: titleSize.height)
+            var top = max(titleSize.height, lightsFrame.maxY)
             var belowFrame: CGRect?
             if let below {
-                let size = below.sizeThatFits(ProposedViewSize(width: width, height: nil))
-                belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: size.height)
+                belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: below(width).height)
                 top = belowFrame!.maxY
             }
-            return Arrangement(title: titleFrame, lights: lightsFrame, below: belowFrame,
-                               size: CGSize(width: width, height: max(top, lightsFrame.maxY)))
+            return Arrangement(title: CGRect(x: 0, y: 0, width: titleWidth, height: titleSize.height), lights: lightsFrame,
+                               below: belowFrame, size: CGSize(width: width, height: top))
         }
         // The lights on a line of their own, under the title and the cadence.
-        let titleSize = title.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        let titleSize = title(width)
         var top = titleSize.height
         var belowFrame: CGRect?
         if let below {
-            let size = below.sizeThatFits(ProposedViewSize(width: width, height: nil))
-            belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: size.height)
+            belowFrame = CGRect(x: 0, y: top + lineSpacing, width: width, height: below(width).height)
             top = belowFrame!.maxY
         }
-        let own = lights.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        let own = lights(width)
         let lightsFrame = CGRect(x: 0, y: top + HITSpacing.xs, width: min(own.width, width), height: own.height)
         return Arrangement(title: CGRect(x: 0, y: 0, width: width, height: titleSize.height), lights: lightsFrame,
                            below: belowFrame, size: CGSize(width: width, height: lightsFrame.maxY))
