@@ -96,6 +96,10 @@ private struct DuoStandInFrame: ViewModifier {
                 ZStack(alignment: .topLeading) {
                     Color(white: 0.35)
                     content
+                        // The bar column as a safe area. It reaches the SwiftUI views (the board, the Duo's detail and
+                        // `ContentView` measure it) but not what UIKit lays out inside the split view (a list's cells),
+                        // so on the stand-in those run under the strip; the real column is UIKit's and reaches them.
+                        .safeAreaPadding(.trailing, onSide ? DuoDebug.sideBarColumn : 0)
                         .overlay(alignment: .trailing) {
                             if onSide {
                                 // Where the system's clock, battery and toolbar would stand.
@@ -109,9 +113,6 @@ private struct DuoStandInFrame: ViewModifier {
                         .clipped()
                 }
                 .statusBarHidden(onSide)
-                // The frame's edges as the window's safe area, in UIKit, where the real display's bars are: a SwiftUI
-                // padding never reached inside the split view's columns, which UIKit lays out.
-                .background(StandInSafeArea(screen: proxy.size, frame: size, trailingBar: onSide ? DuoDebug.sideBarColumn : 0))
             }
             .ignoresSafeArea(.container)
         } else {
@@ -122,39 +123,3 @@ private struct DuoStandInFrame: ViewModifier {
         #endif
     }
 }
-
-#if DEBUG && os(iOS)
-/// Sets the window's root controller's extra safe area so that, inside the stand-in's frame, UIKit sees the edges the
-/// inner display would have: the frame's own right and bottom edges, and on its side the bar column inside the right one.
-private struct StandInSafeArea: UIViewRepresentable {
-    let screen: CGSize
-    let frame: CGSize
-    let trailingBar: CGFloat
-
-    func makeUIView(context: Context) -> UIView { Probe() }
-
-    func updateUIView(_ view: UIView, context: Context) {
-        (view as? Probe)?.wanted = UIEdgeInsets(top: 0, left: 0,
-                                               bottom: max(0, screen.height - frame.height),
-                                               right: max(0, screen.width - frame.width) + trailingBar)
-        view.setNeedsLayout()
-    }
-
-    private final class Probe: UIView {
-        var wanted: UIEdgeInsets = .zero
-
-        override func layoutSubviews() {
-            super.layoutSubviews()
-            guard let root = window?.rootViewController else { return }
-            // The window's own insets (status bar, home indicator) stay; only what the stand-in adds is set.
-            let current = root.additionalSafeAreaInsets
-            if current != wanted { root.additionalSafeAreaInsets = wanted }
-        }
-
-        override func didMoveToWindow() {
-            super.didMoveToWindow()
-            setNeedsLayout()
-        }
-    }
-}
-#endif
