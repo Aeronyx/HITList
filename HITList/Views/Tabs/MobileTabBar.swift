@@ -154,6 +154,47 @@ enum IslandPlacement: Equatable {
     }
 }
 
+/// The iPhone Duo's outer display upright, down its bar column from the top (brief 106): the system's status (the camera
+/// island, the clock, the battery ring), Back on a pushed screen, then clear room, then our island and the "+" standing on
+/// the home indicator's gap. Summed against the display's height, so `MobileChromeTests` can show that nothing in the
+/// column touches anything else, during a call too. The system's parts are measured on the iPhone Duo simulator (iOS
+/// 27.1, 2026-11-11, `DuoColumnUITests`); ours are `IslandMetrics`'. The screen's own controls are not in the column
+/// (`ScreenControlsPlacement.titleRow`): `systemPill` is what they took there before.
+enum BarColumnBudget {
+    /// The outer display upright, safe areas included.
+    static let displayHeight: CGFloat = 678
+    /// Under the "+": the home indicator's safe area.
+    static let bottomSafeArea: CGFloat = 34
+    /// The system's status, from the display's top to the foot of the battery ring's dots.
+    static let status: CGFloat = 152
+    /// How much farther down a call or a timer pushes the status, and everything the system stacks under it (the friend's
+    /// screenshot: the camera island grows by about 55 pt).
+    static let callGrowth: CGFloat = 60
+    /// Back on a pushed screen: the system's gap under the status, then its 48 pt glass circle (174 to 222 pt down).
+    static let backGap: CGFloat = 22
+    static let back: CGFloat = 48
+    /// The screen's two controls as the system stacked them under Back before brief 106: its gap and its glass capsule.
+    static let systemPill: CGFloat = 12 + 98
+    /// The least clear room between two parts of the column.
+    static let minimumGap: CGFloat = 16
+
+    /// The upright island's top, from the display's top.
+    static var islandTop: CGFloat { displayHeight - bottomSafeArea - IslandMetrics.sideChromeHeight }
+
+    /// The foot of the system's last item in the column.
+    static func systemFoot(pushed: Bool, call: Bool) -> CGFloat {
+        var foot = status
+        if call { foot += callGrowth }
+        if pushed { foot += backGap + back }
+        return foot
+    }
+
+    /// The clear room between the system's last item and the island's top.
+    static func clearRoom(pushed: Bool, call: Bool) -> CGFloat {
+        islandTop - systemFoot(pushed: pushed, call: call)
+    }
+}
+
 /// HITList's bottom bar on iPhone (not the system `TabView` look): a floating capsule inset
 /// `IslandMetrics.sideInset` from the screen sides and `bottomGap` above the home indicator, four icons
 /// with Inter labels, the selected one in accent on a faint pill. The pill is one view that slides to the
@@ -188,6 +229,9 @@ struct MobileTabBar: View {
                 .overlay { capsule.strokeBorder(Theme.separator, lineWidth: 0.5) }
                 .contentShape(capsule)
                 .onAppear { TapHaptic.prepareSelection() }
+                #if DEBUG && os(iOS)
+                .onAppear { AccessibilityDump.startIfRequested() }
+                #endif
         } else {
             HStack(spacing: 0) { buttons }
                 .background { pill }

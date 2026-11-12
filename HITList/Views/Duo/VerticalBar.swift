@@ -61,3 +61,17 @@ private struct SystemVerticalBarEdge: ViewModifier {
     }
 }
 #endif
+
+/// Debug-only: `-duoStatusPad 60` stands in for a call (brief 106). A call or a timer widens the outer display's camera
+/// island and moves the system's status, and Back under it, about 60 pt down its bar column; the simulator has no call.
+/// The system's items can't be moved, so the upright island and its "+" move up by as much instead: the column's parts
+/// stand as close together as during a call (a gap at the column's foot is the only difference).
+enum BarColumnDebug {
+    static var statusPad: CGFloat {
+        #if DEBUG
+        CGFloat(max(0, UserDefaults.standard.double(forKey: "duoStatusPad")))
+        #else
+        0
+        #endif
+    }
+}
