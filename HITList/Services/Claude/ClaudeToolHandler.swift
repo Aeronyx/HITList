@@ -209,6 +209,11 @@ struct ClaudeToolHandler {
             task.hasDueTime = due.date != nil && due.hasTime
             if let rule = due.recurrence { task.recurrenceRule = rule } else if due.date == nil { task.recurrence = nil }
             TaskActions.syncRepeatTime(of: task)
+            // A reminder before the due time leans on the time (brief 127): with none it has nothing to count from,
+            // and stored it would come back the day a time is set again. One typed in the phrase is read.
+            if !task.hasDueTime { task.reminderOffsetMinutes = nil }
+            if let minutes = due.reminderOffsetMinutes { task.reminderOffsetMinutes = minutes > 0 ? minutes : nil }
+            if let at = due.reminderDate { task.reminderDate = at }
         }
         if let priority { task.priority = priority }
         if let labelNames {
@@ -233,7 +238,14 @@ struct ClaudeToolHandler {
         return .json(.object(reply))
     }
 
-    struct Due { var date: Date?; var hasTime: Bool; var recurrence: RecurrenceRule? }
+    struct Due {
+        var date: Date?
+        var hasTime: Bool
+        var recurrence: RecurrenceRule?
+        /// A reminder typed in the phrase ("fri 6pm !30mb", "fri !15m"): read as quick add reads it.
+        var reminderOffsetMinutes: Int? = nil
+        var reminderDate: Date? = nil
+    }
 
     /// A date phrase as quick add reads it ("friday 5pm", "every weekday 9am"), or "none" / "" to clear.
     func parseDue(_ value: JSONValue) throws -> Due {
@@ -247,7 +259,8 @@ struct ClaudeToolHandler {
         guard let date = parsed.dueDate, !kinds.isDisjoint(with: [.date, .time, .recurrence]), parsed.title == "x" else {
             throw ToolError("Couldn't read \"\(phrase)\" as a date. Try \"tomorrow\", \"fri 5pm\", \"jan 6\", \"in 3 days\" or \"every monday\".")
         }
-        return Due(date: date, hasTime: parsed.hasDueTime, recurrence: parsed.recurrence)
+        return Due(date: date, hasTime: parsed.hasDueTime, recurrence: parsed.recurrence,
+                   reminderOffsetMinutes: parsed.reminderOffsetMinutes, reminderDate: parsed.reminderDate)
     }
 
     // MARK: JSON for Claude
