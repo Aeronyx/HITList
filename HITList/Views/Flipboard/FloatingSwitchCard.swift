@@ -104,6 +104,25 @@ enum FloatingCardRequest: Identifiable, Equatable {
 /// read it when the card is tapped away from or closed.
 final class SwitchCardContent {
     var hasContent = false
+    /// The card's top and the top of the cover's safe area, on screen, measured as they change and read only when the
+    /// card asks Discard (brief 107), so measuring redraws nothing.
+    var cardTop: CGFloat = 0
+    var areaTop: CGFloat = 0
+}
+
+/// Whether a floating card still fits above the keyboard with its Discard question added at its foot (brief 107): the
+/// card stands on the keyboard and grows upward, and on the iPhone Duo's outer display (678 pt) the switch card's title
+/// went 6 pt past the display's top once the question was added. Where it would not fit the keyboard steps aside, as it
+/// does for quick add's question, and the card sits whole at the foot of the screen. Pure, so tests pin it.
+enum FloatingCardFit {
+    /// "Discard this switch?" over Keep editing and Discard, under a hairline: two lines on a phone (77 pt measured).
+    static let questionHeight: CGFloat = 80
+
+    /// `cardTop`: the card's top on screen without the question; `areaTop`: the top of the screen's safe area; `inset`:
+    /// the card's distance from the keyboard, kept from the top of the area too.
+    static func questionFits(cardTop: CGFloat, areaTop: CGFloat, inset: CGFloat) -> Bool {
+        cardTop - questionHeight >= areaTop + inset
+    }
 }
 
 #if os(iOS)
@@ -128,6 +147,10 @@ struct FloatingSwitchCard: View {
     /// re-renders nothing (the first letter typed re-laid out the whole cover and the next letter was lost).
     @State private var content = SwitchCardContent()
     @State private var confirmingDiscard = false
+    /// The keyboard stepped aside for the question: the name does not ask for it while this holds.
+    @State private var keyboardSteppedAside = false
+    /// Bumped to give the switch's name the keyboard back after it stepped aside for the question.
+    @State private var nameFocusRequest = 0
 
     /// The oval's distance from the screen's edges and from the top of the keyboard (`PopoutHost.ovalInset`).
     private static let inset: CGFloat = 12
@@ -151,6 +174,7 @@ struct FloatingSwitchCard: View {
                     .accessibilityLabel(confirmingDiscard ? "Keep editing" : "Close")
                 if shown {
                     card
+                        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { content.cardTop = $0 }
                         .padding(.horizontal, Self.inset)
                         .padding(.bottom, Self.inset + aboveKeyboard)
                         .opacity(closing ? 0 : 1)
@@ -162,6 +186,7 @@ struct FloatingSwitchCard: View {
             .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
             .animation(HITMotion.exit(reduceMotion: reduceMotion), value: closing)
         }
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { content.areaTop = $0 }
         .ignoresSafeArea(.keyboard)
         .onAppear {
             // A turn later: the cover arrives in a transaction without animation, and a change made inside it
@@ -178,6 +203,7 @@ struct FloatingSwitchCard: View {
         case .switchCard(let request):
             SwitchCard(editing: request.task, style: .floating, board: request.board, duplicating: request.source,
                        isConfirmingDiscard: confirmingDiscard, isClosing: closing, focusesName: request.isAdding,
+                       keyboardSteppedAside: keyboardSteppedAside, nameFocusRequest: nameFocusRequest,
                        onClose: requestClose, onSaved: { finish(saved: $0) },
                        onDraftChange: { content.hasContent = $0 },
                        onDiscard: { finish(saved: nil) },
@@ -203,7 +229,7 @@ struct FloatingSwitchCard: View {
     private func tapAway() {
         switch BoardInlineAdd.clickAway(hasContent: content.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close: finish(saved: nil)
-        case .askDiscard: withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .askDiscard: askDiscard()
         case .keepEditing: keepEditing()
         }
     }
@@ -211,13 +237,38 @@ struct FloatingSwitchCard: View {
     private func requestClose() {
         switch BoardInlineAdd.close(hasContent: content.hasContent, confirmingDiscard: confirmingDiscard) {
         case .close, .discard: finish(saved: nil)
-        case .askDiscard: withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+        case .askDiscard: askDiscard()
+        }
+    }
+
+    /// The question at the card's foot. Where the card would then reach past the top of the screen (a short display),
+    /// the keyboard steps aside first: let go from this action (never from a view update: `SwitchCard.dropKeyboard`),
+    /// and the name stops asking for it (`keyboardSteppedAside`), else the next redraw, still carrying its focus, took
+    /// it straight back (seen on the iPhone Duo simulator).
+    private func askDiscard() {
+        if keyboard.height > 0,
+           !FloatingCardFit.questionFits(cardTop: content.cardTop, areaTop: content.areaTop, inset: Self.inset) {
+            Self.endEditing()
+            keyboardSteppedAside = true
+        }
+        withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
+    }
+
+    /// Takes the keyboard from the name, from an action: every window of the app's scenes ends its editing.
+    private static func endEditing() {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            for window in scene.windows { window.endEditing(true) }
         }
     }
 
     private func keepEditing() {
         withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = false }
+        if keyboardSteppedAside {
+            keyboardSteppedAside = false
+            nameFocusRequest += 1
+        }
     }
+
 
     /// The card holds where it is (the keyboard height it had), drops the keyboard and fades with a small
     /// settle downward; the cover goes once it has.
