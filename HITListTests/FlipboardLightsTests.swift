@@ -120,4 +120,82 @@ final class FlipboardLightsTests: XCTestCase {
         renderer.scale = 1
         return try XCTUnwrap(renderer.cgImage, "rendered").height
     }
+
+    // MARK: A board's lights and its row (brief 126)
+
+    private func lights(_ count: Int, on: (Int) -> Bool = { $0 % 3 != 1 }) -> [BoardLight] {
+        (0..<count).map { BoardLight(id: UUID(), title: "Switch \($0 + 1)", isOn: on($0)) }
+    }
+
+    /// The strip draws dots while they fit the header's real width, then slimmer segments, then the bar with its count:
+    /// decided by the width, not by how many there are. The widths of an iPhone 16's panel header beside "Before Bed"
+    /// (about 230 pt) and a Mac's (about 600).
+    func testTheLightsFallBackByTheWidthTheyHave() {
+        XCTAssertEqual(BoardLights.dotsWidth(3), 3 * 7 + 2 * 4)
+        XCTAssertEqual(BoardLights.segmentsWidth(40), 40 * 3 + 39 * 2)
+        XCTAssertEqual(BoardLights.mode(count: 3, width: 230), .dots)
+        XCTAssertEqual(BoardLights.mode(count: 12, width: 230), .dots)
+        XCTAssertEqual(BoardLights.mode(count: 20, width: 230), .dots, "20 dots are 216 pt")
+        XCTAssertEqual(BoardLights.mode(count: 20, width: 150), .segments)
+        XCTAssertEqual(BoardLights.mode(count: 40, width: 230), .segments, "40 segments are 198 pt")
+        XCTAssertEqual(BoardLights.mode(count: 40, width: 600), .dots)
+        XCTAssertEqual(BoardLights.mode(count: 40, width: 120), .bar)
+        XCTAssertEqual(BoardLights.mode(count: 60, width: 230), .bar)
+        // Never cut off: whatever is chosen fits, or is the bar.
+        for count in [1, 3, 12, 20, 40, 80] {
+            for width in stride(from: CGFloat(20), through: 700, by: 7) {
+                switch BoardLights.mode(count: count, width: width) {
+                case .dots: XCTAssertLessThanOrEqual(BoardLights.dotsWidth(count), width + 0.5)
+                case .segments: XCTAssertLessThanOrEqual(BoardLights.segmentsWidth(count), width + 0.5)
+                case .bar: XCTAssertGreaterThan(BoardLights.segmentsWidth(count), width + 0.5)
+                }
+            }
+        }
+    }
+
+    /// A tap along the strip picks the light under it, in the row's order.
+    func testATapPicksTheLightUnderIt() {
+        XCTAssertEqual(BoardLights.index(at: 3, count: 5, mode: .dots), 0)
+        XCTAssertEqual(BoardLights.index(at: 3 + 11 * 2, count: 5, mode: .dots), 2)
+        XCTAssertEqual(BoardLights.index(at: 500, count: 5, mode: .dots), 4, "past the end: the last")
+        XCTAssertEqual(BoardLights.index(at: -10, count: 5, mode: .dots), 0)
+        XCTAssertEqual(BoardLights.index(at: 1.5 + 5 * 7, count: 40, mode: .segments), 7)
+        XCTAssertNil(BoardLights.index(at: 10, count: 40, mode: .bar), "the bar has no single light")
+    }
+
+    /// VoiceOver reads the strip as one element, with the names of what is still off.
+    func testVoiceOverReadsTheStripAsOne() {
+        let five = ["Take meds", "Brush teeth", "Floss", "Read", "Lights out"].enumerated().map {
+            BoardLight(id: UUID(), title: $0.element, isOn: ![1, 2].contains($0.offset))
+        }
+        XCTAssertEqual(BoardLights.accessibilityLabel(five), "3 of 5 on. Off: Brush teeth, Floss.")
+        XCTAssertEqual(BoardLights.accessibilityLabel(lights(4) { _ in true }), "All 4 on.")
+        XCTAssertEqual(BoardLights.count(lights(24) { $0 < 17 }), "17 of 24")
+    }
+
+    /// Every width a phone, the Duo, an iPad or a Mac window gives the board: a row shows whole tiles and a clear part
+    /// of the next, a fifth to two fifths of a tile (a tile shown nine-tenths read as a clipping fault), its tiles never
+    /// wider than the grid's and never under 128 pt. On an iPhone 16 (a 361 pt panel): two whole tiles of about 145 pt.
+    func testARowShowsWholeTilesAndAClearPartOfTheNext() {
+        let spacing = FlipboardView.spacing, inset = BoardPanel.inset
+        // Phones from the Duo's outer display (about 342 pt) up; regular widths from the Mac's narrowest board up.
+        for compact in [true, false] {
+            for even in [false, true] {
+                let narrowest: CGFloat = compact || even ? 330 : 470
+                for width in stride(from: narrowest, through: 1600, by: 1) {
+                    let columns = FlipboardLayout.columnCount(width: width, compact: compact, spacing: spacing, even: even)
+                    let grid = (width - CGFloat(columns - 1) * spacing) / CGFloat(columns)
+                    let tile = FlipboardLayout.rowTileWidth(width: width, inset: inset, spacing: spacing, gridTile: grid)
+                    let peek = FlipboardLayout.rowPeek(width: width, tile: tile, spacing: spacing, inset: inset)
+                    XCTAssertLessThanOrEqual(tile, grid + 0.5, "width \(width)")
+                    XCTAssertGreaterThanOrEqual(tile, 128, "width \(width)")
+                    XCTAssertGreaterThanOrEqual(peek, 0.19, "width \(width), tile \(tile): \(peek)")
+                    XCTAssertLessThanOrEqual(peek, 0.41, "width \(width), tile \(tile): \(peek)")
+                }
+            }
+        }
+        let phone = FlipboardLayout.rowTileWidth(width: 361, inset: inset, spacing: spacing, gridTile: (361 - spacing) / 2)
+        XCTAssertEqual(phone, 144.6, accuracy: 0.5)
+        XCTAssertEqual(FlipboardLayout.rowPeek(width: 361, tile: phone, spacing: spacing, inset: inset), 0.22, accuracy: 0.01)
+    }
 }

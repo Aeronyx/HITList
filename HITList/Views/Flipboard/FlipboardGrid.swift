@@ -217,3 +217,43 @@ struct SwitchLanding: ViewModifier {
         }
     }
 }
+
+extension FlipboardLayout {
+    /// A row's tiles are never narrower than this where they can help it (a two-line name, the largest type).
+    static let rowTileMinWidth: CGFloat = 140
+    /// How much of the next tile a row shows at rest, as a share of a tile.
+    static let rowPeekShare: CGFloat = 0.22
+
+    /// The width of a Switchboard's row tiles (brief 126, the supervisor on the first pictures: "A tile shown
+    /// nine-tenths … reads as a clipping fault"): from the panel's width, so that a whole number of tiles shows and a
+    /// clear part of the next, about a fifth of a tile. The most whole tiles for which a tile is still `rowTileMinWidth`
+    /// wide, never wider than the grid's tile; where no count does both (the Duo's outer display, a narrow window), the
+    /// most whole tiles with a fifth of the next at no less than 128 pt; failing that, one tile and half the next.
+    /// `width`: the panel's; `inset`: its first tile's distance from its edge.
+    static func rowTileWidth(width: CGFloat, inset: CGFloat, spacing: CGFloat, gridTile: CGFloat) -> CGFloat {
+        let inner = width - inset
+        func tile(_ whole: Int, _ share: CGFloat) -> CGFloat {
+            (inner - CGFloat(whole) * spacing) / (CGFloat(whole) + share)
+        }
+        for whole in stride(from: 16, through: 1, by: -1) {
+            let w = tile(whole, rowPeekShare)
+            if w >= rowTileMinWidth, w <= gridTile + 0.5 { return w }
+        }
+        for whole in stride(from: 16, through: 1, by: -1) {
+            let w = tile(whole, 0.2)
+            if w >= 128, w <= gridTile + 0.5 { return w }
+        }
+        return max(1, min(gridTile, tile(1, 0.5)))
+    }
+
+    /// How much of the next tile a Switchboard's row shows at its trailing edge, at rest on a tile edge (brief 126:
+    /// "the next tile shows at least a quarter of itself … so it is plain that the row scrolls"): the row is `width`
+    /// wide (the panel's), its first tile `inset` in, tiles `tile` wide and `spacing` apart. A fraction of a tile, 0 to 1.
+    static func rowPeek(width: CGFloat, tile: CGFloat, spacing: CGFloat, inset: CGFloat) -> CGFloat {
+        guard tile > 0 else { return 0 }
+        let visible = width - inset
+        let pitch = tile + spacing
+        let whole = ((visible + spacing) / pitch).rounded(.down)
+        return max(0, min(1, (visible - whole * pitch) / tile))
+    }
+}

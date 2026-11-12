@@ -52,5 +52,34 @@ enum FlipboardDebug {
         }
         try? context.save()
     }
+
+    /// `-seedFlipboardRows N` (brief 126): two more Switchboards on a side store, once: "Kitchen", N switches (12, 20, 40)
+    /// with about two in three flipped, for the lights' backups; "Morning", three switches all on, for a board that is
+    /// wholly green. Debug builds only, side stores only.
+    static let rowsArgument = "-seedFlipboardRows"
+
+    static func seedRowsIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments) {
+        guard let index = arguments.firstIndex(of: rowsArgument),
+              ModelContainerFactory.storeName != ModelContainerFactory.mainStoreName else { return }
+        let count = arguments.indices.contains(index + 1) ? Int(arguments[index + 1]) ?? 20 : 20
+        let boards = (try? context.fetch(FetchDescriptor<Switchboard>())) ?? []
+        guard !boards.contains(where: { $0.name == "Kitchen" }) else { return }
+        let chores = ["Wipe the counters", "Empty the dishwasher", "Take out the bins", "Clean the hob", "Descale the kettle",
+                      "Water the herbs", "Sweep the floor", "Wipe the fridge door", "Restock the soap", "Clean the sink",
+                      "Change the dish towel", "Check the pantry", "Wipe the microwave", "Mop", "Polish the taps",
+                      "Clear the table", "Run the disposal", "Sort the recycling", "Clean the toaster", "Dust the shelves"]
+        guard let kitchen = try? Flipboard.createSwitchboard(name: "Kitchen", cadence: .weekly, in: context),
+              let morning = try? Flipboard.createSwitchboard(name: "Morning", cadence: .daily, in: context) else { return }
+        for i in 0..<count {
+            let title = i < chores.count ? chores[i] : "\(chores[i % chores.count]) \(i / chores.count + 1)"
+            guard let task = try? Flipboard.createSwitch(title: title, rule: .weekly, board: kitchen, in: context) else { continue }
+            if i % 3 != 1 { _ = Flipboard.flip(task, in: context) }
+        }
+        for title in ["Make the bed", "Open the blinds", "Vitamins"] {
+            guard let task = try? Flipboard.createSwitch(title: title, rule: .daily, board: morning, in: context) else { continue }
+            _ = Flipboard.flip(task, in: context)
+        }
+        try? context.save()
+    }
 }
 #endif
