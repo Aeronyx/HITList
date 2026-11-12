@@ -176,7 +176,8 @@ private struct CompanionListMargin: ViewModifier {
     }
 }
 
-/// A companion as it sits on its host: the sprite, and its seat under it.
+/// A companion as it sits on its host: the sprite (what lies behind the host drawn only outside its shape, brief 104),
+/// and its seat under it.
 struct CompanionFigure: View {
     let character: CompanionCharacter
     let pose: CompanionPose
@@ -184,7 +185,7 @@ struct CompanionFigure: View {
     var inks: CompanionInks? = nil
 
     var body: some View {
-        CompanionSprite(character: character, pose: pose, inks: inks)
+        CompanionSprite(character: character, pose: pose, inks: inks, host: CompanionPerch.surface(character, spot: spot))
             .background(alignment: .topLeading) { CompanionSeat(character: character, pose: pose, spot: spot, inks: inks) }
     }
 }
@@ -205,16 +206,18 @@ struct CompanionSeat: View {
     /// How far the clip sits into the host, so the seat's edge and the host's meet without a seam of background.
     static let overlap: CGFloat = 0.5
 
-    /// The base pixels a seat goes under: on the edge row, with nothing hanging below them (x as drawn, mirrored or
-    /// not).
+    /// The base pixels a seat goes under: on the edge row, with nothing hanging below them in front of the host (x as
+    /// drawn, mirrored or not). What lies behind the host (brief 104) is no base and hangs over nothing.
     static func base(_ character: CompanionCharacter, pose: CompanionPose) -> [(x: Int, ink: CompanionInk)] {
         guard character.drawn.indices.contains(pose.frame) else { return [] }
         let runs = character.drawn[pose.frame]
         let edge = character.seatRow - 1
         var below = Set<Int>()
-        for run in runs where run.y == edge + 1 { for x in run.x..<(run.x + run.length) { below.insert(x) } }
+        for run in runs where run.y == edge + 1 && !run.behind {
+            for x in run.x..<(run.x + run.length) { below.insert(x) }
+        }
         var out: [(x: Int, ink: CompanionInk)] = []
-        for run in runs where run.y == edge && run.ink != .veil {
+        for run in runs where run.y == edge && run.ink != .veil && !run.behind {
             for x in run.x..<(run.x + run.length) where !below.contains(x) {
                 let drawnX: Int = pose.mirrored ? character.width - 1 - x : x
                 out.append((drawnX, run.ink))
