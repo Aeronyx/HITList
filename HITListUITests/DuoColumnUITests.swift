@@ -18,6 +18,8 @@ final class DuoColumnUITests: XCTestCase {
 
     /// The least room between two parts of the column, or two controls in the title's row.
     static let minimumGap: CGFloat = 8
+    /// The seeded Groups, as a row's meta line names them.
+    static let groups = ["Work", "Home", "Finance", "Personal", "Health", "Shared Tasks"]
 
     override func setUpWithError() throws {
         continueAfterFailure = true
@@ -119,6 +121,13 @@ final class DuoColumnUITests: XCTestCase {
             XCTAssertLessThanOrEqual(frame.maxX, island.minX, "\(screen): \(id) \(frame) in the column")
             XCTAssertLessThan(frame.maxY, window.height / 4, "\(screen): \(id) \(frame) not in the title's row")
         }
+        // A row's Group is never cut to a letter (item 3): each Group's name on screen is wider than "W…".
+        for name in Self.groups {
+            let texts = app.staticTexts.matching(NSPredicate(format: "label == %@", name)).allElementsBoundByIndex
+            for text in texts where text.frame.minY > 80 && text.frame.maxX <= island.minX && text.frame.height < 60 {
+                XCTAssertGreaterThanOrEqual(text.frame.width, 28, "\(screen): \(name) cut to \(text.frame.width) pt")
+            }
+        }
         let parts = column + row
         for (i, a) in parts.enumerated() {
             for b in parts[(i + 1)...] where a.1.intersects(b.1) {
@@ -215,4 +224,5 @@ final class DuoColumnUITests: XCTestCase {
         add(attachment)
     }
 }
+
 
