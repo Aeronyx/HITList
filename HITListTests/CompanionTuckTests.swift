@@ -6,7 +6,7 @@ import HITListCore
 /// Brief 88: Tuck, Moss's companion. A white snail whose shell is a clay flowerpot with a seedling growing in it (its
 /// leaves the theme's accent): mostly still, a blink or an eye stalk tipping out now and then, four routines of its own,
 /// the weather's own, a seedling that flowers as its flourish, and a foot that rests on what it sits on in both places.
-/// Brief 91: the weather shows on it: rain drips off its pot's rim and it shakes itself dry, snow piles up on its pot
+/// Brief 91: the weather shows on it: rain pools in its pot and round its foot and it shakes itself dry (brief 122), snow piles up on its pot
 /// until it shrugs it off, and on a hot day it wilts with its seedling and finds the shade of its own pot.
 @MainActor
 final class CompanionTuckTests: XCTestCase {
@@ -41,7 +41,7 @@ final class CompanionTuckTests: XCTestCase {
 
     /// Its flickers are a snail's (brief 105), each small beside the still it plays on and under a second: a blink, an
     /// eye stalk tipping out, one dipping in a row (left or right), the leaf stirring, a look back at its seedling as the
-    /// leaf lifts, and the weather's two (a drip off its pot's rim in the rain, a pant on a hot day); a tap makes it
+    /// leaf lifts, and the weather's two (a drop off its leaf into its pot in the rain, a pant on a hot day); a tap makes it
     /// flinch (eyes shut and pulled down a step), and woken it opens one eye.
     func testItsFlickersAndGesturesAreSmall() {
         for place in CompanionPlace.allCases {
@@ -62,37 +62,54 @@ final class CompanionTuckTests: XCTestCase {
             }
             XCTAssertEqual(awake.answer.name, "flinch")
             let asleep = tuck.posture(place).asleep
-            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf", "breath"])
+            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf", "breath", "drip"])
+            XCTAssertEqual(asleep.gestures.map(\.sky), [nil, nil, nil, .rain], "brief 122: a drop runs off it asleep too")
             XCTAssertEqual(asleep.answer.name, "wake")
             XCTAssertNotEqual(asleep.answer.ticks, awake.answer.ticks, "woken, not just looking")
         }
     }
 
     /// At night its stalks wilt and its shut eyes hang from them (brief 119: low, and no smile on its face), and its
-    /// seedling's leaves fold up; it is the one that likes the rain (eyes up to the sky); in the snow its eyes
-    /// come down and snow sits on its pot's rim.
+    /// seedling's leaves fold up; it is the one that likes the rain (brief 122: itself, in a puddle, its pot brimming); in
+    /// the snow its eyes come down and snow sits on its pot's rim.
     func testItsNightAndWeather() throws {
         let rest = try XCTUnwrap(tuck.rows("rest")), sleep = try XCTUnwrap(tuck.rows("sleep"))
         let rain = try XCTUnwrap(tuck.rows("rain")), snow = try XCTUnwrap(tuck.rows("snow"))
         XCTAssertTrue(rest.joined().contains("k"), "awake: its eyes open")
-        // Brief 119 (George: "Tuck's eyes should still droop down far at night ... He also shouldn't smile while
-        // sleeping, that's creepy"): asleep each stalk folds over flat at its root and its eye hangs at its cheek at
-        // the side of its face, at day size and shut (a grey lid over a dark slit), and its face has no mouth.
-        for (y, row) in sleep.enumerated() {
-            for (x, c) in row.enumerated() where c == "k" {
-                XCTAssertEqual(Array(sleep[y - 1])[x], "m", "asleep (\(x), \(y)): a lid over each slit, no open eye")
-                XCTAssertEqual(Array(sleep[y + 1])[x], "d", "asleep (\(x), \(y)): the ball's underside below it")
+        // Brief 122 (George: "He also looks extremely depressed at night instead of like he's sleeping. Can you make
+        // him look relaxed instead and perhaps with his eyes slightly bowed apart to show he's resting?"; brief 119:
+        // "He also shouldn't smile while sleeping"): asleep its head is its day head with no mouth, and its eyes are its
+        // day balls, shut, a row lower and each a pixel further out, on stalks leaning apart.
+        XCTAssertFalse(sleep.joined().contains("k"), "asleep: both eyes shut")
+        for y in 10..<tuck.height {
+            if [14, 15].contains(y) {
+                XCTAssertEqual(sleep[y].dropFirst(10), rest[y].dropFirst(10), "asleep row \(y): its day head")
+            } else {
+                XCTAssertEqual(sleep[y], rest[y], "asleep row \(y): its day head, settled, not flattened")
             }
         }
         XCTAssertEqual(String(sleep[15].prefix(10)), "dlllllllll", "asleep: no mouth")
         XCTAssertEqual(String(Array(sleep[14])[3...6]), "llll", "asleep: no smile")
-        XCTAssertEqual(Self.topRow(of: "l", in: sleep, columns: 0..<9), 9, "asleep: its stalks folded flat on its head")
-        let slits = try XCTUnwrap(Self.topRow(of: "k", in: sleep, columns: 0..<10), "asleep: its two eyes")
-        let pupils = try XCTUnwrap(Self.topRow(of: "k", in: rest, columns: 0..<10))
-        XCTAssertGreaterThan(slits, pupils + 5, "asleep: its eyes hang at its cheeks, far below where they stand by day")
+        let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<11), "asleep: its two shut eyes")
+        let tops = try XCTUnwrap(Self.topRow(of: "m", in: rest, columns: 0..<10))
+        XCTAssertGreaterThan(lids, tops, "asleep: its eyes lower than by day")
+        XCTAssertEqual(Self.columns(of: "m", in: sleep, rows: 0..<10), Array(0...3) + Array(7...10),
+                       "asleep: each eye a pixel further out than by day (1...4 and 6...9), bowed apart")
         XCTAssertLessThan(Self.width(of: "a", in: sleep), Self.width(of: "a", in: rest), "asleep: its leaves fold up")
         let eyesAtRest = try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10))
-        XCTAssertLessThan(try XCTUnwrap(Self.topRow(of: "l", in: rain, columns: 0..<10)), eyesAtRest, "rain: eyes up")
+        // Brief 122 (George: "He should be in a little puddle and/or have a bit of water pool up in his pot"): in the rain
+        // it is itself, its own rest pose, and only water is added: beads, a puddle at its foot, its pot brimming.
+        XCTAssertEqual(try XCTUnwrap(Self.topRow(of: "l", in: rain, columns: 0..<10)), eyesAtRest, "rain: its own eyes")
+        for (y, (dryRow, wetRow)) in zip(rest, rain).enumerated() {
+            for (x, (dryInk, wetInk)) in zip(dryRow, wetRow).enumerated() where dryInk != wetInk {
+                XCTAssertTrue("phu".contains(wetInk), "rain (\(x), \(y)): only water on its rest pose")
+            }
+        }
+        let brim = try XCTUnwrap(rest.firstIndex { $0.contains("dddddddddd") })
+        XCTAssertTrue(rain[brim].contains("p") && rain[brim].contains("h"), "rain: its pot brimming, with a glint")
+        let puddle = rain[tuck.seatRow - 1].filter { "phu".contains($0) }
+        XCTAssertTrue((4...8).contains(puddle.count), "rain: a puddle at its foot, \(puddle.count) wide")
+        XCTAssertTrue(puddle.contains("h") && puddle.contains("u"), "rain: a glint on the puddle, its deep end in shadow")
         XCTAssertGreaterThan(try XCTUnwrap(Self.topRow(of: "l", in: snow, columns: 0..<10)), eyesAtRest, "snow: eyes down")
         let rim = try XCTUnwrap(rest.firstIndex { $0.contains("dddddddddd") })
         XCTAssertTrue(snow[rim - 1].contains { "sbc".contains($0) }, "snow on the rim")
@@ -105,7 +122,7 @@ final class CompanionTuckTests: XCTestCase {
                 XCTAssertTrue((4...120).contains(change), "\(place): \(change) pixels")
             }
             XCTAssertEqual(posture.asleep.snow, "sleepSnow", "snow settles on its pot while it sleeps")
-            XCTAssertNil(posture.asleep.rain, "asleep wins over rain")
+            XCTAssertEqual(posture.asleep.rain, "sleepRain", "brief 122: asleep in its puddle")
             XCTAssertEqual(posture.awake.heat, "heat")
             XCTAssertNil(posture.asleep.heat, "a hot day is a day")
             XCTAssertEqual(posture.awake.snowDeep, ["snowDeep1", "snowDeep2"])
@@ -184,10 +201,30 @@ final class CompanionTuckTests: XCTestCase {
 
     /// Nothing is drawn in the air (brief 91) but a single drop it touches: the drip is one drop under its pot's rim,
     /// the shake starts with one drop falling into its leaf.
-    func testNothingInTheAirButOneDrop() {
-        for name in ["drip1", "drip3", "drip4"] { XCTAssertEqual(tuck.difference(name, "rain"), 1, name) }
-        XCTAssertEqual(tuck.difference("drip2", "rain"), 2, "a drop stretching")
-        XCTAssertEqual(tuck.difference("drop1", "rain"), 1, "the drop its leaf catches")
+    func testNothingInTheAirButOneDrop() throws {
+        // Brief 122 (COMMON's water): every frame drawn for the rain (its still, the drop that runs off, its glad shake,
+        // the start at thunder) has at most one water pixel touching nothing but the air, the one falling drop, and no
+        // drop is left in the light ink.
+        let awake = tuck.plus.awake
+        var names = [try XCTUnwrap(awake.rain)]
+        for gesture in awake.gestures where gesture.sky == .rain { names += gesture.ticks.map(\.frame) }
+        let asleep = tuck.plus.asleep
+        names.append(try XCTUnwrap(asleep.rain))
+        for gesture in asleep.gestures where gesture.sky == .rain { names += gesture.ticks.map(\.frame) }
+        names += tuck.frames.map(\.name).filter { $0.hasSuffix("@sleepRain") }
+        for routine in awake.routines where routine.sky == .rain || routine.sky == .storm {
+            names += awake.ticks(of: routine).filter(\.whole).map(\.tick.frame)
+        }
+        for name in Set(names) {
+            let rows = try XCTUnwrap(tuck.rows(name)).map(Array.init)
+            XCTAssertLessThanOrEqual(Self.loose(rows, seat: tuck.seatRow), 1, "\(name): one drop in the air at most")
+            for y in 0..<9 { XCTAssertFalse(rows[y][11...].contains("l"), "\(name) row \(y): its rain in the water inks") }
+        }
+        // The drop that runs off: a bead swells under its leaf's tip, hangs, falls, lands in the pot and the glint jumps.
+        for name in ["drip1", "drip3"] { XCTAssertEqual(tuck.difference(name, "rain"), 1, name) }
+        for name in ["drip2", "drip4", "drip5"] { XCTAssertEqual(tuck.difference(name, "rain"), 2, name) }
+        let water = { (name: String) in try XCTUnwrap(self.tuck.rows(name)).joined().filter { "phu".contains($0) }.count }
+        XCTAssertEqual(try water("drop1"), try water("reach") + 1, "the drop its leaf catches, as it reaches up")
     }
 
     /// Four routines of its own (it tends its seedling, tucks its eyes in, looks two ways at once, rights its tipping
@@ -214,8 +251,19 @@ final class CompanionTuckTests: XCTestCase {
             }
             XCTAssertTrue(tuck.posture(place).asleep.routines.isEmpty)
         }
-        // In the rain its eyes are raised, so a blink there is drawn for the rain, not cut out of the plain one.
-        XCTAssertEqual(tuck.drawnIndex("blink", over: "rain", rest: "rest"), tuck.index["blink@rain"])
+        // Brief 122: in the rain it is in its own rest pose with water where nothing moves, so nothing is drawn for the
+        // old raised eyes and every idle, the blink and the reply to a tap are drawn over the rain still.
+        XCTAssertFalse(tuck.frames.contains { $0.name.hasSuffix("@rain") }, "no frame for 0.9.7's raised eyes")
+        XCTAssertEqual(tuck.drawnIndex("blink", over: "rain", rest: "rest"), tuck.composites["blink@rain"])
+        for place in CompanionPlace.allCases {
+            let awake = tuck.posture(place).awake
+            for gesture in awake.gestures + [awake.answer] where gesture.sky == nil {
+                XCTAssertTrue(tuck.canDraw(gesture, in: .rain, mode: awake, depth: 0), "\(place) \(gesture.name) in the rain")
+            }
+            for routine in awake.routines where routine.little {
+                XCTAssertTrue(tuck.plays(routine, in: .rain, mode: awake), "\(place) \(routine.name) in the rain")
+            }
+        }
         XCTAssertEqual(tuck.drawnIndex("tucked", over: "snow", rest: "rest"), tuck.index["tucked@snow"])
     }
 
@@ -285,7 +333,15 @@ final class CompanionTuckTests: XCTestCase {
         for frame in tuck.frames {
             let lowest = frame.rows.lastIndex { $0.contains { $0 != CompanionInk.clear } }
             XCTAssertEqual(lowest, tuck.seatRow - 1, "\(frame.name): its foot on the edge")
-            XCTAssertEqual(Self.opaque(frame.rows[tuck.seatRow - 1]), foot, "\(frame.name): the same foot")
+            // Brief 122: in the rain a puddle laps the front of its foot, on the same edge, no wider than the foot's front.
+            let row = frame.rows[tuck.seatRow - 1]
+            let wet = Self.opaque(String(row.map { "phu".contains($0) ? $0 : "." }))
+            if wet.isEmpty {
+                XCTAssertEqual(Self.opaque(row), foot, "\(frame.name): the same foot")
+            } else {
+                XCTAssertEqual(Self.opaque(row), Array(0...foot[foot.count - 1]), "\(frame.name): its foot, in a puddle")
+                XCTAssertTrue(wet.allSatisfy { $0 <= 6 }, "\(frame.name): the puddle at its front, not under it all")
+            }
         }
         let offset = CompanionPerch.offset(tuck, spot: .addButton)
         XCTAssertEqual(offset.height, -CGFloat(tuck.seatRow) * p, "the foot's row on the capsule's top edge")
@@ -308,6 +364,20 @@ final class CompanionTuckTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// Water pixels in the air: touching (side by side) nothing but the air and other water, above its foot's row.
+    private static func loose(_ rows: [[Character]], seat: Int) -> Int {
+        var count = 0
+        for (y, row) in rows.enumerated() where y < seat - 1 {
+            for (x, c) in row.enumerated() where "phu".contains(c) {
+                let touches = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)].contains { i, j in
+                    rows.indices.contains(j) && rows[j].indices.contains(i) && rows[j][i] != "." && !"phu".contains(rows[j][i])
+                }
+                if !touches { count += 1 }
+            }
+        }
+        return count
+    }
+
     private static func opaque(_ row: String) -> [Int] {
         var out: [Int] = []
         for (x, c) in row.enumerated() where c != CompanionInk.clear { out.append(x) }
@@ -321,6 +391,15 @@ final class CompanionTuckTests: XCTestCase {
             for (x, c) in row.enumerated() where c == ink { columns.insert(x) }
         }
         return columns.count
+    }
+
+    /// The columns where the ink appears within the rows.
+    private static func columns(of ink: Character, in rows: [String], rows range: Range<Int>) -> [Int] {
+        var columns = Set<Int>()
+        for row in rows[range] {
+            for (x, c) in row.enumerated() where c == ink { columns.insert(x) }
+        }
+        return columns.sorted()
     }
 
     /// The first row where the ink appears within the columns.
