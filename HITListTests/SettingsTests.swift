@@ -815,7 +815,7 @@ final class SettingsTidyTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(top, 0, "\(side): inside the swatch's height")
             let dot = ThemeSwatch.Metrics(side: side).dot
             XCTAssertFalse(pixels.contains { $0.intersects(dot) }, "\(side): clear of the accent dot")
-            // His eyes (the ink) on the half of him nearer the box's middle.
+            // His head toward the box: his eyes (the ink), on the whole, on the half of him nearer its middle.
             let rows = flint.rows(layout.frame) ?? []
             let eyes = pixels.enumerated().filter { _, pixel in
                 let x = Int(pixel.minX - layout.origin.x), y = Int(pixel.minY - layout.origin.y)
@@ -823,7 +823,8 @@ final class SettingsTidyTests: XCTestCase {
                 return Array(rows[y])[column] == CompanionInk.ink.rawValue
             }.map(\.element)
             let middle: CGFloat = (pixels.map(\.minX).min()! + pixels.map(\.maxX).max()!) / 2
-            XCTAssertGreaterThan(eyes.map(\.midX).min() ?? 0, middle, "\(side): his eyes toward the box")
+            XCTAssertFalse(eyes.isEmpty, "\(side): his eyes")
+            XCTAssertGreaterThan(eyes.map(\.midX).reduce(0, +) / CGFloat(max(1, eyes.count)), middle, "\(side): his eyes toward the box")
         }
     }
 
@@ -930,3 +931,4 @@ final class SettingsTidyTests: XCTestCase {
     }
     #endif
 }
+
