@@ -3,14 +3,19 @@ import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Brief 102: Gargle, Graphite's companion in place of Smudge. A gargoyle pup crouched on the "+" as its elders crouch
-/// on a parapet: a round head half its height, two big eyes with a glint, two horn nubs, small wing tips over its
-/// shoulders, two paws gripping the edge and its tail over the front; asleep it turns to stone. Alive at round 20's
-/// pace (brief 100), the weather on it (brief 91). Every frame is also checked by `CompanionSpriteTests` and by
-/// `CompanionDirectorTests.testNeverADeadMinute`.
+/// Briefs 102 and 104: Gargle, Graphite's companion, a gargoyle pup carved for a ledge and come half alive on it. Round 21
+/// (brief 104) carved him again: his body side-on along the edge as his elders sit on a cornice, all four paws on top of
+/// it and nothing of him over the front; a wing folded up his back; his head turned to you with pale horns at its sides,
+/// wide low eyes, a broad nose, one fang and his tongue; his tail behind the host (brief 104's capitals) with only its
+/// spade back up beside him. He plays statue in his elders' profile, a shade paler, and sleeps as stone. Every frame is
+/// also checked by `CompanionSpriteTests`, `CompanionSeatTests` and `CompanionDirectorTests.testNeverADeadMinute`.
 @MainActor
 final class CompanionGargleTests: XCTestCase {
     private let gargle = CompanionCharacter.gargle
+
+    private func rows(_ name: String) -> [[Character]] { gargle.rows(name)!.map(Array.init) }
+
+    private func count(_ ink: Character, _ name: String) -> Int { gargle.rows(name)!.joined().filter { $0 == ink }.count }
 
     func testGraphiteHasGargleAndSmudgeIsGone() {
         XCTAssertEqual(gargle.problems, [])
@@ -25,39 +30,67 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertEqual(CompanionCast.character(forTheme: "nord", launch: forced).id, "gargle")
     }
 
-    /// One clean shape at real size: the head is most of it, two eyes with a glint each, two pale horn tips, a wing tip
-    /// on each side, one warm pixel (its tongue), two paws and a tail over the edge, and nothing busier.
-    func testItIsAGargoylePup() {
+    /// Carved, not flat (brief 104): two tones of stone and a highlight, a head as large as his body turned to you with
+    /// two wide eyes, a glint in each; pale horns at the sides of his head; one fang breaking his mouth and the tip of his
+    /// tongue (the one warm detail); a wing up his back, a dark membrane with lighter ribs and a pale hooked tip.
+    func testHeIsACarvedGargoylePup() {
         XCTAssertEqual(gargle.inks, [.ink, .dark, .mid, .light, .warm])
-        XCTAssertEqual(gargle.seatRow, 17)
-        let rest = gargle.rows("rest")!.map(Array.init)
-        func count(_ ink: Character, _ rows: ArraySlice<[Character]>) -> Int { rows.joined().filter { $0 == ink }.count }
-        // The head: rows 2 to 12, 16 wide at its widest; the body under it no wider than 14.
-        XCTAssertEqual(rest[7][2...17].filter { $0 != CompanionInk.clear }.count, 16)
-        XCTAssertLessThanOrEqual(rest[15].filter { $0 != CompanionInk.clear }.count, 12)
-        var glints = 0
-        for y in 6...9 {
+        XCTAssertEqual(gargle.seatRow, 18)
+        let rest = rows("rest")
+        var glints: [Int] = []
+        for y in 5...10 {
             for x in 1..<19 where rest[y][x] == "l" {
-                if rest[y - 1][x] == "k", rest[y + 1][x] == "k", rest[y][x - 1] == "k", rest[y][x + 1] == "k" { glints += 1 }
+                if rest[y - 1][x] == "k", rest[y + 1][x] == "k", rest[y][x - 1] == "k", rest[y][x + 1] == "k" { glints.append(x) }
             }
         }
-        XCTAssertEqual(glints, 2, "two big eyes, a glint in each")
-        XCTAssertEqual(count("l", rest[0...0]), 2, "two pale horn tips")
-        XCTAssertEqual(count("l", rest[1...]), 2, "and only the glints besides")
-        XCTAssertEqual(count("w", rest[0...]), 1, "a tongue tip")
-        for y in 10...12 {
-            XCTAssertNotEqual(rest[y][0], CompanionInk.clear, "a wing tip on the left")
-            XCTAssertNotEqual(rest[y][19], CompanionInk.clear, "and on the right")
-        }
-        XCTAssertEqual(String(rest[17][6...7]), "mm", "a paw over the edge")
-        XCTAssertEqual(String(rest[17][12...13]), "mm", "and the other")
-        XCTAssertTrue(rest[18...19].joined().contains("d"), "its tail over the front")
+        XCTAssertEqual(glints.count, 2, "two big eyes, a glint in each")
+        XCTAssertGreaterThanOrEqual(glints[1] - glints[0], 6, "set wide")
+        // Horns: pale, along their length, at the sides of the head (its top rows, left and right of the crown).
+        let horns = (0...3).flatMap { y in (0..<13).filter { rest[y][$0] == "l" } }
+        XCTAssertGreaterThanOrEqual(horns.filter { $0 <= 3 }.count, 3, "the left horn, pale along its length")
+        XCTAssertGreaterThanOrEqual(horns.filter { $0 >= 9 }.count, 3, "and the right")
+        // The mouth: one fang breaking its line, the tongue's tip under it.
+        XCTAssertEqual(String(rest[11][4...8]), "dlddd", "one fang in the mouth's line")
+        XCTAssertEqual(count("w", "rest"), 1, "the tip of his tongue")
+        // The wing: a dark membrane up his back, with ribs in mid grey and a pale tip at the top.
+        let wing = (0...11).flatMap { y in (13..<20).map { rest[y][$0] } }
+        XCTAssertGreaterThan(wing.filter { $0 == "d" }.count, 40, "a dark membrane")
+        XCTAssertGreaterThanOrEqual(wing.filter { $0 == "m" }.count, 8, "its ribs")
+        XCTAssertTrue(rest[0][13...16].contains("l"), "its hooked tip, pale")
+        // Two tones of stone and a highlight: mid and dark both carry him.
+        XCTAssertGreaterThan(count("m", "rest"), 60)
+        XCTAssertGreaterThan(count("d", "rest"), 60)
         XCTAssertFalse(gargle.flourishTurns)
     }
 
+    /// Perched (brief 104): all four paws on the host's top edge, nothing of him over the front in any frame; his tail
+    /// drops behind the host from under his rump, and only its spade comes back up beside him, a pixel clear of his body.
+    func testHeSitsOnTopAndHisTailIsBehindTheBar() {
+        let seat = gargle.seatRow
+        for frame in gargle.frames {
+            for y in seat..<gargle.height {
+                for c in frame.rows[y] where c != CompanionInk.clear {
+                    XCTAssertTrue(CompanionInk.isBehind(c), "\(frame.name) row \(y): only what is behind the host below the edge")
+                }
+            }
+        }
+        let rest = rows("rest")
+        XCTAssertTrue(rest[seat].contains("D"), "his tail behind the bar")
+        XCTAssertEqual(rest[seat].filter { $0 == "D" }.count, 7, "from under his rump to the spade")
+        let edge = rest[seat - 1]
+        XCTAssertEqual(edge[16], CompanionInk.clear, "the spade comes up a pixel clear of him")
+        XCTAssertNotEqual(edge[17], CompanionInk.clear)
+        XCTAssertNotEqual(edge[18], CompanionInk.clear)
+        XCTAssertEqual(rest[seat - 3][18], "m", "the spade's point, pale stone above the edge")
+        // His paws: the front paw and the hind foot on the edge row, toes showing.
+        XCTAssertEqual(String(edge[1...5]), "dmdmd", "a front paw, its toes")
+        XCTAssertEqual(String(edge[9...14]), "mdmdmm", "a hind foot")
+    }
+
     /// Round 20's pace (brief 100): awake at least six flickers (the blink the heaviest) and four little loops, four long
-    /// routines of every day, a flourish and an answer; asleep at least two breaths. The same in both places.
-    func testItIsAliveAtTheNewPace() {
+    /// routines of every day, a flourish and an answer; asleep at least two breaths. The same in both places. No foot
+    /// swing (round 21): in every flicker his paws stay where they are on the ledge.
+    func testHeIsAliveAtTheNewPace() {
         for place in CompanionPlace.allCases {
             let posture = gargle.posture(place)
             let awake = posture.awake
@@ -73,35 +106,67 @@ final class CompanionGargleTests: XCTestCase {
             }
             XCTAssertGreaterThanOrEqual(posture.asleep.gestures.count, 2, at)
             XCTAssertTrue(posture.asleep.routines.isEmpty, at)
+            let rest = rows(awake.rest)
+            let edge = gargle.seatRow - 1
+            for gesture in flickers {
+                for tick in gesture.ticks {
+                    XCTAssertEqual(Array(rows(tick.frame)[edge][0...15]), Array(rest[edge][0...15]),
+                                   "\(at) \(gesture.name): his paws stay on the ledge")
+                }
+            }
         }
         XCTAssertEqual(gargle.plus.awake.routines.map(\.name), gargle.field.awake.routines.map(\.name))
+        let names = Set(gargle.plus.awake.routines.map(\.name))
+        XCTAssertTrue(names.isSuperset(of: ["statue", "periscope", "statueGame", "stretch", "chase", "dust", "tryFly"]))
     }
 
-    /// Its flourish: the grotesque's face (wings high, fangs, a glare), spoiled by a giggle.
-    func testItPullsAGrotesquesFace() {
+    /// The statue (brief 104): he turns into his elders' profile through one frame between, a shade paler (the stone's
+    /// shading lifts a tone, fewer dark pixels than the pup), holds, and a peek (an eye with its glint) gives him away.
+    func testHePlaysStatue() {
+        let awake = gargle.plus.awake
+        let statue = awake.routines.first { $0.name == "statueGame" }!
+        let frames = awake.ticks(of: statue).map(\.tick.frame)
+        XCTAssertTrue(frames.contains("turn") && frames.contains("statue") && frames.contains("statuePeek"))
+        let turn = frames.firstIndex(of: "turn")!
+        XCTAssertEqual(frames[turn + 1], "statue", "the turn is one frame between the pup and the statue")
+        XCTAssertLessThan(count("d", "statue"), count("d", "rest"), "a shade paler")
+        XCTAssertFalse(gargle.rows("statue")!.joined().contains("w"), "no tongue on a statue")
+        XCTAssertTrue(gargle.rows("statuePeek")!.joined().contains("k"), "the peek: an eye opens")
+        // The quick one, a little loop, the same turn and the same statue.
+        let quick = awake.routines.first { $0.name == "statue" }!
+        XCTAssertTrue(quick.little)
+        XCTAssertTrue(awake.ticks(of: quick).map(\.tick.frame).contains("statue"))
+        // In the rain his statue is a waterspout: its mouth open.
+        XCTAssertGreaterThan(count("k", "statue@rain"), count("k", "statue"))
+    }
+
+    /// Its flourish: the grotesque's face (both wings high, fangs, a glare), spoiled by a giggle.
+    func testHePullsAGrotesquesFace() {
         let frames = gargle.plus.flourish.map(\.frame)
         XCTAssertTrue(frames.contains("boo") && frames.contains("giggle"))
-        let boo = gargle.rows("boo")!.map(Array.init)
+        let boo = rows("boo")
         XCTAssertEqual(boo[11].filter { $0 == "l" }.count, 2, "two fangs")
-        XCTAssertNotEqual(boo[7][0], CompanionInk.clear, "its wings high")
+        XCTAssertTrue(boo[0][3...6].contains("d"), "the far wing up behind his head")
         XCTAssertEqual(gargle.flourishDuration(.plus), gargle.flourishDuration(.field))
     }
 
-    /// Asleep it has turned to stone: the same greys, no glint, no tongue, its eyes two cracks; woken, one eye opens.
-    func testAsleepItTurnsToStone() {
+    /// Asleep he has turned to stone (brief 104: in profile, a shade paler, the statue's pose with its head down a pixel):
+    /// no dark of an eye, no tongue; woken, one eye opens.
+    func testAsleepHeTurnsToStone() {
         let sleep = gargle.rows("sleep")!.joined()
-        XCTAssertFalse(sleep.contains("k"), "no dark of an eye: two cracks")
+        XCTAssertFalse(sleep.contains("k"), "no dark of an eye: a carved line")
         XCTAssertFalse(sleep.contains("w"), "no tongue")
-        XCTAssertEqual(sleep.filter { $0 == "l" }.count, 2, "only its horn tips pale")
+        XCTAssertLessThan(count("d", "sleep"), count("d", "rest"), "a shade paler")
+        XCTAssertGreaterThan(gargle.difference("sleep", "rest"), 40, "a pose of its own")
         XCTAssertEqual(gargle.plus.asleep.rest, "sleep")
         XCTAssertNil(gargle.plus.asleep.rain, "asleep wins over the rain")
-        XCTAssertTrue(gargle.rows("sleepPeekLook")!.joined().contains("k"), "woken: one eye opens")
+        XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("k"), "woken: one eye opens")
     }
 
-    /// Brief 91: in the rain its mouth hangs open like a spout and a drop falls from its chin (a flicker that shows), and
-    /// it shakes its head dry; snow piles up twice over (more each time, the seat untouched) until it shakes the heap
-    /// off, from the heap only; on a hot day its wings droop and it pants, and it lies flat on the cool stone.
-    func testTheWeatherShowsOnIt() {
+    /// Brief 91: in the rain his mouth hangs open like a spout and a drop runs from his chin (a flicker that shows), and he
+    /// shakes his head dry; snow piles up twice over on his crown and back (more each time, the seat untouched) until he
+    /// shakes the heap off, from the heap only; on a hot day he lies flat on the cool stone and pants.
+    func testTheWeatherShowsOnHim() {
         for place in CompanionPlace.allCases {
             let awake = gargle.posture(place).awake
             let at = "\(place)"
@@ -112,9 +177,7 @@ final class CompanionGargleTests: XCTestCase {
             XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "shake", at)
             var previous = awake.snow!
             for deep in awake.snowDeep {
-                let more = gargle.rows(deep)!.joined().filter { $0 == "l" }.count
-                let less = gargle.rows(previous)!.joined().filter { $0 == "l" }.count
-                XCTAssertGreaterThan(more, less, "\(at) \(deep)")
+                XCTAssertGreaterThan(count("l", deep), count("l", previous), "\(at) \(deep)")
                 previous = deep
             }
             XCTAssertEqual(awake.snowDeep.count, 2, at)
@@ -125,7 +188,12 @@ final class CompanionGargleTests: XCTestCase {
             XCTAssertTrue(awake.gestures.contains { $0.sky == .heat && $0.flicker }, at)
             XCTAssertEqual(awake.routines.first { $0.sky == .heat }?.name, "flop", at)
         }
-        XCTAssertGreaterThan(gargle.rows("heat")!.joined().filter { $0 == "w" }.count, 1, "its tongue out on a hot day")
+        XCTAssertGreaterThan(count("w", "heat"), 1, "his tongue out on a hot day")
+        // Flat: his head is down on his paws, its top four rows lower than by day.
+        let heat = rows("heat")
+        let rest = rows("rest")
+        let top = { (r: [[Character]]) in r.firstIndex { row in row[0...12].contains { $0 != CompanionInk.clear } }! }
+        XCTAssertGreaterThanOrEqual(top(heat) - top(rest), 3, "lying flat")
     }
 
     /// Brief 100: an idle can be drawn over every still it may show, so it is never still for long whatever the sky.
@@ -146,13 +214,18 @@ final class CompanionGargleTests: XCTestCase {
                     XCTAssertFalse(drawable.isEmpty, "\(place) \(label) \(weather) \(depth): an idle that draws")
                 }
             }
+            // The reply to a tap plays in every weather (a frame of its own on a hot day).
+            for weather in CompanionLook.Weather.allCases {
+                XCTAssertTrue(gargle.canDraw(posture.awake.answer, in: weather, mode: posture.awake, depth: 0), "\(place) \(weather)")
+            }
         }
     }
 
-    /// Its seat (brief 100): on the "+" (SwiftUI's continuous capsule, the lower of it and the circular one at each
-    /// point) every column of every still that rests on the edge line has the "+" right under it, to under half a device
-    /// pixel at 3x, and it sits on the middle of the "+"; its paws hang over the front.
-    func testItSitsOnThePlus() {
+    /// Its seat (brief 100): he sits on the middle of the "+", and every column of every still that rests on the edge line
+    /// has the "+" (SwiftUI's continuous capsule, the lower of it and the circular one at each point) less than a sprite
+    /// pixel under it, which the seat fills (his outer paws are over its shoulders), or his tail goes on down behind the
+    /// host there. `CompanionSeatTests` measures what is drawn, seat and all.
+    func testHeSitsOnThePlus() {
         let size = FloatingAddButton.size
         let rect = CGRect(origin: .zero, size: size)
         let shapes = [Capsule(style: .continuous).path(in: rect), Capsule(style: .circular).path(in: rect)]
@@ -170,16 +243,16 @@ final class CompanionGargleTests: XCTestCase {
         for mode in [posture.awake, posture.asleep] { stills.append(contentsOf: mode.stills) }
         let edge = gargle.seatRow - 1
         for name in stills {
-            let rows = gargle.rows(name)!.map(Array.init)
+            let rows = rows(name)
             for c in 0..<gargle.width where rows[edge][c] != CompanionInk.clear {
+                if CompanionInk.isBehind(rows[edge + 1][c]) { continue }
                 let x0: CGFloat = left + CGFloat(c) * p
                 let x1: CGFloat = x0 + p
                 let gap = max(top(x0 + 0.01), top(x1 - 0.01))
-                XCTAssertLessThan(gap, 0.17, "\(name) column \(c): \(gap) pt of background under it")
+                XCTAssertLessThan(gap, p, "\(name) column \(c): \(gap) pt under it, more than the seat fills")
             }
-            XCTAssertEqual(String(rows[gargle.seatRow][6...7]), "mm", "\(name): its paws over the edge")
         }
-        let seat = gargle.rows("rest")![edge].map { $0 }
+        let seat = rows("rest")[edge]
         let first = seat.firstIndex { $0 != CompanionInk.clear }!
         let last = seat.lastIndex { $0 != CompanionInk.clear }!
         let first0: CGFloat = CGFloat(first)
@@ -190,7 +263,7 @@ final class CompanionGargleTests: XCTestCase {
 
     /// The UI tests tap the companion just above the "+" (24 pt in from its right edge, 14 pt up) and the "+" just under
     /// its paws (22 pt in, 3 pt down): the first is the companion's, the second the "+"'s.
-    func testTheUITestsTapsLandOnItAndOnThePlus() {
+    func testTheUITestsTapsLandOnHimAndOnThePlus() {
         let size = FloatingAddButton.size
         let rest = gargle.index[gargle.plus.awake.rest]!
         let shape = CompanionCharacter.tapShape(runs: gargle.drawn[rest], width: gargle.width, mirrored: false,
@@ -199,7 +272,45 @@ final class CompanionGargleTests: XCTestCase {
         let spriteWidth: CGFloat = CGFloat(gargle.width) * CompanionCharacter.pointsPerPixel
         let left: CGFloat = size.width - spriteWidth + offset.width
         let top: CGFloat = offset.height
-        XCTAssertTrue(shape.contains(CGPoint(x: size.width - 24 - left, y: -14 - top)), "a tap on it is its own")
-        XCTAssertFalse(shape.contains(CGPoint(x: size.width - 22 - left, y: 3 - top)), "a tap under its paws is the +'s")
+        XCTAssertTrue(shape.contains(CGPoint(x: size.width - 24 - left, y: -14 - top)), "a tap on him is his own")
+        XCTAssertFalse(shape.contains(CGPoint(x: size.width - 22 - left, y: 3 - top)), "a tap under his paws is the +'s")
+    }
+
+    /// Brief 104: his tail drawn as the app draws it, on the real "+" at iPhone 17 and 16 widths and on the Mac's field:
+    /// the part behind the host shows only outside the host's shape (`CompanionBehindTests` checks the layer itself), under
+    /// the seat's half point at the rim.
+    func testHisTailIsBehindTheHostWhenDrawn() throws {
+        let palette = ThemePalette.all.first { $0.id == "graphite" } ?? .slate
+        for host in [CompanionSeatTests.iPhone17, CompanionSeatTests.iPhone16, CompanionSeatTests.hosts[3]] {
+            let pose = CompanionPose(frame: gargle.index["rest"]!, mirrored: false)
+            let scene = CompanionSeatTests.Scene(character: gargle, pose: pose, host: host, palette: palette)
+            let alone = CompanionSeatTests.Scene(character: gargle, pose: nil, host: host, palette: palette)
+            let pixels = CompanionSeatTests.Pixels(try XCTUnwrap(CompanionSeatTests.render(scene, scale: host.scale)))
+            let bare = CompanionSeatTests.Pixels(try XCTUnwrap(CompanionSeatTests.render(alone, scale: host.scale)))
+            let colours = CompanionSeatTests.Palette(palette, host: host)
+            let origin = CompanionSeatTests.spriteOrigin(gargle, host: host)
+            let p = CompanionCharacter.pointsPerPixel
+            let y0: CGFloat = origin.y + CGFloat(gargle.seatRow) * p
+            // Deeper than the seat's own half point tucked into the rim under his base (`CompanionSeat.overlap`), which
+            // follows the host's curve: the host also that far and a device pixel above.
+            let tuck: Int = Int((CompanionSeat.overlap * host.scale).rounded(.up)) + 1
+            var covered = 0
+            for y in Int((y0 * host.scale).rounded())..<Int(((y0 + p) * host.scale).rounded()) {
+                for c in 13...18 {
+                    let x0: CGFloat = origin.x + CGFloat(c) * p
+                    for x in Int((x0 * host.scale).rounded())..<Int(((x0 + p) * host.scale).rounded()) {
+                        // Wholly the host there (it and its neighbours): the tail must not show on it.
+                        let around = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1), (0, -tuck)].allSatisfy {
+                            colours.shows(bare.rgb(x + $0.0, y + $0.1)) == .host
+                        }
+                        guard around else { continue }
+                        covered += 1
+                        XCTAssertLessThan(CompanionSeatTests.Palette.distance(pixels.rgb(x, y), bare.rgb(x, y)), 48,
+                                          "\(host.name) \(x),\(y): his tail drawn on the host")
+                    }
+                }
+            }
+            XCTAssertGreaterThan(covered, 20, "\(host.name): the tail's row lies over the host")
+        }
     }
 }
