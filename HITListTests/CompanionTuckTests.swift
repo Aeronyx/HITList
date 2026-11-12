@@ -69,7 +69,7 @@ final class CompanionTuckTests: XCTestCase {
         }
     }
 
-    /// At night its stalks wilt and its shut eyes hang from them (brief 119: low, and no smile on its face), and its
+    /// At night its shut eyes rest low beside their stalks, a line mouth on its face and no smile (briefs 119 and 130), and its
     /// seedling's leaves fold up; it is the one that likes the rain (brief 122: itself, in a puddle, its pot brimming); in
     /// the snow its eyes come down and snow sits on its pot's rim.
     func testItsNightAndWeather() throws {
@@ -79,18 +79,31 @@ final class CompanionTuckTests: XCTestCase {
         // Brief 122 (George: "He also looks extremely depressed at night instead of like he's sleeping. Can you make
         // him look relaxed instead and perhaps with his eyes slightly bowed apart to show he's resting?"; brief 119:
         // "He also shouldn't smile while sleeping"): asleep its head is its day head with no mouth, and its eyes are its
-        // day balls, shut, a row lower and each a pixel further out, on stalks leaning apart.
+        // day balls, shut, a row lower and each a pixel further out, on stalks leaning apart. Brief 130 (George: "Please
+        // put back a little line mouth to show when he's resting. His eyes can also droop a bit more"): a flat line where
+        // the smile's line is by day, no corners turned up; the shut eyes a row lower again, resting on his head.
         XCTAssertFalse(sleep.joined().contains("k"), "asleep: both eyes shut")
         for y in 10..<tuck.height {
-            if [14, 15].contains(y) {
+            if y == 14 {
                 XCTAssertEqual(sleep[y].dropFirst(10), rest[y].dropFirst(10), "asleep row \(y): its day head")
             } else {
                 XCTAssertEqual(sleep[y], rest[y], "asleep row \(y): its day head, settled, not flattened")
             }
         }
-        XCTAssertEqual(String(sleep[15].prefix(10)), "dlllllllll", "asleep: no mouth")
-        XCTAssertEqual(String(Array(sleep[14])[3...6]), "llll", "asleep: no smile")
+        XCTAssertEqual(String(sleep[15].prefix(10)), "dllldddlll", "asleep: a little line mouth, the smile's line by day")
+        XCTAssertEqual(String(Array(sleep[14])[3...7]), "lllll", "asleep: no smile, the corners not turned up")
         let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<11), "asleep: its two shut eyes")
+        XCTAssertEqual(lids, 6, "asleep: the shut eyes droop a row lower than 0.9.8's")
+        XCTAssertEqual(Array(sleep[9])[3], "l", "asleep: the left eye rests beside its stalk")
+        XCTAssertEqual(Array(sleep[9])[7], "l", "asleep: the right eye rests beside its stalk")
+        // Every asleep frame has the same little mouth (the breath, the dream, the leaf, the peeks, the snows, the rain).
+        let asleepNames = tuck.frames.map(\.name).filter { $0.hasPrefix("sleep") || $0.hasPrefix("dream") }
+        XCTAssertGreaterThanOrEqual(asleepNames.count, 40)
+        for name in asleepNames {
+            let rows = try XCTUnwrap(tuck.rows(name))
+            XCTAssertEqual(String(Array(rows[15])[0...9]), "dllldddlll", "\(name): its resting mouth")
+            XCTAssertEqual(String(Array(rows[14])[0...9]), "dlllllllll", "\(name): no smile")
+        }
         let tops = try XCTUnwrap(Self.topRow(of: "m", in: rest, columns: 0..<10))
         XCTAssertGreaterThan(lids, tops, "asleep: its eyes lower than by day")
         XCTAssertEqual(Self.columns(of: "m", in: sleep, rows: 0..<10), Array(0...3) + Array(7...10),
