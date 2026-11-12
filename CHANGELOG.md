@@ -55,7 +55,8 @@ Room around the words (George: "some text is right next to a border"), on every 
 - The reminder card: every label, chip and field is 12 pt inside the card (they were 6 to 8, and "Later today…"
   ended on the border). On a narrow card the three "from now" choices fit one row as "In 15 min", "In 1 hour",
   "Later…", and the note about notifications is left out so the card needs no scrolling. "N min" is laid out like
-  its neighbours, and the card is never wider than the screen.
+  its neighbours, the four times keep the card's two columns where they do not fit one row ("8 PM" sat alone on a
+  second one), and the card is never wider than the screen.
 - The date card: the five quick choices have 8 pt either side of their words and 6 pt between them (the words
   filled them from border to border), and the month's name, the day grid, the choices and the time field share one
   left edge.
