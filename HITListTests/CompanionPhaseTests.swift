@@ -56,21 +56,26 @@ final class CompanionPhaseTests: XCTestCase {
         XCTAssertEqual(rest[19].filter { $0 != CompanionInk.clear }.count, 3)
         // A hanging cloth, not a figure: a one-pixel pinch under the head, then a skirt that flares to the head's width
         // (12 to 14 pixels) and falls into points of different lengths, the right corner lifted, folds shaded in.
-        XCTAssertEqual(span(12).count, span(11).count - 2, "a one-pixel pinch each side, where it would be tied")
-        XCTAssertGreaterThanOrEqual(span(13).count, span(11).count, "and the cloth flares out again")
+        XCTAssertEqual(span(13).count, span(12).count - 2, "a one-pixel pinch each side, where it would be tied")
+        XCTAssertGreaterThanOrEqual(span(14).count, span(11).count, "and the cloth flares out again")
         XCTAssertTrue((12...16).contains(span(15).count), "the skirt as wide as the head")
         XCTAssertEqual(phase.rightmostColumn("rest"), 19, "the corner lifted out")
         XCTAssertTrue(rest[14][19] != CompanionInk.clear && rest[17][19] == CompanionInk.clear, "lifted, not hanging")
         XCTAssertTrue(rest[18].contains("a") && !rest[18][12...].contains("a"), "a shorter point beside the longest")
         XCTAssertGreaterThanOrEqual(rest[13...].joined().filter { $0 == "r" }.count, 8, "folds and the corner's underside")
         // Eyes of its own (round 22): pale, a dusky iris, a dark pupil and a light in each; not Button's round black eye.
-        for x in [7, 13] {
-            let eye = (8...10).flatMap { y in rest[y][x..<(x + 3)] }
-            XCTAssertEqual(eye.filter { $0 == "k" }.count, 1, "a small pupil")
-            XCTAssertEqual(eye.filter { $0 == "l" }.count, 2, "pale, with a light")
-            XCTAssertEqual(eye.filter { $0 == "r" }.count, 2, "a dusky iris")
+        // Supervisor's note, round 22: a size up so the face reads at 1x: 4 x 3 pale almonds set wide and a little low,
+        // a 1 x 2 pupil low in each with the iris against it, the light along the top; the mouth a row clear of them.
+        for x in [6, 13] {
+            let eye = (8...10).flatMap { y in rest[y][x..<(x + 4)] }
+            XCTAssertEqual(eye.filter { $0 == "k" }.count, 2, "a pupil, one by two")
+            XCTAssertEqual(eye.filter { $0 == "l" }.count, 4, "pale, with the light along the top")
+            XCTAssertEqual(eye.filter { $0 == "r" }.count, 2, "a dusky iris against the pupil")
+            XCTAssertEqual(rest[8][x + 1], "l", "the light at the top")
+            XCTAssertEqual(rest[10][x + 1...x + 2].filter { $0 == "k" }.count, 1, "the pupil low in it")
         }
-        XCTAssertEqual(rest[11...12].joined().filter { $0 == "k" }.count, 3, "a small smile")
+        XCTAssertTrue(rest[11][5...17].allSatisfy { $0 == "a" }, "a row clear between the eyes and the mouth")
+        XCTAssertEqual(rest[12...13].joined().filter { $0 == "k" }.count, 3, "a small smile")
         // Its own point, curling back, above its crown, with a row of room to rise.
         XCTAssertTrue(rest[2].contains("a") && rest[3].contains("a"), "its point")
         XCTAssertFalse(rest[0...1].joined().contains("a"), "room to rise")
@@ -151,13 +156,13 @@ final class CompanionPhaseTests: XCTestCase {
         let awake = phase.plus.awake
         let rain = awake.rain!
         let snowInks: Set<Character> = ["s", "b", "c"]
-        XCTAssertLessThanOrEqual(phase.difference(rain, "rest"), 16, "the rain changes only its look and its corner")
+        XCTAssertLessThanOrEqual(phase.difference(rain, "rest"), 24, "the rain changes only its look and its corner")
         XCTAssertFalse(phase.rows(rain)!.joined().contains { snowInks.contains($0) })
         let through = awake.gesture(named: "through")!
         XCTAssertEqual(through.sky, .rain)
         XCTAssertTrue(through.flicker)
         for tick in through.ticks {
-            XCTAssertLessThanOrEqual(phase.difference(tick.frame, rain), 8, "\(tick.frame): one drop, and its eyes")
+            XCTAssertLessThanOrEqual(phase.difference(tick.frame, rain), 16, "\(tick.frame): one drop, and its eyes")
         }
         let watch = awake.routines.first { $0.name == "watch" }!
         XCTAssertEqual(watch.sky, .rain)
@@ -210,8 +215,8 @@ final class CompanionPhaseTests: XCTestCase {
     func testAsleepAHeapOfCloth() {
         let sleep = phase.rows("sleep")!
         XCTAssertEqual(sleep.joined().filter { $0 == "l" }.count, 3, "the sheen on its crown, no light in shut eyes")
-        XCTAssertEqual(sleep[13].filter { $0 == "r" }.count, 6, "two eyes shut")
-        XCTAssertEqual(sleep[14].filter { $0 == "k" }.count, 2, "a small mouth")
+        XCTAssertEqual(sleep[13].filter { $0 == "r" }.count, 8, "two eyes shut")
+        XCTAssertEqual(sleep[15].filter { $0 == "k" }.count, 2, "a small mouth")
         XCTAssertTrue(sleep[10].hasSuffix("aa"), "its point flopped over")
         XCTAssertFalse(sleep[0...7].joined().contains("a"), "a heap, low")
         XCTAssertGreaterThan(phase.difference("sleep", "rest"), 40, "a pose of its own")
