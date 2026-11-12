@@ -410,6 +410,35 @@ final class DuoLayoutTests: XCTestCase {
 
     // MARK: Brief 108: the inner display looked at again
 
+    /// The inner display held like a book: on its side, with the system's bar column (about 62 pt) down the trailing edge.
+    private var book: WindowGeometry {
+        WindowGeometry(fullSize: innerOnItsSide, width: innerOnItsSide.width - 62)
+    }
+
+    func testOpenFlatTheListAndTheEditorMeetAtTheHingeNotAtHalfTheSafeArea() {
+        XCTAssertEqual(book.middle, innerOnItsSide.width / 2, "the hinge is the display's middle")
+        XCTAssertEqual(book.split, book.middle, "open flat, the split is the hinge")
+        let plan = DuoColumns.plan(width: book.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: true,
+                                   showsToday: false, fold: book.split)
+        XCTAssertFalse(plan.showsSidebar, "sidebar, list and editor don't fit beside the bar column")
+        let editor = try! XCTUnwrap(plan.editorWidth)
+        XCTAssertEqual(book.width - editor, book.middle.rounded(), accuracy: 1,
+                       "the list is the left page, the editor the right one: they meet at the hinge, not 31 pt before it")
+    }
+
+    func testABarColumnOnTheLeadingEdgeMovesTheMiddleWithIt() {
+        let leading = WindowGeometry(fullSize: innerOnItsSide, width: innerOnItsSide.width - 62, leadingInset: 62)
+        XCTAssertEqual(leading.middle, innerOnItsSide.width / 2 - 62, "the columns' space starts after the bar column")
+    }
+
+    func testPartlyOpenTheCreaseIsTheSplitAndUprightTheMiddleIsHalfTheWidth() {
+        let creased = WindowGeometry(fullSize: innerOnItsSide, width: 889, crease: CGRect(x: 463, y: 0, width: 25, height: 669))
+        XCTAssertEqual(creased.split, 475.5)
+        let upright = WindowGeometry(fullSize: inner, width: inner.width)
+        XCTAssertEqual(upright.split, inner.width / 2)
+        XCTAssertNil(WindowGeometry().split, "nothing before the window is measured")
+    }
+
     func testTheInnerDisplaySearchesInItsSidebarAndTheIPadIsAsItWas() {
         XCTAssertTrue(AppShell.searchesInSidebar(.duo, idiom: .phone),
                       "the inner display's sidebar stands where Browse would: without it there was no search there")
