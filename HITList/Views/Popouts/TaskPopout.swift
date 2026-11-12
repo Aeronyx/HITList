@@ -93,11 +93,12 @@ struct TaskPopout: View {
     }
 
     var body: some View {
-        // The title is read once per keystroke: its highlights, and every row and pill below, come from it.
+        // The title is read twice per keystroke: its highlights as it is typed (a "!" word at the very end waits for
+        // a space, brief 48), and every row and pill below as Confirm will save it (brief 127), so "!30mb" just
+        // typed reads "30 min before" on the Reminder pill at once.
         let parser = parser()
         let parsed = draft.parsed(parser, for: task)
-        let phrases = TitlePhrases(text: draft.title, result: parsed, dueDate: task.dueDate, hasDueTime: task.hasDueTime,
-                                   calendar: parser.dateParser.calendar)
+        let phrases = draft.phrases(parser, for: task)
         let shown = EditorFields(task: task).applying(phrases)
         VStack(spacing: 0) {
             VStack(spacing: 0) {

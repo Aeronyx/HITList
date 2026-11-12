@@ -45,9 +45,10 @@ final class TaskPopoutTitleTests: XCTestCase {
         draft.parsed(parser(), for: task, mode).tokens.filter { !$0.isSuperseded }.map(\.text)
     }
 
-    /// What the editor's rows show while the draft is typed.
-    private func shown(_ draft: TaskEditorDraft, _ task: TaskItem, _ mode: QuickAddParser.Mode = .live) -> EditorFields {
-        EditorFields(task: task).applying(draft.phrases(parser(), for: task, mode))
+    /// What the editor's rows show while the draft is typed: what the editor reads them from (`phrases(_:for:)`
+    /// with its own mode).
+    private func shown(_ draft: TaskEditorDraft, _ task: TaskItem) -> EditorFields {
+        EditorFields(task: task).applying(draft.phrases(parser(), for: task))
     }
 
     // MARK: The brief's case
@@ -265,6 +266,26 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(lit(other, untimed), [], "no time anywhere: plain text, as in quick add")
     }
 
+    /// Brief 127 (a friend of George's, on 0.9.8): "!30mb" typed at the very end of a timed task's title, no space
+    /// after it. Its box waits for the space (brief 48), but the Reminder pill says at once what Confirm will save,
+    /// so the phrase never looks dead.
+    func testAReminderAtTheVeryEndShowsOnThePillBeforeConfirm() throws {
+        let (task, context) = task("PNHP Working Group tonight", due: day(0, hour: 20), hasTime: true)
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " !30mb"
+        XCTAssertEqual(lit(draft, task), [], "no box while it is still being typed (brief 48)")
+        XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 30, "the pill says what Confirm saves")
+        XCTAssertEqual(shown(draft, task).dueDate, day(0, hour: 20), "the task keeps its time")
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.reminderOffsetMinutes, 30)
+        XCTAssertEqual(task.title, "PNHP Working Group tonight")
+
+        // "!!1" at the very end too: the check's colour shows it before the space.
+        var other = TaskEditorDraft(task: task)
+        other.title += " !!1"
+        XCTAssertEqual(shown(other, task).priority, .p1)
+    }
+
     /// A later priority overrides one already in the title only if that one was typed now; the stored one
     /// stays in the title as text.
     func testAStoredPhraseNeverCompetes() throws {
@@ -339,12 +360,14 @@ final class TaskPopoutTitleTests: XCTestCase {
 
     // MARK: Live and final
 
-    /// While typed, a "!" phrase at the very end is not read yet; Confirm reads the end of the title as finished.
+    /// While typed, a "!" phrase at the very end is not highlighted yet, but the rows already show what Confirm will
+    /// save (brief 127); Confirm reads the end of the title as finished.
     func testConfirmReadsAPhraseAtTheVeryEnd() throws {
         let (task, context) = task("Call mom")
         var draft = TaskEditorDraft(task: task)
         draft.title += " !15m"
-        XCTAssertNil(shown(draft, task).reminderDate)
+        XCTAssertEqual(lit(draft, task), [])
+        XCTAssertEqual(shown(draft, task).reminderDate, now.addingTimeInterval(15 * 60))
         try draft.commit(to: task, in: context, parser: parser())
         XCTAssertEqual(task.reminderDate, now.addingTimeInterval(15 * 60))
         XCTAssertEqual(task.title, "Call mom")
