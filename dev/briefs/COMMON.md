@@ -66,6 +66,84 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 22 (2026-11-12, before dawn; briefs 109–115 in parallel, all seven at once; `ROUND-22.md` says why)
+0.9.5 was prepared and never released (George: "I'm not quite satisfied with it yet"); this round is **0.9.6**, and
+George wants it **by 09:00 Eastern today**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is away until then: nobody answers a question or
+a system dialog, so decide by your brief and George's words, and write down what you decided. **No schema change.**
+- **The clock decides.** Your brief names when your report is due, in Eastern time (`TZ=America/New_York date`).
+  Work in the brief's order, commit each item as it becomes whole, and fifteen minutes before that time stop
+  starting things: commit what is coherent, run your tests, write the report. An item you did not reach is one line
+  in the report, never a rushed half. A report that is late is merged after the build and waits a round.
+- Ownership, the creatures (a session owns its characters' files, their own test files, their own line in
+  `ThemeCompanion.seats` and their own cases in the shared companion tests `CompanionSpriteTests`,
+  `CompanionSeatTests`, `CompanionCastFlavorTests`, `CompanionIdleTests`, `CompanionIslandTests`; nothing else):
+  109 `button-back` (high) `Characters/Button.swift` and Nod's snow frames in `Characters/Nod.swift`. 110
+  `phase-cloth` (xhigh) `Characters/Phase.swift`. 111 `gargle-dragon` (xhigh) `Characters/Gargle.swift`. 112
+  `hush-quill` (xhigh) `Characters/Hush.swift`, `Characters/Quill.swift`. 113 `glim-tuck` (xhigh)
+  `Characters/Glim.swift`, `Characters/Tuck.swift`. **Nobody changes the engine** (`CompanionCharacter.swift`,
+  `CompanionDirector`, `CompanionSchedule`, `CompanionClock`, `CompanionSprite`, `CompanionPerch`) **or the ink
+  table**: if a drawing needs it, send the supervisor one message saying what, and carry on without it. In a shared
+  test file change only the lines that name your creature, so the merges stay clean.
+- Ownership, the spacing: 114 `card-insets` (xhigh) what opens over a list: `Views/Popouts/*` (quick add, the
+  editor, every picker) and `Support/DesignSystem/*`. 115 `screen-insets` (xhigh) the screens and the rest:
+  `Views/Tabs/*`, `Views/Duo/*`, the lists and rows, `Views/Flipboard/*` with its cards, Review Inbox,
+  `SettingsView` and `Views/Settings/*`, `Views/Help/*`, sheets, toasts, tips.
+- Nobody: `scripts/`, `dev/briefs/`, `dev/ROADMAP.md`, `CHANGELOG.md`, the entries in `WhatsNew.swift`, the
+  `SettingsTests` What's New pin, the models' shape, `CompanionCast.swift`, `CompanionSky*.swift`,
+  `AppearanceSettingsSection.swift`, and in `ThemeCompanion.swift` anything but your own creature's seat.
+- **Snow, for every creature session.** George: "The snow effects just looks like hats for many characters
+  (especially Quill). Fix it to look more like powdery, pixelated fallen snow than just white globs. Be artistic
+  with the pixelated snow and add some blue hues to make it look professional." Three inks are on master for it,
+  the same colours in every theme and never see-through: `s` the lit crest (#F3F7FF), `b` the powder's body, a pale
+  blue (#BFD2F4), `c` its shaded side and lone flecks, a deeper blue (#8CA5D8) (`CompanionInk.snow`, `.snowBlue`,
+  `.snowShade`; add them to your workshop's palette). Redraw every snow still of your creatures (`snow`, each
+  `snowDeep`, awake and asleep, both postures, and whatever is carried or drawn onto them) to this recipe:
+  1. Snow lies where it would fall and stay: on what faces up (a crown, the tops of ears and horns, shoulders, a
+     back, the upper side of a tail, a rim), thinner on a slope than on a flat, deepest in a hollow (between two
+     ears, the crook of a tail). None on a vertical side or under an overhang. The creature's outline stays the
+     creature's: ear tips, horns and the curve of a head still show at every depth.
+  2. Powder, not a cap: the first still is a dusting one pixel deep with gaps in it (never one unbroken band from
+     side to side) and a fleck or two lower down (a shoulder, a cheek, a foot). Each deeper still adds unevenly, a
+     drift to one side, up to three pixels at the deepest. The lower edge is ragged, single pixels stepping down
+     into the creature: never a straight rim, never mirror-symmetric.
+  3. Three tones in every still: `s` only along the top where the light lands, `b` under it, `c` on the lee side,
+     under a ledge of snow and for the flecks; where the snow thins it breaks into a checker of `b` or `c` and the
+     creature's own colour. No block of one snow ink larger than 2 × 3 pixels.
+  4. It must read at real size, on the "+" and on the Mac's search field, as "snow has fallen on it", and never as
+     headgear: put it beside the 0.9.5 still (the old white cap) at 1x, 2x and 3x and look.
+  What a creature does about its snow (its shake-off, a heap that slides off) stays its own, redrawn over the new
+  pile. The old snow used the creature's own light ink `l`; none of that is left when you are done.
+- **Eyes.** George: "I don't love that three of the characters have the same style of large black eyes (the bat,
+  the mushroom and Mocha); they fit best on the mushroom". The large round black eye with a glint is Button's
+  alone from now on; every other creature has eyes of its own. His standard is unchanged: a face that looks at
+  you, a light in each eye ("soulless" is his word for eyes without one), cute beside Hush.
+- **Original characters only** (`dev/SUPERVISOR.md` §7): nothing that is, or could be mistaken for, a character
+  someone else owns.
+- **Creature sessions build little.** Draw with the workshops in the shared notes folder (python:
+  `105-cast-flavor/workshop`, `103-button-stands/workshop`, `104-gargle-perched/workshop`, `101-phase/workshop`,
+  `102-rose-and-graphite/`, `84-companion-routines/workshop`; `105-cast-flavor/dump.sh` and each README say how),
+  look at your sheets at real size and enlarged, and use no simulator. Near the end build once and run
+  `scripts/test.sh macos` (every companion test is in it); one look at your creature in a Debug Mac app of your
+  own on the search field (`HITLIST_STORE_SUFFIX=sNN`, `-disableCloudKit YES -ApplePersistenceIgnoreState YES
+  -hideTips YES -companion <id>`; `scripts/window-shot.sh`) if the clock allows. The supervisor runs the iOS suite
+  and the UI suite on the merged tree.
+- **Spacing sessions**: a Duo simulator of your own (`xcrun simctl create "HITList-NN" "iPhone Duo"`, it boots
+  folded on the outer display; `xcrun simctl io <udid> screenshot --display=primary <file>`) and an iPhone 16 of
+  your own (`HITList-NN-16`), **one booted at a time**; an iPhone 17 (`HITList-NN-17`) for `scripts/test.sh ios`
+  at the end. Delete all three when you finish.
+- **The shared notes folder** (outside git):
+  `/Users/gtrammell/Library/Application Support/Claude/side-session-notes/local_8995b93d-4779-400a-855f-77db7b4e0b1d/`.
+  Your pictures go in a folder named after your brief (`110-phase-cloth/`). `round-22/george-saw/` holds the eleven
+  pictures of 0.9.5 that George judged.
+- **A message to the supervisor** is for what your brief asks for (a concept sheet's path and your pick) or for
+  something that blocks you: reply to the message that started you, and carry on meanwhile. The supervisor looks
+  at every concept sheet at real size and stops you only when the pick is wrong.
+- Everything in Round 21's block below still holds: pictures are part of the work, George's phone is an iPhone 16,
+  seven sessions share one Mac (your own derived data in your worktree, your own side store), the CI runner's older
+  Swift, no session answers a system dialog, never touch George's `/Applications/HITList.app` or its store, quit
+  what you started.
+
 ## Round 21 (2026-11-11, overnight; briefs 103–108 in parallel; `ROUND-21.md` says why)
 0.9.4 (25) is released; this round is **0.9.5**. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is asleep while you work ("Work freely

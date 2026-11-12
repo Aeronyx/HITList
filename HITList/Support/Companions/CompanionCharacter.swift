@@ -65,6 +65,13 @@ enum CompanionInk: Character, CaseIterable {
     /// Over the "+" (the accent) it is the body's own dusky tone with the button showing through; over the window
     /// or the Mac's field it is fainter, and what is behind shows through.
     case veil = "v"
+    /// Fallen snow (round 22; George: "powdery, pixelated fallen snow … add some blue hues"), three tones that are the
+    /// same in every theme: the lit crest of the powder,
+    case snow = "s"
+    /// its body, a pale blue,
+    case snowBlue = "b"
+    /// and its shaded side and lone flecks, a deeper blue. Snow is never see-through, on a ghost either.
+    case snowShade = "c"
 
     /// Clear.
     static let clear: Character = "."
@@ -604,7 +611,7 @@ struct CompanionCharacter: Identifiable {
     func opacity(_ ink: CompanionInk) -> Double {
         switch ink {
         case .veil: CompanionInks.veilOpacity
-        case .ink, .light: 1
+        case .ink, .light, .snow, .snowBlue, .snowShade: 1
         case .dark, .mid, .accent, .warm, .glow, .accentDark: 1 - seeThrough
         }
     }
