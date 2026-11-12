@@ -134,6 +134,7 @@ struct MobileShell: View {
             let column = max(barColumnWidth(placement), IslandMetrics.sideColumnWidth)
             VStack(spacing: IslandMetrics.sideAddButtonGap) {
                 tabBar(axis: .vertical)
+                    .overlay(alignment: CompanionPerch.alignment(.island)) { CompanionPerch.island(pushed: !(paths[tab]?.isEmpty ?? true)) }
                 IslandAddButton { popouts.openQuickAdd() }
             }
             // On the system's centre line: under the camera, as its own controls are.
