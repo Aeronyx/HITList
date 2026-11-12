@@ -19,9 +19,9 @@ Reminders and quick add:
   "PNHP Working Group tonight !30mb" as its title and no reminder. It failed two ways, and both are fixed. Typed in
   quick add, the line had no time ("tonight" was not a word the app read), so "!30mb" stayed in the title as text,
   and it stayed dead there after the task was given a time by hand. Now a reminder before the due time ("!30mb",
-  "!1hb", "!at") left in a title wakes once the task has a time: opening the task shows it lit, the reminder pill
-  shows what Confirm will save, and Confirm sets it and takes it out of the title. Closing with × changes nothing
-  and asks nothing.
+  "!1hb", "!at") left in a title is set the moment it can count: when the task is given a time in the editor, or
+  when a task that already has one is opened. The reminder appears on its pill and the phrase leaves the title;
+  nothing waits for Confirm. A task that already has such a reminder keeps it, and the words stay words.
 - Typed in the editor, such a reminder showed nothing until a space was typed after it, so it looked dead although
   Confirm saved it. The editor's rows and pills now show it at once; the highlight in the title still waits for
   the space, as in quick add.
@@ -33,6 +33,8 @@ Reminders and quick add:
   longer keeps "minutes before" on a task whose time it removes, and reads a reminder in a due phrase.
 - Removing a task's date (the editor's "No date", "Remove Date" in a row's menu or in Upcoming) removes its reminder
   before the due time with it. Kept, it came back unasked the day the task was given a time again.
+- A title never breaks its line between a "!" and the word it starts: on an iPhone "!30mb" at a line's end left the
+  "!" on one line and "30mb" on the next, its highlight in two pieces.
 
 The creatures:
 
