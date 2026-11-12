@@ -188,10 +188,12 @@ public struct QuickAddParser: Sendable {
             }
             // Date (a plain day drops the moment of an earlier "in 2 hours"); "starting friday" too
             if let (pd, n, isStart) = matchDateOrStart(lowers, at: i) {
+                let isTonight = DateExpressionParser.normalize(lowers[i + n - 1]) == "tonight"
                 date = pd.date; moment = nil; dateIsStart = isStart; win(i, n, .date); i += n
                 // A bare hour right after a date word is its time, on a 24-hour clock: "tom 13", "friday 9".
-                // Only when no time is typed yet: a bare number is too weak to override "5pm".
-                if time == nil, i < words.count, !consumed[i],
+                // Only when no time is typed yet: a bare number is too weak to override "5pm". Not after "tonight",
+                // where "9" would read 09:00 (brief 127): it stays in the title.
+                if time == nil, !isTonight, i < words.count, !consumed[i],
                    let t = dateParser.matchTime(in: lowers, at: i, allowBareHour: true) {
                     time = (t.hour, t.minute); win(i, t.consumed, .time); i += t.consumed
                 }
@@ -358,8 +360,9 @@ public struct QuickAddParser: Sendable {
 
 /// A typed reminder (brief 48): `!15m`, `!2h`, `!1d`, `!90m`, `!1h30m`, `!1d12h` = that long from now;
 /// the same with a "b" (`!15mb`, `!1hb`, `!1h30mb`) = that long before the due time; `!0` and `!at` = at the
-/// due time. The parts come in the order d, h, m, each once, each N ≥ 1, four weeks at most in all. Nothing
-/// else is a reminder (`!`, `!0m`, `!m`, `!15`, `!30m15h`, `!29d`).
+/// due time, and so is zero before it (`!0mb`, `!0hb`, `!0db`, `!0b`, brief 127). The parts come in the order
+/// d, h, m, each once, each N ≥ 1, four weeks at most in all. Nothing else is a reminder (`!`, `!0m`, `!m`,
+/// `!15`, `!30m15h`, `!29d`, `!0h30mb`).
 public enum ReminderPhrase: Equatable, Sendable {
     case fromNow(ReminderSpan)
     /// 0 is at the due time.
@@ -375,7 +378,8 @@ public enum ReminderPhrase: Equatable, Sendable {
         var w = Substring(DateExpressionParser.normalize(word))
         guard w.hasPrefix("!"), !w.hasPrefix("!!") else { return nil }
         w.removeFirst()
-        if w == "0" || w == "at" { self = .beforeDue(minutes: 0); return }
+        // Zero before the due time is at it (brief 127): "!0mb", "!0hb", "!0db" and "!0b" read as "!0" does.
+        if ["0", "at", "0b", "0mb", "0hb", "0db"].contains(w) { self = .beforeDue(minutes: 0); return }
         let before = w.hasSuffix("b")
         if before { w.removeLast() }
         guard let span = ReminderSpan(parts: w) else { return nil }

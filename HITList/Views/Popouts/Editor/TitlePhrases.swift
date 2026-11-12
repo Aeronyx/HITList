@@ -38,8 +38,9 @@ struct TitlePhrases: Equatable {
             && reminderOffsetMinutes == nil && reminderDate == nil
     }
 
-    /// `result` is the parse of `text` (`TaskEditorDraft.parsed`); `dueDate` and `hasDueTime` are the task's.
-    init(text: String, result: QuickAddResult, dueDate: Date?, hasDueTime: Bool, calendar: Calendar = .current) {
+    /// `result` is the parse of `text` (`TaskEditorDraft.parsed`); `dueDate`, `hasDueTime` and `repeats` are the task's.
+    init(text: String, result: QuickAddResult, dueDate: Date?, hasDueTime: Bool, repeats: RecurrenceRule? = nil,
+         calendar: Calendar = .current) {
         let read = result.tokens.filter { !$0.isSuperseded }
         let kinds = Set(read.map(\.kind))
 
@@ -48,7 +49,14 @@ struct TitlePhrases: Equatable {
         for span in spans.sorted(by: { $0.lowerBound > $1.lowerBound }) { title = TaskEditorDraft.removing(span, from: title) }
         self.title = TaskLimits.singleLine(title).trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if kinds.contains(.date), let parsed = result.dueDate {
+        if kinds.contains(.date), var parsed = result.dueDate {
+            // "starting <day>" leans on a repeat (brief 127): with none typed, the task's own starts on its first day
+            // on or after that one, as quick add starts a typed one ("starting nov 10" on a Monday repeat: Nov 16).
+            if !kinds.contains(.recurrence), let rule = repeats,
+               read.contains(where: { $0.kind == .date && $0.text.lowercased().hasPrefix("starting") }) {
+                let start = rule.firstOccurrence(onOrAfter: calendar.startOfDay(for: parsed), calendar: calendar)
+                parsed = result.hasDueTime ? Self.day(start, at: parsed, calendar: calendar) : start
+            }
             if result.hasDueTime {
                 due = Due(date: parsed, hasTime: true)
             } else if hasDueTime, let current = dueDate {

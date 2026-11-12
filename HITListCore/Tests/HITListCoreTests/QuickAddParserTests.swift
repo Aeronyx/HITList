@@ -367,12 +367,14 @@ final class QuickAddParserTests: XCTestCase {
     func testOnlyTheDocumentedReminderFormsCount() {
         let valid: [(String, Int)] = [
             ("!1mb", 1), ("!2hb", 120), ("!3db", 4320), ("!0", 0), ("!at", 0),
+            // Zero before is at the due time (brief 127).
+            ("!0mb", 0), ("!0hb", 0), ("!0db", 0), ("!0b", 0),
         ]
         for (token, minutes) in valid {
             XCTAssertEqual(ReminderOffset.minutes(fromToken: token), minutes, token)
             XCTAssertEqual(parser.parse("Call 5pm \(token)").reminderOffsetMinutes, minutes, token)
         }
-        for token in ["!", "!0mb", "!0m", "!0h", "!0hb", "!0d", "!0db", "!00", "!m", "!mb", "!h", "!d", "!b", "!xyz",
+        for token in ["!", "!0m", "!0h", "!0d", "!00", "!0h30mb", "!m", "!mb", "!h", "!d", "!b", "!xyz",
                       "!15", "!15b", "!15x", "!15bm", "!15mbb", "!-5m", "!+5m", "!1.5h", "!at5", "!att", "!1 5m"] {
             XCTAssertNil(ReminderOffset.minutes(fromToken: token), token)
             let r = parser.parse("Fix sink 5pm \(token)")
@@ -432,5 +434,29 @@ final class QuickAddParserTests: XCTestCase {
         XCTAssertEqual(ReminderOffset.duration(minutes: 90), "1 hr 30 min")
         XCTAssertEqual(ReminderOffset.duration(minutes: 1500), "1 day 1 hr")
         XCTAssertEqual(ReminderOffset.duration(minutes: 2880), "2 days")
+    }
+
+    /// Brief 127: "tonight" is today, a day and no time (no hour is made up for it), like "today". A friend typed
+    /// "PNHP Working Group tonight !30mb" and nothing read the word. A time beside it is its time; a bare number
+    /// after it is not ("tonight 9" would read 09:00 on the 24-hour rule), it stays in the title.
+    func testTonightIsToday() {
+        let r = parser.parse("PNHP Working Group tonight")
+        XCTAssertEqual(r.title, "PNHP Working Group")
+        assertDate(r.dueDate, 2026, 10, 21)
+        XCTAssertFalse(r.hasDueTime)
+        XCTAssertEqual(r.tokens.map(\.kind), [.date])
+
+        let timed = parser.parse("Dinner tonight 8pm !30mb")
+        XCTAssertEqual(timed.title, "Dinner")
+        assertDate(timed.dueDate, 2026, 10, 21, 20, 0)
+        XCTAssertEqual(timed.reminderOffsetMinutes, 30)
+        XCTAssertEqual(parser.parse("Dinner 7:30pm Tonight").title, "Dinner")
+        assertDate(parser.parse("Dinner 7:30pm Tonight").dueDate, 2026, 10, 21, 19, 30)
+
+        let bare = parser.parse("Call tonight 9")
+        XCTAssertEqual(bare.title, "Call 9")
+        XCTAssertFalse(bare.hasDueTime)
+        XCTAssertNil(parser.parse("Call tonight !30mb").reminderOffsetMinutes, "a day only: no time to count from")
+        XCTAssertEqual(parser.parse("Call \"tonight\"").title, "Call tonight", "quotes keep it a word")
     }
 }
