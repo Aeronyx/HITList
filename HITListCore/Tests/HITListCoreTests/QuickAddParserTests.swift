@@ -367,12 +367,14 @@ final class QuickAddParserTests: XCTestCase {
     func testOnlyTheDocumentedReminderFormsCount() {
         let valid: [(String, Int)] = [
             ("!1mb", 1), ("!2hb", 120), ("!3db", 4320), ("!0", 0), ("!at", 0),
+            // Zero before is at the due time (brief 127).
+            ("!0mb", 0), ("!0hb", 0), ("!0db", 0), ("!0b", 0),
         ]
         for (token, minutes) in valid {
             XCTAssertEqual(ReminderOffset.minutes(fromToken: token), minutes, token)
             XCTAssertEqual(parser.parse("Call 5pm \(token)").reminderOffsetMinutes, minutes, token)
         }
-        for token in ["!", "!0mb", "!0m", "!0h", "!0hb", "!0d", "!0db", "!00", "!m", "!mb", "!h", "!d", "!b", "!xyz",
+        for token in ["!", "!0m", "!0h", "!0d", "!00", "!0h30mb", "!m", "!mb", "!h", "!d", "!b", "!xyz",
                       "!15", "!15b", "!15x", "!15bm", "!15mbb", "!-5m", "!+5m", "!1.5h", "!at5", "!att", "!1 5m"] {
             XCTAssertNil(ReminderOffset.minutes(fromToken: token), token)
             let r = parser.parse("Fix sink 5pm \(token)")
