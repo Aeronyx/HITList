@@ -20,6 +20,13 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.7", items: [
+            "Glim is his old self again, with only a touch of new shading. In rain and snow he curls his tail in and holds his lantern in his lap.",
+            "Gargle awake is the little side-on pup he is asleep, with his eye open. In the rain he hides under his wing.",
+            "Phase is a floating sheet now: a wavy drape with two soft dark eyes. Rain falls through it and snow piles up underneath.",
+            "Tuck sleeps with his eye stalks folded and his eyes hanging low, and no longer smiles in his sleep. Quill has his derpy face back.",
+            "Rain and snow show more plainly: Nod holds up an umbrella, Button pulls his cap down over his eyes, and the snow lies deeper. To switch the weather off: Settings → Extras → Weather.",
+        ]),
         Entry(version: "0.9.6", items: [
             "Button the mushroom stands on top of the bar now instead of dangling his boots, and his idle moves are a mushroom's: a bob, a puff, a wobble of his cap, a few spores.",
             "Phase is a little cloth ghost with pale glowing eyes. It hovers on top of the +, rain falls straight through it, and snow piles up underneath it.",

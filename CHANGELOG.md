@@ -5,6 +5,34 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.7
+
+George's notes on 0.9.6's creatures, the same morning: a creature he has seen is his, and a good rework barely
+shows. Five sessions redrew what he sent back, each starting from the drawing he likes and changing the least that
+answers his words; he saw every sketch as it was made.
+
+- Glim, Tokyo Night's mouse, is 0.9.5's drawing again, every frame. 0.9.6 had redrawn him paler, with bigger ears
+  and lit eyes, and he was "so much worse". On the old drawing he has nine pixels of new shading (soft lower lids,
+  a shade under his chin, paler rings down his tail, a rim of glow on his lantern), which nobody sees at real size
+  without looking for it. In rain and snow he still keeps his light dry, now on that body: the tail curled in, the
+  lantern in his lap in both paws, its glow on his chin.
+- Gargle, Graphite's stone pup, is awake what he is asleep: his side-on night sprite with his eye open. 0.9.6's
+  larger head turned toward you is gone ("a tad too big and not cute enough"). The night sprite itself is the same
+  pixel for pixel, and a test keeps it so. In the rain he lifts his wing over his head and peeks out from under it.
+- Phase, Mocha's ghost, is one floating sheet: a wavy drape with a wavy hem and a trailing corner, two soft dark
+  eyes and a tiny mouth. No head and body, nothing that reads as hands, no horn. It hovers over the bar. Rain falls
+  in at its crown and out under its hem; snow gathers in a drift on the bar beneath it.
+- Tuck, Moss's snail, sleeps with his eye stalks folded over and his eyes hanging at cheek level, shut. 0.9.6 left
+  them standing upright on their stalks, and left him smiling in his sleep; the smile is gone.
+- Quill, Midnight's cat, has 0.9.5's face back on 0.9.6's tabby coat: small dark eyes set wide and low, no dark M
+  that read as a frown, no narrowed bright eyes.
+- Rain and snow read at a glance. Nod holds an umbrella up over his head, with a handle in his hand (it was a flat
+  canopy on his cap), twirls it, rights it in a gust, and sleeps with it leaning on him. Button grips the rim of his
+  cap and pulls it down over his eyes, and lifts it now and then to look out. Snow lies about half as deep again
+  on Nod, Button, Gargle, Glim, Tuck and Quill, still as powder and never as a cap.
+- Hush is exactly as 0.9.6 drew it ("the perfect example of a good rework"), and a test pins every one of its
+  frames.
+
 ## 0.9.6 — build 26, 2026-11-12
 
 0.9.5 was prepared overnight and never released: George looked at its pictures and sent it back before dawn ("not

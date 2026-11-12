@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-22.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-23.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -209,6 +209,22 @@ row). A walk picture taken while three suites run can catch a card mid-animation
 step on a quiet machine before calling it a bug; the walk's corner tap is inside the status bar on an iPhone with a
 Dynamic Island.
 
+Lessons from round 23 (five drawing sessions, a morning; the creatures' third send-back): **a creature George has
+seen is his.** He wants it kept, and a good rework barely shows at real size ("you kept his vibe without changing
+much"); a free redraw is "so much worse" however well drawn. So a drawing brief names the drawing he likes, starts
+from its pixels, changes the least that answers his exact words, and is judged at 1x beside that drawing. Pin what he
+praises with a test the same day (`CompanionKeptTests` for Hush, the digests in Button's, Gargle's and Glim's
+tests). **The supervisor's own rule was wrong twice** ("a face must look at you" sent Gargle's side-on profile back
+in two rounds; the profile is the sprite George adores): when a session's pick and a rule of yours disagree, look
+for what George has actually praised. **Send every concept sheet to George the moment it arrives**, with the pick,
+and carry on: he was awake and would rather see a sketch than a build. **Draw it yourself when words fail**: three
+passes of text about Tuck's sleeping eyes produced hooks and bunny ears; twenty minutes with a small renderer
+(`round-23/draw/kit.py` and `view.py` in the shared notes folder: rows of ink letters to a picture at 10x and on
+a "+" at 3x, 2x and 1x, in any theme, straight from a worktree's Swift file) found the frame and showed every session's current stills without
+waiting for their sheets. Give exact rows, not coordinates in prose. Drawing sessions with a narrow brief finish in
+25 to 45 minutes; a stop delivers a note at once, and a message to an idle session starts a new turn by itself (do
+not stop it after).
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -402,7 +418,32 @@ on the Mac too; "Later…" and no note about notifications in the reminder card'
 344 pt wide; a row's Group ends where its section header does (12 pt further right); "Pick a Group" on two lines on
 the Duo's narrower tiles; the words of the switch card's quick choices a few per cent narrower on a narrow card.
 
-## 8. Where things stand (2026-11-12, round 22 merged)
+From 2026-11-12 (round 23, on 0.9.6, which George released that morning): **keep what he has seen.** "Hush is
+actually the perfect example of a good rework; you kept his vibe without changing much, just slight improvements to
+coloration and design. Keep the new Hush": Hush is 0.9.6's, every frame. Glim is 0.9.5's drawing ("scrap him
+entirely … so much worse") with "largely imperceptible" touches. Quill keeps 0.9.6's tabby with 0.9.5's "derpy
+cat-mouse" face ("no major redesigns, only slight changes if anything"). Gargle's night sprite, a side-on profile,
+is the one he adores; awake he is that sprite with his eye open ("a tad too big and not cute enough" of the larger
+head). Tuck's eyes "droop down far at night" and he never smiles asleep ("that's creepy"). Phase is "a wavy body
+that almost looks like a floating sheet", with no hands and no horn. "Snow and rain need to be slightly more
+obvious": each creature does something about the weather that reads at a glance (Nod holds an umbrella up, Gargle
+hides under a wing, Button pulls his cap down). The supervisor's own choices that round, which George may reverse:
+Tuck asleep has his eyes hanging at cheek level as shut grey balls on folded stalks, with no mouth (two alternates
+were shown); Phase's eyes are dark holes (glowing ovals are one line in its workshop); Gargle's eye has a warm
+glint under its light; Nod's umbrella is drawn over the top-left of his cap; Glim's touches are the nine-pixel "B";
+while a creature holds its umbrella or its cap a few idles do not play.
+
+## 8. Where things stand (2026-11-12, round 23 merged)
+
+**2026-11-12, round 23 merged for 0.9.7 (Fable 5.2 supervisor), the morning 0.9.6 (26) was released.** Briefs 116 to
+120 are merged on master (`dev/briefs/ROUND-23.md` has George's message): Glim as 0.9.5 drew him with small
+touches, Gargle awake as his night sprite, Phase a floating sheet, Tuck asleep with his eyes hanging low, Quill's
+old face on his tabby coat, and weather that reads at a glance (Nod's umbrella, Button's cap, Gargle's wing, deeper
+powder). Hush is pinned. Drawings only: no engine, layout or schema change. George releases with
+`scripts/release.sh --version 0.9.7 --quick`. Open: George's eye on each sketch he was sent; the Duo's inner
+display (CoreDeviceService); "Shave" (round 20). Details in COMMON's Round 23 record. The next brief number is 121.
+
+### Round 22 (kept for the record; 0.9.6, released 2026-11-12)
 
 **2026-11-12, round 22 merged for 0.9.6 (Fable 5.2 supervisor), before nine in the morning after 0.9.5 was sent back.**
 Briefs 109 to 115 are merged on master (`dev/briefs/ROUND-22.md` has George's message): Button as 0.9.4 drew him,
