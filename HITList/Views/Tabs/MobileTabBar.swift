@@ -102,6 +102,17 @@ enum IslandMetrics {
     static var sideLabelRoom: CGFloat { sidePillWidth }
 }
 
+/// Whether a keyboard frame the system announced is the on-screen keyboard (a hardware keyboard's shortcut bar is a
+/// strip of 50 pt or so, and leaves the island where it is).
+enum KeyboardCover {
+    static let minimumHeight: CGFloat = 120
+
+    static func isUp(frameEnd: CGRect, screenHeight: CGFloat) -> Bool {
+        let covered = screenHeight - frameEnd.minY
+        return frameEnd.height >= minimumHeight && covered >= minimumHeight
+    }
+}
+
 /// Where the iPhone shell's island and "+" stand (brief 50). Apple's iPhone Duo guidelines: "Follow the
 /// system's vertical layout for toolbars, tab bars, and navigation controls" and "don't override the default
 /// bar placement". Where the system puts its bars in a column on one edge (`\.islandPlacement`: the Duo's
@@ -154,6 +165,13 @@ enum IslandPlacement: Equatable {
         let offset = cameraCentre - columnWidth / 2
         let room = (columnWidth - IslandMetrics.sideWidth) / 2
         return abs(offset) <= room ? offset : 0
+    }
+
+    /// Whether the island and the "+" are on show (brief 106): upright they step aside while the keyboard is up, rather
+    /// than leave the island's top cell peeking out between a card and the keys. At the bottom the keyboard covers them
+    /// whole, as before.
+    func showsChrome(keyboardUp: Bool) -> Bool {
+        !(isSide && keyboardUp)
     }
 
     /// Where the chrome stands in the shell.

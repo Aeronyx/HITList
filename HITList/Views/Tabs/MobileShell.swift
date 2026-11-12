@@ -31,6 +31,8 @@ struct MobileShell: View {
     /// The same screens as values (`PhoneStack`): a `NavigationPath` can't be read back.
     @State private var stacks: [MobileTab: PhoneStack]
     @State private var now = Date()
+    /// The on-screen keyboard is up: the upright island and its "+" step aside (`IslandPlacement.showsChrome`).
+    @State private var keyboardUp = false
 
     init(place: Binding<ShellPlace>) {
         _place = place
@@ -79,6 +81,15 @@ struct MobileShell: View {
         }
         .onReceive(clock) { now = $0 }
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
+            let end = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect ?? .zero
+            let screen = (note.object as? UIScreen)?.bounds.height ?? end.maxY
+            let up = KeyboardCover.isUp(frameEnd: end, screenHeight: screen)
+            if up != keyboardUp { withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { keyboardUp = up } }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            if keyboardUp { withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { keyboardUp = false } }
+        }
         // Siri / Shortcuts "Open Today / Inbox / Upcoming" (brief 46).
         .intentRouting(tab: $tab)
     }
@@ -141,6 +152,10 @@ struct MobileShell: View {
             .padding(.bottom, IslandMetrics.bottomGap + BarColumnDebug.statusPad)
             .frame(width: column)
             .ignoresSafeArea(.container, edges: edge == .leading ? .leading : .trailing)
+            // Out of the way while the keyboard is up (brief 106): the keys covered the "+" and most of the island.
+            .opacity(placement.showsChrome(keyboardUp: keyboardUp) ? 1 : 0)
+            .allowsHitTesting(placement.showsChrome(keyboardUp: keyboardUp))
+            .accessibilityHidden(!placement.showsChrome(keyboardUp: keyboardUp))
             .transition(.opacity)
         }
     }

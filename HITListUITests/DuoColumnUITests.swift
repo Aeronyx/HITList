@@ -63,6 +63,19 @@ final class DuoColumnUITests: XCTestCase {
         add(tree)
     }
 
+    /// While the keyboard is up the upright island and its "+" are out of the way (item 5): nothing of them peeks out
+    /// between the quick-add card and the keys.
+    func testTheIslandStepsAsideForTheKeyboard() throws {
+        try launch()
+        go("inbox")
+        tap(app.buttons["quickAddButton"].firstMatch)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "quick add's keyboard")
+        pause(1)
+        snap("keyboard, quick add")
+        let tab = app.buttons["tab-inbox"].firstMatch
+        XCTAssertFalse(tab.exists && tab.isHittable, "the island stepped aside")
+    }
+
     // MARK: The walk
 
     /// Every tab's first screen, then Browse, a Group and Completed pushed from it.
