@@ -5,26 +5,27 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.4 (round 20, 2026-11-11, afternoon)
+## Now: 0.9.5 (round 21, 2026-11-11 to 12, overnight)
 
 | Brief | What | Status |
 |---|---|---|
-| 95 `sync-truth` | The bolt is filled only within 30 s of a confirmation from iCloud itself (a small check every 15 s while a bolt can be seen); Check iCloud… compares this device with iCloud record by record and repairs nothing by itself | merged, awaiting release; why "Shave" was on the iPhone and not the Mac is still open (both logs in hand) |
-| 96 `flipboard-phone` | The empty Flipboard is one Add switch outline; a calmer Add a Switch card; drag a switch onto a Switchboard; Duplicate | merged, awaiting release |
-| 97 `repeat-picker` | The repeat menu worded for the task's day, Custom…, a Repeat button in the date picker; no system date picker left | merged, awaiting release |
-| 98 `quick-add-words` | "starting", several weekdays at once, the quick add guide | merged, awaiting release |
-| 99 `sweep-polish` | The Mac's "…" is the Settings button; the sweep's eighteen items | merged, awaiting release |
-| 100 `companions-alive` | An idle every 6 to 36 s, the first within seconds; every companion sits on the "+"; Tuck's eyes | merged, awaiting release |
-| 101 `phase`, 102 `rose-and-graphite` | Phase (Mocha), Button (Rosé), Gargle (Graphite) in place of Mallow, Posy and Smudge | merged, awaiting release |
+| 103 `button-stands` | Button redrawn small and sweet, standing on the bar, with a mushroom's idles (the roll, the spore puff) | merged, awaiting release |
+| 104 `gargle-perched` | Gargle carved and perched, his tail behind the bar; the format's "behind the host" layer; a companion on the Duo's tab island | merged, awaiting release |
+| 105 `cast-flavor` | Nod, Quill, Tuck, Hush, Glim and Phase: idles that are each creature's own | merged, awaiting release |
+| 106 `duo-column` | The Duo's outer display: a screen's controls beside its title, nothing overlapping in the bar column; a row's Group never cut to a letter | merged, awaiting release |
+| 107 `duo-cards` | The Duo's outer display: every picker, card and the editor fit a short screen (by the room, on any device) | merged, awaiting release |
+| 108 `duo-inner` | The Duo's inner display: search in the sidebar, the hinge, the board's whole days (seen on a stand-in only) | merged, awaiting release |
+| supervisor | Each creature's name under its theme in Settings | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's eye on round 20**: the three new creatures and Tuck's eyes at real size; whether a companion's pace
-   (something every 6 to 36 s) is right; whether the bolt is ever hollow or red when nothing is wrong (its pace and
-   its red after two minutes apart are the supervisor's numbers); the Mac's drag of a switch onto a Switchboard,
-   which nobody saw through to a drop.
-2. **What happened to "Shave"**, from the two logs George saved and from Check iCloud… on each device once 0.9.4 is
-   on them; then whatever the cause turns out to need.
+1. **George's eye, and his friend's, on round 21**: Button and Gargle at real size and what each creature now does;
+   the Duo's outer display in the friend's hand (the title row's controls, the cards, the companion on the tab bar);
+   whether the Duo's title should stay put while a list scrolls.
+2. **The Duo's inner display, for real.** Nobody has seen it since October: Device Hub could not list the round's
+   simulators (`killall -u "$USER" CoreDeviceService` in George's Terminal, then `108-duo-inner/unfold.sh`). Then:
+   the system's bar column on its side, how sheets are sized there, Settings closing on a fold, the keyboard.
+   **What happened to "Shave"** (round 20) is still open: Check iCloud… on each device names it.
 3. **Widgets, third pass**: a Control Center "Add task", calendar events in the Upcoming widget, an "Add task"
    widget.
 4. **The Mac window's shape on macOS 27.** Since 0.9.0 (21) the app draws its own sidebar rows, selection and toolbar
@@ -67,6 +68,11 @@ release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; 
 ## Shipped
 
 Newest first; one line per release, details in `CHANGELOG.md`.
+
+- **0.9.4**, 2026-11-11: a sync bolt that is filled only when iCloud has just confirmed it, and Check iCloud…;
+  companions that idle every few seconds and sit on the "+"; Button, Phase and Gargle; the repeat menu and Custom…;
+  "starting", weekday lists and the quick add guide; a calmer Flipboard card, drag and Duplicate; the Mac's Settings
+  button and a sweep's eighteen items.
 
 - **0.9.3**, 2026-11-11: a companion for every theme with idle routines and the weather shown on the creature; the
   location asked once; a date with no time kept on its day in every zone; Settings as one short screen and pages;

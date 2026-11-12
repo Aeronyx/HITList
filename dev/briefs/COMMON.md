@@ -376,6 +376,66 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 21 record (2026-11-11 to 12, overnight; sessions 103–108 merged for 0.9.5)
+All six branches are merged on master. Two early commits went first so siblings could build on them (104's "behind"
+layer at 22:20, 106's bar column at 23:30); then 104, 105, 103, 104's island companion, 106, 108, 107. No schema
+change.
+- **103 `button-stands`** (`claude/button-stands-22ca15`): Button redrawn at 14 × 12 pixels, the smallest of the
+  eight: a rose cap over a rose stem with the face on it (nothing bone white), both stub feet on the host's top
+  edge, centred on the flat of the "+". Idles: bob, breeze, puff, grow, tiptoe, a tipped cap, a shiver, a blush, a
+  spot that lights. Routines: the roll, the spore puff (the format's one exception to "nothing in the air"), a
+  bounce, planting itself, a doze. The boots and their kicks are gone.
+- **104 `gargle-perched`** (`claude/gargle-perched-6967f4`): the "behind the host" layer (a capital ink letter is
+  that ink behind the host, drawn only outside `CompanionPerch.surface`, not at all with no host;
+  `CompanionBehindTests`); Gargle redrawn (side-on body, his face toward you, pale horns at the sides, a broad
+  nose, one fang, a folded wing in flat shapes, the tail behind the bar with its spade beside him; the profile is
+  his statue pose and his sleep); and the companion on the Duo's outer display (a new spot on the crown of the
+  upright tab island: its own surface, a base carried down the dome up to 8 pt, shown only while the room above is
+  its height plus 8 pt; `CompanionIslandTests`, `CompanionIslandUITests`).
+- **105 `cast-flavor`** (`claude/cast-flavor-1de84d`): the audit (`105-cast-flavor/audit.md`: on 0.9.4 Nod's two
+  minutes were seven idles, six of them his feet); new idles and routines for Nod, Quill, Tuck, Hush, Glim and
+  Phase, each its own; `CompanionCastFlavorTests` (enough idles each, none too small to see, feet at most a fifth);
+  the contact sheets are drawn in pages of 120 frames. It used the behind layer for none of the six.
+- **106 `duo-column`** (`claude/duo-column-c20f70`): on the outer display a screen's bolt and pill are the system's
+  title-row item (`ScreenControlsPlacement`; an overlay of our own took no taps under the navigation bar) and the
+  column keeps the status, Back, the island and the "+" (`BarColumnBudget`); a 1 pt scroll view above the list
+  keeps the title row in place; the week strip and Browse's saved filters stop at the content's edge; a row's
+  meta line gives way in order (labels to "@first +N", then the Group to a line of its own); the upright island's
+  labels keep the default size (large-content viewer on a long press); the island and "+" fade while the keyboard
+  is up. `DuoColumnUITests`, `DuoOuterListsTests`, `DuoSweepUITests` (on demand), `-duoStatusPad 60` (a Debug
+  stand-in for a call).
+- **107 `duo-cards`** (`claude/duo-cards-f7ad0e`): the app chooses a picker card's side (above or below its chip,
+  by the room, never beside it); short layouts for the date and reminder cards and denser lists where a card still
+  does not fit; the editor at full height on a short screen; Review Inbox's cards hang under the title; a switch
+  card's Discard question makes the keyboard step aside; Settings' descriptions wrap at XL. All keyed on the room
+  on screen, not on the device (`DuoCardsTests`, `DuoCardsUITests`).
+- **108 `duo-inner`** (`claude/duo-inner-a0aa19`): on the inner display the sidebar has the search field (there
+  was no search there at all), one gear, the list and the editor meet at the hinge, the board shows whole days,
+  the days beside Today use the lists' headers and rows, the sidebar steps aside after an unfold with the editor
+  open. `-duoStandInSize inner` draws the app at 669 × 951 on an iPad mini; `DuoInnerUITests` (on demand).
+- **The supervisor**: each creature's name under its theme (`ThemeSwatchButton`; the grid and the first screen's
+  group spacing give back the height, 719.7 of 720 pt); the format's header line for Button's spores.
+What worked: concept sheets again. Button's pick was right the first time; Gargle's first pick (a profile, one eye,
+"the only one that reads as a gargoyle") was sent back within minutes with a stop: the three-quarter pup with his
+face toward you is the resting pose and the profile is his statue. A note between sessions (108 to 107: the open
+Duo on its side is as short as the outer display, so key fixes on the room) was worth a stop too.
+What cost time: six sessions' first builds with six fresh simulators on two iOS runtimes took the Mac to a load of
+900 and 15 GB of swap for an hour; simulators' SpringBoards and a Python crashed, and their crash dialogs and one
+privacy prompt ("claude.app would like to access data from other apps") were left on George's screen, unanswered.
+**The Duo's inner display was never reached**: Device Hub lists simulators through CoreDevice, whose per-user
+service was stuck on the morning's device list; restarting it was refused to the session and is George's to do
+(`killall -u "$USER" CoreDeviceService`); `108-duo-inner/unfold.sh` and its README are the procedure for the next
+round. `scripts/test.sh` builds into Xcode's default derived data, so `build.noindex/mac-tests` holds whatever was
+last built there by hand: build the Debug Mac app with `-derivedDataPath` before looking at it (the supervisor
+looked at a round-old app for a minute). `window-drive.sh` refuses a click that a system alert covers.
+Never seen running, for the hand-over: the Duo's inner display itself; a real call in the Duo's camera island;
+VoiceOver's order on the Duo; sheets on the open Duo; a tip and a Flipboard drag on the Duo; a sharing invitation
+and the profile picture picker on the Duo. Known and left: Settings closes when the Duo folds or unfolds (it is
+presented from inside each shell); Browse at AX5 breaks "Default Group" inside words; on a pushed screen during a
+real call the island's companion may come within a few points of Back.
+Side stores left in the Mac's app-group folder, for George to delete by hand: `HITList-sup21*` and the sessions'
+(`HITList-s103*` to `HITList-s108*`).
+
 ## Round 20 record (2026-11-11, afternoon; sessions 95–102 merged for 0.9.4)
 All eight branches are merged on master (in this order: 98, 97, 95, 102, 101, 100, 96, 99). No schema change.
 - **95 `sync-truth`** (`claude/sync-truth-b7f2bc`): `BoltTruth` (filled only within 30 s of a confirmation, two lost
