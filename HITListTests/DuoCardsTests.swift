@@ -145,4 +145,19 @@ final class DuoCardsTests: XCTestCase {
         XCTAssertTrue(PickerKind.labels.selfScrolls)
         XCTAssertFalse(PickerKind.date.selfScrolls)
     }
+
+    // MARK: Review Inbox
+
+    func testReviewCalendarHangsUnderTheTitleOnTheDuo() {
+        // The Duo: the title's foot at 240, the actions at 500; the calendar (309) needs 333 with its arrow.
+        let calendar = DatePickerCardLayout.regularHeight(hasFoot: false)
+        XCTAssertEqual(ReviewPopoverPlace.place(cardHeight: calendar, titleBottom: 240, actionsTop: 500), .underTitle)
+        // George's iPhone 16: 290 and 674, room to rise from the actions without covering the title, as it always has.
+        XCTAssertEqual(ReviewPopoverPlace.place(cardHeight: calendar, titleBottom: 290, actionsTop: 674), .actions)
+    }
+
+    func testReviewGroupCardHeightFollowsItsGroups() {
+        XCTAssertEqual(InboxPicker.height(options: 0), 96 + 36 + 8)
+        XCTAssertEqual(InboxPicker.height(options: 40), 96 + 300, "the list scrolls past 300")
+    }
 }
