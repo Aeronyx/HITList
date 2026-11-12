@@ -212,8 +212,9 @@ final class CompanionGlimTests: XCTestCase {
             for y in glim.seatRow..<glim.height {
                 XCTAssertEqual(rows[y], String(repeating: ".", count: glim.width), "\(name) row \(y): nothing hangs")
             }
-            // The light in his lap, between his paws, under his chin.
-            XCTAssertEqual(String(Array(rows[13])[3...10]), "ddgwwgdd", "\(name): his arms round its top")
+            // The light in his lap, between his paws, its glow on his chest under his chin.
+            XCTAssertEqual(String(Array(rows[12])[5...8]), "lggl", "\(name): its glow on his chest")
+            XCTAssertEqual(String(Array(rows[13])[3...10]), "ddwwwwdd", "\(name): his arms round its top")
             XCTAssertEqual(String(Array(rows[14])[3...9]), "dlwwwwl", "\(name): his paws at its sides")
             // No tail out to the right: nothing right of his curled tail, and his face as by day.
             for y in 0..<glim.seatRow {
@@ -298,7 +299,7 @@ final class CompanionGlimTests: XCTestCase {
             XCTAssertEqual(Set(snow).count, snow.count, "\(still): each depth adds snow")
         }
         let held = try XCTUnwrap(glim.rows("snow"))[13]
-        XCTAssertEqual(String(held.dropFirst(5).prefix(4)), "gwwg", "the light held, dry")
+        XCTAssertEqual(String(held.dropFirst(5).prefix(4)), "wwww", "the light held, dry")
         let shakeOff = try XCTUnwrap(mode.routines.first { $0.name == "shakeOff" })
         XCTAssertTrue(shakeOff.shakesOff)
         XCTAssertTrue(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 2), "from the heap")
