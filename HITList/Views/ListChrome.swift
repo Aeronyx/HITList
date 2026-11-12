@@ -261,3 +261,52 @@ extension View {
         #endif
     }
 }
+
+// MARK: - Beside the bar column (brief 106)
+
+extension IslandPlacement {
+    /// The edges a list's own strip may draw its background under: all of them, except the system's bar column's where
+    /// the island stands at the side (the clock and the battery ring sit there).
+    var stripBackgroundEdges: Edge.Set {
+        switch self {
+        case .bottom: .all
+        case .side(.leading): [.top, .bottom, .trailing]
+        case .side: [.top, .bottom, .leading]
+        }
+    }
+
+    /// The bar column's edge, where a sideways strip stops; nil where the island is at the bottom.
+    var barColumnEdge: Edge.Set? {
+        switch self {
+        case .bottom: nil
+        case .side(.leading): .leading
+        case .side: .trailing
+        }
+    }
+}
+
+extension View {
+    /// A strip that scrolls sideways (Upcoming's week, Browse's saved filters) ends at the content's edge beside the
+    /// system's bar column: a scroll view draws into the safe area around it, which there is the column, so the next
+    /// week's first day and the last filter ran under the battery ring. Clipped to its own frame on that side only;
+    /// every other iPhone, the iPad and the Mac are left as they are.
+    func endsBeforeTheBarColumn() -> some View { modifier(EndsBeforeTheBarColumn()) }
+}
+
+private struct EndsBeforeTheBarColumn: ViewModifier {
+    @Environment(\.listIslandPlacement) private var placement
+
+    func body(content: Content) -> some View {
+        if let edge = placement.barColumnEdge {
+            // Open on every other side (a press's lift, a chip's shadow), shut on the column's.
+            content.mask {
+                Rectangle()
+                    .padding(.horizontal, -400)
+                    .padding(.vertical, -400)
+                    .padding(edge, 400)
+            }
+        } else {
+            content
+        }
+    }
+}
