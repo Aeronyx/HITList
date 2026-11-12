@@ -460,4 +460,25 @@ final class DuoLayoutTests: XCTestCase {
         XCTAssertTrue(AppShell.sidebarHasSettingsGear(.split), "the iPad as it was")
         XCTAssertTrue(AppShell.sidebarHasSettingsGear(nil), "offscreen renders as they were")
     }
+
+    func testUpcomingsBoardShowsWholeColumnsOnTheInnerDisplay() {
+        let inset = UpcomingBoard.boardInset, spacing = UpcomingBoard.columnSpacing
+        func columns(_ board: CGFloat) -> (count: CGFloat, width: CGFloat) {
+            let width = DuoBoardColumns.width(board: board, inset: inset, spacing: spacing)
+            return (((board - 2 * inset + spacing) / (width + spacing)).rounded(.down), width)
+        }
+        let upright = columns(inner.width - DuoSplit.sidebarWidth)
+        XCTAssertEqual(upright.count, 2, "upright beside the sidebar: two days, not one and a half")
+        let held = columns(book.width - DuoSplit.sidebarWidth)
+        XCTAssertEqual(held.count, 3, "held like a book beside the sidebar")
+        let besideEditor = columns(334)
+        XCTAssertEqual(besideEditor.count, 1)
+        for board: CGFloat in [300, 334, 429, 475, 649, 669, 889] {
+            let (count, width) = columns(board)
+            XCTAssertGreaterThanOrEqual(width, DuoBoardColumns.minWidth, "\(board)")
+            let used = count * width + (count - 1) * spacing + 2 * inset
+            XCTAssertLessThanOrEqual(used, board, "\(board): whole columns only")
+            XCTAssertLessThan(board - used, width + spacing, "\(board): no room left for another")
+        }
+    }
 }
