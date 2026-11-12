@@ -322,4 +322,24 @@ final class TaskActionsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(t.updatedAt, before)
         XCTAssertFalse(context.hasChanges)
     }
+
+    /// Round 25 (after brief 127): "Remove Date" in a row's menu and in Upcoming left "30 minutes before" on a task
+    /// with no time, and it came back the day the task was given one. A reminder at its own moment ("!15m") stays.
+    func testRemovingTheDateTakesTheReminderBeforeItAlong() throws {
+        let t = try task(due: tomorrow(20, 0), hasDueTime: true)
+        t.reminderOffsetMinutes = 30
+        let own = tomorrow(8, 0)
+        t.reminderDate = own
+        TaskActions.reschedule(t, to: nil, in: context)
+        XCTAssertNil(t.reminderOffsetMinutes, "nothing left to count from")
+        XCTAssertEqual(t.reminderDate, own, "a reminder at its own moment needs no due time")
+        TaskActions.reschedule(t, to: tomorrow(), in: context)
+        t.hasDueTime = true
+        XCTAssertNil(t.reminderOffsetMinutes, "and it does not come back with a new time")
+
+        let kept = try task(due: tomorrow(20, 0), hasDueTime: true)
+        kept.reminderOffsetMinutes = 30
+        TaskActions.reschedule(kept, to: cal.date(byAdding: .day, value: 2, to: tomorrow())!, in: context)
+        XCTAssertEqual(kept.reminderOffsetMinutes, 30, "another day keeps the time and its reminder")
+    }
 }
