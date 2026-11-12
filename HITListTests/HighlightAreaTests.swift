@@ -257,6 +257,37 @@ final class HighlightAreaTests: XCTestCase {
         XCTAssertLessThanOrEqual(last.rect.maxY - lastLine.maxY, HighlightTextStyle.current().boxOutset)
     }
 
+    /// Round 25: on an iPhone the title "PNHP Working Group !30mb" ended its first line on the "!" and began the next
+    /// with "30mb", the phrase and its box in two pieces. A "!" stays with the word it starts.
+    func testAReminderPhraseIsNeverBrokenAfterItsBang() throws {
+        XCTAssertFalse(HighlightLineBreaks.allowsBreak(before: 20, in: "PNHP Working Group !30mb"), "between ! and 30mb")
+        XCTAssertTrue(HighlightLineBreaks.allowsBreak(before: 19, in: "PNHP Working Group !30mb"), "before the !")
+        XCTAssertFalse(HighlightLineBreaks.allowsBreak(before: 6, in: "Rent !!1 today"), "inside !!1")
+        XCTAssertFalse(HighlightLineBreaks.allowsBreak(before: 7, in: "Rent !!1 today"))
+        XCTAssertTrue(HighlightLineBreaks.allowsBreak(before: 5, in: "Done! Next"), "a sentence's ! is followed by a space")
+        XCTAssertTrue(HighlightLineBreaks.allowsBreak(before: 0, in: "!at"))
+        XCTAssertTrue(HighlightLineBreaks.allowsBreak(before: 3, in: "!at"), "past the end")
+
+        let text = "PNHP Working Group !30mb"
+        let attributes = HighlightTextStyle.current().attributes
+        func width(_ string: String) -> CGFloat { NSAttributedString(string: string, attributes: attributes).size().width }
+        // Wide enough for the line up to and including the "!", too narrow for the whole phrase.
+        let narrow = (width("PNHP Working Group !") + width("PNHP Working Group !3")) / 2
+        let stack = HighlightTextStack()
+        stack.storage.setAttributedString(NSAttributedString(string: text, attributes: attributes))
+        stack.container.size = CGSize(width: narrow.rounded(.up), height: CGFloat.greatestFiniteMagnitude)
+        stack.layoutManager.ensureLayout(for: stack.container)
+        let layout = stack.layoutManager
+        let bang = (text as NSString).range(of: "!").location
+        let bangLine = layout.lineFragmentRect(forGlyphAt: layout.glyphIndexForCharacter(at: bang), effectiveRange: nil)
+        let restLine = layout.lineFragmentRect(forGlyphAt: layout.glyphIndexForCharacter(at: bang + 1), effectiveRange: nil)
+        let firstLine = layout.lineFragmentRect(forGlyphAt: 0, effectiveRange: nil)
+        XCTAssertEqual(bangLine.minY, restLine.minY, "the ! and 30mb share a line")
+        XCTAssertGreaterThan(bangLine.minY, firstLine.minY, "and that line is the second: the break came before the !")
+        let pieces = HighlightGeometry.pieces(for: [(text as NSString).range(of: "!30mb")], layoutManager: layout, container: stack.container)
+        XCTAssertEqual(pieces.count, 1, "one box, not two")
+    }
+
     // MARK: Layout
 
     /// The title's TextKit layout of `text` in the field's font at `width` (nil: wide enough for one line), and
