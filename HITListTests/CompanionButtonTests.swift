@@ -29,13 +29,14 @@ final class CompanionButtonTests: XCTestCase {
         XCTAssertEqual(CompanionCast.character(forTheme: "nord", launch: forced).id, "button")
     }
 
-    /// Brief 109, "completely revert": every still it shows that is not snow (awake, rain, heat, asleep; the same in
+    /// Brief 109, "completely revert": every still it shows that is not snow or rain (awake, heat, asleep; the same in
     /// both places) is 0.9.4's, row for row. The digests are of each still's rows joined by newlines, computed once
-    /// from `git show v0.9.4:HITList/Support/Companions/Characters/Button.swift`.
+    /// from `git show v0.9.4:HITList/Support/Companions/Characters/Button.swift`. The rain's is brief 120's: the cap
+    /// pulled down over its eyes (George: "grab his mushroom hood and warp it down a bit, attempting to hide").
     func testItIsZeroNineFoursButtonPixelForPixel() {
         let v094: [String: String] = [
             "rest": "5a6420179c928ee7fce5f6ffbfec11a6408a184482c7879efd979a8be0ec0c1a",
-            "rain": "30966c8c0ccf23454ab872202cd9563ccf7c29134c5b9983a893821ef68c7709",
+            "rain": "1618136210bc51b1db6d0b2139b19b788bf00b7485b46e504de4f3c20befd8ba",
             "heat": "7bcbb8e948ea38c99f254b33721bd8870fbf6788fe238fc3681da63fb2ed3ca8",
             "sleep": "2f79dd4fa7141ec21214971a993bea07b540d03ac6463a799ec82139de22db83",
         ]
@@ -44,7 +45,7 @@ final class CompanionButtonTests: XCTestCase {
             let data = Data(rows.joined(separator: "\n").utf8)
             return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
         }
-        for (name, expected) in v094 { XCTAssertEqual(digest(name), expected, "\(name) is 0.9.4's") }
+        for (name, expected) in v094 { XCTAssertEqual(digest(name), expected, "\(name) is 0.9.4's (the rain brief 120's)") }
         XCTAssertEqual(button.width, 20)
         XCTAssertEqual(button.height, 20)
         for place in CompanionPlace.allCases {
@@ -259,7 +260,7 @@ final class CompanionButtonTests: XCTestCase {
         XCTAssertTrue(button.rows("sleepPeekLook")!.joined().contains("k"), "woken: one eye peeks out")
     }
 
-    /// Brief 91: in the rain a drop runs off its rim (a flicker that shows) and it shakes the water off both rims; snow
+    /// Brief 91: in the rain a drop runs off its rim (a flicker that shows) and it peeks out from under it (120); snow
     /// piles up twice over (more snow each time, the seat untouched) until it tips its cap and the heap slides off,
     /// from the heap only; on a hot day it lifts its cap, a bead of sweat runs down, and it fans itself with the cap.
     func testTheWeatherShowsOnIt() {
@@ -270,7 +271,14 @@ final class CompanionButtonTests: XCTestCase {
             XCTAssertEqual(drip.sky, .rain)
             XCTAssertTrue(drip.flicker)
             for tick in drip.ticks { XCTAssertEqual(button.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
-            XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "shake", at)
+            XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "peek", at)
+            // Brief 120: hiding under its cap: the rim pulled down over its eyes, its hands on the rim's ends, its eyes
+            // (each with a glint) peeking out from under.
+            let rain = button.rows(awake.rain!)!.map(Array.init)
+            XCTAssertEqual(String(rain[13]), "rarrrrrrrrrrrrrrrrar", "\(at): the rim across its face")
+            XCTAssertEqual(rain[14][1], "l", "\(at): a hand on the rim")
+            XCTAssertEqual(rain[14][18], "l", "\(at): and the other")
+            XCTAssertTrue(String(rain[14]).contains("klk"), "\(at): its eyes peek out, glints and all")
             var previous = awake.snow!
             let snowInks: Set<Character> = ["s", "b", "c"]
             for deep in awake.snowDeep {
