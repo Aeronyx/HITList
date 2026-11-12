@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00AE08A4120A9520190FC873 /* CompanionCastFlavorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1783B0C50F9E3DBF2734E065 /* CompanionCastFlavorTests.swift */; };
 		01AFA4B56374FCB5B29D005A /* CloudKitSchemaCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = D010EDAA6842A7E3DD29AEED /* CloudKitSchemaCheck.swift */; };
 		01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71906FD6A69511E19F1911F9 /* SyncStatusViews.swift */; };
 		0246959458F71445ABB2603C /* ShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = 994FA0B078605DDC99DC19C2 /* ShareInbox.swift */; };
@@ -642,6 +643,7 @@
 		165FA6D62560AF712E0AB48D /* HITSegmented.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITSegmented.swift; sourceTree = "<group>"; };
 		170EFAA108F98117E278099E /* SyncBeatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncBeatTests.swift; sourceTree = "<group>"; };
 		172507FC4FF599F803EE8248 /* TaskPopout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopout.swift; sourceTree = "<group>"; };
+		1783B0C50F9E3DBF2734E065 /* CompanionCastFlavorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCastFlavorTests.swift; sourceTree = "<group>"; };
 		179EC0133891B8DCC4B358ED /* MobileTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileTabBar.swift; sourceTree = "<group>"; };
 		184C37C143DA7F89F0707031 /* SettingsRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRouter.swift; sourceTree = "<group>"; };
 		18F4F1697CE016BD20D66BDA /* CompanionsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionsUITests.swift; sourceTree = "<group>"; };
@@ -1624,6 +1626,7 @@
 				5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */,
 				C30C52D93F8827A9A1FF9CC4 /* CompanionBehindTests.swift */,
 				CA9BD27B56EBA4D8307553E6 /* CompanionButtonTests.swift */,
+				1783B0C50F9E3DBF2734E065 /* CompanionCastFlavorTests.swift */,
 				453738DB09EEE9FAE6BD7859 /* CompanionClockTests.swift */,
 				B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */,
 				40E19A8110C433322A8B61BA /* CompanionGargleTests.swift */,
@@ -2738,6 +2741,7 @@
 				FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */,
 				714095B9D6D2E61ABF7F9547 /* CompanionBehindTests.swift in Sources */,
 				6DE21FA23CD585AE4FE40CDD /* CompanionButtonTests.swift in Sources */,
+				00AE08A4120A9520190FC873 /* CompanionCastFlavorTests.swift in Sources */,
 				F1E57121A758A7BE8F241ADF /* CompanionClockTests.swift in Sources */,
 				812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */,
 				1EF8F087699CD428EB04059E /* CompanionGargleTests.swift in Sources */,

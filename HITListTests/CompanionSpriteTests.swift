@@ -225,10 +225,13 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.awake.snow, "snow")
         XCTAssertEqual(nod.field.asleep.snow, "sleepSnow", "snow settles on its cap while it sleeps")
         XCTAssertNil(nod.field.asleep.rain, "asleep wins over rain: it doesn't hold an umbrella in its sleep")
-        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "swing", "swingRight", "glance", "lookLeft", "lookRight",
-                                                              "lampFlicker", "rimDrip", "sweat"])
-        XCTAssertEqual(nod.field.awake.flickers, Array(0...8), "brief 100: every one an idle, the weather's drip and sweat too")
-        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "kick"])
+        // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
+        XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
+                                                              "rimDrip", "sweat"])
+        XCTAssertEqual(nod.field.awake.flickers, Array(0...7), "brief 100: every one an idle, the weather's drip and sweat too")
+        XCTAssertEqual(nod.field.awake.routines.filter(\.little).map(\.name), ["nodOff", "rubYawn", "dangle", "lampTap"])
+        XCTAssertEqual(nod.plus.awake.gestures.map(\.name), nod.field.awake.gestures.map(\.name), "the same in both places")
+        XCTAssertEqual(nod.field.asleep.gestures.map(\.name), ["nod", "sway", "murmur"])
         // The lamp is turned down at night: no full-bright bobble pixel in the middle of it.
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
         XCTAssertEqual(rest[13][17], "w")
@@ -408,8 +411,14 @@ final class CompanionSpriteTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CompanionSheets", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for character in CompanionCharacter.all {
-            let frames = Self.sheet(character, palette: .slate, frames: Array(character.frames.indices), scale: 4)
-            try write(frames, scale: 2, to: folder.appendingPathComponent("\(character.id)-frames-8x.png"))
+            // In pages of 120 frames (brief 105: Tuck's 227 frames in one sheet were too tall for iOS to encode).
+            let every = Array(character.frames.indices)
+            for (n, start) in stride(from: 0, to: every.count, by: 120).enumerated() {
+                let page = Array(every[start..<min(start + 120, every.count)])
+                let frames = Self.sheet(character, palette: .slate, frames: page, scale: 4)
+                let name = n == 0 ? "\(character.id)-frames-8x.png" : "\(character.id)-frames-8x-\(n + 1).png"
+                try write(frames, scale: 2, to: folder.appendingPathComponent(name))
+            }
             let field = character.field, plus = character.plus
             let poses = [field.awake.rest, field.asleep.rest, field.flourish[field.flourish.count / 2].frame,
                          plus.awake.rest, plus.asleep.rest].compactMap { character.index[$0] }
