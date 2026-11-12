@@ -5046,15 +5046,14 @@ extension CompanionCharacter {
                         snow: "snow",
                         gestures: [
                             Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
-                            // Brief 105: nothing fast. An eye stalk tips out slowly; one draws in and comes back;
-                            // both stretch up to the sky; they lean ahead; the leaf stirs; it leans back toward its
-                            // seedling and the leaf lifts as it looks.
+                            // Brief 105: nothing fast, each a few pixels. An eye stalk tips out slowly; one dips in
+                            // a row, the left or the right; the leaf stirs; it looks back at its seedling and the leaf
+                            // lifts as it looks. Drawing both in, stretching up and leaning are its little loops.
                             Gesture(name: "twitch", weight: 2, ticks: Self.ticks(("twitch", 5)), flicker: true),
-                            Gesture(name: "stalkIn", ticks: Self.ticks(("inL1", 2), ("inL2", 3), ("inL1", 2)), flicker: true),
-                            Gesture(name: "stretch", ticks: Self.ticks(("lookUp", 1), ("upBoth", 4), ("upL", 1), ("lookUp", 1)), flicker: true),
-                            Gesture(name: "leanAhead", ticks: Self.ticks(("look", 1), ("leanAhead", 5), ("look", 1)), flicker: true),
+                            Gesture(name: "stalkIn", ticks: Self.ticks(("inL1", 5)), flicker: true),
+                            Gesture(name: "stalkInRight", ticks: Self.ticks(("inR1", 5)), flicker: true),
                             Gesture(name: "leaf", ticks: Self.ticks(("leaf", 4)), flicker: true),
-                            Gesture(name: "seedling", ticks: Self.ticks(("lookBack", 1), ("leanBack", 2), ("leanLeaf", 3), ("lookBack", 1)), flicker: true),
+                            Gesture(name: "seedling", ticks: Self.ticks(("lookBack", 1), ("lookBackLeaf", 4), ("lookBack", 1)), flicker: true),
                             Gesture(name: "drip", weight: 2, ticks: Self.ticks(("drip1", 3), ("drip2", 2), ("drip3", 1), ("drip4", 1)), flicker: true, sky: .rain),
                             Gesture(name: "pant", weight: 2, ticks: Self.ticks(("pant", 2), ("heat", 1), ("pant", 2)), flicker: true, sky: .heat),
                         ],
