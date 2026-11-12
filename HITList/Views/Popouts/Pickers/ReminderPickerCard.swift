@@ -119,11 +119,17 @@ struct ReminderPickerCard: View {
                 header(onOffset == nil ? "Remind me at" : "Time")
             }
             PickerTimeField(time: time, focusTrigger: focusRequest, onCommit: onTime)
-            HITChipRow {
-                ForEach(Self.timePresets, id: \.0) { preset in
-                    HITChip(preset.0, systemImage: "alarm", tint: Theme.accent, isSelected: time == preset.1,
-                            action: { onTime(preset.1) })
+            if short {
+                // The short layout keeps the four times on one row: where they do not fit it with their alarm icons
+                // (the larger text sizes), without them, and only then on two rows (brief 114: at XL their second row
+                // met the card's rounded foot).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) { timeChips(icons: true) }
+                    HStack(spacing: 6) { timeChips(icons: false) }
+                    HITChipRow { timeChips(icons: true) }
                 }
+            } else {
+                HITChipRow { timeChips(icons: true) }
             }
             let fire = Self.fireText(day: day, time: time, offsetMinutes: offsetMinutes, now: now)
             let clears = time != nil || reminderDate != nil
@@ -159,6 +165,13 @@ struct ReminderPickerCard: View {
         // Brief 114: text and chips 12 pt from the card's border at the least, 16 where the card has the room.
         .padding(.horizontal, short ? ReminderCardMetrics.shortInset : ReminderCardMetrics.inset)
         .padding(.vertical, short ? ReminderCardMetrics.shortInset : ReminderCardMetrics.inset)
+    }
+
+    private func timeChips(icons: Bool) -> some View {
+        ForEach(Self.timePresets, id: \.0) { preset in
+            HITChip(preset.0, systemImage: icons ? "alarm" : nil, tint: Theme.accent, isSelected: time == preset.1,
+                    action: { onTime(preset.1) })
+        }
     }
 
     private func header(_ title: String) -> some View {
