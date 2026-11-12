@@ -43,7 +43,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "blink", rows: [
                 "....................",
@@ -65,7 +65,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "glance", rows: [
                 "....................",
@@ -87,7 +87,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sniff", rows: [
                 "....................",
@@ -109,7 +109,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "earFlick", rows: [
                 "....................",
@@ -131,7 +131,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll..drd..",
                 ".drd...........drd..",
                 ".ddd...........ddd..",
-                "dd...............dd.",
+                "..dd...........dd...",
             ]),
             Frame(name: "lookUp", rows: [
                 "....................",
@@ -153,7 +153,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "rain", rows: [
                 ".........dd.........",
@@ -219,7 +219,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sleep", rows: [
                 "....................",
@@ -373,7 +373,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "flake2", rows: [
                 "....................",
@@ -395,7 +395,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "flake3", rows: [
                 "....................",
@@ -417,7 +417,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "flake4", rows: [
                 "....................",
@@ -439,7 +439,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "crossEyed", rows: [
                 "....................",
@@ -461,7 +461,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "ah1", rows: [
                 "....................",
@@ -482,7 +482,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..ll..ll..drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
                 "....................",
             ]),
             Frame(name: "ah2", rows: [
@@ -593,7 +593,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "earFlickR", rows: [
                 "....................",
@@ -615,7 +615,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll...drd.",
                 "..drd...........drd.",
                 "..ddd...........ddd.",
-                ".dd...............dd",
+                "...dd...........dd..",
             ]),
             Frame(name: "earsBoth", rows: [
                 "....................",
@@ -637,7 +637,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "eyesRight", rows: [
                 "....................",
@@ -659,7 +659,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "listenL", rows: [
                 "....................",
@@ -681,7 +681,7 @@ extension CompanionCharacter {
                 ".......ll..ll..drd..",
                 "...............drd..",
                 "...............ddd..",
-                ".................dd.",
+                "...............dd...",
             ]),
             Frame(name: "listenR", rows: [
                 "....................",
@@ -703,7 +703,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll.......",
                 "..drd...............",
                 "..ddd...............",
-                ".dd.................",
+                "...dd...............",
             ]),
             Frame(name: "wrap1", rows: [
                 "....................",
@@ -813,7 +813,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sniffR", rows: [
                 "....................",
@@ -835,7 +835,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "hdA", rows: [
                 ".........dd..l......",
@@ -1055,7 +1055,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sfB", rows: [
                 "....................",
@@ -1077,7 +1077,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sfC", rows: [
                 "....................",
@@ -1099,7 +1099,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sfD", rows: [
                 "....................",
@@ -1121,7 +1121,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "sfFlick", rows: [
                 "....................",
@@ -1143,7 +1143,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll..drd..",
                 ".drd...........drd..",
                 ".ddd...........ddd..",
-                "dd...............dd.",
+                "..dd...........dd...",
             ]),
             Frame(name: "sfAway", rows: [
                 "....................",
@@ -1165,7 +1165,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll..drd..",
                 ".drd...........drd..",
                 ".ddd...........ddd..",
-                "dd...............dd.",
+                "..dd...........dd...",
             ]),
             Frame(name: "startle", rows: [
                 "........dddd........",
@@ -1231,7 +1231,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "sunHalf", rows: [
                 "....................",
@@ -1253,7 +1253,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "wrap0", rows: [
                 "....................",
@@ -1407,7 +1407,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "snow3", rows: [
                 "....................",
@@ -1429,7 +1429,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "hOffLook", rows: [
                 "....................",
@@ -1451,7 +1451,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "hOffFlap", rows: [
                 "....................",
@@ -1473,7 +1473,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "hOffSlide", rows: [
                 "....................",
@@ -1495,7 +1495,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "hOffGone", rows: [
                 "....................",
@@ -1517,7 +1517,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll..drd..",
                 ".drd...........drd..",
                 ".ddd...........ddd..",
-                "dd...............dd.",
+                "..dd...........dd...",
             ]),
             Frame(name: "hot", rows: [
                 "....................",
@@ -1539,7 +1539,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "hPant", rows: [
                 "....................",
@@ -1561,7 +1561,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll...drd.",
                 ".drd............drd.",
                 ".ddd............ddd.",
-                "dd................dd",
+                "..dd............dd..",
             ]),
             Frame(name: "earFlick@hot", rows: [
                 "....................",
@@ -1583,7 +1583,7 @@ extension CompanionCharacter {
                 "drd....ll..ll...drd.",
                 "drd.............drd.",
                 "ddd.............ddd.",
-                ".d................dd",
+                ".dd.............dd..",
             ]),
             Frame(name: "earFlickR@hot", rows: [
                 "....................",
@@ -1605,7 +1605,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll....drd",
                 ".drd.............drd",
                 ".ddd.............ddd",
-                "dd................d.",
+                "..dd.............dd.",
             ]),
             Frame(name: "hFanUp", rows: [
                 "....................",
@@ -1649,7 +1649,7 @@ extension CompanionCharacter {
                 "drd....ll..ll....drd",
                 "drd..............drd",
                 "ddd..............ddd",
-                ".d................d.",
+                ".dd..............dd.",
             ]),
         // Brief 100: asleep, a breath: its round head swells a pixel.
         Frame(name: "sleepBreath", rows: [
@@ -1695,7 +1695,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "tiltB", rows: [
                 "....................",
@@ -1717,7 +1717,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "tiltC", rows: [
                 "....................",
@@ -1739,7 +1739,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll.drd...",
                 ".drd..........drd...",
                 ".ddd..........ddd...",
-                "dd..............dd..",
+                "..dd..........dd....",
             ]),
             Frame(name: "backA", rows: [
                 "....................",
@@ -1761,7 +1761,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll.drd...",
                 ".drd..........drd...",
                 ".ddd..........ddd...",
-                "dd..............dd..",
+                "..dd..........dd....",
             ]),
             Frame(name: "backB", rows: [
                 "....................",
@@ -1783,7 +1783,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll.drd...",
                 ".drd..........drd...",
                 ".ddd..........ddd...",
-                "dd..............dd..",
+                "..dd..........dd....",
             ]),
             Frame(name: "backC", rows: [
                 "....................",
@@ -1805,7 +1805,7 @@ extension CompanionCharacter {
                 "...drd.ll..ll...drd.",
                 "...drd..........drd.",
                 "...ddd..........ddd.",
-                "..dd..............dd",
+                "....dd..........dd..",
             ]),
             Frame(name: "tiltRA", rows: [
                 "....................",
@@ -1827,7 +1827,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "tiltRB", rows: [
                 "....................",
@@ -1849,7 +1849,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "tiltRC", rows: [
                 "....................",
@@ -1871,7 +1871,7 @@ extension CompanionCharacter {
                 "...drd.ll..ll...drd.",
                 "...drd..........drd.",
                 "...ddd..........ddd.",
-                "..dd..............dd",
+                "....dd..........dd..",
             ]),
             Frame(name: "backRA", rows: [
                 "....................",
@@ -1893,7 +1893,7 @@ extension CompanionCharacter {
                 "...drd.ll..ll...drd.",
                 "...drd..........drd.",
                 "...ddd..........ddd.",
-                "..dd..............dd",
+                "....dd..........dd..",
             ]),
             Frame(name: "backRB", rows: [
                 "....................",
@@ -1915,7 +1915,7 @@ extension CompanionCharacter {
                 "...drd.ll..ll...drd.",
                 "...drd..........drd.",
                 "...ddd..........ddd.",
-                "..dd..............dd",
+                "....dd..........dd..",
             ]),
             Frame(name: "backRC", rows: [
                 "....................",
@@ -1937,7 +1937,7 @@ extension CompanionCharacter {
                 ".drd...ll..ll.drd...",
                 ".drd..........drd...",
                 ".ddd..........ddd...",
-                "dd..............dd..",
+                "..dd..........dd....",
             ]),
             Frame(name: "half", rows: [
                 "....................",
@@ -1959,7 +1959,7 @@ extension CompanionCharacter {
                 "..drd..ll..ll..drd..",
                 "..drd..........drd..",
                 "..ddd..........ddd..",
-                ".dd..............dd.",
+                "...dd..........dd...",
             ]),
             Frame(name: "hideA", rows: [
                 "....................",
@@ -1981,7 +1981,7 @@ extension CompanionCharacter {
                 "....drdll..ll..drd..",
                 "....drd........drd..",
                 "....ddd........ddd..",
-                "...dd............dd.",
+                ".....dd........dd...",
             ]),
             Frame(name: "hideB", rows: [
                 "....................",
@@ -2003,7 +2003,7 @@ extension CompanionCharacter {
                 "......dmd..ll..drd..",
                 "......dmd......drd..",
                 "......ddd......ddd..",
-                ".....dd..........dd.",
+                ".......dd......dd...",
             ]),
             Frame(name: "peek", rows: [
                 "....................",
@@ -2025,7 +2025,7 @@ extension CompanionCharacter {
                 "......dmd..ll..drd..",
                 "......dmd......drd..",
                 "......dmd......ddd..",
-                "......dmd........dd.",
+                "......dmd......dd...",
             ]),
             // Brief 105: an ear pricked up a little, drawn up two rows where it hangs.
             Frame(name: "perkL", rows: [
@@ -2046,9 +2046,9 @@ extension CompanionCharacter {
                 "..drd.mmmllmmm.drd..",
                 "..drd.dmmllmmd.drd..",
                 "..ddd..ll..ll..drd..",
-                ".dd............drd..",
+                "...dd..........drd..",
                 "...............ddd..",
-                ".................dd.",
+                "...............dd...",
             ]),
             Frame(name: "perkR", rows: [
                 "....................",
@@ -2068,9 +2068,9 @@ extension CompanionCharacter {
                 "..drd.mmmllmmm.drd..",
                 "..drd.dmmllmmd.drd..",
                 "..drd..ll..ll..ddd..",
-                "..drd............dd.",
+                "..drd..........dd...",
                 "..ddd...............",
-                ".dd.................",
+                "...dd...............",
             ]),
         ],
         gestureFPS: 8,
