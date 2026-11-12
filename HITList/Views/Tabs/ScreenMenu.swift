@@ -363,7 +363,7 @@ enum ScreenControlsPlacement: Equatable {
     /// Whether the system's bar column holds the screen's controls.
     var inSystemColumn: Bool { self == .toolbar }
 
-    /// `.titleRow`: the point of nothing above the screen's list that keeps the title's row from folding away.
+    /// `.titleRow`: the point-high, still scroll view above the screen's list that keeps the title's row from folding away.
     static let titleRowAnchor: CGFloat = 1
 
     /// Whether the large title's row stays while the list scrolls under it.
@@ -437,19 +437,26 @@ private struct TitleRowControlStyle: ButtonStyle {
 }
 
 /// Keeps the large title's row on screen while the list scrolls (`.titleRow`): the navigation bar folds its large title
-/// away with the screen's first scroll view only when that scroll view starts at the bar; a point of nothing above it
-/// leaves the title and the controls in its row where they are, as Browse's search field and Upcoming's week strip
-/// already did. The list starts a point lower; at rest nothing else moves. The screen's background goes up under the
-/// title again from here (the list's no longer reaches the bar: the title's row was black).
+/// away with the scroll view at the top of the screen. Here that is a point-high scroll view that never scrolls, so the
+/// title and the controls in its row stay where they are while the list under it scrolls, as Browse's search field and
+/// Upcoming's week strip already kept theirs. (A point of nothing above the list was enough for a `List`; the
+/// Flipboard's `ScrollView` still took the bar with it.) The list starts a point lower; at rest nothing else moves. The
+/// screen's background goes up under the title again from here (the list's no longer reaches the bar: the title's row
+/// was black).
 private struct PinsTheTitleRow: ViewModifier {
     let isOn: Bool
 
     func body(content: Content) -> some View {
         if isOn {
             VStack(spacing: 0) {
-                Color.clear
-                    .frame(height: ScreenControlsPlacement.titleRowAnchor)
-                    .accessibilityHidden(true)
+                ScrollView(.vertical) {
+                    Color.clear.frame(height: ScreenControlsPlacement.titleRowAnchor)
+                }
+                .frame(height: ScreenControlsPlacement.titleRowAnchor)
+                .scrollDisabled(true)
+                .scrollIndicators(.hidden)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
                 content
             }
             .background(Theme.background)

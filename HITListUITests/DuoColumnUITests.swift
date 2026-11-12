@@ -84,6 +84,10 @@ final class DuoColumnUITests: XCTestCase {
             go(tab)
             check("\(tab)\(suffix)", pushed: false)
         }
+        // Scrolled, the title's row and its controls stay (a List and the Flipboard's ScrollView alike).
+        go("flipboard")
+        scrollDown()
+        check("flipboard, scrolled\(suffix)", pushed: false)
         go("inbox")
         scrollDown()
         check("inbox, scrolled\(suffix)", pushed: false)
@@ -239,3 +243,189 @@ final class DuoColumnUITests: XCTestCase {
 }
 
 
+/// Brief 106's sweep: every list screen on the Duo's outer display photographed, for the findings table. It looks; it
+/// does not judge. Skipped unless asked for (`TEST_RUNNER_HITLIST_DUO_SWEEP=1`); `TEST_RUNNER_HITLIST_DUO_SWEEP_XL=1` at
+/// the XL text size, `TEST_RUNNER_HITLIST_DUO_SWEEP_LANDSCAPE=1` on its side.
+final class DuoSweepUITests: XCTestCase {
+    private var app: XCUIApplication!
+    private var number = 0
+    private var environment: [String: String] { ProcessInfo.processInfo.environment }
+    private var suffix: String {
+        (environment["HITLIST_DUO_SWEEP_XL"] == "1" ? " XL" : "") + (environment["HITLIST_DUO_SWEEP_LANDSCAPE"] == "1" ? " side" : "")
+    }
+
+    override func setUpWithError() throws {
+        try XCTSkipUnless(environment["HITLIST_DUO_SWEEP"] == "1", "brief 106's sweep runs only on demand")
+        continueAfterFailure = true
+        XCUIDevice.shared.orientation = environment["HITLIST_DUO_SWEEP_LANDSCAPE"] == "1" ? .landscapeLeft : .portrait
+    }
+
+    override func tearDown() {
+        XCUIDevice.shared.orientation = .portrait
+        super.tearDown()
+    }
+
+    func test1Lists() throws {
+        launch(seed: true)
+        go("inbox")
+        // The supervisor's crowded row: a repeat, a date and time, a checklist (in the editor) and a label.
+        let plus = app.buttons["quickAddButton"].firstMatch
+        if plus.waitForExistence(timeout: 5), plus.isHittable {
+            plus.tap()
+            if app.descendants(matching: .any)["quickAddTitle"].firstMatch.waitForExistence(timeout: 5) {
+                pause(0.6)
+                app.typeText("Frame the print tomorrow 5pm p1 #Work @errands @waiting every week ")
+                pause(0.8)
+                snap("quick add, keyboard")
+                app.buttons["quickAddSave"].firstMatch.tap()
+                pause(1.2)
+            }
+        }
+        go("inbox")
+        snap("inbox")
+        scrolled("inbox")
+        for tab in ["today", "upcoming", "flipboard"] {
+            go(tab)
+            snap(tab)
+            scrolled(tab)
+        }
+        go("flipboard")
+        let tile = app.descendants(matching: .any)["flipSwitchTile"].firstMatch
+        if tile.waitForExistence(timeout: 3) {
+            tile.press(forDuration: 1.0)
+            pause()
+            snap("flipboard, a tile's menu")
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.95)).tap()
+            pause()
+        }
+        go("today")
+        let check = app.buttons.matching(NSPredicate(format: "label == %@", "Complete task")).firstMatch
+        if check.waitForExistence(timeout: 3) {
+            check.tap()
+            pause(0.7)
+            snap("completion toast")
+            pause(4)
+        }
+    }
+
+    func test2Browse() throws {
+        launch(seed: true)
+        go("inbox")
+        tap(app.buttons["browseButton"].firstMatch)
+        snap("Browse")
+        scrolled("Browse")
+        for (label, name) in [("Work", "a Group, Work"), ("Shared Tasks", "Shared Tasks"), ("errands", "a label, errands"),
+                              ("Focus filter", "a filter, Focus"), ("Completed", "Completed")] {
+            let link = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+            guard scrollTo(link) else { continue }
+            link.tap()
+            pause()
+            snap(name)
+            back()
+            scrollToTop()
+        }
+        let field = app.textFields["browseSearch"].firstMatch
+        if field.waitForExistence(timeout: 3) {
+            field.tap()
+            app.typeText("lease")
+            pause()
+            snap("search, lease, keyboard")
+            app.typeText("\n")
+            pause()
+            snap("search, lease")
+        }
+    }
+
+    func test3EmptyAndTips() throws {
+        launch(seed: false, tips: true)
+        for tab in ["inbox", "today", "upcoming", "flipboard"] {
+            go(tab)
+            snap("empty \(tab)")
+        }
+        go("inbox")
+        tap(app.buttons["browseButton"].firstMatch)
+        snap("empty Browse")
+        let completed = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Completed")).firstMatch
+        if scrollTo(completed) {
+            completed.tap()
+            pause()
+            snap("empty Completed")
+        }
+    }
+
+    // MARK: Helpers
+
+    private func launch(seed: Bool, tips: Bool = false) {
+        app = XCUIApplication()
+        app.launchEnvironment["HITLIST_STORE_SUFFIX"] = "s106w-\(UUID().uuidString.prefix(8))"
+        app.launchArguments = ["-disableCloudKit", "YES"]
+        if !tips { app.launchArguments += ["-hideTips"] }
+        if seed { app.launchArguments += ["-seedDemoData", "YES", "-seedSharedTasksSample", "YES"] }
+        if environment["HITLIST_DUO_SWEEP_XL"] == "1" {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXL"]
+        }
+        app.launch()
+        _ = app.buttons["tab-inbox"].waitForExistence(timeout: 30)
+        pause(1.5)
+    }
+
+    private func go(_ tab: String) {
+        let button = app.buttons["tab-\(tab)"]
+        guard button.waitForExistence(timeout: 5) else { return }
+        button.tap()
+        pause(0.4)
+        if app.buttons["BackButton"].exists { button.tap() }
+        pause()
+    }
+
+    private func tap(_ element: XCUIElement) {
+        if element.waitForExistence(timeout: 5) { element.tap() }
+        pause()
+    }
+
+    private func back() {
+        let button = app.buttons["BackButton"].firstMatch
+        if button.exists { button.tap() }
+        pause()
+    }
+
+    private func scrollTo(_ element: XCUIElement) -> Bool {
+        _ = element.waitForExistence(timeout: 2)
+        var tries = 0
+        while !(element.exists && element.isHittable) && tries < 8 {
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.7))
+            from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -200)))
+            pause(0.5)
+            tries += 1
+        }
+        return element.exists && element.isHittable
+    }
+
+    private func scrollToTop() {
+        for _ in 0..<3 {
+            let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.3))
+            from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: 400)))
+        }
+        pause(0.5)
+    }
+
+    private func scrolled(_ name: String) {
+        let from = app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: 0.75))
+        from.press(forDuration: 0.05, thenDragTo: from.withOffset(CGVector(dx: 0, dy: -300)))
+        pause()
+        snap("\(name), scrolled")
+        scrollToTop()
+    }
+
+    private func pause(_ seconds: TimeInterval = 0.8) {
+        RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+    }
+
+    private func snap(_ name: String) {
+        number += 1
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = String(format: "%03d %@%@", number, name, suffix)
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
+}
