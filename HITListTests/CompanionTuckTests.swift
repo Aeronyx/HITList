@@ -39,26 +39,22 @@ final class CompanionTuckTests: XCTestCase {
         XCTAssertTrue(tuck.rows("rest")!.joined().contains("a"))
     }
 
-    /// Its idles are a snail's (brief 105): a blink, an eye stalk tipping out, one drawn in and back, both stretched up,
-    /// a lean ahead, the leaf stirring, a lean back to its seedling as the leaf lifts, and the weather's two (a drip off
-    /// its pot's rim in the rain, a pant on a hot day). Each starts and ends a step from the still it plays on (nothing
-    /// pops), moves no more than its eyes and a leaf, and is under a second; a tap makes it flinch (eyes shut and pulled
-    /// down a step), and woken it opens one eye.
+    /// Its flickers are a snail's (brief 105), each small beside the still it plays on and under a second: a blink, an
+    /// eye stalk tipping out, one dipping in a row (left or right), the leaf stirring, a look back at its seedling as the
+    /// leaf lifts, and the weather's two (a drip off its pot's rim in the rain, a pant on a hot day); a tap makes it
+    /// flinch (eyes shut and pulled down a step), and woken it opens one eye.
     func testItsFlickersAndGesturesAreSmall() {
         for place in CompanionPlace.allCases {
             let awake = tuck.posture(place).awake
             // Brief 100: every gesture an idle. Brief 105: its own, slow, no glances about.
-            let names = ["blink", "twitch", "stalkIn", "stretch", "leanAhead", "leaf", "seedling", "drip", "pant"]
+            let names = ["blink", "twitch", "stalkIn", "stalkInRight", "leaf", "seedling", "drip", "pant"]
             XCTAssertEqual(awake.gestures.filter(\.flicker).map(\.name), names)
             XCTAssertEqual(awake.gestures.map(\.name), names)
-            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, nil, nil, .rain, .heat])
+            XCTAssertEqual(awake.gestures.map(\.sky), [nil, nil, nil, nil, nil, nil, .rain, .heat])
             for gesture in awake.gestures + [awake.answer] {
                 let still = gesture.sky.map { awake.base(CompanionLook.Weather($0)) } ?? awake.rest
-                for tick in [gesture.ticks.first, gesture.ticks.last].compactMap({ $0 }) {
-                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 16, "\(place) \(gesture.name): nothing pops")
-                }
                 for tick in gesture.ticks {
-                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 40, "\(place) \(gesture.name): its eyes and a leaf")
+                    XCTAssertLessThanOrEqual(tuck.difference(tick.frame, still), 16, "\(place) \(gesture.name)")
                 }
             }
             for gesture in awake.gestures {
@@ -130,7 +126,7 @@ final class CompanionTuckTests: XCTestCase {
             }
             // Its eyes' flickers play over the pile; the leaf and the look back at the seedling wait until it is bare.
             for gesture in awake.gestures where gesture.flicker && gesture.sky == nil {
-                let overThePile = ["blink", "twitch", "stalkIn", "stretch", "leanAhead"].contains(gesture.name)
+                let overThePile = ["blink", "twitch", "stalkIn", "stalkInRight"].contains(gesture.name)
                 if overThePile || depth == 0 {
                     XCTAssertTrue(tuck.canDraw(gesture, in: .snow, mode: awake, depth: depth), "\(gesture.name) at \(depth)")
                 }
