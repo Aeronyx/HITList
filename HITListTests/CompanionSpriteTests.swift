@@ -196,11 +196,13 @@ final class CompanionSpriteTests: XCTestCase {
                 XCTAssertNotEqual(mode.heat, mode.rest)
                 XCTAssertTrue(mode.gestures.contains { $0.sky == .heat && $0.flicker }, "\(at): a heat flicker")
                 XCTAssertTrue(mode.routines.contains { $0.sky == .heat }, "\(at): a heat routine")
-                // Each deeper frame adds snow: more light pixels than the one before.
+                // Each deeper frame adds snow: more snow pixels than the one before (round 22's inks `s`, `b`, `c`, or the
+                // light ink of the old snow).
                 var previous = mode.snow ?? mode.rest
+                let snowy: Set<Character> = ["l", "s", "b", "c"]
                 for deep in mode.snowDeep {
-                    let more = character.rows(deep)!.joined().filter { $0 == "l" }.count
-                    let less = character.rows(previous)!.joined().filter { $0 == "l" }.count
+                    let more = character.rows(deep)!.joined().filter { snowy.contains($0) }.count
+                    let less = character.rows(previous)!.joined().filter { snowy.contains($0) }.count
                     XCTAssertGreaterThan(more, less, "\(at) \(deep): deeper than \(previous)")
                     previous = deep
                 }
