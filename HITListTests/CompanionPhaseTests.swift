@@ -8,8 +8,9 @@ import HITListCore
 /// arm or a hand in any frame, no horn, two eyes and a one-pixel mouth; it hovers wholly on top of what it sits on
 /// (nothing hangs over it or lies behind it), alive at round 20's pace, weather going through it, nothing between it
 /// and the "+", and see-through drawing (`seeThrough`, and the veil while it phases) at the right opacity. Round 24
-/// (brief 121): see-through for the eye (thinning to a nearly clear hem that breaks into a checker of the veil), eyes
-/// that glow, fading in its moves, one mound of snow, rain in blue going through it.
+/// (brief 121): see-through for the eye (thinning to a nearly clear hem that breaks into a checker of the veil), fading
+/// in its moves, one mound of snow, rain in blue going through it. Round 25 (brief 129): 0.9.7's black eyes with a white
+/// pupil back, no glow; in the snow he looks at the pile, in deep snow a little worried.
 /// `CompanionSpriteTests` also runs every check that holds for every companion on it.
 @MainActor
 final class CompanionPhaseTests: XCTestCase {
@@ -28,19 +29,19 @@ final class CompanionPhaseTests: XCTestCase {
     }
 
     /// Brief 118: one sheet, floating. Drawn in the accent with the accent's shade for its folds and (round 24) its
-    /// light along the crown, see-through and thinning down its rows, its eyes solid and glowing; nothing hangs (seat
+    /// light along the crown, see-through and thinning down its rows, its eyes solid and black (round 25: no glow); nothing hangs (seat
     /// row 20) and at rest it hovers two pixels over the bar, so nothing of it lies over the button's face or behind it;
     /// the veil in a still only in the checker of its hem's lowest row, never on the bar (no darker band on the "+").
     func testOneSheetFloating() {
         XCTAssertEqual(phase.inks, [.ink, .light, .accent, .accentDark, .accentLight, .veil])
         XCTAssertEqual(phase.seeThrough, 0.28)
         XCTAssertEqual(phase.thinning, 0.68)
-        XCTAssertEqual(phase.glow, [.light], "its eyes glow")
+        XCTAssertEqual(phase.glow, [], "no glow: his eyes are black again (round 25)")
         XCTAssertEqual(phase.opacity(.accent), 0.72)
         XCTAssertEqual(phase.opacity(.accentDark), 0.72, "its folds see-through like the rest of its cloth")
         XCTAssertEqual(phase.opacity(.accentLight), 0.72, "and its lit edge")
         XCTAssertEqual(phase.opacity(.ink), 1, "its eyes stay solid")
-        XCTAssertEqual(phase.opacity(.light), 1, "and the light in them")
+        XCTAssertEqual(phase.opacity(.light), 1, "and the white pupil in them")
         XCTAssertEqual(phase.opacity(.veil), CompanionInks.veilOpacity)
         XCTAssertEqual(CompanionCharacter.nod.opacity(.mid), 1, "everyone else is solid")
         XCTAssertEqual(phase.seatRow, phase.height, "nothing hangs over the edge it sits on")
@@ -101,10 +102,11 @@ final class CompanionPhaseTests: XCTestCase {
         XCTAssertTrue(rest[9][11...13].allSatisfy { $0 == "a" }, "well apart: three pixels of cloth between them")
         let marks = rest[11...13].joined().filter { !"ar".contains($0) && $0 != CompanionInk.clear }
         XCTAssertEqual(marks.count, 1, "a one-pixel mouth")
-        // Round 24: the eyes lit (`l`), each with its dark pupil low in it, the mouth dark.
+        // Round 25 (brief 129): 0.9.7's eyes again, black (`k`, the window's colour), each with its white pupil low and
+        // to the right (he looks down to the right by day), the mouth dark.
         for x in [9, 14] {
-            XCTAssertEqual(eyeRows.flatMap { y in rest[y][x...(x + 1)] }.filter { $0 == "l" }.count, 5, "eye at \(x): lit")
-            XCTAssertEqual(rest[eyeRows.upperBound][x + 1], "k", "eye at \(x): its pupil low in it")
+            XCTAssertEqual(eyeRows.flatMap { y in rest[y][x...(x + 1)] }.filter { $0 == "k" }.count, 5, "eye at \(x): black")
+            XCTAssertEqual(rest[eyeRows.upperBound][x + 1], "l", "eye at \(x): its white pupil low and to the right")
         }
         XCTAssertEqual(rest[12][12], "k", "the mouth stays")
         // The tiny touches (brief 121): the crown's upper side lit, a fold that tapers up, the far waves' insides a
@@ -180,7 +182,7 @@ final class CompanionPhaseTests: XCTestCase {
 
     /// Its tricks (brief 118): it hovers and bobs; its hem ripples and a shiver runs down it; it turns slowly round; it
     /// goes down through the bar, drawn by leaving out what is below the bar's top (a ghost through a wall, never a dim
-    /// band), its crown moving along the top, and comes up further along; it vanishes but for its eyes; the boo swells
+    /// band), its crown moving along the top, and comes up further along; it fades to a faint crown round its eyes; the boo swells
     /// it. No wave and nothing held out (`testNothingSticksOutAboveTheHem`).
     func testItsTricks() {
         let rest = phase.rows("rest")!
@@ -222,10 +224,17 @@ final class CompanionPhaseTests: XCTestCase {
         let awake = phase.plus.awake
         let through = awake.ticks(of: awake.routines.first { $0.name == "through" }!).map(\.tick.frame)
         XCTAssertTrue(through.contains("under") && through.contains("along"))
-        // Vanishing: everything but its eyes is gone; see-through all over as it goes.
-        let gone = phase.rows("gone")!.joined()
-        XCTAssertFalse(gone.contains("a") || gone.contains("r") || gone.contains("e"), "no cloth")
-        XCTAssertTrue(gone.contains("k") && gone.contains("l"), "its eyes stay")
+        // Vanishing (round 25, brief 129): with black eyes, eyes alone would leave two white pixels in the dark, so it
+        // fades to a faint crown round its eyes: no hem, no folds, no mouth; see-through all over as it goes.
+        for name in ["gone", "goneL", "goneR"] {
+            let rows = phase.rows(name)!
+            let gone = rows.joined()
+            XCTAssertFalse(gone.contains("r"), "\(name): no folds")
+            XCTAssertLessThan(Self.clothRows(rows.map(Array.init)).last!, Self.clothRows(rest.map(Array.init)).last! - 3,
+                              "\(name): no hem")
+            XCTAssertEqual(gone.filter { $0 == "k" }.count, 10, "\(name): its two black eyes, no mouth")
+            XCTAssertEqual(gone.filter { $0 == "l" }.count, 2, "\(name): a white pupil in each")
+        }
         XCTAssertTrue(phase.rows("thin2")!.joined().contains("v"))
         XCTAssertTrue(phase.plus.flourish.map(\.frame).contains("gone"))
         // The boo: it swells, taller and wider, its mouth open.
@@ -448,9 +457,8 @@ final class CompanionPhaseTests: XCTestCase {
     }
 
     /// At 3x every device pixel is one of its inks at that ink's opacity on its row of that frame (round 24: thinning
-    /// down its rows, the frame's fade), or clear: crisp squares, see-through where it should be and nowhere else. Its
-    /// eyes glow (round 24), so within two pixels of a lit eye the halo is allowed; the eyes themselves, and their dark
-    /// pupils, are their own inks exactly, crisp on top of the halo.
+    /// down its rows, the frame's fade), or clear: crisp squares, see-through where it should be and nowhere else. Round
+    /// 25 (brief 129): no glow, so no halo anywhere; every pixel is checked, the black eyes and their white pupils too.
     func testDrawnCrispAtItsOpacity() throws {
         for palette in [ThemePalette.mocha, .slate] {
             let inks = CompanionInks(palette: palette)
@@ -461,7 +469,7 @@ final class CompanionPhaseTests: XCTestCase {
                 let pixels = try render(CompanionSprite(character: phase, pose: pose, inks: inks), scale: 3)
                 XCTAssertEqual(pixels.width, phase.width * 6, "laid out at its own size, the halo beyond it")
                 let rows = phase.frames[frame].rows.map(Array.init)
-                let lights = (0..<phase.height).flatMap { y in (0..<phase.width).filter { rows[y][$0] == "l" }.map { (x: $0, y: y) } }
+                let lights: [(x: Int, y: Int)] = phase.glow.isEmpty ? [] : (0..<phase.height).flatMap { y in (0..<phase.width).filter { rows[y][$0] == "l" }.map { (x: $0, y: y) } }
                 func nearLight(_ x: Int, _ y: Int) -> Bool { lights.contains { abs($0.x - x) <= 2 && abs($0.y - y) <= 2 } }
                 for y in 0..<phase.height {
                     for x in 0..<phase.width {
@@ -492,9 +500,9 @@ final class CompanionPhaseTests: XCTestCase {
     }
 
     /// Round 24 (brief 121): his body comes and goes in his moves, his eyes never. His breath thins him as he bobs up
-    /// and fills him as he comes down; a tap dips him twice; the phase fades him from the hem up to his eyes alone and fills him back from the crown
-    /// down; through the bar he fades; asleep he is fainter and his breath fills him. The light flares for the eyes
-    /// alone in the dark.
+    /// and fills him as he comes down; a tap dips him twice; the phase fades him from the hem up to a faint crown round
+    /// his eyes (round 25) and fills him back from the crown down; through the bar he fades; asleep he is fainter and
+    /// his breath fills him.
     func testHisOpacityMoves() {
         func fade(_ name: String) -> Double { phase.looks[phase.index[name]!].fade }
         func light(_ name: String) -> Double { phase.looks[phase.index[name]!].light }
@@ -517,8 +525,14 @@ final class CompanionPhaseTests: XCTestCase {
         func lowestCloth(_ name: String) -> Int? { Self.clothRows(phase.rows(name)!.map(Array.init)).last }
         XCTAssertLessThan(lowestCloth("thin3")!, lowestCloth("thin1")!, "from the hem up")
         XCTAssertLessThan(lowestCloth("back1")!, lowestCloth("back2")!, "back from the crown down")
-        XCTAssertNil(lowestCloth("gone"))
-        XCTAssertGreaterThan(light("gone"), 1, "its eyes alone in the dark, brighter for that beat")
+        // Round 25 (brief 129): the phase ends at a faint body, its faintest beat, with no glow anywhere.
+        XCTAssertLessThan(fade("gone"), fade("thin3"))
+        XCTAssertLessThan(fade("gone"), fade("back1"))
+        XCTAssertGreaterThanOrEqual(fade("gone"), 0.2, "faint, not gone")
+        XCTAssertEqual(fade("goneL"), fade("gone"))
+        XCTAssertEqual(fade("goneR"), fade("gone"))
+        XCTAssertLessThanOrEqual(lowestCloth("gone")!, lowestCloth("thin3")!, "from the hem up")
+        for frame in phase.frames { XCTAssertEqual(frame.light, 1, "\(frame.name): no light to flare") }
         XCTAssertEqual(light("rest"), 1)
         // Through the bar it fades and fills again.
         XCTAssertLessThan(fade("under"), fade("sinkA"))
