@@ -135,8 +135,8 @@ struct PickerCardChrome: ViewModifier {
     }
 }
 
-/// iPhone: the height the open picker card has on its side of the chip (`PhonePickerPlacement`), for a card with a
-/// short layout to take it; nil where the card has all it wants (iPad, the Duo's inner display).
+/// iPhone and iPad: the height the open picker card has on its side of the chip (`PhonePickerPlacement`), for a card
+/// with a short layout to take it; nil on the Mac, whose in-window cards are placed by `PickerPlacement`.
 private struct PickerRoomKey: EnvironmentKey {
     static let defaultValue: CGFloat? = nil
 }
@@ -168,7 +168,6 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
     @Binding var isPresented: Bool
     let card: () -> Card
 
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.pickerSettleInset) private var settleInset
     /// The chip's own view in UIKit, which knows where it is in the window.
     @State private var probe = PickerAnchorProbe()
@@ -176,8 +175,10 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
     @State private var opened: PhonePickerPlacement.Result?
 
     func body(content: Content) -> some View {
-        // iPhone only: the iPad's and the Duo's inner display's popovers have the room and keep the system's choice.
-        let placement = sizeClass == .compact ? opened ?? probe.placement(for: kind, settleInset: settleInset) : nil
+        // By the room there is, on every width: the Duo's inner display held on its side is 669 pt tall, regular width
+        // with no island, and its quick add cards fell off the bottom as the outer display's did (session 108). On an
+        // iPad the roomier side is the one the system took, with the room to spare.
+        let placement = opened ?? probe.placement(for: kind, settleInset: settleInset)
         content
             .background(PickerChipReveal(isPresented: isPresented, probe: probe))
             // `arrowEdge` is the card's own edge that carries the arrow: its top for a card below the chip (measured on
@@ -188,7 +189,7 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
                     .presentationCompactAdaptation(.popover)
             }
             .onChange(of: isPresented) { _, open in
-                opened = open && sizeClass == .compact ? placement : nil
+                opened = open ? placement : nil
             }
     }
 }

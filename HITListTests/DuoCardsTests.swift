@@ -95,6 +95,21 @@ final class DuoCardsTests: XCTestCase {
         XCTAssertEqual(placed.room, 0)
     }
 
+    func testTheInnerDisplayOnItsSideGetsTheSameFix() {
+        // The Duo unfolded and held like a book: 951 × 669 pt, regular width, no island; quick add's oval floats over the
+        // keyboard (about 290 pt) and drops with it as a chip opens a card. 0.9.4's cards fell off its bottom too.
+        let side = CGRect(x: 0, y: 15, width: 951 - 84, height: 669 - 30)
+        let chip = CGRect(x: 300, y: 230, width: 110, height: 30)
+        let placed = PhonePickerPlacement.place(anchor: chip, area: side, settle: 290 - 15)
+        XCTAssertEqual(placed.edge, .above)
+        for kind in PickerKind.allCases where kind != .reminder {
+            XCTAssertFalse(kind.isShort(room: placed.room), "\(kind) whole in its regular layout")
+        }
+        XCTAssertGreaterThan(placed.room, 0)
+        // Without the drop it would have opened below the chip, which then fell to the display's foot.
+        XCTAssertEqual(PhonePickerPlacement.place(anchor: chip, area: side).edge, .below)
+    }
+
     func testOnAnIPhone16TheCardsKeepTheirRegularLayouts() {
         // Quick add's chips at the foot of George's screen once the keyboard is down: every card whole above them.
         let chip = CGRect(x: 66, y: 852 - 34 - 12 - 76, width: 110, height: 30)
