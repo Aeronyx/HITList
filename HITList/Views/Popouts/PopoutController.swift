@@ -173,6 +173,9 @@ final class PopoutController {
         let owner: UUID
         let message: String
         let undo: () -> Void
+        /// The list's side margin (`listMargin`), for the toast to start on its rows' left edge (brief 114: on the
+        /// Duo's outer display it sat 15.5 pt in, the rows 20); nil keeps the island's side inset.
+        var margin: CGFloat? = nil
     }
     /// A deletion waiting for the user's yes (Settings → General → Confirm before deleting); `PopoutHost`
     /// shows the dialog. Nil when nothing is pending.
