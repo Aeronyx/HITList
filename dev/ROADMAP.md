@@ -5,29 +5,25 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.6 (rounds 21 and 22, 2026-11-11 to 12)
+## Now: 0.9.7 (round 23, 2026-11-12, the morning 0.9.6 was released)
 
-0.9.5 (round 21, overnight) was prepared and not released: George looked at its pictures and sent it back before
-dawn. Round 22 worked his notes in by nine; 0.9.6 carries both rounds.
+George's notes on 0.9.6's creatures: keep what he has seen, change little, make the weather plainer.
 
 | Brief | What | Status |
 |---|---|---|
-| 109 `button-back` | Button as 0.9.4 drew him, pixel for pixel, standing on the bar, with a mushroom's idles and no boot swinging; Button's and Nod's snow | merged, awaiting release |
-| 110 `phase-cloth` | Phase redrawn as a little cloth ghost with eyes of its own, wholly on top of the bar; rain and snow pass through it | merged, awaiting release |
-| 111 `gargle-dragon` | Gargle more of a dragon: a snout, reptile eyes, a closed mouth, smoke and an ember | merged, awaiting release |
-| 112 `hush-quill` | Hush and Quill drawn with more care in the same poses; their snow | merged, awaiting release |
-| 113 `glim-tuck` | Glim improved, his tail and its light out of the rain and snow; Tuck asleep with its eyes shut on their stalks | merged, awaiting release |
-| 114 `card-insets` | Room around the words in quick add, the editor and every picker card; a test that measures it | merged, awaiting release |
-| 115 `screen-insets` | Rows, the Flipboard, the switch card, Browse and Review Inbox on their edges and at even gaps | merged, awaiting release |
-| supervisor | Three snow inks; "Pick a Group" on one line on an iPhone 16; the reminder card's times in two columns | merged, awaiting release |
-| round 21 (103 to 108) | Idles that are each creature's own, the "behind the host" layer, names under themes, the iPhone Duo's outer and inner displays | merged, awaiting release |
+| 116 `glim-subtle` | Glim as 0.9.5 drew him, with nine pixels of new shading; his lantern held in his lap in rain and snow | merged, awaiting release |
+| 117 `gargle-pup` | Gargle awake as his night sprite with his eye open; under his wing in the rain | merged, awaiting release |
+| 118 `phase-sheet` | Phase as one floating sheet: no hands, no horn, a simpler face | merged, awaiting release |
+| 119 `tuck-quill` | Tuck asleep with his eyes hanging low and no smile; Quill's 0.9.5 face on his tabby coat | merged, awaiting release |
+| 120 `nod-button-weather` | Nod holds an umbrella up; Button pulls his cap down; deeper powder | merged, awaiting release |
+| supervisor | Hush pinned to 0.9.6's frames; Tuck's sleeping frame drawn by hand | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's eye, and his friend's, on rounds 21 and 22**: the eight creatures at real size (Phase and Gargle most
-   of all) and the snow on them; quick add's chips on two or three lines; the Duo's outer display in the friend's
-   hand (the title row's controls, the cards, the companion on the tab bar); whether the Duo's title should stay
-   put while a list scrolls.
+1. **George's eye on round 23's creatures** (Tuck asleep and Phase most of all: both were the supervisor's
+   reading of a few words), **and his friend's on the Duo** (rounds 21 and 22: the title row's controls, the
+   cards, the companion on the tab bar; whether the title should stay put while a list scrolls); quick add's chips
+   on two or three lines.
 2. **The Duo's inner display, for real.** Nobody has seen it since October: Device Hub could not list the round's
    simulators (`killall -u "$USER" CoreDeviceService` in George's Terminal, then `108-duo-inner/unfold.sh`). Then:
    the system's bar column on its side, how sheets are sized there, Settings closing on a fold, the keyboard.
@@ -75,6 +71,9 @@ dawn. Round 22 worked his notes in by nine; 0.9.6 carries both rounds.
 
 Newest first; one line per release, details in `CHANGELOG.md`.
 
+- **0.9.6**, 2026-11-12: creatures redrawn after two rounds of notes (Button as 0.9.4 drew him, Phase a cloth
+  ghost, Gargle a small dragon, snow as blue-shaded powder), names under the themes, room around the words in every
+  card, and the first full pass over the iPhone Duo (0.9.5 was prepared and never released).
 - **0.9.4**, 2026-11-11: a sync bolt that is filled only when iCloud has just confirmed it, and Check iCloud…;
   companions that idle every few seconds and sit on the "+"; Button, Phase and Gargle; the repeat menu and Custom…;
   "starting", weekday lists and the quick add guide; a calmer Flipboard card, drag and Duplicate; the Mac's Settings
