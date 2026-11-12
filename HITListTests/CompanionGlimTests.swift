@@ -45,14 +45,14 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertGreaterThan(warmPixels("sleepDream"), ember, "a dream brightens it")
     }
 
-    /// Its flickers are a blink and its light flickering, a mouse's sniff and a lamplighter's moves (brief 105: the
-    /// lantern swaying, lifted to peer, its flame cupped back to life), and one for each of rain and heat (a drop off
-    /// its lantern, a bead of sweat); its glances play only inside its routines.
+    /// Its flickers are a blink and its light flickering, a mouse's sniffs and a lamplighter's small moves (brief 105:
+    /// a paw steadying the lantern, its flame cupped back to life), and one for each of rain and heat (a drop off its
+    /// lantern, a bead of sweat); its glances play only inside its routines.
     func testItsFlickersAreABlinkAndItsLight() throws {
         for place in CompanionPlace.allCases {
             let mode = glim.posture(place).awake
             XCTAssertEqual(mode.flickers.map { mode.gestures[$0].name },
-                           ["blink", "flicker", "sniff", "sway", "peer", "cup", "drop", "sweat"], "\(place)")
+                           ["blink", "flicker", "sniff", "air", "paw", "cup", "drop", "sweat"], "\(place)")
             let skies = mode.gestures.filter(\.flicker).map { $0.sky?.rawValue ?? "every sky" }
             XCTAssertEqual(skies, Array(repeating: "every sky", count: 6) + ["rain", "heat"], "\(place)")
             XCTAssertEqual(mode.routines.filter(\.little).map(\.name), ["gutter", "swingStill", "sniffPeer", "lightCheck"], "\(place)")
