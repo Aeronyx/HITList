@@ -123,21 +123,26 @@ final class FlipboardPhoneUITests: XCTestCase {
         XCTAssertTrue(lights("2 of 5 on").waitForExistence(timeout: 5), "on Before Bed now")
         snapshot("2 Dropped on Before Bed")
 
-        // Back off it: dragged onto the loose switches' + tile, which stands just above Before Bed, once both are clear
-        // of the bars (the board has centred the switch where it landed).
+        // Back off it: from near the top of its tile, now on Before Bed's row, onto the lower part of the loose switches'
+        // Add outline, which stands just above the panel: both held clear of the screen's edges, where a held drag
+        // scrolls the board (brief 126: the panel's header between them made the old centre-to-centre drag too long).
         let addTile = app.buttons["addSwitchTile"]
-        let moved = switchTile("Water the plants")
+        let moved = tile("Water the plants")
         XCTAssertTrue(moved.waitForExistence(timeout: 3))
-        for _ in 0..<4 {
-            if addTile.frame.minY < 120 {
-                scroll(by: -0.12)
-            } else if moved.frame.maxY > app.frame.height - 110 {
-                scroll(by: 0.1)
+        let height = app.frame.height
+        for _ in 0..<6 {
+            let drop = addTile.frame.minY + addTile.frame.height * 0.85, lift = moved.frame.minY + moved.frame.height * 0.15
+            if drop < height * 0.3 {
+                scroll(by: -0.06)
+            } else if lift > height * 0.7 {
+                scroll(by: 0.06)
             } else {
                 break
             }
         }
-        moved.press(forDuration: 0.6, thenDragTo: addTile, withVelocity: .default, thenHoldForDuration: 1.0)
+        moved.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15))
+            .press(forDuration: 0.6, thenDragTo: addTile.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)),
+                   withVelocity: .default, thenHoldForDuration: 1.0)
         XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "off Before Bed again")
         snapshot("3 Dragged back onto the loose switches")
 
