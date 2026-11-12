@@ -241,6 +241,54 @@ final class FlipboardLightsTests: XCTestCase {
         try data.write(to: URL(fileURLWithPath: folder).appendingPathComponent("lights-strip-modes.png"))
     }
 
+    /// A board's header (`BoardHeaderLayout`): the lights sit on the name's line at the trailing end while they fit
+    /// beside it; a long name or the largest type sends them to a line of their own under the cadence. Either way they
+    /// never overlap the name or the cadence, stay one line, and the header is as tall as what it holds. The parts
+    /// answer as text and the strip do: a name wraps at the width it is offered, the strip picks dots, segments or the bar.
+    func testTheHeaderKeepsTheLightsClearOfTheName() {
+        func name(ideal: CGFloat, line: CGFloat) -> (CGFloat) -> CGSize {
+            { width in CGSize(width: min(ideal, width), height: line * (ideal / max(1, width)).rounded(.up)) }
+        }
+        func strip(_ count: Int) -> (CGFloat) -> CGSize {
+            { width in
+                switch BoardLights.mode(count: count, width: width) {
+                case .dots: CGSize(width: BoardLights.dotsWidth(count), height: BoardLights.lineHeight)
+                case .segments: CGSize(width: BoardLights.segmentsWidth(count), height: BoardLights.lineHeight)
+                case .bar: CGSize(width: 115, height: BoardLights.lineHeight)
+                }
+            }
+        }
+        let cadence: (CGFloat) -> CGSize = { width in CGSize(width: min(160, width), height: 15 * (160 / width).rounded(.up)) }
+
+        // An iPhone 16's panel header: "Before Bed" and five lights on one line.
+        let phone = BoardHeaderLayout.arrange(width: 337, gap: 12, lineSpacing: 3, titleIdeal: CGSize(width: 90, height: 20),
+                                              title: name(ideal: 90, line: 20), lights: strip(5), below: cadence)
+        XCTAssertEqual(phone.lights.maxX, 337, accuracy: 0.5, "at the trailing end")
+        XCTAssertEqual(phone.lights.midY, 10, accuracy: 0.5, "on the name's line")
+        XCTAssertLessThanOrEqual(phone.title.maxX, phone.lights.minX - 12 + 0.5)
+        // The largest type: the name takes the line, and the lights go under the cadence.
+        let large = BoardHeaderLayout.arrange(width: 337, gap: 12, lineSpacing: 3, titleIdeal: CGSize(width: 520, height: 62),
+                                              title: name(ideal: 520, line: 62), lights: strip(5), below: cadence)
+        XCTAssertEqual(large.lights.minX, 0, "leading, on a line of their own")
+        XCTAssertGreaterThan(large.lights.minY, large.below?.maxY ?? 0)
+
+        for ideal in stride(from: CGFloat(40), through: 700, by: 15) {
+            for count in [1, 3, 12, 20, 40, 80] {
+                for width in [CGFloat(300), 337, 600] {
+                    let a = BoardHeaderLayout.arrange(width: width, gap: 12, lineSpacing: 3,
+                                                      titleIdeal: CGSize(width: ideal, height: 20),
+                                                      title: name(ideal: ideal, line: 20), lights: strip(count), below: cadence)
+                    let label = "name \(ideal) pt, \(count) lights, \(width) pt"
+                    XCTAssertFalse(a.title.intersects(a.lights), label)
+                    XCTAssertFalse(a.below.map { $0.intersects(a.lights) } ?? false, label)
+                    XCTAssertEqual(a.lights.height, BoardLights.lineHeight, label)
+                    XCTAssertLessThanOrEqual(a.lights.maxX, width + 0.5, label)
+                    XCTAssertGreaterThanOrEqual(a.size.height, max(a.lights.maxY, a.below?.maxY ?? 0, a.title.maxY) - 0.5, label)
+                }
+            }
+        }
+    }
+
     /// The size `view` takes when offered `width` (and any height), as a header's layout offers it.
     private static func offered<V: View>(_ width: CGFloat, _ view: V) -> CGSize {
         let box = OfferedSize()
