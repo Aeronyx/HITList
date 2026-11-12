@@ -63,7 +63,8 @@ struct DuoNextDays: View {
                             ForEach(day.items) { task in
                                 TaskRow(task: task, now: now, hidesDay: true) { complete(task) }
                                     .tag(task)
-                                    .slateRow()
+                                    // Flat on the background, as Today's rows beside it (brief 108: they were cards).
+                                    .completionRowBackground(flashing: false)
                             }
                         } header: {
                             // The lists' one day form and header style (brief 99), as Today beside it writes its own day.
