@@ -267,7 +267,12 @@ enum TaskActions {
             task.dueDate = calendar.startOfDay(for: date)
         } else {
             task.dueDate = date
-            if date == nil { task.hasDueTime = false }
+            if date == nil {
+                task.hasDueTime = false
+                // A reminder before the due time has nothing left to count from (round 25, after brief 127): kept, it
+                // would come back unasked the day the task is given a time again. Every "Remove Date" comes through here.
+                task.reminderOffsetMinutes = nil
+            }
         }
         syncRepeatTime(of: task)
         task.touch()
