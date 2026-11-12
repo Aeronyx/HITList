@@ -232,8 +232,9 @@ final class CompanionSpriteTests: XCTestCase {
         XCTAssertEqual(nod.field.asleep.rain, "sleepRain")
         XCTAssertEqual(nod.plus.asleep.rain, "sleepRain")
         let rain = nod.rows("rain")!.map(Array.init)
-        XCTAssertTrue(rain[0...2].joined().contains("m"), "the canopy is up over its cap")
-        XCTAssertEqual(rain[12][1], "l", "its raised hand holds the shaft beside its head")
+        XCTAssertTrue(rain[0...3].joined().contains("m"), "the canopy is a dome over its head")
+        XCTAssertTrue((4...13).allSatisfy { rain[$0][0] == "l" }, "the shaft stands beside it")
+        XCTAssertEqual(rain[12][1], "m", "its arm reaches out to hold the shaft")
         // Brief 105: a sleepy child's idles, no glances about; its legs swing slowly, one at a time.
         XCTAssertEqual(nod.field.awake.gestures.map(\.name), ["blink", "heavyBlink", "rub", "yawn", "lampFlicker", "swing",
                                                               "rimDrip", "sweat"])
