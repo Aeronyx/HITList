@@ -58,10 +58,10 @@ final class CompanionButtonTests: XCTestCase {
 
     /// A mushroom at a glance: a cap in the accent (with its own shade) half its height and wider than its body by
     /// three pixels a side, pale spots on it, a pale face on the stem with two big round eyes, each with a glint, rosy
-    /// cheeks, and two boots of a pixel's height over the edge.
+    /// cheeks, and two boots of a pixel's height standing on the edge (brief 109: seat row 19, the soles on the host).
     func testItIsAMushroomInTheThemesRose() {
         XCTAssertEqual(button.inks, [.ink, .dark, .mid, .light, .accent, .accentDark])
-        XCTAssertEqual(button.seatRow, 18)
+        XCTAssertEqual(button.seatRow, 19)
         let rest = button.rows("rest")!.map(Array.init)
         func count(_ ink: Character, _ rows: ArraySlice<[Character]>) -> Int { rows.joined().filter { $0 == ink }.count }
         // The cap: rows 1 to 10, mostly rose, with pale marks; its widest row spans the sprite.
@@ -80,8 +80,9 @@ final class CompanionButtonTests: XCTestCase {
         }
         XCTAssertEqual(glints, 2, "two eyes, a glint in each")
         XCTAssertEqual(count("a", rest[16...16]), 4, "rosy cheeks")
-        // Boots over the edge, a pixel high, nothing longer.
+        // Boots on the edge row, a pixel high, nothing longer.
         XCTAssertEqual(count("d", rest[18...18]), 4)
+        XCTAssertEqual(button.seatRow - 1, 18, "the soles are the edge row")
         XCTAssertTrue(rest[19].allSatisfy { $0 == CompanionInk.clear })
         XCTAssertFalse(button.flourishTurns)
     }
@@ -188,10 +189,11 @@ final class CompanionButtonTests: XCTestCase {
         }
     }
 
-    /// Its seat (brief 100): on the "+" (SwiftUI's continuous capsule, the lower of it and the circular one at each
-    /// point) every column of every still that rests on the edge line has the "+" right under it, to under half a
-    /// device pixel at 3x; its boots hang over the front. On the Mac's field (flat) the same.
-    func testItSitsOnThePlus() {
+    /// Its seat (briefs 100 and 109): it stands on top of its host. On the "+" (SwiftUI's continuous capsule, the lower
+    /// of it and the circular one at each point) every column of every still on the edge row (its soles) has the "+"
+    /// right under it, to under half a device pixel at 3x, and nothing of it is below that row in any frame it has:
+    /// no boot over the "+"'s face. Centred on the "+". On the Mac's field (flat) the same.
+    func testItStandsOnThePlus() {
         let size = FloatingAddButton.size
         let rect = CGRect(origin: .zero, size: size)
         let shapes = [Capsule(style: .continuous).path(in: rect), Capsule(style: .circular).path(in: rect)]
@@ -210,15 +212,19 @@ final class CompanionButtonTests: XCTestCase {
         let edge = button.seatRow - 1
         for name in stills {
             let rows = button.rows(name)!.map(Array.init)
+            XCTAssertTrue(rows[edge].contains("d"), "\(name): its boots on the edge")
             for c in 0..<button.width where rows[edge][c] != CompanionInk.clear {
                 let x0: CGFloat = left + CGFloat(c) * p
                 let x1: CGFloat = x0 + p
                 let gap = max(top(x0 + 0.01), top(x1 - 0.01))
                 XCTAssertLessThan(gap, 0.17, "\(name) column \(c): \(gap) pt of background under it")
             }
-            XCTAssertTrue(rows[button.seatRow].contains("d"), "\(name): its boots over the edge")
         }
-        // Centred on the "+": its seat's middle within a point of the button's.
+        for frame in button.frames {
+            let below = frame.rows[button.seatRow...].joined()
+            XCTAssertTrue(below.allSatisfy { $0 == CompanionInk.clear }, "\(frame.name): nothing over the host's face")
+        }
+        // Centred on the "+": its soles' middle within a point of the button's.
         let seat = button.rows("rest")![edge].map { $0 }
         let first = seat.firstIndex { $0 != CompanionInk.clear }!
         let last = seat.lastIndex { $0 != CompanionInk.clear }!
@@ -229,7 +235,7 @@ final class CompanionButtonTests: XCTestCase {
     }
 
     /// The UI tests tap the companion just above the "+" (24 pt in from its right edge, 14 pt up) and the "+" just under
-    /// its boots (22 pt in, 3 pt down): the first is the companion's, the second the "+"'s.
+    /// its soles (22 pt in, 3 pt down): the first is the companion's, the second the "+"'s.
     func testTheUITestsTapsLandOnItAndOnThePlus() {
         let size = FloatingAddButton.size
         let rest = button.index[button.plus.awake.rest]!

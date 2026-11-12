@@ -9,7 +9,8 @@ import Foundation
 extension CompanionCharacter {
     /// Button: Rosé's companion (brief 102), in place of Posy. A button mushroom in the theme's own rose: a round cap
     /// half its height, with three pale spots and a sheen, over a soft pear of a body whose face is on its stem (big
-    /// round eyes, each with a glint, rosy cheeks, a small mouth), two little boots dangling over the edge it sits on, the
+    /// round eyes, each with a glint, rosy cheeks, a small mouth), standing on two little boots on top of what it is on
+    /// (round 22, brief 109: seat row 19, the soles on the host's top edge, nothing of it over the host's face), the
     /// same in both places. Its cap is its hat, its umbrella and its bed. Every few seconds an idle (brief 100): a blink, a
     /// slow blink, a wink, a twinkle, a swing of one boot, a blush, or a little loop (a few kicks, a wink and a kick, a peek
     /// up, a giggle). Now and then a routine: it stretches and its cap lifts off its head, it wobbles its cap, it sneezes
@@ -24,7 +25,7 @@ extension CompanionCharacter {
         name: "Button",
         width: 20,
         height: 20,
-        seatRow: 18,
+        seatRow: 19,
         frames: [
             Frame(name: "rest", rows: [
                 "....................",
