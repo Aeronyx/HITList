@@ -254,6 +254,7 @@
 		7530184EFACC2C9A7984DB8E /* ShareCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675B4794555E7045EFF1B2D1 /* ShareCard.swift */; };
 		7543FED4B4F8EAAB07C5FB12 /* SharedGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C465CF288740B05ADBF45DE /* SharedGroupTests.swift */; };
 		758B50E6289C51644435C433 /* DuoInnerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF439F742971231AE951AD6C /* DuoInnerUITests.swift */; };
+		7595407495DF3BCC5B7A6391 /* CardInsetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D621ADAD71AF49B8CBBC49 /* CardInsetsTests.swift */; };
 		75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */; };
 		75EC156FFEF5271C580DE564 /* Inter_18pt-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */; };
 		77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */; };
@@ -836,6 +837,7 @@
 		7507272CF27356E20DACB086 /* HITSheetPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITSheetPages.swift; sourceTree = "<group>"; };
 		75960E738C6C5B64805D2022 /* EventKitSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventKitSource.swift; sourceTree = "<group>"; };
 		7622E79F19BE12C0FCCBF12F /* SharedTasksSchema.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksSchema.swift; sourceTree = "<group>"; };
+		76D621ADAD71AF49B8CBBC49 /* CardInsetsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CardInsetsTests.swift; sourceTree = "<group>"; };
 		779C8E0132E607E31B370A6E /* HITListUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITListUITests.swift; sourceTree = "<group>"; };
 		77AB4B47251DCB574A0A682C /* Gargle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Gargle.swift; sourceTree = "<group>"; };
 		77C2724E3421441280B8B8EA /* ProfileTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTests.swift; sourceTree = "<group>"; };
@@ -1638,6 +1640,7 @@
 				E8D3387F2A9DE9AFDD95FCC7 /* CalendarEventsTests.swift */,
 				62F5564837C929EE59B55756 /* CalendarRowsTests.swift */,
 				4D30F06A15BE4AC421570D5F /* CalendarSettingsTests.swift */,
+				76D621ADAD71AF49B8CBBC49 /* CardInsetsTests.swift */,
 				288443055725713733FD3685 /* ClaudeConnectorTests.swift */,
 				7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */,
 				F2383CCF0E885DBE6A113EF3 /* CloudKitSchemaTests.swift */,
@@ -2760,6 +2763,7 @@
 				9741D29817F3B0B673F3A520 /* CalendarEventsTests.swift in Sources */,
 				0B2770BAA1D2056C5CCFD554 /* CalendarRowsTests.swift in Sources */,
 				E318C64E9486E23649628246 /* CalendarSettingsTests.swift in Sources */,
+				7595407495DF3BCC5B7A6391 /* CardInsetsTests.swift in Sources */,
 				28501DADE2F939236C1A902B /* ClaudeConnectorTests.swift in Sources */,
 				B489C0EB889A8D0FD6AC644D /* ClaudeGatingTests.swift in Sources */,
 				DADDAC552653674841536C86 /* CloudKitSchemaTests.swift in Sources */,
