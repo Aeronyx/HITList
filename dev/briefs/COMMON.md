@@ -442,6 +442,11 @@ VoiceOver's order on the Duo; sheets on the open Duo; a tip and a Flipboard drag
 and the profile picture picker on the Duo. Known and left: Settings closes when the Duo folds or unfolds (it is
 presented from inside each shell); Browse at AX5 breaks "Default Group" inside words; on a pushed screen during a
 real call the island's companion may come within a few points of Back.
+On the final tree (da976dd and this record): core 704, Mac 1927 (1 skipped), iOS 1890 (1 skipped), UI 130 with 0
+failures (58 skipped: the walks on demand and the Duo's own) on a fresh iPhone 17 simulator in 72 minutes; the
+Duo's own UI tests (`DuoColumnUITests` 6, `CompanionIslandUITests`, `DuoCardsUITests`) pass on an iPhone Duo
+simulator; brief 93's walk was looked at on the Duo's outer display and on an iPhone 16; a Release archive and
+export of both platforms pass `release.sh`'s 44 checks (iOS 16.4 MB, Mac 31.9 MB); GitHub Actions green.
 Side stores left in the Mac's app-group folder, for George to delete by hand: `HITList-sup21*` and the sessions'
 (`HITList-s103*` to `HITList-s108*`).
 
