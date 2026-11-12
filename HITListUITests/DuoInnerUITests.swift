@@ -190,6 +190,35 @@ final class DuoInnerUITests: XCTestCase {
         }
     }
 
+    /// Folding and unfolding with quick add's card typed in, then with Settings open.
+    func test9AcrossAFoldCardAndSettings() throws {
+        launch(extra: ["-duoFoldDemo", "7"])
+        go("Today")
+        let plus = app.buttons["quickAddButton"].firstMatch
+        if plus.waitForExistence(timeout: 5) {
+            plus.tap()
+            pause(1)
+            app.typeText("Pick up the dry cleaning")
+            for step in 1...2 {
+                pause(7.2)
+                snap("fold \(step), quick add typed")
+            }
+            tapIfExists(app.buttons["Close"].firstMatch)
+            tapIfExists(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Discard")).firstMatch, timeout: 1.5)
+            pause(1)
+        } else { note("no quickAddButton") }
+        let gear = app.buttons["settingsButton"].firstMatch
+        if gear.waitForExistence(timeout: 8) {
+            gear.tap()
+            pause(1)
+            snap("settings open")
+            for step in 1...2 {
+                pause(7.2)
+                snap("fold \(step), settings")
+            }
+        } else { note("no settingsButton") }
+    }
+
     /// XL type (and one size up): the sidebar, Today and the editor.
     func test7LargerText() throws {
         for size in ["UICTContentSizeCategoryXL", "UICTContentSizeCategoryXXXL"] {
@@ -233,7 +262,8 @@ final class DuoInnerUITests: XCTestCase {
         let save = app.buttons["quickAddSave"].firstMatch
         if save.waitForExistence(timeout: 2) { save.tap() }
         pause(0.8)
-        app.typeText(XCUIKeyboardKey.escape.rawValue)
+        // The card stays open for the next task: its × puts it away (nothing typed, so no Discard question).
+        tapIfExists(app.buttons["Close"].firstMatch)
         pause(0.8)
     }
 
