@@ -184,7 +184,10 @@ drawing session's own pick can trade George's standard (a face that looks at you
 gargoyle): send it back at the concept sheet, with a stop. Relay one session's finding to the sibling it concerns
 with a stop as well. `scripts/test.sh` builds into Xcode's default derived data: build the Debug Mac app with
 `-derivedDataPath build.noindex/…` before you look at it, or you are looking at an old one. What's New must name at
-least one real `Settings → Page → Row` path (`testWhatsNewPathsNameRealHomes`).
+least one real `Settings → Page → Row` path (`testWhatsNewPathsNameRealHomes`). **Run brief 93's walk on the merged
+tree and read its notes as well as its pictures**: on the Duo it found that a second quick add in a row did not open
+(a control switched off and on in place with `allowsHitTesting` and `accessibilityHidden`; take it out and put it
+back new instead), which every session's own tests had passed.
 
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
