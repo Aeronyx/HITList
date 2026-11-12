@@ -224,7 +224,7 @@ struct TaskEditorDraft: Equatable {
     /// though Confirm saved it). Only the highlights wait for the space (`parsed(_:for:_:)`, `.live`).
     func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .final) -> TitlePhrases {
         TitlePhrases(text: title, result: parsed(parser, for: task, mode), dueDate: task.dueDate,
-                     hasDueTime: task.hasDueTime, calendar: parser.dateParser.calendar)
+                     hasDueTime: task.hasDueTime, repeats: task.recurrenceRule, calendar: parser.dateParser.calendar)
     }
 
     /// A highlight clicked, tapped or backspaced: its words stay in the title as text. `token` comes from
