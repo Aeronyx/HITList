@@ -57,8 +57,15 @@ struct TaskRow: View {
                 TaskRowNotes(notes: task.notes)
                 metaLine
             }
+            #if os(iOS)
+            // To the row's trailing inset, where the headers, the hairline and the toolbar end (brief 115): a trailing
+            // Spacer took the stack's 12 pt check gap before it, so every Group stopped 12 pt short of them.
+            .frame(maxWidth: .infinity, alignment: .leading)
+            #endif
+            #if os(macOS)
             // Priority shows as the checkbox's colour alone; no "P1" badge.
             Spacer(minLength: 0)
+            #endif
         }
         .taskRowChrome(compact: compactRows, completionPhase: completionPhase, calmMotion: effects.calmMotion)
         .taskRowSpeech(label: task.title, value: TaskRowSpeech.value(speechParts),
@@ -422,6 +429,7 @@ extension View {
         let slide = completionPhase == .animating && !calmMotion ? CompletionMotion.slideDistance : 0
         return self
             .listRowInsetsOnMargin(compact: compact) // the list's margin, the system's on iPhone (brief 99)
+            .separatorClearsTheBarColumn()
             .listRowSeparatorTint(Theme.separator)
             .contentShape(Rectangle())
             .offset(x: slide)

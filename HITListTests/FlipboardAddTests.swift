@@ -511,6 +511,14 @@ final class FlipboardAddTests: XCTestCase {
         let iPhone = ChoiceStripLayout.widths(ideal: [35.7, 47.4, 52.9, 59.2, 58.7], total: 325)
         XCTAssertEqual(iPhone.reduce(0, +), 325, accuracy: 0.01)
         XCTAssertGreaterThan(iPhone[3] - 59.2, 12, "room either side of the widest choice's words")
+        // Brief 115: 8 pt either side of the words stays when the strip is too narrow (the Duo's outer display, 314
+        // pt): the words narrow, each by one ratio.
+        let words: [CGFloat] = [35.7, 47.4, 52.9, 59.2, 58.7]
+        let duo = ChoiceStripLayout.widths(ideal: words.map { $0 + 16 }, total: 314, room: 8)
+        XCTAssertEqual(duo.reduce(0, +), 314, accuracy: 0.01)
+        let ratios = zip(duo, words).map { ($0 - 16) / $1 }
+        for ratio in ratios { XCTAssertEqual(ratio, ratios[0], accuracy: 0.001, "one ratio for every choice") }
+        XCTAssertGreaterThan(ratios[0], 0.75, "within the words' smallest size")
     }
 
     // MARK: Brief 96: one scale of type, and the card's words
