@@ -263,7 +263,7 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertFalse(sleep.contains("k"), "no dark of an eye: a carved line")
         XCTAssertFalse(sleep.contains("w"), "no tongue")
         XCTAssertEqual(gargle.plus.asleep.rest, "sleep")
-        XCTAssertNil(gargle.plus.asleep.rain, "asleep wins over the rain")
+        XCTAssertEqual(gargle.plus.asleep.rain, "sleepRain", "asleep in the rain: his own still (brief 124)")
         XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("k"), "woken: one eye opens")
         XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("w"), "his own eye, its warm glint")
         XCTAssertLessThanOrEqual(gargle.difference("sleepPeek", "sleep"), 10, "only his eye opens")
@@ -288,7 +288,9 @@ final class CompanionGargleTests: XCTestCase {
             let drip = awake.gesture(named: "drip")!
             XCTAssertEqual(drip.sky, .rain)
             XCTAssertTrue(drip.flicker)
-            for tick in drip.ticks { XCTAssertEqual(gargle.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
+            // Brief 124: the drop that runs off is only water moving over the wet still, under a second.
+            for tick in drip.ticks { XCTAssertTrue((1...4).contains(gargle.difference(tick.frame, awake.rain!)), "\(at): one drop") }
+            XCTAssertLessThan(Double(drip.ticks.count) / gargle.gestureFPS, 1, at)
             XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "peek", at)
             XCTAssertEqual(awake.routines.first { $0.sky == .storm }?.name, "duck", at)
             var previous = awake.snow!
@@ -311,12 +313,19 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertEqual(String(rain[0][8...13]), "mmmmmm", "the rib, highest over his crown")
         XCTAssertEqual(String(rain[1][8...13]), "dddddd", "its membrane")
         XCTAssertEqual(rain[5][0], "m", "its tip, down in front of his snout")
-        XCTAssertEqual(rain[6][0], "l", "a drop running off it")
-        let tops = (0..<gargle.width).map { x in (0..<gargle.height).first { rain[$0][x] != CompanionInk.clear } ?? 99 }
+        XCTAssertEqual(String([rain[6][0], rain[7][0]]), "hp", "a drop hanging from it, blue (brief 124)")
+        // The wing's outline (the beads standing on it, brief 124, are water, not wing).
+        let tops = (0..<gargle.width).map { x in (0..<gargle.height).first { rain[$0][x] != CompanionInk.clear && !"phu".contains(rain[$0][x]) } ?? 99 }
         XCTAssertEqual(tops[0...10].map { $0 }, tops[0...10].sorted(by: >), "it curves up from the tip to the crown")
         XCTAssertGreaterThanOrEqual(String(rain[2][0...16]).components(separatedBy: ".").filter { $0.contains("d") }.count, 3,
                                     "scallops along its lower edge")
-        XCTAssertTrue(rain[14...19].map { String($0) } == rows("rest")[14...19].map { String($0) }, "the same seat")
+        // The same seat, a puddle on it at his front paws (brief 124): only water differs on the edge row.
+        let dry = rows("rest")
+        for y in 14...19 {
+            for x in 0..<gargle.width where rain[y][x] != dry[y][x] {
+                XCTAssertTrue(y == 17 && x < 8 && "phu".contains(rain[y][x]), "the same seat: \(x),\(y)")
+            }
+        }
         XCTAssertEqual(rain[2][9], "l", "his far horn under it")
         XCTAssertTrue(rain[6...8].contains { $0[3...6].contains("k") }, "his eye open")
         XCTAssertEqual(rain[6][4], "l", "looking up")
@@ -331,6 +340,57 @@ final class CompanionGargleTests: XCTestCase {
         let top = { (r: [[Character]]) in r.firstIndex { row in row[0...12].contains { $0 != CompanionInk.clear } }! }
         XCTAssertEqual(top(heat) - top(rest), 1, "lying low")
         XCTAssertEqual(heat[10][1], "k", "panting, his mouth a little open at the front")
+    }
+
+    /// Brief 124 (George: "During rain, they should have little droplets bead off of them every once in a while, and have
+    /// some droplets stick around or tiny puddles pool around their feet"): in the rain, awake and asleep, blue beads on
+    /// him (on the wing's outline, at its tip, on his snout; asleep on his wing, his back and his snout), a puddle under his
+    /// front paws, and now and then a drop that runs off into it. No drop is left in the old light ink, nothing blinks out
+    /// (every frame the rain draws whole is wet), and the blink, the glance up and the reply to a tap still play over it.
+    func testTheRainIsWaterOnHim() {
+        let water: Set<Character> = ["p", "h", "u"]
+        func puddle(_ name: String) -> [Int] {
+            rows(name)[gargle.seatRow - 1].indices.filter { water.contains(rows(name)[gargle.seatRow - 1][$0]) }
+        }
+        for place in CompanionPlace.allCases {
+            let posture = gargle.posture(place)
+            for mode in [posture.awake, posture.asleep] {
+                let still = mode.rain!
+                let at = "\(place) \(still)"
+                let flat = gargle.rows(still)!.joined()
+                for ink in water { XCTAssertTrue(flat.contains(ink), "\(at): all three blues") }
+                XCTAssertLessThanOrEqual(count("l", still), count("l", mode.rest), "\(at): no drop in the old light ink")
+                let pool = puddle(still)
+                XCTAssertTrue((4...8).contains(pool.count), "\(at): a puddle four to eight wide, not a plinth")
+                XCTAssertLessThanOrEqual(pool.max()! - pool.min()!, 7, at)
+                let beads = rows(still)[0..<(gargle.seatRow - 1)].joined().filter { water.contains($0) }.count
+                XCTAssertTrue((3...5).contains(beads), "\(at): a few beads, one of them two tall")
+                let drip = mode.gestures.first { $0.sky == .rain }!
+                XCTAssertLessThan(Double(drip.ticks.count) / gargle.gestureFPS, 1, at)
+                // The drop is the only thing in the air: one run of water off him at a time, and it lands in the puddle.
+                let landing = drip.ticks.last!.frame
+                XCTAssertEqual(puddle(landing), pool, "\(at): it lands in the puddle")
+                XCTAssertNotEqual(rows(landing)[gargle.seatRow - 1], rows(still)[gargle.seatRow - 1], "\(at): its glint jumps")
+                XCTAssertTrue(gargle.canDraw(mode.answer, in: .rain, mode: mode, depth: 0), "\(at): the reply to a tap")
+            }
+            // Every frame the rain draws whole carries the puddle.
+            let awake = posture.awake
+            for tick in awake.wholeTicks(sky: .rain) + awake.wholeTicks(sky: .storm) {
+                XCTAssertEqual(puddle(tick.frame).count, puddle(awake.rain!).count, "\(place) \(tick.frame): the puddle stays")
+            }
+            for name in ["blink@rain", "lookUp@rain", "winkFlick@rain", "sleepBreathe@sleepRain"] {
+                XCTAssertFalse(puddle(name).isEmpty, "\(name): the puddle stays")
+            }
+            XCTAssertTrue(gargle.canDraw(awake.gesture(named: "blink")!, in: .rain, mode: awake, depth: 0), "\(place): a blink")
+            XCTAssertTrue(gargle.canDraw(awake.gesture(named: "lookUp")!, in: .rain, mode: awake, depth: 0), "\(place)")
+            XCTAssertTrue(gargle.canDraw(posture.asleep.gesture(named: "breathe")!, in: .rain, mode: posture.asleep, depth: 0),
+                          "\(place): his breath, asleep in the rain")
+        }
+        // The drop runs off the wing's tip onto his nose, hangs from his chin and falls into the puddle at his paws.
+        let path = gargle.plus.awake.gesture(named: "drip")!.ticks.map(\.frame)
+        XCTAssertEqual(rows(path[0])[7][0], "u", "it swells at the wing's tip")
+        XCTAssertTrue(path.contains { rows($0)[12][0] == "p" }, "it hangs from his chin")
+        XCTAssertTrue(path.contains { rows($0)[14][0] == "h" && rows($0)[15][0] == "p" }, "it falls")
     }
 
     /// Snow (round 22's recipe): powder, not a cap. Every snow still, awake and asleep, is drawn in the three snow inks and in
@@ -385,6 +445,29 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertGreaterThan(back, front, "deeper toward his back")
         XCTAssertEqual(gargle.difference(gargle.plus.awake.snowDeep.last!, "rest"), snow(gargle.plus.awake.snowDeep.last!),
                        "only snow on him: no hat, no pose of its own")
+    }
+
+    /// Brief 124 (George: "He looks barely recognizable in deep snow"): deeper, only the drifts grow. Every pixel of him that
+    /// the first dusting leaves stone stays stone at every depth (his horn tips, his brow, his eye, his snout's tip, the
+    /// wing's outline), so at 1x beside `rest` he is still Gargle; the snow lies along his back, the wing's slope and elbow,
+    /// his nape and against his toes, and the drift in his back's hollow is the deepest.
+    func testDeepSnowLeavesHimHisOwnStone() {
+        let awake = gargle.plus.awake
+        let rest = rows(awake.rest)
+        let dusting = rows(awake.snow!)
+        for deep in awake.snowDeep {
+            let pile = rows(deep)
+            for y in 0..<gargle.height {
+                for x in 0..<gargle.width where rest[y][x] != CompanionInk.clear {
+                    XCTAssertEqual(pile[y][x], dusting[y][x], "\(deep) \(x),\(y): more of him covered")
+                }
+            }
+            XCTAssertTrue(pile[4...8].allSatisfy { row in !row[2...6].contains { "sbc".contains($0) } }, "\(deep): his brow and eye are clear")
+        }
+        let deepest = rows(awake.snowDeep.last!)
+        let hollow = (9...11).filter { y in (10...12).contains { "sbc".contains(deepest[y][$0]) } }
+        XCTAssertEqual(hollow.count, 3, "three deep in his back's hollow")
+        XCTAssertEqual(gargle.field.awake.snowDeep, awake.snowDeep)
     }
 
     /// Brief 100: an idle can be drawn over every still it may show, so it is never still for long whatever the sky.
