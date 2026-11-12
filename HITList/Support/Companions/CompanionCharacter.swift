@@ -21,7 +21,9 @@ import HITListCore
 //   only under it, about every other routine or idle while it holds; its own frames are drawn whole, for that
 //   sky's still. Everything else is drawn over the still frame (only the pixels it changes from `rest`) and plays in a
 //   weather only where it leaves that still's own pixels alone, or a frame named "frame@still" is drawn for it.
-// - Nothing is drawn in the air around a companion, except a single drop or flake it touches.
+// - Nothing is drawn in the air around a companion, except a single drop or flake it touches, and Button's puff of
+//   spores (round 21, George: "puff around"): at most three pixels within two of its cap, gone within a second,
+//   never in rain or snow, in a routine only.
 // - Snow piles up: in snow the still moves one frame deeper through `snowDeep` every 8 to 14 minutes of showing time,
 //   stopping at the last (kept in memory; it starts again when the sky leaves snow, at a new launch, when night and day
 //   change over). At a depth, what was drawn for `rest` or for `snow` plays only where it leaves that frame's extra
