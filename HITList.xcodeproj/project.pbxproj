@@ -153,6 +153,7 @@
 		4887CE8432BD8382222B7F9A /* SchemaV5Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3DF8FADE739784FAFE5D568 /* SchemaV5Models.swift */; };
 		48B1C2A135C8CBDF5939730E /* BoltMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8029EE45AC3F45957AC8CFEA /* BoltMotionTests.swift */; };
 		48B5F9A8831978AD2FD46F36 /* MobileChromeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5144DA93AF367608CA17BD2E /* MobileChromeTests.swift */; };
+		48EAB8E61FA2446B6742D54E /* DuoCardsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFD1E714E0D088EB6CB927A4 /* DuoCardsTests.swift */; };
 		490CBF09443A68F306B100F1 /* TaskActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966FF672CF1AE97484CD00CE /* TaskActions.swift */; };
 		49985B167209401E0166CB1B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4F2C6F0B31F217723029B1AA /* Assets.xcassets */; };
 		49ECA1A1C931DA440FAE8E5E /* DuoHinge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 744FE67BEC1E7FE2D5CD8914 /* DuoHinge.swift */; };
@@ -162,6 +163,7 @@
 		4A5A32F96EDD564B3FC09DE9 /* CompletionFeedbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38F35E64B476B4961A39EC62 /* CompletionFeedbackTests.swift */; };
 		4A81A461D3A3ABF0CD2800B9 /* SharedAddingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D2FDF2D4FA353062924EFA4 /* SharedAddingTests.swift */; };
 		4AA13F1E4BD7D820C4850F54 /* SharedTaskPopout.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB0F6B260E707986FB5A77C /* SharedTaskPopout.swift */; };
+		4B4AE104DAA6494922E44F15 /* DuoCardsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E664EDAD52B9A5261F63C61 /* DuoCardsUITests.swift */; };
 		4B750AD0778719EB373860E7 /* WidgetLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2C524777B8CA68EDF5DAAA4 /* WidgetLook.swift */; };
 		4BBCC915C9A42646A08A469B /* ShareDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9681118E0D329F0DD5D4BBEE /* ShareDebug.swift */; };
 		4C3E594F18816DAA10A08509 /* CompanionSpriteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC8F4B56B5871C0BE8977E4 /* CompanionSpriteTests.swift */; };
@@ -648,6 +650,7 @@
 		1B25094CD0CFE92ECAF30B4A /* HighlightTextView+iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+iOS.swift"; sourceTree = "<group>"; };
 		1CAAC5533A1A8433446C4478 /* RepeatMenuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatMenuCard.swift; sourceTree = "<group>"; };
 		1D47EBD278801897E89A2D06 /* SharedTasksRecords.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksRecords.swift; sourceTree = "<group>"; };
+		1E664EDAD52B9A5261F63C61 /* DuoCardsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoCardsUITests.swift; sourceTree = "<group>"; };
 		1EE91CEE19A3849BEA15DFAB /* RepeatCustomCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatCustomCard.swift; sourceTree = "<group>"; };
 		1EF80B50B96770FD7E915BE6 /* IntentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntentStore.swift; sourceTree = "<group>"; };
 		1F69802BB4075BBEB05BF86D /* SettingsPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPreferences.swift; sourceTree = "<group>"; };
@@ -991,6 +994,7 @@
 		CE6603FF5D680E50A9C729E1 /* SyncWatchdog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWatchdog.swift; sourceTree = "<group>"; };
 		CF39F3312D74267C7D2CDDE7 /* WeatherHeatTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherHeatTests.swift; sourceTree = "<group>"; };
 		CF922AE937BECF293EE28887 /* TaskPopoutTitleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskPopoutTitleTests.swift; sourceTree = "<group>"; };
+		CFD1E714E0D088EB6CB927A4 /* DuoCardsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoCardsTests.swift; sourceTree = "<group>"; };
 		CFFB73EA220E7DD77461E00A /* SpacingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpacingTests.swift; sourceTree = "<group>"; };
 		D010EDAA6842A7E3DD29AEED /* CloudKitSchemaCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitSchemaCheck.swift; sourceTree = "<group>"; };
 		D17E34A4CAB819BB8BFDD7BA /* HITListShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = HITListShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1507,6 +1511,7 @@
 				FA368D92A67007225A415A9A /* CompanionListEndUITests.swift */,
 				019968238418E949DF9D108C /* CompanionPhaseUITests.swift */,
 				18F4F1697CE016BD20D66BDA /* CompanionsUITests.swift */,
+				1E664EDAD52B9A5261F63C61 /* DuoCardsUITests.swift */,
 				56C4491BDDA21F86C2B1B6AE /* FirstRunUITests.swift */,
 				ABB1E2283AF1F9D993947D84 /* FlipboardPhoneUITests.swift */,
 				779C8E0132E607E31B370A6E /* HITListUITests.swift */,
@@ -1636,6 +1641,7 @@
 				EF858F2F7761E0A27B2D49E8 /* DayAnchorStoreTests.swift */,
 				32E8FAB5202E03DE25B34918 /* DeduplicatorTests.swift */,
 				0222BC93E2AA258E168B8F5C /* DesignSystemTests.swift */,
+				CFD1E714E0D088EB6CB927A4 /* DuoCardsTests.swift */,
 				ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */,
 				DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */,
 				8AEAF40D7B5D7F3D38A794EB /* FlipboardAddTests.swift */,
@@ -2322,6 +2328,7 @@
 				2B4B252EFF59598535FFE4E0 /* CompanionListEndUITests.swift in Sources */,
 				17E4281140A4157B88B2C2EC /* CompanionPhaseUITests.swift in Sources */,
 				D8B013C120B7C86730E152BC /* CompanionsUITests.swift in Sources */,
+				4B4AE104DAA6494922E44F15 /* DuoCardsUITests.swift in Sources */,
 				D459E5A89A8B9604E0C6CEE2 /* FirstRunUITests.swift in Sources */,
 				8302DD14596300DD6FEE40EC /* FlipboardPhoneUITests.swift in Sources */,
 				4DA0D7A920592A3351482879 /* HITListUITests.swift in Sources */,
@@ -2748,6 +2755,7 @@
 				238945B5DE75E680AF75A0DA /* DayAnchorStoreTests.swift in Sources */,
 				EE344518DF396F71155E8D44 /* DeduplicatorTests.swift in Sources */,
 				D5D0186DDAF23212B7048BC6 /* DesignSystemTests.swift in Sources */,
+				48EAB8E61FA2446B6742D54E /* DuoCardsTests.swift in Sources */,
 				C9900D3D916A62FDA1BDC0E2 /* DuoLayoutTests.swift in Sources */,
 				C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */,
 				D7CE880328DE945D47634FF7 /* FlipboardAddTests.swift in Sources */,

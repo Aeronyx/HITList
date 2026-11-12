@@ -117,6 +117,7 @@ struct ProjectChipPopover: View {
     @State private var search = ""
     @FocusState private var searchFocused: Bool
     @Environment(\.pickerFocusRequest) private var focusRequest
+    @Environment(\.pickerRoom) private var pickerRoom
 
     /// Your Groups whose names match, then Shared Tasks when its name does (`GroupPicker`).
     private var matches: [GroupRef<UUID>] {
@@ -155,7 +156,7 @@ struct ProjectChipPopover: View {
                     }
                 }
             }
-            .frame(maxHeight: 280)
+            .frame(maxHeight: PickerListHeight.max(room: pickerRoom))
         }
         .padding(.bottom, HITSpacing.xs)
         .onChange(of: focusRequest) { _, _ in searchFocused = true }
@@ -196,6 +197,7 @@ struct LabelsChipPopover: View {
     @State private var search = ""
     @FocusState private var searchFocused: Bool
     @Environment(\.pickerFocusRequest) private var focusRequest
+    @Environment(\.pickerRoom) private var pickerRoom
 
     private func isSelected(_ name: String) -> Bool {
         selected.contains { $0.caseInsensitiveCompare(name) == .orderedSame }
@@ -235,7 +237,7 @@ struct LabelsChipPopover: View {
                     }
                 }
             }
-            .frame(maxHeight: 280)
+            .frame(maxHeight: PickerListHeight.max(room: pickerRoom))
         }
         .padding(.bottom, HITSpacing.xs)
         .onChange(of: focusRequest) { _, _ in searchFocused = true }
@@ -253,6 +255,20 @@ struct LabelsChipPopover: View {
         guard !name.isEmpty else { return }
         if !isSelected(name) { onToggle(labels.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.name ?? name) }
         search = ""
+    }
+}
+
+/// The Group and labels cards' lists: 280 pt at most, less where the card has less room beside its chip (brief 107), the
+/// search field above them always whole. Pure, so tests pin it.
+enum PickerListHeight {
+    /// The search field and the padding around it and under the list.
+    static let chrome: CGFloat = 76
+    /// The list never shrinks below three rows.
+    static let minimum: CGFloat = 132
+
+    static func max(room: CGFloat?) -> CGFloat {
+        guard let room else { return 280 }
+        return Swift.min(280, Swift.max(minimum, room - chrome))
     }
 }
 
