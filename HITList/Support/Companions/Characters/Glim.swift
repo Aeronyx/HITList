@@ -2251,6 +2251,29 @@ extension CompanionCharacter {
                 "...............gwwg.",
                 "................gg..",
             ]),
+            // Brief 105: a sniff of the air, nose and eyes up.
+            Frame(name: "sniffUp", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddkllllkddd.......",
+                ".ddlkllllkldd.......",
+                ".dlllllllllld..md...",
+                ".dllllddlllld.mdmd..",
+                "..dlllllllld.md.md..",
+                "...dlllllld.md..md..",
+                "...ddddddddmd...md..",
+                "...dllddlld.....dd..",
+                "...............gwwg.",
+                "...............wwww.",
+                "...............wwww.",
+                "...............gwwg.",
+                "................gg..",
+            ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -2270,12 +2293,13 @@ extension CompanionCharacter {
         gestures: [
             Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
             Gesture(name: "flicker", weight: 2, ticks: Self.ticks(("dim", 1), ("rest", 1), ("dim", 1)), flicker: true),
-            // Brief 105: quick, a mouse's and a lamplighter's: a sniff of the air; the lantern set swaying; lifted to
-            // peer into the dark; the flame guttering and cupped back to life with a paw.
+            // Brief 105: quick and small, a mouse's and a lamplighter's: a double sniff; a sniff of the air, nose and
+            // eyes up; a paw on the lantern, steadying it; the flame guttering, cupped, and flaring up. Swinging the
+            // lantern and lifting it to peer are its little loops.
             Gesture(name: "sniff", weight: 2, ticks: Self.ticks(("sniff", 1), ("rest", 1), ("sniff", 1)), flicker: true),
-            Gesture(name: "sway", ticks: Self.ticks(("swingL", 1), ("swingR", 1), ("swingL", 1)), flicker: true),
-            Gesture(name: "peer", ticks: Self.ticks(("peerA", 1), ("peer", 4), ("peerA", 1)), flicker: true),
-            Gesture(name: "cup", ticks: Self.ticks(("dim", 1), ("rest", 1), ("cupDim", 2), ("cupLit", 2)), flicker: true),
+            Gesture(name: "air", ticks: Self.ticks(("sniffUp", 1), ("rest", 1), ("sniffUp", 2)), flicker: true),
+            Gesture(name: "paw", ticks: Self.ticks(("still", 4)), flicker: true),
+            Gesture(name: "cup", ticks: Self.ticks(("dim", 1), ("rest", 1), ("cupDim", 2), ("brighter", 2)), flicker: true),
             Gesture(name: "drop", weight: 2, ticks: Self.ticks(("rainDrip1", 3), ("rainDrip2", 1)), flicker: true, sky: .rain),
             Gesture(name: "sweat", weight: 2, ticks: Self.ticks(("heatSweat1", 2), ("heatSweat2", 1), ("heatSweat3", 1)), flicker: true, sky: .heat),
         ],
