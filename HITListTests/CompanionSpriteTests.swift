@@ -411,8 +411,14 @@ final class CompanionSpriteTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("CompanionSheets", isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         for character in CompanionCharacter.all {
-            let frames = Self.sheet(character, palette: .slate, frames: Array(character.frames.indices), scale: 4)
-            try write(frames, scale: 2, to: folder.appendingPathComponent("\(character.id)-frames-8x.png"))
+            // In pages of 120 frames (brief 105: Tuck's 227 frames in one sheet were too tall for iOS to encode).
+            let every = Array(character.frames.indices)
+            for (n, start) in stride(from: 0, to: every.count, by: 120).enumerated() {
+                let page = Array(every[start..<min(start + 120, every.count)])
+                let frames = Self.sheet(character, palette: .slate, frames: page, scale: 4)
+                let name = n == 0 ? "\(character.id)-frames-8x.png" : "\(character.id)-frames-8x-\(n + 1).png"
+                try write(frames, scale: 2, to: folder.appendingPathComponent(name))
+            }
             let field = character.field, plus = character.plus
             let poses = [field.awake.rest, field.asleep.rest, field.flourish[field.flourish.count / 2].frame,
                          plus.awake.rest, plus.asleep.rest].compactMap { character.index[$0] }
