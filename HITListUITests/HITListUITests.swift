@@ -597,7 +597,9 @@ final class HITListUITests: XCTestCase {
         app.swipeDown()
 
         sort(by: "Date")
-        XCTAssertTrue(element(beginningWith: "Today,").waitForExistence(timeout: 5), "the Today section")
+        // Every list writes a day one way since 0.9.4: "Nov 11 · Today · Wednesday".
+        let todaySection = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", " · Today · ")).firstMatch
+        XCTAssertTrue(todaySection.waitForExistence(timeout: 5), "the Today section")
         snapshot("3 Inbox by Date")
         app.swipeUp()
         XCTAssertTrue(element(beginningWith: "No date, 2 tasks").waitForExistence(timeout: 5), "the undated tasks last")
