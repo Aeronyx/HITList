@@ -34,6 +34,8 @@ import HITListCore
 //   flourish facing the same way there. A character using none of this still works: flickers and the flourish.
 // - See-through (brief 101): the ink `v` (veil) is the accent dimmed toward the background, drawn see-through (a hem
 //   over the "+", a ghost phasing); `seeThrough:` (0 to 0.5) makes the body's inks see-through, eyes and glints solid.
+// - Behind the host (brief 104): a capital ink letter is that ink behind the host (`M` is `m` behind), drawn only where
+//   the host's shape is not (a tail dropped behind the "+" shows down to its curve); only below the seat row.
 // `problems` lists what is wrong with a character; `CompanionSpriteTests` runs it on every one.
 
 /// A colour a companion is drawn in. Frames are rows of these letters ("." is clear); `CompanionInks` maps
@@ -64,6 +66,19 @@ enum CompanionInk: Character, CaseIterable {
 
     /// Clear.
     static let clear: Character = "."
+
+    /// The letter for this ink behind the host (brief 104): its capital (`M` is `m` behind).
+    var behind: Character { Character(String(rawValue).uppercased()) }
+
+    /// A frame's letter read: its ink, and whether it is behind the host (a capital). Nil for clear or no ink.
+    static func read(_ letter: Character) -> (ink: CompanionInk, behind: Bool)? {
+        if let ink = CompanionInk(rawValue: letter) { return (ink, false) }
+        guard letter.isUppercase, let ink = CompanionInk(rawValue: Character(String(letter).lowercased())) else { return nil }
+        return (ink, true)
+    }
+
+    /// Whether a frame's letter is an ink behind the host.
+    static func isBehind(_ letter: Character) -> Bool { read(letter)?.behind == true }
 }
 
 /// Where a companion lives (brief 79): the same two places for every companion. The Mac: on the sidebar's search
@@ -345,12 +360,14 @@ struct CompanionCharacter: Identifiable {
         func mode(_ look: CompanionLook) -> Mode { look.asleep ? asleep : awake }
     }
 
-    /// One horizontal run of a single ink, for drawing.
+    /// One horizontal run of a single ink, for drawing; `behind` when it lies behind the host (a capital letter, brief
+    /// 104: drawn only outside the host's shape, and not at all with no host).
     struct Run: Equatable {
         let x: Int
         let y: Int
         let length: Int
         let ink: CompanionInk
+        var behind = false
     }
 
     /// Points per sprite pixel: every pixel is a 2 pt square (4 or 6 device pixels).
@@ -567,10 +584,10 @@ struct CompanionCharacter: Identifiable {
             let chars = Array(row)
             var x = 0
             while x < chars.count {
-                guard let ink = CompanionInk(rawValue: chars[x]) else { x += 1; continue }
+                guard let letter = CompanionInk.read(chars[x]) else { x += 1; continue }
                 var end = x
                 while end + 1 < chars.count, chars[end + 1] == chars[x] { end += 1 }
-                out.append(Run(x: x, y: y, length: end - x + 1, ink: ink))
+                out.append(Run(x: x, y: y, length: end - x + 1, ink: letter.ink, behind: letter.behind))
                 x = end + 1
             }
         }
@@ -601,13 +618,16 @@ struct CompanionCharacter: Identifiable {
         return count
     }
 
-    /// The rightmost opaque column of a frame: where a perch lines the companion up.
+    /// The rightmost opaque column of a frame in front of the host: where a perch lines the companion up (what lies
+    /// behind the host, brief 104, doesn't move it).
     func rightmostColumn(_ name: String) -> Int {
         guard let rows = rows(name) else { return width - 1 }
         var best = 0
         for row in rows {
             let chars = Array(row)
-            for x in chars.indices where chars[x] != CompanionInk.clear && x > best { best = x }
+            for x in chars.indices where x > best && chars[x] != CompanionInk.clear && !CompanionInk.isBehind(chars[x]) {
+                best = x
+            }
         }
         return best
     }
@@ -632,8 +652,12 @@ struct CompanionCharacter: Identifiable {
             }
             for (y, row) in frame.rows.enumerated() {
                 if row.count != width { out.append("\(id).\(frame.name) row \(y): \(row.count) wide, not \(width)") }
-                for c in row where c != CompanionInk.clear && CompanionInk(rawValue: c) == nil {
+                for c in row where c != CompanionInk.clear && CompanionInk.read(c) == nil {
                     out.append("\(id).\(frame.name) row \(y): unknown ink \(c)")
+                }
+                // Behind the host (brief 104) only where the host is: above the seat row there is nothing to be behind.
+                if y < seatRow, row.contains(where: CompanionInk.isBehind) {
+                    out.append("\(id).\(frame.name) row \(y): behind the host above the seat row")
                 }
             }
         }
