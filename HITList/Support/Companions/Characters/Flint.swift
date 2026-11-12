@@ -3,12 +3,12 @@ import Foundation
 // Drawn for brief 104 (round 21), redrawn for brief 111 (round 22) and again for brief 117 (round 23) from the workshop in
 // the notes folder (117-gargle-pup/workshop: pup.py draws every awake frame from v0.9.6's own night sprite, make.py writes
 // this file); his rain's water and his deep snow for brief 124 (round 24; 124-gargle-button-rain/workshop/gargle_make.py
-// stamps them onto 0.9.7's frames). `CompanionSpriteTests` and `CompanionGargleTests` check them.
+// stamps them onto 0.9.7's frames). `CompanionSpriteTests` and `CompanionFlintTests` check them.
 // Inks: . clear  k ink  d dark  m mid  l light  w warm  g glow; s b c snow; p h u water; a capital is that ink behind the
 // host (`D`: his tail).
 
 extension CompanionCharacter {
-    /// Gargle: Graphite's companion (briefs 102, 104, 111 and 117), a stone dragon pup carved for a ledge and come half alive
+    /// Flint: Graphite's companion (briefs 102, 104, 111 and 117), a stone dragon pup carved for a ledge and come half alive
     /// on it. Awake he is his own night sprite with his eye open (brief 117; George: "I still adore the nighttime sprite"):
     /// side-on along the edge he lives on, snout to the left, two small pale horns swept back, the wing folded up his back
     /// like a cape (a dark membrane, a pale hooked tip), a compact stone body, front paws down, and his tail dropping behind
@@ -30,9 +30,9 @@ extension CompanionCharacter {
     /// nape, the wing's upper edge, the crook behind his head); deeper (brief 124) only the drifts grow, along his back and
     /// the wing's slope, against his toes and on his spade, so his horn tips, brow, eye and snout stay stone, until he draws
     /// his wing over his head with the snow on it, then throws it all off. On a hot day he lies low on the cool stone and pants.
-    static let gargle: CompanionCharacter = CompanionCharacter(
-        id: "gargle",
-        name: "Gargle",
+    static let flint: CompanionCharacter = CompanionCharacter(
+        id: "flint",
+        name: "Flint",
         width: 20,
         height: 20,
         seatRow: 18,
@@ -1823,11 +1823,11 @@ extension CompanionCharacter {
         gestureFPS: 8,
         flourishFPS: 9,
         flourishTurns: false,
-        field: Posture(awake: gargleAwake, asleep: gargleAsleep, flourish: gargleFlourish),
-        plus: Posture(awake: gargleAwake, asleep: gargleAsleep, flourish: gargleFlourish, inset: 5))
+        field: Posture(awake: flintAwake, asleep: flintAsleep, flourish: flintFlourish),
+        plus: Posture(awake: flintAwake, asleep: flintAsleep, flourish: flintFlourish, inset: 5))
 
     /// Awake, the same in both places.
-    static let gargleAwake: Mode = Mode(
+    static let flintAwake: Mode = Mode(
         rest: "rest",
         rain: "rain",
         snow: "snow",
@@ -1849,11 +1849,11 @@ extension CompanionCharacter {
             Gesture(name: "pant", ticks: Self.ticks(("pant", 2), ("heat", 1), ("pant", 2)), flicker: true, sky: .heat),
         ],
         answer: Gesture(name: "look", ticks: Self.ticks(("lookUp", 3), ("winkFlick", 4), ("lookUp", 2))),
-        routines: gargleRoutines)
+        routines: flintRoutines)
 
     /// Asleep, stone in profile: every gesture is a breath, a wisp of smoke, a twitch of the spade (brief 100), and in the
     /// rain the drop off his snout (brief 124).
-    static let gargleAsleep: Mode = Mode(
+    static let flintAsleep: Mode = Mode(
         rest: "sleep",
         rain: "sleepRain",
         snow: "sleepSnow",
@@ -1867,9 +1867,9 @@ extension CompanionCharacter {
         ],
         answer: Gesture(name: "wake", ticks: Self.ticks(("sleepPeek", 4), ("sleep", 1), ("sleepPeek", 3))))
 
-    /// Gargle's routines, the same in both places: four little loops for his idles, four long routines, and one for each of
-    /// rain, thunder, snow and heat (see `gargle`).
-    static let gargleRoutines: [Routine] = [
+    /// Flint's routines, the same in both places: four little loops for his idles, four long routines, and one for each of
+    /// rain, thunder, snow and heat (see `flint`).
+    static let flintRoutines: [Routine] = [
         Routine(name: "statue", weight: 2, little: true, steps: [.play(("lookL", 2), ("statue", 12), ("lookL", 1)), .gesture("blink")]),
         Routine(name: "periscope", weight: 2, little: true, steps: [.play(("rise", 1), ("periscope", 3), ("scopeL", 4), ("periscope", 1), ("scopeR", 3), ("rise", 1), ("sink", 2), ("tipGone", 1)), .gesture("blink")]),
         Routine(name: "yawn", little: true, steps: [.play(("half", 1), ("yawn1", 1), ("yawn2", 5), ("yawn1", 1), ("half", 1)), .gesture("blink")]),
@@ -1885,5 +1885,5 @@ extension CompanionCharacter {
     ]
 
     /// The grotesque's roar: both wings high, mouth open on two fangs, a glare and a puff of smoke, then a giggle that spoils it.
-    static let gargleFlourish: [Tick] = Self.ticks(("rest", 1), ("wingsHigh", 1), ("booUp", 2), ("boo", 3), ("booPuff", 3), ("booUp", 1), ("giggle", 3), ("happy", 2), ("giggle", 2), ("rest", 1), ("blink", 1), ("rest", 1))
+    static let flintFlourish: [Tick] = Self.ticks(("rest", 1), ("wingsHigh", 1), ("booUp", 2), ("boo", 3), ("booPuff", 3), ("booUp", 1), ("giggle", 3), ("happy", 2), ("giggle", 2), ("rest", 1), ("blink", 1), ("rest", 1))
 }

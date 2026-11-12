@@ -4,7 +4,7 @@ extension CompanionCharacter {
     /// Every companion, in the themes' order.
     static let all: [CompanionCharacter] = [
         CompanionCharacter.nod,
-        CompanionCharacter.gargle,
+        CompanionCharacter.flint,
         CompanionCharacter.quill,
         CompanionCharacter.tuck,
         CompanionCharacter.hush,
@@ -17,7 +17,7 @@ extension CompanionCharacter {
 }
 
 /// One companion per colour theme (briefs 79, 85 and 87 to 89), and only that one shows: Slate has Nod (the default),
-/// Graphite Gargle, Midnight Quill, Moss Tuck, Nord Hush, Tokyo Night Glim, Mocha Phase, Rosé Button. A theme from a
+/// Graphite Flint, Midnight Quill, Moss Tuck, Nord Hush, Tokyo Night Glim, Mocha Phase, Rosé Button. A theme from a
 /// newer build, with no companion drawn here, borrows Nod. There are no points, unlocks or collecting of any kind:
 /// the theme alone decides. Debug: `-companion quill` picks one whatever the theme.
 enum CompanionCast {
@@ -26,7 +26,7 @@ enum CompanionCast {
         "slate": "nod",
         // A small stone dragon in Graphite's greys, perched on the "+" as its elders perch on a parapet, its tail
         // behind the bar (briefs 102, 104 and 111).
-        "graphite": "gargle",
+        "graphite": "flint",
         "midnight": "quill",
         // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
         "moss": "tuck",
