@@ -360,7 +360,8 @@ final class CompanionSpriteTests: XCTestCase {
                     for x in 0..<character.width {
                         let c = rows[y][x]
                         let px = pixels.at(x * 6 + 3, y * 6 + 3)
-                        if c == CompanionInk.clear { XCTAssertEqual(px.alpha, 0) } else {
+                        // Behind the host (brief 104) is not drawn with no host.
+                        if c == CompanionInk.clear || CompanionInk.isBehind(c) { XCTAssertEqual(px.alpha, 0) } else {
                             let ink: CompanionInk = CompanionInk(rawValue: c)!
                             let want: [Int] = CompanionInks.rgb(inks.hex[ink]!)
                             XCTAssertTrue(close(px.rgb, want), "\(character.id) \(x),\(y)")

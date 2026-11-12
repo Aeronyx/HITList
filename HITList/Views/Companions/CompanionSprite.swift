@@ -63,12 +63,17 @@ struct CompanionInks: Equatable {
 
 /// One companion pose, drawn: every sprite pixel a 2 pt square of its ink, no smoothing, nothing between pixels; a
 /// see-through ink or body (`CompanionCharacter.opacity`, brief 101) at its opacity, so what is behind shows through.
+/// What lies behind the host (brief 104, a capital letter) is drawn only outside `host`, the host's shape in the
+/// sprite's own coordinates (`CompanionPerch.surface`); with no host (the swatch in Settings, the design sheets) it
+/// isn't drawn: it is all below the seat row, where the host would be.
 struct CompanionSprite: View {
     let character: CompanionCharacter
     let pose: CompanionPose
     var inks: CompanionInks? = nil
     /// Points per sprite pixel; larger only for the design sheets.
     var pixel = CompanionCharacter.pointsPerPixel
+    /// The host's shape, for what lies behind it; nil: no host, and nothing behind one is drawn.
+    var host: Path? = nil
 
     var body: some View {
         let inks = inks ?? CompanionInks(palette: Theme.palette)
@@ -77,8 +82,9 @@ struct CompanionSprite: View {
         let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
         let mirrored = pose.mirrored
         let character = character
+        let host = host
         Canvas { context, _ in
-            for run in runs {
+            func fill(_ run: CompanionCharacter.Run, in context: GraphicsContext) {
                 // One step per line: the CI runner's older Swift gave up on this as one expression.
                 let x: Int = mirrored ? width - run.x - run.length : run.x
                 let left: CGFloat = CGFloat(x) * p
@@ -89,6 +95,12 @@ struct CompanionSprite: View {
                 let color: Color = alpha < 1 ? inks[run.ink].opacity(alpha) : inks[run.ink]
                 context.fill(Path(rect), with: .color(color))
             }
+            for run in runs where !run.behind { fill(run, in: context) }
+            // Behind the host: only where the host's shape is not.
+            guard let host, runs.contains(where: \.behind) else { return }
+            var behind = context
+            behind.clip(to: host, options: .inverse)
+            for run in runs where run.behind { fill(run, in: behind) }
         }
         .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height) * p)
         .accessibilityHidden(true)
@@ -97,12 +109,12 @@ struct CompanionSprite: View {
 
 extension CompanionCharacter {
     /// The opaque pixels of a pose's runs (mirrored when asked), as a shape, for taps: only rows above `belowRow`
-    /// (what hangs over the field or the "+" is theirs to tap).
+    /// (what hangs over the field or the "+" is theirs to tap), and nothing behind the host (brief 104).
     static func tapShape(runs: [Run], width: Int, mirrored: Bool, belowRow: Int? = nil) -> Path {
         var path = Path()
         let p = pointsPerPixel
         let edge: Int = belowRow ?? Int.max
-        for run in runs where run.y < edge {
+        for run in runs where run.y < edge && !run.behind {
             let x: Int = mirrored ? width - run.x - run.length : run.x
             // A pixel's worth of slack around the body, so a fingertip finds it; none below the edge.
             let top: CGFloat = CGFloat(run.y - 1) * p
