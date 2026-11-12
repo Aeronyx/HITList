@@ -15,22 +15,24 @@ Switchboards as rows. Sixteen sessions over the three rounds; he saw every sketc
 
 Reminders and quick add:
 
-- A reminder typed into a task's title is no longer lost. A friend typed "PNHP Working Group tonight !30mb" in quick
-  add: "tonight" was not a word the app read, so the task had no time and "!30mb" stayed in the title as text; he
-  gave it 8:00 PM by hand, opened it, and the reminder he had typed sat dead in the title. Now a reminder before the
-  due time ("!30mb", "!1hb", "!at") left in a title wakes once the task has a time: opening the task shows it lit,
-  the reminder pill shows what Confirm will save, and Confirm sets it and takes it out of the title. Closing with ×
-  changes nothing and asks nothing.
-- Typing such a reminder in the editor showed nothing until a space was typed after it, so it looked dead although
+- A reminder typed into a task's title is no longer lost. A friend's screenshot showed a task due at 8:00 PM with
+  "PNHP Working Group tonight !30mb" as its title and no reminder. It failed two ways, and both are fixed. Typed in
+  quick add, the line had no time ("tonight" was not a word the app read), so "!30mb" stayed in the title as text,
+  and it stayed dead there after the task was given a time by hand. Now a reminder before the due time ("!30mb",
+  "!1hb", "!at") left in a title wakes once the task has a time: opening the task shows it lit, the reminder pill
+  shows what Confirm will save, and Confirm sets it and takes it out of the title. Closing with × changes nothing
+  and asks nothing.
+- Typed in the editor, such a reminder showed nothing until a space was typed after it, so it looked dead although
   Confirm saved it. The editor's rows and pills now show it at once; the highlight in the title still waits for
   the space, as in quick add.
 - "tonight" is a day word: today, with no hour of its own.
 - "!0mb", "!0hb", "!0db" and "!0b" mean at the due time, like "!0" and "!at".
 - The same fault looked for everywhere a typed phrase leans on something the task holds: Review Inbox kept dropping
-  a reminder typed into a title and read the task's stored title as if it had just been typed; the editor's "No
-  date" left a reminder before a time that was gone; "starting friday" typed on a task that already repeats now
-  starts that repeat from there; Claude's update_task no longer keeps "minutes before" on a task whose time it
-  removes, and reads a reminder in a due phrase.
+  a reminder typed into a title and read the task's stored title as if it had just been typed; "starting friday"
+  typed on a task that already repeats now starts that repeat on its first day from there; Claude's update_task no
+  longer keeps "minutes before" on a task whose time it removes, and reads a reminder in a due phrase.
+- Removing a task's date (the editor's "No date", "Remove Date" in a row's menu or in Upcoming) removes its reminder
+  before the due time with it. Kept, it came back unasked the day the task was given a time again.
 
 The creatures:
 
@@ -44,17 +46,18 @@ The creatures:
   that doesn't fit the theme. He needs to have more cartoonish eyes and appearance (not necessarily sillier, just
   less real), and perhaps make him a Gryffin … (Also, please rename him; Gargle is a bad name)". Flint is drawn as
   the other seven are: a round owl's face looking at you, eyes ringed in light, a peach beak and talons, and behind
-  it a lion cub's body in flat greys with one folded wing and a short tail that ends in a soft tuft. He preens,
-  pats at his own tail, and flaps until he lifts off the bar. Asleep he lies down with the tuft over his talons; in
-  the rain he holds his wing over his head in an arc; snow gathers between his ear tufts, on his wing and on his
-  tail, and never over his eyes.
+  it a lion cub's body in flat greys with one folded wing and a short tail that ends in a soft tuft. He preens a
+  wing, pounces on his own tail and misses, and flaps until he lifts off the bar for a moment; now and then he lets
+  out a squeaky screech and giggles. Asleep he lies down with the tuft over his talons; in the rain he holds his
+  wing over his head in an arc; snow gathers between his ear tufts, on his wing and on his tail, never over his
+  eyes, until he shakes it off.
 - Phase, Mocha's ghost, is one floating sheet you can see through: a wavy drape with a wavy hem, no head and body,
   nothing that reads as hands, no horn. His body thins from the crown down to a nearly clear hem and a tail that
   ends in a wisp, and what he does is done with opacity: his bob thins and fills him, a tap makes him flicker, and
   now and then he fades from the hem up to a faint shape round his eyes, then fills back in from the crown. His
   eyes are black with one white pupil, solid on the see-through body (0.9.8 had lit them white: "ruin his entire
-  vibe"). By day he looks down and to the right; in rain away and up; in snow at the pile under him, and when it
-  is deep he looks a little worried. Rain falls through him to a puddle on the bar; snow gathers under him in one
+  vibe"). By day he looks down and to the right; in rain up and away to the left; in snow at the pile under him,
+  and when it is deep he looks a little worried. Rain falls through him to a puddle on the bar; snow gathers under him in one
   mound.
 - A companion can give real light: it names the inks that glow, and the app draws a soft halo of their colour
   under the crisp pixels. Glim's lantern does (fainter in his lap, fainter still asleep). With Reduce Transparency
