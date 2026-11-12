@@ -92,7 +92,9 @@ struct BrowseView: View {
         } menu: {}
         // The Duo's outer display (brief 115): the picture in the title row's item, at the bolt's gap from it, where the
         // system set it apart as an item of its own, 23 pt from the bolt against the bolt's 7 from the pill.
-        .environment(\.titleRowLeading, islandPlacement.isSide ? AnyView(profileButton) : nil)
+        // The menu's frame reaches 4 pt past the picture on each side (36 pt for its 28; XCUITest reads it), so it gives
+        // those 4 back on the bolt's side: picture to bolt and bolt to pill are then the same 7 pt as drawn.
+        .environment(\.titleRowLeading, islandPlacement.isSide ? AnyView(profileButton.padding(.trailing, -4)) : nil)
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
