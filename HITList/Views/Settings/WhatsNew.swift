@@ -24,7 +24,7 @@ enum WhatsNew {
             "Each companion moves like itself: Nod nods off and rubs his eyes, Quill writes with his tail tip, Tuck leans toward his seedling, Hush listens with one ear, Glim tends his lantern, Phase pops up out of the button.",
             "Button, Rosé's mushroom, is smaller and sweeter and stands on its feet. Now and then it bobs, puffs up, rolls along the bar or lets go a puff of spores.",
             "Gargle, Graphite's gargoyle pup, is carved again: he perches on top with his tail tucked behind the bar, and plays statue when he thinks you're watching.",
-            "Each theme shows its companion's name under it in Settings.",
+            "Each theme shows its companion's name under it in Settings. To hide them all: Settings → Extras → Show companions.",
             "iPhone Duo, closed: a screen's controls sit beside its title, so nothing is drawn on top of the tab bar, and the date and reminder cards open whole.",
             "iPhone Duo, closed: a companion sits on top of the tab bar.",
             "iPhone Duo, open: search is in the sidebar, the list and the editor meet at the fold, and Upcoming shows whole days.",
