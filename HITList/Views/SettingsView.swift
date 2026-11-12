@@ -148,14 +148,20 @@ struct SettingsPageContent: View {
 struct SettingsHome: View {
     @Environment(\.hitPages) private var pages
 
+    /// Between the first screen's three groups: a step closer than a page's groups (`HITSpacing.xl`), which pays for
+    /// the companions' names under the themes (round 21) so the screen still fits an iPhone without scrolling.
+    static let spacing: CGFloat = 20
+
     var body: some View {
-        HITGroup {
-            SettingsProfileRow { pages(SettingsPage.account) }
-        }
-        AppearanceSettingsSection()
-        HITGroup {
-            ForEach(SettingsPage.list) { page in
-                SettingsPageRow(page: page) { pages(page) }
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            HITGroup {
+                SettingsProfileRow { pages(SettingsPage.account) }
+            }
+            AppearanceSettingsSection()
+            HITGroup {
+                ForEach(SettingsPage.list) { page in
+                    SettingsPageRow(page: page) { pages(page) }
+                }
             }
         }
     }
