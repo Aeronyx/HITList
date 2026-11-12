@@ -152,12 +152,12 @@ struct TaskEditorDraft: Equatable {
     /// One stored phrase wakes (brief 127): a reminder before the due time ("!30mb", "!1hb", "!at", "!0mb") is the
     /// only phrase quick add refuses for want of something the task can gain later, a time. A friend typed "PNHP
     /// Working Group tonight !30mb" with no time, so "!30mb" stayed text; given 8 PM by hand, the task's editor
-    /// showed it dead in the title. So on a task with a due time and no reminder before it of its own, such a stored
-    /// phrase is read as if typed: it lights up (at the very end too: a stored word is not being typed), the pill
-    /// previews it, a tap or Backspace switches it off, Confirm sets it and takes it out of the title. A
-    /// before-due phrase typed in this session wins over it wherever each sits. Every other stored word had its
-    /// chance when it was typed (read then, or switched off on purpose) and stays text (brief 65). A woken phrase
-    /// is not typing: opening and closing ask nothing and save nothing (`hasPendingChanges`).
+    /// showed it dead in the title. On a task with a due time and no reminder before it of its own, such a stored
+    /// phrase is read as if typed (at the very end too: a stored word is not being typed), and the editor sets it at
+    /// once (`landStoredReminder`). Beside a time typed in this session it lights up and waits with that time for
+    /// Confirm; a tap or Backspace switches it off. A before-due phrase typed in this session wins over it wherever
+    /// each sits. Every other stored word had its chance when it was typed (read then, or switched off on purpose)
+    /// and stays text (brief 65).
     func parsed(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live,
                 waking: Bool = true) -> QuickAddResult {
         var parser = parser
@@ -192,6 +192,38 @@ struct TaskEditorDraft: Equatable {
             result = parser.parse(title, switchedOff: off, mode: mode)
         }
         return result
+    }
+
+    /// A reminder before the due time stored in the title is set the moment it can count, as a pick lands (brief 127,
+    /// the supervisor on its first fix: lit and waiting for Confirm was a trap, since a person closes the sheet after a
+    /// pick as after any pick, and lost it). When the editor opens on a task with a time and no reminder before it, and
+    /// when the task gains a time while the editor is open: the reminder is set, the phrase leaves the stored title and
+    /// the draft's title where it sits (anything else typed stays, and only that waits for Confirm), and it is saved.
+    /// Of two stored, the parser's winner lands; the superseded one stays text. A before-due phrase typed in this
+    /// session wins and waits for Confirm; so does a stored one woken by a time typed in the title (`parsed`), since
+    /// that time is not the task's until Confirm. True if it landed.
+    @MainActor
+    @discardableResult
+    mutating func landStoredReminder(on task: TaskItem, parser: QuickAddParser, in context: ModelContext) throws -> Bool {
+        guard Self.wakesStoredReminder(on: task) else { return false }
+        let isWinner = { (token: QuickAddToken) in Self.isBeforeDue(token) && !token.isSuperseded }
+        // The draft's: stored, not switched off, no typed one beside it (that masks it).
+        guard let mine = parsed(parser, for: task, .final).tokens.first(where: { isWinner($0) && isStored($0) }),
+              case .beforeDue(let minutes)? = ReminderPhrase(token: mine.text),
+              let here = QuickAddDisabledPhrase(mine, in: title) else { return false }
+        // The same phrase in the stored title, the winner there too.
+        guard let theirs = TaskEditorDraft(task: task).parsed(parser, for: task, .final).tokens.first(where: isWinner),
+              let there = QuickAddDisabledPhrase(theirs, in: task.title), there.key == here.key else { return false }
+        let stored = TaskLimits.singleLine(Self.removing(there.start..<(there.start + there.length), from: task.title))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // A title of only the phrase keeps it: a task has a title.
+        guard !stored.isEmpty else { return false }
+        title = Self.removing(here.start..<(here.start + here.length), from: title)
+        task.title = stored
+        task.reminderOffsetMinutes = minutes > 0 ? minutes : nil
+        task.touch()
+        try context.save()
+        return true
     }
 
     /// A stored reminder before the due time is read (brief 127): the task has a due time and no reminder before it.

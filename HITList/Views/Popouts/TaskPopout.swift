@@ -147,7 +147,11 @@ struct TaskPopout: View {
         .pickerOverlay()
         .onAppear {
             if taskID == nil { taskID = task.id }
+            landStoredReminder()
         }
+        // A time picked anywhere in the editor (the date card, the time card, the Reminder card) lets a reminder phrase
+        // stored in the title count: it lands at once (brief 127).
+        .onChange(of: task.hasDueTime) { _, hasTime in if hasTime { landStoredReminder() } }
         // Mac and iPad: a click on the dimmed backdrop with typing asks Discard too (`PopoutHost`).
         .panelDismissGuard(isActive: isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { confirmingDiscard = true }
@@ -678,6 +682,12 @@ struct TaskPopout: View {
         if (try? draft.commit(to: task, in: context, parser: parser(), confirming: confirming)) == true {
             rescheduleNotifications()
         }
+    }
+
+    /// A reminder phrase stored in the title is set the moment the task has a time, as a pick lands (brief 127).
+    private func landStoredReminder() {
+        guard !isClosing, let taskID, PopoutController.taskExists(taskID, in: context) else { return }
+        if (try? draft.landStoredReminder(on: task, parser: parser(), in: context)) == true { rescheduleNotifications() }
     }
 
     // MARK: Changes

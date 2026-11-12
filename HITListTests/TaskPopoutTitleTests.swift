@@ -286,71 +286,89 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(shown(other, task).priority, .p1)
     }
 
-    // MARK: A stored reminder phrase wakes (brief 127)
+    // MARK: A stored reminder phrase lands (brief 127)
 
-    /// The friend's case: "PNHP Working Group tonight !30mb" typed in quick add with no time ("!30mb" stayed text),
-    /// then given 8 PM by hand. Opened, the stored "!30mb" lights up (at the very end, as it was stored, not being
-    /// typed), the pill previews it, opening and closing stay quiet, and Confirm sets it and takes it out.
-    func testAStoredReminderWakesOnATimedTask() throws {
+    /// The friend's case: "PNHP Working Group tonight !30mb" typed in quick add with no time ("!30mb" stayed text), then
+    /// given 8 PM by hand. The editor opening on it sets the reminder at once and takes the phrase out of the title, as a
+    /// pick lands: nothing waits for Confirm, so × and a swipe close quietly and the pill shows a reminder really set.
+    func testAStoredReminderLandsWhenTheEditorOpens() throws {
         let (task, context) = task("PNHP Working Group tonight !30mb", due: day(0, hour: 20), hasTime: true)
         var draft = TaskEditorDraft(task: task)
-        XCTAssertEqual(lit(draft, task), ["!30mb"], "lit as the editor opens")
-        XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 30)
-        XCTAssertFalse(draft.hasPendingChanges(for: task), "a woken phrase is not typing")
-        XCTAssertEqual(draft.closeStep(for: task, asking: false), .close, "× closes without asking Discard")
-        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task))
-        XCTAssertNil(task.reminderOffsetMinutes, "nothing lands before Confirm")
-
-        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser()))
-        XCTAssertEqual(task.reminderOffsetMinutes, 30)
+        XCTAssertTrue(try draft.landStoredReminder(on: task, parser: parser(), in: context))
+        XCTAssertEqual(task.reminderOffsetMinutes, 30, "set with no Confirm")
         XCTAssertEqual(task.title, "PNHP Working Group tonight")
-        XCTAssertEqual(lit(draft, task), [], "after Confirm nothing is left to read")
+        XCTAssertEqual(draft.title, "PNHP Working Group tonight")
+        XCTAssertFalse(draft.hasPendingChanges(for: task), "nothing is pending")
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .close, "× asks nothing")
+        XCTAssertFalse(draft.asksBeforeSwipeClose(for: task), "a swipe closes")
+        XCTAssertEqual(lit(draft, task), [])
+        XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 30, "the pill shows the reminder set")
+        XCTAssertFalse(try draft.commit(to: task, in: context, parser: parser()), "Confirm has nothing to add")
+        XCTAssertFalse(try draft.landStoredReminder(on: task, parser: parser(), in: context), "once")
     }
 
-    /// Completing, duplicating or moving the task from the editor saves what was typed, as Confirm does, but a woken
-    /// phrase is not typing: only Confirm sets it.
-    func testOnlyConfirmSetsAWokenReminder() throws {
-        let (task, context) = task("Call Sam !30mb", due: day(0, hour: 20), hasTime: true)
+    /// A time picked in the editor (the date card, the time card, the Reminder card) lands it the same way, keeping what
+    /// else was typed in this session where it is: only that typing waits for Confirm.
+    func testAStoredReminderLandsWhenTheTaskGainsATime() throws {
+        let (task, context) = task("Pack !1hb", due: day(1))
         var draft = TaskEditorDraft(task: task)
-        XCTAssertFalse(try draft.commit(to: task, in: context, parser: parser(), confirming: false))
-        XCTAssertEqual(task.title, "Call Sam !30mb")
-        XCTAssertNil(task.reminderOffsetMinutes)
-
-        draft.title += " p1"
-        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser(), confirming: false))
-        XCTAssertEqual(task.title, "Call Sam !30mb", "the typing lands, the woken phrase stays text")
-        XCTAssertEqual(task.priorityValue, .p1)
-        XCTAssertNil(task.reminderOffsetMinutes)
-    }
-
-    /// Only a reminder before the due time wakes: every other stored phrase had its chance when it was typed.
-    /// "!15m" (from now) and "p1" stay text.
-    func testOnlyAStoredBeforeReminderWakes() throws {
-        let (task, context) = task("Call p1 tomorrow !15m !1hb Sam", due: day(0, hour: 20), hasTime: true)
-        var draft = TaskEditorDraft(task: task)
-        XCTAssertEqual(lit(draft, task), ["!1hb"])
+        XCTAssertFalse(try draft.landStoredReminder(on: task, parser: parser(), in: context), "no time: text")
+        XCTAssertEqual(task.title, "Pack !1hb")
+        draft.title = "Pack the bags !1hb"
+        task.dueDate = day(1, hour: 9)
+        task.hasDueTime = true
+        XCTAssertTrue(try draft.landStoredReminder(on: task, parser: parser(), in: context))
+        XCTAssertEqual(task.reminderOffsetMinutes, 60)
+        XCTAssertEqual(task.title, "Pack")
+        XCTAssertEqual(draft.title, "Pack the bags")
+        XCTAssertTrue(draft.hasPendingChanges(for: task), "the typing still waits for Confirm")
         try draft.commit(to: task, in: context, parser: parser())
-        XCTAssertEqual(task.title, "Call p1 tomorrow !15m Sam")
+        XCTAssertEqual(task.title, "Pack the bags")
+        XCTAssertEqual(task.reminderOffsetMinutes, 60)
+    }
+
+    /// Only a reminder before the due time lands, and only the parser's winner: every other stored phrase had its chance
+    /// when it was typed. "p1", "tomorrow" and "!15m" stay text; of "!30mb … !1hb" the later wins and the earlier,
+    /// superseded, stays text.
+    func testOnlyTheStoredWinnerLands() throws {
+        let (task, context) = task("Call p1 tomorrow !15m !30mb !1hb Sam", due: day(0, hour: 20), hasTime: true)
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertTrue(try draft.landStoredReminder(on: task, parser: parser(), in: context))
+        XCTAssertEqual(task.title, "Call p1 tomorrow !15m !30mb Sam")
         XCTAssertEqual(task.reminderOffsetMinutes, 60)
         XCTAssertEqual(task.priorityValue, .p4)
         XCTAssertNil(task.reminderDate)
         XCTAssertEqual(task.dueDate, day(0, hour: 20))
+        XCTAssertEqual(lit(draft, task), [], "the superseded one is text")
     }
 
-    /// No time, no wake; the time picked in the date card in this editing session wakes it at once. A task that has
-    /// a reminder before its time already keeps it, and the stored phrase stays text.
-    func testAStoredReminderWaitsForATimeAndNeverOverridesAPickedOne() throws {
-        let (task, _) = task("Pack !1hb", due: day(1))
-        let draft = TaskEditorDraft(task: task)
-        XCTAssertEqual(lit(draft, task), [], "no time: text, as quick add left it")
+    /// A task that already has a reminder before its time keeps it: the stored phrase stays text.
+    func testAnExistingReminderIsLeftAlone() throws {
+        let (task, context) = task("Pack !1hb", due: day(1, hour: 9), hasTime: true)
+        task.reminderOffsetMinutes = 15
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertFalse(try draft.landStoredReminder(on: task, parser: parser(), in: context))
+        XCTAssertEqual(task.reminderOffsetMinutes, 15)
+        XCTAssertEqual(task.title, "Pack !1hb")
+        XCTAssertEqual(lit(draft, task), [])
+    }
+
+    /// A phrase typed in this session still waits for Confirm (lit, previewed, × asks Discard) and wins over a stored
+    /// one, which does not land and stays text.
+    func testATypedReminderStillWaitsForConfirm() throws {
+        let (task, context) = task("Call Sam !30mb", due: day(1))
+        var draft = TaskEditorDraft(task: task)
+        draft.title = "!1hb " + draft.title
         task.dueDate = day(1, hour: 9)
         task.hasDueTime = true
-        XCTAssertEqual(lit(draft, task), ["!1hb"], "the date card's time wakes it")
+        XCTAssertFalse(try draft.landStoredReminder(on: task, parser: parser(), in: context), "the typed one wins")
+        XCTAssertNil(task.reminderOffsetMinutes)
+        XCTAssertEqual(lit(draft, task), ["!1hb"])
         XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 60)
-
-        task.reminderOffsetMinutes = 15
-        XCTAssertEqual(lit(draft, task), [], "a reminder already picked wins")
-        XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 15)
+        XCTAssertEqual(draft.closeStep(for: task, asking: false), .askDiscard)
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.reminderOffsetMinutes, 60)
+        XCTAssertEqual(task.title, "Call Sam !30mb")
     }
 
     /// A time typed in this editing session wakes a stored reminder too: Confirm gives the task that time.
@@ -360,28 +378,37 @@ final class TaskPopoutTitleTests: XCTestCase {
         draft.title += " 8pm"
         XCTAssertEqual(lit(draft, task), ["!1hb", "8pm"])
         XCTAssertEqual(shown(draft, task).reminderOffsetMinutes, 60)
+        XCTAssertFalse(try draft.landStoredReminder(on: task, parser: parser(), in: context), "the time is not the task's yet")
         try draft.commit(to: task, in: context, parser: parser())
         XCTAssertEqual(task.dueDate, day(1, hour: 20))
         XCTAssertEqual(task.reminderOffsetMinutes, 60)
         XCTAssertEqual(task.title, "Pack")
     }
 
-    /// A woken phrase switched off by a tap stays text, as any other; a before-due phrase typed now wins over a
-    /// stored one wherever each sits.
-    func testAWokenReminderCanBeSwitchedOffAndATypedOneWins() throws {
-        let (task, context) = task("Call Sam !30mb", due: day(0, hour: 20), hasTime: true)
+    /// A stored phrase woken by a typed time waits with it for Confirm: completing, duplicating or moving the task from
+    /// the editor saves the typing (the time) without it.
+    func testOnlyConfirmSetsAReminderWokenByATypedTime() throws {
+        let (task, context) = task("Call Sam !30mb", due: day(1))
         var draft = TaskEditorDraft(task: task)
-        let token = try XCTUnwrap(draft.parsed(parser(), for: task).tokens.first)
-        draft.disable(token)
-        XCTAssertEqual(lit(draft, task), [])
-        XCTAssertTrue(draft.phrases(parser(), for: task).isEmpty)
-
-        var typed = TaskEditorDraft(task: task)
-        typed.title = "!1hb " + typed.title
-        XCTAssertEqual(lit(typed, task), ["!1hb"], "the stored one goes back to sleep")
-        try typed.commit(to: task, in: context, parser: parser())
-        XCTAssertEqual(task.reminderOffsetMinutes, 60)
+        draft.title += " 8pm"
+        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser(), confirming: false))
+        XCTAssertEqual(task.dueDate, day(1, hour: 20))
         XCTAssertEqual(task.title, "Call Sam !30mb")
+        XCTAssertNil(task.reminderOffsetMinutes)
+    }
+
+    /// A stored phrase woken by a typed time can be switched off by a tap, as any other.
+    func testAReminderWokenByATypedTimeCanBeSwitchedOff() throws {
+        let (task, context) = task("Call Sam !30mb", due: day(1))
+        var draft = TaskEditorDraft(task: task)
+        draft.title += " 8pm "
+        let token = try XCTUnwrap(draft.parsed(parser(), for: task).tokens.first { $0.kind == .reminder })
+        draft.disable(token)
+        XCTAssertEqual(lit(draft, task), ["8pm"])
+        try draft.commit(to: task, in: context, parser: parser())
+        XCTAssertEqual(task.title, "Call Sam !30mb")
+        XCTAssertNil(task.reminderOffsetMinutes)
+        XCTAssertEqual(task.dueDate, day(1, hour: 20))
     }
 
     /// The time cleared in the editor: a typed reminder leaves the title (it would be dead text), a stored one only
