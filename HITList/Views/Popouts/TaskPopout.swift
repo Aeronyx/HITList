@@ -29,9 +29,10 @@ struct TaskPopout: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
-    /// The iPhone Duo's outer display: the system's bar column stands on the trailing edge, and the pills stop at the
-    /// content's edge beside it rather than scrolling under its clock (brief 107).
-    @Environment(\.islandPlacement) private var islandPlacement
+    /// The safe area on the editor's trailing side: the system's bar column on the iPhone Duo (its outer display, and its
+    /// inner one on its side), where the pills stop at the content's edge rather than scrolling under its clock (brief
+    /// 107). Measured, so it follows the bar wherever the system puts it.
+    @State private var trailingInset: CGFloat = 0
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
 
@@ -126,6 +127,12 @@ struct TaskPopout: View {
             footer
         }
         .background(Theme.background)
+        // A view reaching into the safe area reports how deep it is (the editor itself is laid out inside it).
+        .background {
+            Color.clear
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.trailing } action: { trailingInset = $0 }
+        }
         #if os(iOS)
         // A swipe down (or a tap above the sheet) with typing asks Discard; with none it just closes.
         .sheetSwipeGuard(isActive: !isPanel && !isClosing && draft.asksBeforeSwipeClose(for: task)) {
@@ -417,7 +424,7 @@ struct TaskPopout: View {
     /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set (typed in the
     /// title or stored: `shown`). Beside the Duo's bar column it stops at the content's edge on that side.
     private func pillRow(_ shown: EditorFields) -> some View {
-        let barOnTrailing = islandPlacement == .side(.trailing)
+        let barOnTrailing = trailingInset > 0
         return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: HITSpacing.s) {
                 descriptionPill
