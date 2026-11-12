@@ -17,6 +17,8 @@ struct CompanionInks: Equatable {
     /// window, so its hem reads on the button with the button showing through; over the window it is fainter.
     static let veilDusk = 0.42
     static let veilOpacity = 0.6
+    /// How far the accent's light (round 24, brief 121: the lit edge of Phase's crown) leans toward the text colour.
+    static let accentLightMix = 0.6
     /// Fallen snow's three tones (round 22), the same in every theme.
     static let snowHex = "#F3F7FF"
     static let snowBlueHex = "#BFD2F4"
@@ -39,6 +41,8 @@ struct CompanionInks: Equatable {
             (.accentDark, Self.mix(h.accent, h.background, Self.accentDarkMix)),
             // The accent dimmed toward the background; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
             (.veil, Self.mix(h.accent, h.background, Self.veilDusk)),
+            // The accent lightened toward the text, as `accentDark` darkens it (round 24): a lit edge, see-through with the body.
+            (.accentLight, Self.mix(h.accent, h.text, Self.accentLightMix)),
             // Snow is snow in every theme (round 22): a lit crest, a pale blue body, a deeper blue shade.
             (.snow, Self.snowHex), (.snowBlue, Self.snowBlueHex), (.snowShade, Self.snowShadeHex),
             // Water is water in every theme (round 24): rain reads as rain because it is blue.
@@ -78,6 +82,11 @@ struct CompanionInks: Equatable {
 /// What lies behind the host (brief 104, a capital letter) is drawn only outside `host`, the host's shape in the
 /// sprite's own coordinates (`CompanionPerch.surface`); with no host (the swatch in Settings, the design sheets) it
 /// isn't drawn: it is all below the seat row, where the host would be.
+/// Round 24 (brief 121): a body thins down its rows and fades with its frame (`opacity(_:pose:row:)`), and an ink that
+/// gives light (`glow`) casts a soft halo, blurred, over the body and under the solid pixels (eyes, pupils, glints, the
+/// weather) and its own, which stay crisp. The halo may
+/// reach `haloMargin` pixels past the sprite's frame: a character with a glow is drawn on a canvas that much larger,
+/// laid out at the sprite's own size (so its place and its tap shape are unchanged); one with none, exactly as before.
 struct CompanionSprite: View {
     let character: CompanionCharacter
     let pose: CompanionPose
@@ -86,36 +95,90 @@ struct CompanionSprite: View {
     var pixel = CompanionCharacter.pointsPerPixel
     /// The host's shape, for what lies behind it; nil: no host, and nothing behind one is drawn.
     var host: Path? = nil
+    /// Reduce Transparency, when a caller decides it (tests, sheets); nil: the system's setting.
+    var reduceTransparency: Bool? = nil
+    @Environment(\.accessibilityReduceTransparency) private var systemReduceTransparency
 
     var body: some View {
+        let p = pixel
+        let size = CGSize(width: CGFloat(character.width) * p, height: CGFloat(character.height) * p)
+        Group {
+            if character.glow.isEmpty {
+                drawing(margin: 0)
+                    .frame(width: size.width, height: size.height)
+            } else {
+                // Drawn on a larger canvas so the halo is never cut at the sprite's edge, laid out at the sprite's size.
+                let margin: CGFloat = CGFloat(CompanionCharacter.haloMargin) * p
+                drawing(margin: margin)
+                    .frame(width: size.width + 2 * margin, height: size.height + 2 * margin)
+                    .padding(-margin)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func drawing(margin: CGFloat) -> some View {
         let inks = inks ?? CompanionInks(palette: Theme.palette)
         let p = pixel
         let width = character.width
-        let runs = character.drawn.indices.contains(pose.frame) ? character.drawn[pose.frame] : []
+        let frame = pose.frame
+        let runs = character.drawn.indices.contains(frame) ? character.drawn[frame] : []
         let mirrored = pose.mirrored
         let character = character
         let host = host
-        Canvas { context, _ in
-            func fill(_ run: CompanionCharacter.Run, in context: GraphicsContext) {
+        let reduce = reduceTransparency ?? systemReduceTransparency
+        let glowing = character.glow
+        let strength: Double = character.haloStrength(pose: frame)
+        return Canvas { context, _ in
+            if margin > 0 { context.translateBy(x: margin, y: margin) }
+            func rect(_ run: CompanionCharacter.Run) -> CGRect {
                 // One step per line: the CI runner's older Swift gave up on this as one expression.
                 let x: Int = mirrored ? width - run.x - run.length : run.x
                 let left: CGFloat = CGFloat(x) * p
                 let top: CGFloat = CGFloat(run.y) * p
                 let length: CGFloat = CGFloat(run.length) * p
-                let rect = CGRect(x: left, y: top, width: length, height: p)
-                let alpha: Double = character.opacity(run.ink)
-                let color: Color = alpha < 1 ? inks[run.ink].opacity(alpha) : inks[run.ink]
-                context.fill(Path(rect), with: .color(color))
+                return CGRect(x: left, y: top, width: length, height: p)
             }
-            for run in runs where !run.behind { fill(run, in: context) }
+            func fill(_ run: CompanionCharacter.Run, in context: GraphicsContext) {
+                let alpha: Double = character.opacity(run.ink, pose: frame, row: run.y, reduceTransparency: reduce)
+                let color: Color = alpha < 1 ? inks[run.ink].opacity(alpha) : inks[run.ink]
+                context.fill(Path(rect(run)), with: .color(color))
+            }
+            // The halo: the glowing runs blurred, in their own colours, `strength` strong (a pass per whole unit).
+            func halo(_ lit: [CompanionCharacter.Run], in context: GraphicsContext) {
+                guard !lit.isEmpty, strength > 0 else { return }
+                var left: Double = strength
+                while left > 0.001 {
+                    var layer = context
+                    layer.opacity = min(1, left)
+                    layer.addFilter(.blur(radius: CompanionCharacter.haloRadius * p))
+                    layer.drawLayer { light in
+                        for run in lit { light.fill(Path(rect(run)), with: .color(inks[run.ink])) }
+                    }
+                    left -= 1
+                }
+            }
+            // Runs never overlap, so with no light the order is the drawing's own. With light: the body, the halo over
+            // it, then the solid pixels (eyes and pupils, glints, the weather) and the glowing ones, crisp on top, so a
+            // pupil stays dark in a lit eye.
+            func draw(_ runs: [CompanionCharacter.Run], in context: GraphicsContext) {
+                guard !glowing.isEmpty else {
+                    for run in runs { fill(run, in: context) }
+                    return
+                }
+                let lit = runs.filter { glowing.contains($0.ink) }
+                for run in runs where !glowing.contains(run.ink) && character.fades(run.ink) { fill(run, in: context) }
+                halo(lit, in: context)
+                for run in runs where !glowing.contains(run.ink) && !character.fades(run.ink) { fill(run, in: context) }
+                for run in lit { fill(run, in: context) }
+            }
+            draw(runs.filter { !$0.behind }, in: context)
             // Behind the host: only where the host's shape is not.
             guard let host, runs.contains(where: \.behind) else { return }
             var behind = context
             behind.clip(to: host, options: .inverse)
-            for run in runs where run.behind { fill(run, in: behind) }
+            draw(runs.filter(\.behind), in: behind)
         }
-        .frame(width: CGFloat(character.width) * p, height: CGFloat(character.height) * p)
-        .accessibilityHidden(true)
     }
 }
 
