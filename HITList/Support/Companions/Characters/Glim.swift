@@ -2463,7 +2463,8 @@ extension CompanionCharacter {
         flourishFPS: 9,
         flourishTurns: false,
         field: Posture(awake: glimAwake, asleep: glimAsleep, flourish: glimFlourish),
-        plus: Posture(awake: glimAwake, asleep: glimAsleep, flourish: glimFlourish, inset: 3))
+        plus: Posture(awake: glimAwake, asleep: glimAsleep, flourish: glimFlourish, inset: 3),
+        glow: [.warm])
 
     /// Awake: its idles (brief 105: a blink; its light flickering; a sniff; the lantern swaying; lifted to peer; the
     /// flame cupped back to life) and one for each of rain and heat (a drop off the lantern; a bead of sweat), a hello in light for a tap (it looks up and blinks its

@@ -64,6 +64,20 @@ final class CompanionLightTests: XCTestCase {
         }
     }
 
+    /// Light is Phase's eyes and Glim's lantern this round, nobody else's (COMMON, round 24).
+    func testOnlyPhaseAndGlimGiveLight() {
+        XCTAssertEqual(CompanionCharacter.phase.glow, [.light])
+        XCTAssertEqual(CompanionCharacter.glim.glow, [.warm])
+        for character in CompanionCharacter.all where !["phase", "glim"].contains(character.id) {
+            XCTAssertTrue(character.glow.isEmpty, character.id)
+        }
+        // Glim's lantern is lit awake and turned down asleep.
+        let glim = CompanionCharacter.glim
+        XCTAssertEqual(glim.haloStrength(pose: glim.index[glim.plus.awake.rest]!), CompanionCharacter.glowStrength)
+        XCTAssertEqual(glim.haloStrength(pose: glim.index[glim.plus.asleep.rest]!),
+                       CompanionCharacter.glowStrength * CompanionCharacter.asleepLight)
+    }
+
     // MARK: - Light
 
     /// A lantern at the sprite's right edge: its halo reaches past the edge (not cut there), the sprite is laid out at
