@@ -29,12 +29,12 @@ final class CompanionGlimTests: XCTestCase {
 
     /// Brief 116 (George, of 0.9.6's redrawn Glim: "Please scrap him entirely and either use 0.9.5 Glim or try to
     /// upgrade him again but with much more subtle changes"): his plain stills, awake and asleep, the same in both
-    /// places, are 0.9.5's. The digests are of each still's rows joined by newlines, computed once from
-    /// `git show f3da1e6:HITList/Support/Companions/Characters/Glim.swift`.
+    /// places, are 0.9.5's with a few pixels in a second tone (below). The digests are of each still's rows joined by
+    /// newlines.
     func testItIsZeroNineFivesGlim() {
         let stills: [String: String] = [
-            "rest": "ebd8ec296ddfd5584884bb2107fe61183f5a7c6499e2ca00962136a4bdcec49e",
-            "sleep": "ab2ceb23e8f5224056b8aa3c7a937559e7b125ddc3ca7435cdc0716203026ade",
+            "rest": "c7f046bcb158f20f65855db2a95eabeba340cdf7ed4d0909fbfb6b3ebc9828d8",
+            "sleep": "82023e6c17557180cb95fc9e1b4af3acd641f83af8bebb37d9ada4101c25d5bd",
         ]
         for (name, expected) in stills { XCTAssertEqual(digest(name), expected, "\(name)") }
         XCTAssertEqual(glim.width, 20)
@@ -43,6 +43,48 @@ final class CompanionGlimTests: XCTestCase {
         for place in CompanionPlace.allCases {
             XCTAssertEqual(glim.posture(place).awake.rest, "rest", "\(place)")
             XCTAssertEqual(glim.posture(place).asleep.rest, "sleep", "\(place)")
+        }
+    }
+
+    /// Brief 116, Hush's kind of touches (George: "a tiny bit more color shading and such, but largely imperceptible
+    /// changes unless you're looking closely"): against 0.9.5's stills (`f3da1e6`, below), the outline and the eyes
+    /// are the same pixel for pixel, and only a handful of pixels inside take the other of two near tones (the face's
+    /// pale and the fur's mid, the lantern's warm and its glow): soft lower lids under the eye sockets (they stay put
+    /// when the eyes move, so no gesture grows), the hood's shade on the face's top corners and under the chin, two pale
+    /// rings far down the tail, the lantern's shaded side.
+    func testItsTouchesAreAFewPixelsInsideTheOutline() throws {
+        let v095: [String: [String]] = [
+            "rest": [
+                "....................", ".ddd......ddd.......", "dmmmd....dmmmd......", "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......", ".dddddddddddd.......", ".dddddddddddd.......", ".dddllllllddd.......",
+                ".ddlkllllkldd.......", ".dllkllllklld..md...", ".dlllllllllld.mdmd..", "..dlllddllld.md.md..",
+                "...dlllllld.md..md..", "...ddddddddmd...md..", "...dllddlld.....dd..", "...............gwwg.",
+                "...............wwww.", "...............wwww.", "...............gwwg.", "................gg..",
+            ],
+            "sleep": [
+                "....................", "....................", ".ddd......ddd.......", "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......", "dmmmddddddmmmd......", ".dddddddddddd.......", ".dddddddddddd.......",
+                ".dddllllllddd.......", ".ddlllllllldd.......", ".dlldlllldddd.......", ".dlllllllggggd......",
+                "..dlllddlgwwgm......", "...dlllllgwwgm......", "...dllddllggmm......", "....................",
+                "....................", "....................", "....................", "....................",
+            ],
+        ]
+        let near: Set<String> = ["lm", "ml", "wg"]
+        for (name, old) in v095 {
+            let now = try XCTUnwrap(glim.rows(name)).map(Array.init)
+            var changed = 0
+            for y in 0..<glim.height {
+                let was = Array(old[y])
+                for x in 0..<glim.width where was[x] != now[y][x] {
+                    changed += 1
+                    XCTAssertNotEqual(was[x], CompanionInk.clear, "\(name) (\(x), \(y)): the outline is 0.9.5's")
+                    XCTAssertNotEqual(now[y][x], CompanionInk.clear, "\(name) (\(x), \(y)): the outline is 0.9.5's")
+                    XCTAssertFalse(was[x] == "k" || now[y][x] == "k", "\(name) (\(x), \(y)): the eyes are 0.9.5's")
+                    XCTAssertTrue(near.contains(String([was[x], now[y][x]])), "\(name) (\(x), \(y)): a near tone")
+                }
+            }
+            XCTAssertGreaterThan(changed, 0, name)
+            XCTAssertLessThanOrEqual(changed, 10, "\(name): a handful of pixels, \(changed)")
         }
     }
 
