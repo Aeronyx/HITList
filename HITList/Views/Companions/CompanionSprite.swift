@@ -17,6 +17,10 @@ struct CompanionInks: Equatable {
     /// window, so its hem reads on the button with the button showing through; over the window it is fainter.
     static let veilDusk = 0.42
     static let veilOpacity = 0.6
+    /// Fallen snow's three tones (round 22), the same in every theme.
+    static let snowHex = "#F3F7FF"
+    static let snowBlueHex = "#BFD2F4"
+    static let snowShadeHex = "#8CA5D8"
 
     init(palette: ThemePalette) {
         let h = palette.hex
@@ -31,6 +35,8 @@ struct CompanionInks: Equatable {
             (.accentDark, Self.mix(h.accent, h.background, Self.accentDarkMix)),
             // The accent dimmed toward the background; drawn at `veilOpacity` (`CompanionCharacter.opacity`).
             (.veil, Self.mix(h.accent, h.background, Self.veilDusk)),
+            // Snow is snow in every theme (round 22): a lit crest, a pale blue body, a deeper blue shade.
+            (.snow, Self.snowHex), (.snowBlue, Self.snowBlueHex), (.snowShade, Self.snowShadeHex),
         ]
         hex = Dictionary(uniqueKeysWithValues: pairs)
         colors = Dictionary(uniqueKeysWithValues: pairs.map { ($0.0, Color(hex: $0.1)) })
