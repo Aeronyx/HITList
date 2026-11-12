@@ -222,8 +222,11 @@ final class CompanionGlimTests: XCTestCase {
                 XCTAssertFalse(right.contains { $0 != CompanionInk.clear }, "\(name) row \(y): the tail is in")
             }
             if name == "rain" {
+                // His face as by day, but for the bead of rain on his cheek (round 24).
                 for y in 7...11 {
-                    XCTAssertEqual(String(rows[y].prefix(13)), String(rest[y].prefix(13)), "row \(y): his face")
+                    for (now, day) in zip(rows[y].prefix(13), rest[y].prefix(13)) where !"phu".contains(now) {
+                        XCTAssertEqual(now, day, "row \(y): his face")
+                    }
                 }
             }
         }
@@ -245,6 +248,92 @@ final class CompanionGlimTests: XCTestCase {
                                        act: CompanionAct(kind: .gesture(drop), start: start), sky: .rain)
         let dropPose = CompanionClock(character: glim).pose(at: start.addingTimeInterval(0.05), stage: dropStage)
         XCTAssertEqual(dropPose.frame, glim.index["rainDrip1"])
+    }
+
+    /// Round 24 (brief 125, George: "During rain, they should have little droplets bead off of them every once in a
+    /// while, and have some droplets stick around or tiny puddles pool around their feet so it's clearer why they're
+    /// cowering/hiding"; and "Glim: done"): he is rained on while he keeps his light dry. In the rain, awake and
+    /// asleep, both places: beads in the water's blue on his ears, his head and a cheek, one hanging from his left ear's
+    /// tip, a small puddle at his feet, and never a drop on the lantern or beside it; now and then the bead off his ear
+    /// lets go, runs past his side and lands in the puddle. Every frame he draws whole for the rain carries the puddle,
+    /// and no drop is left in his own pale ink.
+    func testHeIsRainedOnAndKeepsHisLightDry() throws {
+        let water: Set<Character> = ["p", "h", "u"]
+        let ground = glim.seatRow - 1
+        for place in CompanionPlace.allCases {
+            XCTAssertEqual(glim.posture(place).asleep.rain, "sleepRain", "\(place): asleep in the rain, a still of its own")
+            XCTAssertEqual(glim.posture(place).asleep.gestures.filter { $0.sky == .rain }.map(\.name), ["drip"])
+        }
+        let asleep = glim.field.asleep
+        var whole = Set(["rain", "sleepRain"] + glim.frames.map(\.name).filter { $0.hasSuffix("@rain") })
+        for mode in [glim.field.awake, asleep] {
+            whole.formUnion(mode.wholeTicks(sky: .rain).map(\.frame))
+            whole.formUnion(mode.wholeTicks(sky: .storm).map(\.frame))
+        }
+        XCTAssertEqual(whole.count, 29)
+        for name in whole.sorted() {
+            let rows = try XCTUnwrap(glim.rows(name), name).map(Array.init)
+            // Never a drop on the light he keeps dry, nor touching it.
+            for y in 0..<glim.height {
+                for x in 0..<glim.width where "wg".contains(rows[y][x]) {
+                    for (nx, ny) in [(x, y), (x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+                    where (0..<glim.width).contains(nx) && (0..<glim.height).contains(ny) {
+                        XCTAssertFalse(water.contains(rows[ny][nx]), "\(name) (\(nx), \(ny)): water on the lantern")
+                    }
+                }
+            }
+            // The puddle on the surface he sits on, at his left, a glint in it; nothing under the seat.
+            let left = String(rows[ground][0...2])
+            XCTAssertTrue(left.allSatisfy { water.contains($0) } && left.contains("h"), "\(name): the puddle is there, \(left)")
+            for y in glim.seatRow..<glim.height {
+                XCTAssertFalse(rows[y].contains { water.contains($0) }, "\(name) row \(y): nothing under the seat")
+            }
+            // No drop in his pale ink: every pale pixel is on him, none alone in the air.
+            for y in 0..<glim.seatRow {
+                for x in 0..<glim.width where rows[y][x] == "l" {
+                    let around = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)].filter {
+                        (0..<glim.width).contains($0.0) && (0..<glim.height).contains($0.1)
+                    }
+                    XCTAssertTrue(around.contains { rows[$0.1][$0.0] != CompanionInk.clear }, "\(name) (\(x), \(y)): a pale drop")
+                }
+            }
+        }
+        for still in ["rain", "sleepRain"] {
+            let rows = try XCTUnwrap(glim.rows(still)).map(Array.init)
+            // The puddle: on the surface and pooled a pixel deep against him, four to eight pixels, one glint. It stops
+            // at his side: further right the "+" has begun to curve.
+            let puddle = rows[ground].filter { water.contains($0) }
+            let pooled = (0..<glim.width).filter { water.contains(rows[ground - 1][$0]) && water.contains(rows[ground][$0]) }
+            XCTAssertTrue((4...8).contains(puddle.count + pooled.count), "\(still): a puddle of \(puddle.count + pooled.count)")
+            XCTAssertEqual(puddle.filter { $0 == "h" }.count, 1, "\(still): one glint")
+            XCTAssertFalse(rows[ground][14...].contains { water.contains($0) }, "\(still): no water past the shoulder")
+            // Two to four beads above the puddle, one of them hanging (two tall) from his ear.
+            var beads = 0
+            var hangs = false
+            for y in 0..<(ground - 1) {
+                for x in 0..<glim.width where water.contains(rows[y][x]) {
+                    if y > 0, water.contains(rows[y - 1][x]) { hangs = true; continue }
+                    beads += 1
+                }
+            }
+            XCTAssertTrue((2...4).contains(beads), "\(still): \(beads) beads")
+            XCTAssertTrue(hangs, "\(still): one hangs from his ear")
+            // Asleep in the rain he is as he sleeps, curled round his lantern, his water aside.
+            if still == "sleepRain" {
+                let sleep = try XCTUnwrap(glim.rows("sleep")).map(Array.init)
+                for y in 0..<glim.height {
+                    for x in 0..<glim.width where !water.contains(rows[y][x]) {
+                        XCTAssertEqual(rows[y][x], sleep[y][x], "sleepRain (\(x), \(y)) is his sleep")
+                    }
+                }
+            }
+        }
+        // The drop off his ear: it swells, lets go (one pixel in the air at most), and lands, the puddle's glint
+        // jumping.
+        let mode = glim.field.awake
+        let drop = try XCTUnwrap(mode.gestures.first { $0.name == "drop" })
+        XCTAssertEqual(drop.ticks.map(\.frame), ["rainDrip1", "rainDrip1", "rainDrip2", "rainDrip3", "rainDrip4", "rainDrip4"])
+        XCTAssertNotEqual(try XCTUnwrap(glim.rows("rainDrip4"))[ground], try XCTUnwrap(glim.rows("rain"))[ground], "it lands")
     }
 
     /// Brief 91: the weather is told by Glim, not drawn round it. Every still it shows is one shape (nothing floating
