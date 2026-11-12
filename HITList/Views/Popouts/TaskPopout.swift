@@ -29,6 +29,9 @@ struct TaskPopout: View {
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
+    /// The iPhone Duo's outer display: the system's bar column stands on the trailing edge, and the pills stop at the
+    /// content's edge beside it rather than scrolling under its clock (brief 107).
+    @Environment(\.islandPlacement) private var islandPlacement
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
 
@@ -412,9 +415,10 @@ struct TaskPopout: View {
     }
 
     /// One sideways-scrolling row, edge to edge: outlined until set, filled with the value once set (typed in the
-    /// title or stored: `shown`).
+    /// title or stored: `shown`). Beside the Duo's bar column it stops at the content's edge on that side.
     private func pillRow(_ shown: EditorFields) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        let barOnTrailing = islandPlacement == .side(.trailing)
+        return ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: HITSpacing.s) {
                 descriptionPill
                 priorityPill(shown.priority)
@@ -424,11 +428,14 @@ struct TaskPopout: View {
                 deadlinePill
                 locationPill
             }
-            .padding(.horizontal, HITSpacing.l)
+            .padding(.leading, HITSpacing.l)
+            .padding(.trailing, barOnTrailing ? 0 : HITSpacing.l)
             .padding(.vertical, 1)
         }
-        .padding(.horizontal, -HITSpacing.l)
+        .padding(.leading, -HITSpacing.l)
+        .padding(.trailing, barOnTrailing ? 0 : -HITSpacing.l)
         .frame(height: HITChip.Size.compact.height + 2)
+        .clipped()
         .accessibilityIdentifier("editorPills")
     }
 
