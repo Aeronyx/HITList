@@ -82,6 +82,26 @@ final class ScreenInsetsUITests: XCTestCase {
         }
     }
 
+    /// Review Inbox and its three tiles, from the Inbox's view options (on demand, as above).
+    func testPhotographReviewInbox() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["HITLIST_QA"] == "1", "pictures on demand (TEST_RUNNER_HITLIST_QA=1)")
+        go("inbox")
+        let options = app.buttons["viewOptions"].firstMatch
+        XCTAssertTrue(options.waitForExistence(timeout: 5), "the view options")
+        options.tap()
+        pause()
+        let review = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Review ")).firstMatch
+        XCTAssertTrue(review.waitForExistence(timeout: 5), "Review Inbox in the view options")
+        review.tap()
+        pause(1.2)
+        snap("Review Inbox")
+        let group = app.buttons["reviewMoveToGroup"].firstMatch
+        XCTAssertTrue(group.waitForExistence(timeout: 5), "the tiles")
+        let date = app.buttons["reviewPickDate"].firstMatch, later = app.buttons["reviewLater"].firstMatch
+        XCTAssertEqual(date.frame.height, group.frame.height, accuracy: 0.5, "the tiles stand as tall as each other")
+        XCTAssertEqual(later.frame.height, group.frame.height, accuracy: 0.5)
+    }
+
     // MARK: Helpers
 
     private func snap(_ name: String) {
