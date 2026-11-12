@@ -2023,6 +2023,51 @@ extension CompanionCharacter {
                 "......dmd......ddd..",
                 "......dmd.......d...",
             ]),
+            // Brief 105: an ear pricked up a little, drawn up two rows where it hangs.
+            Frame(name: "perkL", rows: [
+                "....................",
+                "....................",
+                "....................",
+                "....................",
+                ".......dmmmmd.......",
+                "...dddmmmmmmmmd.....",
+                "..dmdmmllllllmmd....",
+                "..dmdmllllllllmdd...",
+                "..dmdmlkllllklmdmd..",
+                "..dmdmlkllllklmdmd..",
+                "..dmdmllllllllmdmd..",
+                "..dmdmlllaalllmdmd..",
+                "..dmd.mllllllm.dmd..",
+                "..dmd.mmmmmmmm.dmd..",
+                "..dmd.mmmmmmmm.dmd..",
+                "..dmd.dmmmmmmd.dmd..",
+                "..ddd..ll..ll..dmd..",
+                "...d...........dmd..",
+                "...............ddd..",
+                "................d...",
+            ]),
+            Frame(name: "perkR", rows: [
+                "....................",
+                "....................",
+                "....................",
+                "....................",
+                ".......dmmmmd.......",
+                ".....dmmmmmmmmddd...",
+                "....dmmllllllmmdmd..",
+                "...ddmllllllllmdmd..",
+                "..dmdmlkllllklmdmd..",
+                "..dmdmlkllllklmdmd..",
+                "..dmdmllllllllmdmd..",
+                "..dmdmlllaalllmdmd..",
+                "..dmd.mllllllm.dmd..",
+                "..dmd.mmmmmmmm.dmd..",
+                "..dmd.mmmmmmmm.dmd..",
+                "..dmd.dmmmmmmd.dmd..",
+                "..dmd..ll..ll..ddd..",
+                "..dmd...........d...",
+                "..ddd...............",
+                "...d................",
+            ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -2069,17 +2114,18 @@ extension CompanionCharacter {
             inset: 5)
     )
 
-    /// Hush's idles (brief 105), the same in both places. Shy, and her ears are who she is: she lifts one to listen and
-    /// lets it fall, swinging; she tilts her head and her ears swing a beat behind; she draws an ear across her face and
-    /// peeks over it; her nose twitches; a slow blink. The weather's own: a drop off her hood's rim; panting on a hot day.
+    /// Hush's flickers (brief 105), the same in both places, each a few pixels: her nose twitches and wiggles; she looks
+    /// down it, cross-eyed; an ear pricks up; a slow blink. Shy, and her ears are who she is: lifting one to listen and
+    /// letting it fall, tilting her head with her ears a beat behind, an ear across her face and a peek over it are her
+    /// little loops (`hushRoutines`), too big for flickers. The weather's own: a drop off her hood's rim; panting on a hot day.
     static let hushIdles: [Gesture] = [
         Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
         Gesture(name: "slowBlink", weight: 2, ticks: Self.ticks(("half", 2), ("blink", 3), ("half", 2)), flicker: true),
         Gesture(name: "sniff", weight: 2, ticks: Self.ticks(("sniff", 2)), flicker: true),
-        Gesture(name: "listen", ticks: Self.ticks(("earFlick", 1), ("listenL", 5), ("earFlick", 1)), flicker: true),
-        Gesture(name: "listenRight", ticks: Self.ticks(("earFlickR", 1), ("listenR", 5), ("earFlickR", 1)), flicker: true),
-        Gesture(name: "tilt", ticks: Self.ticks(("tiltA", 1), ("tiltB", 1), ("tiltC", 2), ("backA", 1), ("backB", 1), ("backC", 1)), flicker: true),
-        Gesture(name: "tiltRight", ticks: Self.ticks(("tiltRA", 1), ("tiltRB", 1), ("tiltRC", 2), ("backRA", 1), ("backRB", 1), ("backRC", 1)), flicker: true),
+        Gesture(name: "wiggle", ticks: Self.ticks(("sniffL", 2), ("sniffR", 2)), flicker: true),
+        Gesture(name: "crossEyed", ticks: Self.ticks(("crossEyed", 4)), flicker: true),
+        Gesture(name: "perk", ticks: Self.ticks(("perkL", 5)), flicker: true),
+        Gesture(name: "perkRight", ticks: Self.ticks(("perkR", 5)), flicker: true),
         Gesture(name: "rimDrip", ticks: Self.ticks(("hRimA", 2), ("hRimB", 2)), flicker: true, sky: .rain),
         Gesture(name: "pant", ticks: Self.ticks(("hPant", 2), ("hot", 1), ("hPant", 2)), flicker: true, sky: .heat),
     ]
@@ -2092,10 +2138,14 @@ extension CompanionCharacter {
     /// open) it fans its face with its ears and lets them flop wide; thunder makes its ears stand up inside the hood; in
     /// sunshine it spreads its ears out and shuts its eyes.
     static let hushRoutines: [Routine] = [
-        // Her little loops (briefs 100 and 105): a slow tilt, her ears a beat behind; shy, an ear across her face and a
-        // peek over it; three quick sniffs; a look down her own nose.
+        // Her little loops (briefs 100 and 105): an ear lifted to listen and let fall, swinging; a tilt one way or the
+        // other, her ears a beat behind; shy, an ear across her face and a peek over it; three quick sniffs; a look
+        // down her own nose.
+        Routine(name: "earUp", little: true, steps: [.play(("earFlick", 1), ("listenL", 5)), .play(("earFlick", 2)), .hold(1)]),
+        Routine(name: "earUpRight", little: true, steps: [.play(("earFlickR", 1), ("listenR", 5)), .play(("earFlickR", 2)), .hold(1)]),
         Routine(name: "earsBehind", little: true, steps: [.gesture("blink"), .play(("tiltA", 2), ("tiltB", 1), ("tiltC", 4)), .play(("backA", 2), ("backB", 1), ("backC", 2)), .hold(1)]),
-        Routine(name: "shy", little: true, steps: [.play(("earFlick", 1), ("hideA", 2), ("hideB", 6)), .play(("peek", 5)), .play(("hideA", 1), ("earFlick", 2)), .hold(1)]),
+        Routine(name: "earsBehindRight", little: true, steps: [.gesture("blink"), .play(("tiltRA", 2), ("tiltRB", 1), ("tiltRC", 4)), .play(("backRA", 2), ("backRB", 1), ("backRC", 2)), .hold(1)]),
+        Routine(name: "shy", weight: 2, little: true, steps: [.play(("earFlick", 1), ("hideA", 2), ("hideB", 6)), .play(("peek", 5)), .play(("hideA", 1), ("earFlick", 2)), .hold(1)]),
         Routine(name: "sniffs", little: true, steps: [.play(("sniffL", 2)), .play(("sniffR", 2)), .gesture("sniff"), .hold(1)]),
         Routine(name: "nose", little: true, steps: [.play(("crossEyed", 3)), .hold(1), .gesture("blink"), .gesture("sniff"), .hold(1)]),
         Routine(name: "tiltAbout", steps: [
