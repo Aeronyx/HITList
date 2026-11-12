@@ -137,6 +137,9 @@ struct FloatingSwitchCard: View {
     let request: FloatingCardRequest
     /// The card has gone; the switch it added or saved, if any.
     var onFinished: (TaskItem?) -> Void
+    /// A switch was just added, while the card is still going (brief 126): the board holds its tile unseen until
+    /// `onFinished`, so it appears once, in its place, when the board is in view again.
+    var onAdded: (TaskItem) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var keyboard: KeyboardObserver { .shared }
@@ -274,6 +277,7 @@ struct FloatingSwitchCard: View {
     /// settle downward; the cover goes once it has.
     private func finish(saved: TaskItem?) {
         guard !closing else { return }
+        if let saved, case .switchCard(let card) = request, card.isAdding { onAdded(saved) }
         heldKeyboardHeight = keyboard.height
         // From the action itself, outside any view update (see `SwitchCard.dropKeyboard`).
         SwitchCard.dropKeyboard()

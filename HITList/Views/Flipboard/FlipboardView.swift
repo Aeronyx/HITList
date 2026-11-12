@@ -174,10 +174,12 @@ struct FlipboardView: View {
                 }
             }, including: hasInlineCard ? .all : .subviews)
             .coordinateSpace(.named(Self.boardSpace))
-            // iPhone: the new switch may sort above the fold; bring it into view as it settles.
+            // iPhone: the new switch may sort out of view; bring it into view as it lands, by the least scroll that
+            // shows it whole (a centred scroll near the top pulled the board under the large title and let it spring
+            // back).
             .onChange(of: landing) { _, mark in
-                guard cardFloats, let mark else { return }
-                withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: .center) }
+                guard cardFloats, let mark, !mark.waiting else { return }
+                withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(mark.id, anchor: nil) }
             }
             .onChange(of: inlineCard?.id ?? boardCard?.id) { _, id in
                 guard let id else { return }
@@ -237,11 +239,14 @@ struct FlipboardView: View {
                          onDismiss: { withAnimation(HITMotion.exit) { deleted = nil } })
         #if os(iOS)
         .fullScreenCover(item: $floatingCard) { request in
-            FloatingSwitchCard(request: request) { saved in
+            FloatingSwitchCard(request: request, onFinished: { saved in
                 withoutAnimation { floatingCard = nil }
                 // The board is in view again: the switch settles into its place.
                 if let saved { land(saved) }
-            }
+            }, onAdded: { added in
+                // Brief 126: on the board already, held unseen until the card has gone, so it appears once.
+                land(added, waiting: true)
+            })
             .presentationBackground(.clear)
         }
         #endif
@@ -457,9 +462,18 @@ struct FlipboardView: View {
 
     /// A switch was added or saved: its tile settles into the grid (a new one lands as the board's own
     /// animation inserts it).
-    private func land(_ task: TaskItem) {
-        let mark = SwitchLanding.Mark(id: task.id, generation: (landing?.generation ?? 0) + 1)
+    /// `waiting` (iPhone, brief 126): the switch is in, the card that added it still going; its tile is held unseen
+    /// until it lands (and lands on its own if the card never says it has gone).
+    private func land(_ task: TaskItem, waiting: Bool = false) {
+        let mark = SwitchLanding.Mark(id: task.id, generation: (landing?.generation ?? 0) + 1, waiting: waiting)
         landing = mark
+        if waiting {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                if landing == mark { land(task) }
+            }
+            return
+        }
         // Landed: the mark goes, so the tile doesn't settle again when the board comes back on screen.
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
