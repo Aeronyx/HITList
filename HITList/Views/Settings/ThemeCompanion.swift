@@ -48,7 +48,7 @@ enum ThemeCompanion {
         "glim": Seat(placement: .onCard, along: 0.3),
         // Mocha: Phase asleep in the accent dot, sunk to its eyes, its point flopped over like a nightcap.
         "phase": Seat(placement: .asleepOnDot, along: 0.7),
-        // Rosé: Button stands on the card's edge, left of the dot (round 21: the smallest of the eight, on its feet).
+        // Rosé: Button stands on the card's edge on its boots, left of the dot (round 22: 0.9.4's drawing, standing).
         "button": Seat(placement: .onCard, along: 0.3),
     ]
 

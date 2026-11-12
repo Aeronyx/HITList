@@ -238,6 +238,25 @@ final class CompanionSpriteTests: XCTestCase {
         let sleep = nod.rows("sleep")!.map(Array.init), rest = nod.rows("rest")!.map(Array.init)
         XCTAssertEqual(rest[13][17], "w")
         XCTAssertNotEqual(sleep[13][17], "w")
+        // Round 22's snow (brief 109): powder fallen on its cap, never a second, white cone. Each snow still is its body
+        // with only the three snow inks added, all three in each; nothing piles more than a row over the cap's crown; the
+        // dusting has gaps on the crown; the cap's tail and bobble still show.
+        let snowInks: Set<Character> = ["s", "b", "c"]
+        for (still, bodyName) in [("snow", "rest"), ("snow2", "rest"), ("snow3", "rest"),
+                                  ("sleepSnow", "sleep"), ("sleepSnow2", "sleep"), ("sleepSnow3", "sleep")] {
+            let rows = nod.rows(still)!.map(Array.init), body = nod.rows(bodyName)!.map(Array.init)
+            var used = Set<Character>()
+            for y in rows.indices {
+                for x in rows[y].indices where rows[y][x] != body[y][x] {
+                    XCTAssertTrue(snowInks.contains(rows[y][x]), "\(still) \(x), \(y): only snow is added")
+                    used.insert(rows[y][x])
+                }
+            }
+            XCTAssertEqual(used, snowInks, "\(still): three tones")
+            XCTAssertTrue(rows[0...1].joined().allSatisfy { $0 == CompanionInk.clear }, "\(still): no cone over the crown")
+            XCTAssertTrue(rows[13...14].joined().contains("w"), "\(still): the bobble shows")
+        }
+        XCTAssertTrue(nod.rows("snow")![3].contains("d"), "the dusting has gaps")
         // Its nod in the snow is drawn by hand (the dusting dips with the cap), not cut through.
         let clock = CompanionClock(character: nod)
         let stage = CompanionStage(since: .distantPast, place: .field, look: .init(asleep: true, weather: .snow),
