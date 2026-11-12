@@ -41,10 +41,20 @@ under the island), the island (Inbox, Today, Upcoming, Flipboard) and the uprigh
 grey handle with a chevron, which is the system's.
 
 ## What the supervisor saw first (the simulator, 0.9.4, the outer display, before any session)
-`round-21/duo-walk-before/` in the shared notes folder: brief 93's walk of every screen, run on a folded iPhone Duo
-simulator. The simulator boots folded, so the outer display needs no Device Hub. On the Inbox the column holds the
-time, the battery, a capsule with the view options and the magnifying glass, a gap, the island and the "+"; the
-first row's Group ("Work") is cut to "W" by its own meta line.
+`round-21/duo-walk-before/` in the shared notes folder: brief 93's walk of every screen (81 pictures), run on a
+folded iPhone Duo simulator. The simulator boots folded, so the outer display needs no Device Hub.
+- **The bar column overflows.** Status, then our toolbar items as the system stacks them, then our island and the
+  "+" from the bottom: on every pushed screen (Back and two controls) the pill's lower control is drawn on the
+  island's top cell, and with a call in the camera island the same happens on every first screen (the friend's
+  screenshot).
+- **Our content under the system's clock and battery**: Upcoming's week strip and Browse's saved filters scroll
+  sideways into the column.
+- **Cards that do not fit a 678 pt display**: quick add's date picker shows no grid at all, the editor's is cut top
+  and bottom, the reminder picker starts off the left edge, a switch card with its Discard question loses its
+  title off the top.
+- A row's Group cut to one letter ("W"); at XL the island's labels are wider than the island and Settings' second
+  lines are cut.
+- The inner display was not looked at (it needs Device Hub's fold): brief 108 starts there.
 
 ## Sessions (all Opus 5.5; six at once)
 | Brief | Session | Effort | What |
