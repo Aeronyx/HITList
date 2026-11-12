@@ -310,6 +310,7 @@ struct InboxProcessView: View {
     /// From a tile's sides to its name (brief 115: "Pick a Group" came 6 pt from its tile's sides on the Duo's outer
     /// display): a name wider than that wraps onto a second line at the same size rather than nearing the border.
     static let tileLabelInset: CGFloat = 10
+    static let tileIconHeight: CGFloat = 30
 
     private func action(_ title: String, _ symbol: String, key: String, tint: Color,
                         shortcut: KeyboardShortcut, id: String, perform: @escaping () -> Void) -> some View {
@@ -318,6 +319,9 @@ struct InboxProcessView: View {
                 Image(systemName: symbol)
                     .font(.title2)
                     .foregroundStyle(tint)
+                    // One height for the three symbols (the clock is taller than the calendar), so the names below
+                    // them start on one line.
+                    .frame(height: Self.tileIconHeight)
                 Text(title)
                     .font(HITType.subheadlineMedium)
                     .foregroundStyle(.primary)
