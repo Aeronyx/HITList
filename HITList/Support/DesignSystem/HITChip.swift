@@ -269,3 +269,57 @@ struct HITFlowLayout: Layout {
         }
     }
 }
+
+/// A row of chips too long for its card: it scrolls sideways inside the card's padding and fades out at an edge where
+/// more is hidden, never a hard cut through a word at the card's border (brief 114). At either end of the scroll that
+/// end's fade goes, so the first and last chips show whole.
+///
+///     HITScrollingChipRow { ForEach(pills) { HITChip($0.title, size: .compact) { … } } }
+struct HITScrollingChipRow<Content: View>: View {
+    var spacing: CGFloat = 6
+    /// How far the fade reaches in from an edge.
+    var fade: CGFloat = 28
+    @ViewBuilder var content: Content
+
+    init(spacing: CGFloat = 6, fade: CGFloat = 28, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.fade = fade
+        self.content = content()
+    }
+
+    /// Which ends have chips past them.
+    struct Hidden: Equatable {
+        var leading = false
+        var trailing = false
+
+        /// From the scroll's offset, its content's width and its own: half a point either way is the end.
+        static func edges(offset: CGFloat, content: CGFloat, container: CGFloat) -> Hidden {
+            Hidden(leading: offset > 0.5, trailing: content - offset - container > 0.5)
+        }
+    }
+
+    @State private var hidden = Hidden()
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: spacing) { content }
+                // The chips' 1 pt borders, whole above and below.
+                .padding(.vertical, 1)
+        }
+        .onScrollGeometryChange(for: Hidden.self) { geometry in
+            Hidden.edges(offset: geometry.contentOffset.x + geometry.contentInsets.leading,
+                         content: geometry.contentSize.width, container: geometry.containerSize.width)
+        } action: { _, edges in
+            hidden = edges
+        }
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: hidden.leading ? fade : 0)
+                Rectangle()
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: hidden.trailing ? fade : 0)
+            }
+        }
+    }
+}

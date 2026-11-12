@@ -25,11 +25,19 @@ enum PickerKind: Hashable, CaseIterable {
         // iPhone and iPad: Custom… opens in the date card's place, and its Daily · Weekly · Monthly · Yearly need
         // 360 at the phone's control size (brief 97).
         #if os(macOS)
-        case .date, .deadline: 320
+        // The five quick choices with 8 pt beside each label and 6 between them (brief 114): 320 left "Tomorrow" and
+        // "Next week" touching their tiles' sides.
+        case .date, .deadline: 344
         #else
         case .date, .deadline: 360
         #endif
+        // iPhone: the regular layout's two columns hold "In 15 minutes" and "Later today…" whole inside its 16 pt insets
+        // (brief 114; at 300 they were cut to "In 15 minut…"). The Mac's smaller type fits 300.
+        #if os(macOS)
         case .reminder: 300
+        #else
+        case .reminder: 320
+        #endif
         case .location: 300
         case .priority, .group, .labels: 280
         // The Repeat menu's longest choices ("Every 2 weeks on Wednesday") and Custom's Daily · Weekly · Monthly ·
@@ -46,7 +54,7 @@ enum PickerKind: Hashable, CaseIterable {
     /// simulator); with less room beside its chip a card takes its short layout (`isShort`).
     var phoneHeight: CGFloat {
         switch self {
-        case .date: 370
+        case .date: 378
         case .deadline: 340
         case .reminder: 491
         case .priority: 90
@@ -180,11 +188,13 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
         // iPad the roomier side is the one the system took, with the room to spare.
         let placement = opened ?? probe.placement(for: kind, settleInset: settleInset)
         content
-            .background(PickerChipReveal(isPresented: isPresented, probe: probe))
+            // Hidden from accessibility: with the chip's identifier passed down to it, it stood beside the chip's
+            // button as a second element of the same name that cannot be tapped (brief 114, quick add's wrapping row).
+            .background(PickerChipReveal(isPresented: isPresented, probe: probe).accessibilityHidden(true))
             // `arrowEdge` is the card's own edge that carries the arrow: its top for a card below the chip (measured on
             // the iPhone Duo simulator, iOS 27.1).
             .popover(isPresented: $isPresented, arrowEdge: placement.map { $0.edge == .below ? .top : .bottom }) {
-                PickerPopoverCard(kind: kind, room: placement?.room, card: card)
+                PickerPopoverCard(kind: kind, room: placement?.room, widest: placement?.width, card: card)
                     .presentationBackground(Theme.surface)
                     .presentationCompactAdaptation(.popover)
             }
@@ -200,24 +210,31 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
 private struct PickerPopoverCard<Card: View>: View {
     let kind: PickerKind
     let room: CGFloat?
+    /// The screen's room across (`PhonePickerPlacement.Result.width`); nil: the card's own width.
+    let widest: CGFloat?
     let card: () -> Card
+
+    private var width: CGFloat { min(kind.width(room: room), widest ?? .infinity) }
 
     var body: some View {
         Group {
             if let room, !kind.selfScrolls {
                 ScrollView(.vertical) {
-                    card().frame(width: kind.width(room: room))
+                    card().frame(width: width)
                 }
                 .scrollBounceBehavior(.basedOnSize)
                 .frame(maxHeight: room)
             } else {
-                card().frame(width: kind.width(room: room))
+                card().frame(width: width)
             }
         }
         .environment(\.pickerRoom, room)
         .background(Theme.surface)
         .preferredColorScheme(.dark)
         .tint(Theme.accent)
+        // The card's own frame, without the popover's arrow: what brief 114's inset test measures against.
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("pickerCard")
     }
 }
 

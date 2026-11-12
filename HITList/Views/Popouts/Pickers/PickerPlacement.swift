@@ -87,6 +87,9 @@ enum PhonePickerPlacement {
         var edge: Edge
         /// The card's tallest on that side, its arrow and margins taken off.
         var room: CGFloat
+        /// The card's widest: the screen's width inside its safe area, `margin` off each side (brief 114: on the iPhone
+        /// Duo's outer display, 376 pt beside the bar column, the 360 pt Reminder card ran 6 pt into the column).
+        var width: CGFloat? = nil
     }
 
     /// What the system's popover takes between the chip and the card: its arrow (13 pt on iOS 27) and a hairline.
@@ -113,6 +116,8 @@ enum PhonePickerPlacement {
         let chip = anchor.offsetBy(dx: 0, dy: settle)
         let below = max(0, area.maxY - chip.maxY - arrow - margin)
         let above = max(0, chip.minY - area.minY - arrow - margin)
-        return below >= above ? Result(edge: .below, room: below) : Result(edge: .above, room: above)
+        let width = max(0, area.width - 2 * margin)
+        return below >= above ? Result(edge: .below, room: below, width: width)
+                              : Result(edge: .above, room: above, width: width)
     }
 }
