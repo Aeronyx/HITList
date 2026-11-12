@@ -73,7 +73,7 @@ final class CompanionGlimTests: XCTestCase {
             }
         }
         XCTAssertGreaterThan(changed, 4)
-        XCTAssertEqual(glim.difference("blink", "rest"), 4, "a blink is its two eyes")
+        XCTAssertEqual(glim.difference("blink", "rest"), 8, "a blink is its two eyes (brief 113: two by two each)")
     }
 
     /// Routines that could belong to nobody else (its lantern, a mouse's face-washing), one each for rain, snow and
