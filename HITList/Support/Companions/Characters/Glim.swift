@@ -2140,6 +2140,117 @@ extension CompanionCharacter {
                 "....................",
                 "....................",
         ]),
+            // Brief 105: a lamplighter's own. The lantern lifted a few rows to peer into the dark, its eyes gone the other way; the flame guttering and a paw coming round to cup it bright; the paw on the lantern, stilling it after a swing.
+            Frame(name: "peerA", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddllllllddd..md...",
+                ".ddlkllllkldd.mdmd..",
+                ".dllkllllklldmd.md..",
+                ".dllllllllllmd..md..",
+                "..dlllddllldmm..md..",
+                "...dlllllld.m...dd..",
+                "...ddddddddmd..gwwg.",
+                "...dllddlld....wwww.",
+                "...............wwww.",
+                "...............gwwg.",
+                "................gg..",
+                "....................",
+                "....................",
+            ]),
+            Frame(name: "peer", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd..md...",
+                ".dddllllllddd.mdmd..",
+                ".ddkllllkllddmd.md..",
+                ".dlkllllklllmd..md..",
+                ".dlllllllllld...md..",
+                "..dlllddllldmm..dd..",
+                "...dlllllld.m..gwwg.",
+                "...ddddddddmd..wwww.",
+                "...dllddlld....wwww.",
+                "...............gwwg.",
+                "................gg..",
+                "....................",
+                "....................",
+                "....................",
+            ]),
+            Frame(name: "cupDim", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddllllllddd.......",
+                ".ddlkllllkldd.......",
+                ".dllkllllklld..md...",
+                ".dlllllllllld.mdmd..",
+                "..dlllddllld.md.md..",
+                "...dlllllld.md..md..",
+                "...ddddddddmd...md..",
+                "...dllddlldm....dd..",
+                "............m..gggg.",
+                ".............mlgwwg.",
+                ".............mlgwwg.",
+                "...............gggg.",
+                "................gg..",
+            ]),
+            Frame(name: "cupLit", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddllllllddd.......",
+                ".ddlllllllldd.......",
+                ".dlllkllllkld..md...",
+                ".dlllkllllkld.mdmd..",
+                "..dlllddllld.md.md..",
+                "...dlllllld.md..md..",
+                "...ddddddddmd...md..",
+                "...dllddlldm....dd..",
+                "............m.ggwwgg",
+                ".............mlwwwwg",
+                ".............mlwwwwg",
+                "...............gwwg.",
+                "................gg..",
+            ]),
+            Frame(name: "still", rows: [
+                "....................",
+                ".ddd......ddd.......",
+                "dmmmd....dmmmd......",
+                "dmlmd....dmlmd......",
+                "dmmmddddddmmmd......",
+                ".dddddddddddd.......",
+                ".dddddddddddd.......",
+                ".dddllllllddd.......",
+                ".ddlkllllkldd.......",
+                ".dllkllllklld..md...",
+                ".dlllllllllld.mdmd..",
+                "..dlllddllld.md.md..",
+                "...dlllllld.md..md..",
+                "...ddddddddmd...md..",
+                "...dllddlldm....dd..",
+                "............m..gwwg.",
+                ".............mlwwww.",
+                ".............mlwwww.",
+                "...............gwwg.",
+                "................gg..",
+            ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,
@@ -2147,8 +2258,8 @@ extension CompanionCharacter {
         field: Posture(awake: glimAwake, asleep: glimAsleep, flourish: glimFlourish),
         plus: Posture(awake: glimAwake, asleep: glimAsleep, flourish: glimFlourish, inset: 3))
 
-    /// Awake: two flickers (a blink; its light flickering) and one for each of rain and heat (a drop off the lantern; a
-    /// bead of sweat), the small moves its routines are made of, a hello in light for a tap (it looks up and blinks its
+    /// Awake: its idles (brief 105: a blink; its light flickering; a sniff; the lantern swaying; lifted to peer; the
+    /// flame cupped back to life) and one for each of rain and heat (a drop off the lantern; a bead of sweat), a hello in light for a tap (it looks up and blinks its
     /// lantern twice), five everyday routines and one each for rain, snow (and the snow shaken off), thunder and heat.
     private static let glimAwake: Mode = Mode(
         rest: "rest",
@@ -2159,12 +2270,12 @@ extension CompanionCharacter {
         gestures: [
             Gesture(name: "blink", weight: 4, ticks: Self.ticks(("blink", 2)), flicker: true),
             Gesture(name: "flicker", weight: 2, ticks: Self.ticks(("dim", 1), ("rest", 1), ("dim", 1)), flicker: true),
-            // Brief 100: its glances, a sniff and an ear are idles of their own too.
-            Gesture(name: "glance", ticks: Self.ticks(("glance", 4)), flicker: true),
-            Gesture(name: "lookDown", ticks: Self.ticks(("lookDown", 4)), flicker: true),
-            Gesture(name: "sniff", ticks: Self.ticks(("sniff", 1), ("rest", 1), ("sniff", 1)), flicker: true),
-            Gesture(name: "ear", ticks: Self.ticks(("ear", 2)), flicker: true),
-            Gesture(name: "lookUp", ticks: Self.ticks(("lookUp", 4)), flicker: true),
+            // Brief 105: quick, a mouse's and a lamplighter's: a sniff of the air; the lantern set swaying; lifted to
+            // peer into the dark; the flame guttering and cupped back to life with a paw.
+            Gesture(name: "sniff", weight: 2, ticks: Self.ticks(("sniff", 1), ("rest", 1), ("sniff", 1)), flicker: true),
+            Gesture(name: "sway", ticks: Self.ticks(("swingL", 1), ("swingR", 1), ("swingL", 1)), flicker: true),
+            Gesture(name: "peer", ticks: Self.ticks(("peerA", 1), ("peer", 4), ("peerA", 1)), flicker: true),
+            Gesture(name: "cup", ticks: Self.ticks(("dim", 1), ("rest", 1), ("cupDim", 2), ("cupLit", 2)), flicker: true),
             Gesture(name: "drop", weight: 2, ticks: Self.ticks(("rainDrip1", 3), ("rainDrip2", 1)), flicker: true, sky: .rain),
             Gesture(name: "sweat", weight: 2, ticks: Self.ticks(("heatSweat1", 2), ("heatSweat2", 1), ("heatSweat3", 1)), flicker: true, sky: .heat),
         ],
@@ -2172,30 +2283,31 @@ extension CompanionCharacter {
             Self.ticks(("lookUp", 2), ("lookUpDim", 1), ("lookUp", 1), ("lookUpDim", 1), ("lookUp", 3), ("blink", 1),
                 ("lookUp", 1))),
         routines: [
-            // Brief 100, its little loops: a look about, a sniff and an ear, a look down at its light as it flickers,
-            // a look up and over.
-            Routine(name: "lookAbout", little: true, steps: [.gesture("glance"), .hold(1), .gesture("lookDown"), .gesture("blink"), .hold(1)]),
-            Routine(name: "whiskers", little: true, steps: [.gesture("sniff"), .gesture("ear"), .hold(1), .gesture("blink"), .hold(1)]),
+            // Its little loops (briefs 100 and 105), quick: the flame gutters and a paw cups it bright; a paw sets
+            // the lantern swinging and stills it; a sniff, the lantern lifted toward the smell, a sniff; a look down at its
+            // light as it flickers.
+            Routine(name: "gutter", little: true, steps: [.play(("dim", 1), ("rest", 1), ("dim", 2)), .play(("cupDim", 2), ("cupLit", 3)), .play(("still", 1)), .hold(1)]),
+            Routine(name: "swingStill", little: true, steps: [.play(("still", 1)), .play(("swingL", 1), ("swingR", 1), ("swingL", 1), ("swingR", 1)), .play(("still", 3)), .hold(1)]),
+            Routine(name: "sniffPeer", little: true, steps: [.gesture("sniff"), .play(("peerA", 1), ("peer", 4), ("peerA", 1)), .gesture("sniff"), .hold(1)]),
             Routine(name: "lightCheck", little: true, steps: [.play(("lookDown", 3)), .gesture("flicker"), .hold(1), .gesture("blink"), .hold(1)]),
-            Routine(name: "upAndOver", little: true, steps: [.play(("lookUp", 3)), .hold(1), .play(("lookLeft", 3)), .gesture("blink"), .hold(1)]),
             Routine(name: "swing", steps: [
-                .gesture("glance"), .play(("swingL", 2), ("rest", 1), ("swingR", 2), ("rest", 1)),
+                .play(("glance", 4)), .play(("swingL", 2), ("rest", 1), ("swingR", 2), ("rest", 1)),
                 .play(("swingL", 2), ("rest", 1), ("swingR", 2), ("rest", 1)), .play(("swingL", 1), ("rest", 2)),
                 .hold(3), .play(("pleased", 4)), .gesture("blink")
             ]),
             Routine(name: "checkLight", steps: [
-                .gesture("flicker"), .hold(2), .gesture("lookDown"),
+                .gesture("flicker"), .hold(2), .play(("lookDown", 4)),
                 .play(("shakeL", 1), ("shakeR", 1), ("shakeL", 1), ("shakeR", 1)), .play(("brighter", 4)),
                 .play(("pleased", 4)), .hold(3), .gesture("blink")
             ]),
             Routine(name: "warmPaws", steps: [
-                .gesture("lookDown"), .play(("lift", 2)), .play(("cheek", 3)), .play(("cheekCozy", 8)),
+                .play(("lookDown", 4)), .play(("lift", 2)), .play(("cheek", 3)), .play(("cheekCozy", 8)),
                 .play(("cheek", 2)), .play(("lift", 2)), .hold(3), .gesture("blink")
             ]),
             Routine(name: "wash", steps: [
                 .play(("pawsUp", 2)),
                 .play(("rub1", 2), ("rub2", 2), ("rub1", 2), ("rub2", 2), ("rub1", 2), ("rub2", 2)),
-                .play(("pawsUp", 2)), .hold(2), .gesture("ear"), .hold(2), .gesture("sniff"), .gesture("blink")
+                .play(("pawsUp", 2)), .hold(2), .play(("ear", 2)), .hold(2), .gesture("sniff"), .gesture("blink")
             ]),
             Routine(name: "sniffAir", steps: [
                 .gesture("sniff"), .hold(2), .gesture("sniff"), .play(("lookLeft", 4)), .gesture("sniff"),
