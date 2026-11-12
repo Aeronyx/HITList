@@ -27,16 +27,20 @@ final class CompanionGlimTests: XCTestCase {
     }
 
     /// Six inks: the night's for its eyes, three greys for the mouse, and the warm light and its glow for the
-    /// lantern, which is its one warm detail (no accent at all).
+    /// lantern, which is its one warm detail (no accent at all). Brief 113: the lantern's light shows in its face too,
+    /// low in each eye and on its two cheeks, a single warm pixel each; the glow stays in the lantern.
     func testItsLightIsItsOneWarmDetail() throws {
         XCTAssertEqual(glim.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         let rest = try XCTUnwrap(glim.rows("rest")).map(Array.init)
+        var face: [String] = []
         for y in 0..<glim.height {
             for x in 0..<glim.width where rest[y][x] == "w" || rest[y][x] == "g" {
-                XCTAssertGreaterThanOrEqual(x, 15, "warm pixel (\(x), \(y)) outside the lantern")
-                XCTAssertGreaterThanOrEqual(y, 14, "warm pixel (\(x), \(y)) outside the lantern")
+                if x >= 15, y >= 14 { continue }
+                XCTAssertEqual(rest[y][x], "w", "glow at (\(x), \(y)) outside the lantern")
+                face.append("\(x),\(y)")
             }
         }
+        XCTAssertEqual(face, ["5,9", "9,9", "3,10", "10,10"], "a light low in each eye, and its cheeks")
         // At night the lantern is turned down to an ember: a warm heart in a dim body, much less bright than by day.
         let bright = warmPixels("rest")
         let ember = warmPixels("sleep")
@@ -190,9 +194,11 @@ final class CompanionGlimTests: XCTestCase {
         XCTAssertTrue(shakeOff.shakesOff)
         XCTAssertTrue(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 2), "from the heap")
         XCTAssertFalse(glim.canDraw(shakeOff, in: .snow, mode: mode, depth: 1), "only from the deepest pile")
-        // A hot day: no warm pixel left (its light turned right down), its ears lower than by day.
+        // A hot day: no warm pixel left in the lantern or its eyes (its light turned right down; brief 113: only its
+        // cheeks keep their colour), its ears lower than by day.
         let heat = try XCTUnwrap(mode.heat)
-        XCTAssertFalse(try XCTUnwrap(glim.rows(heat)).joined().contains("w"), "its light turned right down")
+        let hot = try XCTUnwrap(glim.rows(heat)).joined()
+        XCTAssertEqual(hot.filter { $0 == "w" }.count, 2, "its light turned right down")
         XCTAssertGreaterThan(try topRow(heat), try topRow("rest"), "its ears droop")
         XCTAssertEqual(mode.gestures.filter { $0.sky == .heat && $0.flicker }.map(\.name), ["sweat"])
     }
