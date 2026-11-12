@@ -9,8 +9,10 @@ enum SyncSignal: Equatable, Sendable {
     /// A local save that changed at least one object, so an export has to follow. `records`: how many objects it
     /// changed, for the words of what is waiting (brief 95: George's Mac saved 46 tasks in one save).
     case localSave(at: Date, records: Int = 1)
-    /// A CloudKit push for this app's container, so an import has to follow.
-    case push(at: Date)
+    /// A CloudKit push for this app's container, so an import has to follow. `inBackground`: it woke an iOS app in the
+    /// background, where iOS decides when the mirror imports (brief 95: all five "Import overdue" errors in George's
+    /// iPhone log were such pushes, each imported once the app was in front).
+    case push(at: Date, inBackground: Bool = false)
     /// The app became active after `idle` seconds away (nil: unknown, e.g. the first activation).
     case activated(at: Date, idle: TimeInterval?)
     case network(online: Bool, at: Date)
@@ -198,6 +200,11 @@ struct SyncWatchdog: Sendable {
     private(set) var accountAvailable: Bool?
     private(set) var accountDescription: String?
     private(set) var isSuspended = false
+    /// The pushes waiting arrived with the app in the background: past the 5 s they wait for the front without an error.
+    private(set) var importsWaitForFront = false
+
+    /// Why an import waits after a push that found the app in the background.
+    static let inBackgroundReason = "the app is in the background; iOS chooses when the mirror imports"
     private(set) var setup: Setup = .pending
     private var flights: [UUID: Flight] = [:]
     private var exports: Pending?
@@ -318,7 +325,8 @@ struct SyncWatchdog: Sendable {
             let blocked = waitBlockedReason, window = rules.exportWithin, cap = rules.maxWaiting
             return Self.add(at, records: max(1, records), to: &exports, wait: .export, window: window, blocked: blocked, cap: cap)
 
-        case let .push(at):
+        case let .push(at, inBackground):
+            importsWaitForFront = inBackground
             if imports == nil, let start = lastImportStart, let end = lastImportAt,
                start >= at.addingTimeInterval(-rules.importSlack) {
                 return [.importAfterPush(latency: max(0, end.timeIntervalSince(at)), pushes: 1)]
@@ -327,6 +335,11 @@ struct SyncWatchdog: Sendable {
             return Self.add(at, to: &imports, wait: .import, window: window, blocked: blocked, cap: cap)
 
         case let .activated(at, idle):
+            // In front: a push that waited in the background gets its five seconds from now.
+            if importsWaitForFront {
+                importsWaitForFront = false
+                if waitBlockedReason == nil { Self.restart(&imports, at: at, window: rules.importWithin) }
+            }
             guard let idle, idle >= rules.activationMinimumIdle, waitBlockedReason == nil else { return [] }
             activation = (at, at.addingTimeInterval(rules.activationWindow))
             return []
@@ -371,10 +384,18 @@ struct SyncWatchdog: Sendable {
                                                context: context(now)))
             }
             if var pending = imports, !pending.overdue, let deadline = pending.deadline, deadline <= now {
-                pending.overdue = true
                 pending.deadline = nil
+                if importsWaitForFront {
+                    // Not an error: the clock starts again when the app is in front (`.activated`, `.resumed`).
+                    if !pending.reportedWaiting {
+                        pending.reportedWaiting = true
+                        findings.append(.waiting(.import, reason: Self.inBackgroundReason, count: pending.times.count))
+                    }
+                } else {
+                    pending.overdue = true
+                    findings.append(.importOverdue(pushes: pending.times.count, context: context(now)))
+                }
                 imports = pending
-                findings.append(.importOverdue(pushes: pending.times.count, context: context(now)))
             }
         }
         if let activation, activation.deadline <= now {
