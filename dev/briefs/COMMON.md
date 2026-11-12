@@ -454,6 +454,67 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 22 record (2026-11-12, 05:00 to 09:00 Eastern; sessions 109–115 merged for 0.9.6)
+0.9.5 was handed over at 04:30 and sent back at 04:55 from its pictures (`ROUND-22.md`). Seven sessions started at
+05:09 and were all in by 06:34, each with a clock in its brief; master carries their branches and the supervisor's
+follow-ups. **No schema change. 0.9.5 was never released: 0.9.6's notes carry rounds 21 and 22.**
+- **109 `button-back`** (high, 25 minutes): Button's stills pinned to `v0.9.4` by digest; seat row 19 (he stands,
+  nothing over the host's face); bob, puff, cap wobble, spore puff, a snuggle asleep, no frame moves a boot (a test);
+  Button's and Nod's snow. Not done: the roll (his cap fills the frame's width).
+- **110 `phase-cloth`** (xhigh, 50 minutes, sent back twice at the sheets): a hooded head with the curled point, a
+  one-pixel pinch, a skirt of three uneven points with a lifted corner, 4 × 3 almond eyes (`l`, an `r` iris, a `k`
+  pupil); seat row 20, no veil in any still (the veil only while it phases); going through the bar leaves out what
+  is below its top; rain goes in at the crown and out at the hem; snow gathers in a drift on the bar under it. 169
+  frames from `110-phase-cloth/workshop/build.py`. The format refuses the accent and the warm ink together, so the
+  iris is not warm.
+- **111 `gargle-dragon`** (xhigh, 35 minutes): a three-quarter head with a short snout, horns swept back, a warm iris
+  under a brow that lowers, a closed mouth with one fang (a test: nothing dark or warm below his eyes in any frame);
+  a smoke puff, an ember hiccup, a wisp when he snores; his sleep kept with a second horn and two spines.
+- **112 `hush-quill`** (xhigh, 40 minutes): Hush's inner ears in `r`, a brow peak, lower lids, a belly; Quill a
+  tabby with accent eyes; their snow. Hush's ear tips turn in (out-turned tips failed the seat test).
+- **113 `glim-tuck`** (xhigh, 55 minutes): Glim mid grey-blue with a dark outline, a moon face, the lantern's light
+  low in his eyes; in rain, snow and thunder the tail curls round him and the light is held to his chest (`peek`,
+  `warm`); Tuck asleep keeps its eyes on lowered stalks under round lids; their snow. Not done: reeling the tail in
+  as the weather turns (the engine plays nothing on a change of sky).
+- **114 `card-insets`** (xhigh, 85 minutes): `CardInsetsUITests` (every card over a list: 12 pt to the border, 6 pt
+  between controls, nothing cut; 45 places under the floors on the Duo before, 0 after; 30 to 0 on an iPhone 16;
+  `TEST_RUNNER_HITLIST_INSETS_OUT`), `CardInsetsTests`; the reminder card's insets and its short row ("Later…");
+  quick add's chips wrap (`HITFlowLayout`); the date card's tiles sized to their labels; the editor's pills in a
+  fading scroll row (`HITScrollingChipRow`); `HITCalendar.circlesOnEdges`; the Mac's date card 344 pt.
+- **115 `screen-insets`** (xhigh, 85 minutes): rows end with their headers (a 12 pt gap sat before an empty
+  spacer); the Flipboard on the screen's margin; the switch card's choices with 8 pt around their words; Browse's
+  title row at one 7 pt gap on the Duo and its filter chips fading at the edge; Review Inbox's tiles;
+  `ScreenInsetsUITests`; a meter that reads screenshots (`115-screen-insets/tool/measure.swift`).
+- **The supervisor's own**: three snow inks `s`, `b`, `c` (`CompanionInk.snowInks`; `inks` leaves them out,
+  `allInks` has them; the weather test counts them); "Pick a Group" at an 8 pt inset (one line on an iPhone 16, two
+  on the Duo); the reminder card's four times in its two columns where they do not fit one row; the walk's menu
+  dismissal under the status bar; the notes.
+- **What worked**: a clock in every brief; concept sheets within half an hour, looked at at 1x beside Hush; the
+  cast photographed in the real app, 0.9.5 beside 0.9.6 (`build.noindex/round-22/handover/02-…`); shared fixes on
+  master handed out as hashes with a stop.
+- **What cost time**: two shared lines every snow session met (the 4…6 colours rule, the snow count), found after
+  the start; a walk picture of quick add's date card with its lower half blurred, which was a frame caught
+  mid-animation while three suites ran (a rerun on a quiet machine showed the whole calendar).
+- **Final counts** (core, Mac and iOS on `ca8f87f`, the last code commit; the UI suite, 136 tests with 61 on demand or for the Duo only, 0 failures in 76 minutes, on the merged tree an hour earlier, and what touched the later changes, `CardInsetsUITests`, `HITListUITests` and the Duo's own, again on the final build): core 704, Mac 1939 (1 skipped), iOS 1902 (1
+  skipped). On the Duo simulator `DuoCardsUITests`, `DuoColumnUITests` (7 run), `CompanionIslandUITests`,
+  `CardInsetsUITests` and `ScreenInsetsUITests` pass; `CardInsetsUITests` passes on an iPhone 16 too. Brief 93's walk
+  was looked at on the Duo's outer display (87 pictures) and an iPhone 16 (83). A Release archive and export of both
+  platforms pass the 44 checks (`build.noindex/package-proof-073722`: iOS 16,458,629 bytes, macOS 31,956,284 bytes; the last commit after it changes comments and documents only). GitHub Actions green on `ac52fc4`.
+- **Looked into and left**: under a starved simulator (three suites at once) quick add's date card landed 44 pt
+  above its chip, its arrow in the title; a probe at ordinary load put every card 13 to 18 pt above its chip and
+  steady, which is the system's arrow. The popover follows its chip as the popout drops with the keyboard, and a
+  starved main thread can leave it at a stale spot. `HITListUITests.testFlipboardSwitchesStayOnTheBoardUnlessTheyOptIn`
+  takes fifteen minutes in every run since round 20 (after a long press on a switch the app never reports idle, so
+  each step waits a minute): worth a brief of its own.
+- **Never seen running**: the Duo's inner display itself (still a stand-in; CoreDeviceService); a real call on the
+  Duo; VoiceOver on the Duo; the new creatures on a device's own screen (simulator and Mac only); quick add's
+  wrapped chips with a picker open at the larger text sizes on the Duo.
+- **Left**: Settings' two-line rows keep 8 pt of row padding (about 11 pt above the title's caps and 10 below the
+  second line's baseline; judged balanced, and the first screen has 0.3 pt of height to spare); the system places a
+  wide card 8 pt from the Duo's edge; "Shave" (round 20).
+- **Side stores to delete by hand** (the Mac's app-group folder): `HITList-sup22*`, `HITList-s109*` to
+  `HITList-s113*`, `HITList-s114*`, `HITList-s115*`, and round 21's if still there. Never `HITList.store`.
+
 ## Round 21 record (2026-11-11 to 12, overnight; sessions 103–108 merged for 0.9.5)
 All six branches are merged on master. Two early commits went first so siblings could build on them (104's "behind"
 layer at 22:20, 106's bar column at 23:30); then 104, 105, 103, 104's island companion, 106, 108, 107. No schema

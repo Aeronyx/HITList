@@ -38,8 +38,8 @@ HITList is in beta on TestFlight.
 - **System integration.** Siri and Shortcuts, Spotlight, local notifications, calendar events beside
   your tasks, and layouts for the foldable iPhone.
 - **Companions.** A small pixel creature for each of the eight themes sits on the search field or the
-  add button: still most of the time, asleep at night, and dressed for the weather outside. They can be
-  switched off.
+  add button: it idles in its own way, sleeps at night and shows the weather outside on itself. They can
+  be switched off.
 
 ## How it is put together
 
