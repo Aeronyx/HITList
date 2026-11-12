@@ -15,8 +15,8 @@ settings:
     # The version and build of everything in the app: the app, its widget extension (whose version must equal the
     # app's) and the helpers inherit these. scripts/release.sh reads and bumps exactly one line of each, so no target
     # sets its own.
-    CURRENT_PROJECT_VERSION: 24
-    MARKETING_VERSION: "0.9.3"
+    CURRENT_PROJECT_VERSION: 25
+    MARKETING_VERSION: "0.9.4"
 packages:
   HITListCore:
     path: HITListCore
@@ -80,8 +80,8 @@ targets:
       path: HITList/Info.plist
       properties:
         CFBundleDisplayName: HITList
-        CFBundleShortVersionString: "0.9.3"
-        CFBundleVersion: "24"
+        CFBundleShortVersionString: "0.9.4"
+        CFBundleVersion: "25"
         LSApplicationCategoryType: public.app-category.productivity
         # Brief 81: fetch for the widgets' background refresh (WidgetRefresh), beside the silent pushes.
         UIBackgroundModes: [remote-notification, fetch]
