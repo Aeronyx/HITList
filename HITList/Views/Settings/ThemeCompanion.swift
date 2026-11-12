@@ -43,8 +43,8 @@ enum ThemeCompanion {
     static let seats: [String: Seat] = [
         // Slate: Nod sits on the card, legs over its edge, its bobble clear of the accent dot.
         "nod": Seat(placement: .onCard, along: 0.27),
-        // Graphite: Gargle peeks over the top as over a parapet, horns, eyes and wing tips.
-        "gargle": Seat(placement: .peeking, along: 0.35),
+        // Graphite: Flint peeks over the top as over a parapet, horns, eyes and wing tips.
+        "flint": Seat(placement: .peeking, along: 0.35),
         // Midnight: Quill lies along the top, its tail's inked tip up.
         "quill": Seat(placement: .alongTop, along: 0.62),
         // Moss: Tuck on the card with its pot, left of the accent dot.

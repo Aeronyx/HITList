@@ -5,7 +5,7 @@ import XCTest
 /// widening the camera island, which the simulator can't place). On a pushed screen during a call the column leaves
 /// 36 pt: only a companion that fits there shows. Saves each screen as a PNG in the runner's temporary folder
 /// (`CompanionIsland/`) and as an attachment, for the brief's contact sheet (the companion is hidden from VoiceOver,
-/// so it is looked at, not queried). `COMPANION_ISLAND_ONLY=gargle,hush` in the runner's environment narrows the cast.
+/// so it is looked at, not queried). `COMPANION_ISLAND_ONLY=flint,hush` in the runner's environment narrows the cast.
 ///
 /// Runs only where the island stands upright (an `iPhone Duo` simulator, folded onto its outer display):
 ///
@@ -14,7 +14,7 @@ import XCTest
 final class CompanionIslandUITests: XCTestCase {
     /// Each companion and its own theme.
     static let cast = [("nod", "slate"), ("quill", "midnight"), ("hush", "nord"), ("tuck", "moss"), ("glim", "tokyo"),
-                       ("phase", "mocha"), ("button", "rose"), ("gargle", "graphite")]
+                       ("phase", "mocha"), ("button", "rose"), ("flint", "graphite")]
 
     override func setUpWithError() throws {
         continueAfterFailure = true

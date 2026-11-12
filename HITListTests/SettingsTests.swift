@@ -549,7 +549,7 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(ThemeCompanion.seats["nod"]?.placement, .onCard)
         XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .alongTop)
         XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
-        XCTAssertEqual(ThemeCompanion.seats["gargle"]?.placement, .peeking)
+        XCTAssertEqual(ThemeCompanion.seats["flint"]?.placement, .peeking)
         XCTAssertEqual(ThemeCompanion.seats["button"]?.placement, .onFloor, "round 24: at the bottom of his box")
         XCTAssertNil(ThemeCompanion.seats["pip"], "Pip retired in 0.9.3")
         XCTAssertNil(ThemeCompanion.seats["smudge"], "Smudge, Posy and Mallow retired in 0.9.4")

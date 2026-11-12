@@ -348,7 +348,7 @@ final class CompanionSeatTests: XCTestCase {
     }
 
     /// Characters another session is redrawing: measured and reported, their failures expected until that session's
-    /// drawing lands. Remove an id when its character sits. (Brief 102's Button and Gargle, in place of Posy and Smudge,
+    /// drawing lands. Remove an id when its character sits. (Brief 102's Button and Flint, in place of Posy and Smudge,
     /// sit: none waits.)
     static let awaitingRedraw: Set<String> = []
 
