@@ -370,6 +370,12 @@ enum ScreenControlsPlacement: Equatable {
     var pinsTitleRow: Bool { self == .titleRow }
 }
 
+extension EnvironmentValues {
+    /// Where the controls stand in the large title's row (`.titleRow`), a screen's own control shown first in their item,
+    /// at the bolt's gap: Browse's profile picture (brief 115). Nil elsewhere.
+    @Entry var titleRowLeading: AnyView? = nil
+}
+
 /// The title row's controls, measured (`MobileChromeTests` pins them). The pill is the system's toolbar group at its
 /// iPhone size: two 44 pt targets in a glass capsule, the glyphs at the toolbar's 17 pt.
 enum TitleRowControlMetrics {
@@ -398,10 +404,13 @@ struct TitleRowControls<Bolt: View, Options: View, Top: View>: View {
     @ViewBuilder var bolt: Bolt
     @ViewBuilder var options: Options
     @ViewBuilder var top: Top
+    /// A screen's own first control (Browse's profile picture), the bolt's gap before the bolt.
+    @Environment(\.titleRowLeading) private var leading
 
     var body: some View {
         let capsule = Capsule(style: .continuous)
         HStack(spacing: TitleRowControlMetrics.boltGap) {
+            if let leading { leading }
             bolt
                 // The bolt is drawn `SyncBolt.nudge` right of its slot for the toolbar's spacing; here it has our own.
                 .offset(x: -SyncBolt.nudge)

@@ -74,7 +74,10 @@ struct BrowseView: View {
         .followsSystemListMargin()
         .navigationTitle("Browse")
         .navigationBarTitleDisplayMode(.large)
-        .toolbar { profileItem }
+        .toolbar {
+            // Where the controls stand in the title's row the picture is the first of them (`titleRowLeading`).
+            if !islandPlacement.isSide { profileItem }
+        }
         .screenChrome {
             Menu {
                 Button { creatingProject = true } label: { Label("New Group…", systemImage: "circle.fill") }
@@ -87,6 +90,9 @@ struct BrowseView: View {
             .help("New Group, label or filter")
             .accessibilityIdentifier("browseNew")
         } menu: {}
+        // The Duo's outer display (brief 115): the picture in the title row's item, at the bolt's gap from it, where the
+        // system set it apart as an item of its own, 23 pt from the bolt against the bolt's 7 from the pill.
+        .environment(\.titleRowLeading, islandPlacement.isSide ? AnyView(profileButton) : nil)
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
@@ -525,30 +531,49 @@ private struct ChipsReachTheSafeArea: ViewModifier {
     /// Beside the system's bar column the chips stop at the cards' edge, faded there, rather than running under the battery
     /// ring (brief 106).
     @Environment(\.barColumnSide) private var column
+    /// Whether chips lie beyond either end of what shows: that end fades (brief 115: never a hard cut through a word,
+    /// at the bar column or the screen's edge); an end with nothing beyond it is drawn whole.
+    @State private var beyond = ChipsBeyond(leading: false, trailing: true)
 
     func body(content: Content) -> some View {
+        // How far past the scroll view's frame the chips may draw: to the screen's edge, never into the column.
+        let leadingReach = column.stops == .leading ? 0 : margin
+        let trailingReach = column.stops == .trailing ? 0 : margin
         content
             .scrollClipDisabled()
+            .onScrollGeometryChange(for: ChipsBeyond.self) { geometry in
+                ChipsBeyond(leading: geometry.visibleRect.minX > 1,
+                            trailing: geometry.visibleRect.maxX < geometry.contentSize.width - 1)
+            } action: { _, now in
+                beyond = now
+            }
             .mask {
-                if let edge = column.stops {
-                    HStack(spacing: 0) {
-                        if edge == .leading { fade(towards: .leading) }
-                        Rectangle()
-                        if edge == .trailing { fade(towards: .trailing) }
-                    }
-                    .padding(edge == .leading ? .trailing : .leading, -margin)
-                } else {
-                    Rectangle().padding(.horizontal, -margin)
+                HStack(spacing: 0) {
+                    end(.leading, fades: beyond.leading)
+                    Rectangle()
+                    end(.trailing, fades: beyond.trailing)
                 }
+                .padding(.leading, -leadingReach)
+                .padding(.trailing, -trailingReach)
             }
     }
 
-    /// The last chips fade out over the cards' last points, so one cut at the edge reads as "more this way".
-    private func fade(towards edge: HorizontalEdge) -> some View {
-        LinearGradient(colors: [.black, .clear], startPoint: edge == .trailing ? .leading : .trailing,
-                       endPoint: edge == .trailing ? .trailing : .leading)
-            .frame(width: BrowseChipMetrics.fade)
+    /// The chips fade out over an end's last points, so what is cut there reads as "more this way".
+    @ViewBuilder
+    private func end(_ edge: HorizontalEdge, fades: Bool) -> some View {
+        if fades {
+            LinearGradient(colors: [.black, .clear], startPoint: edge == .trailing ? .leading : .trailing,
+                           endPoint: edge == .trailing ? .trailing : .leading)
+                .frame(width: BrowseChipMetrics.fade)
+        } else {
+            Rectangle().frame(width: BrowseChipMetrics.fade)
+        }
     }
+}
+
+private struct ChipsBeyond: Equatable {
+    var leading: Bool
+    var trailing: Bool
 }
 
 /// Beside the Duo's bar column (brief 106) the system sets an inset-grouped card's trailing edge on the column itself, 3 pt
@@ -569,7 +594,8 @@ private struct CardsClearTheBarColumn: ViewModifier {
 
 /// Browse's saved filters beside the Duo's bar column (brief 106).
 enum BrowseChipMetrics {
-    /// The width over which the row of chips fades out at the column's side.
-    static let fade: CGFloat = 24
+    /// The width over which the row of chips fades out at an end with more beyond it (the column's side, or the screen's
+    /// edge): 24 left the next chip's first letter cut in two on the Duo (brief 115).
+    static let fade: CGFloat = 40
 }
 #endif
