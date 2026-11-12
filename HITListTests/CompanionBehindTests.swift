@@ -72,7 +72,7 @@ final class CompanionBehindTests: XCTestCase {
         XCTAssertEqual(CompanionCharacter.runs(of: ["sbc"]).map(\.ink), [.snow, .snowBlue, .snowShade])
         for character in CompanionCharacter.all {
             XCTAssertTrue(character.inks.isDisjoint(with: CompanionInk.snowInks), character.id)
-            XCTAssertEqual(character.inks, character.allInks.subtracting(CompanionInk.snowInks), character.id)
+            XCTAssertEqual(character.inks, character.allInks.subtracting(CompanionInk.weatherInks), character.id)
             for ink in CompanionInk.snowInks { XCTAssertEqual(character.opacity(ink), 1, "\(character.id) \(ink)") }
         }
         for palette in ThemePalette.all {
@@ -80,6 +80,24 @@ final class CompanionBehindTests: XCTestCase {
             XCTAssertEqual(inks.hex[.snow], CompanionInks.snowHex)
             XCTAssertEqual(inks.hex[.snowBlue], CompanionInks.snowBlueHex)
             XCTAssertEqual(inks.hex[.snowShade], CompanionInks.snowShadeHex)
+        }
+    }
+
+    /// Round 24: water's three inks (beads, a running drop, a puddle) are every creature's too: the same blues in
+    /// every theme, never see-through, never among a creature's own colours.
+    func testWaterInksAreNotACreaturesOwnColours() {
+        XCTAssertEqual(CompanionInk.waterInks, [.water, .waterLight, .waterDeep])
+        XCTAssertEqual(CompanionInk.weatherInks, CompanionInk.snowInks.union(CompanionInk.waterInks))
+        XCTAssertEqual(CompanionCharacter.runs(of: ["phu"]).map(\.ink), [.water, .waterLight, .waterDeep])
+        for character in CompanionCharacter.all {
+            XCTAssertTrue(character.inks.isDisjoint(with: CompanionInk.waterInks), character.id)
+            for ink in CompanionInk.waterInks { XCTAssertEqual(character.opacity(ink), 1, "\(character.id) \(ink)") }
+        }
+        for palette in ThemePalette.all {
+            let inks = CompanionInks(palette: palette)
+            XCTAssertEqual(inks.hex[.water], CompanionInks.waterHex)
+            XCTAssertEqual(inks.hex[.waterLight], CompanionInks.waterLightHex)
+            XCTAssertEqual(inks.hex[.waterDeep], CompanionInks.waterDeepHex)
         }
     }
 
