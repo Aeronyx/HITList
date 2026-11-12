@@ -55,7 +55,10 @@ final class CardInsetsTests: XCTestCase {
         let area = CGRect(x: 0, y: 15, width: 376, height: 648)
         let placed = PhonePickerPlacement.place(anchor: CGRect(x: 220, y: 256, width: 107, height: 30), area: area)
         XCTAssertEqual(placed.width, 376 - 2 * PhonePickerPlacement.margin)
+        #if !os(macOS)
+        // The phone's short Reminder card (360) is the one that needs it; the Mac's cards are placed in its window.
         XCTAssertLessThan(placed.width ?? .infinity, PickerKind.reminder.width(room: placed.room))
+        #endif
         // The iPhone 16 has the room for the whole card.
         let sixteen = PhonePickerPlacement.place(anchor: CGRect(x: 220, y: 300, width: 107, height: 30),
                                                  area: CGRect(x: 0, y: 59, width: 393, height: 759))
