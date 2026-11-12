@@ -41,6 +41,35 @@ enum PickerKind: Hashable, CaseIterable {
         #endif
         }
     }
+
+    /// iPhone: about how tall the card is in its regular layout at the default text size (measured on the iPhone Duo
+    /// simulator); with less room beside its chip a card takes its short layout (`isShort`).
+    var phoneHeight: CGFloat {
+        switch self {
+        case .date: 370
+        case .deadline: 340
+        case .reminder: 491
+        case .priority: 90
+        case .group, .labels: 352
+        case .repeating: 410
+        case .location: 140
+        }
+    }
+
+    /// The Group and labels cards scroll their own lists under a search field that stays put.
+    var selfScrolls: Bool { self == .group || self == .labels }
+
+    /// The card has less room beside its chip than its regular layout takes (iPhone; never where `room` is nil).
+    func isShort(room: CGFloat?) -> Bool {
+        guard let room else { return false }
+        return room < phoneHeight
+    }
+
+    /// The card's width with `room` beside its chip: the Reminder card's short layout is as wide as the date card's,
+    /// for its three offsets to a row (brief 107).
+    func width(room: CGFloat?) -> CGFloat {
+        self == .reminder && isShort(room: room) ? PickerKind.date.width : width
+    }
 }
 
 extension View {
@@ -106,6 +135,31 @@ struct PickerCardChrome: ViewModifier {
     }
 }
 
+/// iPhone: the height the open picker card has on its side of the chip (`PhonePickerPlacement`), for a card with a
+/// short layout to take it; nil where the card has all it wants (iPad, the Duo's inner display).
+private struct PickerRoomKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+/// The popout drops with the keyboard as one of its chips opens a card (quick add's oval): the card is placed for where
+/// the chip will be once it has (brief 107). The value is the bottom safe area the popout stands on, which the keyboard's
+/// height includes: the popout drops by the keyboard's height less it. Nil: the popout stays where it is.
+private struct PickerSettleInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    var pickerRoom: CGFloat? {
+        get { self[PickerRoomKey.self] }
+        set { self[PickerRoomKey.self] = newValue }
+    }
+
+    var pickerSettleInset: CGFloat? {
+        get { self[PickerSettleInsetKey.self] }
+        set { self[PickerSettleInsetKey.self] = newValue }
+    }
+}
+
 // MARK: - iPhone / iPad: popovers
 
 #if !os(macOS)
@@ -114,18 +168,55 @@ private struct PickerAnchorModifier<Card: View>: ViewModifier {
     @Binding var isPresented: Bool
     let card: () -> Card
 
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.pickerSettleInset) private var settleInset
+    /// The chip's own view in UIKit, which knows where it is in the window.
+    @State private var probe = PickerAnchorProbe()
+    /// The side and room the open card was given, kept while it is open so it never flips under the finger.
+    @State private var opened: PhonePickerPlacement.Result?
+
     func body(content: Content) -> some View {
+        // iPhone only: the iPad's and the Duo's inner display's popovers have the room and keep the system's choice.
+        let placement = sizeClass == .compact ? opened ?? probe.placement(for: kind, settleInset: settleInset) : nil
         content
-            .background(PickerChipReveal(isPresented: isPresented))
-            .popover(isPresented: $isPresented) {
-            card()
-                .frame(width: kind.width)
-                .background(Theme.surface)
-                .preferredColorScheme(.dark)
-                .tint(Theme.accent)
-                .presentationBackground(Theme.surface)
-                .presentationCompactAdaptation(.popover)
+            .background(PickerChipReveal(isPresented: isPresented, probe: probe))
+            // `arrowEdge` is the card's own edge that carries the arrow: its top for a card below the chip (measured on
+            // the iPhone Duo simulator, iOS 27.1).
+            .popover(isPresented: $isPresented, arrowEdge: placement.map { $0.edge == .below ? .top : .bottom }) {
+                PickerPopoverCard(kind: kind, room: placement?.room, card: card)
+                    .presentationBackground(Theme.surface)
+                    .presentationCompactAdaptation(.popover)
+            }
+            .onChange(of: isPresented) { _, open in
+                opened = open && sizeClass == .compact ? placement : nil
+            }
+    }
+}
+
+/// The card inside its popover: its width, and on iPhone at most the room its side of the chip has. A card taller than
+/// that takes its short layout (it reads `pickerRoom`) and, if that is still too tall, scrolls inside the card, never
+/// cut at an edge. The Group and labels cards scroll their own lists (`selfScrolls`).
+private struct PickerPopoverCard<Card: View>: View {
+    let kind: PickerKind
+    let room: CGFloat?
+    let card: () -> Card
+
+    var body: some View {
+        Group {
+            if let room, !kind.selfScrolls {
+                ScrollView(.vertical) {
+                    card().frame(width: kind.width(room: room))
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: room)
+            } else {
+                card().frame(width: kind.width(room: room))
+            }
         }
+        .environment(\.pickerRoom, room)
+        .background(Theme.surface)
+        .preferredColorScheme(.dark)
+        .tint(Theme.accent)
     }
 }
 
@@ -134,16 +225,40 @@ private struct PickerOverlayModifier: ViewModifier {
 }
 
 /// Brings a chip into sight as its card opens, as on the Mac (brief 65): the quick-add card's Repeat chip, revealed by
-/// "+" → Repeat at the end of the sideways row, opened its popover off the screen's edge (brief 97, iPhone 17).
+/// "+" → Repeat at the end of the sideways row, opened its popover off the screen's edge (brief 97, iPhone 17). It is
+/// also the chip's foothold in UIKit, where its place in the window and the window's safe area are (`probe`).
 private struct PickerChipReveal: UIViewRepresentable {
     let isPresented: Bool
+    let probe: PickerAnchorProbe
 
-    func makeUIView(context: Context) -> PickerChipRevealView { PickerChipRevealView() }
+    func makeUIView(context: Context) -> PickerChipRevealView {
+        let view = PickerChipRevealView()
+        probe.view = view
+        return view
+    }
 
     func updateUIView(_ view: PickerChipRevealView, context: Context) {
+        probe.view = view
         guard isPresented != view.wasPresented else { return }
         view.wasPresented = isPresented
         if isPresented { view.reveal() }
+    }
+}
+
+/// Where a chip is, asked as its card opens. A reference held in the chip's state, so reading it redraws nothing.
+@MainActor
+final class PickerAnchorProbe {
+    weak var view: UIView?
+
+    /// The side and room for `kind`'s card from where the chip is now (and, with a `settleInset`, where it will be
+    /// once the keyboard has gone); nil before the chip is in a window.
+    func placement(for kind: PickerKind, settleInset: CGFloat?) -> PhonePickerPlacement.Result? {
+        guard let view, let window = view.window else { return nil }
+        let anchor = view.convert(view.bounds, to: window)
+        let area = window.bounds.inset(by: window.safeAreaInsets)
+        let keyboard = KeyboardObserver.shared.heightUnobserved
+        let settle = settleInset.map { max(0, keyboard - $0) } ?? 0
+        return PhonePickerPlacement.place(anchor: anchor, area: area, settle: settle)
     }
 }
 

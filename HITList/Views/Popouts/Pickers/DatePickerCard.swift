@@ -33,6 +33,8 @@ struct DatePickerCard: View {
 
     @Environment(\.pickerFocusRequest) private var focusRequest
     @Environment(\.pickerEscape) private var pickerEscape
+    /// iPhone: the height the card has beside its chip; under its regular height it takes its short layout.
+    @Environment(\.pickerRoom) private var pickerRoom
     @HITEffectsSetting private var effects
     /// The Repeat menu (a dropdown on the Mac, the card's page on iPhone and iPad) or Custom…, while open.
     @State private var repeatPage: RepeatPage?
@@ -85,6 +87,7 @@ struct DatePickerCard: View {
 
     private var dateContent: some View {
         let weekStart = Preferences.weekStartWeekday()
+        let layout = DatePickerCardLayout(room: pickerRoom, hasFoot: onTime != nil || onRepeat != nil, hasTitle: title != nil)
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 if let title {
@@ -94,19 +97,20 @@ struct DatePickerCard: View {
                 }
                 HStack(spacing: HITSpacing.xs) {
                     ForEach(DatePreset.all(now: now, weekStart: weekStart, clearTitle: clearTitle)) { preset in
-                        DatePresetTile(preset: preset, isSelected: isPicked(preset)) { onPick(preset.date) }
+                        DatePresetTile(preset: preset, isSelected: isPicked(preset), height: layout.presetHeight) { onPick(preset.date) }
                             .disabled(preset.kind == .none && (selected == nil || !canClear))
                     }
                 }
                 .padding(.horizontal, HITSpacing.m)
-                .padding(.vertical, HITSpacing.s)
+                .padding(.vertical, layout.rowPadding)
                 separator
-                HITCalendar(selection: selected, today: now, weekStart: weekStart, focusTrigger: focusRequest) { day in
+                HITCalendar(selection: selected, today: now, weekStart: weekStart, focusTrigger: focusRequest,
+                            daySize: layout.daySize) { day in
                     onPick(day)
                 }
                 .padding(.horizontal, HITSpacing.m)
-                .padding(.top, HITSpacing.s)
-                .padding(.bottom, HITSpacing.xs)
+                .padding(.top, layout.rowPadding)
+                .padding(.bottom, layout.isShort ? 2 : HITSpacing.xs)
             }
             #if os(macOS)
             .overlay(alignment: .bottom) { repeatDropdown }
@@ -127,7 +131,7 @@ struct DatePickerCard: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, HITSpacing.m)
-                .padding(.vertical, HITSpacing.s)
+                .padding(.vertical, layout.rowPadding)
             }
         }
     }
@@ -208,6 +212,8 @@ struct DatePickerCard: View {
             separator
             RepeatMenuList(rule: recurrence, day: repeatDay, onPick: pickFromMenu, onKeep: keep,
                            onCustom: { show(.custom) })
+                // The way back takes a row of the card's room (brief 107).
+                .environment(\.pickerRoom, pickerRoom.map { $0 - HITRowMetrics.minHeight - 1 })
                 .accessibilityIdentifier("datePickerRepeatMenu")
         }
     }
@@ -239,6 +245,27 @@ struct DatePickerCard: View {
         guard let date = preset.date, let selected else { return false }
         return Calendar.current.isDate(date, inSameDayAs: selected)
     }
+}
+
+/// The date card's two layouts (brief 107). The regular one is 370 pt tall with its time row (quick add, the editor;
+/// measured on the iPhone Duo simulator) and 309 pt without (Review Inbox, a deadline); the Duo's outer display is
+/// 678 pt tall. Under its regular height the card takes the short layout: presets 32 pt tall instead of 40, days 28 pt
+/// instead of 32, 4 pt instead of 8 around each row, 56 pt less in all. Pure, so tests pin when it switches.
+struct DatePickerCardLayout: Equatable {
+    let isShort: Bool
+
+    /// The regular layout's height: presets, calendar and, with `hasFoot`, the time row (and a title, a deadline's).
+    static func regularHeight(hasFoot: Bool, hasTitle: Bool = false) -> CGFloat {
+        (hasFoot ? 370 : 309) + (hasTitle ? 24 : 0)
+    }
+
+    init(room: CGFloat?, hasFoot: Bool, hasTitle: Bool = false) {
+        isShort = room.map { $0 < Self.regularHeight(hasFoot: hasFoot, hasTitle: hasTitle) } ?? false
+    }
+
+    var presetHeight: CGFloat { isShort ? 32 : 40 }
+    var daySize: CGFloat { isShort ? 28 : HITCalendar.cellSize }
+    var rowPadding: CGFloat { isShort ? HITSpacing.xs : HITSpacing.s }
 }
 
 enum DatePickerCardMetrics {
@@ -333,6 +360,8 @@ struct DatePreset: Identifiable, Equatable {
 private struct DatePresetTile: View {
     let preset: DatePreset
     let isSelected: Bool
+    /// 40 pt; 32 in the card's short layout.
+    var height: CGFloat = 40
     let action: () -> Void
 
     @State private var isHovered = false
@@ -343,9 +372,9 @@ private struct DatePresetTile: View {
         let look = HITChipAppearance(tint: preset.tint, isSelected: isSelected, isHovered: isHovered && isEnabled)
         let shape = RoundedRectangle(cornerRadius: HITRadius.field, style: .continuous)
         Button(action: action) {
-            VStack(spacing: 3) {
+            VStack(spacing: height < 40 ? 1 : 3) {
                 Image(systemName: preset.symbol)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: height < 40 ? 11 : 13, weight: .semibold))
                     .foregroundStyle(look.icon)
                 Text(preset.title)
                     .font(HITType.caption2)
@@ -357,7 +386,7 @@ private struct DatePresetTile: View {
                     .dynamicTypeSize(...DynamicTypeSize.large)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 40)
+            .frame(height: height)
             .background(shape.fill(look.fill))
             .overlay(shape.strokeBorder(look.border, lineWidth: 1))
             .contentShape(shape)

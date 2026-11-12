@@ -407,6 +407,9 @@ struct PopoutHost: ViewModifier {
                         }
                         card
                             .ovalCardChrome()
+                            // A chip's card opens for where the chip will be once the keyboard has stepped aside and
+                            // the card has dropped with it, by `aboveKeyboard` (brief 107).
+                            .environment(\.pickerSettleInset, geo.safeAreaInsets.bottom)
                             // A first-run tip floats above the card over the dimmed list, never inside it.
                             .floatingQuickAddTip(isHidden: confirmingDiscard)
                             // A tap on the card itself also means "keep editing".

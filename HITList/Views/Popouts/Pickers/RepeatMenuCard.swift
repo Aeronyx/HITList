@@ -28,6 +28,8 @@ struct RepeatMenuList: View {
     var onCustom: (() -> Void)?
 
     @Environment(\.pickerFocusRequest) private var focusRequest
+    /// iPhone: the card's room beside its chip; the rows grow denser to fit it (brief 107).
+    @Environment(\.pickerRoom) private var pickerRoom
     @FocusState private var isFocused: Bool
     /// The keyboard's row (arrows move it, Return picks it).
     @State private var keyboardRow: Row?
@@ -100,7 +102,8 @@ struct RepeatMenuList: View {
         Button { pick(row) } label: {
             RepeatMenuRowLabel(lead: lead, detail: detail, isTicked: isTicked)
         }
-        .buttonStyle(RepeatMenuRowStyle(density: density, isKeyboardRow: keyboardRow == row))
+        .buttonStyle(RepeatMenuRowStyle(density: density, isKeyboardRow: keyboardRow == row,
+                                        cardRowHeight: RepeatMenuMetrics.cardRowHeight(rows: rows.count, room: pickerRoom)))
         .accessibilityLabel(detail.isEmpty ? lead : lead + " " + detail)
         .accessibilityAddTraits(isTicked ? .isSelected : [])
     }
@@ -184,6 +187,19 @@ enum RepeatMenuMetrics {
     static let dropdownRowHeight: CGFloat = 40
     static let cardRowHeight: CGFloat = HITRowMetrics.minHeight
     #endif
+
+    /// The least a card's row shrinks to where the card is short of room.
+    static let shortestCardRow: CGFloat = 36
+
+    /// A card's rows: `cardRowHeight`, or less where `rows` of them would not fit the card's room beside its chip
+    /// (brief 107: the editor's Repeat menu on the iPhone Duo's outer display had 333 pt for 360), never under
+    /// `shortestCardRow` (past that the card scrolls). Pure, so tests pin it.
+    static func cardRowHeight(rows: Int, room: CGFloat?) -> CGFloat {
+        guard let room, rows > 0 else { return cardRowHeight }
+        // The list's 4 pt above and below, and a hairline.
+        let each = ((room - 9) / CGFloat(rows)).rounded(.down)
+        return min(cardRowHeight, max(shortestCardRow, each))
+    }
 }
 
 /// A menu row: the other cards' rows (`HITRowButtonStyle`'s padding and fills) in a card; in the dropdown a rounded
@@ -191,9 +207,12 @@ enum RepeatMenuMetrics {
 struct RepeatMenuRowStyle: ButtonStyle {
     var density: RepeatMenuList.Density
     var isKeyboardRow = false
+    /// A card's row height (`RepeatMenuMetrics.cardRowHeight(rows:room:)`).
+    var cardRowHeight = RepeatMenuMetrics.cardRowHeight
 
     func makeBody(configuration: Configuration) -> some View {
-        RepeatMenuRowBody(configuration: configuration, density: density, isKeyboardRow: isKeyboardRow)
+        RepeatMenuRowBody(configuration: configuration, density: density, isKeyboardRow: isKeyboardRow,
+                          cardRowHeight: cardRowHeight)
     }
 }
 
@@ -201,6 +220,7 @@ private struct RepeatMenuRowBody: View {
     let configuration: ButtonStyle.Configuration
     let density: RepeatMenuList.Density
     let isKeyboardRow: Bool
+    let cardRowHeight: CGFloat
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isHovered = false
@@ -214,8 +234,8 @@ private struct RepeatMenuRowBody: View {
                 configuration.label
                     .padding(.leading, HITSpacing.m)
                     .padding(.trailing, HITSpacing.l)
-                    .padding(.vertical, 6)
-                    .frame(minHeight: RepeatMenuMetrics.cardRowHeight)
+                    .padding(.vertical, cardRowHeight < RepeatMenuMetrics.cardRowHeight ? 4 : 6)
+                    .frame(minHeight: cardRowHeight)
                     .background(fill)
             case .dropdown:
                 configuration.label
