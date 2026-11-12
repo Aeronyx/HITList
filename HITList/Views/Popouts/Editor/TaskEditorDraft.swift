@@ -254,6 +254,15 @@ struct TaskEditorDraft: Equatable {
         for span in spans { title = Self.removing(span, from: title) }
     }
 
+    /// The date card's day (a new day keeps the time of day); nil is "No date", which takes the time away and with
+    /// it the reminder before the time, as clearing the time does (brief 127: stored, it would have come back the
+    /// day a time was set again).
+    @MainActor
+    static func pickDay(_ day: Date?, for task: TaskItem, in context: ModelContext) {
+        if day == nil { task.reminderOffsetMinutes = nil }
+        TaskActions.reschedule(task, to: day, in: context)
+    }
+
     /// `text` without the UTF-8 stretch `span` and one space beside it (the one before, else the one after), so
     /// the words either side keep one space between them and nothing else moves.
     static func removing(_ span: Range<Int>, from text: String) -> String {

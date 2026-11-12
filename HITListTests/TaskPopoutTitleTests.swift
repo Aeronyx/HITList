@@ -378,6 +378,20 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(draft.title, "Call Sam !30mb")
     }
 
+    /// Brief 127's scan: "No date" takes the time away, and with it the reminder before the time, as clearing the time
+    /// does; stored, it would come back the day a time is set again.
+    func testNoDateTakesTheReminderBeforeTheTimeWithIt() {
+        let (task, context) = task("Call Sam", due: day(0, hour: 20), hasTime: true)
+        task.reminderOffsetMinutes = 30
+        TaskEditorDraft.pickDay(day(2), for: task, in: context)
+        XCTAssertEqual(task.dueDate, day(2, hour: 20))
+        XCTAssertEqual(task.reminderOffsetMinutes, 30, "a new day keeps the time and its reminder")
+        TaskEditorDraft.pickDay(nil, for: task, in: context)
+        XCTAssertNil(task.dueDate)
+        XCTAssertFalse(task.hasDueTime)
+        XCTAssertNil(task.reminderOffsetMinutes, "nothing to count from")
+    }
+
     /// A later priority overrides one already in the title only if that one was typed now; the stored one
     /// stays in the title as text.
     func testAStoredPhraseNeverCompetes() throws {
