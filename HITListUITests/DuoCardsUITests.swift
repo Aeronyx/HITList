@@ -82,6 +82,15 @@ final class DuoCardsUITests: XCTestCase {
         try XCTSkipUnless(walks, "brief 107's walk runs only on demand (TEST_RUNNER_HITLIST_DUO_WALK=1)")
         launch()
         go("inbox")
+        // A title of three lines, first, on a fresh card.
+        openQuickAdd()
+        app.typeText("Ask the landlord whether the radiator in the back bedroom can be bled before the cold weather arrives tom")
+        pause()
+        snap("Quick add, three lines, keyboard up")
+        pickerShot("quickAddDateChip", "Quick add, three lines, date card")
+        tapIfExists(app.buttons["Close"].firstMatch)
+        tapIfExists(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Discard")).firstMatch)
+        pause(1.5)
         openQuickAdd()
         snap("Quick add, empty, keyboard up")
         app.typeText("Haircut tom 11am p1 !15mb #Home @errands ")
@@ -110,12 +119,6 @@ final class DuoCardsUITests: XCTestCase {
         dump("quick add discard")
         tapIfExists(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Discard")).firstMatch)
         pause()
-        // A title of three lines.
-        openQuickAdd()
-        app.typeText("Ask the landlord whether the radiator in the back bedroom can be bled before the cold weather arrives tom")
-        pause()
-        snap("Quick add, three lines, keyboard up")
-        pickerShot("quickAddDateChip", "Quick add, three lines, date card")
     }
 
     func testWalk2Editor() throws {
@@ -165,6 +168,7 @@ final class DuoCardsUITests: XCTestCase {
         let title = element("editorTitle")
         if title.waitForExistence(timeout: 2) {
             title.tap()
+            _ = app.keyboards.firstMatch.waitForExistence(timeout: 5)
             pause(0.5)
             app.typeText(" soon")
             pause(0.5)
@@ -279,6 +283,38 @@ final class DuoCardsUITests: XCTestCase {
         }
     }
 
+    func testWalk8SettingsPages() throws {
+        try XCTSkipUnless(walks, "brief 107's walk runs only on demand (TEST_RUNNER_HITLIST_DUO_WALK=1)")
+        let pages: [(page: String, row: String, name: String)] = [
+            ("settings-page-iCloud", "settings-sync-log-row", "Sync log"),
+            ("settings-page-iCloud", "settings-check-icloud", "Check iCloud"),
+            ("settings-page-general", "settings-quick-add-guide", "Quick add guide"),
+            ("settings-page-about", "settings-whats-new", "What's New"),
+            ("settings-page-about", "settings-privacy-policy", "Privacy policy"),
+            ("settings-page-about", "settings-feedback", "Feedback"),
+        ]
+        for (size, name) in [("UICTContentSizeCategoryL", "default"), ("UICTContentSizeCategoryXL", "XL")] {
+            launch(extra: ["-UIPreferredContentSizeCategoryName", size])
+            for entry in pages {
+                openSettings()
+                let page = element(entry.page)
+                guard scrollTo(page) else { note("no \(entry.page)"); closeSettings(); continue }
+                page.tap()
+                pause()
+                let row = element(entry.row)
+                guard scrollTo(row) else { note("no \(entry.row)"); closeSettings(); continue }
+                row.tap()
+                pause(entry.name == "Check iCloud" ? 4 : 1.2)
+                shotDown("\(entry.name) \(name)")
+                closeSettings()
+                // A card or sheet over Settings (the feedback card) closes with its own Cancel or a tap above it.
+                tapIfExists(app.buttons["Cancel"].firstMatch, timeout: 1)
+                if element("settings-profile").exists { closeSettings() }
+            }
+            app.terminate()
+        }
+    }
+
     func testWalk6Sheets() throws {
         try XCTSkipUnless(walks, "brief 107's walk runs only on demand (TEST_RUNNER_HITLIST_DUO_WALK=1)")
         launch()
@@ -367,8 +403,12 @@ final class DuoCardsUITests: XCTestCase {
         let plus = app.buttons["quickAddButton"].firstMatch
         guard plus.waitForExistence(timeout: 5) else { return note("no +") }
         plus.tap()
-        _ = element("quickAddTitle").waitForExistence(timeout: 5)
-        pause(1.2)
+        let title = element("quickAddTitle")
+        _ = title.waitForExistence(timeout: 5)
+        // The keyboard comes with the card; on a busy simulator it can be late, and typing before it lands nowhere.
+        if !app.keyboards.firstMatch.waitForExistence(timeout: 4), title.exists { title.tap() }
+        _ = app.keyboards.firstMatch.waitForExistence(timeout: 4)
+        pause(0.8)
     }
 
     private func openTask(_ prefix: String) {
@@ -455,8 +495,17 @@ final class DuoCardsUITests: XCTestCase {
         dismissPopover()
     }
 
+    /// A tap just outside the open card (above it, or below where it reaches the top), which the card's dismissal layer
+    /// takes; a corner of the screen is the status bar on an iPhone, where a tap closes nothing.
     private func dismissPopover() {
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.03)).tap()
+        let popover = app.popovers.firstMatch
+        if popover.exists {
+            let card = popover.frame
+            let y = card.minY > 90 ? card.minY - 30 : min(card.maxY + 30, app.frame.height - 40)
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: card.midX, dy: y)).tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.12)).tap()
+        }
         pause(0.8)
     }
 
