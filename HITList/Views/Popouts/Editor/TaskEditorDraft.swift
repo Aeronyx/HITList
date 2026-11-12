@@ -95,11 +95,14 @@ struct TaskEditorDraft: Equatable {
     /// Confirm: saves what was typed. True if anything changed. The title's phrases leave it and set their
     /// fields (brief 65); the sub-task field's text becomes a sub-task; the field closes. `parser` reads the
     /// title (the editor passes the one it highlights with; nil makes one from the context's Groups and labels).
+    /// `confirming: false` (completing, duplicating, moving the task from the editor): the typing lands, but a woken
+    /// stored reminder is not typing and stays text (brief 127).
     @MainActor
     @discardableResult
-    mutating func commit(to task: TaskItem, in context: ModelContext, parser: QuickAddParser? = nil) throws -> Bool {
+    mutating func commit(to task: TaskItem, in context: ModelContext, parser: QuickAddParser? = nil,
+                         confirming: Bool = true) throws -> Bool {
         var changed = false
-        let phrases = self.phrases(parser ?? Self.parser(in: context), for: task, .final)
+        let phrases = self.phrases(parser ?? Self.parser(in: context), for: task, .final, waking: confirming)
         if let title = Self.titleToSave(phrases.title, current: task.title) {
             task.title = title
             changed = true
@@ -155,14 +158,15 @@ struct TaskEditorDraft: Equatable {
     /// before-due phrase typed in this session wins over it wherever each sits. Every other stored word had its
     /// chance when it was typed (read then, or switched off on purpose) and stays text (brief 65). A woken phrase
     /// is not typing: opening and closing ask nothing and save nothing (`hasPendingChanges`).
-    func parsed(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live) -> QuickAddResult {
+    func parsed(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .live,
+                waking: Bool = true) -> QuickAddResult {
         var parser = parser
         parser.dueTimeIsSet = task.hasDueTime && task.dueDate != nil
-        let wakes = Self.wakesStoredReminder(on: task)
+        let wakes = waking && Self.wakesStoredReminder(on: task)
         let result = parsed(parser, mode, waking: wakes)
         // No time of its own yet, but one typed in this session ("8pm", "in 2 hours"): Confirm gives the task that
         // time, so a stored reminder wakes for it as for one picked in the date card.
-        guard !wakes, task.reminderOffsetMinutes == nil, result.hasDueTime else { return result }
+        guard waking, !wakes, task.reminderOffsetMinutes == nil, result.hasDueTime else { return result }
         return parsed(parser, mode, waking: true)
     }
 
@@ -222,8 +226,9 @@ struct TaskEditorDraft: Equatable {
     /// saves and so what the editor's rows and pills show while it is typed (brief 127: a friend's "!30mb" at the
     /// very end of a timed task's title left the Reminder pill on "8:00 PM" until a space came, so it looked dead,
     /// though Confirm saved it). Only the highlights wait for the space (`parsed(_:for:_:)`, `.live`).
-    func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .final) -> TitlePhrases {
-        TitlePhrases(text: title, result: parsed(parser, for: task, mode), dueDate: task.dueDate,
+    func phrases(_ parser: QuickAddParser, for task: TaskItem, _ mode: QuickAddParser.Mode = .final,
+                 waking: Bool = true) -> TitlePhrases {
+        TitlePhrases(text: title, result: parsed(parser, for: task, mode, waking: waking), dueDate: task.dueDate,
                      hasDueTime: task.hasDueTime, repeats: task.recurrenceRule, calendar: parser.dateParser.calendar)
     }
 
