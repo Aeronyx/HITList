@@ -62,7 +62,8 @@ final class CompanionTuckTests: XCTestCase {
             }
             XCTAssertEqual(awake.answer.name, "flinch")
             let asleep = tuck.posture(place).asleep
-            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf", "breath"])
+            XCTAssertEqual(asleep.gestures.map(\.name), ["dream", "leaf", "breath", "drip"])
+            XCTAssertEqual(asleep.gestures.map(\.sky), [nil, nil, nil, .rain], "brief 122: a drop runs off it asleep too")
             XCTAssertEqual(asleep.answer.name, "wake")
             XCTAssertNotEqual(asleep.answer.ticks, awake.answer.ticks, "woken, not just looking")
         }
@@ -75,21 +76,25 @@ final class CompanionTuckTests: XCTestCase {
         let rest = try XCTUnwrap(tuck.rows("rest")), sleep = try XCTUnwrap(tuck.rows("sleep"))
         let rain = try XCTUnwrap(tuck.rows("rain")), snow = try XCTUnwrap(tuck.rows("snow"))
         XCTAssertTrue(rest.joined().contains("k"), "awake: its eyes open")
-        // Brief 119 (George: "Tuck's eyes should still droop down far at night ... He also shouldn't smile while
-        // sleeping, that's creepy"): asleep each stalk folds over flat at its root and its eye hangs at its cheek at
-        // the side of its face, at day size and shut (a grey lid over a dark slit), and its face has no mouth.
-        for (y, row) in sleep.enumerated() {
-            for (x, c) in row.enumerated() where c == "k" {
-                XCTAssertEqual(Array(sleep[y - 1])[x], "m", "asleep (\(x), \(y)): a lid over each slit, no open eye")
-                XCTAssertEqual(Array(sleep[y + 1])[x], "d", "asleep (\(x), \(y)): the ball's underside below it")
+        // Brief 122 (George: "He also looks extremely depressed at night instead of like he's sleeping. Can you make
+        // him look relaxed instead and perhaps with his eyes slightly bowed apart to show he's resting?"; brief 119:
+        // "He also shouldn't smile while sleeping"): asleep its head is its day head with no mouth, and its eyes are its
+        // day balls, shut, a row lower and each a pixel further out, on stalks leaning apart.
+        XCTAssertFalse(sleep.joined().contains("k"), "asleep: both eyes shut")
+        for y in 10..<tuck.height {
+            if [14, 15].contains(y) {
+                XCTAssertEqual(sleep[y].dropFirst(10), rest[y].dropFirst(10), "asleep row \(y): its day head")
+            } else {
+                XCTAssertEqual(sleep[y], rest[y], "asleep row \(y): its day head, settled, not flattened")
             }
         }
         XCTAssertEqual(String(sleep[15].prefix(10)), "dlllllllll", "asleep: no mouth")
         XCTAssertEqual(String(Array(sleep[14])[3...6]), "llll", "asleep: no smile")
-        XCTAssertEqual(Self.topRow(of: "l", in: sleep, columns: 0..<9), 9, "asleep: its stalks folded flat on its head")
-        let slits = try XCTUnwrap(Self.topRow(of: "k", in: sleep, columns: 0..<10), "asleep: its two eyes")
-        let pupils = try XCTUnwrap(Self.topRow(of: "k", in: rest, columns: 0..<10))
-        XCTAssertGreaterThan(slits, pupils + 5, "asleep: its eyes hang at its cheeks, far below where they stand by day")
+        let lids = try XCTUnwrap(Self.topRow(of: "m", in: sleep, columns: 0..<11), "asleep: its two shut eyes")
+        let tops = try XCTUnwrap(Self.topRow(of: "m", in: rest, columns: 0..<10))
+        XCTAssertGreaterThan(lids, tops, "asleep: its eyes lower than by day")
+        XCTAssertEqual(Self.columns(of: "m", in: sleep, rows: 0..<10), Array(0...3) + Array(7...10),
+                       "asleep: each eye a pixel further out than by day (1...4 and 6...9), bowed apart")
         XCTAssertLessThan(Self.width(of: "a", in: sleep), Self.width(of: "a", in: rest), "asleep: its leaves fold up")
         let eyesAtRest = try XCTUnwrap(Self.topRow(of: "l", in: rest, columns: 0..<10))
         // Brief 122 (George: "He should be in a little puddle and/or have a bit of water pool up in his pot"): in the rain
@@ -117,7 +122,7 @@ final class CompanionTuckTests: XCTestCase {
                 XCTAssertTrue((4...120).contains(change), "\(place): \(change) pixels")
             }
             XCTAssertEqual(posture.asleep.snow, "sleepSnow", "snow settles on its pot while it sleeps")
-            XCTAssertNil(posture.asleep.rain, "asleep wins over rain")
+            XCTAssertEqual(posture.asleep.rain, "sleepRain", "brief 122: asleep in its puddle")
             XCTAssertEqual(posture.awake.heat, "heat")
             XCTAssertNil(posture.asleep.heat, "a hot day is a day")
             XCTAssertEqual(posture.awake.snowDeep, ["snowDeep1", "snowDeep2"])
@@ -203,6 +208,10 @@ final class CompanionTuckTests: XCTestCase {
         let awake = tuck.plus.awake
         var names = [try XCTUnwrap(awake.rain)]
         for gesture in awake.gestures where gesture.sky == .rain { names += gesture.ticks.map(\.frame) }
+        let asleep = tuck.plus.asleep
+        names.append(try XCTUnwrap(asleep.rain))
+        for gesture in asleep.gestures where gesture.sky == .rain { names += gesture.ticks.map(\.frame) }
+        names += tuck.frames.map(\.name).filter { $0.hasSuffix("@sleepRain") }
         for routine in awake.routines where routine.sky == .rain || routine.sky == .storm {
             names += awake.ticks(of: routine).filter(\.whole).map(\.tick.frame)
         }
@@ -382,6 +391,15 @@ final class CompanionTuckTests: XCTestCase {
             for (x, c) in row.enumerated() where c == ink { columns.insert(x) }
         }
         return columns.count
+    }
+
+    /// The columns where the ink appears within the rows.
+    private static func columns(of ink: Character, in rows: [String], rows range: Range<Int>) -> [Int] {
+        var columns = Set<Int>()
+        for row in rows[range] {
+            for (x, c) in row.enumerated() where c == ink { columns.insert(x) }
+        }
+        return columns.sorted()
     }
 
     /// The first row where the ink appears within the columns.
