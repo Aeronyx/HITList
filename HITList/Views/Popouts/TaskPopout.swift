@@ -639,7 +639,7 @@ struct TaskPopout: View {
     private func confirm() {
         guard !isClosing else { return }
         isClosing = true
-        commitDraft()
+        commitDraft(confirming: true)
         popouts.closeTask()
     }
 
@@ -670,10 +670,14 @@ struct TaskPopout: View {
         popouts.closeTask()
     }
 
-    private func commitDraft() {
+    /// `confirming`: Confirm (or Return on the Mac), which alone sets a woken stored reminder (brief 127); completing,
+    /// duplicating and moving the task save only the typing.
+    private func commitDraft(confirming: Bool = false) {
         // Closed because the task was deleted elsewhere: leave it alone (a write would bring it back).
         guard let taskID, PopoutController.taskExists(taskID, in: context) else { return }
-        if (try? draft.commit(to: task, in: context, parser: parser())) == true { rescheduleNotifications() }
+        if (try? draft.commit(to: task, in: context, parser: parser(), confirming: confirming)) == true {
+            rescheduleNotifications()
+        }
     }
 
     // MARK: Changes

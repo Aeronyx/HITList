@@ -307,6 +307,22 @@ final class TaskPopoutTitleTests: XCTestCase {
         XCTAssertEqual(lit(draft, task), [], "after Confirm nothing is left to read")
     }
 
+    /// Completing, duplicating or moving the task from the editor saves what was typed, as Confirm does, but a woken
+    /// phrase is not typing: only Confirm sets it.
+    func testOnlyConfirmSetsAWokenReminder() throws {
+        let (task, context) = task("Call Sam !30mb", due: day(0, hour: 20), hasTime: true)
+        var draft = TaskEditorDraft(task: task)
+        XCTAssertFalse(try draft.commit(to: task, in: context, parser: parser(), confirming: false))
+        XCTAssertEqual(task.title, "Call Sam !30mb")
+        XCTAssertNil(task.reminderOffsetMinutes)
+
+        draft.title += " p1"
+        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser(), confirming: false))
+        XCTAssertEqual(task.title, "Call Sam !30mb", "the typing lands, the woken phrase stays text")
+        XCTAssertEqual(task.priorityValue, .p1)
+        XCTAssertNil(task.reminderOffsetMinutes)
+    }
+
     /// Only a reminder before the due time wakes: every other stored phrase had its chance when it was typed.
     /// "!15m" (from now) and "p1" stay text.
     func testOnlyAStoredBeforeReminderWakes() throws {
