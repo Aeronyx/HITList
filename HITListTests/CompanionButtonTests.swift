@@ -174,6 +174,42 @@ final class CompanionButtonTests: XCTestCase {
         XCTAssertTrue(button.rows("breathe")![16].contains("k"))
     }
 
+    /// Brief 100: an idle can be drawn over every still it may show (each depth of snow, the heat, asleep in the snow),
+    /// and brief 103 draws its idles for each, so it has several to choose from whatever the sky.
+    func testAnIdleDrawsOverEveryStill() {
+        for place in CompanionPlace.allCases {
+            let posture = button.posture(place)
+            for (label, mode) in [("awake", posture.awake), ("asleep", posture.asleep)] {
+                var looks: [(CompanionLook.Weather, Int)] = [(.plain, 0), (.rain, 0), (.snow, 0), (.heat, 0)]
+                for depth in 0..<mode.snowDeep.count { looks.append((.snow, depth + 1)) }
+                for (weather, depth) in looks {
+                    let candidates = label == "asleep" ? mode.gestures : mode.flickers.map { mode.gestures[$0] }
+                    let drawable = candidates.filter { gesture in
+                        guard let sky = gesture.sky else {
+                            return button.canDraw(gesture, in: weather, mode: mode, depth: depth)
+                        }
+                        return CompanionLook.Weather(sky) == weather && button.canDraw(gesture, in: weather, mode: mode, depth: depth)
+                    }
+                    let most = label == "asleep" ? 2 : 5
+                    XCTAssertGreaterThanOrEqual(drawable.count, most, "\(place) \(label) \(weather) \(depth): idles that draw")
+                    if label == "awake" {
+                        let loops = mode.routines.filter(\.little).filter { button.plays($0, in: weather, mode: mode, depth: depth) }
+                        XCTAssertGreaterThanOrEqual(loops.count, 3, "\(place) \(weather) \(depth): little loops that draw")
+                    }
+                }
+            }
+            // The tap's answer plays in every sky, the snow at every depth included.
+            for (label, mode) in [("awake", posture.awake), ("asleep", posture.asleep)] {
+                for weather in CompanionLook.Weather.allCases {
+                    for depth in 0...(weather == .snow ? mode.deepest : 0) {
+                        XCTAssertTrue(button.canDraw(mode.answer, in: weather, mode: mode, depth: depth),
+                                      "\(place) \(label) answer in \(weather) \(depth)")
+                    }
+                }
+            }
+        }
+    }
+
     /// Its seat (brief 100): on the "+" (SwiftUI's continuous capsule, the lower of it and the circular one at each
     /// point) both stubs of every still have the "+" right under them, to under half a device pixel at 3x, centred on
     /// the button's flat. On the Mac's field (flat) the same.
