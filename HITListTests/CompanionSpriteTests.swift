@@ -306,6 +306,20 @@ final class CompanionSpriteTests: XCTestCase {
         // In the rain it holds its tail over its head; its tip still twitches there (drawn by hand).
         XCTAssertNotNil(quill.index["loafTip@loafRain"])
         XCTAssertNotNil(quill.index["sitTip@sitRain"])
+        // Brief 123: the rain is wet: beads on it and a puddle by its paws in every rain still, awake and asleep (it
+        // sleeps under its tail), and no drop left in the old pale ink.
+        XCTAssertEqual(quill.field.asleep.rain, "curlRain")
+        XCTAssertEqual(quill.plus.asleep.rain, "drapeRain")
+        for still in ["sitRain", "loafRain", "curlRain", "drapeRain"] {
+            let rows = quill.rows(still)!
+            XCTAssertTrue(rows[..<(quill.seatRow - 1)].joined().contains("p"), "\(still): beads on it")
+            XCTAssertTrue(rows[quill.seatRow - 1].contains("p") || rows[quill.seatRow - 1].contains("u"), "\(still): a puddle")
+        }
+        // Its 0.9.6 face, a touch friendlier: accent irises beside the pupils, the M's centre stroke gone, a small mouth.
+        let sit = quill.rows("sit")!
+        XCTAssertEqual(sit[8], ".mmkammkamm...ldlm..")
+        XCTAssertEqual(sit[7], ".mmmmmmmmmm....llm..")
+        XCTAssertEqual(sit[10], ".mmmdmdmmmm.lmmd....")
     }
 
     func testHushKeepsWarmWithItsEars() {
