@@ -95,7 +95,7 @@ final class CompanionGargleTests: XCTestCase {
         let rest = rows("rest")
         XCTAssertEqual(String(rest[10][1...5]), "ddddd", "a line along the muzzle")
         XCTAssertEqual(rest[9][6], "d", "its corner turned up")
-        XCTAssertEqual(rest[9][3], "l", "one tiny fang over the lip")
+        XCTAssertEqual(rest[9][2], "l", "one tiny fang over the lip")
         for y in 9...12 {
             for x in 0...9 { XCTAssertFalse(["k", "w", "g"].contains(rest[y][x]), "rest \(x),\(y): dark or warm at his mouth") }
         }
