@@ -124,8 +124,15 @@ struct IntervalChoiceStrip: View {
 /// highlight sits around every one with the same room either side of its words; too narrow even for the words, each
 /// narrows by the same ratio. Rows fill the height given (the strip's 30 pt).
 struct ChoiceStripLayout: Layout {
-    /// The room either side of a choice's words, inside its part of the strip (and so inside the highlight).
-    static let labelRoom: CGFloat = 8
+    /// The room either side of a choice's words, inside its part of the strip (and so inside the highlight). The Mac's
+    /// strip is left as it was (its inline card can be 270 pt narrow, where the room would shrink its 13 pt words).
+    static var labelRoom: CGFloat {
+        #if os(iOS)
+        8
+        #else
+        0
+        #endif
+    }
 
     /// Each choice's width in `total`, from its ideal widths (its words and `room` either side). Too narrow for them
     /// all, the room stays and only the words narrow, every choice's by the same ratio, so they stay one size.
