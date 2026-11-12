@@ -863,7 +863,7 @@ final class CloudSyncMonitor {
 
     private func localSaved(_ summary: SaveSummary, deleted: [PersistentIdentifier] = [], at: Date) {
         // Gathered into the log's line first, so a "waiting: offline" finding follows the save it is about.
-        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at)) } }
+        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at, records: summary.total)) } }
         // Brief 95: what the next beat compares with iCloud has changed; a deleted record is named by its id.
         lastLocalSaveAt = max(at, lastLocalSaveAt ?? at)
         inventoryIsStale = true
@@ -1071,7 +1071,7 @@ final class CloudSyncMonitor {
             let now = Date()
             pruneDeletions(now)
             return .answered(BoltTruth.findings(
-                comparison: result, unsentSaves: watchdog.waitingSaves, oldestUnsentSave: watchdog.oldestWaitingSave,
+                comparison: result, unsentSaves: watchdog.waitingRecords, oldestUnsentSave: watchdog.oldestWaitingSave,
                 lastLocalSaveAt: lastLocalSaveAt, deletedHere: deletedHere, inFlight: isSyncing, now: now))
         }
     }

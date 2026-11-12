@@ -38,10 +38,11 @@ final class BoltTruthReplayTests: XCTestCase {
         XCTAssertFalse(back.filled)
         XCTAssertEqual(back.state, .syncing, "hollow")
         // The first beat finds the 46 dates the 0.9.3 launch rewrote (M1676) unsent: no export since, and 1 min 50 s old.
+        // One save of 46 records: the words count the records, not the saves ("Sending 1 change" before this).
         let first = replay.look("2026-11-11 13:35:29.000")
         XCTAssertFalse(first.filled)
-        XCTAssertEqual(first.verdict.why, .missed(.sending(replay.unsentAtFirstBeatAfterReturn ?? 0)))
-        XCTAssertNotNil(replay.unsentAtFirstBeatAfterReturn)
+        XCTAssertEqual(replay.unsentAtFirstBeatAfterReturn, 46)
+        XCTAssertEqual(first.words, "Sending 46 changes to iCloud…")
         // The export that sends them ends at 13:35:31.829 (M1701); the beat that follows at once finds nothing apart.
         XCTAssertFalse(replay.look("2026-11-11 13:35:31.800").filled)
         let sent = replay.look("2026-11-11 13:35:33.000")
@@ -377,7 +378,7 @@ final class BoltTruthReplayTests: XCTestCase {
         }
 
         private func saved(_ records: Int, at t: Date) {
-            _ = watchdog.handle(.localSave(at: t))
+            _ = watchdog.handle(.localSave(at: t, records: records))
         }
 
         private func ended(_ event: Event) {
@@ -451,7 +452,7 @@ final class BoltTruthReplayTests: XCTestCase {
             for _ in 0..<day.onlyHere { local.append(SyncComparison.Local(entity: entity, id: UUID(), updatedAt: old, createdAt: old)) }
             for _ in 0..<(day.onlyThere + coming) { remote.append(there(UUID())) }
             let comparison = SyncComparison.compare(remote: remote, local: local, entities: StoreInventory.entities)
-            return BoltTruth.findings(comparison: comparison, unsentSaves: watchdog.waitingSaves,
+            return BoltTruth.findings(comparison: comparison, unsentSaves: watchdog.waitingRecords,
                                       oldestUnsentSave: watchdog.oldestWaitingSave, lastLocalSaveAt: nil,
                                       inFlight: inFlight, now: t)
         }
