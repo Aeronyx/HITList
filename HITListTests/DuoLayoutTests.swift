@@ -407,4 +407,110 @@ final class DuoLayoutTests: XCTestCase {
                        "half the display while partly open")
         XCTAssertEqual(FlipboardLayout.columnCount(width: 397, compact: false, spacing: spacing), 3, "iPad and Mac as before")
     }
+
+    // MARK: Brief 108: the inner display looked at again
+
+    /// The inner display held like a book: on its side, with the system's bar column (about 62 pt) down the trailing edge.
+    private var book: WindowGeometry {
+        WindowGeometry(fullSize: innerOnItsSide, width: innerOnItsSide.width - 62)
+    }
+
+    func testOpenFlatTheListAndTheEditorMeetAtTheHingeNotAtHalfTheSafeArea() {
+        XCTAssertEqual(book.middle, innerOnItsSide.width / 2, "the hinge is the display's middle")
+        XCTAssertEqual(book.split, book.middle, "open flat, the split is the hinge")
+        let plan = DuoColumns.plan(width: book.width, sidebarWidth: DuoSplit.sidebarWidth, editorOpen: true,
+                                   showsToday: false, fold: book.split)
+        XCTAssertFalse(plan.showsSidebar, "sidebar, list and editor don't fit beside the bar column")
+        let editor = try! XCTUnwrap(plan.editorWidth)
+        XCTAssertEqual(book.width - editor, book.middle.rounded(), accuracy: 1,
+                       "the list is the left page, the editor the right one: they meet at the hinge, not 31 pt before it")
+    }
+
+    func testABarColumnOnTheLeadingEdgeMovesTheMiddleWithIt() {
+        let leading = WindowGeometry(fullSize: innerOnItsSide, width: innerOnItsSide.width - 62, leadingInset: 62)
+        XCTAssertEqual(leading.middle, innerOnItsSide.width / 2 - 62, "the columns' space starts after the bar column")
+        XCTAssertEqual(leading.trailingInset, 0)
+        XCTAssertEqual(book.trailingInset, 62, "the columns stop at most this far from the trailing edge")
+        XCTAssertEqual(WindowGeometry(fullSize: inner, width: inner.width).trailingInset, 0, "upright: no bar column")
+    }
+
+    func testPartlyOpenTheCreaseIsTheSplitAndUprightTheMiddleIsHalfTheWidth() {
+        let creased = WindowGeometry(fullSize: innerOnItsSide, width: 889, crease: CGRect(x: 463, y: 0, width: 25, height: 669))
+        XCTAssertEqual(creased.split, 475.5)
+        let upright = WindowGeometry(fullSize: inner, width: inner.width)
+        XCTAssertEqual(upright.split, inner.width / 2)
+        XCTAssertNil(WindowGeometry().split, "nothing before the window is measured")
+    }
+
+    func testTheInnerDisplaySearchesInItsSidebarAndTheIPadIsAsItWas() {
+        XCTAssertTrue(AppShell.searchesInSidebar(.duo, idiom: .phone),
+                      "the inner display's sidebar stands where Browse would: without it there was no search there")
+        XCTAssertFalse(AppShell.searchesInSidebar(.tabs, idiom: .phone), "the outer display searches in Browse")
+        XCTAssertFalse(AppShell.searchesInSidebar(.split, idiom: .phone), "a Max on its side is as it was")
+        XCTAssertFalse(AppShell.searchesInSidebar(.split, idiom: .pad), "the iPad is as it was")
+        XCTAssertTrue(AppShell.searchesInSidebar(.split, idiom: .mac), "the Mac's field (brief 66)")
+    }
+
+    #if os(iOS)
+    func testTheSidebarSearchFieldIsAFingersHeightOnIOS() {
+        XCTAssertGreaterThanOrEqual(SidebarSearchField.height, 36, "the Mac's 28 pt is a pointer's")
+    }
+    #endif
+
+    func testTheInnerDisplayHasOneGearTheListsAndTheIPadKeepsTheSidebars() {
+        XCTAssertFalse(AppShell.sidebarHasSettingsGear(.duo),
+                       "the list's gear beside its view options is on every screen; the sidebar steps aside for the editor")
+        XCTAssertTrue(AppShell.sidebarHasSettingsGear(.split), "the iPad as it was")
+        XCTAssertTrue(AppShell.sidebarHasSettingsGear(nil), "offscreen renders as they were")
+    }
+
+    func testUpcomingsBoardShowsWholeColumnsOnTheInnerDisplay() {
+        let inset = UpcomingBoard.boardInset, spacing = UpcomingBoard.columnSpacing
+        func columns(_ board: CGFloat) -> (count: CGFloat, width: CGFloat) {
+            let width = DuoBoardColumns.width(board: board, inset: inset, spacing: spacing)
+            return (((board - 2 * inset + spacing) / (width + spacing)).rounded(.down), width)
+        }
+        let upright = columns(inner.width - DuoSplit.sidebarWidth)
+        XCTAssertEqual(upright.count, 2, "upright beside the sidebar: two days, not one and a half")
+        let held = columns(book.width - DuoSplit.sidebarWidth)
+        XCTAssertEqual(held.count, 3, "held like a book beside the sidebar")
+        let besideEditor = columns(334)
+        XCTAssertEqual(besideEditor.count, 1)
+        for board: CGFloat in [300, 334, 429, 475, 649, 669, 889] {
+            let (count, width) = columns(board)
+            XCTAssertGreaterThanOrEqual(width, DuoBoardColumns.minWidth, "\(board)")
+            let used = count * width + (count - 1) * spacing + 2 * inset
+            XCTAssertLessThanOrEqual(used, board, "\(board): whole columns only")
+            XCTAssertLessThan(board - used, width + spacing, "\(board): no room left for another")
+        }
+    }
+
+    func testANarrowBoardColumnNamesItsDayWithoutCuttingIt() {
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 12 · Tomorrow · Thu"), "Nov 12 · Tomorrow",
+                       "the weekday goes when the day has a name of its own")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 11 · Today · Wed"), "Nov 11 · Today")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Nov 13 · Fri"), "Nov 13 · Fri", "a plain day keeps its weekday")
+        XCTAssertEqual(UpcomingBoard.compactHeader("Jan 1, 2027 · Tomorrow · Fri"), "Jan 1, 2027 · Tomorrow")
+    }
+
+    func testTheEditorStartsAtTheHingeHoweverTheColumnIsInset() {
+        let hinge = innerOnItsSide.width / 2
+        // The system insets the split view's column from its bar column: the detail ends at it.
+        let inset = DuoColumns.editorWidth(planned: 445, detail: CGRect(x: 0, y: 0, width: 889, height: 669),
+                                           start: hinge, trailingBar: 0)
+        XCTAssertEqual(889 - inset, hinge, accuracy: 1, "the list is the left page")
+        // It does not: the detail runs under the column, and stops its columns at it.
+        let under = DuoColumns.editorWidth(planned: 445, detail: CGRect(x: 0, y: 0, width: 951, height: 669),
+                                           start: hinge, trailingBar: 62)
+        XCTAssertEqual(under, inset)
+        // Partly open: from the crease's far side.
+        let creased = DuoColumns.editorWidth(planned: 401, detail: CGRect(x: 0, y: 0, width: 889, height: 669),
+                                             start: 488, trailingBar: 0)
+        XCTAssertEqual(creased, 401)
+        XCTAssertEqual(DuoColumns.editorWidth(planned: 334, detail: .zero, start: 334, trailingBar: 0), 334,
+                       "before the detail is measured, the plan's")
+        XCTAssertEqual(DuoColumns.editorWidth(planned: 334, detail: CGRect(x: 0, y: 0, width: 669, height: 951),
+                                              start: 600, trailingBar: 0), DuoColumns.editorWidths.lowerBound,
+                       "never narrower than an editor")
+    }
 }

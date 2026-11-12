@@ -37,6 +37,9 @@ struct SearchScreen: View {
                                 Task { await NotificationScheduler.reschedule(context: context) }
                             }
                             .tag(task)
+                            // The lists' row background: on the Duo's inner display (brief 108) the open result was the
+                            // system's bright selection fill, its meta line blue on blue; the Mac keeps its selection.
+                            .completionRowBackground(flashing: false)
                         }
                     } header: {
                         Text(model.countLine).taskSectionHeader(color: Theme.secondaryText)

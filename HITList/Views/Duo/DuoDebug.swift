@@ -11,7 +11,26 @@ import SwiftUI
 /// - `-duoFoldDemo 8`: with `-duoStandIn`, the window swaps between the folded layout (the four tabs, as on the
 ///   outer display) and the unfolded one every 8 seconds, as folding and unfolding would, so the swap and the
 ///   editor's kept typing can be watched.
+/// - `-duoStandInSize inner` (brief 108): with `-duoStandIn`, the app is drawn at the inner display's own size
+///   (669 × 951 pt upright, 951 × 669 on its side) in the iPad's top-leading corner, the rest of the screen grey,
+///   so widths break where they would on the Duo. On its side the status bar is hidden and the system's bar
+///   column (`sideBarColumn`) stands down the trailing edge as a safe area, drawn as a strip, as the inner display
+///   on its side puts its bars there. Sheets and the keyboard are still the iPad's.
 enum DuoDebug {
+    /// The inner display, upright (`xcrun simctl io <udid> enumerate`: 2007 × 2853 px at 3×).
+    static let innerSize = CGSize(width: 669, height: 951)
+    /// The system's bar column on the outer display (its trailing safe area); the inner display on its side is
+    /// taken to keep the same one.
+    static let sideBarColumn: CGFloat = 62
+
+    static var standInFrame: Bool {
+        #if DEBUG
+        standIn && UserDefaults.standard.string(forKey: "duoStandInSize") == "inner"
+        #else
+        false
+        #endif
+    }
+
     static var foldDemoInterval: Double? {
         #if DEBUG
         let seconds = UserDefaults.standard.double(forKey: "duoFoldDemo")
@@ -41,6 +60,13 @@ enum DuoDebug {
         #endif
     }
 
+    /// The size the stand-in draws the app at, for a screen of `screen` points (nil: the whole screen).
+    static func standInSize(screen: CGSize) -> CGSize? {
+        guard standInFrame else { return nil }
+        let onSide = screen.width > screen.height
+        return onSide ? CGSize(width: innerSize.height, height: innerSize.width) : innerSize
+    }
+
     static func crease(in size: CGSize) -> CGRect? {
         #if DEBUG
         let x = UserDefaults.standard.double(forKey: "duoCrease")
@@ -48,6 +74,52 @@ enum DuoDebug {
         return CGRect(x: x - 12, y: 0, width: 24, height: size.height)
         #else
         return nil
+        #endif
+    }
+}
+
+extension View {
+    /// `-duoStandInSize inner` (brief 108): the app at the inner display's size; nothing otherwise.
+    func duoStandInFrame() -> some View {
+        modifier(DuoStandInFrame())
+    }
+}
+
+private struct DuoStandInFrame: ViewModifier {
+    func body(content: Content) -> some View {
+        #if DEBUG && os(iOS)
+        if DuoDebug.standInFrame {
+            // The whole screen, so the frame starts at its corner and the content inside meets the status bar itself.
+            GeometryReader { proxy in
+                let size = DuoDebug.standInSize(screen: proxy.size) ?? proxy.size
+                let onSide = size.width > size.height
+                ZStack(alignment: .topLeading) {
+                    Color(white: 0.35)
+                    content
+                        // The bar column as a safe area. It reaches the SwiftUI views (the board, the Duo's detail and
+                        // `ContentView` measure it) but not what UIKit lays out inside the split view (a list's cells),
+                        // so on the stand-in those run under the strip; the real column is UIKit's and reaches them.
+                        .safeAreaPadding(.trailing, onSide ? DuoDebug.sideBarColumn : 0)
+                        .overlay(alignment: .trailing) {
+                            if onSide {
+                                // Where the system's clock, battery and toolbar would stand.
+                                Rectangle().fill(Color.white.opacity(0.08))
+                                    .frame(width: DuoDebug.sideBarColumn)
+                                    .ignoresSafeArea()
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                }
+                .statusBarHidden(onSide)
+            }
+            .ignoresSafeArea(.container)
+        } else {
+            content
+        }
+        #else
+        content
         #endif
     }
 }

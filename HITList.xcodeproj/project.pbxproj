@@ -250,6 +250,7 @@
 		74E66A8FC0FB24F9EE188997 /* FilterEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44155658C8F3884AA9502C5 /* FilterEditorView.swift */; };
 		7530184EFACC2C9A7984DB8E /* ShareCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 675B4794555E7045EFF1B2D1 /* ShareCard.swift */; };
 		7543FED4B4F8EAAB07C5FB12 /* SharedGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C465CF288740B05ADBF45DE /* SharedGroupTests.swift */; };
+		758B50E6289C51644435C433 /* DuoInnerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF439F742971231AE951AD6C /* DuoInnerUITests.swift */; };
 		75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */; };
 		75EC156FFEF5271C580DE564 /* Inter_18pt-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */; };
 		77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */; };
@@ -1033,6 +1034,7 @@
 		DD8CAFC613EB6934C5181E3E /* AccessibilityAuditUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityAuditUITests.swift; sourceTree = "<group>"; };
 		DDB5E498003ED6A77458D9DC /* FloatingSwitchCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingSwitchCard.swift; sourceTree = "<group>"; };
 		DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterDraftTests.swift; sourceTree = "<group>"; };
+		DF439F742971231AE951AD6C /* DuoInnerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoInnerUITests.swift; sourceTree = "<group>"; };
 		E098101387CC4E17342476ED /* InboxZeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxZeroView.swift; sourceTree = "<group>"; };
 		E0CDA94242E336C8805AF0BF /* FlipboardGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardGrid.swift; sourceTree = "<group>"; };
 		E13ACE44A63995095A971A36 /* SearchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchScreen.swift; sourceTree = "<group>"; };
@@ -1521,6 +1523,7 @@
 				019968238418E949DF9D108C /* CompanionPhaseUITests.swift */,
 				18F4F1697CE016BD20D66BDA /* CompanionsUITests.swift */,
 				D763EE5033BAE28F2F4E6BD1 /* DuoColumnUITests.swift */,
+				DF439F742971231AE951AD6C /* DuoInnerUITests.swift */,
 				56C4491BDDA21F86C2B1B6AE /* FirstRunUITests.swift */,
 				ABB1E2283AF1F9D993947D84 /* FlipboardPhoneUITests.swift */,
 				779C8E0132E607E31B370A6E /* HITListUITests.swift */,
@@ -2342,6 +2345,7 @@
 				17E4281140A4157B88B2C2EC /* CompanionPhaseUITests.swift in Sources */,
 				D8B013C120B7C86730E152BC /* CompanionsUITests.swift in Sources */,
 				71BD3A1C9F94B60A1528A355 /* DuoColumnUITests.swift in Sources */,
+				758B50E6289C51644435C433 /* DuoInnerUITests.swift in Sources */,
 				D459E5A89A8B9604E0C6CEE2 /* FirstRunUITests.swift in Sources */,
 				8302DD14596300DD6FEE40EC /* FlipboardPhoneUITests.swift in Sources */,
 				4DA0D7A920592A3351482879 /* HITListUITests.swift in Sources */,
