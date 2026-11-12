@@ -1,15 +1,16 @@
+import CryptoKit
 import XCTest
 import SwiftUI
 import HITListCore
 @testable import HITList
 
-/// Briefs 102, 104 and 111: Gargle, Graphite's companion, a stone dragon pup carved for a ledge and come half alive on it.
-/// Round 21 (brief 104) carved his body side-on along the edge as his elders sit on a cornice, all four paws on top of it and
-/// nothing of him over the front, a wing folded up his back, his tail behind the host (brief 104's capitals) with only its
-/// spade back up beside him. Round 22 (brief 111) made him more of a dragon: his head three-quarters to you with a short
-/// snout, two small horns swept back and a spine, a reptile's amber eyes with a light in each, and a mouth closed in a smile
-/// with one tiny fang, so nothing ever reads as coming out of it. He plays statue in his elders' profile, a shade paler,
-/// and sleeps as stone. Every frame is also checked by `CompanionSpriteTests`, `CompanionSeatTests` and
+/// Briefs 102, 104, 111 and 117: Gargle, Graphite's companion, a stone dragon pup carved for a ledge and come half alive
+/// on it. Round 21 (brief 104) carved his body side-on along the edge as his elders sit on a cornice, nothing of him over
+/// the front, a wing folded up his back, his tail behind the host (brief 104's capitals) with only its spade back up beside
+/// him. Round 22 (brief 111) made him more of a dragon. Round 23 (brief 117; George: "a tad too big and not cute enough. I
+/// still adore the nighttime sprite"): awake he is v0.9.6's night sprite with his eye open, side-on, that size, those horns,
+/// that wing; one round eye with a light in it, his mouth closed with its corner up. The night sprite itself is v0.9.6's,
+/// pixel for pixel. Every frame is also checked by `CompanionSpriteTests`, `CompanionSeatTests` and
 /// `CompanionDirectorTests.testNeverADeadMinute`.
 @MainActor
 final class CompanionGargleTests: XCTestCase {
@@ -40,10 +41,10 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertEqual(CompanionCast.character(forTheme: "nord", launch: forced).id, "gargle")
     }
 
-    /// A stone dragon pup (brief 111): two tones of stone and a highlight; his head as large as his body, three-quarters to
-    /// you, its snout sticking out to the left past his crown; two pale horns swept back off the crown; two eyes of his own,
-    /// an amber iris with a light in each (not Button's round black eye); a wing up his back, a dark membrane with lighter
-    /// ribs and a pale hooked tip.
+    /// A stone dragon pup (briefs 111 and 117): two tones of stone and a highlight; in profile, his snout sticking out to the
+    /// left past his crown; two pale horns swept back off the crown; one eye of his own, dark with a light in it and a warm
+    /// glint low in its iris (not Button's round black eye); a wing up his back, a dark membrane with lighter ribs and a
+    /// pale hooked tip.
     func testHeIsAStoneDragonPup() {
         XCTAssertEqual(gargle.inks, [.ink, .dark, .mid, .light, .warm, .glow])
         XCTAssertEqual(gargle.seatRow, 18)
@@ -52,23 +53,23 @@ final class CompanionGargleTests: XCTestCase {
         let left = { (y: Int) in rest[y].firstIndex { $0 != CompanionInk.clear }! }
         XCTAssertEqual(left(8), 0, "the snout's tip")
         XCTAssertGreaterThanOrEqual(left(4), 3, "the crown set back behind it")
-        XCTAssertEqual(rest[8][1], "k", "a nostril at the snout's tip")
         // Two horns swept back: pale along their length, each rising to the right (backwards) off the crown.
-        XCTAssertEqual(String(rest[1][7...8]), "ll", "the far horn's tip")
-        XCTAssertEqual(rest[2][6], "l")
-        XCTAssertEqual(String(rest[1][11...12]), "ll", "the near horn's tip")
-        XCTAssertEqual(rest[2][10], "l")
-        XCTAssertEqual(rest[3][12], "m", "a spine behind the near horn")
-        // His eyes: each a light (`l`) beside the amber iris (`w`) and a dark pupil under or beside it.
-        var lights: [Int] = []
-        for y in 5...9 {
-            for x in 1..<13 where rest[y][x] == "l" {
-                let around = [rest[y - 1][x], rest[y + 1][x], rest[y][x - 1], rest[y][x + 1]]
-                if around.contains("k"), around.contains("w") || rest[y + 1][x] == "w" { lights.append(x) }
+        XCTAssertEqual(rest[1][9], "l", "the far horn's tip")
+        XCTAssertEqual(String(rest[2][7...8]), "ll")
+        XCTAssertEqual(rest[3][6], "l")
+        XCTAssertEqual(rest[2][12], "l", "the near horn's tip")
+        XCTAssertEqual(String(rest[3][10...11]), "ll")
+        // One eye: a light (`l`) in the dark of it, with the warm glint under the light.
+        var lights: [(Int, Int)] = []
+        for y in 4...8 {
+            for x in 1..<10 where rest[y][x] == "l" {
+                let around = [rest[y - 1][x], rest[y][x - 1], rest[y][x + 1]]
+                if around.allSatisfy({ $0 == "k" }), rest[y + 1][x] == "w" { lights.append((x, y)) }
             }
         }
-        XCTAssertEqual(lights.count, 2, "a light in each eye")
-        XCTAssertGreaterThanOrEqual(count("w", "rest"), 4, "amber irises")
+        XCTAssertEqual(lights.count, 1, "a light in his eye")
+        XCTAssertEqual(count("w", "rest"), 1, "a warm glint, no more")
+        XCTAssertFalse(rest[0...12].joined().contains("g"))
         // Not Button's round black eye: no two-by-two of ink anywhere on his face.
         for y in 3..<12 {
             for x in 0..<13 {
@@ -87,15 +88,63 @@ final class CompanionGargleTests: XCTestCase {
         XCTAssertFalse(gargle.flourishTurns)
     }
 
-    /// His mouth never reads as being sick (brief 111; George: "Gargle looks like he's throwing up"). At rest it is closed: a
-    /// line along the muzzle with its corner turned up and one tiny fang over the lip, nothing dark in it and nothing under it.
+    /// Brief 117: awake he is the night sprite with his eye open. `rest` is v0.9.6's `sleepBreathe` (the sleep with his head
+    /// up a pixel) but for the eye, the mouth and the spade a pixel up; his head is no higher than that, and no wider.
+    func testAwakeHeIsTheNightSpriteWithHisEyeOpen() {
+        XCTAssertLessThanOrEqual(gargle.difference("rest", "sleepBreathe"), 16, "the night sprite, his eye open")
+        let rest = rows("rest")
+        let sleep = rows("sleep")
+        let top = { (r: [[Character]]) in r.firstIndex { row in row[0...12].contains { $0 != CompanionInk.clear } }! }
+        XCTAssertEqual(top(sleep) - top(rest), 1, "his head up a pixel at most")
+        let drawn = { (r: [[Character]]) in r.joined().filter { $0 != CompanionInk.clear }.count }
+        XCTAssertLessThanOrEqual(drawn(rest), drawn(rows("sleepBreathe")) + 4, "no bigger than the night sprite (its spade up)")
+        XCTAssertLessThan(drawn(rest), 265, "smaller than v0.9.6's awake Gargle, 265 pixels (\"a tad too big\")")
+        // Same horns, same wing, same body: everything off his eye, his mouth and the spade is the night sprite's.
+        let breath = rows("sleepBreathe")
+        for y in 0..<gargle.height {
+            for x in 0..<gargle.width where !(3...6).contains(x) || !(4...9).contains(y) {
+                if x <= 4, (8...10).contains(y) { continue }
+                if x >= 17, (14...16).contains(y) { continue }
+                XCTAssertEqual(rest[y][x], breath[y][x], "rest \(x),\(y) is the night sprite's")
+            }
+        }
+        // His blink is the night sprite's shut line.
+        XCTAssertEqual(String(rows("blink")[7][3...6]), "dddd")
+        XCTAssertEqual(String(breath[7][3...6]), "dddd")
+    }
+
+    /// Brief 117: the night sprite George adores does not change by one pixel. The digests are of each asleep still's rows
+    /// joined by newlines, computed once from `git show v0.9.6:HITList/Support/Companions/Characters/Gargle.swift`.
+    func testTheNightSpriteIsZeroNineSixsPixelForPixel() {
+        let v096: [String: String] = [
+            "sleep": "d04e0843ba17bc072c097e7769d4df8161136cc11f8e077d4d31e1c75f27dfdd",
+            "sleepSnow": "5e1130c8b7f99eaee9fcbbbaf9f4b80743ab942658d8d1a11a4753379588e459",
+            "sleepSnow2": "335ea9bfb786d9839ff50821aa54e1a244796263c001496baac8abc2e8c3f2b9",
+        ]
+        func digest(_ name: String) -> String? {
+            guard let rows = gargle.rows(name) else { return nil }
+            let data = Data(rows.joined(separator: "\n").utf8)
+            return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        }
+        for (name, expected) in v096 { XCTAssertEqual(digest(name), expected, "\(name) is 0.9.6's") }
+        for place in CompanionPlace.allCases {
+            let asleep = gargle.posture(place).asleep
+            XCTAssertEqual(asleep.rest, "sleep")
+            XCTAssertEqual(asleep.snow, "sleepSnow")
+            XCTAssertEqual(asleep.snowDeep, ["sleepSnow2"])
+        }
+    }
+
+    /// His mouth never reads as being sick (brief 111; George: "Gargle looks like he's throwing up"). At rest it is closed: the
+    /// night sprite's line along the muzzle with its corner turned up (brief 117: no fang), nothing dark in it and nothing
+    /// under it.
     /// In every frame nothing warm (an iris, an ember) is lower than his eyes, so whatever leaves him (a puff of smoke, an
     /// ember) goes up and away from the snout's end.
     func testHisMouthIsClosedAndNothingComesOutOfIt() {
         let rest = rows("rest")
-        XCTAssertEqual(String(rest[10][1...5]), "ddddd", "a line along the muzzle")
-        XCTAssertEqual(rest[9][6], "d", "its corner turned up")
-        XCTAssertEqual(rest[9][2], "l", "one tiny fang over the lip")
+        XCTAssertEqual(String(rest[9][0...3]), "dddd", "a line along the muzzle")
+        XCTAssertEqual(rest[8][4], "d", "its corner turned up")
+        XCTAssertFalse(rest[8...11].contains { $0[0...5].contains("l") }, "no fang")
         for y in 9...12 {
             for x in 0...9 { XCTAssertFalse(["k", "w", "g"].contains(rest[y][x]), "rest \(x),\(y): dark or warm at his mouth") }
         }
@@ -171,27 +220,29 @@ final class CompanionGargleTests: XCTestCase {
         }
         XCTAssertEqual(gargle.plus.awake.routines.map(\.name), gargle.field.awake.routines.map(\.name))
         let names = Set(gargle.plus.awake.routines.map(\.name))
-        XCTAssertTrue(names.isSuperset(of: ["statue", "periscope", "statueGame", "stretch", "chase", "dust", "tryFly"]))
+        XCTAssertTrue(names.isSuperset(of: ["statue", "periscope", "yawn", "wag", "statueGame", "stretch", "dust", "tryFly"]))
+        // Brief 117's idles: a glance, a horn flicked like an ear, the wing ruffled, the spade, a puff and an ember.
+        let gestures = Set(gargle.plus.awake.gestures.map(\.name))
+        XCTAssertTrue(gestures.isSuperset(of: ["glance", "hornFlick", "shrug", "tipFlick", "puff", "hiccup"]))
     }
 
-    /// The statue (brief 104): he turns into his elders' profile through one frame between, a shade paler (the stone's
-    /// shading lifts a tone, fewer dark pixels than the pup), holds, and a peek (an eye with its glint) gives him away.
+    /// The statue (briefs 104 and 117): he is already in profile, so he simply freezes, eye shut, a shade paler (the stone's
+    /// shading lifts a tone, fewer dark pixels than the pup), holds, and a peek (an eye with its light) gives him away.
     func testHePlaysStatue() {
         let awake = gargle.plus.awake
         let statue = awake.routines.first { $0.name == "statueGame" }!
         let frames = awake.ticks(of: statue).map(\.tick.frame)
-        XCTAssertTrue(frames.contains("turn") && frames.contains("statue") && frames.contains("statuePeek"))
-        let turn = frames.firstIndex(of: "turn")!
-        XCTAssertEqual(frames[turn + 1], "statue", "the turn is one frame between the pup and the statue")
+        XCTAssertTrue(frames.contains("statue") && frames.contains("statuePeek") && frames.contains("statueGrin"))
         XCTAssertLessThan(count("d", "statue"), count("d", "rest"), "a shade paler")
-        XCTAssertFalse(gargle.rows("statue")!.joined().contains("w"), "no tongue on a statue")
+        XCTAssertFalse(gargle.rows("statue")!.joined().contains("w"), "no glint on a statue")
+        XCTAssertFalse(gargle.rows("statue")!.joined().contains("k"), "his eye shut")
         XCTAssertTrue(gargle.rows("statuePeek")!.joined().contains("k"), "the peek: an eye opens")
-        // The quick one, a little loop, the same turn and the same statue.
+        XCTAssertTrue(gargle.rows("statuePeek")!.joined().contains("l"))
+        XCTAssertLessThanOrEqual(gargle.difference("statue", "rest"), 24, "the same profile, frozen")
+        // The quick one, a little loop, the same statue.
         let quick = awake.routines.first { $0.name == "statue" }!
         XCTAssertTrue(quick.little)
         XCTAssertTrue(awake.ticks(of: quick).map(\.tick.frame).contains("statue"))
-        // Brief 111: no waterspout in the rain any more, nothing pours from his mouth.
-        XCTAssertFalse(gargle.rows("statue@rain")!.joined().contains("k"))
     }
 
     /// Its flourish: the grotesque's roar (both wings high, fangs, a glare, a puff of smoke), spoiled by a giggle.
@@ -199,24 +250,23 @@ final class CompanionGargleTests: XCTestCase {
         let frames = gargle.plus.flourish.map(\.frame)
         XCTAssertTrue(frames.contains("boo") && frames.contains("booPuff") && frames.contains("giggle"))
         let boo = rows("boo")
-        XCTAssertEqual(boo[10].filter { $0 == "l" }.count, 2, "two fangs")
+        XCTAssertEqual(boo[9][0...4].filter { $0 == "l" }.count, 2, "two fangs")
         XCTAssertTrue(rows("booPuff")[3...5].contains { $0[0...1].contains("m") }, "a puff of smoke above his snout")
         XCTAssertTrue(boo[0...2].contains { $0[10...12].contains("d") }, "the far wing up beside the near one")
         XCTAssertEqual(gargle.flourishDuration(.plus), gargle.flourishDuration(.field))
     }
 
-    /// Asleep he has turned to stone (brief 104: in profile, a shade paler, the statue's pose with its head down a pixel):
-    /// no dark of an eye, no tongue; woken, one eye opens.
+    /// Asleep he has turned to stone (brief 104: in profile, the statue's pose with its head down a pixel): no dark of an eye,
+    /// no tongue; woken, his eye opens (brief 117: his awake eye).
     func testAsleepHeTurnsToStone() {
         let sleep = gargle.rows("sleep")!.joined()
         XCTAssertFalse(sleep.contains("k"), "no dark of an eye: a carved line")
         XCTAssertFalse(sleep.contains("w"), "no tongue")
-        XCTAssertLessThan(count("d", "sleep"), count("d", "rest"), "a shade paler")
-        XCTAssertGreaterThan(gargle.difference("sleep", "rest"), 40, "a pose of its own")
         XCTAssertEqual(gargle.plus.asleep.rest, "sleep")
         XCTAssertNil(gargle.plus.asleep.rain, "asleep wins over the rain")
         XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("k"), "woken: one eye opens")
-        XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("w"), "his own amber eye")
+        XCTAssertTrue(gargle.rows("sleepPeek")!.joined().contains("w"), "his own eye, its warm glint")
+        XCTAssertLessThanOrEqual(gargle.difference("sleepPeek", "sleep"), 10, "only his eye opens")
         // Brief 111: two horns swept back and a spine down his neck; a snore is a wisp of smoke from his nostril.
         let sleepRows = rows("sleep")
         XCTAssertEqual(String(sleepRows[4][10...11]), "ll", "the second horn")
@@ -227,9 +277,10 @@ final class CompanionGargleTests: XCTestCase {
         }
     }
 
-    /// Brief 91, as brief 111 has it: in the rain his brow is down and a drop runs off behind his head (a flicker that shows),
-    /// and he shakes his head dry; snow piles up twice over (more each time, the seat untouched) until he shakes the heap off,
-    /// from the heap only; on a hot day he lies flat on the cool stone and pants.
+    /// Brief 91, as brief 117 has it: in the rain he ducks his head and holds his wing over it like a roof, his eye looking up
+    /// from under it, a drop running off its tip (a flicker that shows); now and then he peeks out, and at thunder he ducks
+    /// right under. Snow piles up twice over (more each time, the seat untouched) until he shakes the heap off, from the heap
+    /// only; on a hot day he lies low on the cool stone and pants.
     func testTheWeatherShowsOnHim() {
         for place in CompanionPlace.allCases {
             let awake = gargle.posture(place).awake
@@ -238,7 +289,8 @@ final class CompanionGargleTests: XCTestCase {
             XCTAssertEqual(drip.sky, .rain)
             XCTAssertTrue(drip.flicker)
             for tick in drip.ticks { XCTAssertEqual(gargle.difference(tick.frame, awake.rain!), 1, "\(at): one drop") }
-            XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "shake", at)
+            XCTAssertEqual(awake.routines.first { $0.sky == .rain }?.name, "peek", at)
+            XCTAssertEqual(awake.routines.first { $0.sky == .storm }?.name, "duck", at)
             var previous = awake.snow!
             for deep in awake.snowDeep {
                 XCTAssertGreaterThan(snow(deep), snow(previous), "\(at) \(deep)")
@@ -250,14 +302,35 @@ final class CompanionGargleTests: XCTestCase {
             XCTAssertFalse(gargle.canDraw(shake, in: .snow, mode: awake, depth: 0), at)
             XCTAssertEqual(awake.heat, "heat")
             XCTAssertTrue(awake.gestures.contains { $0.sky == .heat && $0.flicker }, at)
-            XCTAssertEqual(awake.routines.first { $0.sky == .heat }?.name, "flop", at)
+            XCTAssertEqual(awake.routines.first { $0.sky == .heat }?.name, "loll", at)
         }
-        XCTAssertEqual(String(rows("heat")[14][1...2]), "kk", "panting, his mouth a little open at the front")
-        // Flat: his head is down on his paws, its top four rows lower than by day.
+        // The rain: his wing off his back and over his head, rising from his shoulder in a curve over his crown and down in
+        // front of his snout to a point (higher at the shoulder than at the tip), a lighter rib along its leading edge, the
+        // membrane under it in scallops, a drop on its tip; his eye open under it, looking up; his far horn still shows.
+        let rain = rows("rain")
+        XCTAssertEqual(String(rain[0][8...13]), "mmmmmm", "the rib, highest over his crown")
+        XCTAssertEqual(String(rain[1][8...13]), "dddddd", "its membrane")
+        XCTAssertEqual(rain[5][0], "m", "its tip, down in front of his snout")
+        XCTAssertEqual(rain[6][0], "l", "a drop running off it")
+        let tops = (0..<gargle.width).map { x in (0..<gargle.height).first { rain[$0][x] != CompanionInk.clear } ?? 99 }
+        XCTAssertEqual(tops[0...10].map { $0 }, tops[0...10].sorted(by: >), "it curves up from the tip to the crown")
+        XCTAssertGreaterThanOrEqual(String(rain[2][0...16]).components(separatedBy: ".").filter { $0.contains("d") }.count, 3,
+                                    "scallops along its lower edge")
+        XCTAssertTrue(rain[14...19].map { String($0) } == rows("rest")[14...19].map { String($0) }, "the same seat")
+        XCTAssertEqual(rain[2][9], "l", "his far horn under it")
+        XCTAssertTrue(rain[6...8].contains { $0[3...6].contains("k") }, "his eye open")
+        XCTAssertEqual(rain[6][4], "l", "looking up")
+        XCTAssertFalse(String(rain[0][13...16]).contains("l"), "the wing is off his back")
+        // Thunder: he ducks right under, eye shut.
+        let duck = rows("rainDuck")
+        XCTAssertFalse(duck[4...9].contains { $0[3...6].contains("k") }, "his eye shut")
+        XCTAssertEqual(String(duck[1][8...13]), "mmmmmm", "the wing a pixel lower")
+        // Low on the cool stone: his head down at the night sprite's height, his eye half shut, his mouth open a little.
         let heat = rows("heat")
         let rest = rows("rest")
         let top = { (r: [[Character]]) in r.firstIndex { row in row[0...12].contains { $0 != CompanionInk.clear } }! }
-        XCTAssertGreaterThanOrEqual(top(heat) - top(rest), 3, "lying flat")
+        XCTAssertEqual(top(heat) - top(rest), 1, "lying low")
+        XCTAssertEqual(heat[10][1], "k", "panting, his mouth a little open at the front")
     }
 
     /// Snow (round 22's recipe): powder, not a cap. Every snow still, awake and asleep, is drawn in the three snow inks and in
@@ -292,9 +365,26 @@ final class CompanionGargleTests: XCTestCase {
                 }
             }
         }
+        // Brief 117: his horns' tips still stone at every depth; at the deepest he has drawn his wing over his head and the
+        // snow lies on it, ragged, thicker toward the back.
+        for name in ["snow", "snow2"] {
+            let r = rows(name)
+            XCTAssertEqual(r[1][9], "l", "\(name): the far horn's tip")
+            XCTAssertEqual(r[2][12], "l", "\(name): the near one's")
+        }
         let deepest = rows(gargle.plus.awake.snowDeep.last!)
-        XCTAssertEqual(String(deepest[1][7...8]), "ll", "the far horn's tip still stone under the deepest snow")
-        XCTAssertEqual(String(deepest[1][11...12]), "ll", "and the near one's")
+        XCTAssertEqual(deepest[1][9], "l", "the far horn's tip under the deepest snow")
+        XCTAssertEqual(deepest[2][12], "l", "and the near one's")
+        var back = 0
+        var front = 0
+        for row in deepest {
+            for (x, c) in row.enumerated() where "sbc".contains(c) {
+                if x >= 10 { back += 1 } else { front += 1 }
+            }
+        }
+        XCTAssertGreaterThan(back, front, "deeper toward his back")
+        XCTAssertEqual(gargle.difference(gargle.plus.awake.snowDeep.last!, "rest"), snow(gargle.plus.awake.snowDeep.last!),
+                       "only snow on him: no hat, no pose of its own")
     }
 
     /// Brief 100: an idle can be drawn over every still it may show, so it is never still for long whatever the sky.
