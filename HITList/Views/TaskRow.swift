@@ -111,15 +111,17 @@ struct TaskRow: View {
 
     // MARK: The meta line
 
-    /// The second line. In a list it is always one line, laid out even when empty, so rows with and
-    /// without dates are the same height and line up; the Group sits at its trailing end, Todoist style.
-    /// On the board (`taskMetaWraps`, brief 56) its items flow onto a second line instead, so a crowded
-    /// 270 pt card keeps its time, bell and Group readable.
+    /// The second line. In a list it is one line, laid out even when empty, so rows with and without dates are
+    /// the same height and line up; the Group sits at its trailing end, Todoist style. Where the line is too narrow
+    /// for all of it (the Duo's outer display, any iPhone at a large text size) the Group is never cut to a letter
+    /// (brief 106, `TaskMetaLine`): more than one label shortens to the first and a count, then the Group takes a line
+    /// of its own under the rest. On the board (`taskMetaWraps`, brief 56) its items flow onto a second line instead,
+    /// so a crowded 270 pt card keeps its time, bell and Group readable.
     @ViewBuilder
     private var metaLine: some View {
         if metaWraps {
             MetaFlowLayout(spacing: HITSpacing.s + 2, lineSpacing: ListMetrics.rowLineGap) {
-                metaItems
+                metaItems()
                 if showProject, task.project != nil {
                     groupItem.layoutValue(key: MetaTrailingKey.self, value: true)
                 } else if !Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
@@ -127,10 +129,14 @@ struct TaskRow: View {
                 }
             }
             .lineLimit(1)
+        } else if showProject, task.project != nil {
+            TaskMetaLine(items: metaItems(), fewerLabels: task.labelList.count > 1 ? metaItems(allLabels: false) : nil) {
+                groupItem
+            }
         } else {
             HStack(spacing: HITSpacing.s + 2) {
-                // The date, labels and note icon keep their full width; a long Group name truncates.
-                HStack(spacing: HITSpacing.s + 2) { metaItems }
+                // The date, labels and note icon keep their full width.
+                HStack(spacing: HITSpacing.s + 2) { metaItems() }
                     .layoutPriority(1)
                 Spacer(minLength: HITSpacing.s)
                 groupItem
@@ -139,9 +145,10 @@ struct TaskRow: View {
         }
     }
 
-    /// The date (or time), the reminder bell, the checklist count and the labels, in that order.
+    /// The date (or time), the reminder bell, the checklist count and the labels, in that order. `allLabels` false:
+    /// the first label and how many more ("@errands +2"), for a line too narrow for them all.
     @ViewBuilder
-    private var metaItems: some View {
+    private func metaItems(allLabels: Bool = true) -> some View {
         if Self.hasMeta(task, hidesDay: hidesDay, showProject: showProject, now: now) {
             if isSwitch {
                 // Due today, every day: the glyph says so; the Flipboard keeps the days overdue.
@@ -169,8 +176,14 @@ struct TaskRow: View {
                 MetaItem(checklist, systemImage: "checklist", tint: Theme.secondaryText)
                     .accessibilityLabel("\(checklist.replacingOccurrences(of: "/", with: " of ")) sub-tasks done")
             }
-            ForEach(task.labelList) { label in
-                MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
+            if allLabels {
+                ForEach(task.labelList) { label in
+                    MetaItem("@" + label.name, systemImage: nil, tint: Color(hex: label.colorHex))
+                }
+            } else if let first = task.labelList.first {
+                MetaItem("@" + first.name, systemImage: nil, tint: Color(hex: first.colorHex))
+                MetaItem("+\(task.labelList.count - 1)", systemImage: nil, tint: Theme.secondaryText)
+                    .accessibilityLabel("\(task.labelList.count - 1) more labels")
             }
         }
         if differentiateWithoutColor, let priority = PriorityWords.shown(task.priorityValue, isChecked: isChecked) {
@@ -236,6 +249,63 @@ enum TaskRowMetrics {
     static let checkDrop: CGFloat = 0
     static let metaIconWeight: Font.Weight = .semibold
     #endif
+}
+
+/// A row's second line with its Group at the trailing end (brief 106), yours and a shared task's alike: the first of
+/// these that fits the row's width.
+/// 1. Everything on one line, the Group in full.
+/// 2. The labels shortened to the first and a count (`fewerLabels`, when the task has more than one), on one line.
+/// 3. The Group on a line of its own under the rest, at the trailing end, as on every other row.
+/// 4. The same with the labels shortened: the last word of a crowded first line may still be cut, the Group only where
+///    it is wider than the whole row.
+/// Before, the date and labels kept their width and the Group took what was left: "W" on the Duo's outer display,
+/// "…" at the largest text size.
+struct TaskMetaLine<Items: View, Fewer: View, GroupItem: View>: View {
+    let items: Items
+    let fewerLabels: Fewer?
+    let group: GroupItem
+
+    init(items: Items, fewerLabels: Fewer?, @ViewBuilder group: () -> GroupItem) {
+        self.items = items
+        self.fewerLabels = fewerLabels
+        self.group = group()
+    }
+
+    static var spacing: CGFloat { HITSpacing.s + 2 }
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            oneLine(items)
+            if let fewerLabels { oneLine(fewerLabels) }
+            twoLines(items)
+            if let fewerLabels { twoLines(fewerLabels) }
+        }
+        .lineLimit(1)
+    }
+
+    private func oneLine(_ items: some View) -> some View {
+        HStack(spacing: Self.spacing) {
+            HStack(spacing: Self.spacing) { items }
+                .layoutPriority(1)
+            Spacer(minLength: HITSpacing.s)
+            group
+        }
+    }
+
+    private func twoLines(_ items: some View) -> some View {
+        VStack(alignment: .trailing, spacing: ListMetrics.rowLineGap) {
+            HStack(spacing: Self.spacing) { items }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            group
+        }
+    }
+}
+
+extension TaskMetaLine where Fewer == EmptyView {
+    /// A line with nothing to shorten (a shared task's: its date and its people).
+    init(items: Items, @ViewBuilder group: () -> GroupItem) {
+        self.init(items: items, fewerLabels: nil, group: group)
+    }
 }
 
 /// A row's Group at the trailing end of its second line: the name, its dot after it. A shared task's is Shared Tasks
