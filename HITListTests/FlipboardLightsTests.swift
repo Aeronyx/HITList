@@ -199,4 +199,73 @@ final class FlipboardLightsTests: XCTestCase {
         XCTAssertEqual(phone, 144.6, accuracy: 0.5)
         XCTAssertEqual(FlipboardLayout.rowPeek(width: 361, tile: phone, spacing: spacing, inset: inset), 0.22, accuracy: 0.01)
     }
+
+    /// Whatever room the header leaves it, the strip draws within it on one line (dots, segments or the bar, chosen by
+    /// `ViewThatFits`), with Differentiate Without Color off and on. Narrower than the bar and its count (about 115
+    /// pt), `BoardHeaderLayout` gives the strip a line of its own. With `STRIP_DIR` set, a picture of every mode.
+    func testTheStripDrawsWithinItsRoomOnOneLine() throws {
+        func make(_ count: Int) -> [BoardLight] { (0..<count).map { BoardLight(id: UUID(), title: "S\($0)", isOn: $0 % 3 != 1) } }
+        for count in [3, 12, 20, 40] {
+            for width in [CGFloat(130), 150, 230, 400] {
+                for differentiate in [false, true] {
+                    let size = Self.offered(width, BoardLightsStrip(lights: make(count), differentiate: differentiate))
+                    XCTAssertGreaterThan(size.width, 20, "measured")
+                    XCTAssertLessThanOrEqual(size.width, width + 0.5, "\(count) lights in \(width) pt")
+                    XCTAssertLessThanOrEqual(size.height, BoardLights.lineHeight + 0.5, "\(count) lights in \(width) pt: one line")
+                }
+            }
+        }
+        guard let folder = ProcessInfo.processInfo.environment["STRIP_DIR"] else { return }
+        let allOn = (0..<4).map { BoardLight(id: UUID(), title: "\($0)", isOn: true) }
+        let sheet = HStack(alignment: .top, spacing: 24) {
+            ForEach([false, true], id: \.self) { shapes in
+                VStack(alignment: .trailing, spacing: 12) {
+                    Text(shapes ? "Differentiate Without Color" : "Colour").font(HITType.caption).foregroundStyle(.white)
+                    ForEach(Array([(5, CGFloat(230)), (20, 230), (40, 230), (40, 150), (24, 130)].enumerated()), id: \.offset) { _, sample in
+                        BoardLightsStrip(lights: make(sample.0), differentiate: shapes).frame(width: sample.1, alignment: .trailing)
+                    }
+                    BoardLightsStrip(lights: allOn, differentiate: shapes).frame(width: 230, alignment: .trailing)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color(red: 0.09, green: 0.1, blue: 0.13))
+        let renderer = ImageRenderer(content: sheet)
+        renderer.scale = 3
+        #if os(macOS)
+        let tiff = try XCTUnwrap(renderer.nsImage?.tiffRepresentation)
+        let data = try XCTUnwrap(NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]))
+        #else
+        let data = try XCTUnwrap(renderer.uiImage?.pngData())
+        #endif
+        try data.write(to: URL(fileURLWithPath: folder).appendingPathComponent("lights-strip-modes.png"))
+    }
+
+    /// The size `view` takes when offered `width` (and any height), as a header's layout offers it.
+    private static func offered<V: View>(_ width: CGFloat, _ view: V) -> CGSize {
+        let box = OfferedSize()
+        let renderer = ImageRenderer(content: Offer(width: width, box: box) { view })
+        _ = renderer.cgImage
+        return box.size
+    }
+}
+
+private final class OfferedSize {
+    var size = CGSize.zero
+}
+
+/// Offers its one view a width and keeps the size it answers.
+private struct Offer: Layout {
+    let width: CGFloat
+    let box: OfferedSize
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let size = subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: nil)) ?? .zero
+        box.size = size
+        return size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(width: width, height: nil))
+    }
 }

@@ -363,10 +363,14 @@ enum BoardLights {
 /// as one element.
 struct BoardLightsStrip: View {
     let lights: [BoardLight]
+    /// Draws off lights in their own shape whatever the setting says (pictures, previews); nil: the system's setting.
+    var differentiate: Bool?
     var onSelect: (Int) -> Void = { _ in }
 
-    @Environment(\.accessibilityDifferentiateWithoutColor) private var shapes
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var shapes: Bool { differentiate ?? differentiateWithoutColor }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
