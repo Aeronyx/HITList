@@ -5,6 +5,53 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.5
+
+George's notes on 0.9.4, worked through overnight by six sessions: creatures that move like themselves, a mushroom
+that stands and a gargoyle that perches, each creature's name under its theme, and the first full pass over the
+iPhone Duo since October, after a friend's screenshot of menus drawn on top of each other.
+
+- Each companion moves like itself. Watched for two minutes on 0.9.4, Nod did seven things and six of them were his
+  feet. Now Nod nods off and jerks awake, rubs his eyes, yawns and pulls his nightcap down, and his legs swing only
+  now and then, slowly. Quill turns an ear toward a sound, watches things nobody else can see, writes with his tail
+  tip and kneads. Tuck draws his eyes in one after the other, stretches them up, leans toward his seedling and half
+  hides under his pot when startled. Hush lifts an ear to listen, tilts her head with her ears swinging after it,
+  and peeks out from behind an ear. Glim sniffs the air, steadies and swings his lantern, cups his flickering flame
+  and lifts the lantern to peer into the dark. Phase pops up out of the button and ducks back down. A test keeps a
+  creature's feet to a fifth of its idles at most.
+- Button, Rosé's mushroom, is smaller and sweeter: the smallest of the eight, a rose cap over a warm face, standing
+  on its little feet on top of the bar with nothing hanging over. Now and then it bobs, sways, puffs up, rolls
+  along the bar or lets go a puff of spores, and it is the one creature that is glad of the rain.
+- Gargle, Graphite's gargoyle pup, is carved again: horns, a broad nose, one fang, a folded wing. He sits on top of
+  the bar with his tail tucked behind it and only its spade showing, plays statue when he thinks you're watching,
+  and sleeps as stone.
+- A companion can be behind what it sits on: its drawing can mark pixels as behind the bar, so a tail drops behind
+  the "+" or the search field instead of hanging over its face.
+- Each theme's companion is named under it in Settings: Nod, Gargle, Quill, Tuck, Hush, Glim, Phase and Button.
+- iPhone Duo, closed (the outer display): a screen's controls (the bolt, the view options, search or Settings) sit
+  beside its title, and the column down the side keeps only the clock, Back, the tab bar and the "+", so nothing is
+  drawn on top of anything else, on a pushed screen or during a call. The title and its controls stay at the top
+  while a list scrolls. The week strip and Browse's saved filters no longer slide under the clock and battery, and
+  the tab bar steps aside while you type.
+- iPhone Duo, closed: the date, reminder, repeat, priority, Group and labels cards open whole, above or below their
+  button and never off an edge (quick add's date card showed no calendar at all); the task editor opens at its full
+  height; a switch's "Discard this switch?" no longer pushes its card off the top. These go by the room on the
+  screen, so the open Duo held on its side and any other short screen get them too.
+- iPhone Duo, closed: a companion lives there now, on top of the upright tab bar, which had no place for one.
+- iPhone Duo, open (the inner display): search is in the sidebar; one Settings gear instead of two; the list and
+  the editor meet at the fold; Upcoming shows whole days (two upright, three held like a book); the days beside
+  Today look like Today's; the sidebar steps aside when you unfold with a task open.
+- On every iPhone: a task's Group is never shortened to a letter (several labels shorten to "@first +2" first,
+  then the Group moves to a line of its own); the Reminder card in the editor is never cut at the top; Review Inbox
+  keeps the task in sight while its calendar is open, and "Move to a Group" reads "Pick a Group"; Settings'
+  descriptions wrap at larger text sizes instead of being cut.
+
+For the record, what nobody saw running: the Duo's inner display itself (Device Hub could not list tonight's
+simulators, so every inner-display picture is an iPad mini drawn at the inner display's size); a real call in the
+Duo's camera island (a Debug stand-in moved the tab bar instead); VoiceOver's reading order on the Duo; how sheets
+are sized on the open Duo. Known and left: Settings closes when the Duo is folded or unfolded; on a pushed screen
+during a real call the companion on the tab bar may come within a few points of Back.
+
 ## 0.9.4 — build 25, 2026-11-11
 
 George's notes on 0.9.3, worked through in an afternoon by eight sessions: a sync bolt that cannot claim more than
