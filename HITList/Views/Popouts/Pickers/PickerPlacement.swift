@@ -68,9 +68,10 @@ enum PickerPlacement {
     }
 }
 
-/// iPhone (compact width): which side of its chip a picker card opens on, and how tall it may be there (brief 107).
-/// Pure, so tests pin it against the phones' screens, the iPhone Duo's short outer display among them (376 × 678 pt
-/// of content beside the system's bar column).
+/// iPhone and iPad: which side of its chip a picker card opens on, and how tall it may be there (brief 107). Keyed on
+/// the room there is, never on the device: pure, so tests pin it against the phones' screens, the iPhone Duo's short
+/// outer display (376 × 678 pt of content beside the system's bar column) and its inner display held on its side
+/// (951 × 669, regular width) among them.
 ///
 /// The card is a system popover. Left to itself the system took the roomier side of the chip, as this does, but put a
 /// card too tall for either side beside its chip, past the screen's edge (the editor's Reminder card on the Duo started
