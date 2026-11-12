@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-21.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-22.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,8 +44,8 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.5: core 704, Mac 1927, iOS 1890, and 130 UI tests (58 of them on demand or for the Duo simulator only)
-  (`scripts/test.sh ui`, over an hour on a fresh simulator since round 21; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests` and `DuoCardsUITests`, run on an `iPhone Duo` simulator). CI
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.6: core 704, Mac 1939, iOS 1902, and 136 UI tests (61 of them on demand or for the Duo simulator only)
+  (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
   SDK) against 27.2 here: after every merge look at the run, because only it shows a type-check timeout or a
@@ -188,6 +188,26 @@ least one real `Settings → Page → Row` path (`testWhatsNewPathsNameRealHomes
 tree and read its notes as well as its pictures**: on the Duo it found that a second quick add in a row did not open
 (a control switched off and on in place with `allowsHitTesting` and `accessibilityHidden`; take it out and put it
 back new instead), which every session's own tests had passed.
+
+Lessons from round 22 (seven sessions, done in eighty-five minutes before dawn): **George judges the hand-over's
+pictures first, and may not release.** 0.9.5 went back from its pictures: text 6 pt from a card's border, a chip row
+cut through a word at a card's edge and labels that filled their chips were all in the supervisor's own sheets. Before
+a picture is sent, look at it for the floors (12 pt from text or a control to its card's border, 8 pt from a label to
+its chip's border, 6 pt between controls, nothing cut at an edge); `CardInsetsUITests` measures every card and
+`115-screen-insets/tool/measure.swift` in the notes folder reads a screenshot. A redraw that makes a creature
+"sweeter" can lose what made it itself (Button): when George calls a creature large or creepy, change its moves and
+its seat and show him before redrawing it; pin a drawing he likes to its tag with a test, so going back is cheap.
+Put a round's shared inks on master before the sessions start, and when two sessions meet the same shared line (the
+colour count, the snow count), fix it on master in the first one's own words and hand the others the hash to
+cherry-pick, with a stop. **A clock in the brief works** ("report due 07:05 Eastern", items in order, stop starting
+things fifteen minutes before): drawing sessions took 35 to 55 minutes, the spacing sessions 85. Ask for a concept
+sheet within half an hour and look at it at 1x beside Hush: Phase went back twice, fifteen minutes each (a body that
+read as a little figure, then a face that did not read at real size). The cast photographed in the real app, the
+last build beside the new one, shows a creature round at a glance (`-companion`, `-pref.theme`, `-companionHour`,
+`-companionSky`, `-companionSnowDepth` on a simulator; build the previous release in a side worktree for the "before"
+row). A walk picture taken while three suites run can catch a card mid-animation (its lower half blurred): rerun the
+step on a quiet machine before calling it a bug; the walk's corner tap is inside the status bar on an iPhone with a
+Dynamic Island.
 
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
@@ -367,7 +387,33 @@ Group" in Review Inbox; search in the sidebar and one gear on the open Duo; a co
 island; Gargle's face toward you with the profile as his statue; Button's face in the cap's own rose; the first
 screen of Settings has its groups 20 pt apart to make room for the creatures' names.
 
-## 8. Where things stand (2026-11-12, round 21 merged)
+From 2026-11-12 (round 22, on 0.9.5's pictures, which George did not release: "I haven't deployed 0.9.5 as I'm not
+quite satisfied with it yet"): **Button is 0.9.4's** ("completely revert … I actually kind of liked his
+creepy-but-slightly-endearing big-eyed smile and rosy cheeks. His sleeping sprite was also great"). The large black
+eye with a glint is his alone ("they fit best on the mushroom"); every other creature has eyes of its own. Phase is
+a cloth ghost (George pointed at a character someone else owns "to be inspired by"; ours stays original), never
+"behind" the button, and rain and snow leave it be. Gargle is "a bit more of a dragon with a different eye and mouth
+style"; his night sprite and his side-on poses are liked. Hush and Quill get small improvements only. Snow is
+"powdery, pixelated fallen snow" with "some blue hues", never a hat. Glim hides his tail from rain and snow. Text
+right next to a border "looks lazy and unprofessional". The supervisor's own choices that round, which George may
+reverse: Button stands on the bar and no boot of his moves (the plain 0.9.4 file is the other reading of "completely
+revert"); Phase's iris in its own mauve; Quill's eyes in his theme's colour; quick add's chips wrap onto more lines,
+on the Mac too; "Later…" and no note about notifications in the reminder card's narrow layout; the Mac's date card
+344 pt wide; a row's Group ends where its section header does (12 pt further right); "Pick a Group" on two lines on
+the Duo's narrower tiles; the words of the switch card's quick choices a few per cent narrower on a narrow card.
+
+## 8. Where things stand (2026-11-12, round 22 merged)
+
+**2026-11-12, round 22 merged for 0.9.6 (Fable 5.2 supervisor), before nine in the morning after 0.9.5 was sent back.**
+Briefs 109 to 115 are merged on master (`dev/briefs/ROUND-22.md` has George's message): Button as 0.9.4 drew him,
+standing; Phase a cloth ghost; Gargle a small dragon; Hush, Quill and Glim improved; Tuck asleep on its stalks; snow
+as powder in three inks; and room around the words in quick add, the editor, every picker, the Flipboard, Browse and
+Review Inbox, with tests that measure it. 0.9.5 was never released, so 0.9.6's notes carry round 21 as well. No
+schema change. George releases with `scripts/release.sh --version 0.9.6 --quick`. Open: the Duo's inner display has
+not been seen for real (CoreDeviceService); "Shave" (round 20). Details and what was never seen running are in
+COMMON's Round 22 record. The next brief number is 116.
+
+### Round 21 (kept for the record; 0.9.5, prepared and not released)
 
 **2026-11-12, round 21 merged for 0.9.5 (Fable 5.2 supervisor), overnight after 0.9.4 (25) was released.** Briefs 103
 to 108 are merged on master (`dev/briefs/ROUND-21.md` has George's message): creatures whose idles are their own,

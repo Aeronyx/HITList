@@ -24,7 +24,8 @@ enum CompanionCast {
     /// Theme id → companion id.
     static let byTheme: [String: String] = [
         "slate": "nod",
-        // A gargoyle pup in stone greys, crouched on the "+" as its elders crouch on a parapet (brief 102).
+        // A small stone dragon in Graphite's greys, perched on the "+" as its elders perch on a parapet, its tail
+        // behind the bar (briefs 102, 104 and 111).
         "graphite": "gargle",
         "midnight": "quill",
         // A snail whose shell is a flowerpot, its seedling in Moss's leaf green (brief 88).
@@ -33,7 +34,8 @@ enum CompanionCast {
         "nord": "hush",
         // A small mouse whose tail ends in a lantern: the one warm light in an indigo night (brief 89).
         "tokyo": "glim",
-        // A sneaky little ghost in the "+"'s own mauve, its see-through hem passing over the button (brief 101).
+        // A sly little cloth ghost in the "+"'s own mauve, a little see-through, hovering on top of the button
+        // (briefs 101 and 110).
         "mocha": "phase",
         // A button mushroom in the theme's own rose, its cap its hat, umbrella and bed, for George's favourite (brief 102).
         "rose": "button",

@@ -5,23 +5,29 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.5 (round 21, 2026-11-11 to 12, overnight)
+## Now: 0.9.6 (rounds 21 and 22, 2026-11-11 to 12)
+
+0.9.5 (round 21, overnight) was prepared and not released: George looked at its pictures and sent it back before
+dawn. Round 22 worked his notes in by nine; 0.9.6 carries both rounds.
 
 | Brief | What | Status |
 |---|---|---|
-| 103 `button-stands` | Button redrawn small and sweet, standing on the bar, with a mushroom's idles (the roll, the spore puff) | merged, awaiting release |
-| 104 `gargle-perched` | Gargle carved and perched, his tail behind the bar; the format's "behind the host" layer; a companion on the Duo's tab island | merged, awaiting release |
-| 105 `cast-flavor` | Nod, Quill, Tuck, Hush, Glim and Phase: idles that are each creature's own | merged, awaiting release |
-| 106 `duo-column` | The Duo's outer display: a screen's controls beside its title, nothing overlapping in the bar column; a row's Group never cut to a letter | merged, awaiting release |
-| 107 `duo-cards` | The Duo's outer display: every picker, card and the editor fit a short screen (by the room, on any device) | merged, awaiting release |
-| 108 `duo-inner` | The Duo's inner display: search in the sidebar, the hinge, the board's whole days (seen on a stand-in only) | merged, awaiting release |
-| supervisor | Each creature's name under its theme in Settings | merged, awaiting release |
+| 109 `button-back` | Button as 0.9.4 drew him, pixel for pixel, standing on the bar, with a mushroom's idles and no boot swinging; Button's and Nod's snow | merged, awaiting release |
+| 110 `phase-cloth` | Phase redrawn as a little cloth ghost with eyes of its own, wholly on top of the bar; rain and snow pass through it | merged, awaiting release |
+| 111 `gargle-dragon` | Gargle more of a dragon: a snout, reptile eyes, a closed mouth, smoke and an ember | merged, awaiting release |
+| 112 `hush-quill` | Hush and Quill drawn with more care in the same poses; their snow | merged, awaiting release |
+| 113 `glim-tuck` | Glim improved, his tail and its light out of the rain and snow; Tuck asleep with its eyes shut on their stalks | merged, awaiting release |
+| 114 `card-insets` | Room around the words in quick add, the editor and every picker card; a test that measures it | merged, awaiting release |
+| 115 `screen-insets` | Rows, the Flipboard, the switch card, Browse and Review Inbox on their edges and at even gaps | merged, awaiting release |
+| supervisor | Three snow inks; "Pick a Group" on one line on an iPhone 16; the reminder card's times in two columns | merged, awaiting release |
+| round 21 (103 to 108) | Idles that are each creature's own, the "behind the host" layer, names under themes, the iPhone Duo's outer and inner displays | merged, awaiting release |
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's eye, and his friend's, on round 21**: Button and Gargle at real size and what each creature now does;
-   the Duo's outer display in the friend's hand (the title row's controls, the cards, the companion on the tab bar);
-   whether the Duo's title should stay put while a list scrolls.
+1. **George's eye, and his friend's, on rounds 21 and 22**: the eight creatures at real size (Phase and Gargle most
+   of all) and the snow on them; quick add's chips on two or three lines; the Duo's outer display in the friend's
+   hand (the title row's controls, the cards, the companion on the tab bar); whether the Duo's title should stay
+   put while a list scrolls.
 2. **The Duo's inner display, for real.** Nobody has seen it since October: Device Hub could not list the round's
    simulators (`killall -u "$USER" CoreDeviceService` in George's Terminal, then `108-duo-inner/unfold.sh`). Then:
    the system's bar column on its side, how sheets are sized there, Settings closing on a fold, the keyboard.
