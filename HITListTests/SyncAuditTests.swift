@@ -86,21 +86,20 @@ final class SyncAuditTests: XCTestCase {
             "R-link": .init(type: "CDMR", entity: "CDMR", id: nil),
         ], token: Data([1]), isFullRead: true))
         reader.names = ["R-there": "Water plants"]
-        var adopted: ICloudZoneIndex.ZoneChanges?
-        let outcome = await SyncAudit.run(container: container, reader: reader, adopt: { changes, _ in adopted = changes })
+        let outcome = await SyncAudit.run(container: container, reader: reader)
         guard case .report(let found) = outcome else { return XCTFail("\(outcome)") }
         XCTAssertEqual(found.items(.onlyHere).map(\.id), [here.id])
         XCTAssertEqual(found.items(.onlyThere).map(\.id), [onlyThere])
         XCTAssertEqual(found.names[here.id], "Shave")
         XCTAssertEqual(found.names[onlyThere], "Water plants", "named from iCloud, for the list")
         XCTAssertEqual(found.otherRecords, 1)
-        XCTAssertEqual(adopted?.changed.count, 3)
-        XCTAssertEqual(reader.zoneTokens, [nil], "a fresh read of the whole zone, never the beats' token")
+        XCTAssertEqual(found.recordsRead, 3)
+        XCTAssertEqual(reader.zoneTokens, [nil], "a fresh read of the whole zone, every time it is asked")
     }
 
     func testAnUnansweredAuditSaysSo() async {
         let reader = FakeReader()
-        reader.database = .failure(SyncBeatFailure(.network, "network unavailable"))
+        reader.database = .failure(ICloudReadFailure(.network, "network unavailable"))
         let outcome = await SyncAudit.run(container: ModelContainerFactory.preview(), reader: reader)
         XCTAssertEqual(outcome, .failed("network unavailable"))
     }
@@ -149,6 +148,37 @@ final class SyncAuditTests: XCTestCase {
         XCTAssertEqual(SyncAuditModel.sendResult(sent: one + one, missing: one, exported: true),
                        "1 still isn't in iCloud. iCloud didn't take it; the Sync log has the export's answer.")
         XCTAssertEqual(SyncAuditModel.sendResult(sent: one, missing: one, exported: false),
-                       "1 still isn't in iCloud. No export finished within a minute; try again once the bolt is filled.")
+                       "1 still isn't in iCloud. No export finished within a minute; try again in a moment.")
+    }
+}
+
+/// iCloud as a test answers for it (`ICloudZoneReading`): what Check iCloud… reads, without the network.
+final class FakeReader: ICloudZoneReading, @unchecked Sendable {
+    var database: Result<ICloudDatabaseAnswer, ICloudReadFailure> = .success(ICloudDatabaseAnswer(zoneChanged: true, token: Data([0])))
+    var zone: Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> = .success(.init(changed: [:], token: Data([0]), isFullRead: true))
+    /// Answers for the next zone fetches, in order, before `zone`.
+    var zoneQueue: [Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure>] = []
+    var names: [String: String] = [:]
+    private(set) var databaseCalls = 0
+    private(set) var zoneTokens: [Data?] = []
+
+    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, ICloudReadFailure> {
+        databaseCalls += 1
+        return database
+    }
+
+    func zoneChanges(since token: Data?, timeout: TimeInterval,
+                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> {
+        zoneTokens.append(token)
+        let next = zoneQueue.isEmpty ? zone : zoneQueue.removeFirst()
+        if case .success(var changes) = next {
+            changes.isFullRead = token == nil
+            return .success(changes)
+        }
+        return next
+    }
+
+    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], ICloudReadFailure> {
+        .success(names.filter { recordNames.contains($0.key) })
     }
 }

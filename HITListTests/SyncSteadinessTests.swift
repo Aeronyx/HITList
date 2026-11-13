@@ -200,17 +200,15 @@ final class SyncSteadinessTests: XCTestCase {
 
     // MARK: Inertia in the drawing
 
-    func testEveryChangeOfLookCrossfadesAndTheWorkingLookBreathesSlowly() {
+    func testEveryChangeOfLookCrossfadesAndNothingAnimatesAtRest() {
         XCTAssertGreaterThanOrEqual(BoltSteadyMotion.crossfade, 0.2, "a few tenths of a second, never one frame")
         XCTAssertLessThanOrEqual(BoltSteadyMotion.crossfade, 0.5)
         XCTAssertLessThan(BoltSteadyMotion.crossfade, SyncSteadiness.Windows().dwell, "a crossfade ends well inside a dwell")
-        XCTAssertGreaterThanOrEqual(BoltSteadyMotion.breathPeriod, 2, "a breath, not a pulse")
-        XCTAssertGreaterThanOrEqual(BoltSteadyMotion.breathLow, 0.4, "never fades out")
-        XCTAssertTrue(SyncBolt.breathes(.syncing))
-        XCTAssertTrue(SyncBolt.breathes(.retrying(since: start)))
-        XCTAssertFalse(SyncBolt.breathes(synced(0)))
-        XCTAssertFalse(SyncBolt.breathes(.offline))
-        XCTAssertFalse(SyncBolt.breathes(.error("x", start)))
+        // 0.9.10: the hollow bolt stands still. Until 0.9.9 it breathed without an end, and in the Mac's toolbar that
+        // cost a fifth of a core for as long as it was hollow. The working looks differ from the filled one by shape.
+        XCTAssertEqual(SyncBolt.look(for: .syncing, everSignedIn: true).symbol, "bolt")
+        XCTAssertEqual(SyncBolt.look(for: .retrying(since: start), everSignedIn: true).symbol, "bolt")
+        XCTAssertEqual(SyncBolt.look(for: synced(0), now: start, everSignedIn: true).symbol, "bolt.fill")
     }
 
     // MARK: 5. The other live marks
@@ -237,12 +235,6 @@ final class SyncSteadinessTests: XCTestCase {
         XCTAssertFalse(SyncStatusLine.confirms(from: .synced, to: .synced), "an ordinary sync keeps the line still")
         XCTAssertFalse(SyncStatusLine.confirms(from: .synced, to: .syncing))
         XCTAssertFalse(SyncStatusLine.confirms(from: .localOnly, to: .synced))
-    }
-
-    func testTheLastChangeRowHoldsEachChangeTwoSeconds() {
-        XCTAssertEqual(LastSyncChange.wait(shownAt: nil, now: at(0)), 0, "the first shows at once")
-        XCTAssertEqual(LastSyncChange.wait(shownAt: at(0), now: at(0.5)), 1.5, accuracy: 1e-9)
-        XCTAssertEqual(LastSyncChange.wait(shownAt: at(0), now: at(3)), 0)
     }
 
     // MARK: The account status Settings and the profile menu show

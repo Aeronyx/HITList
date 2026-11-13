@@ -153,19 +153,6 @@ final class SyncComparisonTests: XCTestCase {
         XCTAssertEqual(index.otherRecords(entities: entities), 2)
     }
 
-    func testTheIndexKeepsAcrossLaunchesAndStartsAfreshOnAnotherFormat() throws {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "SyncComparisonTests-\(UUID().uuidString)")
-        defer { try? FileManager.default.removeItem(at: folder) }
-        let url = ICloudZoneIndex.fileURL(storeName: "HITList-test.store", folder: folder)
-        var index = ICloudZoneIndex()
-        index.accountKey = "acct1:test"
-        index.apply(.init(changed: ["a": entry()], token: Data([9]), isFullRead: true), at: at(0))
-        index.save(to: url)
-        XCTAssertEqual(ICloudZoneIndex.load(from: url), index)
-        try Data("{\"version\": 0}".utf8).write(to: url)
-        XCTAssertEqual(ICloudZoneIndex.load(from: url), ICloudZoneIndex())
-    }
-
     func testTheShortHashIsTheSameEverywhereAndNeverTheId() {
         let id = UUID(uuidString: "3FA2C1D9-0000-4000-8000-000000000001")!
         let hash = SyncComparison.shortHash(id)

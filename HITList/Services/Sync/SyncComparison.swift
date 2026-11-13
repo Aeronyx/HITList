@@ -1,8 +1,8 @@
 import Foundation
 
-/// Brief 95: this device's store against iCloud's copy, record by record, for every kind the store syncs. The same
-/// comparison serves the bolt (each beat, against the record index the beats keep, `ICloudZoneIndex`) and the audit
-/// that "Check iCloud…" runs (against a fresh read of the whole zone, `SyncAudit`).
+/// Brief 95: this device's store against iCloud's copy, record by record, for every kind the store syncs: what
+/// "Check iCloud…" runs, on request, against a fresh read of the whole zone (`SyncAudit`). The bolt no longer waits
+/// on it (0.9.10, `SyncSessionGate`).
 ///
 /// A record is known by its kind (the model's entity) and its own `id` (CloudKit's `CD_id` field), never by CloudKit's
 /// record name, which this device's store doesn't show. Two records in iCloud with one id (the mirror wrote a record

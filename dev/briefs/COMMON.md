@@ -66,6 +66,24 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 26 (2026-11-13; no briefs: the supervisor alone; `ROUND-26.md` says why). Standing rules for every session since
+
+Sync says only what CloudKit's mirror says. These hold for any brief that touches sync, its marks, or anything that
+draws or schedules:
+- SwiftData's CloudKit mirror is the engine. Never poke it, poll for it or second-guess it. What the app knows about
+  sync is the mirror's events (each setup, import and export with its start, end and error), the account status and
+  the network path; the marks are a pure function of those: `SyncState.derive` → `SyncSteadiness` → `SyncSessionGate`.
+- **No request to iCloud the mirror didn't make**, unless the person asked (Check iCloud…). `ICloudZoneReader`,
+  `SyncAudit`, `SyncComparison` and `StoreInventory` serve that screen only.
+- **No timer with nothing pending.** A timer is one `Task.sleep` to a known deadline, armed by an event, cancelled
+  when the event it waits for comes.
+- **No animation without an end** on any mark of sync, and nothing endless inside the Mac's toolbar at all: each
+  frame lays the toolbar out again (0.9.9's breathing bolt: 16 to 21% CPU for as long as it was hollow).
+- If your brief draws or schedules, measure: run your Debug Mac build for a minute at rest and give its CPU in the
+  report (`top -l 60 -s 1 -pid <pid> -stats pid,cpu`). At rest it reads 0.0%.
+- Retired, do not bring back: `SyncBeat`, `BoltTruth`, the kept iCloud index, "Up to date, checked 12 s ago",
+  "Sending N changes to iCloud…", the bolt's breath.
+
 ## Round 25 (2026-11-12, late afternoon; briefs 127–131 in parallel, all five at once; `ROUND-25.md` says why)
 0.9.8 was prepared and not released; this round is **0.9.9**: a reminder a friend could not set from the editor, a
 gryphon cub in Gargle's place, Phase's black eyes, Nod's canopy without its handle, Tuck asleep with a mouth, and

@@ -20,6 +20,11 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.10", items: [
+            "HITList is quiet when it has nothing to do. The hollow sync bolt no longer pulses, which on the Mac used a fifth of a processor core for as long as it was hollow.",
+            "The sync bolt says what iCloud sync itself reports: hollow for a moment after you open the app, filled once it has fetched from iCloud, and it says so when something fails. HITList no longer asks iCloud every 15 seconds whether anything changed.",
+            "If you ever think a device is missing something, open Settings → iCloud & data → Check iCloud: it compares the device with iCloud and names what differs.",
+        ]),
         Entry(version: "0.9.9", items: [
             "A reminder typed in a task's title works when the task has a time: type !30mb and the reminder shows before you confirm. One typed before the task had a time is set as soon as you give the task a time. And \"tonight\" now means today.",
             "Graphite has a new companion: Flint, a gryphon cub, in place of Gargle. He preens, pounces on his own tail and tries to fly.",

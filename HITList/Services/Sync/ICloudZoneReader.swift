@@ -12,18 +12,18 @@ struct ICloudDatabaseAnswer: Equatable, Sendable {
     var token: Data?
 }
 
-/// What the beats and the audit ask iCloud (brief 95), behind a protocol so the tests answer instead. Every call needs
-/// the account and the network; none writes anything to iCloud.
+/// What Check iCloud… asks iCloud (`SyncAudit`), behind a protocol so the tests answer instead. Every call needs the
+/// account and the network; none writes anything to iCloud. Nothing calls it unasked: until 0.9.9 brief 95's beats
+/// asked every 15 s.
 protocol ICloudZoneReading: Sendable {
-    /// Whether the Core Data zone changed since `token` (the private database's; nil: never asked). One small request:
-    /// the beat.
-    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, SyncBeatFailure>
+    /// Whether the Core Data zone changed since `token` (the private database's; nil: never asked). One small request.
+    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, ICloudReadFailure>
     /// The zone's records changed or deleted since `token` (nil: every record), keeping only what the index holds.
     /// `progress` hears the running count of records read.
     func zoneChanges(since token: Data?, timeout: TimeInterval,
-                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure>
+                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure>
     /// The names of `recordNames` (`CD_title`, `CD_name` or `CD_displayName`), for the audit's lists, on the device only.
-    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], SyncBeatFailure>
+    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], ICloudReadFailure>
 }
 
 /// The live reader: CloudKit operations on the tasks container's private database, at the user's priority, each with
@@ -54,9 +54,9 @@ struct ICloudZoneReader: ICloudZoneReading {
         return configuration
     }
 
-    // MARK: The beat
+    // MARK: One small request
 
-    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, SyncBeatFailure> {
+    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, ICloudReadFailure> {
         let operation = CKFetchDatabaseChangesOperation(previousServerChangeToken: Self.token(from: token))
         operation.fetchAllChanges = true
         operation.configuration = Self.configuration(timeout: timeout)
@@ -88,7 +88,7 @@ struct ICloudZoneReader: ICloudZoneReading {
     // MARK: The zone
 
     func zoneChanges(since token: Data?, timeout: TimeInterval,
-                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure> {
+                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> {
         let first = await fetchZone(since: token, timeout: timeout, progress: progress)
         // A token iCloud no longer knows (`changeTokenExpired`): read the whole zone instead, once.
         if case .failure(let failure) = first, failure.reason == Self.expiredTokenReason, token != nil {
@@ -99,7 +99,7 @@ struct ICloudZoneReader: ICloudZoneReading {
     }
 
     private func fetchZone(since token: Data?, timeout: TimeInterval,
-                           progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure> {
+                           progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> {
         let zoneID = Self.zoneID
         let options = CKFetchRecordZoneChangesOperation.ZoneConfiguration()
         options.previousServerChangeToken = Self.token(from: token)
@@ -128,7 +128,7 @@ struct ICloudZoneReader: ICloudZoneReading {
         operation.recordZoneChangeTokensUpdatedBlock = { _, token, _ in
             box.update { $0.token = Self.data(from: token) }
         }
-        let zoneFailure = Box<SyncBeatFailure?>(nil)
+        let zoneFailure = Box<ICloudReadFailure?>(nil)
         operation.recordZoneFetchResultBlock = { _, result in
             switch result {
             case .success(let (token, _, _)):
@@ -141,7 +141,7 @@ struct ICloudZoneReader: ICloudZoneReading {
                 }
             }
         }
-        let result: Result<ICloudZoneIndex.ZoneChanges, SyncBeatFailure> = await Self.race(operation, in: database, timeout: timeout) { finish in
+        let result: Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> = await Self.race(operation, in: database, timeout: timeout) { finish in
             operation.fetchRecordZoneChangesResultBlock = { result in
                 switch result {
                 case .success:
@@ -158,8 +158,8 @@ struct ICloudZoneReader: ICloudZoneReading {
             }
         }
         if case .success = result { progress(counter.value) }
-        // Cut short with records and a token to go on from (a large zone on a slow network): keep what came, so the next
-        // beat goes on from there rather than starting over.
+        // Cut short with records and a token to go on from (a large zone on a slow network): keep what came, so a
+        // caller can go on from there rather than start over.
         if case .failure = result {
             var partial = box.value
             if let reached = partial.token, reached != token, !partial.changed.isEmpty || !partial.deleted.isEmpty {
@@ -173,7 +173,7 @@ struct ICloudZoneReader: ICloudZoneReading {
 
     // MARK: Names, for the audit
 
-    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], SyncBeatFailure> {
+    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], ICloudReadFailure> {
         guard !recordNames.isEmpty else { return .success([:]) }
         let ids = recordNames.map { CKRecord.ID(recordName: $0, zoneID: Self.zoneID) }
         let operation = CKFetchRecordsOperation(recordIDs: ids)
@@ -226,23 +226,23 @@ struct ICloudZoneReader: ICloudZoneReading {
         return code == .zoneNotFound || code == .userDeletedZone
     }
 
-    /// How a CloudKit error reads to the bolt (`SyncBeatFailure.Kind`) and in a few words.
-    static func failure(for error: Error) -> SyncBeatFailure {
+    /// How a CloudKit error reads to the bolt (`ICloudReadFailure.Kind`) and in a few words.
+    static func failure(for error: Error) -> ICloudReadFailure {
         let reason = SyncState.shortReason(for: error)
-        guard let ckError = error as? CKError else { return SyncBeatFailure(.other, reason) }
+        guard let ckError = error as? CKError else { return ICloudReadFailure(.other, reason) }
         switch ckError.code {
         case .networkUnavailable, .networkFailure:
-            return SyncBeatFailure(.network, reason)
+            return ICloudReadFailure(.network, reason)
         case .notAuthenticated, .accountTemporarilyUnavailable:
-            return SyncBeatFailure(.account, reason)
+            return ICloudReadFailure(.account, reason)
         case .serviceUnavailable, .requestRateLimited, .zoneBusy:
-            return SyncBeatFailure(.busy, reason, retryAfter: ckError.retryAfterSeconds)
+            return ICloudReadFailure(.busy, reason, retryAfter: ckError.retryAfterSeconds)
         case .changeTokenExpired:
-            return SyncBeatFailure(.other, expiredTokenReason)
+            return ICloudReadFailure(.other, expiredTokenReason)
         case .operationCancelled:
-            return SyncBeatFailure(.timeout, "cancelled")
+            return ICloudReadFailure(.timeout, "cancelled")
         default:
-            return SyncBeatFailure(.other, reason, retryAfter: ckError.retryAfterSeconds)
+            return ICloudReadFailure(.other, reason, retryAfter: ckError.retryAfterSeconds)
         }
     }
 
@@ -261,7 +261,7 @@ struct ICloudZoneReader: ICloudZoneReading {
     /// Adds `operation` to `database` and returns its outcome, or a timeout once `timeout` plus a little has passed
     /// without one (the operation is then cancelled). `install` sets the operation's final block, which calls `finish`.
     private static func race<T: Sendable>(_ operation: CKDatabaseOperation, in database: CKDatabase, timeout: TimeInterval,
-                                          install: (@escaping @Sendable (Result<T, SyncBeatFailure>) -> Void) -> Void) async -> Result<T, SyncBeatFailure> {
+                                          install: (@escaping @Sendable (Result<T, ICloudReadFailure>) -> Void) -> Void) async -> Result<T, ICloudReadFailure> {
         await withCheckedContinuation { continuation in
             let once = Once(continuation)
             install { once.resume($0) }
@@ -311,5 +311,36 @@ struct ICloudZoneReader: ICloudZoneReading {
             pending?.resume(returning: value)
             return pending != nil
         }
+    }
+}
+
+/// Why a read of iCloud got no answer (`ICloudZoneReader`), sorted the way Check iCloud… speaks of it.
+struct ICloudReadFailure: Error, Equatable, Hashable, Sendable {
+    enum Kind: String, Equatable, Hashable, Sendable {
+        /// No route to iCloud: the network is down or failing.
+        case network
+        /// iCloud refused the account: signed out, or "sign in again".
+        case account
+        /// iCloud is busy or asked HITList to slow down (`retryAfter`).
+        case busy
+        /// No answer within the read's timeout.
+        case timeout
+        case other
+    }
+
+    var kind: Kind
+    /// A few words (`SyncState.shortReason(for:)`): "network unavailable", "timed out".
+    var reason: String
+    /// The server asked for this long before the next request (`CKErrorRetryAfterKey`).
+    var retryAfter: TimeInterval?
+
+    init(_ kind: Kind, _ reason: String, retryAfter: TimeInterval? = nil) {
+        self.kind = kind
+        self.reason = reason
+        self.retryAfter = retryAfter
+    }
+
+    static func timedOut(after seconds: TimeInterval) -> ICloudReadFailure {
+        ICloudReadFailure(.timeout, "no answer within \(SyncLogFormat.duration(seconds))")
     }
 }

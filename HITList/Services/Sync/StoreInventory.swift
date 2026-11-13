@@ -3,8 +3,7 @@ import SwiftData
 
 /// Brief 95: this device's side of the comparison with iCloud (`SyncComparison`): every record of every kind the store
 /// syncs, as its kind, id and change stamps, read on a context of its own so the main thread never waits for it. The
-/// persistent identifiers come along, so a deletion saved later can be told by its id (`CloudSyncMonitor`'s
-/// `deletedHere`).
+/// persistent identifiers come along, to name a record by the store's own id.
 enum StoreInventory {
     struct Snapshot: Sendable {
         var records: [SyncComparison.Local]
