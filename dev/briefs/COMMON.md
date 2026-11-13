@@ -630,6 +630,75 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 25 record (2026-11-12, 15:50 to about 19:00 Eastern; sessions 127–131 merged for 0.9.9)
+0.9.8 was held back; George's notes came at about 15:50 with a friend's screenshot (`ROUND-25.md`). Gargle was
+renamed Flint on master at 16:21, five sessions started at 16:22, the first sheets were in by 16:31, 129 and 130
+were done at 16:43, 131 at 17:07, 128 at 17:09 and 127 at 17:12; all five were on master at 17:15. No schema change.
+- **The supervisor's own**: the rename (`id: "flint"`, `Characters/Flint.swift`, `CompanionFlintTests`), on
+  master before any session started; sketches in the sessions' first ten minutes, sent as rows with a stop: Tuck
+  asleep (the eyes a row lower, a flat three-pixel mouth), Flint's head (an owl's face ringed in light, "A2"), then
+  "G1" (flat tones, one wing as one shape) when the session's pick was busy, then the tail's tuft ("T6": short and
+  soft; a plus on a stalk read as a star on a wand); every sheet forwarded to George; the ruling that the friend's
+  case is the stored phrase (below); `TaskActions.reschedule(to: nil)` clears a reminder before the due time (the
+  row menu's and Upcoming's "Remove Date", which 127 named as outside its files); the title's layout manager is
+  its own delegate and never breaks a line between a "!" and the word it starts (`HighlightLineBreaks`; on an
+  iPhone the friend's own title split "!" from "30mb"; the test fails without the rule on both platforms); the
+  notes.
+- **127 `phrases-on-a-task`** (xhigh, 50 minutes, 12 commits): reproduced first. Two faults. (1) In the editor a
+  "!" word at the very end of the title stays plain until a space is typed (brief 48's rule), and the pills read
+  the same live parse, so "!30mb" looked dead although Confirm saved it: the rows and pills now read what Confirm
+  will save; the highlight still waits for the space. (2) The friend's: "PNHP Working Group tonight !30mb" typed in
+  quick add, where nothing read "tonight", so there was no time and "!30mb" stayed in the title; a time picked
+  later by hand; the editor never reads stored words. Now **a reminder-before-due phrase in a stored title lands
+  the moment it can count, in the editor**: when the editor opens on a task that has a time and no before-due
+  reminder of its own, and when the task gains a time while the editor is open; the reminder is set, the phrase
+  leaves the title, it is saved, nothing waits for Confirm. (Its first form lit the phrase and waited for Confirm,
+  with a quiet ×, on the supervisor's ruling; walked as George would, a time picked and the sheet swiped away saved
+  nothing, so the supervisor reversed it within the hour.) Also: "tonight" is today (a day only);
+  `!0mb`, `!0hb`, `!0db`, `!0b` are "at the due time"; Review Inbox set a typed reminder it used to drop and reads
+  only what was typed in the review (it re-read the stored title: "Watch Friday Night Lights" got a date);
+  "starting <day>" on a task that already repeats starts that repeat on its first day from there; the editor's "No
+  date" and Claude's `update_task` clear a reminder whose time is gone, and `update_task` reads a reminder in its
+  due phrase. Its tables (every parser site by every phrase) are in `127-phrases-on-a-task/tables.md`. Open, not in
+  its files: the Shared Task editor reads no phrases.
+- **128 `flint`** (xhigh, 47 minutes, four notes): six candidates in the line-up of eight at 1x; the pick is the
+  supervisor's head on a lion cub's body turned three-quarters, redrawn flat ("R4" + "T6"): a round owl's face,
+  2 × 2 pupils in a 4 × 4 ring of light, a peach beak and talons, one folded wing (dark, its leading edge in light,
+  three light tips), a short tail with a soft tuft. 61 frames (Gargle had 81): eight idles, loops (wag, yawn, look
+  about, fluff), routines (preen, pounce at his tail, flap and lift), a screech that ends in a giggle; asleep
+  lying down, the tuft over his talons, beak showing; rain under his wing held in an arc (a flat roof read as a
+  crate), beads, a drop off its tip, a puddle at his talons; snow between his ear tufts, on wing and tail, shaken
+  off from the deepest; heat panting. `fly` and `flyDown` for the swatch. `rest` and `sleep` pinned by digest;
+  Gargle's pins to `v0.9.6` are gone. Inset 4 on the "+".
+- **129 `phase-eyes`** (xhigh, 21 minutes): 0.9.7's eye pixels back by script on the 147 frames the two builds
+  share, the same on round 24's 17; `glow:` off for Phase (on a one-pixel pupil it smeared past the eye); the phase
+  ends at a faint crown round his eyes (fade 0.25), since black eyes alone leave two white pixels; in snow the
+  pupils turn down-left to the mound, and in deep snow the outer top corner of each eye is rounded off (worry "A");
+  in rain the pupil is at the upper left as George wrote (0.9.7 and 0.9.8 had it at the upper right).
+  `CompanionLightTests`: only Glim gives light.
+- **130 `nod-tuck`** (xhigh, 19 minutes): the handle and hand gone from 22 of Nod's frames, his left hand back
+  where `rest` has it, the left pool one pixel; the canopy's own tip and duck stay, no bob; `rub` and `rubYawn`
+  play in the rain again. Tuck asleep is the supervisor's "C" on all 44 asleep frames; the breath lifts the front
+  eye a row.
+- **131 `swatch-seats`** (xhigh, 45 minutes, a second pass on the real `fly`): placements `overCorner` (Quill's
+  `drape`, 7 pt past the top right corner), `inAir` (Flint's `fly`, mirrored, 5 pt past the left edge at the box's
+  middle height), `onFloorRight` (Glim's `rest` as far right as his body clears the corner's curve, the lantern
+  3.4 to 3.7 pt above the name); Tuck centred on his floor, Button left where he was; Hush alone behind a box. No
+  swatch-only frame was needed. The grid's row heights are unchanged.
+- **How `fly` reached 131**: 128 committed it early; the supervisor merged that commit into master once the only
+  failures were in Flint's own old test, and allowed 131 one `git merge master`.
+- Final counts on master (`966987d`, the last code): core 706, Mac 1990 (1 skipped), iOS 1953 (1 skipped), no
+  failures. The full UI suite on an iPhone 17 simulator, on an integration checkout of all five sessions merged
+  (`55d51ff`): 141 tests, 80 passed, 61 skipped (on demand or for the Duo only), no failures, in 83 minutes. After
+  it only the line-break rule and 127's follow-up changed; on the final build the classes that type into titles
+  and the editor's reminder class were run again (28 tests on a fresh iPhone 16 simulator, 27 passed, 1 skipped, no failures; the one long Flipboard test left out). The Duo classes on a Duo simulator: 20
+  tests, 10 skipped, no failures; Flint looked at on the island. A Release archive and export of both platforms
+  pass the 44 checks on the final code (iOS 16,622,354 bytes, macOS 32,311,022). GitHub Actions green on
+  `966987d`. The supervisor's own iPhone 16 simulator failed two UI tests that pass elsewhere: it had been used for
+  `simctl launch` photographs and showed no on-screen keyboard; round 24's tree failed them there too, and a
+  fresh iPhone 16 simulator passed both.
+- Decisions George may reverse: SUPERVISOR §7 (round 25).
+
 ## Round 24 record (2026-11-12, 11:45 to about 15:20 Eastern; sessions 121–126 merged for 0.9.8)
 0.9.7 was held back; George's notes came at about 11:45 (`ROUND-24.md`). The three water inks went onto master at
 12:00, six sessions started at 12:02, the five drawing ones were in by 12:50 and the Flipboard's at 14:05. George

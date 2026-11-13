@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-24.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-25.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.8: core 704, Mac 1967, iOS 1930, and 138 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.9: core 706, Mac 1990, iOS 1953, and 141 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -252,6 +252,34 @@ a stopping point … we'll pick up in a bit"): finish what is in flight, shut th
 where the next context finds it (`round-24/STATE.md` in the notes folder), leave the sessions working unless he
 says otherwise, and merge nothing until he is back.
 
+Lessons from round 25 (five sessions, done in fifty minutes; the creatures' fifth send-back, and a friend's bug):
+**read a bug's picture before its words.** George guessed a cause the code had handled two rounds ago; the friend's
+screenshot (one quick-add line as the title, the caret at its end, nothing lit) said the phrase was stored text from
+before the task had a time. Brief the session to reproduce in the running app first, and look yourself: the session
+found the true mechanism and still filed the friend's own case as "a choice for George". When George's words
+cover a case ("they must also work when editing a task that already has a time"), rule on it; do not pass it up.
+**A new creature is judged in the line-up.** Ask for each candidate once in the row of all eight at 1x: Flint was
+picked, cleaned and drawn (61 frames) in 47 minutes on four notes, each a picture and rows. What made Gargle not
+fit was profile, a small eye and texture; what fits is a big head facing you, eyes of several pixels, flat tones
+and one idea. Stray single pixels are texture; a symmetric shape on a one-pixel stalk reads as a star on a wand; a
+flat ten-pixel roof reads as a crate. **Rename on master before the round** so every session branches from it.
+**Briefs that name exact pixels finish in twenty minutes** (Phase's eyes by script from a named commit, Nod's
+handle, Tuck's rows). **An early commit a sibling needs** can go to master when its only failures are in its own
+session's old tests: say which test fails until the rest lands, and allow the sibling one `git merge master` in
+words. Never chain a merge after reading a test log (`tail … && git merge` merged on a red run): read the result,
+then merge. **Walk the fix as George will before ruling on its manners**: the supervisor asked for a stored
+reminder to light up and wait for Confirm with a quiet ×; in the app, picking a time and swiping the sheet away
+(what anyone does after a pick) saved nothing. What is found from the past and can count is applied at once, like a
+pick. **George's left and right can be loose** ("up left" in rain, where every build had up right): follow
+the words, show both, and say so in the hand-over. `pgrep -f HITList` prints every session's whole command line:
+`pgrep -x HITList`. `stop_session` takes its `session` field exactly as its hook prints it, and a second tool call
+in the same message is refused with it. **Run UI tests on a simulator made for them**: the one used for
+`simctl launch` photographs showed no on-screen keyboard and failed two tests that pass everywhere else; before
+blaming new code for a UI failure, run the test on a fresh simulator and on the last round's tree (ten minutes,
+and both answers were "not this round"). Every Debug Mac build, test host and archive registers the app's widget
+and share extensions: at the end list them all (`pluginkit -m -A -D -v -i com.trammells.hitlist.widgets`, and
+`.share`) and `pluginkit -r` every path that is not under `/Applications/HITList.app` (there were sixteen).
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -274,10 +302,13 @@ files" is obeyed; one that does not produces merge conflicts.
 - Settings: `SettingsView.swift`, `Views/Settings/*` (+ `Mac/`), `WhatsNew.swift`, `Support/Preferences.swift`.
 - Design system: `Support/DesignSystem/*` (`HITTokens.swift` = fonts/spacing/colours; README).
 - Companions: `Support/Companions/*` (the engine: `CompanionCharacter` holds frames, modes and inks, with snow's
-  `s b c` and water's `p h u` the same in every theme, `glow:` for inks that give light, `Frame(fade:, light:)`,
-  a see-through body thinning down its rows; `CompanionDirector`, `CompanionSchedule`, `CompanionClock`),
+  `s b c` and water's `p h u` the same in every theme, `glow:` for inks that give light (only Glim's lantern since
+  round 25), `Frame(fade:, light:)`, a see-through body thinning down its rows; `CompanionDirector`,
+  `CompanionSchedule`, `CompanionClock`),
   `Support/Companions/Characters/*.swift` (one file a creature), `Views/Companions/*` (`CompanionSprite` draws,
-  `CompanionPerch` seats), `Views/Settings/ThemeCompanion.swift` (the swatches' seats).
+  `CompanionPerch` seats), `Views/Settings/ThemeCompanion.swift` (the swatches' seats: `onCard`, `alongTop`,
+  `peeking`, `asleepOnDot`, `onTop`, `onFloor`, `overCorner`, `inAir`, `onFloorRight`). Graphite's creature is
+  Flint (`Characters/Flint.swift`; Gargle until round 25).
 - Delight: `Support/Delight/*` (sounds, haptics `TapHaptic`), `Views/Delight/*` (completion motion, toast).
 - Notifications: `Services/NotificationScheduler.swift`, `Services/Notifications/*`.
 - Nobody but the supervisor: `scripts/`, `dev/briefs/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`
@@ -492,18 +523,58 @@ the same width" between the grid and the rows (one height everywhere, one width 
 under a row on the Mac and iPad; the loose switches' header says "Ungrouped"; five idles each that Nod and Quill do
 not play in the rain.
 
-## 8. Where things stand (2026-11-12, round 24 merged)
+From 2026-11-12 (round 25, on 0.9.8, which he did not release): **a typed phrase must work on a task that already
+holds what it leans on.** "When editing a task, typing !0mb wouldn't register a reminder even though that task
+already had a time … they must also work when editing a task that already has a time associated with it. This same
+edge case could cause issues with other interactions as well; please scan for and fix any problems." **Gargle is
+gone**: "he's the only creature that doesn't fit the theme. He needs to have more cartoonish eyes and appearance
+(not necessarily sillier, just less real), and perhaps make him a Gryffin or something more fantastical instead of
+a straight dragon … (Also, please rename him; Gargle is a bad name)". **Phase's eyes are black**: "Please put
+Phase's black eyes back! The new white eyes you added for him ruin his entire vibe. Please make them majority
+black with a white pupil again and have him once again looking down to the right by default/day and also have him
+looking at the snow pile with mild concern instead of away from it during deep snow (looking away/up left during
+rain is still good). The other opacity and design changes you made for him are great." Nod: "just restore his
+0.9.6 canopy. It'll just be a little floating canopy over his head." Tuck: "I just said the smile was weird, not
+to remove the mouth entirely! Please put back a little line mouth to show when he's resting. His eyes can also
+droop a bit more … I just want him to look at peace." "Hush, Quill, Glim, and Button are all looking good along
+with the new weather effects." The theme boxes in Settings: Quill "asleep and almost falling/slumping off the top
+right corner"; Tuck "in the bottom left similar to Button, but perhaps center one of them"; Glim "in the bottom
+right, having his tail almost hanging over the 'Tokyo Night' text"; Graphite's creature "flying in the middle left
+slightly extended outside of his box … definitely not behind his box; only Hush should be hiding like that". The
+supervisor's own choices that round, which George may reverse: the name **Flint** (alternates offered: Perch,
+Kite); Flint sits three-quarters on with his face to you, eyes a 2 × 2 pupil in a ring of light, a short tail with
+a soft tuft, his beak showing asleep; **a reminder-before-due phrase left in a stored title is set at once in the
+editor** when the task is given a time there or a task that has one is opened, and leaves the title, with no
+Confirm (brief 65's rule that stored words stay text holds for every other phrase); the pills preview a typed
+phrase before its space is typed while the highlight still waits for it; **"tonight" is today**,
+a day with no hour; "!0mb" and its family mean at the due time; Review Inbox reads only what is typed in the
+review; removing a task's date removes its reminder before the due time everywhere; Phase's rain pupil is at the
+upper left as he wrote (0.9.7 and 0.9.8 had upper right: one line in `129-phase-eyes/workshop/mine.py`), his glow
+is off, his phase ends at a faint crown instead of eyes alone, his worry is the outer top corner of each eye
+rounded off; Nod's canopy keeps 0.9.8's water (the dry 0.9.6 still is in `130-nod-tuck/workshop`); Tuck's mouth is
+three pixels and his eyes one row lower; **Tuck is centred on his box's floor and Button stays at the left** (the
+other way round is two numbers in `ThemeCompanion.seats`); Quill's swatch uses his own `drape` frame, 7 pt past
+the corner; Glim's lantern crosses the selection ring's corner when Tokyo Night is selected.
 
-**2026-11-12, round 24 merged for 0.9.8 (Fable 5.2 supervisor), the afternoon 0.9.7 was held back.** Briefs 121 to
-126 are merged on master (`dev/briefs/ROUND-24.md` has George's message): rain as blue water on all eight (beads,
-a drop that runs off, a puddle, a rain still asleep), Phase see-through with glowing eyes and opacity in his moves,
-the engine's glow, fade and thinning, Glim's lantern alight, Tuck asleep at rest and in a puddle in the rain,
-Quill's 0.9.6 face, Nod's two-pixel eyes and held canopy, Gargle under deep snow, Button on the floor of his
+## 8. Where things stand (2026-11-12, round 25 merged)
+
+**2026-11-12, round 25 merged for 0.9.9 (Fable 5.2 supervisor), the evening 0.9.8 was held back.** Briefs 127 to
+131 are merged on master (`dev/briefs/ROUND-25.md` has George's message): a reminder typed in a task's title works
+on a task that has a time, typed now or left there from before (with "tonight", the zero-before family, Review
+Inbox, "starting <day>", "No date" and Claude's `update_task` put right by the same scan); Flint the gryphon cub in
+Gargle's place; Phase's black eyes on his see-through body, looking at the snow; Nod's canopy floating; Tuck asleep
+with a line mouth; and the creatures' new seats on the theme boxes. 0.9.7 and 0.9.8 were never uploaded: their
+sections in `CHANGELOG.md` became 0.9.9's. No schema change. George releases with
+`scripts/release.sh --version 0.9.9 --quick`. Open: George's eye on the choices in §7; the Shared Task editor reads
+no quick-add phrases; a row scrolled by trackpad and shift-wheel on a real Mac; the Duo's inner display (CoreDeviceService); "Shave" (round 20). Details in COMMON's
+Round 25 record. The next brief number is 132.
+
+### Round 24 (kept for the record; 0.9.8, prepared and not released)
+Briefs 121 to 126: rain as blue water on all eight (beads, a drop that runs off, a puddle, a rain still asleep),
+Phase see-through with opacity in his moves, the engine's glow, fade and thinning, Glim's lantern alight, Tuck
+asleep at rest and in a puddle in the rain, Quill's 0.9.6 face, Nod's two-pixel eyes, Button on the floor of his
 swatch; and the Flipboard's Switchboards as sideways rows on panels with lights, the ungrouped switches folding
-away, the add jitter fixed. 0.9.7 was never uploaded: its section in `CHANGELOG.md` became 0.9.8's. No schema
-change. George releases with `scripts/release.sh --version 0.9.8 --quick`. Open: George's eye on the choices in §7;
-a row scrolled by trackpad and shift-wheel on a real Mac; the Duo's inner display (CoreDeviceService); "Shave"
-(round 20). Details in COMMON's Round 24 record. The next brief number is 127.
+away, the add jitter fixed. Details in COMMON's Round 24 record.
 
 ### Round 23 (kept for the record; 0.9.7, prepared and not released)
 
