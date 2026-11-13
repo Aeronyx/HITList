@@ -5,28 +5,29 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.8 (round 24, 2026-11-12, the afternoon 0.9.7 was held back)
+## Now: 0.9.9 (round 25, 2026-11-12, the evening 0.9.8 was held back)
 
-George's notes on 0.9.7 (never released; its work ships in 0.9.8): rain that is rain, a ghost you can see through,
-eyes that are not dots, and Switchboards in rows.
+George's notes on 0.9.8 (never released; its work ships in 0.9.9): a reminder a friend could not set from a task's
+title, a gryphon cub in Gargle's place, Phase's black eyes, Nod's canopy without its handle, Tuck asleep with a
+mouth, and new seats on the theme boxes in Settings.
 
 | Brief | What | Status |
 |---|---|---|
-| 121 `phase-ether` | Phase see-through with glowing eyes and opacity in his moves; the engine's glow, fade and thinning; Glim's lantern alight | merged, awaiting release |
-| 122 `tuck-rest` | Tuck asleep at rest; in the rain, in a puddle with his pot brimming | merged, awaiting release |
-| 123 `quill-nod` | Quill's 0.9.6 face, three pixels friendlier; Nod's two-pixel eyes; Nod holds 0.9.6's canopy | merged, awaiting release |
-| 124 `gargle-button-rain` | Water on Gargle and Button; Gargle recognisable under deep snow; Button on the floor of his swatch | merged, awaiting release |
-| 125 `hush-glim-rain` | Water on Hush and Glim, nothing else of theirs | merged, awaiting release |
-| 126 `flipboard-rows` | Switchboards as sideways rows on panels with lights; "Ungrouped" folds; the add jitter fixed | merged, awaiting release |
-| supervisor | The three water inks; sketches for Tuck asleep, Nod's eyes and his held canopy; the one-size UI test | merged, awaiting release |
+| 127 `phrases-on-a-task` | A reminder typed in a title works on a task that has a time, typed now or stored; "tonight"; the scan of every phrase that leans on the task | merged, awaiting release |
+| 128 `flint` | Flint, a cartoon gryphon cub for Graphite, in place of Gargle: 61 frames, his weather, `fly` | merged, awaiting release |
+| 129 `phase-eyes` | Phase's black eyes on every frame; he looks at the snow, worried when it is deep | merged, awaiting release |
+| 130 `nod-tuck` | Nod's canopy floats, no handle; Tuck asleep has a line mouth and lower eyes | merged, awaiting release |
+| 131 `swatch-seats` | Settings: Quill over a corner, Flint in the air, Tuck centred, Glim's lantern below his box | merged, awaiting release |
+| supervisor | The rename to Flint; sketches for Tuck asleep and Flint; "Remove Date" clears a reminder before the time | merged, awaiting release |
 
-Round 23's briefs (116 to 120: Glim as 0.9.5 drew him, Gargle awake as his night sprite, Phase a floating sheet,
-Hush pinned) are in the same release.
+Round 24's briefs (121 to 126: rain as blue water, Phase see-through, the engine's glow, Quill's face, Nod's eyes,
+the Flipboard's rows with lights) and round 23's (116 to 120) are in the same release.
 
 ## Next (in this order unless George says otherwise)
 
-1. **George's eye on round 24's choices** (`dev/SUPERVISOR.md` §7: Nod's handle, Tuck asleep, the rows' narrower
-   tiles; a row scrolled by trackpad on a real Mac), **and his friend's on the Duo** (rounds 21 and 22: the title row's controls, the
+1. **George's eye on round 25's choices** (`dev/SUPERVISOR.md` §7: the name Flint, a stored reminder phrase waking
+   in the editor, "tonight", Phase's rain gaze, Tuck centred and Button left; from round 24 the rows' narrower
+   tiles and a row scrolled by trackpad on a real Mac), **and his friend's on the Duo** (rounds 21 and 22: the title row's controls, the
    cards, the companion on the tab bar; whether the title should stay put while a list scrolls); quick add's chips
    on two or three lines.
 2. **The Duo's inner display, for real.** Nobody has seen it since October: Device Hub could not list the round's
