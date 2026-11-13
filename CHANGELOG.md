@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.9
+## 0.9.9 — build 27, 2026-11-12
 
 0.9.7 and 0.9.8 were each prepared and never released: George looked at their pictures the same day, wrote "we're
 getting closer to the final product" of the first and "I already have enough feedback for you to prepare 0.9.9" of
