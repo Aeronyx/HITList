@@ -5,7 +5,19 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.9 (round 25, 2026-11-12, the evening 0.9.8 was held back)
+## Now: 0.9.10 (round 26, 2026-11-13, the day after 0.9.9 was released)
+
+George's Mac idled at 18 to 24% CPU with a hollow bolt that said "Sending 3 changes to iCloud…"; he asked for a
+robust, lightweight sync foundation. No briefs: the supervisor alone (`dev/briefs/ROUND-26.md`). Sync's marks now
+say only what CloudKit's mirror reports (`SyncSessionGate`); the polling of iCloud, the kept index, the comparison
+that drove the bolt and the hollow bolt's breath are gone; Check iCloud… still compares on request. On master,
+tested, packaged; George releases it.
+
+Next, if George wants it (each needs his word): a `CKSyncEngine` engine of our own (a new record schema in
+Production and a migration of every tester's data); a check that `Deduplicator`'s winner is in iCloud before it
+deletes the other copies.
+
+## Before: 0.9.9 (round 25, 2026-11-12, the evening 0.9.8 was held back; released that night)
 
 George's notes on 0.9.8 (never released; its work ships in 0.9.9): a reminder a friend could not set from a task's
 title, a gryphon cub in Gargle's place, Phase's black eyes, Nod's canopy without its handle, Tuck asleep with a
