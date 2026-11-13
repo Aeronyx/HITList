@@ -5,6 +5,41 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.10
+
+Sync, back to what CloudKit itself reports. On 2026-11-13 George's Mac sat at 18 to 24% CPU doing nothing, its bolt
+hollow for good, saying "Sending 3 changes to iCloud…". Nothing was being sent, and nothing was wrong with sync: every
+import and export of that session finished well, in hundredths of a second. What was wrong was the layer HITList had
+built on top of CloudKit's mirror to check on it.
+
+- The bolt and every line about sync now say what CloudKit's mirror reports and nothing else: each setup, import and
+  export, with its start, its end and its error. Hollow from a launch until the mirror's first import of the session
+  (it imports at every launch, about a second in); filled after it for as long as nothing fails, with "Synced 3 min
+  ago" naming its last import or export; trouble in the mirror's own words once it has stayed, as before. With the
+  account fine, the network up and nothing running, a minute without that first import reads "iCloud isn't
+  answering, HITList will keep trying", never a hollow bolt with no words for why.
+- Gone: the request HITList made to iCloud every 15 seconds while a window could be seen, its own copy of iCloud's
+  record index, and the record-by-record comparison that held the bolt hollow whenever this device and iCloud
+  differed (0.9.4's rule that the bolt is filled only within 30 seconds of a confirmation). That rule could only be
+  kept by asking iCloud over and over, and it turned any old difference into a bolt that never filled: George's Mac
+  holds two filters and a label from October that iCloud doesn't have, so the bolt read "Sending 3 changes" for as
+  long as the window was open, then "This device and iCloud differ", then "Sending" again each time the window came
+  back.
+- The comparison is still there when you ask for it: Settings → iCloud → Check iCloud… reads iCloud afresh, lists what
+  differs by name, and offers "Send to iCloud" or "Remove from this device" for what is only here.
+- The hollow bolt stands still. It used to "breathe" (an opacity animation with no end), and in the Mac's toolbar
+  every frame of that laid the whole toolbar out again: a fifth of a processor core for as long as the bolt was
+  hollow, which on George's Mac was always. Nothing about sync animates without an end now: a change of look
+  crossfades once, the "good to go" plays once.
+- Settings' sync line redraws every 30 seconds instead of every second ("checked 12 s ago" is gone with the checks).
+- "Last change" in the Mac's Settings named only the newer of the last import and the last export, and the mirror
+  runs one of each every time the app comes to the front, so the row flipped between "Import from iCloud" and
+  "Export to iCloud" on every click into the window. It names both now, side by side ("Received 3 min ago · Sent
+  just now"), and changes only as they age.
+- Unchanged underneath: SwiftData's CloudKit mirror, the store, the schema, pushes, the sync log, the 5-second
+  watchdog's log lines and its "Sync is stuck" row, the steadied marks (trouble only once it stayed), the bolt's
+  "good to go" after a launch, a minute away or a minute of trouble.
+
 ## 0.9.9 — build 27, 2026-11-12
 
 0.9.7 and 0.9.8 were each prepared and never released: George looked at their pictures the same day, wrote "we're

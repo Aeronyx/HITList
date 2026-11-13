@@ -6,30 +6,28 @@ import Foundation
 /// in to iCloud" while the other said "iCloud: Signed out".
 ///
 /// The account's words (`AccountState`) come first; the sync's follow only when there is an account to sync with,
-/// since without one every sync word would only repeat the account's. Since brief 95 the sync's words are the bolt's
-/// (`SyncWords`): "Up to date, checked 12 s ago" only within 30 s of a beat that confirmed it.
+/// since without one every sync word would only repeat the account's. The sync's words are the bolt's (`SyncWords`).
 struct SyncHealth: Equatable {
     var account: AccountState
     var sync: SyncState
-    /// What the beats found (`CloudSyncMonitor.wordsVerdict`); nil where none run, so the state's own words stand.
-    /// Left out, the live monitor's, so a row that builds its own line (`AccountStatusRow`) speaks as Settings does.
-    var verdict: BoltTruth.Verdict?
+    /// The session still waits for its first import (`CloudSyncMonitor.isWaitingForFirstImport`). Left out, the live
+    /// monitor's, so a row that builds its own line (`AccountStatusRow`) speaks as Settings does.
+    var waiting: Bool
     var lastSynced: Date?
 
-    init(account: AccountState, sync: SyncState, verdict: BoltTruth.Verdict? = SyncHealth.liveVerdict,
+    init(account: AccountState, sync: SyncState, waiting: Bool = SyncHealth.liveWaiting,
          lastSynced: Date? = SyncHealth.liveLastSynced) {
         self.account = account
         self.sync = sync
-        self.verdict = verdict
+        self.waiting = waiting
         self.lastSynced = lastSynced
     }
 
-    /// "iCloud: Signed in · Up to date, checked just now", "iCloud: Signed out", "iCloud: Not in use · iCloud sync
-    /// turned off". `precise`: the seconds since the check ("checked 12 s ago").
-    func line(now: Date = .now, precise: Bool = false) -> String {
+    /// "iCloud: Signed in · Synced 3 min ago", "iCloud: Signed out", "iCloud: Not in use · iCloud sync turned off".
+    func line(now: Date = .now) -> String {
         switch account {
         case .signedIn, .switched, .checking, .couldNotDetermine:
-            let words = SyncWords.status(state: sync, verdict: verdict, lastSynced: lastSynced, now: now, precise: precise)
+            let words = SyncWords.status(state: sync, waiting: waiting, lastSynced: lastSynced, now: now)
             return "\(account.title) · \(words)"
         case .signedOut, .neverSignedIn, .restricted, .needsSignInAgain:
             return account.title
@@ -44,11 +42,11 @@ struct SyncHealth: Equatable {
         SyncHealth(account: .current, sync: CloudSyncMonitor.shared.state)
     }
 
-    /// The running monitor's verdict, read on the main thread (views and tests both build lines there); nil before the
-    /// monitor started (hosted tests) or where no beats run.
-    static var liveVerdict: BoltTruth.Verdict? {
-        guard Thread.isMainThread else { return nil }
-        return MainActor.assumeIsolated { CloudSyncMonitor.shared.wordsVerdict }
+    /// Whether the running monitor still waits for this session's first import, read on the main thread (views and
+    /// tests both build lines there); false before the monitor started (hosted tests) or where nothing syncs.
+    static var liveWaiting: Bool {
+        guard Thread.isMainThread else { return false }
+        return MainActor.assumeIsolated { CloudSyncMonitor.shared.isWaitingForFirstImport }
     }
 
     static var liveLastSynced: Date? {

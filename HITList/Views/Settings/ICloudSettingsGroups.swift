@@ -320,8 +320,6 @@ final class SyncAuditModel {
         phase = .checking(read: report == nil ? nil : 0)
         let outcome = await SyncAudit.run(container: container, progress: { [weak self] count in
             self?.phase = .checking(read: count)
-        }, adopt: { [weak self] changes, token in
-            self?.monitor.auditRead(changes, databaseToken: token)
         })
         switch outcome {
         case .report(let found):
@@ -403,7 +401,7 @@ final class SyncAuditModel {
             return sent.count == 1 ? "Sent: it is in iCloud now." : "Sent: all \(sent.count) are in iCloud now."
         }
         let still = missing.count == 1 ? "1 still isn't" : "\(missing.count) still aren't"
-        let why = exported ? "iCloud didn't take it; the Sync log has the export's answer." : "No export finished within a minute; try again once the bolt is filled."
+        let why = exported ? "iCloud didn't take it; the Sync log has the export's answer." : "No export finished within a minute; try again in a moment."
         return "\(still) in iCloud. \(why)"
     }
 

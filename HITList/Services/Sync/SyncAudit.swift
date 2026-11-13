@@ -18,6 +18,10 @@ import OSLog
 enum SyncAudit {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
 
+    /// How long one small request to iCloud may take, and the read of the whole zone (every record: slow is fine).
+    static let requestTimeout: TimeInterval = 6
+    static let readTimeout: TimeInterval = 120
+
     struct Report: Equatable {
         var comparison: SyncComparison.Result
         /// The names of the records that differ, from this device or from iCloud: shown, never logged.
@@ -45,15 +49,13 @@ enum SyncAudit {
     }
 
     /// Reads iCloud and this device and compares them. `progress` hears how many of iCloud's records have been read.
-    /// `adopt` hands the read to the beats (`CloudSyncMonitor.auditRead`) so their index starts from it.
     @MainActor
     static func run(container: ModelContainer, reader: ICloudZoneReading = ICloudZoneReader(),
-                    timeout: TimeInterval = SyncBeat.Rules().fullReadTimeout,
-                    progress: @escaping @MainActor (Int) -> Void = { _ in },
-                    adopt: @MainActor (ICloudZoneIndex.ZoneChanges, Data?) -> Void = { _, _ in }) async -> Outcome {
+                    timeout: TimeInterval = SyncAudit.readTimeout,
+                    progress: @escaping @MainActor (Int) -> Void = { _ in }) async -> Outcome {
         let started = Date()
-        // The database token first, so a change made during the read shows at the next beat.
-        let database = await reader.zoneChanged(since: nil, timeout: SyncBeat.Rules().timeout)
+        // A small request first: iCloud answers at all before the whole zone is asked for.
+        let database = await reader.zoneChanged(since: nil, timeout: SyncAudit.requestTimeout)
         if case .failure(let failure) = database { return .failed(failure.reason) }
         let report: @Sendable (Int) -> Void = { count in Task { @MainActor in progress(count) } }
         let read = await reader.zoneChanges(since: nil, timeout: timeout, progress: report)
@@ -64,7 +66,6 @@ enum SyncAudit {
         }
         var index = ICloudZoneIndex()
         index.apply(changes, at: Date())
-        adopt(changes, try? database.get().token)
         let snapshot: StoreInventory.Snapshot
         do {
             snapshot = try await StoreInventory.read(container)
@@ -94,7 +95,7 @@ enum SyncAudit {
         var names = StoreInventory.names(of: wanted, in: container.mainContext)
         let remoteOnly = comparison.differences(.onlyThere).prefix(limit)
         let recordNames = remoteOnly.compactMap { $0.remote?.recordName }
-        if case .success(let found) = await reader.names(of: recordNames, timeout: SyncBeat.Rules().timeout * 2) {
+        if case .success(let found) = await reader.names(of: recordNames, timeout: SyncAudit.requestTimeout * 2) {
             for difference in remoteOnly {
                 if let name = difference.remote.flatMap({ found[$0.recordName] }) { names[difference.id] = name }
             }

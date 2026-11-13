@@ -4,10 +4,10 @@ import OSLog
 import AppKit
 #endif
 
-/// "iCloud: Signed in · Up to date, checked 12 s ago" with its icon: the sync health line (`SyncHealth`), word for word
-/// what Settings → Account's status row says. Re-renders every second while the bolt is filled, so "checked 12 s ago"
-/// counts (brief 95), and every 30 s otherwise. It reads the state every mark draws (`CloudSyncMonitor.state`: steadied,
-/// then held to the truth), so it never claims more than the bolt. When work it showed ends in a good sync, the icon
+/// "iCloud: Signed in · Synced 3 min ago" with its icon: the sync health line (`SyncHealth`), word for word what
+/// Settings → Account's status row says. Re-renders every 30 s, so "3 min ago" ages. It reads the state every mark
+/// draws (`CloudSyncMonitor.state`: steadied, then held to `SyncSessionGate`), so it never claims more than the bolt.
+/// When work it showed ends in a good sync, the icon
 /// turns into a checkmark for a few seconds, then it settles back (brief 78: once per visible stretch of work, not on
 /// every export). Every change crossfades; plain fades under Reduce Motion.
 struct SyncStatusLine: View {
@@ -18,9 +18,9 @@ struct SyncStatusLine: View {
 
     var body: some View {
         let state = monitor.state
-        TimelineView(.periodic(from: .now, by: state.isSynced ? 1 : 30)) { context in
+        TimelineView(.periodic(from: .now, by: 30)) { context in
             Label {
-                Text(SyncHealth.current.line(now: context.date, precise: true))
+                Text(SyncHealth.current.line(now: context.date))
                     .contentTransition(.opacity)
             } icon: {
                 Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
@@ -102,14 +102,19 @@ struct AccountChangeBanner: View {
 
 /// Sync status as one small bolt in the toolbar's empty space, on every screen and platform. It says "status is
 /// green" and then keeps still (brief 78): it draws `CloudSyncMonitor.state`, the raw state steadied over time
-/// (`SyncSteadiness`), not every export and import, and held to the truth (brief 95, `BoltTruth`): filled only within
-/// 30 s of a beat in which iCloud itself answered and nothing waited either way. Its shape is the message: a filled
-/// bolt while that holds, a hollow bolt breathing slowly while it checks or works (George's "flashing": the first
-/// answer after a launch or a return, a change on its way, a sync that keeps trying), a struck-through bolt once
-/// trouble has stayed (offline, signed out, restricted, an error, this device and iCloud apart, local only) or when it
-/// has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a pastel that sits apart from the
-/// accent; struck-through states go grey, errors and sign-out red. Every change crossfades (`BoltSteadyMotion`), plain
-/// fades under Reduce Motion. Its label says the same as Settings (`SyncWords`). Tapping it opens Settings.
+/// (`SyncSteadiness`), not every export and import, and held to `SyncSessionGate`: hollow from a launch until the
+/// mirror's first import of the session, filled after it for as long as nothing fails. Its shape is the message: a
+/// filled bolt while all is well, a hollow bolt while it checks or works (the first import after a launch, a long
+/// sync, a sync that keeps trying), a struck-through bolt once trouble has stayed (offline, signed out, restricted, an
+/// error, local only) or when it has not synced in a while (`staleAfter`). Its colour is the theme's `bolt`, a pastel
+/// that sits apart from the accent; struck-through states go grey, errors and sign-out red. Every change crossfades
+/// (`BoltSteadyMotion`), plain fades under Reduce Motion. Its label says the same as Settings (`SyncWords`). Tapping it
+/// opens Settings.
+///
+/// **At rest it draws nothing.** The hollow bolt stood still since 0.9.10: until 0.9.9 it "breathed" (an endless
+/// opacity animation), and in the Mac's toolbar every frame of that laid the toolbar out again, a fifth of a core for
+/// as long as the bolt was hollow (George's Mac, 2026-11-13: 18 to 24% CPU, idle). No mark of sync animates without an
+/// end: a change of look crossfades once, the "good to go" plays once.
 ///
 /// It plays once as a "you're good to go": on the first confirmation after the app opens, after it comes back from
 /// a minute or more away, or after sync was in trouble for a minute or more (`BoltStrikeGate`). Never for
@@ -153,7 +158,7 @@ struct SyncBolt: View {
         TimelineView(.periodic(from: .now, by: 60)) { tick in
             let look = Self.look(for: state, now: tick.date)
             Button(action: action) {
-                BoltGlyph(look: look, breathes: Self.breathes(state), reduceMotion: reduceMotion)
+                BoltGlyph(look: look, reduceMotion: reduceMotion)
                     .modifier(BoltMotions(player: player, color: look.color))
                     .frame(width: Self.frame.width, height: Self.frame.height)
                     .contentShape(Rectangle())
@@ -182,8 +187,8 @@ struct SyncBolt: View {
             Self.strikeGate.appActive(isActive, now: Date())
         }
         #endif
-        // The gate counts trouble from the raw state, exactly as before the marks were steadied, and from what only the
-        // beats can call trouble (brief 95: this device and iCloud apart, iCloud not answering).
+        // The gate counts trouble from the raw state, exactly as before the marks were steadied, and from what the
+        // marks themselves show.
         .onChange(of: monitor.rawState.isHealthyForStrike && monitor.state.isHealthyForStrike, initial: true) { _, healthy in
             Self.strikeGate.syncState(healthy: healthy, now: Date())
         }
@@ -202,14 +207,6 @@ struct SyncBolt: View {
         if BoltStrikeDemo.isRequested { return state.summary(now: now) }
         #endif
         return CloudSyncMonitor.shared.statusWords(now: now)
-    }
-
-    /// The working look breathes: work that is the news, and "will keep trying".
-    static func breathes(_ state: SyncState) -> Bool {
-        switch state {
-        case .syncing, .retrying: true
-        default: false
-        }
     }
 
     /// In front and visible: on the Mac also the active app, so a sync that lands while George works in
@@ -263,14 +260,11 @@ struct SyncBolt: View {
     }
 }
 
-/// The bolt's inertia in the drawing (brief 78, rule 4): every change of look crossfades, never a swap on one frame,
-/// and the working look breathes slowly rather than pulsing. Reduce Motion: the same timing with plain fades.
+/// The bolt's inertia in the drawing (brief 78, rule 4): every change of look crossfades, never a swap on one frame.
+/// Reduce Motion: the same timing with plain fades.
 enum BoltSteadyMotion {
     /// Seconds a change of look takes.
     static let crossfade: TimeInterval = 0.35
-    /// One slow breath in and out of the working look, and how far its opacity falls at the bottom of it.
-    static let breathPeriod: TimeInterval = 2.8
-    static let breathLow: Double = 0.45
     /// How much smaller the incoming glyph starts (none under Reduce Motion).
     static let settleScale: CGFloat = 0.88
 
@@ -281,46 +275,21 @@ enum BoltSteadyMotion {
     }
 }
 
-/// The bolt's glyph for one look. A new look crossfades over the old one (`BoltSteadyMotion`); the working look
-/// breathes. The toolbar bolt wears its strike and slam on the outside, so a change of look never restarts them.
+/// The bolt's glyph for one look. A new look crossfades over the old one (`BoltSteadyMotion`), once; at rest nothing
+/// animates. The toolbar bolt wears its strike and slam on the outside, so a change of look never restarts them.
 struct BoltGlyph: View {
     var look: SyncBolt.Look
-    var breathes: Bool
     var reduceMotion: Bool
 
-    private struct Identity: Hashable {
-        var look: SyncBolt.Look
-        var breathes: Bool
-    }
-
     var body: some View {
-        let identity = Identity(look: look, breathes: breathes)
         ZStack {
             Image(systemName: look.symbol)
                 .font(.system(size: SyncBolt.size, weight: .bold))
                 .foregroundStyle(look.color.opacity(look.opacity))
-                .modifier(BoltBreath(active: breathes))
-                .id(identity)
+                .id(look)
                 .transition(BoltSteadyMotion.transition(reduceMotion: reduceMotion))
         }
-        .animation(BoltSteadyMotion.crossfadeAnimation, value: identity)
-    }
-}
-
-/// The working look's slow breath of opacity, from full to `BoltSteadyMotion.breathLow` and back.
-struct BoltBreath: ViewModifier {
-    var active: Bool
-
-    func body(content: Content) -> some View {
-        if active {
-            content.phaseAnimator([1.0, BoltSteadyMotion.breathLow]) { glyph, opacity in
-                glyph.opacity(opacity)
-            } animation: { _ in
-                .easeInOut(duration: BoltSteadyMotion.breathPeriod / 2)
-            }
-        } else {
-            content
-        }
+        .animation(BoltSteadyMotion.crossfadeAnimation, value: look)
     }
 }
 

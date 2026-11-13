@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-25.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-26.md`.
 The memory folder under `~/.claude/projects/-Users-gtrammell-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.9: core 706, Mac 1990, iOS 1953, and 141 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.10: core 706, Mac 1955, iOS 1918 (35 fewer each: brief 95's beats and truth went with their tests), and 141 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -99,6 +99,17 @@ How George works with you:
   see a field missing from both: three `TaskItem` fields from 0.4.0 went undeployed for a week that way, and the
   first flip of a switch on a friend's Mac stopped his sync for good (2026-11-06). `release.sh` now also fails its
   preflight while Production lacks a field the models have (`CloudKitSchemaCheck`).
+- **Sync says only what CloudKit's mirror says** (round 26, after George's Mac idled at 18 to 24% CPU with a bolt
+  that never filled). SwiftData's CloudKit mirror is the engine; HITList never pokes it, polls for it or second-guesses
+  it. What the app knows about sync is the mirror's own events (`NSPersistentCloudKitContainer.eventChangedNotification`:
+  each setup, import and export with its start, end and error), the account status and the network path, and the
+  marks are a pure function of those (`SyncState.derive` → `SyncSteadiness` → `SyncSessionGate`). Three nevers, each
+  of which was true of 0.9.4 to 0.9.9 and each of which cost a release: **no request to iCloud that the mirror
+  didn't make**, unless the person asked for it (Check iCloud…); **no timer with nothing pending** (every timer is one
+  `Task.sleep` to a known deadline, armed by an event); **no animation without an end**, anywhere a mark of sync is
+  drawn, and nothing endless in the Mac's toolbar at all (each frame lays the toolbar out again). Before a round
+  ships anything that draws or schedules, the Mac app's idle CPU is measured (`sync26/cpu-run.sh` in the round-26
+  notes): at rest it is 0.0%.
 - Never add `com.apple.developer.icloud-container-development-container-identifiers` to any entitlements.
   Never open the real store under the Development environment. Never call `ModelContainer.deleteAllData()`
   or delete objects as a "reset": deletions mirror to CloudKit and wipe every device.
@@ -280,6 +291,24 @@ and both answers were "not this round"). Every Debug Mac build, test host and ar
 and share extensions: at the end list them all (`pluginkit -m -A -D -v -i com.trammells.hitlist.widgets`, and
 `.share`) and `pluginkit -r` every path that is not under `/Applications/HITList.app` (there were sixteen).
 
+Lessons from round 26 (no sessions; the supervisor alone, on the app George had running):
+**look at the running app before reading a line of code.** George's Mac was still in the state he described, so
+`sample <pid> 8` and `/usr/bin/log show` on it came first: the sample, symbolicated with the release archive's dSYM
+(`atos -o build.noindex/archives/HITList-macos.xcarchive/dSYMs/HITList.app.dSYM/Contents/Resources/DWARF/HITList -l
+<load address>`; `dwarfdump --uuid` proves the archive is the running build), named the toolbar's layout and the
+bolt's animation within ten minutes, and the log said every import and export had succeeded. Neither opens, stops
+or changes his app. **When the person says "it isn't syncing", check whether the engine or our words failed**:
+here the engine had not failed once; the words had. **A status the engine can't back needs machinery, and the
+machinery becomes the bug.** George's "filled only within 30 seconds of a confirmation" (round 20) could only be
+kept by a second CloudKit client, a copy of iCloud's index and a comparison, 6,800 lines in all with the watchdog
+and the steadiness; three old records then held the bolt hollow for good. When a rule can't be met from what the
+platform reports, say so in the round it is asked for, and offer the nearest rule that can. **Measure idle CPU of
+every build that draws**: an endless `phaseAnimator` on an 11-point glyph cost a fifth of a core because it sat in
+an `NSToolbar` item. Compare two Debug builds on the same `-syncReplay YES` script (`cpu-run.sh`): 0.9.9 read 16 to
+21% each second the bolt was hollow, the fix 0%. **A side checkout for the old build** (`git worktree add --detach
+build.noindex/<round>/wt-<version> <commit>`, its own `-derivedDataPath`) takes five minutes and makes "before" a
+number.
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -296,8 +325,10 @@ files" is obeyed; one that does not produces merge conflicts.
 - Lists: `TaskListView.swift`, `Inbox/`, `Upcoming/`, `Tabs/` (iPhone shell: `MobileShell`, `MobileTabBar`,
   `BrowseView`, `ScreenMenu` = the top-right controls), `TaskRow.swift`, `ListChrome.swift` (`ListMetrics`),
   `Flipboard/`, `SidebarView.swift` + `ContentView.swift` (Mac).
-- Sync: `Services/Sync/*` (`SyncLog`, `SyncWatchdog`, `SyncEnvironment`, `SyncAppDelegate`, `SyncRecovery`,
-  `SyncStoreGuard`), `CloudSyncMonitor.swift`, `ModelContainerFactory.swift`, `Deduplicator.swift`.
+- Sync: `Services/Sync/*` (`SyncSessionGate` = when the bolt may be filled, `SyncSteadiness`, `SyncWatchdog`,
+  `SyncLog`, `SyncEnvironment`, `SyncAppDelegate`, `SyncRecovery`, `SyncStoreGuard`; `SyncAudit`, `ICloudZoneReader`,
+  `SyncComparison`, `StoreInventory` = Check iCloud… only, on request), `CloudSyncMonitor.swift`,
+  `ModelContainerFactory.swift`, `Deduplicator.swift`. `ROUND-26.md` says what was taken out and why.
 - Model: `Models/Models.swift`, `SchemaVersions.swift`, frozen `SchemaV1Models.swift`, `SchemaV2Models.swift`.
 - Settings: `SettingsView.swift`, `Views/Settings/*` (+ `Mac/`), `WhatsNew.swift`, `Support/Preferences.swift`.
 - Design system: `Support/DesignSystem/*` (`HITTokens.swift` = fonts/spacing/colours; README).
@@ -438,8 +469,9 @@ minutes and the flourish stay rare. (This replaces round 18's "still by default"
 companion must be cute, by George's eye: Hush is the standard (one soft shape, large eyes with a glint; "soulless" is
 his word for eyes without one), and it must sit on the "+", never float above it or lie on its face. Rosé has a
 mushroom (Button), Mocha a see-through ghost named Phase, Graphite a gargoyle pup (Gargle); Posy, Mallow and Smudge
-retired. **The bolt is filled only while a sync was confirmed in the last 30 seconds of real time** ("never, ever"):
-the app asks iCloud while a bolt can be seen. The Mac's toolbar "…" is the Settings button. Quick add leaves
+retired. (Round 20's rule, "the bolt is filled only while a sync was confirmed in the last 30 seconds of real
+time", with the app asking iCloud every 15 s to keep it, was retired in round 26: see the end of this section.)
+The Mac's toolbar "…" is the Settings button. Quick add leaves
 "starting" out of a title and reads several weekdays as a weekly repeat. The Add a Switch toggle reads "Become a
 task when Overdue". About findings lists: George answers the few he cares about and expects the obvious ones done
 without asking ("if they really don't [have obvious answers] ask me directly in the chat"). When asked for files he
@@ -556,7 +588,37 @@ three pixels and his eyes one row lower; **Tuck is centred on his box's floor an
 other way round is two numbers in `ThemeCompanion.seats`); Quill's swatch uses his own `drape` frame, 7 pt past
 the corner; Glim's lantern crosses the selection ring's corner when Tokyo Night is selected.
 
-## 8. Where things stand (2026-11-12, round 25 merged)
+Round 26 (2026-11-13, on 0.9.9, the day after its release; `ROUND-26.md` has his message whole): "HITList is
+idling at over 24% CPU usage on my Mac, and it's not even able to sync while doing so. It's been stuck on the hollow
+bolt with no error for 5 minutes now, and just says 'Sending 3 changes to iCloud...'" "Did we overcomplicate
+something or misimplement something?" "I need you to act like a professional Apple App Developer and write a
+robust, lightweight cloud sync foundation for HITList." What that asks for from now on: **sync must cost nothing at
+rest and must never say more than is known.** The supervisor's own choices that round, which George may reverse:
+**his 30-second rule of round 20 is retired** (it could only be kept by asking iCloud over and over; the bolt is
+now hollow from a launch until the mirror's first import, filled after it while nothing fails, and its words name
+the last import or export); **the hollow bolt stands still**; **nothing compares this device with iCloud unless he
+asks** (Check iCloud…), so a bolt can be filled while old records differ, as his Mac's two filters and a label do;
+a minute without the launch's import reads "iCloud isn't answering, HITList will keep trying" rather than an
+error; "Last change" names both directions at once; SwiftData's mirror stays the engine (a `CKSyncEngine` rewrite
+was weighed and not begun: new record types in Production and a migration of every tester's data need his word).
+
+## 8. Where things stand (2026-11-13, round 26 on master)
+
+**2026-11-13, round 26 on master for 0.9.10 (Fable 5.2 supervisor), the day after 0.9.9 (27) was released.** No
+briefs and no sessions: the supervisor alone (`dev/briefs/ROUND-26.md` has George's message, what the running app
+showed and what was decided). Sync's marks say only what CloudKit's mirror reports (`SyncSessionGate`); brief 95's
+polling of iCloud, its kept index and the comparison that drove the bolt are gone, and so is the hollow bolt's
+breath, which cost a fifth of a core in the Mac's toolbar; "Last change" names both directions; Check iCloud… still
+compares on request. No schema change. George releases with `scripts/release.sh --version 0.9.10 --quick`. Open:
+George's word on the retired 30-second rule and on a `CKSyncEngine` rewrite (§7); the two filters and the label that
+are only on his Mac (his to settle in Check iCloud…); why they are only there (they look like the survivors of a
+duplicate merge on 2026-10-29 whose other copies were the ones iCloud had: `Deduplicator` trusts that its winner
+is in iCloud, and nothing checks); 0.9.10 has not run against Production; the Flipboard's overdue light still
+breathes at 30 frames a second while it is on screen (in the content, not the toolbar; the demo's Flipboard reads
+0.0% at rest, an overdue light was not measured);
+everything open from round 25. The next brief number is 132.
+
+### Round 25 (kept for the record; 0.9.9, released 2026-11-12)
 
 **2026-11-12, round 25 merged for 0.9.9 (Fable 5.2 supervisor), the evening 0.9.8 was held back.** Briefs 127 to
 131 are merged on master (`dev/briefs/ROUND-25.md` has George's message): a reminder typed in a task's title works

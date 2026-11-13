@@ -210,26 +210,18 @@ final class MacSettingsTests: XCTestCase {
 
     // MARK: iCloud
 
-    func testLastChangeIsTheNewerOfImportAndExport() {
+    func testLastChangeNamesBothWaysAndNeverFlipsBetweenThem() {
         let t = Date(timeIntervalSinceReferenceDate: 815_000_000)
-        XCTAssertNil(LastSyncChange.latest(lastImport: nil, lastExport: nil))
-        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: nil), LastSyncChange(date: t, phase: .imported))
-        XCTAssertEqual(LastSyncChange.latest(lastImport: nil, lastExport: t), LastSyncChange(date: t, phase: .exported))
-        XCTAssertEqual(LastSyncChange.latest(lastImport: t.addingTimeInterval(5), lastExport: t),
-                       LastSyncChange(date: t.addingTimeInterval(5), phase: .imported))
-        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t.addingTimeInterval(5)),
-                       LastSyncChange(date: t.addingTimeInterval(5), phase: .exported))
-        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t, sessionPhase: .importing)?.phase, .imported,
-                       "a tie goes to what this session saw last")
-        XCTAssertEqual(LastSyncChange.latest(lastImport: t, lastExport: t)?.phase, .exported)
-    }
-
-    func testLastChangeTextNamesThePhase() {
-        let t = Date(timeIntervalSinceReferenceDate: 815_000_000)
-        XCTAssertEqual(LastSyncChange(date: t, phase: .imported).text(now: t.addingTimeInterval(180)),
-                       "Import from iCloud · 3 min ago")
-        XCTAssertEqual(LastSyncChange(date: t, phase: .exported).text(now: t.addingTimeInterval(10)),
-                       "Export to iCloud · just now")
+        func text(_ lastImport: Date?, _ lastExport: Date?, after seconds: TimeInterval) -> String {
+            LastSyncChange.text(lastImport: lastImport, lastExport: lastExport, now: t.addingTimeInterval(seconds))
+        }
+        XCTAssertEqual(text(nil, nil, after: 0), "None yet")
+        XCTAssertEqual(text(t, nil, after: 180), "Received 3 min ago")
+        XCTAssertEqual(text(nil, t, after: 10), "Sent just now")
+        XCTAssertEqual(text(t, t.addingTimeInterval(120), after: 180), "Received 3 min ago · Sent 1 min ago")
+        // George's Mac, 2026-11-13: an import and two exports within half a second at every click into the window.
+        // The row used to name the newer one and flipped each time; now the words are the same whichever came last.
+        XCTAssertEqual(text(t, t.addingTimeInterval(0.2), after: 1), text(t.addingTimeInterval(0.2), t, after: 1))
     }
 
     // MARK: Appearance

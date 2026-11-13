@@ -89,44 +89,25 @@ final class CloudSyncMonitor {
 
     static let lastImportKey = "sync.lastImportAt"
     static let lastExportKey = "sync.lastExportAt"
-    /// When a beat last confirmed this store agreed with iCloud (brief 95), for "Last synced 3 min ago" after a relaunch.
+    /// Written by 0.9.4 to 0.9.9 (brief 95's beats); removed at launch.
     static let lastConfirmedKey = "sync.lastConfirmedAt"
 
-    // MARK: - The truth (brief 95)
+    // MARK: - When the bolt may be filled (0.9.10)
 
-    /// The beats: one small CloudKit request every 15 s while a bolt can be seen (`SyncBeat`).
-    /// Hosted tests keep no index (the test host shares the real app's container on the Mac).
-    @ObservationIgnored let beat = SyncBeat(indexURL: SyncAppDelegateSupport.isTesting ? nil : ICloudZoneIndex.fileURL())
-    /// When the bolt may be filled (`BoltTruth`), fed by the beats.
-    @ObservationIgnored private var truth = BoltTruth()
-    /// What the truth says now; every mark reads it through `state`.
-    private(set) var verdict: BoltTruth.Verdict = .unknown
-    /// When the latest confirming beat started, this session: each advance may play the "good to go" strike.
+    /// Hollow from a launch until the mirror's first import of the session, filled after it (`SyncSessionGate`). Fed by
+    /// the mirror's own events only: nothing here asks iCloud anything.
+    @ObservationIgnored private var sessionGate = SyncSessionGate()
+    /// The session still waits for its first import: the words say "checking…" (`SyncWords`).
+    private(set) var isWaitingForFirstImport = false
+    /// When the latest import or export finished well, once the session's first import is in: each advance may play
+    /// the bolt's "good to go" (`BoltStrikeGate` decides whether it does).
     private(set) var confirmedAt: Date?
-    /// The last confirmation of any launch of this store (kept in the app group's defaults), for the words only.
-    private(set) var rememberedConfirmationAt: Date?
-    /// The first read of iCloud's records for the bolt: how many so far, nil when none is running.
-    private(set) var readingCount: Int?
-    /// The latest comparison of this device with the beats' index, and the inventory it read.
-    private(set) var comparison: SyncComparison.Result?
-    @ObservationIgnored private var inventory: StoreInventory.Snapshot?
-    /// The store changed since `inventory` was read (a save here, an import).
-    @ObservationIgnored private var inventoryIsStale = true
-    @ObservationIgnored private var lastLocalSaveAt: Date?
-    /// Records this session deleted, by id, with when: a record iCloud still has is then a deletion on its way out.
-    @ObservationIgnored private var deletedHere: [UUID: Date] = [:]
     @ObservationIgnored private var container: ModelContainer?
-    /// A bolt can be seen: the app in front (iPhone, iPad) or a window visible (Mac).
-    @ObservationIgnored private var boltCanBeSeen = false
-    @ObservationIgnored private var truthTimer: Task<Void, Never>?
-    /// What "Marks show: …" said last, so the log gets a line per change of look or words, not per beat.
+    /// The app is in front (iPhone, iPad): the process runs and the marks can be seen.
+    @ObservationIgnored private var isInFront = false
+    @ObservationIgnored private var gateTimer: Task<Void, Never>?
+    /// What "Marks show: …" said last, so the log gets a line per change of look or words.
     @ObservationIgnored private var loggedMarks: String?
-    /// Beats in a row that got no answer, by kind, since the last one that did (one log line per kind, then a count).
-    @ObservationIgnored private var beatFailures: [SyncBeatFailure.Kind: Int] = [:]
-    @ObservationIgnored private var beatFailingSince: Date?
-    /// The differences last written to the log, by short hash, so a new line comes only when they change.
-    @ObservationIgnored private var loggedDifferences: Set<String> = []
-    @ObservationIgnored private var readStartedAt: Date?
 
     /// The defaults key for this store's `key` (`lastImportKey`, `lastExportKey`). Every build on a device
     /// shares the app group's defaults, so a Debug build's own store (HITList-Development.store) quoted the
@@ -145,38 +126,27 @@ final class CloudSyncMonitor {
         // `shared` is first touched after `SyncStoreGuard` has picked the store, so these are its own.
         lastImportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastImportKey)) as? Date
         lastExportAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastExportKey)) as? Date
-        rememberedConfirmationAt = AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.lastConfirmedKey)) as? Date
         watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
         accountSteadiness = AccountSteadiness(remembered: accountWatch.lastStatus)
         troubleTracker = SyncTroubleTracker(defaults: AppGroup.defaults)
     }
 
-    /// The latest moment anything is known to have reached or come from iCloud: an import, an export, or a beat that
-    /// found this device and iCloud agreeing (brief 95).
-    var lastSyncedAt: Date? { [lastImportAt, lastExportAt, rememberedConfirmationAt].compactMap { $0 }.max() }
+    /// The latest moment anything is known to have reached or come from iCloud: the mirror's last import or export.
+    var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
 
     /// What every sync mark shows (the bolt, the dot, Settings' status lines, the Account row): `rawState` steadied
     /// over time (`SyncSteadiness`, brief 78), so it says "status is green" and keeps still rather than reporting
-    /// every export and import, and shows trouble only once it stayed; then held to the truth (`BoltTruth.gate`, brief
-    /// 95): "synced" only within 30 s of a beat that confirmed it, the working look otherwise.
+    /// every export and import, and shows trouble only once it stayed; then never "synced" before the session's first
+    /// import (`SyncSessionGate`).
     var state: SyncState { displayState ?? shownState ?? rawState }
 
-    /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Up to date, checked 12 s ago", "Last synced
-    /// 3 min ago, checking…". `precise` gives the seconds.
-    func statusWords(now: Date = Date(), precise: Bool = false) -> String {
-        SyncWords.status(state: state, verdict: wordsVerdict, lastSynced: lastSyncedAt, now: now, precise: precise)
+    /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Synced 3 min ago", "Last synced 3 min ago,
+    /// checking…".
+    func statusWords(now: Date = Date()) -> String {
+        SyncWords.status(state: state, waiting: isWaitingForFirstImport, lastSynced: lastSyncedAt, now: now)
     }
 
-    /// The verdict the words follow; nil where no beats run (sync off, a replay), so the state's own words stand.
-    var wordsVerdict: BoltTruth.Verdict? {
-        guard ModelContainerFactory.isCloudKitEnabled, started else { return nil }
-        #if DEBUG
-        if SyncReplayPlayer.shared.state != nil { return nil }
-        #endif
-        return verdict
-    }
-
-    /// What the marks draw: the steadied state held to the truth, once there is one.
+    /// What the marks draw: the steadied state held to the session gate, once there is one.
     private var displayState: SyncState?
 
     /// What the signals say this instant (`SyncState.derive`): the sync log's "Sync state:" lines and the strike
@@ -253,12 +223,15 @@ final class CloudSyncMonitor {
             let at = Date()
             let summary = SaveSummary(userInfo: note.userInfo, only: synced)
             guard summary.total > 0 else { return }
-            let deleted = (note.userInfo?[ModelContext.NotificationKey.deletedIdentifiers.rawValue] as? [PersistentIdentifier] ?? [])
-                .filter { synced.contains($0.entityName) }
-            Task { @MainActor in self?.localSaved(summary, deleted: deleted, at: at) }
+            Task { @MainActor in self?.localSaved(summary, at: at) }
         })
         observeLifecycle(center)
-        startBeats()
+        #if os(iOS)
+        // iOS may launch the app in the background (a push, a widget's button): the minute of silence counts from the
+        // first time the app is in front, when someone can see the bolt (`sceneChanged`).
+        sessionGate.suspend(true, at: Date())
+        #endif
+        forgetBeats()
         pathMonitor.pathUpdateHandler = { [weak self] path in
             let online = path.status == .satisfied
             let description = Self.describe(path)
@@ -285,7 +258,6 @@ final class CloudSyncMonitor {
     func containerReady(_ container: ModelContainer) {
         LaunchTiming.mark("store")
         self.container = container
-        inventoryIsStale = true
         let url = container.configurations.first?.url
         var fields = ["store": url?.path ?? "unknown"]
         if ModelContainerFactory.didResetStore { fields["reset"] = "store moved to Trash; CloudKit re-imports" }
@@ -296,9 +268,10 @@ final class CloudSyncMonitor {
             write(.container, "Store opened without CloudKit: \(ModelContainerFactory.localOnlyReason)",
                            level: ModelContainerFactory.startupError == nil ? .notice : .error, fields: fields)
         }
+        // The mirror imports at every launch: until that import is in, nothing has been fetched for this session.
+        if ModelContainerFactory.isCloudKitEnabled { sessionGate.begin(at: Date()) }
         // The first state the marks show: only now is it known whether this launch syncs at all.
         stateChanged()
-        updateBeats()
         logStoreCounts("at launch")
     }
 
@@ -348,12 +321,15 @@ final class CloudSyncMonitor {
             MainActor.assumeIsolated {
                 self?.write(.scene, "Mac going to sleep", fields: self?.inFlightFields() ?? [:])
                 self?.watch(.suspended(at: Date()))
+                self?.sessionGate.suspend(true, at: Date())
             }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.write(.scene, "Mac woke from sleep")
                 self?.watch(.resumed(at: Date()))
+                self?.sessionGate.suspend(false, at: Date())
+                self?.publishShown(Date())
                 self?.refreshAccountStatus(force: true)
             }
         })
@@ -378,11 +354,12 @@ final class CloudSyncMonitor {
             write(.scene, "App active", fields: idle.map { ["away": SyncLogFormat.duration($0)] } ?? [:])
             #if os(iOS)
             watch(.resumed(at: now))
-            // Brief 95: what the marks counted while the app was suspended says nothing about now; coming back is
-            // hollow until the first beat answers, and never a flash of trouble for having been away.
-            if !boltCanBeSeen { steadiness.resumed(at: now) }
-            boltCanBeSeen = true
-            updateBeats()
+            // What the marks counted while the app was suspended says nothing about now: coming back never flashes
+            // trouble for having been away, and the wait for a first import counts from now.
+            if !isInFront { steadiness.resumed(at: now) }
+            isInFront = true
+            sessionGate.suspend(false, at: now)
+            publishShown(now)
             #endif
             watch(.activated(at: now, idle: idle))
             refreshAccountStatus()
@@ -394,8 +371,9 @@ final class CloudSyncMonitor {
             write(.scene, "App in background", fields: inFlightFields())
             #if os(iOS)
             watch(.suspended(at: now))
-            boltCanBeSeen = false
-            updateBeats()
+            isInFront = false
+            sessionGate.suspend(true, at: now)
+            publishShown(now)
             #endif
         @unknown default:
             write(.scene, "App phase \(String(describing: phase))")
@@ -548,16 +526,12 @@ final class CloudSyncMonitor {
         watchdog.forgetLastSync()
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastImportKey))
         AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastExportKey))
-        AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastConfirmedKey))
-        rememberedConfirmationAt = nil
         write(.note, "\(reason); sync times cleared", level: .notice)
         // The marks forget them too: nothing has synced for this store or account yet.
         steadiness = SyncSteadiness()
-        // And the truth: a confirmation was about the other store or account (brief 95).
-        truth = BoltTruth()
+        // And the session: an import was about the other store or account.
         confirmedAt = nil
-        comparison = nil
-        inventoryIsStale = true
+        if ModelContainerFactory.isCloudKitEnabled, container != nil { sessionGate.begin(at: Date()) }
         stateChanged()
     }
 
@@ -571,7 +545,7 @@ final class CloudSyncMonitor {
     func replayChange(at date: Date, phase: Phase) {
         lastChangeAt = date
         lastChangePhase = phase
-        // The strike follows confirmations since brief 95: a replayed sync stands for one.
+        // The strike follows `confirmedAt`: a replayed sync stands for a real one.
         confirmedAt = date
     }
 
@@ -635,11 +609,15 @@ final class CloudSyncMonitor {
         accountSteadiness.observe(status, at: now)
         applyShownAccount(now)
         scheduleAccountRetry(after: status)
-        // Back after a sign-out or "sign in again": the beats read iCloud whole again, so whatever the mirror did to the
-        // store meanwhile is compared with all of it (brief 95).
-        if status == .available, let previous, previous != .available { beat.requireFullRead() }
+        // Back after a sign-out or "sign in again": the mirror sets up and imports again, and until that import is in
+        // the bolt isn't filled (George's Mac, 2026-11-11: it filled the instant the account came back, before
+        // anything had been fetched).
+        // Only after a definite "no": "could not determine" says nothing about the account, and no import follows it.
+        if status == .available, let previous, blocking.contains(previous),
+           ModelContainerFactory.isCloudKitEnabled, container != nil {
+            sessionGate.begin(at: now)
+        }
         stateChanged()
-        updateBeats()
         guard status == .available else { return }
         container.fetchUserRecordID { [weak self] id, error in
             Task { @MainActor in
@@ -692,8 +670,6 @@ final class CloudSyncMonitor {
     /// device's local state of the previous account cleared (`AccountSwitch`).
     private func accountIdentified(_ identity: AccountWatch.Identity) {
         accountKey = identity.account
-        // The beats' index belongs to one account: another account's records start a fresh read (brief 95).
-        beat.account(identity.account)
         guard identity.isSwitch, let previous = identity.previous else { return }
         setNotice(.switched)
         Task { await AccountSwitch.handleSwitch(from: previous, to: identity.account) }
@@ -705,7 +681,6 @@ final class CloudSyncMonitor {
         if isOnline != online {
             isOnline = online
             stateChanged()
-            updateBeats()
         }
         guard description != loggedNetwork else { return }
         let first = loggedNetwork == nil
@@ -866,15 +841,9 @@ final class CloudSyncMonitor {
     /// Saves closer together than this share a log line (any other line written first flushes them).
     static let saveGathering: Duration = .seconds(1)
 
-    private func localSaved(_ summary: SaveSummary, deleted: [PersistentIdentifier] = [], at: Date) {
+    private func localSaved(_ summary: SaveSummary, at: Date) {
         // Gathered into the log's line first, so a "waiting: offline" finding follows the save it is about.
         defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at, records: summary.total)) } }
-        // Brief 95: what the next beat compares with iCloud has changed; a deleted record is named by its id.
-        lastLocalSaveAt = max(at, lastLocalSaveAt ?? at)
-        inventoryIsStale = true
-        if !deleted.isEmpty, let ids = inventory?.ids {
-            for identifier in deleted { if let id = ids[identifier] { deletedHere[id] = at } }
-        }
         if var pending = pendingSaves {
             pending.count += 1
             pending.last = at
@@ -934,14 +903,14 @@ final class CloudSyncMonitor {
         publishShown(now)
     }
 
-    /// Publishes what the steadiness shows, held to the truth (`BoltTruth.gate`, brief 95), as `state`; writes each
+    /// Publishes what the steadiness shows, held to the session gate (`SyncSessionGate`), as `state`; writes each
     /// change of look or words to the sync log ("Marks show: …", rare by design, so the log says what the person saw);
-    /// and sleeps until the steadiness's next deadline (the truth keeps a timer of its own, `publishTruth`).
+    /// and sleeps until the steadiness's next deadline (the gate keeps one of its own, `publishGate`).
     private func publishShown(_ now: Date) {
         if let shown = steadiness.shown, shown != shownState {
             shownState = shown
         }
-        publishTruth(now)
+        publishGate(now)
         steadyTimer?.cancel()
         guard let next = steadiness.nextDeadline(after: now) else {
             steadyTimer = nil
@@ -958,220 +927,58 @@ final class CloudSyncMonitor {
         }
     }
 
-    // MARK: - The truth (brief 95)
+    // MARK: - The session gate (0.9.10)
 
-    /// Holds the steadied state to the truth, publishes both, logs a change of look or words once, and wakes again at
-    /// the truth's next deadline (the 30 s window's end, two minutes of disagreement).
-    private func publishTruth(_ now: Date) {
-        truth.block(blocker)
-        let next = truth.verdict(at: now)
-        if next != verdict { verdict = next }
+    /// Holds the steadied state to the session gate, publishes it, logs a change of look or words once, and wakes once
+    /// more at the gate's own deadline (a minute of silence after a launch), if it has one. Nothing else wakes it:
+    /// no timer runs while the marks are at rest.
+    private func publishGate(_ now: Date) {
+        sessionGate.block(isBlocked, at: now)
+        let waiting = sessionGate.isWaiting
+        if waiting != isWaitingForFirstImport { isWaitingForFirstImport = waiting }
         let shown = shownState ?? rawState
-        var gated = BoltTruth.gate(shown, next)
+        var gated = sessionGate.gate(shown, inFlight: isSyncing, at: now)
         #if DEBUG
         // A replay (`-syncReplay`) runs with sync off: its states stand as they are, to record the looks.
         if SyncReplayPlayer.shared.state != nil { gated = shown }
         #endif
         if !ModelContainerFactory.isCloudKitEnabled { gated = shown }
         if gated != displayState { displayState = gated }
-        let words = statusWords(now: now)
-        // One line per change of look or of what the words are about, never per beat ("checked 12 s ago" ages).
-        let key = "\(SyncSteadiness.kind(gated)) \(Self.wordsKey(next, state: gated))"
+        // One line per change of look or of what the words are about, never per tick ("3 min ago" ages).
+        let key = "\(SyncSteadiness.kind(gated)) \(waiting ? "waiting" : "")"
         if key != loggedMarks {
             loggedMarks = key
-            write(.note, "Marks show: \(words)")
+            write(.note, "Marks show: \(statusWords(now: now))")
         }
-        truthTimer?.cancel()
-        truthTimer = nil
-        guard let deadline = truth.nextDeadline(after: now) else { return }
+        gateTimer?.cancel()
+        gateTimer = nil
+        guard let deadline = sessionGate.nextDeadline(after: now) else { return }
         let delay = max(0.01, deadline.timeIntervalSince(now)) + 0.02
-        truthTimer = Task { @MainActor [weak self] in
-            // The window's end is George's 30 seconds: keep the leeway small.
-            try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(50))
+        gateTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay), tolerance: .seconds(1))
             guard !Task.isCancelled, let self else { return }
-            self.publishTruth(Date())
+            self.publishGate(Date())
         }
     }
 
-    /// What the words are about, without their times: one log line per change.
-    private static func wordsKey(_ verdict: BoltTruth.Verdict, state: SyncState) -> String {
-        guard case .syncing = state else { return "" }
-        switch verdict.why {
-        case nil: return "work"
-        case .checking?: return "checking"
-        case .blocked(let blocker)?: return "blocked \(blocker)"
-        case .missed(.reading)?: return "reading"
-        case .missed(.sending)?: return "sending"
-        case .missed(.receiving)?: return "receiving"
-        case .missed(.noAnswer(let failure))?: return "no answer \(failure.kind.rawValue)"
-        }
-    }
-
-    /// What stops sync outright now, known without a beat (`BoltTruth.Blocker`). "Could not determine" and "not
-    /// checked yet" don't block: a beat that answers proves the account works.
-    private var blocker: BoltTruth.Blocker? {
-        guard ModelContainerFactory.isCloudKitEnabled else { return .syncOff }
-        if isOnline == false { return .offline }
+    /// Nothing can sync at all right now, known without asking: no network, or no usable iCloud account. "Could not
+    /// determine" and "not checked yet" don't count: the mirror's own events say how that went.
+    private var isBlocked: Bool {
+        if isOnline == false { return true }
         switch rawAccountStatus {
-        case .noAccount?, .restricted?, .temporarilyUnavailable?: return .account
-        default: return nil
+        case .noAccount?, .restricted?, .temporarilyUnavailable?: return true
+        default: return false
         }
     }
 
-    /// Wires the beats to the monitor, once, from `start()`. On the Mac a visible window lets them run.
-    private func startBeats() {
-        beat.judge = { [weak self] startedAt, answer in
-            guard let self else { return .failed(SyncBeatFailure(.other, "app closing")) }
-            return await self.judge(answer, startedAt: startedAt)
-        }
-        beat.onOutcome = { [weak self] startedAt, outcome in self?.beatEnded(startedAt: startedAt, outcome: outcome) }
-        beat.onReading = { [weak self] count in self?.reading(count) }
-        #if os(macOS)
-        MacWindowVisibility.shared.onChange = { [weak self] visible in
-            guard let self else { return }
-            self.boltCanBeSeen = visible
-            self.write(.scene, visible ? "A window is visible: checking with iCloud every 15 s" : "No window visible: checks paused")
-            self.updateBeats()
-        }
-        MacWindowVisibility.shared.start()
-        #endif
-    }
-
-    /// Lets the beats run, or stops them: a bolt can be seen, the store syncs, the network is up, the account can be
-    /// asked. When they start again after a pause, what the truth counted describes a time nothing was checked.
-    private func updateBeats() {
-        let eligible = started && boltCanBeSeen && container != nil && blocker == nil
-        guard eligible != beat.isEligible else { return }
-        if eligible { truth.restart() }
-        beat.setEligible(eligible)
-        publishTruth(Date())
-    }
-
-    /// The first read of iCloud's records: progress for Settings, and a log line at each end.
-    private func reading(_ count: Int?) {
-        if let count {
-            if readingCount == nil {
-                readStartedAt = Date()
-                write(.note, "Reading iCloud's records, for the bolt and Check iCloud…")
-            }
-            readingCount = count
-        } else if let last = readingCount {
-            readingCount = nil
-            let took = readStartedAt.map { SyncLogFormat.duration(Date().timeIntervalSince($0)) } ?? "?"
-            write(.note, "Read iCloud's records: \(last) in \(took)", fields: ["records": "\(last)", "duration": took])
-        }
-    }
-
-    /// A beat's answer, judged: a failure as it is; an answer compared with this device (a fresh inventory when the
-    /// store or the index changed), with the grace and what the mirror has in flight.
-    private func judge(_ answer: SyncBeat.Answer, startedAt: Date) async -> BoltTruth.Outcome {
-        switch answer {
-        case .failed(let failure):
-            // iCloud refused the account although the last status said it was fine: ask again now (George's Mac,
-            // 2026-11-11: no CKAccountChanged came for a while), so the marks learn it within the window.
-            if failure.kind == .account { refreshAccountStatus(force: true) }
-            return .failed(failure)
-        case .answered(let indexChanged):
-            let result = await compareWithICloud(indexChanged: indexChanged)
-            let now = Date()
-            pruneDeletions(now)
-            return .answered(BoltTruth.findings(
-                comparison: result, unsentSaves: watchdog.waitingRecords, oldestUnsentSave: watchdog.oldestWaitingSave,
-                lastLocalSaveAt: lastLocalSaveAt, deletedHere: deletedHere, inFlight: isSyncing, now: now))
-        }
-    }
-
-    /// This device against the beats' index, or nil while the index hasn't been read whole. Reads the store again only
-    /// when it changed since the last read; logs the differences when they change (counts and short hashes only).
-    private func compareWithICloud(indexChanged: Bool) async -> SyncComparison.Result? {
-        guard beat.index.complete, let container else { return nil }
-        if inventoryIsStale || inventory == nil {
-            // Marked fresh before the read: a save that lands during it marks it stale again.
-            inventoryIsStale = false
-            do {
-                inventory = try await StoreInventory.read(container)
-            } catch {
-                inventoryIsStale = true
-                write(.note, "Reading this device's records for the bolt failed", level: .error, fields: SyncLogFormat.errorFields(error))
-                return nil
-            }
-        } else if !indexChanged, let comparison {
-            return comparison
-        }
-        guard let inventory else { return nil }
-        let remote = beat.index.remoteRecords(entities: StoreInventory.entities)
-        let result = SyncComparison.compare(remote: remote, local: inventory.records, entities: StoreInventory.entities)
-        if result != comparison { comparison = result }
-        logDifferences(result)
-        return result
-    }
-
-    /// "This device and iCloud differ: …" when the set of differences changes, "… agree again" when it empties.
-    private func logDifferences(_ result: SyncComparison.Result) {
-        let hashes = Set(result.differences.map { "\($0.kind.rawValue) \(SyncComparison.shortHash($0.id))" })
-        guard hashes != loggedDifferences else { return }
-        let had = !loggedDifferences.isEmpty
-        loggedDifferences = hashes
-        guard !hashes.isEmpty else {
-            if had { write(.note, "This device and iCloud agree again", fields: ["records": "\(result.counts.values.map(\.here).reduce(0, +))"]) }
-            return
-        }
-        write(.note, "This device and iCloud differ (\(SyncComparison.differenceSummary(result)))", level: .notice,
-              fields: SyncComparison.logFields(result))
-    }
-
-    /// A deletion older than this has had its chance to reach iCloud: if iCloud still has the record, it is no longer
-    /// "on its way out".
-    static let deletionMemory: TimeInterval = 10 * 60
-
-    private func pruneDeletions(_ now: Date) {
-        deletedHere = deletedHere.filter { now.timeIntervalSince($0.value) < Self.deletionMemory }
-    }
-
-    /// A judged beat: the truth hears it, the marks follow, the log gets a line per failure kind and per recovery, and
-    /// the strike gate hears a confirmation.
-    private func beatEnded(startedAt: Date, outcome: BoltTruth.Outcome) {
-        let now = Date()
-        truth.beat(startedAt: startedAt, outcome: outcome)
-        switch outcome {
-        case .failed(let failure):
-            let first = beatFailures.isEmpty
-            beatFailures[failure.kind, default: 0] += 1
-            if first { beatFailingSince = startedAt }
-            if first || beatFailures[failure.kind] == 1 {
-                write(.note, "iCloud didn't answer a check: \(failure.reason)", level: .notice,
-                      fields: ["kind": failure.kind.rawValue, "retryAfter": failure.retryAfter.map { SyncLogFormat.duration($0) } ?? "none"])
-            }
-        case .answered(let findings):
-            if !beatFailures.isEmpty {
-                let counts = beatFailures.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue) ×\($0.value)" }
-                let lasted = beatFailingSince.map { SyncLogFormat.duration(now.timeIntervalSince($0)) } ?? "?"
-                write(.note, "iCloud answered a check again after \(beatFailures.values.reduce(0, +)) without an answer over \(lasted)",
-                      level: .notice, fields: ["failures": counts.joined(separator: ", ")])
-                beatFailures = [:]
-                beatFailingSince = nil
-            }
-            if findings.agree {
-                confirmed(at: startedAt)
-                // A good answer while iCloud last said the account was unavailable: it is back, so ask.
-                if let account = rawAccountStatus, AccountSteadiness.isBlip(account),
-                   lastAccountCheck.map({ now.timeIntervalSince($0) >= 10 }) ?? true {
-                    refreshAccountStatus(force: true)
-                }
-            }
-        }
-        stateChanged()
-    }
-
-    /// A beat confirmed this device and iCloud agree: the words remember it, the strike gate hears it (`confirmedAt`).
-    private func confirmed(at startedAt: Date) {
-        if confirmedAt.map({ startedAt > $0 }) ?? true { confirmedAt = startedAt }
-        let previous = rememberedConfirmationAt
-        rememberedConfirmationAt = startedAt
-        // Kept for the words after a relaunch; written at most once a minute.
-        if previous.map({ startedAt.timeIntervalSince($0) >= 60 }) ?? true {
-            AppGroup.defaults.set(startedAt, forKey: Self.syncTimeKey(Self.lastConfirmedKey))
-        }
+    /// 0.9.4 to 0.9.9 kept a copy of iCloud's record index for brief 95's beats, and the time of their last
+    /// confirmation. Nothing reads either now: both go, once.
+    private func forgetBeats() {
+        // Hosted tests share the installed app's containers on the Mac: they leave both alone.
+        guard !SyncAppDelegateSupport.isTesting else { return }
+        AppGroup.defaults.removeObject(forKey: Self.syncTimeKey(Self.lastConfirmedKey))
+        let index = ICloudZoneIndex.retiredFileURL()
+        if FileManager.default.fileExists(atPath: index.path) { try? FileManager.default.removeItem(at: index) }
     }
 
     /// Waits until an export that started at or after `date` has finished well (one the save just made goes out with),
@@ -1184,20 +991,6 @@ final class CloudSyncMonitor {
             try? await Task.sleep(for: .milliseconds(250))
         }
         return false
-    }
-
-    /// The audit (`SyncAudit`) read the whole zone: the beats carry on from its read, and the next beat compares again.
-    func auditRead(_ changes: ICloudZoneIndex.ZoneChanges, databaseToken: Data?) {
-        beat.adopt(changes, databaseToken: databaseToken, at: Date())
-        inventoryIsStale = true
-        beat.beatSoon()
-    }
-
-    /// The store changed underneath (an import finished, a repair saved): the next beat reads it again, and goes out at
-    /// once while the bolt waits for exactly that.
-    private func storeChangedForBeats() {
-        inventoryIsStale = true
-        if !verdict.filled { beat.beatSoon() }
     }
 
     // MARK: - Evidence (brief 95, Part 2)
@@ -1328,10 +1121,10 @@ final class CloudSyncMonitor {
                lastAccountCheck.map({ now.timeIntervalSince($0) >= 10 }) ?? true {
                 refreshAccountStatus(force: true)
             }
-            // Brief 95: an import changed the store; an export may have sent what the bolt waited for. Either way the
-            // next beat compares again, at once while the bolt isn't filled.
-            if event.type == .import { storeChangedForBeats() }
-            if event.type == .export, !verdict.filled { beat.beatSoon() }
+            // The session's first import is in: from here the bolt may be filled, and each good exchange with iCloud
+            // may play its "good to go" (`BoltStrikeGate` decides).
+            if event.type == .import { sessionGate.imported(at: now) }
+            if event.type == .import || event.type == .export, !sessionGate.isWaiting { confirmedAt = now }
             if event.type == .import, let why = countAfterNextImport {
                 countAfterNextImport = nil
                 logStoreCounts(why)

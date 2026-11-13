@@ -1,15 +1,9 @@
 import Foundation
 import CryptoKit
-import OSLog
 
-/// Brief 95: what iCloud holds in the Core Data zone, as the beats see it: one entry per record (its kind, `CD_id` and
-/// change stamps, never a title), kept current with change tokens of HITList's own, apart from the mirror's. The first
-/// read of a zone fetches every record (`complete` false until it finishes); after it, each beat asks only for what
-/// changed since the last one, which is usually nothing. Kept per store, so a Debug build's side store keeps its own,
-/// and per iCloud account (`accountKey`): another account's records are never compared with this one's.
-///
-/// Pure but for `load` and `save`, which keep it in Application Support (this app's own container, not the app group:
-/// no extension reads it).
+/// What iCloud holds in the Core Data zone, as Check iCloud… reads it (`SyncAudit`): one entry per record (its kind,
+/// `CD_id` and change stamps, never a title). Built afresh in memory each time the audit is asked for; nothing keeps
+/// it between launches and nothing reads iCloud for it unasked (brief 95's beats did both until 0.9.9). Pure.
 struct ICloudZoneIndex: Codable, Equatable {
     struct Entry: Codable, Equatable, Sendable {
         /// The CloudKit record type: "CD_TaskItem", or "CDMR" for a many-to-many link.
@@ -101,33 +95,14 @@ struct ICloudZoneIndex: Codable, Equatable {
         entries.values.filter { $0.id == nil || !entities.contains($0.entity) }.count
     }
 
-    // MARK: Keeping it
+    // MARK: The file 0.9.4 to 0.9.9 kept
 
-    private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
-
-    /// `<Application Support>/Sync/iCloud index <store name>.json`.
-    static func fileURL(storeName: String = ModelContainerFactory.storeName,
-                        folder: URL = URL.applicationSupportDirectory.appending(path: "Sync", directoryHint: .isDirectory)) -> URL {
+    /// `<Application Support>/Sync/iCloud index <store name>.json`: where brief 95's beats kept this index between
+    /// launches. Nothing keeps it now (the audit reads iCloud afresh each time it is asked); `CloudSyncMonitor` removes
+    /// the file once.
+    static func retiredFileURL(storeName: String = ModelContainerFactory.storeName,
+                               folder: URL = URL.applicationSupportDirectory.appending(path: "Sync", directoryHint: .isDirectory)) -> URL {
         folder.appending(path: "iCloud index \(storeName).json")
-    }
-
-    /// The kept index, or a fresh one when there is none, it can't be read, or it is another format's.
-    static func load(from url: URL = fileURL()) -> ICloudZoneIndex {
-        guard let data = try? Data(contentsOf: url) else { return ICloudZoneIndex() }
-        guard let index = try? JSONDecoder().decode(ICloudZoneIndex.self, from: data), index.version == version else {
-            log.notice("iCloud index at \(url.lastPathComponent, privacy: .public) unreadable; reading iCloud afresh")
-            return ICloudZoneIndex()
-        }
-        return index
-    }
-
-    func save(to url: URL = ICloudZoneIndex.fileURL()) {
-        do {
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try JSONEncoder().encode(self).write(to: url, options: .atomic)
-        } catch {
-            Self.log.error("iCloud index not saved: \(error.localizedDescription, privacy: .public)")
-        }
     }
 }
 
