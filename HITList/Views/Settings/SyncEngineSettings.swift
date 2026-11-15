@@ -202,6 +202,9 @@ struct SyncEngineHoldGroup: View {
 
     /// "Keep them in iCloud": the device's copy is thrown away and everything comes again from iCloud, as Reset local
     /// cache does (`ResetLocalCacheGroup`).
+    // TODO(after round 28, wave 2): the brain gets an action of its own for this (forget the engine's memory and
+    // download everything again, no Reset local cache needed; the supervisor's plan). Wire this call site to it then;
+    // the row and its words stay.
     private func resetLocalCache() {
         LocalCacheReset.request()
         #if os(macOS)

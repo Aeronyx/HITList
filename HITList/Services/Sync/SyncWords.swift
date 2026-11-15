@@ -47,16 +47,19 @@ enum SyncWords {
     /// Before the engine's first whole fetch has finished (or while it starts, or fetches with nothing waiting).
     static let engineChecking = "Checking with iCloud…"
 
-    /// "3 changes waiting to go to iCloud"; offline: "…; they go when you are back online".
-    static func engineWaiting(_ count: Int, offline: Bool) -> String {
-        let changes = count == 1 ? "1 change" : "\(count) changes"
-        return "\(changes) waiting to go to iCloud" + (offline ? "; they go when you are back online" : "")
+    /// "3 changes waiting to go to iCloud" / "1 change waiting to go to iCloud".
+    static func engineWaiting(_ count: Int) -> String {
+        "\(count == 1 ? "1 change" : "\(count) changes") waiting to go to iCloud"
     }
 
-    /// Offline with nothing waiting: exact, since the engine knows.
-    static func engineOffline(firstFetchDone: Bool) -> String {
-        firstFetchDone ? "Offline; nothing is waiting to go to iCloud"
-                       : "Offline; HITList checks with iCloud when you are back online"
+    /// Offline, struck through as today whatever waits (the supervisor, round 28: "struck = this device cannot reach
+    /// iCloud now"); the words carry the count, exact since the engine knows it.
+    static func engineOffline(waiting: Int, firstFetchDone: Bool) -> String {
+        if waiting > 0 {
+            return "Offline: \(waiting == 1 ? "1 change goes" : "\(waiting) changes go") to iCloud when you are back online"
+        }
+        return firstFetchDone ? "Offline: nothing is waiting to go to iCloud"
+                              : "Offline: HITList checks with iCloud when you are back online"
     }
 
     /// Items iCloud refused for good (too large, or rejected): Settings → iCloud names them.

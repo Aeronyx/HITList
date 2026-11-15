@@ -300,7 +300,8 @@ struct SyncEngineMarks: Hashable {
         case hollow
         /// Hollow in the colour of trouble: the engine holds until the person acts (`SyncWords.engineNeedsYou`).
         case needsYou
-        /// Struck through in grey: offline with nothing waiting to go.
+        /// Struck through in grey, as today's offline bolt: this device cannot reach iCloud now (the words say what
+        /// waits).
         case offline
     }
 
@@ -327,8 +328,8 @@ struct SyncEngineMarks: Hashable {
         if let hold = status.hold { return held(hold, waiting: status.waiting) }
         // Offline before any error: what stopped early offline stopped for that reason.
         if !isOnline {
-            if status.waiting > 0 { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineWaiting(status.waiting, offline: true))) }
-            return .engine(SyncEngineMarks(look: .offline, words: SyncWords.engineOffline(firstFetchDone: status.firstFetchDone)))
+            let words = SyncWords.engineOffline(waiting: status.waiting, firstFetchDone: status.firstFetchDone)
+            return .engine(SyncEngineMarks(look: .offline, words: words))
         }
         if let error = syncError(status) {
             let since = errorSince ?? now
@@ -340,7 +341,7 @@ struct SyncEngineMarks: Hashable {
         default: break
         }
         if !status.firstFetchDone { return .engine(checking) }
-        if status.waiting > 0 { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineWaiting(status.waiting, offline: false))) }
+        if status.waiting > 0 { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineWaiting(status.waiting))) }
         if !status.refused.isEmpty { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineRefused(status.refused.count))) }
         if status.isSynced { return .synced(lastSynced(status) ?? lastSyncedFallback) }
         // Fetching or sending with nothing waiting: the bolt is filled exactly when the engine says synced.

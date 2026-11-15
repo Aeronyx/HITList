@@ -290,7 +290,7 @@ struct SyncBolt: View {
             return Look(symbol: "bolt", color: HITColor.dueOverdue, opacity: 0.85)
         case .engine(let marks):
             // HITList's own engine (round 28): hollow while something is still to happen, in the colour of trouble only
-            // when the person must act; offline with nothing waiting, struck through in grey as today.
+            // when the person must act; offline struck through in grey as today, whatever waits.
             switch marks.look {
             case .hollow: return Look(symbol: "bolt", color: Theme.bolt, opacity: 0.85)
             case .needsYou: return Look(symbol: "bolt", color: HITColor.dueOverdue, opacity: 0.85)
