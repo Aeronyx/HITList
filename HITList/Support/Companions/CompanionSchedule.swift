@@ -23,8 +23,9 @@ extension Preferences {
 /// anew each time between 4 and 7, the first 1.5 to 4 seconds after it comes on screen; under a sky that holds (rain,
 /// storm, snow, heat) every 6 to 36 seconds, the first 2 to 6, as before brief 132. An idle is one flicker (a blink,
 /// one swing of a foot; about two in three) or one little loop (a blink and two swings, a second or two; about one in
-/// three), by weight (the plainest, a blink, the heaviest), never the same one twice running; while a sky holds, about
-/// every other one is the sky's own. Asleep the idles are its breaths, a twitch, a
+/// three), by weight (the plainest, a blink, the heaviest), never the same one twice running and, in the default
+/// states with three or more to choose from, never one of the last two; while a sky holds, about every other one is
+/// the sky's own. Asleep the idles are its breaths, a twitch, a
 /// murmur: flickers only. A routine (a few seconds of small moves) after 3 to 8 minutes of showing time since the
 /// last, never the same one twice running, never a little loop; while a sky holds, its own routine takes about every
 /// other one. The flourish is rare: about once in three hours of its screen showing with the app in front, never
@@ -196,8 +197,22 @@ enum CompanionSchedule {
     /// while it has any (`sky` against `skyIdleLean`), a little loop about one time in three when there are both
     /// (`kind` < `littleShare`), then by weight (`pick`). Nil when there is nothing to play.
     static func pickIdle(_ choices: [IdleChoice], last: Idle?, sky: Double, kind: Double, pick: Double) -> Idle? {
+        pickIdle(choices, avoiding: last.map { [$0] } ?? [], sky: sky, kind: kind, pick: pick)
+    }
+
+    /// The same in the default states (brief 132), from the idles played so far (`recent`, oldest first): never one
+    /// of the last two when there are three or more to choose from, else never the last.
+    static func pickIdle(_ choices: [IdleChoice], recent: [Idle], sky: Double, kind: Double, pick: Double) -> Idle? {
+        let avoid: [Idle] = Array(recent.suffix(choices.count >= 3 ? 2 : 1))
+        return pickIdle(choices, avoiding: avoid, sky: sky, kind: kind, pick: pick)
+    }
+
+    private static func pickIdle(_ choices: [IdleChoice], avoiding avoid: [Idle], sky: Double, kind: Double,
+                                 pick: Double) -> Idle? {
         guard !choices.isEmpty else { return nil }
-        var left = choices.filter { $0.idle != last }
+        let last = avoid.last
+        var left = choices.filter { !avoid.contains($0.idle) }
+        if left.isEmpty { left = choices.filter { $0.idle != last } }
         if left.isEmpty { left = choices }
         let own = left.filter(\.own)
         let ordinary = left.filter { !$0.own }

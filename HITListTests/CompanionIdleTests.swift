@@ -113,6 +113,34 @@ final class CompanionIdleTests: XCTestCase {
         XCTAssertEqual(CompanionSchedule.firstIdle, 2...6)
     }
 
+    /// Brief 132, item 2: at three times the old rate the same blink would wear, so in the default states an idle is
+    /// never one of its last two when there are three or more to choose from; under a sky only the last one, as before.
+    func testNeverOneOfTheLastTwo() {
+        let choices: [CompanionSchedule.IdleChoice] = [
+            .init(idle: .flicker(0), weight: 4), .init(idle: .flicker(1)), .init(idle: .flicker(2)), .init(idle: .little(0)),
+        ]
+        var recent: [CompanionSchedule.Idle] = []
+        var flickers = 0
+        var blinks = 0
+        for i in 0..<900 {
+            let idle = CompanionSchedule.pickIdle(choices, recent: recent, sky: CompanionRandom.unit(5, 3 * i),
+                                                  kind: CompanionRandom.unit(5, 3 * i + 1),
+                                                  pick: CompanionRandom.unit(5, 3 * i + 2))!
+            XCTAssertFalse(recent.suffix(2).contains(idle), "\(idle) again after \(recent.suffix(2))")
+            if !idle.isLittle { flickers += 1 }
+            if idle == .flicker(0) { blinks += 1 }
+            recent.append(idle)
+        }
+        XCTAssertGreaterThanOrEqual(Double(flickers) / 900, 2.0 / 3 - 0.03, "at least two in three are flickers")
+        let counts = Dictionary(grouping: recent, by: { $0 }).mapValues(\.count)
+        XCTAssertEqual(counts.max { $0.value < $1.value }?.key, .flicker(0), "the plainest still the commonest: \(counts)")
+        // Two to choose from: only the last is kept out (they take turns, never stuck).
+        let two: [CompanionSchedule.IdleChoice] = [.init(idle: .flicker(0)), .init(idle: .flicker(1))]
+        XCTAssertEqual(CompanionSchedule.pickIdle(two, recent: [.flicker(1), .flicker(0)], sky: 0, kind: 0, pick: 0), .flicker(1))
+        // And the old call (one last idle) is unchanged.
+        XCTAssertEqual(CompanionSchedule.pickIdle(choices, last: .flicker(0), sky: 0.9, kind: 0.9, pick: 0), .flicker(1))
+    }
+
     /// Ten minutes on the "+" by day and ten asleep, as George watched: how many different idles came up.
     func testTenMinutesOfIdles() {
         var report: [String] = []

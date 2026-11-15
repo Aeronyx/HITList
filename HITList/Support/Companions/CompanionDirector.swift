@@ -53,6 +53,8 @@ final class CompanionDirector {
     @ObservationIgnored private var nextIdle: [String: Date] = [:]
     /// The idle each played last, and in which place and look (its index means nothing in another mode).
     @ObservationIgnored private var lastIdle: [String: (idle: CompanionSchedule.Idle, place: CompanionPlace, asleep: Bool)] = [:]
+    /// Brief 132: the idle it played before that one, in the same place and look (never one of the last two).
+    @ObservationIgnored private var priorIdle: [String: CompanionSchedule.Idle] = [:]
     /// Brief 132: its last wait between idles in the default states, so the next one is never the same.
     @ObservationIgnored private var lastWait: [String: TimeInterval] = [:]
     /// A demo's turns so far.
@@ -475,12 +477,21 @@ final class CompanionDirector {
             // while a sky holds, about every other one is the sky's own (a drip, a bead of sweat). The next comes a
             // gap after this one ends.
             let kept = lastIdle[id]
-            let last = kept.flatMap { $0.place == stage.place && $0.asleep == stage.look.asleep ? $0.idle : nil }
-            guard let idle = CompanionSchedule.pickIdle(idleChoices(id), last: last, sky: unit(), kind: unit(),
-                                                        pick: unit()) else {
+            let same = kept.map { $0.place == stage.place && $0.asleep == stage.look.asleep } ?? false
+            let last = same ? kept?.idle : nil
+            let picked: CompanionSchedule.Idle?
+            if atEase(id) {
+                // Brief 132: at three times the old rate, never one of the last two when there are three to choose.
+                let recent = [same ? priorIdle[id] : nil, last].compactMap { $0 }
+                picked = CompanionSchedule.pickIdle(idleChoices(id), recent: recent, sky: unit(), kind: unit(), pick: unit())
+            } else {
+                picked = CompanionSchedule.pickIdle(idleChoices(id), last: last, sky: unit(), kind: unit(), pick: unit())
+            }
+            guard let idle = picked else {
                 scheduleIdle(id, after: now)
                 return
             }
+            priorIdle[id] = last
             lastIdle[id] = (idle, stage.place, stage.look.asleep)
             switch idle {
             case .flicker(let i): start(id, .gesture(i), now: now)
@@ -752,6 +763,7 @@ final class CompanionDirector {
             if changed {
                 recent[id] = []
                 lastIdle[id] = nil
+                priorIdle[id] = nil
             }
         }
         if active {
