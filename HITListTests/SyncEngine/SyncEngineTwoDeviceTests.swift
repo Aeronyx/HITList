@@ -351,6 +351,53 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
         XCTAssertEqual(savesAfter, saves, "nothing was deleted or sent: the empty store was not read as deletions")
     }
 
+    // MARK: - The default filters (the review's finding 11)
+
+    func testADefaultFilterDeletedOrEditedOnOneDeviceStaysSoWhenANewDeviceSeedsItsOwn() async throws {
+        let suiteA = "SyncEngineSeedA-\(UUID().uuidString)", suiteB = "SyncEngineSeedB-\(UUID().uuidString)"
+        let defaultsA = try XCTUnwrap(UserDefaults(suiteName: suiteA)), defaultsB = try XCTUnwrap(UserDefaults(suiteName: suiteB))
+        defer {
+            defaultsA.removePersistentDomain(forName: suiteA)
+            defaultsB.removePersistentDomain(forName: suiteB)
+        }
+        func filters(_ device: Device) throws -> [String: String] {
+            let all = try device.context.fetch(FetchDescriptor<SavedFilter>())
+            return Dictionary(uniqueKeysWithValues: all.map { ($0.name, $0.query) })
+        }
+
+        let storeA = ModelContainerFactory.preview()
+        TaskActions.seedDefaultsIfNeeded(in: storeA.mainContext, defaults: defaultsA, engine: .own)
+        let a = await device("A", container: storeA)
+        try await a.sync()
+        let seeded = try a.context.fetch(FetchDescriptor<SavedFilter>())
+        XCTAssertEqual(seeded.count, 4)
+        XCTAssertTrue(seeded.allSatisfy { $0.updatedAt == TaskActions.engineSeedDate && $0.createdAt == TaskActions.engineSeedDate })
+
+        // On A the person deletes "Waiting" and edits "Focus".
+        let waiting = try XCTUnwrap(seeded.first { $0.name == "Waiting" })
+        a.context.delete(waiting)
+        let focus = try XCTUnwrap(seeded.first { $0.name == "Focus" })
+        focus.query = "p1 & today"
+        focus.touch()
+        try a.save()
+        try await a.sync()
+
+        // B is new and seeds its own, then syncs.
+        let storeB = ModelContainerFactory.preview()
+        TaskActions.seedDefaultsIfNeeded(in: storeB.mainContext, defaults: defaultsB, engine: .own)
+        let b = await device("B", container: storeB)
+        try await b.sync()
+        try await a.sync()
+        try await b.sync()
+
+        for device in [a, b] {
+            let names = try filters(device)
+            XCTAssertNil(names["Waiting"], "\(device.name): the deletion stands against a fresh seed")
+            XCTAssertEqual(names["Focus"], "p1 & today", "\(device.name): the edit stands against a fresh seed")
+            XCTAssertEqual(names.count, 3, device.name)
+        }
+    }
+
     // MARK: - Rows that share an id
 
     func testRowsThatShareAnIdAreMergedBeforeTheEngineStarts() async throws {

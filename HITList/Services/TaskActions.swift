@@ -316,7 +316,16 @@ enum TaskActions {
     /// filter with that id or that name already exists. A device that seeds before its first CloudKit
     /// import still creates copies, but they share ids with the other devices' copies, and
     /// `Deduplicator` collapses them after the import. The per-device flag only saves the fetch.
-    static func seedDefaultsIfNeeded(in context: ModelContext, defaults: UserDefaults = AppGroup.defaults) {
+    /// When a seed is made on HITList's own engine (brief 143, the review's finding 11): long ago, the same on every
+    /// device, so a seed loses to any marker (a default filter the person deleted stays deleted on a new device) and to
+    /// any copy iCloud holds (one the person edited keeps the edit), and two devices' untouched seeds are one record.
+    static let engineSeedDate = Date(timeIntervalSinceReferenceDate: 0) // 2001-01-01 00:00 UTC
+
+    /// `engine`: which engine syncs this launch's store (`SyncEngineSwitch`). On the mirror the seed keeps today's
+    /// stamps exactly: there `Deduplicator` keeps the earliest `createdAt`, and an old stamp would let a pristine seed
+    /// win over the person's copy.
+    static func seedDefaultsIfNeeded(in context: ModelContext, defaults: UserDefaults = AppGroup.defaults,
+                                     engine: SyncEngineBoard.Engine = SyncEngineSwitch.current) {
         guard !defaults.bool(forKey: didSeedDefaultsKey) else { return }
         do {
             let existing = try context.fetch(FetchDescriptor<SavedFilter>())
@@ -327,6 +336,10 @@ enum TaskActions {
                 guard !ids.contains(id), !names.contains(Deduplicator.nameKey(seed.name)) else { continue }
                 let filter = SavedFilter(name: seed.name, query: seed.query, colorHex: seed.colorHex, sortOrder: i)
                 filter.id = id
+                if engine == .own {
+                    filter.createdAt = engineSeedDate
+                    filter.updatedAt = engineSeedDate
+                }
                 context.insert(filter)
             }
             try context.save()

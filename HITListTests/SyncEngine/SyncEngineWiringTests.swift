@@ -104,6 +104,15 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertTrue(words.contains("couldn't open this device's data"), words)
     }
 
+    func testOnTheMirrorTheSeedKeepsTodaysStamps() throws {
+        let container = ModelContainerFactory.preview()
+        let before = Date()
+        TaskActions.seedDefaultsIfNeeded(in: container.mainContext, defaults: defaults, engine: .mirror)
+        let seeded = try container.mainContext.fetch(FetchDescriptor<SavedFilter>())
+        XCTAssertEqual(seeded.count, 4)
+        XCTAssertTrue(seeded.allSatisfy { $0.createdAt >= before && $0.updatedAt >= before }, "exactly as before the engine")
+    }
+
     // MARK: - The move
 
     func testTheMoveBacksUpMergesWritesThePreferenceAndAsksToBeReopenedOnASideStore() async throws {
