@@ -122,7 +122,9 @@ struct TodoistImportCard: View {
                 HITMenuRow("Sub-tasks made tasks", systemImage: "arrow.turn.down.right", value: "\(plan.subtasksAsTasks)")
             }
             if !plan.labelsToMake.isEmpty {
-                HITMenuRow("Labels to make", systemImage: "tag", value: plan.labelsToMake.joined(separator: ", "))
+                // The names wrap under the title; as the row's value they were cut on the iPhone ("phone, s..., Errands").
+                HITMenuRow("Labels to make", subtitle: plan.labelsToMake.joined(separator: ", "), systemImage: "tag",
+                           value: "\(plan.labelsToMake.count)")
             }
             if plan.repeatingCount > 0 {
                 HITMenuRow("Repeating", systemImage: "repeat", value: "\(plan.repeatingCount)")
