@@ -130,6 +130,19 @@ final class TodoistImportTests: XCTestCase {
         XCTAssertNil(TodoistImporter.loadReceipt(at: receiptURL))
     }
 
+    func testAFewHundredTasksGoInBatchesOfFifty() async throws {
+        let rows = (1...230).map { "task,Task number \($0),,4,1" }.joined(separator: "\n")
+        let project = try TodoistReader.read(csv: "TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT\n\(rows)\n", fileName: "Big [1].csv")
+        let plan = TodoistMapping.plan([project], existing: try TodoistImporter.existing(in: context))
+        var reports: [Int] = []
+        try await TodoistImporter.run(plan, in: context, backup: { _ in }, receiptURL: receiptURL) { reports.append($0) }
+        XCTAssertEqual(reports, [50, 100, 150, 200, 230])
+        let tasks = try fetch(TaskItem.self).sorted { $0.createdAt < $1.createdAt }
+        XCTAssertEqual(tasks.count, 230)
+        XCTAssertEqual(tasks.first?.title, "Task number 1", "the file's order")
+        XCTAssertEqual(tasks.last?.title, "Task number 230")
+    }
+
     func testANewGroupIsMadeAndUndone() async throws {
         let receipt = try await run(try plan())
         XCTAssertEqual(try fetch(Project.self).map(\.name), ["Home Base"])

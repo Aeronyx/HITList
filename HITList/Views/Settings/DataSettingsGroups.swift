@@ -18,7 +18,7 @@ struct ExportImportGroup: View {
     @State private var showTodoistPicker = false
     @State private var confirmTodoistUndo = false
 
-    static let todoistFooter = "From Todoist: Settings → Backups → Download (a .zip), or a project's ⋯ → Import & export → Export as CSV."
+    static let todoistFooter = "From Todoist: Settings → Backups → Download (a .zip), or a project's ⋯ → Import & export → Export to CSV."
 
     var body: some View {
         Group {

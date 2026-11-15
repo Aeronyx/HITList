@@ -94,8 +94,8 @@ final class TodoistImportModel {
     /// The question before undo, naming the counts.
     var undoQuestion: String {
         guard let receipt else { return "" }
-        return "This removes the \(receipt.summary) the import of \(receipt.date.formatted(date: .abbreviated, time: .shortened)) made, "
-            + "even ones changed since. A Group or label that now holds something of yours stays."
+        return "The import of \(receipt.date.formatted(date: .abbreviated, time: .shortened)) made \(receipt.summary). "
+            + "They are removed, even ones changed since. A Group or label that now holds something of yours stays."
     }
 }
 
