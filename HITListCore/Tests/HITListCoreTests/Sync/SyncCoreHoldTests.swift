@@ -294,6 +294,38 @@ final class SyncCoreHoldTests: XCTestCase {
         XCTAssertNil(stored)
     }
 
+    func testAFullICloudIsStillHeldAfterARelaunchAndTheStartTriesAgain() async throws {
+        let device = await synced([task("A", "Milk")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk")])
+        await device.core.localChanged([taskKey("A")])
+        await device.transport.setAnswer { _, _ in [.sent(saved: [], removed: [], failed: [taskKey("A"): .quotaExceeded])] }
+        try await device.transport.send()
+        let stored = await holdFact(device)
+        XCTAssertEqual(stored, .storageFull)
+        // The relaunch is a return to the app: tried again.
+        let relaunched = device.relaunched(transport: ScriptedTransport())
+        await relaunched.core.start()
+        let status = await relaunched.status()
+        XCTAssertNil(status.hold)
+        let pending = await relaunched.pending()
+        XCTAssertEqual(pending, [.save(taskKey("A"))])
+    }
+
+    func testAConflictOnTheMetaThatIsNewerHolds() async throws {
+        let device = Device([task("A", "Milk")])
+        await device.core.start()
+        await device.deliverFetch([])
+        let newer = meta(SyncSchema.formatVersion + 1, "m9")
+        await device.transport.setAnswer { records, _ in
+            [.sent(saved: [], removed: [], failed: Dictionary(uniqueKeysWithValues: records.map { record in
+                (record.record.key, record.record.key == SyncCore.metaKey ? SendFailure.conflict(server: newer) : .quotaExceeded)
+            }))]
+        }
+        try await device.transport.send()
+        let status = await device.status()
+        XCTAssertEqual(status.state, .held(.needsUpdate), "a newer build reached iCloud first")
+    }
+
     // MARK: duplicates
 
     func testDuplicatesHoldUntilTheAppHasMergedThem() async {

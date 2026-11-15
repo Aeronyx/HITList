@@ -343,6 +343,23 @@ final class SyncCoreTests: XCTestCase {
         XCTAssertEqual(pending, [], "nothing differs from iCloud")
     }
 
+    func testAFetchThatStopsEarlyKeepsWhatWasSetAsideAside() async {
+        let device = await synced([])
+        await device.transport.deliver(.willFetch)
+        await device.transport.deliver(.fetched(changed: [cloud(task("C", "Child", parent: "P"))], removed: []))
+        await device.transport.deliver(.didFetch(error: "The network went away"))
+        let c = await device.item(taskKey("C"))
+        XCTAssertNil(c, "not written without its parent: the fetch will be tried again")
+        let aside = try? await device.ledger.deferred()
+        XCTAssertEqual(aside?.map(\.key), [taskKey("C")])
+        let status = await device.status()
+        XCTAssertEqual(status.lastError, "The network went away")
+
+        await device.deliverFetch([cloud(task("P", "Parent"))])
+        let child = await device.item(taskKey("C"))
+        XCTAssertEqual(child?["parent"], .reference("P"))
+    }
+
     func testATaskBeforeItsParentInOneBatch() async {
         let device = await synced([])
         await device.deliverFetch([cloud(task("C", "Child", parent: "T")), cloud(task("T", "Parent"))])
