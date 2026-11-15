@@ -59,10 +59,23 @@ public enum RecordMerge {
 
     /// `record` as the merge reads it: cut to the fields this build knows, required fields filled in. A type this
     /// build does not know comes back as it is.
+    ///
+    /// Two readings make records that mean the same compare the same, so that nothing is sent back and forth for
+    /// them (round 28, brief 138): a marker is its key and its time and nothing else (content left on one by
+    /// mistake, or an `updatedAt` other than its `deletedAt`, does not make a different marker); a set of references
+    /// is sorted without repeats, and an empty one is none (as a device holds it).
     public static func normal(_ record: SyncRecord?) -> SyncRecord? {
         guard let record else { return nil }
         guard let known = SyncSchema.known(record) else { return record }
-        return SyncSchema.filled(known)
+        if case .millis(let deleted)? = known.fields[SyncSchema.deletedAt] {
+            return SyncRecord(key: known.key, fields: [SyncSchema.deletedAt: .millis(deleted),
+                                                       SyncSchema.updatedAt: .millis(deleted)])
+        }
+        var out = SyncSchema.filled(known)
+        for (field, value) in out.fields {
+            if case .referenceList(let names) = value { out.fields[field] = names.isEmpty ? nil : .references(names) }
+        }
+        return out
     }
 
     public static func merge(_ input: MergeInput) -> MergeOutcome {
@@ -103,8 +116,9 @@ public enum RecordMerge {
 
         case (let base?, nil, let server?):
             if server.isDeleted {
-                // M10 (and M13 for a marker both knew): deleted there, not here either.
-                return MergeOutcome(merged: server, rule: base.isDeleted ? .cameBackThere : .deletedBoth)
+                // M10: deleted there, not here either. Also when the base is a marker too (the table has no row for
+                // it: M13 is a live record there): nothing happened on either side, iCloud's marker stands.
+                return MergeOutcome(merged: server, rule: .deletedBoth)
             }
             if base.isDeleted {
                 // M13: deleted as far as this device knew, made again on another.
