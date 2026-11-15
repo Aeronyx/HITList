@@ -729,6 +729,31 @@ final class FakeCloudTests: XCTestCase {
         XCTAssertEqual(pending, [.save(key("t1"))])
     }
 
+    func testCrashAfterHandling_whatTheBrainAddedWhileHandlingIsLostWithIt_andKeptOtherwise() async throws {
+        let cloud = FakeCloud()
+        await cloud.poke(key("t1"), ["title": .string("one")])
+        let ledger = MemoryLedger()
+        let a = await FakeDevice(cloud, "A", ledger: ledger)
+        let transport = a.transport
+        let t9 = key("t9")
+        await a.recorder.setDuring { event in
+            if case .fetched = event { await transport.add([.save(t9)]) }
+        }
+        await a.transport.crash(.afterHandling(.fetched))
+        await assertFakeThrows(try await a.transport.fetch(), .crashed)
+        let relaunched = await FakeDevice(cloud, "A", ledger: ledger)
+        let lost = await relaunched.transport.pending()
+        XCTAssertEqual(lost, [], "saved with the event, and the process died before the event was")
+        let transport2 = relaunched.transport
+        await relaunched.recorder.setDuring { event in
+            if case .fetched = event { await transport2.add([.save(t9)]) }
+        }
+        try await relaunched.transport.fetch()
+        let again = await FakeDevice(cloud, "A", ledger: ledger)
+        let kept = await again.transport.pending()
+        XCTAssertEqual(kept, [.save(t9)])
+    }
+
     func testDeliverTwice_theNextEventOfAKindArrivesASecondTimeAndTheObserverHearsBoth() async throws {
         let cloud = FakeCloud()
         await cloud.poke(key("t1"), ["title": .string("one")])

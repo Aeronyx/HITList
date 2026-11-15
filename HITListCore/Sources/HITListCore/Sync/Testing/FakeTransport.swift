@@ -198,6 +198,11 @@ public actor FakeTransport: SyncTransport {
     private var twice: Set<FakeEventKind> = []
     private var observer: (@Sendable (FakeDelivery) async -> Void)?
 
+    /// Inside `handle`: what the brain adds or removes then is saved with the event, after it (`CKSyncEngine` hands
+    /// its state over in a later `stateUpdate` event), so a crash right after the event loses it.
+    private var delivering = false
+    private var unsaved = false
+
     // One operation at a time (T1): a second fetch or send waits for the first.
     private var busy = false
     private var waiting: [CheckedContinuation<Void, Never>] = []
@@ -272,7 +277,7 @@ public actor FakeTransport: SyncTransport {
             state.pending.append(change)
             changed = true
         }
-        if changed { await persist() }
+        if changed { await persistUnlessDelivering() }
     }
 
     public func remove(_ changes: [PendingChange]) async {
@@ -280,7 +285,11 @@ public actor FakeTransport: SyncTransport {
         let gone = Set(changes)
         let before = state.pending.count
         state.pending.removeAll { gone.contains($0) }
-        if state.pending.count != before { await persist() }
+        if state.pending.count != before { await persistUnlessDelivering() }
+    }
+
+    private func persistUnlessDelivering() async {
+        if delivering { unsaved = true } else { await persist() }
     }
 
     public func fetch() async throws {
@@ -600,9 +609,11 @@ public actor FakeTransport: SyncTransport {
         for round in 0..<rounds {
             guard let delegate, !dead else { throw dead ? FakeTransportError.crashed : FakeTransportError.notStarted }
             let identity = self.identity
+            delivering = true
             await FakeTransportContext.$handling.withValue(FakeTransportContext.handling.union([identity])) {
                 await delegate.handle(event)
             }
+            delivering = false
             deliveredCount += 1
             if let observer {
                 var failed = false
@@ -615,6 +626,10 @@ public actor FakeTransport: SyncTransport {
             crashPoint = nil
             die()
             throw FakeTransportError.crashed
+        }
+        if unsaved {
+            unsaved = false
+            await persist()
         }
     }
 
