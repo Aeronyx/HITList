@@ -156,9 +156,26 @@ actor SyncLedgerStore: SyncLedger {
                 dropped = true
             }
         }
-        if dropped { try? context.save() }
+        if dropped {
+            // The record of a forgotten entry must be settled afresh, and an item that is not on this device is only
+            // ever settled when iCloud's record arrives: the bookmark is still past it. So everything is asked for
+            // again, once (the brain's own fact for it: `SyncCore` resets the transport at its start when it is set).
+            // Without this the device would lack an item iCloud holds, for good (the review, under finding 6).
+            let name = Self.refetchFact
+            var descriptor = FetchDescriptor<LedgerFactRow>(predicate: #Predicate { $0.name == name })
+            descriptor.fetchLimit = 1
+            if let row = (try? context.fetch(descriptor))?.first {
+                row.value = Data([1])
+            } else {
+                context.insert(LedgerFactRow(name: name, value: Data([1])))
+            }
+            try? context.save()
+        }
         return out.sorted { $0.key < $1.key }
     }
+
+    /// The brain's fact that asks for everything to be fetched again at its next start (`SyncCore.refetchFact`).
+    static let refetchFact = "refetch"
 
     func deferred() async throws -> [CloudRecord] {
         let context = makeContext()

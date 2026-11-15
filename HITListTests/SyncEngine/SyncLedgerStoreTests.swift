@@ -107,6 +107,10 @@ final class SyncLedgerStoreTests: XCTestCase {
         XCTAssertEqual(deferred, [cloud(8)])
         let unreadable = await ledger.unreadable
         XCTAssertEqual(unreadable.count, 2, "said, for the sync log")
+        // The forgotten entry's record must come again from iCloud (an item not here is settled only when its
+        // record arrives): the brain's own fact asks for everything again at its next start.
+        let refetch = try await ledger.fact(SyncLedgerStore.refetchFact)
+        XCTAssertEqual(refetch, Data([1]))
         // Forgotten for good: the next read is clean, and the key can be written again.
         let again = try await ledger.entries()
         XCTAssertEqual(again, [entry(2)])
