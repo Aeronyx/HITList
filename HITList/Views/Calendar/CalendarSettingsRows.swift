@@ -207,10 +207,17 @@ enum CalendarSettingsDevice: Equatable {
     }
 
     /// The way a Google account's calendars come onto the device, as its own settings name it.
-    var googlePath: String {
+    var googlePath: String { googlePath(systemMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion) }
+
+    /// Read on the real things (brief 136): iOS 27's Settings → Apps → Calendar has "Add Account…" in its header,
+    /// which asks for an address or offers "choose from a list" (iOS 27.0 simulator, 2026-11-14); iOS 18 had a
+    /// Calendar Accounts row first. The Mac's from its Internet Accounts strings (macOS 26.7.1).
+    func googlePath(systemMajor: Int) -> String {
         switch self {
         case .iPhone, .iPad:
-            "Settings → Apps → Calendar → Calendar Accounts → Add Account → Google"
+            systemMajor >= 27
+                ? "Settings → Apps → Calendar → Add Account…, then your Google address (or choose from a list → Google)"
+                : "Settings → Apps → Calendar → Calendar Accounts → Add Account → Google"
         case .mac:
             "System Settings → Internet Accounts → Add Account… → Google, with Calendars switched on"
         }

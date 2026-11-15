@@ -59,7 +59,11 @@ final class CalendarSettingsTests: XCTestCase {
 
     func testGoogleWordsGiveTheDevicesOwnPath() {
         let phone = CalendarSettingsPage.googleWords(connected: false, device: .iPhone)
-        XCTAssertTrue(phone.contains("Settings → Apps → Calendar → Calendar Accounts → Add Account → Google"), phone)
+        XCTAssertTrue(phone.contains(CalendarSettingsDevice.iPhone.googlePath), phone)
+        XCTAssertEqual(CalendarSettingsDevice.iPhone.googlePath(systemMajor: 27),
+                       "Settings → Apps → Calendar → Add Account…, then your Google address (or choose from a list → Google)")
+        XCTAssertEqual(CalendarSettingsDevice.iPad.googlePath(systemMajor: 18),
+                       "Settings → Apps → Calendar → Calendar Accounts → Add Account → Google")
         XCTAssertTrue(phone.contains("never signs in to Google"))
         XCTAssertEqual(CalendarSettingsPage.googleWords(connected: nil, device: .iPhone), phone, "unknown reads as not there")
         let mac = CalendarSettingsPage.googleWords(connected: false, device: .mac)

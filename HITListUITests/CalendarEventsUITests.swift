@@ -174,7 +174,7 @@ final class CalendarEventsUITests: XCTestCase {
         for _ in 0..<6 where !toggle.isHittable { app.swipeDown() }
         toggle.tap()
         XCTAssertTrue(element("settings-calendar-account-iCloud").waitForNonExistence(timeout: 2))
-        XCTAssertTrue(google.label.contains("Add Account → Google"), google.label)
+        XCTAssertTrue(google.label.contains("Add Account…"), google.label)
         snapshot("6 Settings → Calendar, off")
         closeSettings()
         tab("today")
@@ -191,7 +191,7 @@ final class CalendarEventsUITests: XCTestCase {
         XCTAssertFalse(element("settings-calendar-account-Gmail").exists)
         let google = element("settings-calendar-google")
         for _ in 0..<6 where !(google.exists && google.isHittable) { app.swipeUp() }
-        XCTAssertTrue(google.label.contains("Settings → Apps → Calendar → Calendar Accounts → Add Account → Google"), google.label)
+        XCTAssertTrue(google.label.contains("Settings → Apps → Calendar → Add Account…"), google.label)
         snapshot("7 Settings → Calendar, no Google account")
     }
 
