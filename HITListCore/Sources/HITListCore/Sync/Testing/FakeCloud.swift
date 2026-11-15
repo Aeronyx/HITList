@@ -200,13 +200,11 @@ public actor FakeCloud {
         var failed: [SyncKey: SendFailure] = [:]
     }
 
-    /// Applies one batch, each change on its own (a batch is not all-or-nothing, T10). The zone must be `incarnation`;
-    /// the caller has checked.
-    func apply(account: String, incarnation: Int, saves: [WireSave], deletes: [SyncKey]) -> BatchResult {
+    /// Applies one batch, each change on its own (a batch is not all-or-nothing, T10). Nil when the zone is no longer
+    /// `incarnation` (lost since the transport looked): nothing was applied.
+    func apply(account: String, incarnation: Int, saves: [WireSave], deletes: [SyncKey]) -> BatchResult? {
         var result = BatchResult()
-        guard var zone = accounts[account]?.zone, zone.incarnation == incarnation else {
-            preconditionFailure("FakeCloud.apply: the transport sent to a zone that is not there; it must check first")
-        }
+        guard var zone = accounts[account]?.zone, zone.incarnation == incarnation else { return nil }
         let quotaFull = accounts[account]?.quotaFull ?? false
         for save in saves {
             if let refusal = refusals.removeValue(forKey: save.key) {

@@ -309,6 +309,22 @@ final class SyncInvariantsTests: XCTestCase {
         print("  replay: SyncSimulation.randomRun(seed: \(report.seed), devices: \(report.devices), steps: \(report.steps), brain: NaiveBrain.make)")
     }
 
+    /// Every fault kind, the ones that are not everyday among them (a memory lost, the zone deleted or reset, an
+    /// account switched or signed out, iCloud full, a refusal), drawn often: the rig plays them all through, relaunches
+    /// what crashed, heals, and still reaches its checks. (The simple brain's findings are not the point here.)
+    func testEveryFaultKindPlaysThroughTheRig() async {
+        var config = SimConfig()
+        config.faults = Set(SimFaultKind.allCases)
+        config.faultPercent = 30
+        let report = await SyncSimulation.randomRun(seed: 3, devices: 3, steps: 400, config: config, brain: NaiveBrain.make)
+        XCTAssertEqual(report.script.count, 400)
+        for kind in ["without its ledger", "fault account", "iCloud deleteZone", "iCloud quotaFull", "iCloud refuseNextSave",
+                     "fault crash", "fault deliverTwice", "transport syncs by itself", "iCloud poke"] {
+            XCTAssertTrue(report.script.contains { $0.contains(kind) }, "no step '\(kind)' in seed 3")
+        }
+        print("Every fault kind, seed 3: \(report.findings.count) findings, \(report.notes.count) notes")
+    }
+
     /// Measured in the test process's own CPU time: on a Mac shared with other builds the wall clock says more about
     /// them than about the rig.
     func testAThousandStepsOnThreeDevicesTakeWellUnderASecond() async {

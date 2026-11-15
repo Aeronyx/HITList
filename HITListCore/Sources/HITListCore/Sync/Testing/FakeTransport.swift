@@ -443,12 +443,14 @@ public actor FakeTransport: SyncTransport {
                     state.bookmark = nil
                     await persist()
                 }
-                guard let incarnation = state.zone, await cloud.incarnation(account: account) == incarnation else {
-                    // Lost between the check and now: the next turn of the loop says so.
+                guard let incarnation = state.zone,
+                      let applied = await cloud.apply(account: account, incarnation: incarnation, saves: batch.saves,
+                                                      deletes: batch.deletes) else {
+                    // The zone was lost since the check: the next turn of the loop says so, and this batch goes again
+                    // if the brain adds it again.
                     continue
                 }
-                result = await cloud.apply(account: account, incarnation: incarnation, saves: batch.saves,
-                                           deletes: batch.deletes)
+                result = applied
             }
             if loseNextResponse {
                 loseNextResponse = false
