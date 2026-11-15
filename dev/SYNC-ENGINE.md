@@ -123,12 +123,12 @@ The result is what both sides should end with: the item, a marker, or nothing.
 |---|---|---|
 | M1 | Nothing here, nothing there | Nothing |
 | M2 | Here, no B, not there | L (new: it goes to iCloud) |
-| M3 | Not here, no B, alive there | S (new: it arrives) |
-| M4 | Not here, no B, a marker there | S (nothing to delete) |
+| M3 | Not here, no B, alive there | S (new: it arrives). Unless this device holds a deletion of its own still to send for it (`deletedHereAt` set, kept across a forgotten ledger, never "now"): then as M8 against that time |
+| M4 | Not here, no B, a marker there | S (nothing to delete). With a deletion of this device's own still to send: a marker at the later of the two times |
 | M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock |
 | M6 | Here, no B, a marker there | L if `L.updatedAt` is after the deletion (it comes back there), else the marker (it goes here) |
 | M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
-| M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D |
+| M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D. The marker is never earlier than the version it deletes (the later of D and `S.updatedAt`): a device whose clock runs behind still deletes what it held |
 | M9 | Here, B alive, a marker there | L same as B: the marker (it goes here). L changed after the deletion: L (it comes back there). Else the marker |
 | M10 | Not here, a marker there | B alive (deleted here too): a marker at the later of D and S's deletion, so the time does not depend on who reached iCloud first; it is sent if it differs from S. B a marker: S, unless this device still has a later marker of its own to send (`deletedHereAt` set, never "now"): then that one |
 | M11 | B present, not there at all | L same as B, or not here: nothing. L changed: L, new again |
@@ -143,6 +143,10 @@ A marker is read as its key and its time and nothing else, and a set of referenc
 an empty one the same as none), whatever a transport hands over. A type this build does not know never reaches
 the merge: the brain leaves such records alone (section 8).
 
+A contest between a change and a deletion at the same millisecond goes to the deletion. `D` is when the deletion
+was noticed, which the brain writes down (never earlier than the deleted version's own time) before it settles
+anything with it, so a marker sent twice is the same marker.
+
 Known limits, on purpose: clocks are the devices' own (a device with a wrong clock can win or lose a contest it
 should not); two devices that both change the same field of the same item while apart keep one of the two values;
 when their `updatedAt` are equal the one that reached iCloud first stands (every device still ends with the same
@@ -150,7 +154,12 @@ record); `flipCount` is last-writer like any field (two devices flipping the sam
 deleted on a device before that device and iCloud ever agreed on it leaves no marker (another device's copy of it
 arrives as new: the seeded filters, the `flipboard` label and the profile have fixed keys, so this can be seen with
 them); an undo is ordered against a deletion elsewhere by the item's `updatedAt`, so the app moves `updatedAt` when
-it puts a deleted item back.
+it puts a deleted item back; a change that does not move `updatedAt` (the day anchoring, a board moving its switches)
+is found and sent like any other but is ordered by the old time, so it loses a contest with a deletion or with
+another device's change to the same field; two devices that meet for the first time with different labels on the
+same task keep one side's (with no base a removal cannot be told from an addition); and once a marker has been
+removed for good, after `markerLifetime` (400 days), a device that merges without a memory and still holds the
+item sends it back.
 
 ## 6. The transport's rules
 
@@ -189,8 +198,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   the first event of the first sync after `start` if it changed while the app was not running (never inside
   `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
   account nothing is fetched or sent. A transport that lost its own state announces `signedIn` for the account that
-  is signed in, even when that is the account the ledger belongs to: the brain reads a sign-in to its own account
-  as no change of account (only the bookmark and the list are gone, as after T13).
+  is signed in, even when that is the account the ledger belongs to. The brain reads a sign-in to its own account
+  as no change of account (nothing of the person's leaves the device) but as **the transport's memory lost**, and
+  forgets its own with it (section 7): a bookmark that starts afresh never tells of a zone lost in the meantime, so
+  a ledger kept would hold bases for records iCloud no longer has, and nothing would send them again (found by
+  session 140's rig).
 - **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
@@ -202,6 +214,12 @@ here has no `base`. Nothing is sent before the first whole fetch has finished (`
 device first learns what iCloud holds; each record is then settled by M2 to M6: the same item on both sides becomes
 one record, an item deleted elsewhere is found deleted by its marker, and only what iCloud truly lacks is sent.
 This one path is the migration, the repair, and the answer to "what if the engine's own file is damaged".
+
+**The ledger never outlives the bookmark, nor the bookmark the ledger.** The transport's state is one of the ledger's
+facts, so they are lost together; and when the transport says its state is gone (T12) the brain forgets the ledger.
+One thing is carried across: a deletion this device made and has not yet sent (`deletedHereAt`) is kept as an entry
+with no base, and settles against iCloud's record like M8 (iCloud's stands if it changed after the deletion, else
+the marker goes). Without that, an item deleted here a moment before the memory was lost would come back.
 
 ## 8. What arrives
 
