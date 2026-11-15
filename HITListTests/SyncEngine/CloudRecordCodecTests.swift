@@ -52,7 +52,7 @@ final class CloudRecordCodecTests: XCTestCase {
         for type in everyType {
             let record = full(type.name, fields: type.fields, name: type.singleton ?? UUID().uuidString)
             let ck = try CloudRecordCodec.record(for: OutgoingRecord(record: record, system: nil), in: zone, assets: assets)
-            XCTAssertEqual(ck.recordType, type.name)
+            XCTAssertEqual(ck.recordType, "HL" + type.name)
             XCTAssertEqual(ck.recordID.recordName, "\(type.name).\(record.key.name)")
             XCTAssertEqual(ck.recordID.zoneID, zone)
             for field in type.fields {
@@ -100,7 +100,7 @@ final class CloudRecordCodecTests: XCTestCase {
     func testARebuiltRecordWritesEveryKnownFieldAndLeavesANewerBuildsKeysAlone() throws {
         // iCloud's record, as a newer build left it: every known field, and two keys this build doesn't know.
         let key = SyncKey(type: "TaskItem", name: UUID().uuidString)
-        let server = CKRecord(recordType: "TaskItem", recordID: CloudRecordCodec.recordID(for: key, in: zone))
+        let server = CKRecord(recordType: "HLTaskItem", recordID: CloudRecordCodec.recordID(for: key, in: zone))
         server["title"] = "Old" as NSString
         server["notes"] = "Kept?" as NSString
         server["futureField"] = "from a newer build" as NSString
@@ -126,7 +126,7 @@ final class CloudRecordCodecTests: XCTestCase {
 
     func testSystemFieldsAreKeptThroughTheRebuild() throws {
         let key = SyncKey(type: "Project", name: UUID().uuidString)
-        let server = CKRecord(recordType: "Project", recordID: CloudRecordCodec.recordID(for: key, in: zone))
+        let server = CKRecord(recordType: "HLProject", recordID: CloudRecordCodec.recordID(for: key, in: zone))
         let system = CloudRecordCodec.systemFields(of: server)
         let rebuilt = try XCTUnwrap(CloudRecordCodec.rebuilt(from: system, id: server.recordID, type: "Project"))
         XCTAssertEqual(rebuilt.recordID, server.recordID)
@@ -135,13 +135,16 @@ final class CloudRecordCodecTests: XCTestCase {
     }
 
     func testSystemFieldsOfAnotherRecordAreNotUsed() throws {
-        let a = CKRecord(recordType: "Project", recordID: CKRecord.ID(recordName: "Project.A", zoneID: zone))
+        let a = CKRecord(recordType: "HLProject", recordID: CKRecord.ID(recordName: "Project.A", zoneID: zone))
         let system = CloudRecordCodec.systemFields(of: a)
         let otherName = CKRecord.ID(recordName: "Project.B", zoneID: zone)
         let otherZone = CKRecord.ID(recordName: "Project.A", zoneID: CloudRecordCodec.zoneID("HITListProbe-x"))
         XCTAssertNil(CloudRecordCodec.rebuilt(from: system, id: otherName, type: "Project"))
         XCTAssertNil(CloudRecordCodec.rebuilt(from: system, id: otherZone, type: "Project"))
         XCTAssertNil(CloudRecordCodec.rebuilt(from: system, id: a.recordID, type: "TaskLabel"))
+        let plainType = CKRecord(recordType: "Project", recordID: a.recordID)
+        XCTAssertNil(CloudRecordCodec.rebuilt(from: CloudRecordCodec.systemFields(of: plainType), id: a.recordID, type: "Project"),
+                     "a token for a record under the model's own type is not ours")
         XCTAssertNil(CloudRecordCodec.rebuilt(from: Data("not an archive".utf8), id: a.recordID, type: "Project"))
         // Then the record is made new, and still carries every field.
         let record = SyncRecord(type: "Project", name: "B", fields: ["name": .string("Inbox")])
@@ -180,7 +183,7 @@ final class CloudRecordCodecTests: XCTestCase {
 
     func testKeysANewerBuildWroteReachTheBrainAndAreCutByTheSchema() throws {
         let id = CloudRecordCodec.recordID(for: SyncKey(type: "TaskLabel", name: "L1"), in: zone)
-        let ck = CKRecord(recordType: "TaskLabel", recordID: id)
+        let ck = CKRecord(recordType: "HLTaskLabel", recordID: id)
         ck["name"] = "Errands" as NSString
         ck["futureText"] = "x" as NSString
         ck["futureInt"] = NSNumber(value: Int64(42))
@@ -208,7 +211,7 @@ final class CloudRecordCodecTests: XCTestCase {
 
     func testAKnownFieldOfAnotherKindIsLeftForTheSchemaToDrop() throws {
         let id = CloudRecordCodec.recordID(for: SyncKey(type: "TaskItem", name: "T1"), in: zone)
-        let ck = CKRecord(recordType: "TaskItem", recordID: id)
+        let ck = CKRecord(recordType: "HLTaskItem", recordID: id)
         ck["priority"] = "high" as NSString
         ck["project"] = ["P1"] as NSArray
         let record = try CloudRecordCodec.cloudRecord(from: ck).record
@@ -220,9 +223,14 @@ final class CloudRecordCodecTests: XCTestCase {
     func testARecordWhoseNameDoesNotParseIsNotOurs() {
         let mirror = CKRecord(recordType: "CD_TaskItem", recordID: CKRecord.ID(recordName: UUID().uuidString, zoneID: zone))
         XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: mirror))
-        let mismatched = CKRecord(recordType: "Project", recordID: CKRecord.ID(recordName: "TaskItem.T1", zoneID: zone))
+        let mismatched = CKRecord(recordType: "HLProject", recordID: CKRecord.ID(recordName: "TaskItem.T1", zoneID: zone))
         XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: mismatched)) {
-            XCTAssertEqual($0 as? CloudRecordCodec.DecodeProblem, .notOurs(recordName: "TaskItem.T1", recordType: "Project"))
+            XCTAssertEqual($0 as? CloudRecordCodec.DecodeProblem, .notOurs(recordName: "TaskItem.T1", recordType: "HLProject"))
+        }
+        // A record under the model's own name (the mirror's mapping; the first probe runs wrote these): not ours.
+        let plain = CKRecord(recordType: "TaskItem", recordID: CKRecord.ID(recordName: "TaskItem.T1", zoneID: zone))
+        XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: plain)) {
+            XCTAssertEqual($0 as? CloudRecordCodec.DecodeProblem, .notOurs(recordName: "TaskItem.T1", recordType: "TaskItem"))
         }
     }
 
@@ -243,6 +251,17 @@ final class CloudRecordCodecTests: XCTestCase {
         for type in everyType {
             let key = SyncKey(type: type.name, name: type.singleton ?? uuid)
             XCTAssertEqual(CloudRecordCodec.key(for: CloudRecordCodec.recordID(for: key, in: zone)), key)
+        }
+    }
+
+    func testRecordTypesAreTheTypeBehindHL() {
+        for type in everyType {
+            XCTAssertEqual(CloudRecordCodec.recordType(for: type.name), "HL\(type.name)")
+            XCTAssertEqual(CloudRecordCodec.type(forRecordType: "HL\(type.name)"), type.name)
+            XCTAssertNil(CloudRecordCodec.type(forRecordType: type.name), "the model's own name is the mirror's")
+        }
+        for bad in ["", "HL", "CD_TaskItem", "hlTaskItem", "HL_x", "HL1Task", "HLTask Item", "XHLTaskItem"] {
+            XCTAssertNil(CloudRecordCodec.type(forRecordType: bad), bad)
         }
     }
 
@@ -311,7 +330,7 @@ final class CloudRecordCodecTests: XCTestCase {
         let handle = try FileHandle(forWritingTo: url)
         try handle.truncate(atOffset: UInt64(CloudRecordCodec.assetByteLimit + 1))
         try handle.close()
-        let ck = CKRecord(recordType: "Profile", recordID: CKRecord.ID(recordName: "Profile.profile", zoneID: zone))
+        let ck = CKRecord(recordType: "HLProfile", recordID: CKRecord.ID(recordName: "Profile.profile", zoneID: zone))
         ck["avatarData"] = CKAsset(fileURL: url)
         XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: ck)) {
             guard case .assetUnreadable(let field, _)? = $0 as? CloudRecordCodec.DecodeProblem else { return XCTFail("\($0)") }

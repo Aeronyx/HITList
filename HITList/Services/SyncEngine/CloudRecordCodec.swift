@@ -8,6 +8,11 @@ import HITListCore
 /// - **Names.** A record is named `"<type>.<name>"` (`TaskItem.6B1F…`, `Profile.profile`, `Meta.meta`) in one zone of
 ///   the private database. A pending change in `CKSyncEngine` names a record by its `CKRecord.ID` alone, so the id
 ///   has to say the type. Parsed back strictly (`key(forRecordName:)`): a name that does not parse is not ours.
+/// - **Record types** are `HL` + the type (`HLTaskItem`, `HLProfile`, `HLMeta`; `recordType(for:)`), never the
+///   model's own name: SwiftData's mirror, still on in released builds, imports every zone of the database and maps a
+///   record whose type is an entity's name onto that entity (probe, 2026-11-15: it turned the engine's records into
+///   empty items and deleted its profile). `SyncKey.type` stays the model's name; only CloudKit sees the prefix. A
+///   record whose type is not exactly `HL` + the type its name says is not ours.
 /// - **Out** (`record(for:in:assets:)`, T4): every field of the type is written, set or emptied, and `deletedAt`
 ///   likewise; a key the type does not list is never touched, so a newer build's fields survive this build's save.
 ///   The record is rebuilt from the archived system fields when there are some, so iCloud sees the change tag the
@@ -47,6 +52,20 @@ enum CloudRecordCodec {
     }
 
     static func key(for recordID: CKRecord.ID) -> SyncKey? { key(forRecordName: recordID.recordName) }
+
+    /// The prefix of every record type the engine writes (`dev/SYNC-ENGINE.md` section 3): a name SwiftData's mirror
+    /// cannot map onto one of its entities.
+    static let recordTypePrefix = "HL"
+
+    /// CloudKit's record type for a `SyncKey.type`: `TaskItem` → `HLTaskItem`.
+    static func recordType(for type: String) -> String { recordTypePrefix + type }
+
+    /// The `SyncKey.type` a CloudKit record type stands for, or nil when it is not one the engine writes.
+    static func type(forRecordType recordType: String) -> String? {
+        guard recordType.hasPrefix(recordTypePrefix) else { return nil }
+        let type = String(recordType.dropFirst(recordTypePrefix.count))
+        return isRecordType(type) ? type : nil
+    }
 
     static func isRecordType(_ text: String) -> Bool {
         guard let first = text.unicodeScalars.first, isASCIILetter(first) else { return false }
@@ -109,7 +128,8 @@ enum CloudRecordCodec {
         guard self.key(forRecordName: recordName(for: key)) == key else { throw EncodeError.invalidKey(key) }
         guard let fields = fields(ofType: key.type) else { throw EncodeError.unknownType(key.type) }
         let id = recordID(for: key, in: zoneID)
-        let record = rebuilt(from: outgoing.system, id: id, type: key.type) ?? CKRecord(recordType: key.type, recordID: id)
+        let record = rebuilt(from: outgoing.system, id: id, type: key.type)
+            ?? CKRecord(recordType: recordType(for: key.type), recordID: id)
         for field in fields + [deletedAtField] {
             record[field.key] = try value(outgoing.record.fields[field.key], for: field, recordID: id, assets: assets)
         }
@@ -121,7 +141,7 @@ enum CloudRecordCodec {
     /// ledger moved between zones): the record is then made new and iCloud answers with a conflict if it holds one.
     static func rebuilt(from system: Data?, id: CKRecord.ID, type: String) -> CKRecord? {
         guard let system, let record = unarchive(system) else { return nil }
-        guard record.recordID == id, record.recordType == type else { return nil }
+        guard record.recordID == id, record.recordType == recordType(for: type) else { return nil }
         return record
     }
 
@@ -175,7 +195,8 @@ enum CloudRecordCodec {
     // MARK: - In
 
     enum DecodeProblem: Error, Equatable, CustomStringConvertible {
-        /// The record's name is not one the engine makes, or its type is not the one its name says.
+        /// The record's name is not one the engine makes, or its type is not `HL` + the type its name says (a record
+        /// SwiftData's mirror wrote, or one of the first probe runs' un-prefixed records).
         case notOurs(recordName: String, recordType: String)
         /// An asset over `assetByteLimit`, or one whose file could not be read.
         case assetUnreadable(field: String, reason: String)
@@ -190,7 +211,7 @@ enum CloudRecordCodec {
 
     /// The record as the brain sees it: every key that maps onto a `SyncValue`, and the system fields.
     static func cloudRecord(from record: CKRecord) throws -> CloudRecord {
-        guard let key = key(for: record.recordID), key.type == record.recordType else {
+        guard let key = key(for: record.recordID), type(forRecordType: record.recordType) == key.type else {
             throw DecodeProblem.notOurs(recordName: record.recordID.recordName, recordType: record.recordType)
         }
         let known = Dictionary(((fields(ofType: key.type) ?? []) + [deletedAtField]).map { ($0.key, $0) },
