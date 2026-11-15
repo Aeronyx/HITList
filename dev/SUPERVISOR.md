@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.11: core 737, Mac 2014, iOS 1977, and 149 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1047 (the sync engine's brain, rules and simulation are most of the growth), Mac 2184, iOS 2147, and 159 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -392,6 +392,15 @@ files" is obeyed; one that does not produces merge conflicts.
   `SyncRecovery`, `SyncStoreGuard`; `SyncAudit` (`compare` for the bolt, `run` for Check iCloud…), `ICloudZoneReader`,
   `SyncComparison`, `StoreInventory`), `CloudSyncMonitor.swift`, `ModelContainerFactory.swift`, `Deduplicator.swift`.
   `ROUND-26.md` says what was taken out and why, `ROUND-27.md` what came back and how.
+- HITList's own sync engine (round 28, switched off; design `dev/SYNC-ENGINE.md`): core
+  `HITListCore/Sources/HITListCore/Sync/` (the contract: `SyncRecord`, `SyncSchema`, `SyncTransport`, `SyncStorage`,
+  `SyncMemory`; `RecordMerge` = how one record is settled; `SyncCore*.swift` = the brain; `SyncStatus`, `SyncHost`;
+  `Testing/` = `FakeCloud`, `FakeTransport`, `SyncSimulation`, `SyncInvariants`), app `Services/SyncEngine/`
+  (`SwiftDataSyncStore`, `SyncRecordMapping`, `SyncLedgerStore`, `SyncSaveHints`, `CloudKitTransport`,
+  `CloudRecordCodec`, `SyncTransportProbe`, `SyncEngine*.swift` = the facade, the switch, the host, the move, the
+  pretend run; `SyncEngineBoard` = what the bolt's side reads), `Views/Settings/SyncEngineSettings.swift`, and the
+  engine's branch in `CloudSyncMonitor` and `SyncState.engine`. A model that gains a stored property must gain a
+  field in `SyncSchema` (a test fails until it does).
 - Calendar: `Services/Calendar/*` (the source protocol, EventKit, the demo, `CalendarAdds`), `Views/Calendar/*` (rows,
   the event's card, Add to Calendar's toast, the settings page, the tip), core `CalendarDay`.
 - Import: core `Todoist*.swift` (reader, mapping, dates), `Services/Import/*` (ZIP, importer, receipt),
@@ -695,7 +704,37 @@ screen's foot; in the import, sections become labels, sub-tasks with a date of t
 the same title in the same Group is skipped, an empty priority is none, and Undo removes imported tasks even if
 edited since.
 
-## 8. Where things stand (2026-11-14, round 27 on master)
+Round 28 (2026-11-15). George's words: Quill's theme-box sprite is not to be changed, only placed ("I simply wanted
+you to position Quill properly"); and HITList gets its own sync engine, "professionally built". My choices in it,
+which he can reverse (`dev/SYNC-ENGINE.md` section 12 has the ones that are his to make before Production holds a
+record: a container of its own, plain or encrypted fields, what sign-out removes, a purge asks, when devices move):
+the Mac's theme boxes are the iPhone's times 1.5 (66 pt), creatures with them; a deleted item leaves a marker for
+400 days; two devices changing one field keep the later record's value and a tie goes to whoever reached iCloud
+first; a deletion and an edit are ordered by time and a tie goes to the deletion; a reference to an item this
+device lacks is never cleared; the engine stops and asks when a device holds none of what iCloud holds, or when at
+least 10 items that are more than half of it are gone (the app vouches for Undo last import and for a Switchboard
+deleted with its switches); a seeded filter is stamped 2001 on the engine so it loses to the person's own copy or
+deletion; the editors save only the fields the person changed; released builds stay on the mirror and the switch
+is shown only in Debug builds on a side store.
+
+## 8. Where things stand (2026-11-15, round 28 on master)
+
+**2026-11-15, round 28 merged for 0.9.12 (Fable 5.2 supervisor), the night George released 0.9.11.** The Theme menu
+is put right (Quill in his own sprite on his corner; the Mac's creatures grow with their boxes), the task, Group,
+label and filter editors save only what the person changed, and **HITList's own sync engine is on master, switched
+off**: `dev/SYNC-ENGINE.md` is its design (read section 13, what is open, before touching it), the contract and the
+brain are in `HITListCore/Sources/HITListCore/Sync/`, the app's side in `HITList/Services/SyncEngine/`. Sessions 138
+to 142 and agents 143 to 146 are merged (`dev/briefs/ROUND-28.md`; COMMON's Round 28 record has what each found).
+Every released build syncs through the mirror exactly as 0.9.11 does; the engine runs only with `-syncEngine own`
+on a side store in a Debug build (or `-syncEnginePretend <name>` on a pretend iCloud in a file, which needs no
+network). No schema change. George releases with `scripts/release.sh --version 0.9.12 --quick`. **Nobody presses
+Deploy Schema Changes for `iCloud.com.trammells.hitlist` until Development has been reset**: the probe left record
+types there that must never reach Production (`release.sh` lists them and carries on). Open: his decisions in
+section 12, first of all a container of its own for the engine; the review's and the simulation's open findings
+(section 13); a push waking the engine; the engine on a phone and on real data; session 142 still waits in its own
+window for his word to re-run a probe the supervisor has since run. The next brief number is 147.
+
+### Round 27 (kept for the record; 0.9.11, released 2026-11-15)
 
 **2026-11-14, round 27 merged for 0.9.11 (Fable 5.2 supervisor), the evening after 0.9.10's release stopped at
 Apple's Program License Agreement** (nothing was uploaded; George accepts the agreement at

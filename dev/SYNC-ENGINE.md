@@ -295,9 +295,18 @@ the marker goes). Without that, an item deleted here a moment before the memory 
    - **I6 Whole**: no item points at one that is not there.
    - **I7 Quiet**: when nothing is waiting, another sync sends nothing. No ping-pong.
    - **I8 A newer build's fields survive** an older build's edit.
+   - **I9 References kept**: no device sends a record without a reference iCloud holds unless a person on that
+     device made the item or changed that field (section 8).
+   - **I10 Accounts apart**: each account's iCloud holds only that account's items.
+   As run in round 28 (`SyncCoreSimulationTests`; the commands are at the top of that file): about 3,200 histories
+   of 300 to 1,000 steps on three devices, some 310,000 records made and 610,000 saves accepted, 14,000 crashes
+   ridden out, 172 conflicts settled. Nineteen kept seeds and a spread of short runs are part of `swift test`.
 3. The app's parts against an in-memory SwiftData store (every field of every model there and back; an edit made
    while the engine writes is not lost).
-4. End to end on CloudKit **Development**: two Debug Mac apps on two side stores, as two devices.
+4. End to end on CloudKit **Development**: two Debug Mac apps on two side stores, as two devices (run in round
+   28: one sent its items, the other, launched empty, showed them all; a task made on the second reached the
+   first when it came forward), and the transport's probe (18 steps: every type there and back, a conflict,
+   markers, removal for good, a newer build's key, 300 records in two batches, a restart from saved state).
 5. The move from the mirror rehearsed on copies of a real store before any real device moves.
 
 ## 10. Holds and the bolt
@@ -356,3 +365,26 @@ guessing; Check iCloud… stays as the person's own audit.
 2. **Sign-out removes what was synced from the device** (as the mirror does), after a backup.
 3. **A purge in iCloud's settings asks** instead of deleting the device's copy (Apple's guidance is to delete).
 4. **When devices move**: his first, then friends.
+
+## 13. Open, as round 28 left it
+
+Found and not yet fixed or not yet traced; none of it can matter while the engine is switched off.
+
+- **From the review** (`146-sync-review/FINDINGS.md` in the notes folder): 18, a change that arrives while the person
+  has the same item edited and unsaved is set aside and fetched again only at the next launch; 19, a store file
+  put back from a backup beside a newer ledger (same file identity) would send its older values over newer ones:
+  the ledger should also know how far the store's own history had got; 16c, a fetched record this build cannot
+  read (an asset too large or missing) is dropped while the bookmark moves on; 16e, an expired change token is
+  only given words; 14, two devices that each make a Group of the same name, and a task filed into the one the
+  name merge then removes; the ledger file is moved aside for any error at opening, not only a damaged file; the
+  switch card's draft was not re-read after the other editors were fixed; an account switch has two owners (the
+  mirror-era `AccountSwitch` and the brain's backup) that are not ordered.
+- **From the simulation** (seeds to replay, `SyncCoreSimulationTests.testTrace`): everyday 133, 210, 261, 559
+  (references to a Group deleted and put back around an unsent change); 284 (a save accepted whose answer was
+  lost while a base exists: a field changed and changed back reads as unchanged; proposal: remember what was sent
+  for every key); memory 36; zone 270 (after a lost zone every device sends everything again, and copies meet by
+  M5 until each holds a base again: to be written as a limit or fixed); quota 59 and 86; refusal 148; a set of
+  references a person emptied and whose items were then deleted here before the change went.
+- **Not proven at all**: a push waking the engine (none reached a Debug build on this Mac in any run); the engine
+  on a phone; the move from the mirror on real data; the way back to the mirror; one contract suite run against
+  both the pretend iCloud and CloudKit (four of the review's findings were a rule the two read differently).

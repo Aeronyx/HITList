@@ -787,6 +787,72 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 28 record (2026-11-15, 02:56 to about 07:00 Eastern; sessions 138–142 and agents 143–146 merged for 0.9.12)
+George released 0.9.11 and wrote at 02:56 (`ROUND-28.md`). The Theme menu was fixed and photographed by 03:20; the
+engine's design, its contract in code and the merge rules were on master at 03:30 with briefs 138 to 142; the five
+sessions started then and all had reported by 04:57; wave 1 was merged and green at 05:10 (core 1,013, Mac 2,128,
+iPhone 2,091). Wave 2 could not be started as sessions (a turn begun by a background task cannot start one) and ran
+from 05:14 as four agents of the supervisor's own session, each in its own worktree: 146 reported at 05:55, 143 at
+05:55, 144 at 06:07, 145 at 06:21. No schema change; nothing of the engine is switched on.
+- **The supervisor's own.** The Theme menu (`f8d9d7a`: `drape` back on Midnight's box at x 25, the bent frame
+  gone, the Mac's swatch the iPhone's times 1.5). `dev/SYNC-ENGINE.md`, the contract (`SyncRecord`, `SyncSchema`,
+  `SyncTransport`, `SyncStorage`, `SyncMemory`), `RecordMerge` as first written. Then, as findings came, sixteen
+  corrections to the design and these fixes in code nobody owned: the CloudKit transport (a zone it knew, missing,
+  is a lost zone; a scheduled fetch that never reached iCloud is not told as ended well; a reset keeps the account
+  and what it knew of the zone; an account change is owed to the brain until handled; 16a, 16b, 16d), the ledger
+  (a row that cannot be read is forgotten alone and everything is fetched again), the SwiftData store (deletes
+  exactly the rows named), the task, Group, label and filter editors (save only what the person changed: a hole
+  the mirror has too), `release.sh` (the schema check compares the record types a release syncs through),
+  `SyncEngineBoard` (the seam between 143 and 144), the vouch and the safe answer wired into the app after 145.
+  The probe on CloudKit Development: 18 steps, none failed, twice. Two Debug Mac apps on side stores on the
+  engine against Development: one sent 10 records, the other, launched empty, showed them all, and a task made on
+  it reached the first when that came forward. No push reached any Debug build.
+- **138 `sync-proof`** (xhigh, about 65 minutes): 95 tests, 21,700 generated cases; six holes in the supervisor's
+  merge rules found and closed (a marker read as key and time only, reference lists as sets, M10's later time,
+  M12 against a newer marker, M13 and M3 with a deletion still to send, M0 for an unknown type), the in-memory
+  store's cascade, and the `expected` comparison that could have stalled every write.
+- **139 `sync-core`** (xhigh, about 85 minutes): `SyncCore` in five files, 107 tests; one serial queue; the device
+  written before the ledger and both orders proved; holds that survive a relaunch; the mass-deletion guard (its
+  own finding); section 8 rewritten on 140's evidence; unsent deletions carried across a forgotten memory.
+- **140 `sync-fake-cloud`** (xhigh, about 85 minutes): `FakeCloud`, `FakeTransport` (T1 to T14, each with a named
+  test), every fault on a switch, the rig and I1 to I9. Its rig found the design clearing a reference to a late
+  item (seed 58) and a ledger outliving its bookmark (seed 4). It had its own work reviewed by a subagent.
+- **141 `sync-swiftdata`** (xhigh, about 75 minutes): the mapping with a test that fails when a model gains a
+  property, `SwiftDataSyncStore`, `SyncLedgerStore` bound to the store file's identity (`NSStoreUUIDKey`),
+  `SyncSaveHints`. Its finding: SwiftData's main context never takes in another context's save, and the person's
+  next save writes its old copy back, so the engine writes through the main context. 5,032 rows read in 0.36 s; an
+  apply of 200 inserts 0.085 s on the main thread, 5,032 about 1.4 s.
+- **142 `sync-cloudkit`** (xhigh, about 45 minutes): `CloudRecordCodec`, `CloudKitTransport` with every error
+  decision a pure function, the probe. Its finding: the mirror imports every zone of its container and made
+  empty items of the engine's records, so record types are `HL` + the type and the engine is meant for a container
+  of its own. Stopped by the supervisor to hand it that decision while its probe was running, its permission
+  check then refused to run the probe again; the supervisor ran it on the merged tree.
+- **143 `sync-wire`** (agent, about 42 minutes): `SyncEngineSwitch`, `SyncEngine`, `SyncEngineHost`, the move, a
+  pretend iCloud in a file for two Debug apps (`-syncEnginePretend`), the mirror's eight event consumers fed on
+  the engine, rows that share an id merged for all six models, the writes that now move `updatedAt`, seeds
+  stamped 2001 on the engine. With the switch off a launch opens the same files and writes the same log lines as
+  before (compared against a build of the commit before it). 28 tests; two devices driven by hand with pictures;
+  0.0% CPU in 58 of 60 seconds at rest.
+- **144 `sync-status`** (agent, about 53 minutes): `SyncState.engine`, the monitor's branch (none of the mirror's
+  instruments run or arm a timer on the engine), the words for every state, the holds' groups with what each
+  button does said first, `-syncEngineDemo <state>`, sheets for the Mac and an iPhone 16. 19 unit and 10 UI tests.
+  CPU in every demo state equals the same build on the mirror (0.09 to 0.12% mean, the companions' clock).
+- **145 `sync-sim`** (agent, about 70 minutes): `SyncCore` on the rig. About 3,200 histories on three devices
+  (everyday 1,000 × 300 and 200 × 1,000; conflict, ledger, zone, memory, account, quota and refusal 300 × 300
+  each); the rig could not make a conflict until it got `sendByItself`. Fixed in the brain: a person's unsent move
+  lost to a Group's deletion, the review's findings 1 and 2, a guard that asked again after "I deleted them", a
+  lost answer leaving no base (M5 with a remembered send), an unsent clearing of a Group. Added
+  `vouchForDeletions`, `restoreFromICloud`, `SyncStatus.refusal`, I10. Open seeds are in `dev/SYNC-ENGINE.md`
+  section 13.
+- **146 `sync-review`** (agent, about 41 minutes, no source edited): twenty findings, twelve of them ways to lose
+  or corrupt data, ten reproduced by tests kept in the suites. Sixteen are fixed or built; the open ones are in
+  section 13. It also read the supervisor's fixes and found the hole in two of them (17, and the gap in 6).
+- **Left in CloudKit Development** (`iCloud.com.trammells.hitlist`): record types under the models' own names
+  from the probe's first runs (`Project`, `TaskItem`, `TaskLabel`, `SavedFilter`, `Switchboard`, `Profile`,
+  `Meta`, some with the mirror's `CD_` fields on them), the `HL*` types, and zone `HITList-e2e1`. None may reach
+  Production: **nobody presses Deploy Schema Changes for that container until Development has been reset**
+  (CloudKit Console → the container → Development → Reset Environment…). `release.sh` no longer stops on them.
+
 ## Round 27 record (2026-11-14, 20:05 to about 22:30 Eastern; sessions 132–137 merged for 0.9.11)
 0.9.10's release stopped at Apple's agreement and nothing was uploaded; George's notes came at about 20:05
 (`ROUND-27.md`). The briefs were on master at 20:20, six sessions started at 20:21, the first sheets were in the
