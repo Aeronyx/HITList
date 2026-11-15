@@ -91,6 +91,20 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertFalse(events.hasGoogleAccount)
     }
 
+    func testTheSwitchReadsOffWhileAccessIsRefused() async {
+        let suite = "CalendarSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let source = FakeCalendarSource(access: .denied, grants: false)
+        let events = CalendarEvents(source: source, defaults: defaults, onForTheRun: true)
+        events.refreshAccess()
+        XCTAssertTrue(events.isOn, "the setting says on")
+        XCTAssertFalse(CalendarSettingsPage.drawnOn(events), "but the switch says what shows: nothing")
+        source.accessNow = .fullAccess
+        events.refreshAccess()
+        XCTAssertTrue(CalendarSettingsPage.drawnOn(events))
+    }
+
     func testThePageRenders() {
         let page = VStack { CalendarSettingsPage() }.frame(width: 400)
         XCTAssertNotNil(ImageRenderer(content: page).cgImage)

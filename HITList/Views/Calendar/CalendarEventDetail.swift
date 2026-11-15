@@ -50,7 +50,7 @@ struct CalendarEventDetailCard: View {
                 }
             }
             if let location = event.location, !location.isEmpty {
-                fact(systemImage: "mappin.and.ellipse") { Text(location) }
+                fact(systemImage: "mappin") { Text(location) }
             }
             if let notes {
                 fact(systemImage: "text.alignleft") {

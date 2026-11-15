@@ -57,6 +57,8 @@ struct CalendarNoticeToast: View {
                 }
             }
             .font(HITType.subheadline)
+            // As wide as its words: the window around it is sized from this (a measured width cut "calendar" short).
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 18)
             .frame(height: CompletionToast.height)
             .background(Theme.elevated, in: Capsule())
@@ -82,8 +84,9 @@ struct CalendarNoticeToast: View {
 
 /// Draws Add to Calendar's toast in a small window of its own over the app's, so it shows wherever the menu was
 /// used (any list, the editor's sheet on iPhone, the editor's panel on the Mac) without a list having to host it.
-/// iPhone: beside the "+", where the undo toasts sit (`PopoutHost.phoneToastInsets`); iPad and Mac: the window's
-/// bottom-trailing corner, a toast's height above where a list's own toast sits. Gone with the notice.
+/// iPhone: beside the "+", where the undo toasts sit (`PopoutHost.phoneToastInsets`); iPad: the bottom-trailing
+/// corner above its floating "+"; Mac: the window's bottom-trailing corner, where a list's toast sits (clear of the
+/// editor panel and its Confirm). Gone with the notice.
 @MainActor
 final class CalendarNoticeWindow {
     static let shared = CalendarNoticeWindow()
@@ -153,10 +156,10 @@ final class CalendarNoticeWindow {
         panel.hasShadow = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.contentView = host
+        // The window's bottom-trailing corner, where a list's toast sits: clear of the editor panel's Confirm.
         let frame = parent.frame
-        let lift = HITSpacing.l + CompletionToast.height + HITSpacing.s
         panel.setFrame(NSRect(x: frame.maxX - HITSpacing.l - size.width + Self.shadowRoom,
-                              y: frame.minY + lift - Self.shadowRoom,
+                              y: frame.minY + HITSpacing.l - Self.shadowRoom,
                               width: size.width, height: size.height), display: true)
         if panel.parent !== parent {
             panel.parent?.removeChildWindow(panel)

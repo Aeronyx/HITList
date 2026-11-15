@@ -20,8 +20,11 @@ struct CalendarSettingsPage: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var events: CalendarEvents { CalendarEvents.shared }
-    /// The switch as drawn: flips at once, then back if access is refused.
-    @State private var isOn = CalendarEvents.shared.isOn
+    /// The switch as drawn: flips at once, then back if access is refused. Off whenever access is refused, even if the
+    /// setting is on (access withdrawn in the system's settings afterwards): nothing shows then.
+    @State private var isOn = Self.drawnOn(CalendarEvents.shared)
+
+    static func drawnOn(_ events: CalendarEvents) -> Bool { events.isOn && !events.access.isRefused }
 
     var body: some View {
         HITGroup {
@@ -41,12 +44,13 @@ struct CalendarSettingsPage: View {
         .onAppear {
             events.refreshAccess()
             events.start()
-            isOn = events.isOn
+            isOn = Self.drawnOn(events)
         }
         .onChange(of: scenePhase) { _, phase in
             // Back from the system's settings: the permission may have changed.
             if phase == .active { events.refreshAccess() }
         }
+        .onChange(of: events.access) { _, _ in isOn = Self.drawnOn(events) }
         if events.isShowing {
             ForEach(Self.accounts(events.calendars), id: \.name) { account in
                 HITGroup(account.name.isEmpty ? "Other" : account.name) {
@@ -64,8 +68,24 @@ struct CalendarSettingsPage: View {
             addTargetRow
         }
         HITGroup("Google Calendar") {
-            SettingsNote(text: Self.googleWords(connected: events.isShowing ? events.hasGoogleAccount : nil))
-                .accessibilityIdentifier("settings-calendar-google")
+            let connected = events.isShowing && events.hasGoogleAccount
+            // Words only: no button that leaves the app.
+            HStack(alignment: .firstTextBaseline, spacing: HITSpacing.m) {
+                Image(systemName: connected ? "checkmark.circle" : "person.crop.circle.badge.plus")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundStyle(connected ? Theme.accent : Theme.secondaryText)
+                    .frame(width: HITRowMetrics.iconColumn)
+                    .accessibilityHidden(true)
+                Text(Self.googleWords(connected: events.isShowing ? events.hasGoogleAccount : nil))
+                    .font(HITType.subheadline)
+                    .foregroundStyle(connected ? HITColor.text : Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .hitRowPadding()
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("settings-calendar-google")
         }
     }
 
