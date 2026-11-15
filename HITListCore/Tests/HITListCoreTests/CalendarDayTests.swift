@@ -217,4 +217,103 @@ final class CalendarDayTests: XCTestCase {
         XCTAssertEqual(CalendarDay.selectionSummary(calendarIDs: ids, hidden: ["gone"]), "All",
                        "a calendar deleted since it was hidden doesn't count")
     }
+
+    // MARK: Brief 136: an event's card
+
+    private let us = Locale(identifier: "en_US")
+
+    func testCardSaysTheDayAndTime() {
+        let ny = calendar("America/New_York")
+        let e = event("review", date(ny, 2026, 11, 14, 9, 30), date(ny, 2026, 11, 14, 10, 15))
+        let when = CalendarDay.cardWhen(e, calendar: ny, locale: us)
+        XCTAssertEqual(when.day, "Saturday, November 14")
+        XCTAssertEqual(plain(when.time), "9:30 – 10:15 AM")
+        XCTAssertNil(when.ownZone, "no zone of its own, nothing more")
+    }
+
+    func testCardAllDayAndOverSeveralDays() {
+        let ny = calendar("America/New_York")
+        let one = event("birthday", date(ny, 2026, 11, 14), date(ny, 2026, 11, 15), allDay: true)
+        XCTAssertEqual(CalendarDay.cardWhen(one, calendar: ny, locale: us), .init(day: "Saturday, November 14", time: "All day", ownZone: nil))
+        let trip = event("lisbon", date(ny, 2026, 11, 19), date(ny, 2026, 11, 22), allDay: true)
+        XCTAssertEqual(plain(CalendarDay.cardWhen(trip, calendar: ny, locale: us).day), "Nov 19 – Nov 21", "the last day, not the midnight after it")
+        let late = event("flight", date(ny, 2026, 11, 14, 22), date(ny, 2026, 11, 15, 2))
+        let when = CalendarDay.cardWhen(late, calendar: ny, locale: us)
+        XCTAssertEqual(plain(when.day), "Nov 14 – Nov 15")
+        XCTAssertEqual(plain(when.time), "10:00 PM – Nov 15 at 2:00 AM")
+        let toMidnight = event("party", date(ny, 2026, 11, 14, 20), date(ny, 2026, 11, 15))
+        XCTAssertEqual(CalendarDay.cardWhen(toMidnight, calendar: ny, locale: us).day, "Saturday, November 14", "ending at midnight stays one day")
+    }
+
+    func testCardGivesTheEventsOwnZoneWhenItsClockDiffers() {
+        let ny = calendar("America/New_York")
+        let start = date(ny, 2026, 11, 14, 9, 30)
+        let london = CalendarEvent(id: "call", title: "Call", start: start, end: start.addingTimeInterval(45 * 60), isAllDay: false,
+                                   calendarID: "work", colorHex: "#000000", timeZoneID: "Europe/London")
+        let when = CalendarDay.cardWhen(london, calendar: ny, locale: us)
+        XCTAssertEqual(plain(when.time), "9:30 – 10:15 AM")
+        XCTAssertEqual(plain(when.ownZone ?? ""), "2:30 – 3:15 PM United Kingdom Time")
+        let same = CalendarEvent(id: "d", title: "D", start: start, end: start.addingTimeInterval(600), isAllDay: false,
+                                 calendarID: "work", colorHex: "#000000", timeZoneID: "America/Detroit")
+        XCTAssertNil(CalendarDay.cardWhen(same, calendar: ny, locale: us).ownZone, "another name for the same clock says nothing")
+    }
+
+    func testNotesPreviewKeepsTheFirstLines() {
+        XCTAssertNil(CalendarDay.notesPreview(nil))
+        XCTAssertNil(CalendarDay.notesPreview("  \n \n"))
+        XCTAssertEqual(CalendarDay.notesPreview("Agenda\n\n - budget\n - hiring\n - offsite\n - q&a"), "Agenda\n- budget\n- hiring")
+    }
+
+    // MARK: Brief 136: accounts
+
+    func testGoogleAccounts() {
+        XCTAssertTrue(CalendarDay.isGoogleAccount(title: "Gmail", isCalDAV: true))
+        XCTAssertTrue(CalendarDay.isGoogleAccount(title: "Google", isCalDAV: true))
+        XCTAssertTrue(CalendarDay.isGoogleAccount(title: "someone@gmail.com", isCalDAV: true))
+        XCTAssertTrue(CalendarDay.isGoogleAccount(title: "me@googlemail.com", isCalDAV: true))
+        XCTAssertFalse(CalendarDay.isGoogleAccount(title: "iCloud", isCalDAV: true))
+        XCTAssertFalse(CalendarDay.isGoogleAccount(title: "Google holidays", isCalDAV: false), "a subscribed calendar is not the account")
+    }
+
+    // MARK: Brief 136: Add to Calendar
+
+    func testATaskWithATimeBecomesThirtyMinutes() {
+        let ny = calendar("America/New_York")
+        let due = date(ny, 2026, 11, 14, 15, 0)
+        let link = URL(string: "hitlist://task/6F9619FF-8B86-D011-B42D-00C04FC964FF")!
+        let draft = CalendarDay.draft(title: "Call the bank", notes: "  ask about fees \n", due: due, hasTime: true, link: link, calendar: ny)
+        XCTAssertEqual(draft.title, "Call the bank")
+        XCTAssertEqual(draft.start, due)
+        XCTAssertEqual(draft.end, date(ny, 2026, 11, 14, 15, 30))
+        XCTAssertFalse(draft.isAllDay)
+        XCTAssertEqual(draft.notes, "ask about fees")
+        XCTAssertEqual(draft.url, link)
+    }
+
+    func testATaskWithoutATimeIsAllDay() {
+        let ny = calendar("America/New_York")
+        let link = URL(string: "hitlist://task/6F9619FF-8B86-D011-B42D-00C04FC964FF")!
+        // The day the clocks go back: all day is the whole 25 hours.
+        let draft = CalendarDay.draft(title: "Taxes", notes: "", due: date(ny, 2026, 11, 1), hasTime: false, link: link, calendar: ny)
+        XCTAssertTrue(draft.isAllDay)
+        XCTAssertEqual(draft.start, date(ny, 2026, 11, 1))
+        XCTAssertEqual(draft.end, date(ny, 2026, 11, 2))
+        XCTAssertNil(draft.notes)
+    }
+
+    func testAlreadyAddedIsAnEventWithTheLinkOnThatDay() {
+        let ny = calendar("America/New_York")
+        let link = URL(string: "hitlist://task/6F9619FF-8B86-D011-B42D-00C04FC964FF")!
+        let draft = CalendarDay.draft(title: "Call", notes: "", due: date(ny, 2026, 11, 14, 15), hasTime: true, link: link, calendar: ny)
+        func linked(_ start: Date, url: URL?) -> CalendarEvent {
+            CalendarEvent(id: "\(start)", title: "Call", start: start, end: start.addingTimeInterval(1800), isAllDay: false,
+                          calendarID: "work", colorHex: "#000000", url: url)
+        }
+        XCTAssertFalse(CalendarDay.isAlreadyAdded(draft, among: [], calendar: ny))
+        XCTAssertTrue(CalendarDay.isAlreadyAdded(draft, among: [linked(date(ny, 2026, 11, 14, 9), url: link)], calendar: ny),
+                      "the same day, another time: still the one copy")
+        XCTAssertFalse(CalendarDay.isAlreadyAdded(draft, among: [linked(date(ny, 2026, 11, 13, 15), url: link)], calendar: ny),
+                       "yesterday's copy is an earlier occurrence")
+        XCTAssertFalse(CalendarDay.isAlreadyAdded(draft, among: [linked(date(ny, 2026, 11, 14, 15), url: nil)], calendar: ny))
+    }
 }

@@ -16,6 +16,8 @@ import SwiftData
 ///   before Switchboards (brief 72: `FlipboardTips`).
 /// - `boardAddTask`: today's "Add task" on the Upcoming board (Mac, full-width iPad).
 /// - `reviewSwipe`: inline on Review Inbox's card on iPhone (brief 60); gone after the first swipe.
+/// - `calendarInToday`: over the top of Today's list while calendar events are off (brief 136,
+///   `calendarInTodayTip`): where the switch is. It floats, never pushing a row, and asks no permission.
 ///
 /// A tip never takes a friend's first tap (brief 56): on iPhone a popover tip closes on the first tap
 /// outside it and that tap goes nowhere. So the quick-add tips sit inside the card, inline (`quickAddTips`),
@@ -23,7 +25,7 @@ import SwiftData
 /// (`HITTip.settled`, `TipSettling`: back in the app after their first task, or any later launch), never
 /// popping up on a first screen or the moment something lands.
 enum HITTipKind: String, CaseIterable, Identifiable {
-    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask, reviewSwipe, switchesStay
+    case quickAddSyntax, keepAsText, browse, flipboard, boardAddTask, reviewSwipe, switchesStay, calendarInToday
 
     var id: String { rawValue }
 
@@ -36,6 +38,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .boardAddTask: "Add straight to a day"
         case .reviewSwipe: "Swipe to sort"
         case .switchesStay: "Switches stay on the Flipboard"
+        case .calendarInToday: "Your calendar, beside your tasks"
         }
     }
 
@@ -48,6 +51,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
         case .reviewSwipe: "Swipe right for Today, left to delete."
         case .switchesStay: "Red switches no longer wait in Today; turn on Become a task when Overdue to bring one back when it’s due."
+        case .calendarInToday: "Today can show the day’s events from your calendars, Google Calendar’s too. Turn it on in Settings → Calendar."
         }
     }
 
@@ -60,6 +64,7 @@ enum HITTipKind: String, CaseIterable, Identifiable {
         case .boardAddTask: "calendar.badge.plus"
         case .reviewSwipe: "hand.draw"
         case .switchesStay: "switch.2"
+        case .calendarInToday: "calendar"
         }
     }
 }
@@ -88,7 +93,9 @@ struct HITTip: Tip {
     static let settled = Tips.Event(id: "settled")
 
     /// Shows only once the person has settled in, so it never sits on their very first screen.
-    var waitsUntilSettled: Bool { kind == .browse || kind == .boardAddTask || kind == .flipboard || kind == .switchesStay }
+    var waitsUntilSettled: Bool {
+        kind == .browse || kind == .boardAddTask || kind == .flipboard || kind == .switchesStay || kind == .calendarInToday
+    }
 
     var rules: [Rule] {
         if kind == .keepAsText {

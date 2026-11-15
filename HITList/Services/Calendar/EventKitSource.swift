@@ -2,12 +2,15 @@ import Foundation
 import EventKit
 import HITListCore
 
-/// The device's calendars through EventKit, read-only (brief 77). One `EKEventStore` for the app's life, as Apple
-/// recommends; its reads run on a private queue so the lists never wait for them.
+/// The device's calendars through EventKit (brief 77): read to show, and one event written when the person chooses
+/// Add to Calendar (brief 136). One `EKEventStore` for the app's life, as Apple recommends; its reads run on a
+/// private queue so the lists never wait for them.
 final class EventKitSource: CalendarEventSource, @unchecked Sendable {
     private let store = EKEventStore()
     private let queue = DispatchQueue(label: "com.trammells.hitlist.calendar", qos: .userInitiated)
     private var observer: NSObjectProtocol?
+    /// The events this run added, kept for their Undo: write-only access can't look an event up again.
+    private var added: [String: EKEvent] = [:]
 
     func access() -> CalendarAccess {
         Self.access(EKEventStore.authorizationStatus(for: .event))
@@ -34,8 +37,14 @@ final class EventKitSource: CalendarEventSource, @unchecked Sendable {
     func calendars() -> [CalendarInfo] {
         queue.sync {
             store.calendars(for: .event)
-                .map { CalendarInfo(id: $0.calendarIdentifier, title: $0.title,
-                                    colorHex: Self.hex($0.cgColor), source: $0.source?.title ?? "") }
+                .map { calendar in
+                    let source = calendar.source
+                    return CalendarInfo(id: calendar.calendarIdentifier, title: calendar.title,
+                                        colorHex: Self.hex(calendar.cgColor), source: source?.title ?? "",
+                                        isGoogle: CalendarDay.isGoogleAccount(title: source?.title ?? "",
+                                                                              isCalDAV: source?.sourceType == .calDAV),
+                                        allowsChanges: calendar.allowsContentModifications)
+                }
                 .sorted { ($0.source, $0.title) < ($1.source, $1.title) }
         }
     }
@@ -49,8 +58,53 @@ final class EventKitSource: CalendarEventSource, @unchecked Sendable {
                 let id = "\(event.eventIdentifier ?? event.calendarItemIdentifier)@\(event.startDate.timeIntervalSinceReferenceDate)"
                 return CalendarEvent(id: id, title: event.title ?? "", start: event.startDate, end: event.endDate,
                                      isAllDay: event.isAllDay, calendarID: calendar?.calendarIdentifier ?? "",
-                                     colorHex: Self.hex(calendar?.cgColor))
+                                     colorHex: Self.hex(calendar?.cgColor), calendarTitle: calendar?.title ?? "",
+                                     location: event.location, notes: event.notes, url: event.url,
+                                     timeZoneID: event.timeZone?.identifier)
             }
+        }
+    }
+
+    func requestWriteAccess() async -> CalendarAccess {
+        _ = try? await store.requestWriteOnlyAccessToEvents()
+        queue.sync { store.reset() }
+        return access()
+    }
+
+    func add(_ draft: CalendarDay.EventDraft, calendarID: String?) throws -> AddedCalendarEvent {
+        try queue.sync {
+            let chosen = calendarID.flatMap { store.calendar(withIdentifier: $0) }.flatMap { $0.allowsContentModifications ? $0 : nil }
+            guard let calendar = chosen ?? store.defaultCalendarForNewEvents else { throw CalendarWriteError.noCalendar }
+            let event = EKEvent(eventStore: store)
+            event.calendar = calendar
+            event.title = draft.title
+            event.isAllDay = draft.isAllDay
+            event.startDate = draft.start
+            // A one-day all-day event: EventKit takes the day's start for both ends.
+            event.endDate = draft.isAllDay ? draft.start : draft.end
+            event.notes = draft.notes
+            event.url = draft.url
+            event.alarms = nil
+            do {
+                try store.save(event, span: .thisEvent, commit: true)
+            } catch {
+                throw CalendarWriteError.failed(error.localizedDescription)
+            }
+            let id = event.eventIdentifier ?? event.calendarItemIdentifier
+            added[id] = event
+            return AddedCalendarEvent(eventID: id, calendarTitle: calendar.title)
+        }
+    }
+
+    func remove(eventID: String) throws {
+        try queue.sync {
+            guard let event = added[eventID] ?? store.event(withIdentifier: eventID) else { return }
+            do {
+                try store.remove(event, span: .thisEvent, commit: true)
+            } catch {
+                throw CalendarWriteError.failed(error.localizedDescription)
+            }
+            added[eventID] = nil
         }
     }
 

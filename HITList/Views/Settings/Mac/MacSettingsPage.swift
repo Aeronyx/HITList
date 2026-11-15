@@ -192,6 +192,8 @@ struct MacSettingsSectionContent: View {
             case .general:
                 GeneralSettingsSection()
                 KeyboardShortcutsGroups()
+            case .calendar:
+                CalendarSettingsPage()
             case .reminders:
                 RemindersSettingsSection()
             case .completing:

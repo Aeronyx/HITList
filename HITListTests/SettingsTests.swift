@@ -315,9 +315,9 @@ final class SettingsTidyTests: XCTestCase {
     // MARK: Pages
 
     func testTheFirstScreenListsThePagesInTheBriefsOrder() {
-        XCTAssertEqual(SettingsPage.list, [.general, .reminders, .extras, .iCloud, .claude, .about],
+        XCTAssertEqual(SettingsPage.list, [.general, .calendar, .reminders, .extras, .iCloud, .claude, .about],
                        "Account is the profile row and Appearance the group above these")
-        XCTAssertEqual(SettingsPage.list.map(\.title), ["General", "Reminders", "Extras", "iCloud & data", "Claude", "About"])
+        XCTAssertEqual(SettingsPage.list.map(\.title), ["General", "Calendar", "Reminders", "Extras", "iCloud & data", "Claude", "About"])
         XCTAssertEqual(Set(SettingsPage.allCases.map(\.title)).count, SettingsPage.allCases.count, "a name once")
         XCTAssertEqual(Set(SettingsPage.list.map(\.systemImage)).count, SettingsPage.list.count)
         for page in SettingsPage.allCases {
@@ -343,7 +343,7 @@ final class SettingsTidyTests: XCTestCase {
             if names.last != name { names.append(name) }
         }
         XCTAssertEqual(macAsIPhone, iPhone)
-        for page in [SettingsPage.account, .general, .reminders, .claude, .about] {
+        for page in [SettingsPage.account, .general, .calendar, .reminders, .claude, .about] {
             let section = MacSettingsSection.allCases.first { $0.title == page.title }
             XCTAssertEqual(section?.systemImage, page.systemImage, "\(page) keeps the Mac's symbol")
         }
@@ -358,7 +358,8 @@ final class SettingsTidyTests: XCTestCase {
             "Account": ["Your name", "Delete profile", "iCloud account", "Sign out"],
             "Appearance": ["Reduce effects", "Compact rows", "Themes"],
             "General": ["Start screen", "Week starts on", "Show task count on the app icon", "Confirm before deleting",
-                        "Calendar events", "Keyboard shortcuts", "Quick add guide"],
+                        "Keyboard shortcuts", "Quick add guide"],
+            "Calendar": ["Calendar events", "Add tasks to", "Add to Calendar", "Google Calendar"],
             "Reminders": ["Notify at due time", "Default reminder", "Morning summary", "If reminders don't arrive",
                           "Send a test notification"],
             "Extras": ["Completion sound", "Haptics", "Companions", "Show companions", "Weather", "Sync bolt",
@@ -406,7 +407,7 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(BoltStyle.key, "delight.boltStyle")
         XCTAssertEqual(HingeCreak.key, "delight.squeakyHinge")
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
-                       ["account", "appearance", "general", "reminders", "completing", "iCloud", "data", "claude", "about"])
+                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude", "about"])
     }
 
     func testRowsSayWhatIsWrongOnlyWhenSomethingIs() {

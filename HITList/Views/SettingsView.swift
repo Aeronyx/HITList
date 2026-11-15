@@ -45,19 +45,20 @@ struct SettingsSheetRequest: Identifiable {
 /// one home (brief 86's audit). The Mac's sections (`MacSettingsSection`) are the same homes under the same names,
 /// with iCloud & data in two (the Mac shows the sync log inline, which would make one page too long).
 enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
-    case account, general, reminders, extras, iCloud, claude, about
+    case account, general, calendar, reminders, extras, iCloud, claude, about
     /// Second level: iCloud & data → Sync log, About → What's New, General → the quick add guide (brief 98).
     case syncLog, whatsNew, quickAddGuide
 
     var id: String { rawValue }
 
     /// The rows under Appearance on the first screen, in order. Account is the profile row above Appearance.
-    static let list: [SettingsPage] = [.general, .reminders, .extras, .iCloud, .claude, .about]
+    static let list: [SettingsPage] = [.general, .calendar, .reminders, .extras, .iCloud, .claude, .about]
 
     var title: String {
         switch self {
         case .account: "Account"
         case .general: "General"
+        case .calendar: "Calendar"
         case .reminders: "Reminders"
         case .extras: "Extras"
         case .iCloud: "iCloud & data"
@@ -81,7 +82,8 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
     var summary: String {
         switch self {
         case .account: "Name, picture, iCloud"
-        case .general: "Start screen, week, badge, calendar"
+        case .general: "Start screen, week, badge"
+        case .calendar: "Your events beside your tasks"
         case .reminders: "Alerts, default reminder, summary"
         case .extras: "Sounds, companions, effects"
         case .iCloud: "Sync, backups, export and import"
@@ -98,6 +100,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: MacSettingsSection.account.systemImage
         case .general: MacSettingsSection.general.systemImage
+        case .calendar: MacSettingsSection.calendar.systemImage
         case .reminders: MacSettingsSection.reminders.systemImage
         case .extras: MacSettingsSection.completing.systemImage
         case .iCloud: MacSettingsSection.iCloud.systemImage
@@ -114,6 +117,7 @@ enum SettingsPage: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .account: MacSettingsSection.account.tint
         case .general, .quickAddGuide: MacSettingsSection.general.tint
+        case .calendar: MacSettingsSection.calendar.tint
         case .reminders: MacSettingsSection.reminders.tint
         case .extras: MacSettingsSection.completing.tint
         case .iCloud, .syncLog: MacSettingsSection.iCloud.tint
@@ -131,6 +135,7 @@ struct SettingsPageContent: View {
         switch page {
         case .account: AccountSettingsSection()
         case .general: GeneralSettingsSection()
+        case .calendar: CalendarSettingsPage()
         case .reminders: RemindersSettingsSection()
         case .extras: DelightSettingsSection()
         case .iCloud: ICloudDataPage()

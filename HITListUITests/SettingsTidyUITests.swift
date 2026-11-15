@@ -136,7 +136,7 @@ final class SettingsTidyUITests: XCTestCase {
         openFromBrowseGear()
         let paths: [(page: String, row: String)] = [
             ("extras", "settings-weather"), ("extras", "companionsToggle"), ("extras", "boltStyle"),
-            ("general", "settings-calendar-events"), ("about", "settings-show-tips"),
+            ("calendar", "settings-calendar-events"), ("about", "settings-show-tips"),
         ]
         for path in paths {
             open("settings-page-\(path.page)")

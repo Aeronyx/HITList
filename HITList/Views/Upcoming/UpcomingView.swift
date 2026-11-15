@@ -104,6 +104,8 @@ struct UpcomingView: View {
                     weekList(entries)
                 }
             }
+            // An event's read-only card, over the list or the board (brief 136).
+            .calendarEventCards(calendar: calendar)
             // iPhone: drawn by PopoutHost above the island and the "+".
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
                              onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })

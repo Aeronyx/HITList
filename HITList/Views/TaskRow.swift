@@ -88,6 +88,8 @@ struct TaskRow: View {
                 }
                 Button("Remove Date") { TaskActions.reschedule(task, to: nil, in: context) }
             }
+            // One event on the calendar, by choice (brief 136); only for a dated task.
+            AddToCalendarButton(task: task)
             Divider()
             Button(role: .destructive) {
                 let delete = { TaskActions.delete(task, in: context) }

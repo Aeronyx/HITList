@@ -103,7 +103,19 @@ final class CalendarEventsTests: XCTestCase {
         XCTAssertFalse(on)
         XCTAssertEqual(events.access, .writeOnly)
         XCTAssertTrue(events.access.isRefused)
-        XCTAssertEqual(source.requests, 0)
+        XCTAssertEqual(source.requests, 1, "brief 136: switching on asks to raise Add to Calendar's write-only access")
+    }
+
+    /// Brief 136: Add to Calendar may have left write-only access; switching events on asks for full access, and
+    /// a yes shows them.
+    func testWriteOnlyAccessCanBeRaisedBySwitchingOn() async {
+        let source = makeSource(access: .writeOnly)
+        source.upgrades = true
+        let events = store(source)
+        let on = await events.setOn(true)
+        XCTAssertTrue(on)
+        XCTAssertEqual(events.access, .fullAccess)
+        XCTAssertFalse(events.events(on: date(10), calendar: calendar).isEmpty)
     }
 
     func testHidingACalendar() async {
@@ -200,6 +212,7 @@ final class FakeCalendarSource: CalendarEventSource, @unchecked Sendable {
     func requestAccess() async -> CalendarAccess {
         requests += 1
         if accessNow == .notDetermined { accessNow = grants ? .fullAccess : .denied }
+        if accessNow == .writeOnly, upgrades { accessNow = .fullAccess }
         return accessNow
     }
 
@@ -214,4 +227,33 @@ final class FakeCalendarSource: CalendarEventSource, @unchecked Sendable {
     func observeChanges(_ onChange: @escaping @Sendable () -> Void) { self.onChange = onChange }
 
     func fireChange() { onChange?() }
+
+    // Brief 136: Add to Calendar writes into memory, and records what it would have saved.
+    var grantsWrite = true
+    /// Write-only access raised to full when asked (the person says yes to the second prompt).
+    var upgrades = false
+    private(set) var writeRequests = 0
+    private(set) var written: [(id: String, draft: CalendarDay.EventDraft, calendarID: String?)] = []
+    private(set) var removed: [String] = []
+
+    func requestWriteAccess() async -> CalendarAccess {
+        writeRequests += 1
+        if accessNow == .notDetermined { accessNow = grantsWrite ? .writeOnly : .denied }
+        return accessNow
+    }
+
+    func add(_ draft: CalendarDay.EventDraft, calendarID: String?) throws -> AddedCalendarEvent {
+        let id = "written-\(written.count + 1)"
+        written.append((id, draft, calendarID))
+        let target = calendarList.first { $0.id == calendarID } ?? calendarList.first
+        all.append(CalendarEvent(id: id, title: draft.title, start: draft.start, end: draft.end, isAllDay: draft.isAllDay,
+                                 calendarID: target?.id ?? "default", colorHex: "#000000", url: draft.url))
+        return AddedCalendarEvent(eventID: id, calendarTitle: accessNow == .writeOnly ? "" : (target?.title ?? "Calendar"))
+    }
+
+    func remove(eventID: String) throws {
+        removed.append(eventID)
+        written.removeAll { $0.id == eventID }
+        all.removeAll { $0.id == eventID }
+    }
 }

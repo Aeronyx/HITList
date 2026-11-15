@@ -9,7 +9,7 @@ import AppKit
 
 /// The calendar events Today and Upcoming show (brief 77), read-only and on the device. Off by default: while off it
 /// loads nothing and never prompts (Settings only reads the permission to say what it is), and every day has no
-/// events, so every screen is as it was. Switched on (Settings → General → Calendar events) it asks for full access once, then keeps the events of
+/// events, so every screen is as it was. Switched on (Settings → Calendar → Calendar events, brief 136) it asks for full access once, then keeps the events of
 /// the days ahead in memory only, reloading when the calendars change (`EKEventStoreChanged`), at midnight, when the
 /// app becomes active and when the setting or the choice of calendars changes. A load never blocks a list: the
 /// events arrive after the tasks if they must.
@@ -35,7 +35,8 @@ final class CalendarEvents {
         #endif
     }
 
-    @ObservationIgnored private let source: any CalendarEventSource
+    /// Where events come from; `CalendarAdds` writes through the same one (brief 136).
+    @ObservationIgnored let source: any CalendarEventSource
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let calendarProvider: () -> Calendar
     @ObservationIgnored private let clock: () -> Date
@@ -47,6 +48,8 @@ final class CalendarEvents {
     private(set) var calendars: [CalendarInfo] = []
     /// Calendars the person switched off (`Preferences.calendarEventsHidden`); new calendars show.
     private(set) var hidden: Set<String>
+    /// Where Add to Calendar puts a task (`Preferences.calendarAddTarget`); nil is the device's default calendar.
+    private(set) var addTarget: String?
     /// Every occurrence from the start of today up to `horizon`.
     private(set) var loaded: [CalendarEvent] = []
     /// How many loads have finished (tests wait on it).
@@ -71,6 +74,26 @@ final class CalendarEvents {
         self.clock = now
         isOn = onForTheRun || (defaults.object(forKey: Preferences.calendarEvents) as? Bool ?? Preferences.calendarEventsDefault)
         hidden = Set(defaults.stringArray(forKey: Preferences.calendarEventsHidden) ?? [])
+        addTarget = defaults.string(forKey: Preferences.calendarAddTarget)
+    }
+
+    /// The device has a Google account among its calendars' accounts (known only while HITList may read them).
+    var hasGoogleAccount: Bool { calendars.contains(where: \.isGoogle) }
+
+    /// The calendars Add to Calendar may write to, by account then title.
+    var writableCalendars: [CalendarInfo] { calendars.filter(\.allowsChanges) }
+
+    /// The calendar picked for Add to Calendar, while it is still there and takes events.
+    var addTargetCalendar: CalendarInfo? {
+        guard let addTarget else { return nil }
+        return writableCalendars.first { $0.id == addTarget }
+    }
+
+    /// Picks where Add to Calendar puts a task; nil goes back to the device's default calendar.
+    func setAddTarget(_ calendarID: String?) {
+        addTarget = calendarID
+        if let calendarID { defaults.set(calendarID, forKey: Preferences.calendarAddTarget) }
+        else { defaults.removeObject(forKey: Preferences.calendarAddTarget) }
     }
 
     /// Showing events: switched on and allowed to read.
@@ -134,7 +157,8 @@ final class CalendarEvents {
             return false
         }
         var current = source.access()
-        if current == .notDetermined { current = await source.requestAccess() }
+        // Write-only (Add to Calendar asked for it while events were off) can be raised to full access by asking.
+        if current == .notDetermined || current == .writeOnly { current = await source.requestAccess() }
         access = current
         guard current.canRead else {
             isOn = false
@@ -208,10 +232,13 @@ final class CalendarEvents {
 }
 
 extension Preferences {
-    /// Settings → General → Calendar events (brief 77). Device-local, like every preference: calendars differ per
+    /// Settings → Calendar → Calendar events (brief 77; its own page since brief 136). Device-local, like every preference: calendars differ per
     /// device, and the permission is the device's.
     static let calendarEvents = "pref.calendarEvents.enabled"
     static let calendarEventsDefault = false
     /// The calendar identifiers switched off in the calendar card; every other calendar shows (all by default).
     static let calendarEventsHidden = "pref.calendarEvents.hiddenCalendars"
+    /// Settings → Calendar → Add tasks to (brief 136): the calendar Add to Calendar writes to; none is the device's
+    /// default calendar.
+    static let calendarAddTarget = "pref.calendarEvents.addTarget"
 }

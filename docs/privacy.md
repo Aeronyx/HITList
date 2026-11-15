@@ -62,14 +62,21 @@ to Siri is handled by Apple under Apple's privacy policy.
 chose) in HITList's own folder on your device until HITList opens and saves it as a task like any other; it uses no
 network and reads nothing else from the app you shared from.
 
-## Calendar events (optional, off unless you turn it on)
+## Your calendars (optional, off unless you turn them on)
 
-If you switch on Settings → General → Calendar events, HITList asks for access to your calendars and shows the
-events of the calendars you pick beside your tasks in Today and Upcoming. It only reads them: it never adds,
-changes or deletes an event. The events are read on the device each time they are shown and never leave it:
-they are not saved with your tasks, synced through iCloud, put in backups or exports, shown in Spotlight or
-Siri, or given to Claude. Switching it off stops the reading; you can also withdraw access in your device's
-settings under Privacy & Security → Calendars.
+If you switch on Settings → Calendar → Calendar events, HITList asks for access to your calendars and shows the
+events of the calendars you pick beside your tasks in Today and Upcoming, and a tap on one shows its details.
+It reads them to show them, on the device, each time they are shown, and they never leave it: they are not saved
+with your tasks, synced through iCloud, put in backups or exports, shown in Spotlight, widgets or Siri, or given to
+Claude. Google Calendar, Outlook and others come in through the accounts your device already has (Apple's Calendar
+holds them); HITList never signs in to Google or any other calendar service and makes no network request of its own
+for your calendars.
+
+HITList writes to a calendar only when you choose Add to Calendar on a task: one event, in the calendar you picked
+in Settings → Calendar, with the task's title, time, notes and a link back to the task. If events are off, it asks
+only to add events, not to read them. It never changes or deletes an event afterwards, except when you tap Undo on
+the "Added" message right away. Switching events off stops the reading; you can also withdraw access in your
+device's settings under Privacy & Security → Calendars.
 
 ## Your companion's local time and weather (optional, asked once)
 
