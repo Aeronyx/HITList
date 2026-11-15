@@ -370,6 +370,39 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(later.rule, .deletedBoth)
     }
 
+    // MARK: Every situation has one rule
+
+    func testEveryOneOfTheEighteenSituationsHasItsRule() {
+        // B: none, alive, a marker. Here: none, the item. There: none, alive, a marker. Where the table has two rows
+        // that apply (M1 and M11 with a base and nothing anywhere; M11 and M12 with a marker base, the item here and
+        // nothing there) the code says M11; both rows give the same result.
+        enum Side { case none, alive, marker }
+        let expected: [(Side, Bool, Side, MergeOutcome.Rule)] = [
+            (.none, false, .none, .nothing), (.none, false, .alive, .newThere),
+            (.none, false, .marker, .deletedThereUnknownHere), (.none, true, .none, .newHere),
+            (.none, true, .alive, .firstMeeting), (.none, true, .marker, .firstMeetingDeletedThere),
+            (.alive, false, .none, .goneForGood), (.alive, false, .alive, .deletedHere),
+            (.alive, false, .marker, .deletedBoth), (.alive, true, .none, .goneForGood),
+            (.alive, true, .alive, .threeWay), (.alive, true, .marker, .deletedThere),
+            (.marker, false, .none, .goneForGood), (.marker, false, .alive, .cameBackThere),
+            (.marker, false, .marker, .deletedBoth), (.marker, true, .none, .goneForGood),
+            (.marker, true, .alive, .cameBackHere), (.marker, true, .marker, .cameBackHere),
+        ]
+        func record(_ side: Side, _ t: Int64) -> SyncRecord? {
+            switch side {
+            case .none: return nil
+            case .alive: return F.task(updated: t)
+            case .marker: return F.marker(at: t)
+            }
+        }
+        for (b, here, s, rule) in expected {
+            let outcome = F.merge(base: record(b, 10), local: here ? F.task(updated: 20) : nil, deletedHereAt: 30,
+                                  server: record(s, 25))
+            XCTAssertEqual(outcome.rule, rule, "B \(b), here \(here), there \(s)")
+        }
+        XCTAssertEqual(Set(expected.map(\.3)).count, MergeOutcome.Rule.allCases.count - 1, "every rule but M0 is used")
+    }
+
     // MARK: What the merge reads: required fields, data, markers, unknown types and keys
 
     func testRequiredFieldMissingOnICloudsSideReadsAsItsDefault() {
