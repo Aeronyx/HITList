@@ -27,6 +27,23 @@ extension SyncCore {
         publish()
     }
 
+    /// A whole compare found too many items gone at once (`SyncHold.massDeletion`): nothing noticed, nothing sent,
+    /// nothing fetched. The moment they were first found is kept with the hold (the time their markers carry if the
+    /// person confirms); a hold already asking keeps its first moment.
+    func holdMassDeletion(_ count: Int, of living: Int, at now: Date) async {
+        if case .massDeletion? = hold { return }
+        let seen = massSeenAt ?? now
+        log("\(count) of the \(living) items iCloud holds are missing here: nothing is deleted in iCloud until the person confirms, or they are back")
+        var write = LedgerWrite()
+        write.facts[Self.massSeenFact] = Data(String(seen.timeIntervalSince1970).utf8)
+        do {
+            try await commit(write)
+        } catch {
+            massSeenAt = seen
+        }
+        await enterHold(.massDeletion(count))
+    }
+
     /// The device's items or the ledger could not be read or written. Tried again by the next `start()` or
     /// `resume()`; fetched records are let go meanwhile and fetched again then.
     func fail(_ words: String) async {
@@ -53,6 +70,7 @@ extension SyncCore {
         }
         var write = LedgerWrite()
         if hold?.persists == true { write.facts.updateValue(nil, forKey: LedgerFact.hold) }
+        if case .massDeletion? = hold { write.facts.updateValue(nil, forKey: Self.massSeenFact) }
         if refetch, resetTransport || hold == .noAccount { write.facts.updateValue(nil, forKey: Self.refetchFact) }
         do {
             try await commit(write)

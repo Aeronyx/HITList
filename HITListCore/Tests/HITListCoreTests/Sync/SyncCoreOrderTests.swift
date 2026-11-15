@@ -12,7 +12,8 @@ final class SyncCoreOrderTests: XCTestCase {
     // MARK: One thing at a time
 
     func testALocalChangeThatArrivesWhileABatchIsBeingWrittenIsDoneAfterItOnTheStateItLeft() async {
-        let memory = MemoryLocalStore([task("A", "Milk")])
+        // A project stays: a real store is never empty (and an empty one is held as a mass deletion).
+        let memory = MemoryLocalStore([task("A", "Milk"), project("P", "Home")])
         let gated = GatedStore(memory)
         let ledger = MemoryLedger()
         let transport = ScriptedTransport()
@@ -21,7 +22,8 @@ final class SyncCoreOrderTests: XCTestCase {
         let core = SyncCore(store: gated, ledger: ledger, transport: transport, host: nil, clock: { clock.now })
         await core.start()
         await transport.deliver(.willFetch)
-        await transport.deliver(.fetched(changed: [cloud(task("A", "Milk")), meta()], removed: []))
+        await transport.deliver(.fetched(changed: [cloud(task("A", "Milk")), cloud(project("P", "Home")), meta()],
+                                         removed: []))
         await transport.deliver(.didFetch(error: nil))
 
         await gated.arm()

@@ -16,10 +16,18 @@ extension SyncCore {
 
     /// Compares `keys` (nil: everything) and makes the transport's list match. Writes the ledger first (a deletion
     /// noticed here), then the list: a crash in between leaves a list the next compare puts right. While held,
-    /// nothing is compared (a full iCloud excepted: then the count is kept, and nothing is added).
-    func compare(_ keys: Set<SyncKey>?) async {
+    /// nothing is compared (a full iCloud excepted: then the count is kept, and nothing is added; and a mass
+    /// deletion, which a whole compare outside an event looks at again, to lift it when the items are back).
+    ///
+    /// This is the one place a deletion here is noticed, so it is the one place guarded against a store that reads
+    /// wrong: a whole compare that finds the store empty while iCloud holds items, or more items gone than `limits`
+    /// allows at once, notices nothing and holds (`massDeletion`). A compare of a few keys that finds many gone
+    /// decides on everything instead. `confirmedAt`: the person confirmed, the deletions carry that moment.
+    func compare(_ keys: Set<SyncKey>?, confirmedAt: Date? = nil) async {
         guard loaded else { return }
-        if let hold, hold != .storageFull { return }
+        if let hold, hold != .storageFull {
+            guard case .massDeletion = hold, keys == nil, !inEvent else { return }
+        }
         let here: [SyncKey: SyncRecord]
         do {
             let records: [SyncRecord]
@@ -38,12 +46,38 @@ extension SyncCore {
         let now = clock()
         var desired: [SyncKey: PendingChange] = [:]
         var write = LedgerWrite()
+        var gone = 0
         for key in universe {
-            let finding = key == Self.metaKey ? metaFinding() : self.finding(key, local: here[key], now: now)
+            let finding = key == Self.metaKey ? metaFinding() : self.finding(key, local: here[key], now: confirmedAt ?? now)
             if let change = finding.change { desired[key] = change }
-            if let entry = finding.entry { write.upsert.append(entry) }
+            if let entry = finding.entry {
+                write.upsert.append(entry)
+                if entry.deletedHereAt != nil, entries[key]?.deletedHereAt == nil { gone += 1 }
+            }
             if finding.drop { write.remove.append(key) }
         }
+
+        if confirmedAt == nil {
+            if keys != nil, gone > limits.massDeletionCount {
+                // Many gone at once in a save's hint: measured against everything before anything is decided.
+                await compare(nil)
+                return
+            }
+            if keys == nil {
+                let living = entries.values.filter { $0.key != Self.metaKey && $0.base?.isDeleted == false }.count
+                let empty = here.isEmpty && living > 0
+                let tooMany = gone > limits.massDeletionCount && Double(gone) > limits.massDeletionShare * Double(living)
+                if empty || tooMany {
+                    await holdMassDeletion(empty ? living : gone, of: living, at: now)
+                    return
+                }
+                if case .massDeletion(let count)? = hold {
+                    log("The \(count) missing items are back (or few enough now): the hold lifts by itself")
+                    await lift(resetTransport: true)
+                }
+            }
+        }
+
         do {
             try await commit(write)
         } catch {
@@ -185,24 +219,15 @@ extension SyncCore {
             if entry?.base == nil, SyncSchema.type(key.type) == nil { return nil }
             return OutgoingRecord(record: local, system: entry?.system)
         }
-        guard var entry, let base = entry.base else { return nil }
+        guard let entry, let base = entry.base else { return nil }
         if base.isDeleted {
             // A marker later than iCloud's (M10), or nothing: iCloud already holds the marker.
             guard let at = entry.deletedHereAt, !RecordMerge.same(.marker(key, deletedAt: at), base) else { return nil }
             return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
         }
-        if entry.deletedHereAt == nil {
-            // Not noticed yet: noticed now, and kept, so the marker carries the same time if it is asked for again.
-            entry.deletedHereAt = clock()
-            var write = LedgerWrite()
-            write.upsert = [entry]
-            do {
-                try await commit(write)
-            } catch {
-                await fail("The engine's memory could not be written: \(error)")
-                return nil
-            }
-        }
-        return OutgoingRecord(record: .marker(key, deletedAt: entry.deletedHereAt ?? clock()), system: entry.system)
+        // A deletion is only ever noticed by the compare, which guards against a store that reads wrong: one it has
+        // not noticed is not sent (the transport drops the change; the compare adds the marker when it notices).
+        guard let at = entry.deletedHereAt else { return nil }
+        return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
     }
 }

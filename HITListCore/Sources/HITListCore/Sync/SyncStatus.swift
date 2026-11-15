@@ -16,6 +16,11 @@ public enum SyncHold: Hashable, Sendable, Codable {
     case storageFull
     /// Two rows on the device share a key. Lifted by `SyncCore.resume()` once the app has merged them.
     case duplicates([SyncKey])
+    /// A whole compare found this many items gone from the device that iCloud holds alive: none left at all, or more
+    /// than `SyncCore.Limits` allows at once. A store that reads wrong (the app on an empty in-memory store, a
+    /// failed read) must not empty iCloud for every device, so nothing is sent or fetched until the person confirms
+    /// (`SyncCore.confirmDeletions()`) or a whole compare finds the items back.
+    case massDeletion(Int)
     /// The device's items or the engine's memory could not be read or written: the words. Tried again at the next
     /// `start()` or `resume()`.
     case failed(String)
@@ -31,7 +36,7 @@ public enum SyncHold: Hashable, Sendable, Codable {
     /// by the next start itself.
     var persists: Bool {
         switch self {
-        case .noAccount, .needsUpdate, .zonePurged, .storageFull: return true
+        case .noAccount, .needsUpdate, .zonePurged, .storageFull, .massDeletion: return true
         case .duplicates, .failed: return false
         }
     }
@@ -44,6 +49,8 @@ public enum SyncHold: Hashable, Sendable, Codable {
         case .zonePurged: return "HITList's data was removed from iCloud"
         case .storageFull: return "iCloud is full"
         case .duplicates(let keys): return "\(keys.count) item\(keys.count == 1 ? "" : "s") on this device share an id"
+        case .massDeletion(let count):
+            return "\(count) item\(count == 1 ? " is" : "s are") missing from this device: nothing goes to iCloud until you confirm you deleted \(count == 1 ? "it" : "them")"
         case .failed(let words): return words
         }
     }

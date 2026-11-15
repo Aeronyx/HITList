@@ -163,6 +163,15 @@ extension SyncCore {
             await storeFailed(error)
             return false
         }
+        // Items iCloud holds alive that are gone here and that nobody noticed yet: noticed by the compare first,
+        // which guards against a store that reads wrong. If it holds, nothing arriving is read (it comes again).
+        let unnoticed = Set(keys.filter {
+            local[$0] == nil && entries[$0]?.base?.isDeleted == false && entries[$0]?.deletedHereAt == nil
+        })
+        if !unnoticed.isEmpty {
+            await compare(unnoticed)
+            if let hold, hold.stopsFetching { return false }
+        }
         var settling: [SyncKey: Settling] = [:]
         for key in keys { settling[key] = decide(key, server: byKey[key], local: local[key], now: now) }
 

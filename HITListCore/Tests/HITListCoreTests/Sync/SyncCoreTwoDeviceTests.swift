@@ -87,7 +87,8 @@ final class SyncCoreTwoDeviceTests: XCTestCase {
     }
 
     func testADeletionAgainstALaterEditElsewhere() async throws {
-        let pair = Pair([task("T", "Milk"), task("S", "Sub", parent: "T")])
+        // A project stays: a real store is never empty (and an empty one is held as a mass deletion).
+        let pair = Pair([task("T", "Milk"), task("S", "Sub", parent: "T"), project("P", "Home")])
         await pair.start()
         try await pair.settle()
         pair.clock.advance(10)

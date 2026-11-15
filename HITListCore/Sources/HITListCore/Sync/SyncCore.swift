@@ -24,6 +24,20 @@ public actor SyncCore: SyncTransportDelegate {
     weak var host: (any SyncHost)?
     let clock: @Sendable () -> Date
     let log: @Sendable (String) -> Void
+    let limits: Limits
+
+    /// The numbers the brain's guards use, in one place.
+    public struct Limits: Sendable, Equatable {
+        /// A whole compare that finds more than this many items gone here (that iCloud holds alive)...
+        public var massDeletionCount: Int
+        /// ...that are also more than this share of everything iCloud holds alive, holds (`SyncHold.massDeletion`).
+        public var massDeletionShare: Double
+
+        public init(massDeletionCount: Int = 50, massDeletionShare: Double = 0.5) {
+            self.massDeletionCount = massDeletionCount
+            self.massDeletionShare = massDeletionShare
+        }
+    }
 
     // MARK: The ledger, as read at start and kept in step with every write (`commit`)
 
@@ -35,8 +49,14 @@ public actor SyncCore: SyncTransportDelegate {
     /// Fetched records were let go unread (a hold, a write that failed): the transport must bring everything again
     /// before the brain trusts its memory. Kept as a fact too, so a relaunch does it.
     var refetch = false
+    /// When a whole compare first found the items a `massDeletion` hold is about: the time their markers carry if
+    /// the person confirms. Kept as a fact with the hold.
+    var massSeenAt: Date?
 
     // MARK: Working state, not kept
+
+    /// An event is being handled: nothing may reset the transport now.
+    var inEvent = false
 
     enum Phase { case off, starting, running }
     var phase = Phase.off
@@ -75,6 +95,7 @@ public actor SyncCore: SyncTransportDelegate {
 
     /// The ledger's own fact this brain adds (`LedgerFact` names the contract's).
     static let refetchFact = "refetch"
+    static let massSeenFact = "massDeletionSeen"
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
     /// before it is set aside for the next.
@@ -82,13 +103,14 @@ public actor SyncCore: SyncTransportDelegate {
 
     public init(store: any SyncLocalStore, ledger: any SyncLedger, transport: any SyncTransport,
                 host: (any SyncHost)?, clock: @escaping @Sendable () -> Date = { Date() },
-                log: @escaping @Sendable (String) -> Void = { _ in }) {
+                log: @escaping @Sendable (String) -> Void = { _ in }, limits: Limits = Limits()) {
         self.store = store
         self.ledger = ledger
         self.transport = transport
         self.host = host
         self.clock = clock
         self.log = log
+        self.limits = limits
     }
 
     // MARK: - Public surface
@@ -182,6 +204,21 @@ public actor SyncCore: SyncTransportDelegate {
         }
     }
 
+    /// The person's "yes, I deleted them" while held for a mass deletion (`SyncHold.massDeletion`): the items gone
+    /// are deleted in iCloud too, their markers carrying the moment the compare first found them gone. Throws
+    /// `SyncCoreError.noQuestion` when the brain is not asking.
+    public func confirmDeletions() async throws {
+        try await serially {
+            guard case .massDeletion? = hold else { throw SyncCoreError.noQuestion }
+            let seen = massSeenAt ?? clock()
+            log("The person confirmed the deletions found at \(seen)")
+            // The hold first, then the deletions noticed: a crash in between finds them again and asks again.
+            await lift(resetTransport: true)
+            await compare(nil, confirmedAt: seen)
+            publish()
+        }
+    }
+
     /// The status's changes, one value per change, starting with the current one.
     public func statusUpdates() -> AsyncStream<SyncStatus> {
         let id = UUID()
@@ -199,7 +236,9 @@ public actor SyncCore: SyncTransportDelegate {
 
     public func handle(_ event: TransportEvent) async {
         await serially {
+            inEvent = true
             await process(event)
+            inEvent = false
             publish()
         }
     }
@@ -281,6 +320,8 @@ public actor SyncCore: SyncTransportDelegate {
             case LedgerFact.account: account = value.flatMap { String(data: $0, encoding: .utf8) }
             case LedgerFact.firstFetchDone: firstFetchDone = value != nil
             case Self.refetchFact: refetch = value != nil
+            case Self.massSeenFact:
+                massSeenAt = value.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             default: break
             }
         }
@@ -297,11 +338,13 @@ public actor SyncCore: SyncTransportDelegate {
             let owner = try await ledger.fact(LedgerFact.account)
             let held = try await ledger.fact(LedgerFact.hold)
             let again = try await ledger.fact(Self.refetchFact)
+            let seen = try await ledger.fact(Self.massSeenFact)
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             deferred = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil
             account = owner.flatMap { String(data: $0, encoding: .utf8) }
             refetch = refetch || again != nil
+            massSeenAt = seen.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             if let held { hold = try? JSONDecoder().decode(SyncHold.self, from: held) } else if hold?.persists == true { hold = nil }
             loaded = true
             log("Started: \(entries.count) records remembered, \(deferred.count) set aside" +
