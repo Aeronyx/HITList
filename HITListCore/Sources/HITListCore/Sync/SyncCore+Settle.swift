@@ -44,6 +44,18 @@ extension SyncCore {
                 records.append(record)
             }
         }
+        if removed.contains(Self.metaKey), entries[Self.metaKey] != nil {
+            // The zone's meta gone for good: forgotten, so the compare sends it again.
+            var forget = LedgerWrite()
+            forget.remove = [Self.metaKey]
+            do {
+                try await commit(forget)
+            } catch {
+                await fail("The engine's memory could not be written: \(error)")
+                await markRefetch()
+                return
+            }
+        }
         // What an earlier batch set aside is looked at again with this one: what it pointed at may have come.
         var incoming = deferred
         for record in records { incoming[record.key] = record }

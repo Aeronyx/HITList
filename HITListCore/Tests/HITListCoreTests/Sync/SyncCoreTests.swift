@@ -51,6 +51,10 @@ final class SyncCoreTests: XCTestCase {
         try? await empty.transport.send()
         let afterSend = await empty.core.recordToSend(SyncCore.metaKey)
         XCTAssertNil(afterSend, "once iCloud holds it, it is never sent again")
+
+        await empty.deliverFetch([], removed: [SyncCore.metaKey])
+        let again = await empty.pending()
+        XCTAssertEqual(again, [.save(SyncCore.metaKey)], "removed for good: sent again")
     }
 
     func testAChangeIsFoundByComparingWhateverWroteItAndWhetherOrNotUpdatedAtMoved() async {
