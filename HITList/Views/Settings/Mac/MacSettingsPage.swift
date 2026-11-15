@@ -200,9 +200,12 @@ struct MacSettingsSectionContent: View {
                 DelightSettingsSection()
             case .iCloud:
                 ICloudSyncGroup(showsLastChange: true)
+                // HITList's own engine holding for the person (nothing on the mirror).
+                if CloudSyncMonitor.shared.isOnEngine { SyncEngineHoldGroup() }
                 ICloudCheckGroup()
                 SyncLogSection()
                 ResetLocalCacheGroup()
+                if SyncEngineSwitchGroup.isShown { SyncEngineSwitchGroup() }
             case .data:
                 MacDataSection()
             case .claude:
