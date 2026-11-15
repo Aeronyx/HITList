@@ -133,7 +133,7 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M10 | Not here, a marker there | B alive (deleted here too): a marker at the later of D and S's deletion, so the time does not depend on who reached iCloud first; it is sent if it differs from S. B a marker: S, unless this device still has a later marker of its own to send (`deletedHereAt` set, never "now"): then that one |
 | M11 | B present, not there at all | L same as B, or not here: nothing. L changed: L, new again |
 | M12 | Here, B a marker | S the marker this device knew (the same time as B's): L, it was made again here, whatever its dates (an undo, an import). S a newer marker (deleted again elsewhere since): as M6. Alive there too: as M5 |
-| M13 | Not here, B a marker, alive there | S: it was made again elsewhere |
+| M13 | Not here, B a marker, alive there | S: it was made again elsewhere. Unless this device still has a later deletion of its own to send (`deletedHereAt` set, never "now"): then as M8 against that time (S if S changed after it, else a marker at it) |
 
 Then: the device is written if it differs from the result (through `LocalWrite.expected`: if the person changed the
 item meanwhile, nothing is written and it is settled again); `base` becomes S; and if the result differs from S it
