@@ -247,6 +247,55 @@ final class SyncCoreSimulationTests: XCTestCase {
         print("SyncCore, kept seeds: \(tally)")
     }
 
+    /// What stays in `swift test` beside the kept seeds: a fixed spread of short runs across the fault sets the brain
+    /// rides out today (the long runs are the command at the top of this file). Two devices' saves meeting in iCloud
+    /// ("conflict", `sendByItself`) among them, at the supervisor's word.
+    static let spread: [(faults: String, seeds: [UInt64])] = [
+        ("everyday", [1, 2]), ("conflict", [1, 2]), ("ledger", [1]), ("zone", [1]), ("memory", [1]),
+        ("quota", [1]), ("refusal", [1]), ("account", [1, 2]),
+    ]
+
+    func testASpreadOfShortRunsAcrossTheFaultSets() async {
+        var tally = SimTally()
+        for (faults, seeds) in Self.spread {
+            for seed in seeds {
+                let report = await Self.run(seed: seed, steps: 300, faults: faults, tally: &tally)
+                XCTAssertEqual(report.findings, [], "\(faults): \(report.description)")
+            }
+        }
+        print("SyncCore, the spread: \(tally)")
+    }
+
+    /// Section 10, as the rig's model now says it (brief 145): at a sign-out what was synced leaves the device after a
+    /// backup and items iCloud never held stay; they go to whichever account the device signs in to next; what was
+    /// synced comes back at the sign-in to its own account; nothing of one account reaches another (I10).
+    func testSignOutAndAnotherAccount_whatWasSyncedLeavesAndComesBack_nothingCrossesAccounts() async {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        let t1 = SyncKey(type: "TaskItem", name: "T1"), t2 = SyncKey(type: "TaskItem", name: "T2")
+        await sim.play([.sync("A"), .act("A", .put(Self.task("T1", "synced"))), .sync("A"),
+                        .fault("A", .network(up: false)), .act("A", .put(Self.task("T2", "never in iCloud"))),
+                        .fault("A", .account(nil))])
+        let afterSignOut = await sim.device("A")?.store.record(t1)
+        let kept = await sim.device("A")?.store.record(t2)
+        XCTAssertNil(afterSignOut, "what was synced left the device")
+        XCTAssertNotNil(kept, "an item iCloud never held stays")
+        let backups = (await sim.device("A")?.brain as? SyncCoreSimBrain)?.host.backups ?? []
+        XCTAssertEqual(backups, [.signedOut], "a backup first")
+        await sim.play([.fault("A", .account("alice-other")), .fault("A", .network(up: true)), .sync("A"), .sync("A")])
+        let other = await sim.cloud.records(account: "alice-other").map(\.key)
+        XCTAssertEqual(other.filter { $0.type == "TaskItem" }, [t2], "it went with the device to the next account")
+        await sim.play([.fault("A", .account(FakeCloud.defaultAccount)), .sync("A"), .sync("A")])
+        let back = await sim.device("A")?.store.record(t1)
+        XCTAssertNotNil(back, "what was synced came back at the sign-in")
+        let gone = await sim.device("A")?.store.record(t2)
+        XCTAssertNil(gone, "the other account's item left with its account")
+        let alice = await sim.cloud.records().map(\.key)
+        XCTAssertEqual(alice.filter { $0.type == "TaskItem" }, [t1], "nothing of the other account reached this one")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
     // MARK: The rig's model, corrected on what SyncCore does
 
     /// Seed 62 (everyday) and 16 (memory): a device whose transport lost its state while a deletion of its own was

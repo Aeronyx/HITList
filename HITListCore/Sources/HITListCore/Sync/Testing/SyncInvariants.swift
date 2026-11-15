@@ -25,8 +25,13 @@ public enum SyncInvariant: String, Hashable, Sendable, CaseIterable, Comparable 
     /// References kept (section 8): no device sends a record that takes away a reference iCloud holds, unless a person
     /// on that device changed that field.
     case referencesKept = "I9"
+    /// Accounts apart (section 10, brief 145): each account's iCloud holds only items that belong to it (made there,
+    /// made signed out, or carried there by a device that left another account holding items iCloud never held).
+    case accountsApart = "I10"
 
-    public static func < (a: SyncInvariant, b: SyncInvariant) -> Bool { a.rawValue < b.rawValue }
+    public static func < (a: SyncInvariant, b: SyncInvariant) -> Bool {
+        (Int(a.rawValue.dropFirst()) ?? 0) < (Int(b.rawValue.dropFirst()) ?? 0)
+    }
 }
 
 /// One thing found wrong, in words a person can act on.
@@ -133,6 +138,27 @@ public struct SimIntent: Sendable {
 
     public mutating func recordDrops(step: Int, _ drops: [FakeCloud.ReferenceDrop]) {
         for drop in drops { self.drops.append((step, drop)) }
+    }
+
+    // MARK: Refusals for good (T9, brief 145)
+    //
+    // A record iCloud refused for good (too large, rejected) is kept out of the list until a person changes it again
+    // (section 6 T9, `SyncStatus.refused`, shown to the person): until then its device holds a version iCloud and the
+    // other devices do not. I1, I2 and I3 do not judge such a key; once a person changes it after the refusal, they do.
+
+    /// When each key was last refused for good.
+    public private(set) var refusals: [SyncKey: Int] = [:]
+
+    public mutating func recordRefusals(step: Int, _ keys: [SyncKey]) {
+        for key in keys { refusals[key] = step }
+    }
+
+    /// Keys held back on a device by a refusal for good that no person has changed since.
+    public var heldBack: Set<SyncKey> {
+        Set(refusals.keys.filter { key in
+            guard let at = refusals[key] else { return false }
+            return !events(of: key).contains { $0.step > at }
+        })
     }
 
     // MARK: Accounts (section 10, brief 145)
@@ -352,7 +378,17 @@ public enum SyncInvariants {
 
     /// I1: every device holds the same items with the same fields (as this build knows them), and iCloud's living
     /// records of the types this build syncs are exactly those.
-    public static func sameEverywhere(devices: [DeviceHoldings], cloud: [CloudRecord]) -> [SyncFinding] {
+    /// `except`: keys held back on a device by a refusal for good (`SimIntent.heldBack`), not judged.
+    public static func sameEverywhere(devices: [DeviceHoldings], cloud: [CloudRecord],
+                                      except: Set<SyncKey> = []) -> [SyncFinding] {
+        // A held-back item is on its device and not in iCloud: the references to it are not judged either.
+        let devices = devices.map { device -> DeviceHoldings in
+            guard !except.isEmpty else { return device }
+            let allowed = Set(device.records.map(\.key)).subtracting(except)
+            let records = device.records.filter { !except.contains($0.key) }.map { shown($0, allowed) }
+            return DeviceHoldings(name: device.name, records: records, pending: device.pending)
+        }
+        let cloud = cloud.filter { !except.contains($0.key) }
         var findings: [SyncFinding] = []
         var there: [SyncKey: SyncRecord] = [:]
         var markers = Set<SyncKey>()
@@ -395,8 +431,10 @@ public enum SyncInvariants {
         }
         let alive = livingKeys(cloud)
         let iCloud = Dictionary(cloud.map { ($0.key, shown($0.record, alive)) }, uniquingKeysWith: { a, _ in a })
+        let heldBack = intent.heldBack
         for key in intent.keys {
-            guard let type = SyncSchema.type(key.type), !intent.everDeleted(key) else { continue }
+            guard let type = SyncSchema.type(key.type), !intent.everDeleted(key), !intent.foreign(key),
+                  !heldBack.contains(key) else { continue }
             if key.type == SyncSchema.taskItem.name, intent.underDeletedParent(key) { continue }
             let events = intent.events(of: key)
             guard let made = events.first(where: { if case .made = $0.change { return true } else { return false } }) else { continue }
@@ -414,7 +452,10 @@ public enum SyncInvariants {
             })
             // Made on two devices (the profile: one per account, made wherever a person first named themselves): the
             // two meet without a common base, and the record changed last wins whole (M5). No field is held to account.
-            guard makers.count == 1 else { continue }
+            // Likewise one made twice on one device without a deletion between (the profile made again on a device
+            // whose synced copy left it at a sign-out, before the sign-in brought it back: brief 145, account seed 19).
+            let madeCount = events.filter { if case .made = $0.change { return true } else { return false } }.count
+            guard makers.count == 1, madeCount == 1 else { continue }
             let skip = clockFields(type).union([SyncSchema.updatedAt])
             for field in type.fields where !skip.contains(field.key) {
                 if field.merge == .union, case .references(let target) = field.kind {
@@ -566,8 +607,10 @@ public enum SyncInvariants {
     public static func nothingComesBack(devices: [DeviceHoldings], cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
         var findings: [SyncFinding] = []
         let iCloud = Dictionary(cloud.map { ($0.key, $0.record) }, uniquingKeysWith: { a, _ in a })
+        let heldBack = intent.heldBack
         for key in intent.keys {
-            guard let deletion = intent.gone(key), !intent.forgotten(deletion) else { continue }
+            guard let deletion = intent.gone(key), !intent.forgotten(deletion), !intent.foreign(key),
+                  !heldBack.contains(key) else { continue }
             var back: [String] = []
             for device in devices.sorted(by: { $0.name < $1.name }) {
                 if let record = device.records.first(where: { $0.key == key }) {
@@ -721,6 +764,20 @@ public enum SyncInvariants {
             }
             let names = drop.removed.map(short).joined(separator: ", ")
             findings.append(SyncFinding(.referencesKept, "device \(drop.device) sent \(drop.key) without \(drop.field) →\(names) at step \(step), which iCloud held; no person on \(drop.device) changed \(drop.field)"))
+        }
+        return findings
+    }
+
+    // MARK: I10
+
+    /// I10: nothing of one account reaches another. Every item `owner`'s iCloud holds alive belongs to `owner` by the
+    /// model (`SimIntent.belongs`): a person made it on a device signed in to it or signed out, or a device carried it
+    /// there from another account whose iCloud had never held it (section 10: those items stay on the device).
+    public static func accountsApart(owner: String, cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
+        var findings: [SyncFinding] = []
+        for record in cloud.sorted(by: { $0.key < $1.key })
+        where !record.record.isDeleted && SyncSchema.type(record.key.type) != nil && !intent.belongs(record.key, to: owner) {
+            findings.append(SyncFinding(.accountsApart, "\(owner)'s iCloud holds \(record.key) (\(sketch(record.record))), which no person made there, signed out, or carried there"))
         }
         return findings
     }

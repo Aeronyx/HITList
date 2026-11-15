@@ -271,6 +271,7 @@ public actor SyncSimulation {
         self.clock = SimClock()
         self.factory = brain
         self.random = SimRandom(seed: seed)
+        self.intent.account = config.account
     }
 
     // MARK: Devices
@@ -380,6 +381,7 @@ public actor SyncSimulation {
     private func absorb() async {
         for name in observed.takeForgotten() { intent.recordAmnesia(step: step, device: name) }
         intent.recordDrops(step: step, await cloud.takeDrops())
+        intent.recordRefusals(step: step, await cloud.takeRefusals())
     }
 
     private func act(_ name: String, _ action: SimAction, hint: SimHint) async {
@@ -461,10 +463,22 @@ public actor SyncSimulation {
         case .deliverTwice(let kind): await device.transport.deliverTwice(kind)
         case .loseBookmark: await device.transport.loseBookmark()
         case .account(let account):
+            await recordAccount(name, to: account)
             await cloud.setAccount(account, for: name)
             await device.transport.noticeChanges()
             await afterBrainCall(name)
         }
+    }
+
+    /// The model's side of a sign-in or sign-out (section 10): the items on the device that its ledger holds no living
+    /// base for are the ones iCloud never held; they stay on the device and go with it to the next account.
+    private func recordAccount(_ name: String, to account: String?) async {
+        guard let device = slots[name], await cloud.account(of: name) != account else { return }
+        let records = (try? await device.store.records()) ?? []
+        let entries = (try? await device.ledger.entries()) ?? []
+        let living = Set(entries.filter { $0.base?.isDeleted == false }.map(\.key))
+        intent.recordAccount(step: step, device: name, to: account,
+                             travelling: records.map(\.key).filter { !living.contains($0) })
     }
 
     private func apply(_ fault: SimCloudFault) async {
@@ -523,6 +537,7 @@ public actor SyncSimulation {
             await device.transport.setNetwork(up: true)
             await device.transport.loseNextResponse(false)
             if await cloud.account(of: name) != config.account {
+                await recordAccount(name, to: config.account)
                 await cloud.setAccount(config.account, for: name)
                 await device.transport.noticeChanges()
                 await afterBrainCall(name)
@@ -577,7 +592,7 @@ public actor SyncSimulation {
         let devices = await holdings()
         let cloud = await self.cloud.records(account: config.account)
         var findings: [SyncFinding] = []
-        findings += SyncInvariants.sameEverywhere(devices: devices, cloud: cloud)
+        findings += SyncInvariants.sameEverywhere(devices: devices, cloud: cloud, except: intent.heldBack)
         findings += SyncInvariants.noLostEdit(devices: devices, cloud: cloud, intent: intent)
         findings += SyncInvariants.nothingComesBack(devices: devices, cloud: cloud, intent: intent)
         findings += observed.findings
@@ -587,6 +602,15 @@ public actor SyncSimulation {
                                          limit: config.quietRounds)
         findings += SyncInvariants.newerFieldsSurvive(cloud: cloud, intent: intent)
         findings += SyncInvariants.referencesKept(intent: intent)
+        // I10: every account a device was signed in to holds only its own.
+        var owners = Set(intent.accountChanges.compactMap(\.account))
+        owners.insert(config.account)
+        if owners.count > 1 {
+            for owner in owners.sorted() {
+                findings += SyncInvariants.accountsApart(owner: owner, cloud: await self.cloud.records(account: owner),
+                                                         intent: intent)
+            }
+        }
         return findings.enumerated().sorted { ($0.element.invariant, $0.offset) < ($1.element.invariant, $1.offset) }.map(\.element)
     }
 
