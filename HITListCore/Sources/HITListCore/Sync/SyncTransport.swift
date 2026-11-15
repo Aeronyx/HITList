@@ -97,7 +97,9 @@ public enum TransportEvent: Sendable {
     case didFetch(error: String?)
     case willSend
     /// One batch came back (T3 to T9): `saved` as iCloud now holds them, `removed` for good, and the changes
-    /// refused. A change that is neither here nor refused is still pending (the network dropped: T5).
+    /// refused. A change that is neither here nor refused is still pending (the network dropped: T5). Every change
+    /// named here has left the pending list before the event is delivered, so one the delegate adds back while
+    /// handling it stays.
     case sent(saved: [CloudRecord], removed: [SyncKey], failed: [SyncKey: SendFailure])
     case didSend(error: String?)
 }

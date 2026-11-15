@@ -5,6 +5,24 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.12
+
+0.9.11 was released on 2026-11-15, and George wrote back within minutes: "Why did all the creatures in the Theme menu
+get so small? And why does Quill look like he's melting in the Theme menu now? I simply wanted you to position Quill
+properly, not change his Theme menu sprite." And: "If we need to make our own engine for proper cloud sync, let's get
+started. I want it to be professionally built."
+
+The Theme menu:
+
+- **Quill is himself again.** 0.9.11 drew him a frame of his own for his theme's box, bent to follow its corner; it
+  read as melting. That frame is gone. He sleeps in the pose he has on the "+" at night, every pixel as since 0.9.6,
+  and only his place changed from 0.9.9's: 6 pt to the left, so he lies on the box's top edge with his hindquarters
+  over the corner instead of hanging in the air beside it. The selection ring passes behind him.
+- **On the Mac the creatures fit their boxes.** Nothing had changed their size: the Mac's Theme page always drew them
+  at the iPhone's size (a point a pixel) on boxes half as big again, where they looked lost, and 0.9.11's notes
+  showed that page. The Mac's box is now the iPhone's one and a half times the size, creature and all (three device
+  pixels a sprite pixel), so each sits exactly as on the iPhone. The iPhone's and iPad's boxes are as they were.
+
 ## 0.9.11 — build 28, 2026-11-15
 
 0.9.10 was prepared on 2026-11-13 and never uploaded: Apple had a new Program License Agreement waiting for George to

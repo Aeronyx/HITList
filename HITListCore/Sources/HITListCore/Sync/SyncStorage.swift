@@ -10,7 +10,9 @@ import Foundation
 public struct LocalWrite: Hashable, Sendable {
     public var key: SyncKey
     /// What the device must hold for the write to go ahead: the record the decision was made on, or nil when the
-    /// item must not exist here. Compared as `SyncRecord.comparable`. (A person may have changed the item between
+    /// item must not exist here. Compared with `RecordMerge.same` (known fields, required ones filled in, data by
+    /// digest, a set of references as a set), never field by field as written: a store that hands out a list in
+    /// another order must not make every write stale. (A person may have changed the item between
     /// the read and the write: then nothing is written, the key comes back from `apply`, and the brain decides
     /// again on the newer record.)
     public var expected: SyncRecord?
@@ -42,7 +44,7 @@ public protocol SyncLocalStore: Sendable {
     func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord]
 
     /// Makes the writes in one transaction, in an order that keeps references whole (a record after the ones it
-    /// points at; deletions last), each only if its `expected` still holds. A reference to an item that does not
+    /// points at; deletions last), each only if its `expected` still holds (`RecordMerge.same`). A reference to an item that does not
     /// exist here is written as none. Returns the keys whose `expected` did not hold: nothing was written for them.
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey>
 }
@@ -58,8 +60,9 @@ public struct LedgerEntry: Hashable, Sendable, Codable {
     public var base: SyncRecord?
     /// iCloud's token for the version `base` is (`CloudRecord.system`). Nil with a nil `base`.
     public var system: Data?
-    /// When this device noticed that the item had been deleted here while `base` says iCloud holds it. The time
-    /// the marker will carry; nil otherwise.
+    /// The time of the marker this device still has to send: when it noticed the item was deleted here while
+    /// `base` says iCloud holds it, or (M10) its own deletion when that is later than iCloud's marker in `base`.
+    /// Nil when there is no marker to send, and cleared when the item is here again.
     public var deletedHereAt: Date?
 
     public init(key: SyncKey, base: SyncRecord? = nil, system: Data? = nil, deletedHereAt: Date? = nil) {
@@ -74,7 +77,8 @@ public struct LedgerEntry: Hashable, Sendable, Codable {
 public struct LedgerWrite: Sendable {
     public var upsert: [LedgerEntry] = []
     public var remove: [SyncKey] = []
-    /// Fetched records set aside until a record they point at arrives (replaced by key).
+    /// Records waiting for an item they point at (`dev/SYNC-ENGINE.md` section 8), replaced by key: per record, its
+    /// key and the reference fields it is waiting for (`system` is not used and may be empty).
     public var deferUpsert: [CloudRecord] = []
     public var deferRemove: [SyncKey] = []
     /// Named facts to set (a value) or forget (nil).
@@ -88,7 +92,7 @@ public struct LedgerWrite: Sendable {
 }
 
 /// The engine's memory, kept on the device beside the items and never synced: for every record, what iCloud last
-/// held (`LedgerEntry`); fetched records waiting for another to arrive; and a few named facts (the account the
+/// held (`LedgerEntry`); the references records are waiting for (`deferred`); and a few named facts (the account the
 /// memory belongs to, whether the first fetch has finished, the transport's own state). Losing it loses nothing of
 /// the person's: the engine then merges everything afresh (`dev/SYNC-ENGINE.md`, "A merge without a memory").
 public protocol SyncLedger: SyncTransportState {

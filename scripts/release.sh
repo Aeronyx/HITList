@@ -30,7 +30,14 @@
 # (`CloudKitSchemaTests`, through TEST_RUNNER_HITLIST_CLOUDKIT_SCHEMA), which fails when Production lacks a
 # field the models have: the diff alone is blind to a field missing from both environments, which is how
 # three TaskItem fields went undeployed for a week and stopped a tester's sync (2026-11-06).
+# In the task store's container only the record types this release syncs through are compared (the mirror's:
+# CD_*, CDMR, Users). HITList's own sync engine (round 28, dev/SYNC-ENGINE.md) is tested against Development and
+# leaves record types there that no released build uses yet; they are listed and left out, until SYNC_ENGINE_LIVE
+# below is 1 (the release that switches the engine on), from when the engine's HL* types must be in Production too.
 set -euo pipefail
+
+# 1 from the release whose builds use HITList's own sync engine by default; 0 while it ships switched off.
+SYNC_ENGINE_LIVE=0
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -90,6 +97,17 @@ fi
 # The models' fields reach CloudKit Development as soon as a Development build saves a record with them;
 # Production only gets them when George deploys in the CloudKit dashboard. A build whose models need
 # undeployed fields would fail to sync in Production, so this refuses to go on while the two differ.
+# `schema_only <file.ckdb> <regex>`: the schema with only the record types whose name matches; `schema_others`: the
+# names of the rest.
+schema_only() {
+  awk -v keep="$2" '
+    /^[[:space:]]*RECORD TYPE / { inblock = 1; show = ($3 ~ keep) }
+    { if (!inblock || show) print }
+    inblock && /^[[:space:]]*\);/ { inblock = 0 }
+  ' "$1"
+}
+schema_others() { awk -v keep="$2" '/^[[:space:]]*RECORD TYPE / { if ($3 !~ keep) print $3 }' "$1" | tr '\n' ' '; }
+
 if (( SCHEMA_CHECK && UPLOAD )); then
   step "CloudKit schema drift check"
   TMP=$(mktemp -d)
@@ -99,12 +117,26 @@ if (( SCHEMA_CHECK && UPLOAD )); then
          --environment development --output-file "$TMP/$CID-dev.ckdb" >/dev/null 2>&1 &&
        xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
          --environment production --output-file "$TMP/$CID-prod.ckdb" >/dev/null 2>&1; then
-      if ! diff -q "$TMP/$CID-dev.ckdb" "$TMP/$CID-prod.ckdb" >/dev/null; then
-        diff "$TMP/$CID-dev.ckdb" "$TMP/$CID-prod.ckdb" || true
+      # What this release syncs through: everything in Shared Tasks' container; in the task store's, the mirror's
+      # record types, and the engine's once it is live.
+      KEEP='.'
+      if [[ "$CID" == "$CONTAINER_ID" ]]; then
+        KEEP='^(CD_|CDMR$|Users$)'
+        (( SYNC_ENGINE_LIVE )) && KEEP='^(CD_|CDMR$|Users$|HL)'
+      fi
+      schema_only "$TMP/$CID-dev.ckdb" "$KEEP" > "$TMP/$CID-dev-used.ckdb"
+      schema_only "$TMP/$CID-prod.ckdb" "$KEEP" > "$TMP/$CID-prod-used.ckdb"
+      OTHERS=$(schema_others "$TMP/$CID-dev.ckdb" "$KEEP")
+      if [[ -n "${OTHERS// /}" ]]; then
+        print -P "%F{yellow}$CID: Development also holds record types this release does not sync through, left out of the comparison: $OTHERS%f"
+        print -P "%F{yellow}They come from test runs of the sync engine. Do not press Deploy Schema Changes for this container while they are there: it deploys everything. Reset Development first (CloudKit Console → $CID → Development → Reset Environment…).%f"
+      fi
+      if ! diff -qB "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" >/dev/null; then
+        diff -B "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" || true
         print -P "%F{yellow}Deploy first: icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Production. Then run this again (nothing was changed here).%f"
         fail "$CID: Development schema differs from Production (see the lines above: '<' is Development, '>' Production). Or pass --skip-schema-check."
       fi
-      echo "$CID: Development and Production schemas match."
+      echo "$CID: Development and Production schemas match (for the record types this release syncs through)."
       if [[ "$CID" == "$CONTAINER_ID" ]]; then
         # xcodebuild forwards TEST_RUNNER_* to the test process: the preflight's CloudKitSchemaTests reads the
         # export and fails if a field the models have is missing from Production (see the header).
