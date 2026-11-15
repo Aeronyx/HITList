@@ -1,13 +1,14 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → About on iPhone and iPad: the version and What's New (a page of its own, `SettingsPage.whatsNew`), the
-/// privacy policy, Show tips again, then Send Beta Feedback… with Copy diagnostics beside it. No header: the page's
-/// title says About. The Mac's About section (`MacAboutSection`) builds on the same rows.
+/// Settings → About on iPhone and iPad: the app's name in full (`AppLongName`), the version and What's New (a page of
+/// its own, `SettingsPage.whatsNew`), the privacy policy, Show tips again, then Send Beta Feedback… with Copy
+/// diagnostics beside it. No header: the page's title says About. The Mac's About section (`MacAboutSection`) builds on the same rows.
 struct AboutSettingsGroup: View {
     @Environment(\.hitPages) private var pages
 
     var body: some View {
+        AppLongName()
         HITGroup {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")
@@ -20,6 +21,46 @@ struct AboutSettingsGroup: View {
             SendFeedbackRow()
             CopyDiagnosticsRow()
         }
+    }
+}
+
+/// The app's name in full, once in the app (round 27, George: "Make it clear once somewhere in the intro/title menus
+/// that the app is actually named 'Human-In-The-List' just for fun"): at the head of About on iPhone, iPad and the Mac,
+/// "HITList" over "short for Human-In-The-List", the capitals the short name is made of in the accent. A smile, not a
+/// banner: no card, no icon, the page's own type. The Mac's About panel says it too (its copyright line, `project.yml`).
+struct AppLongName: View {
+    static let name = "HITList"
+    static let long = "Human-In-The-List"
+    static let line = "short for \(long)"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: HITSpacing.xs / 2) {
+            Text(Self.name)
+                .font(HITType.title2Bold)
+                .foregroundStyle(HITColor.text)
+            Text(Self.lineText(accent: Theme.accent))
+                .font(HITType.callout)
+                .foregroundStyle(Theme.secondaryText)
+        }
+        .padding(.horizontal, HITSpacing.l)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(Self.name), \(Self.line)")
+        .accessibilityIdentifier("settings-long-name")
+    }
+
+    /// "short for Human-In-The-List" with H, I, T and L in `accent`: the letters "HITList" is made of.
+    static func lineText(accent: Color) -> AttributedString {
+        var text = AttributedString("short for ")
+        for word in long.split(separator: "-", omittingEmptySubsequences: false).enumerated() {
+            if word.offset > 0 { text += AttributedString("-") }
+            guard let first = word.element.first else { continue }
+            var capital = AttributedString(String(first))
+            capital.foregroundColor = accent
+            text += capital
+            text += AttributedString(String(word.element.dropFirst()))
+        }
+        return text
     }
 }
 
