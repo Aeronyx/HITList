@@ -126,11 +126,12 @@ public enum RecordMerge {
 
         case (let base?, nil, let server?):
             if server.isDeleted {
-                // M10: deleted there, not here either. Also when the base is a marker too (the table has no row for
-                // it: M13 is a live record there): nothing happened on either side, iCloud's marker stands.
-                // Deleted on both sides apart: the marker carries the later of the two deletions, whichever device
-                // reached iCloud first (round 28, brief 138: with iCloud's time alone, the order of arrival decided
-                // the marker's time, and a deletion here after an edit elsewhere was forgotten).
+                // M10: deleted there, not here either. With the base a marker too, nothing was deleted here since
+                // the two agreed (`deletedHere` would only be "now"): iCloud's marker stands, or every sync would
+                // send a fresher one. Deleted on both sides apart: the marker carries the later of the two
+                // deletions, whichever device reached iCloud first (round 28, brief 138: with iCloud's time alone,
+                // the order of arrival decided the marker's time, and a deletion here after an edit elsewhere was
+                // forgotten).
                 if !base.isDeleted, isLater(.date(deletedHere), than: server[SyncSchema.deletedAt]) {
                     return MergeOutcome(merged: .marker(key, deletedAt: deletedHere), rule: .deletedBoth)
                 }
