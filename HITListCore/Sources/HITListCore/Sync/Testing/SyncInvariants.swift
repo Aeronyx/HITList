@@ -538,6 +538,8 @@ public enum SyncInvariants {
                 because = "device \(last.device) \(last.present ? "added" : "removed") it at step \(last.step) and no other device changed it"
             }
             let item = SyncKey(type: target, name: name)
+            // A label a refusal holds back on its device shows nowhere else (T9).
+            if intent.heldBack.contains(item) { continue }
             var expected = present
             if let deletion = intent.gone(item) {
                 if intent.forgotten(deletion) { continue }
