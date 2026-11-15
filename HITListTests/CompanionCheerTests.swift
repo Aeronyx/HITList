@@ -26,6 +26,50 @@ final class CompanionCheerTests: XCTestCase {
 
     private func kind(_ d: CompanionDirector, _ id: String) -> CompanionAct.Kind? { d.stages[id]?.act?.kind }
 
+    // MARK: - Each creature's own (item 4)
+
+    /// Every creature of the app has a cheer of its own in both places: one to two seconds, every frame one it already
+    /// has and already shows somewhere (no new drawings), drawn as itself in plain weather; no two the same.
+    func testEachCreaturesCheerIsItsOwnAndMadeOfWhatItHas() {
+        var seen: [String: String] = [:]
+        for character in CompanionCharacter.all {
+            XCTAssertNotNil(CompanionCheers.table[character.id], "\(character.id) has a cheer")
+            let shown = CompanionCharacter.names(drawnIn: [character.field.awake, character.field.asleep,
+                                                           character.plus.awake, character.plus.asleep],
+                                                 flourishes: [character.field.flourish, character.plus.flourish])
+            for place in CompanionPlace.allCases {
+                let at = "\(character.id) \(place)"
+                let ticks = CompanionCheers.ticks(for: character, place: place)
+                for tick in ticks {
+                    XCTAssertNotNil(character.index[tick.frame], "\(at): no frame \(tick.frame)")
+                    XCTAssertTrue(shown.contains(tick.frame), "\(at): \(tick.frame) is a frame George has seen")
+                }
+                let seconds = Double(ticks.count) / character.gestureFPS
+                XCTAssertTrue((1...2).contains(seconds), "\(at): \(seconds) s")
+                let rest = character.posture(place).awake.rest
+                XCTAssertNotEqual(ticks.first?.frame, rest, "\(at): it moves at once")
+                XCTAssertGreaterThanOrEqual(Set(ticks.map(\.frame)).count, 3, "\(at): more than a blink")
+                let stage = CompanionStage(since: time(12), place: place, look: .day,
+                                           act: CompanionAct(kind: .cheer, start: time(12)))
+                let clock = CompanionClock(character: character)
+                guard let drawn = clock.drawing(.cheer, stage: stage) else { XCTFail("\(at): can't be drawn"); continue }
+                XCTAssertEqual(drawn.frames.map(\.frame), ticks.map { character.index[$0.frame]! }, "\(at): as itself")
+                XCTAssertEqual(clock.duration(.cheer, stage: stage), seconds, accuracy: 0.001)
+                let shape = ticks.map(\.frame).joined(separator: " ")
+                if place == .plus {
+                    XCTAssertNil(seen[shape], "\(character.id)'s cheer is \(seen[shape] ?? "")'s")
+                    seen[shape] = character.id
+                }
+            }
+        }
+        XCTAssertEqual(seen.count, CompanionCharacter.all.count, "eight cheers, not the same one")
+        // Quill's frames differ by place: a loaf on the Mac's field, sitting on the "+".
+        let quill = CompanionCharacter.all.first { $0.id == "quill" }!
+        XCTAssertNotEqual(CompanionCheers.ticks(for: quill, place: .field), CompanionCheers.ticks(for: quill, place: .plus))
+        // A character without one (the test cast) plays its answer.
+        XCTAssertEqual(CompanionCheers.ticks(for: Cast.stayer, place: .plus), Cast.stayer.plus.awake.answer.ticks)
+    }
+
     // MARK: - The rule, pure
 
     func testTheRule() {
