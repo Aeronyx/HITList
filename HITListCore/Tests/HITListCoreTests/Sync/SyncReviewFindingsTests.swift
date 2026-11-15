@@ -38,10 +38,9 @@ final class SyncReviewFindingsTests: XCTestCase {
 
         let onB = await b.store.record(Self.taskKey("C"))
         let inCloud = await cloud.record(Self.taskKey("C"))
-        XCTExpectFailure("Finding 1: the store's cascade deletes a sub-task made after its parent was deleted elsewhere", strict: true) {
-            XCTAssertNotNil(onB, "the sub-task B made after A's deletion is still on B")
-            XCTAssertNotNil(inCloud, "and reached iCloud")
-        }
+        // Fixed by brief 145 (the supervisor's rule; `SyncCore.underneath`, the strict store): the wrapper is off.
+        XCTAssertNotNil(onB, "the sub-task B made after A's deletion is still on B")
+        XCTAssertNotNil(inCloud, "and reached iCloud")
     }
 
     /// Device B moves an existing task under P after device A deleted P. B's fetch of the deletion cascades it, the
@@ -72,10 +71,9 @@ final class SyncReviewFindingsTests: XCTestCase {
 
         let onA = await a.store.record(Self.taskKey("C"))
         let onB = await b.store.record(Self.taskKey("C"))
-        XCTExpectFailure("Finding 1: a task moved under a parent deleted elsewhere is deleted on every device", strict: true) {
-            XCTAssertNotNil(onA, "A never deleted C")
-            XCTAssertNotNil(onB, "B moved C after A's deletion: a change after a deletion wins (M8/M9)")
-        }
+        // Fixed by brief 145: the wrapper is off.
+        XCTAssertNotNil(onA, "A never deleted C")
+        XCTAssertNotNil(onB, "B moved C after A's deletion: a change after a deletion wins (M8/M9)")
     }
 
     // MARK: Finding 2: the mass-deletion guard walked round by one item
@@ -102,10 +100,9 @@ final class SyncReviewFindingsTests: XCTestCase {
         try? await again.sync()
         let aliveAfter = await Self.alive(cloud)
 
-        XCTExpectFailure("Finding 2: the mass-deletion guard only fires on a store with exactly nothing in it", strict: true) {
-            if case .massDeletion? = hold {} else { XCTFail("held for a mass deletion; got \(String(describing: hold))") }
-            XCTAssertGreaterThanOrEqual(aliveAfter, 31, "nothing deleted in iCloud before the person confirms")
-        }
+        // Fixed by brief 145 (the guard's two conditions, the count 10): the wrapper is off.
+        if case .massDeletion? = hold {} else { XCTFail("held for a mass deletion; got \(String(describing: hold))") }
+        XCTAssertGreaterThanOrEqual(aliveAfter, 31, "nothing deleted in iCloud before the person confirms")
     }
 
     // MARK: Finding 10: on CloudKit a transport reset makes the brain forget its memory
@@ -210,13 +207,14 @@ final class SyncReviewFindingsTests: XCTestCase {
         try await a.sync()
 
         clock.advance(milliseconds: 60_000)
+        // Fixed by brief 145 (`SyncCore.vouchForDeletions`, the supervisor's addition): the app vouches for the
+        // deletion the person asked for, then deletes. The wrapper is off.
+        await a.core.vouchForDeletions(imported)
         for key in imported { await a.store.delete(key) }
         await a.core.localChanged(imported)
         let hold = await a.core.status.hold
 
-        XCTExpectFailure("Finding 12: the undo of an import is read as a store that reads wrong", strict: true) {
-            XCTAssertNil(hold, "an import undone by the person is not a mass deletion to confirm")
-        }
+        XCTAssertNil(hold, "an import undone by the person is not a mass deletion to confirm")
     }
 
     // MARK: The parts

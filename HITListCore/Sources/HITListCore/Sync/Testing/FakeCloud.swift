@@ -207,6 +207,14 @@ public actor FakeCloud {
     }
 
     private var drops: [ReferenceDrop] = []
+    /// The saves refused for good by `refuseNextSave` since the last call (brief 145: the model must know a record is
+    /// held back on its device until a person changes it, section 6 T9).
+    private var fired: [SyncKey] = []
+
+    public func takeRefusals() -> [SyncKey] {
+        defer { fired = [] }
+        return fired
+    }
 
     /// The reference drops since the last call, in the order iCloud accepted them.
     public func takeDrops() -> [ReferenceDrop] {
@@ -251,6 +259,7 @@ public actor FakeCloud {
         for save in saves {
             if let refusal = refusals.removeValue(forKey: save.key) {
                 result.failed[save.key] = refusal
+                fired.append(save.key)
                 continue
             }
             if quotaFull {

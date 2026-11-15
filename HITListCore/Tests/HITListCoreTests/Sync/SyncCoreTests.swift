@@ -547,7 +547,10 @@ final class SyncCoreTests: XCTestCase {
         try await device.transport.send()
         let status = await device.status()
         XCTAssertEqual(status.refused, [taskKey("A"), taskKey("B")])
-        XCTAssertNotNil(status.lastError)
+        // Refusals apart from errors since 2026-11-15 (brief 145, the status session's request): `refusal`, not
+        // `lastError`; the bolt stays hollow while anything is refused.
+        XCTAssertNotNil(status.refusal)
+        XCTAssertNil(status.lastError)
         XCTAssertFalse(status.isSynced)
         let pending = await device.pending()
         XCTAssertEqual(pending, [])

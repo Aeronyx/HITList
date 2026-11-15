@@ -143,6 +143,9 @@ public enum SimStep: Sendable, CustomStringConvertible {
     case sync(String)
     /// The transport syncs by itself (a push, its schedule: T14).
     case byItself(String)
+    /// The transport sends by itself without fetching first (its schedule after changes were added: T14), so that
+    /// two devices' saves of one record can meet in iCloud (T6).
+    case sendByItself(String)
     case fault(String, SimFault)
     case cloud(SimCloudFault)
     /// The app quits and launches again; without its ledger (a lost file: a merge without a memory), or without
@@ -163,6 +166,7 @@ public enum SimStep: Sendable, CustomStringConvertible {
             }
         case .sync(let device): return "\(device) sync"
         case .byItself(let device): return "\(device) transport syncs by itself"
+        case .sendByItself(let device): return "\(device) transport sends by itself"
         case .fault(let device, let fault): return "\(device) fault \(fault)"
         case .cloud(let fault): return "iCloud \(fault)"
         case .relaunch(let device, let ledger, let state):
@@ -179,6 +183,9 @@ public enum SimFaultKind: String, Hashable, Sendable, CaseIterable, Comparable {
     case networkDown, networkDrop, responseLost, crashAfterFetched, crashAfterSent, crashBeforeSent, deliverTwice,
          loseBookmark, transportStateLost, byItself, poke
     case ledgerLost, zoneDeleted, zoneReset, accountSwitch, signOut, quotaFull, refusal
+    /// Added by brief 145, outside `everyday` so that the seeds kept before it still play the same runs: a send without
+    /// a fetch first (two devices' saves meet: T6), and the person removing HITList's data in iCloud's settings.
+    case sendByItself, zonePurged
 
     public static let everyday: Set<SimFaultKind> = [.networkDown, .networkDrop, .responseLost, .crashAfterFetched,
                                                      .crashAfterSent, .crashBeforeSent, .deliverTwice, .loseBookmark,
@@ -264,6 +271,7 @@ public actor SyncSimulation {
         self.clock = SimClock()
         self.factory = brain
         self.random = SimRandom(seed: seed)
+        self.intent.account = config.account
     }
 
     // MARK: Devices
@@ -304,9 +312,11 @@ public actor SyncSimulation {
         await transport.observe { delivery in
             // A lost zone or an account change empties a correct brain's memory (section 10): from here on a merge
             // without a memory may settle what was changed before, and I2 takes that into account.
-            // (A device that has never finished a fetch had nothing to lose: its first sign-in is not a loss.)
+            // (A device that has never finished a fetch had nothing to lose: its first sign-in is not a loss.) The
+            // memory is lost when no entry keeps a base: a brain keeps the deletions it has not sent yet across the
+            // loss, as entries with no base (section 7), and they are no memory of iCloud's records.
             if delivery.round == 0, delivery.kind == .zoneLost || delivery.kind == .account, observed.hasFetched(name),
-               ((try? await ledger.entries()) ?? []).isEmpty {
+               ((try? await ledger.entries()) ?? []).allSatisfy({ $0.base == nil }) {
                 observed.forgot(name)
             }
             // The first whole fetch after a memory was lost: the device has a base for everything again.
@@ -350,6 +360,10 @@ public actor SyncSimulation {
             guard let device = slots[name] else { break }
             await device.transport.syncByItself()
             await afterBrainCall(name)
+        case .sendByItself(let name):
+            guard let device = slots[name] else { break }
+            await device.transport.sendByItself()
+            await afterBrainCall(name)
         case .fault(let name, let fault):
             await apply(fault, on: name)
         case .cloud(let fault):
@@ -367,6 +381,7 @@ public actor SyncSimulation {
     private func absorb() async {
         for name in observed.takeForgotten() { intent.recordAmnesia(step: step, device: name) }
         intent.recordDrops(step: step, await cloud.takeDrops())
+        intent.recordRefusals(step: step, await cloud.takeRefusals())
     }
 
     private func act(_ name: String, _ action: SimAction, hint: SimHint) async {
@@ -448,10 +463,22 @@ public actor SyncSimulation {
         case .deliverTwice(let kind): await device.transport.deliverTwice(kind)
         case .loseBookmark: await device.transport.loseBookmark()
         case .account(let account):
+            await recordAccount(name, to: account)
             await cloud.setAccount(account, for: name)
             await device.transport.noticeChanges()
             await afterBrainCall(name)
         }
+    }
+
+    /// The model's side of a sign-in or sign-out (section 10): the items on the device that its ledger holds no living
+    /// base for are the ones iCloud never held; they stay on the device and go with it to the next account.
+    private func recordAccount(_ name: String, to account: String?) async {
+        guard let device = slots[name], await cloud.account(of: name) != account else { return }
+        let records = (try? await device.store.records()) ?? []
+        let entries = (try? await device.ledger.entries()) ?? []
+        let living = Set(entries.filter { $0.base?.isDeleted == false }.map(\.key))
+        intent.recordAccount(step: step, device: name, to: account,
+                             travelling: records.map(\.key).filter { !living.contains($0) })
     }
 
     private func apply(_ fault: SimCloudFault) async {
@@ -510,6 +537,7 @@ public actor SyncSimulation {
             await device.transport.setNetwork(up: true)
             await device.transport.loseNextResponse(false)
             if await cloud.account(of: name) != config.account {
+                await recordAccount(name, to: config.account)
                 await cloud.setAccount(config.account, for: name)
                 await device.transport.noticeChanges()
                 await afterBrainCall(name)
@@ -564,7 +592,7 @@ public actor SyncSimulation {
         let devices = await holdings()
         let cloud = await self.cloud.records(account: config.account)
         var findings: [SyncFinding] = []
-        findings += SyncInvariants.sameEverywhere(devices: devices, cloud: cloud)
+        findings += SyncInvariants.sameEverywhere(devices: devices, cloud: cloud, except: intent.heldBack)
         findings += SyncInvariants.noLostEdit(devices: devices, cloud: cloud, intent: intent)
         findings += SyncInvariants.nothingComesBack(devices: devices, cloud: cloud, intent: intent)
         findings += observed.findings
@@ -574,6 +602,15 @@ public actor SyncSimulation {
                                          limit: config.quietRounds)
         findings += SyncInvariants.newerFieldsSurvive(cloud: cloud, intent: intent)
         findings += SyncInvariants.referencesKept(intent: intent)
+        // I10: every account a device was signed in to holds only its own.
+        var owners = Set(intent.accountChanges.compactMap(\.account))
+        owners.insert(config.account)
+        if owners.count > 1 {
+            for owner in owners.sorted() {
+                findings += SyncInvariants.accountsApart(owner: owner, cloud: await self.cloud.records(account: owner),
+                                                         intent: intent)
+            }
+        }
         return findings.enumerated().sorted { ($0.element.invariant, $0.offset) < ($1.element.invariant, $1.offset) }.map(\.element)
     }
 
@@ -649,6 +686,8 @@ public actor SyncSimulation {
         case .quotaFull:
             quotaFull.toggle()
             return .cloud(.quotaFull(quotaFull))
+        case .sendByItself: return .sendByItself(name)
+        case .zonePurged: return .cloud(.deleteZone(.purged))
         case .refusal:
             let alive = (try? await slots[name]?.store.records()) ?? []
             guard let target = random.pick(alive) else { return nil }

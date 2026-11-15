@@ -67,6 +67,8 @@ extension SyncCore {
         var write = LedgerWrite()
         var arrivals: [LocalWrite] = []
         var gone = 0
+        /// Of those, the ones the app vouched for (`vouchForDeletions`).
+        var vouchedGone = 0
         // In key order: nothing a `Set` happens to iterate first decides what is written or logged (replays).
         for key in universe.sorted() where key != Self.metaKey {
             var local = here[key]
@@ -77,8 +79,8 @@ extension SyncCore {
                 local = arrived
                 here[key] = arrived
             }
-            // What it waits for now: the base's references to items not on the device.
-            let wait = Self.waitFields(local: local, base: entries[key]?.base, present: isHere)
+            // What it waits for now: its whole record's references to items not on the device.
+            let wait = Self.waitFields(local: local, base: entries[key]?.base, current: waitsFor(key), present: isHere)
             if wait != waitsFor(key) {
                 if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }
@@ -87,24 +89,41 @@ extension SyncCore {
             if let change = finding.change { desired[key] = change }
             if let entry = finding.entry {
                 write.upsert.append(entry)
-                if entry.deletedHereAt != nil, entries[key]?.deletedHereAt == nil { gone += 1 }
+                if entry.deletedHereAt != nil, entries[key]?.deletedHereAt == nil {
+                    gone += 1
+                    if vouched.contains(key) { vouchedGone += 1 }
+                }
             }
             if finding.drop { write.remove.append(key) }
         }
         if universe.contains(Self.metaKey), let change = metaFinding().change { desired[Self.metaKey] = change }
 
+        // Deletions the app vouched for (`vouchForDeletions`) count for nothing in the guard, unless a hold already
+        // stands (a vouch never lifts one).
+        let unvouched = hold == nil ? gone - vouchedGone : gone
         if confirmedAt == nil {
-            if keys != nil, gone > limits.massDeletionCount {
+            if keys != nil, unvouched >= limits.massDeletionCount {
                 // Many gone at once in a save's hint: measured against everything before anything is decided.
                 await compare(nil)
                 return
             }
             if keys == nil {
-                let living = entries.values.filter { $0.key != Self.metaKey && $0.base?.isDeleted == false }.count
-                let empty = here.isEmpty && living > 0
-                let tooMany = gone > limits.massDeletionCount && Double(gone) > limits.massDeletionShare * Double(living)
+                // The supervisor's rule of 2026-11-15 (review finding 2). (a) The store is not the one the ledger
+                // describes: no item here has a living base while the ledger holds living bases (one stray row, a
+                // seeded filter or the profile, no longer defeats "empty"). (b) Many gone at once: at least the count
+                // AND more than the share of the living bases.
+                // Living: what iCloud holds alive that this device has not already found deleted here (a deletion
+                // noticed before, confirmed or under the numbers, is decided: counting it again would ask again after
+                // every "I deleted them", in a loop, until iCloud took the markers; brief 145).
+                let living = entries.values.filter {
+                    $0.key != Self.metaKey && $0.base?.isDeleted == false && $0.deletedHereAt == nil
+                }.count - (gone - unvouched)
+                let known = here.keys.contains { entries[$0]?.base?.isDeleted == false }
+                let empty = living > 0 && !known
+                let tooMany = unvouched >= limits.massDeletionCount
+                    && Double(unvouched) > limits.massDeletionShare * Double(living)
                 if empty || tooMany {
-                    await holdMassDeletion(empty ? living : gone, of: living, at: now)
+                    await holdMassDeletion(empty ? living : unvouched, of: living, at: now)
                     return
                 }
                 if case .massDeletion(let count)? = hold {
@@ -136,6 +155,12 @@ extension SyncCore {
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return
+        }
+        if !vouched.isEmpty {
+            // A vouch ends when its keys are noticed gone, and lapses for keys a whole compare finds still here (or
+            // that were never anything to notice). A compare of a few keys ends it for those keys.
+            let looked = keys == nil ? vouched : vouched.intersection(universe)
+            await setVouched(vouched.subtracting(looked))
         }
         if keys == nil {
             // Everything was looked at: what waits is exactly what this compare found.
@@ -304,6 +329,9 @@ extension SyncCore {
         let entry = entries[key]
         if let local {
             if let base = entry?.base, !base.isDeleted, RecordMerge.same(local, base) { return nil }
+            // No base: what goes is written down first (M5's amendment, `SyncCore+Sent`), so that an answer that never
+            // comes still leaves this device something to settle iCloud's record against.
+            if entry?.base == nil, !(await rememberSend(local, for: key)) { return nil }
             sentAs[key] = .some(local)
             return OutgoingRecord(record: local, system: entry?.system)
         }

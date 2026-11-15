@@ -102,6 +102,61 @@ final class SyncInvariantsTests: XCTestCase {
                                                  intent: intent), [])
     }
 
+    /// Brief 145, seed 34 (memory faults): a label's deletion arrived on A and the store took it off the task; A's person
+    /// then added another label; the first label was put back elsewhere (an undo) and section 8 gave the task its label
+    /// back everywhere. I2 judged the person's save as the whole set and called the label that came back a lost edit.
+    /// A set of references is judged name by name: only the names a person added or removed are theirs.
+    func testI2_aSetOfReferencesIsJudgedNameByName_aNameTheStoreTookOffIsNotAPersonsRemoval() {
+        let l1 = SyncRecord(type: "TaskLabel", name: "l1", fields: ["name": .string("one"), "updatedAt": .millis(1)])
+        let l2 = SyncRecord(type: "TaskLabel", name: "l2", fields: ["name": .string("two"), "updatedAt": .millis(1)])
+        func labelled(_ names: [String]) -> SyncRecord {
+            var record = task("t1", "x")
+            if !names.isEmpty { record["labels"] = .references(names) }
+            return record
+        }
+        var intent = SimIntent()
+        intent.record(step: 1, device: "B", before: [:], after: [l1.key: l1, l2.key: l2])
+        intent.record(step: 2, device: "A", before: [:], after: [key("t1"): labelled(["l1"])])
+        // On A the store took l1 off when l1's deletion arrived (no person's action), then A's person added l2.
+        intent.record(step: 3, device: "A", before: [key("t1"): labelled([])], after: [key("t1"): labelled(["l2"])])
+        let both = labelled(["l1", "l2"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [both, l1, l2]), holder("B", [both, l1, l2])],
+                                                 cloud: [cloud(both), cloud(l1), cloud(l2)], intent: intent), [],
+                       "l1 was made with the task and nobody removed it; l2 was added by A")
+        // The same history with l2 lost, or with l1 dropped, is a lost edit, named by the name.
+        let onlyOne = labelled(["l1"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [onlyOne, l1, l2]), holder("B", [both, l1, l2])],
+                                                 cloud: [cloud(both), cloud(l1), cloud(l2)], intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should hold →l2: device A added it at step 3 and no other device changed it; device A does not",
+        ])
+        let dropped = labelled(["l2"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [dropped, l1, l2]), holder("B", [dropped, l1, l2])],
+                                                 cloud: [cloud(dropped), cloud(l1), cloud(l2)], intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should hold →l1: device A made it so at step 2 and nobody changed it; device A does not; device B does not; iCloud does not",
+        ])
+    }
+
+    func testI2_aNameAPersonRemovedIsGoneEverywhere_andTwoDevicesTouchingOneNameAreNotJudged() {
+        let l1 = SyncRecord(type: "TaskLabel", name: "l1", fields: ["name": .string("one"), "updatedAt": .millis(1)])
+        func labelled(_ names: [String]) -> SyncRecord {
+            var record = task("t1", "x")
+            if !names.isEmpty { record["labels"] = .references(names) }
+            return record
+        }
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [l1.key: l1, key("t1"): labelled(["l1"])])
+        intent.record(step: 2, device: "B", before: [key("t1"): labelled(["l1"])], after: [key("t1"): labelled([])])
+        let kept = labelled(["l1"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [kept, l1])], cloud: [cloud(kept), cloud(l1)],
+                                                 intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should not hold →l1: device B removed it at step 2 and no other device changed it; device A holds it; iCloud holds it",
+        ])
+        intent.record(step: 3, device: "A", before: [key("t1"): labelled(["l1"])], after: [key("t1"): labelled([])])
+        intent.record(step: 4, device: "A", before: [key("t1"): labelled([])], after: [key("t1"): labelled(["l1"])])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [kept, l1])], cloud: [cloud(kept), cloud(l1)],
+                                                 intent: intent), [], "A and B both touched l1: either outcome")
+    }
+
     // MARK: I3 Nothing comes back
 
     func testI3_holdsWhenADeletedItemIsGoneEverywhereAndIcloudKeepsOnlyItsMarker() {
@@ -663,7 +718,7 @@ actor NaiveBrain: SimBrain, SyncTransportDelegate {
         case .fetched(let changed, let removed):
             for record in changed where SyncSchema.type(record.key.type) != nil { await take(record) }
             for key in removed {
-                _ = try? await store.apply([LocalWrite(key: key, expected: await store.record(key), record: nil)])
+                _ = try? await store.applyCascading([LocalWrite(key: key, expected: await store.record(key), record: nil)])
                 var write = LedgerWrite()
                 write.remove = [key]
                 try? await ledger.write(write)
@@ -672,7 +727,7 @@ actor NaiveBrain: SimBrain, SyncTransportDelegate {
                 fetchedEvents += 1
                 var marked = here
                 marked["notes"] = .string("fetched events seen: \(fetchedEvents)")
-                _ = try? await store.apply([LocalWrite(key: first.key, expected: here, record: marked)])
+                _ = try? await store.applyCascading([LocalWrite(key: first.key, expected: here, record: marked)])
             }
         case .sent(let saved, _, let failed):
             for record in saved {
@@ -703,7 +758,7 @@ actor NaiveBrain: SimBrain, SyncTransportDelegate {
     private func take(_ cloud: CloudRecord) async {
         guard let normal = RecordMerge.normal(cloud.record) else { return }
         let here = await store.record(cloud.key)
-        _ = try? await store.apply([LocalWrite(key: cloud.key, expected: here, record: normal.isDeleted ? nil : normal)])
+        _ = try? await store.applyCascading([LocalWrite(key: cloud.key, expected: here, record: normal.isDeleted ? nil : normal)])
         var write = LedgerWrite()
         write.upsert = [LedgerEntry(key: cloud.key, base: normal.comparable, system: cloud.system)]
         try? await ledger.write(write)
@@ -896,7 +951,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         guard !waits.isEmpty else { return }
         for key in waits.keys.sorted() {
             guard let local = await store.record(key), let whole = honoured(local, waits[key]) else { continue }
-            if whole != local { _ = try await store.apply([LocalWrite(key: key, expected: local, record: whole)]) }
+            if whole != local { _ = try await store.applyCascading([LocalWrite(key: key, expected: local, record: whole)]) }
             try await wait(for: whole, key)
         }
     }
@@ -1021,7 +1076,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
             if !RecordMerge.same(outcome.merged, cloud.record) { again.append(.save(cloud.key)) }
         }
         write.deferRemove = waiting.map(\.key)
-        _ = try await store.apply(writes)
+        _ = try await store.applyCascading(writes)
         try await ledger.write(write)
         for key in merged.keys.sorted() { try await wait(for: merged[key] ?? nil, key) }
         try await honourWaits()
@@ -1033,7 +1088,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         let (local, outcome, entry) = try await decide(key, server: server, waits: try await allWaits())
         log("\(device) settles \(key) by \(outcome.rule.rawValue) (conflict or removal): iCloud \(server.map(SyncInvariants.sketch) ?? "nothing")")
         if !RecordMerge.same(local, outcome.device) {
-            _ = try await store.apply([LocalWrite(key: key, expected: local, record: outcome.device)])
+            _ = try await store.applyCascading([LocalWrite(key: key, expected: local, record: outcome.device)])
         }
         var write = LedgerWrite()
         if let server {
@@ -1068,5 +1123,28 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         let local = honoured(await store.record(cloud.key), try await allWaits()[cloud.key])
         if let local, !RecordMerge.same(local, cloud.record) { await transport.add([.save(cloud.key)]) }
         if local == nil, !cloud.record.isDeleted { await transport.add([.save(cloud.key)]) }
+    }
+}
+
+extension MemoryLocalStore {
+    /// The test brains' way of writing (`NaiveBrain`, `MergingBrain`): a task's deletion takes the sub-tasks the device
+    /// holds under it, named, as the store's cascade did before the store became strict (the supervisor's rule of
+    /// 2026-11-15: the store deletes exactly the rows the writes name). These simple brains keep the old behaviour on
+    /// purpose; `SyncCore` decides each sub-task (review finding 1).
+    func applyCascading(_ writes: [LocalWrite]) async throws -> Set<SyncKey> {
+        guard writes.contains(where: { $0.record == nil && $0.key.type == "TaskItem" }) else { return try await apply(writes) }
+        var all = writes
+        let named = Set(writes.map(\.key))
+        let held = try await records()
+        var next = writes.filter { $0.record == nil && $0.key.type == "TaskItem" }.map(\.key.name)
+        var seen = Set(next)
+        while let parent = next.popLast() {
+            for record in held where record.key.type == "TaskItem" && record.fields["parent"] == .reference(parent) {
+                guard seen.insert(record.key.name).inserted else { continue }
+                if !named.contains(record.key) { all.append(LocalWrite(key: record.key, expected: record, record: nil)) }
+                next.append(record.key.name)
+            }
+        }
+        return try await apply(all).intersection(named)
     }
 }

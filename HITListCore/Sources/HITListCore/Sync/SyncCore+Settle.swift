@@ -166,6 +166,8 @@ extension SyncCore {
             await compare(nil)
             if let hold, hold.stopsFetching { return false }
         }
+        // A record this device sent with no base and heard nothing back for: the base its meeting is settled on.
+        await recallSends(sendCandidates(Array(keys), local: local, server: byKey))
         var settling: [SyncKey: Settling] = [:]
         for key in keys { settling[key] = decide(key, server: byKey[key], local: local[key], now: now) }
         let present: Set<SyncKey>
@@ -176,14 +178,9 @@ extension SyncCore {
             return false
         }
         func shown(_ decision: Settling) -> SyncRecord? { Self.shown(decision.target, present: { present.contains($0) }) }
-        // Sub-tasks the store will take with a task this settle deletes: the deletion that caused it is theirs.
-        let cascade: [SyncKey: Date]
-        do {
-            cascade = try await cascadeOf(settling, now: now)
-        } catch {
-            await storeFailed(error)
-            return false
-        }
+        // The items outside this settle that what it deletes here reaches (sub-tasks under a deleted task, records
+        // pointing at a deleted Group or label), decided each round with the writes that delete.
+        var reached = Set<SyncKey>()
 
         // 1. The device. A write the person overtook (its `expected` no longer holds) is decided again on what the
         //    device holds now, a few times; then it is left for the next fetch (`refetch`), the base not moved.
@@ -192,8 +189,38 @@ extension SyncCore {
         var round = 0
         var toWrite = settling.values.filter { !RecordMerge.same($0.local, shown($0)) }
         while !toWrite.isEmpty {
-            let writes = toWrite.sorted { $0.key < $1.key }.map {
-                LocalWrite(key: $0.key, expected: $0.local, record: shown($0))
+            let under: Underneath
+            do {
+                under = try await underneath(toWrite, settling: settling, now: now)
+            } catch {
+                await storeFailed(error)
+                return false
+            }
+            do {
+                // The ledger first: a sub-task that goes carries its deletion's time, one that stays and a record that
+                // pointed at what goes keep the reference as one they wait for. A crash before the device is written
+                // leaves a time on an item still here (cleared by the next compare) and waits for items still here
+                // (dropped by it): the same state, settled again by the next fetch.
+                try await commit(under.ledgerWrite)
+            } catch {
+                await fail("The engine's memory could not be written: \(error)")
+                return false
+            }
+            reached.formUnion(under.keys)
+            // Sub-tasks written out from under their parent come first: the store deletes no row a write does not name.
+            // A record this settle keeps alive under a sub-task that goes (seed 79 with conflicts: a grandchild of the
+            // deleted task, in the same fetch) is written out from under it too.
+            var writes = under.writes + toWrite.sorted { $0.key < $1.key }.map { decision -> LocalWrite in
+                var record = shown(decision)
+                if under.freed.contains(decision.key) { record?.fields["parent"] = nil }
+                return LocalWrite(key: decision.key, expected: decision.local, record: record)
+            }
+            let writing = Set(toWrite.map(\.key))
+            for key in under.freed.sorted() where !writing.contains(key) {
+                guard let local = settling[key]?.local else { continue }
+                var free = local
+                free.fields["parent"] = nil
+                writes.append(LocalWrite(key: key, expected: local, record: free))
             }
             let stale: Set<SyncKey>
             do {
@@ -202,18 +229,21 @@ extension SyncCore {
                 await storeFailed(error)
                 return false
             }
-            written.formUnion(Set(toWrite.map(\.key)).subtracting(stale))
-            guard !stale.isEmpty else { break }
+            written.formUnion(Set(writes.map(\.key)).subtracting(stale))
+            // A sub-task the person changed meanwhile keeps its parent's deletion stale too (strict store): the parent
+            // is decided again, and what is under it with it, in the next round.
+            let staleSettled = stale.intersection(settling.keys)
+            guard !staleSettled.isEmpty else { break }
             round += 1
             let fresh: [SyncKey: SyncRecord]
             do {
-                fresh = try await localRecords(stale)
+                fresh = try await localRecords(staleSettled)
             } catch {
                 await storeFailed(error)
                 return false
             }
             var again: [Settling] = []
-            for key in stale.sorted() {
+            for key in staleSettled.sorted() {
                 let decision = decide(key, server: byKey[key], local: fresh[key], now: now)
                 settling[key] = decision
                 if !RecordMerge.same(decision.local, shown(decision)) { again.append(decision) }
@@ -247,27 +277,28 @@ extension SyncCore {
             let entry = LedgerEntry(key: key, base: Self.base(server.record), system: server.system,
                                     deletedHereAt: deletedHereAt)
             if entries[key] != entry { write.upsert.append(entry) }
-        }
-        if !cascade.isEmpty {
-            let after = (try? await localRecords(Set(cascade.keys))) ?? [:]
-            for key in cascade.keys.sorted() where after[key] == nil {
-                if var entry = entries[key], entry.deletedHereAt == nil {
-                    entry.deletedHereAt = cascade[key]
-                    write.upsert.append(entry)
-                    log("\(key): went with the task above it, deleted in iCloud; its marker carries that deletion's time")
-                }
+            // What it waits for comes from what the merge decided (section 8), not from the base: when this device's
+            // version is the one still to go, its references are not iCloud's, and an older wait must not outlive
+            // another device's move.
+            let wait = Self.waitFields(local: shown(decision), base: decision.target, present: { present.contains($0) })
+            if wait != waitsFor(key) {
+                if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }
         }
+        // A base lands for these: what was remembered of a send with no answer is worth nothing now.
+        let landed = keys.filter { settling[$0]?.server != nil && settling[$0]?.local != nil && !unsettled.contains($0) }
+        forgetSends(landed.sorted(), in: &write)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false
         }
+        for key in landed { remembered[key] = nil }
         if !unsettled.isEmpty { await markRefetch() }
 
         // 3. What each key now waits for, the references that arrived, and the transport's list.
-        await compare(keys.union(cascade.keys))
+        await compare(keys.union(reached))
         var inStep = 0
         for key in keys.sorted() {
             guard let decision = settling[key] else { continue }
@@ -285,7 +316,13 @@ extension SyncCore {
     /// The rule for one record, on what the device and the ledger hold now. The merge reads the whole record.
     func decide(_ key: SyncKey, server: CloudRecord?, local: SyncRecord?, now: Date) -> Settling {
         let entry = entries[key]
-        let input = MergeInput(base: entry?.base, local: Self.whole(local, waiting: waitsFor(key)),
+        var base = entry?.base
+        if base == nil, local != nil, let server, !server.record.isDeleted, let sent = remembered[key] {
+            // M5's amendment: no base, but this device remembers what it sent and heard no answer: that is the base,
+            // and the two are settled as M7.
+            base = sent
+        }
+        let input = MergeInput(base: base, local: Self.whole(local, waiting: waitsFor(key)),
                                deletedHereAt: entry?.deletedHereAt, server: server?.record, now: now)
         return Settling(key: key, server: server, local: local, outcome: RecordMerge.merge(input))
     }
@@ -303,26 +340,130 @@ extension SyncCore {
         return present
     }
 
-    /// The tasks under a task this settle deletes from the device (the store deletes a task's sub-tasks with it), as
-    /// far as the bases tell, with the time of the deletion that takes them: theirs is not a deletion by the person
-    /// here, and must not be stamped with "now" (it would beat a later change made elsewhere).
-    func cascadeOf(_ settling: [SyncKey: Settling], now: Date) async throws -> [SyncKey: Date] {
+    /// What deleting items here does to the device's other items, decided before the device is written.
+    struct Underneath {
+        /// Writes that go first in the same apply: a sub-task that goes with its parent (named, so the strict store
+        /// takes it), or one written out from under it (the `parent` reference off).
+        var writes: [LocalWrite] = []
+        /// The ledger's part, written before the device: the deletion time of a sub-task that goes, and the references
+        /// a record keeps waiting for when what it points at is deleted here.
+        var ledgerWrite = LedgerWrite()
+        /// Every item reached (compared again after the settle).
+        var keys = Set<SyncKey>()
+        /// Records of this settle that it keeps alive under a sub-task that goes: written without their `parent`.
+        var freed = Set<SyncKey>()
+    }
+
+    /// The supervisor's rule of 2026-11-15 (review finding 1): **a deletion arriving from iCloud never takes with it
+    /// an item that was made or changed here after that deletion.** Before a task's deletion is written, every
+    /// sub-task the device holds under it (at any depth) is settled as if its own deletion had arrived at the same
+    /// moment D (the parent marker's time): unchanged here since its base, or last changed here at or before D, it goes
+    /// with the parent, named in the same apply and stamped with D (not "now": it would beat a later change made
+    /// elsewhere); made here (no base), changed here after D, or moved under the parent here (its base says another
+    /// parent or none), it stays: written out from under the parent, its whole record keeping the parent as a reference
+    /// it waits for (section 8), and then sent like any change.
+    ///
+    /// And section 8 for a Group, label or board deleted here: the records on the device that point at it keep that
+    /// reference in their whole record, as one they wait for, whether iCloud has heard of it or not (brief 145, seed
+    /// 93: a person's unsent move to a Group whose deletion arrived was dropped).
+    func underneath(_ deciding: [Settling], settling: [SyncKey: Settling], now: Date) async throws -> Underneath {
         var cause: [String: Date] = [:]
-        for decision in settling.values where decision.key.type == "TaskItem" && decision.local != nil && decision.target == nil {
-            cause[decision.key.name] = decision.outcome.merged?.deletedAt ?? decision.server?.record.deletedAt ?? now
-        }
-        guard !cause.isEmpty else { return [:] }
-        var out: [SyncKey: Date] = [:]
-        var grew = true
-        while grew {
-            grew = false
-            for (key, entry) in entries where key.type == "TaskItem" && out[key] == nil && settling[key] == nil {
-                guard let base = entry.base, !base.isDeleted, entry.deletedHereAt == nil,
-                      case .reference(let parent)? = base.fields["parent"], let at = cause[parent] else { continue }
-                out[key] = at
-                cause[key.name] = at
-                grew = true
+        var gone = Set<SyncKey>()
+        for decision in deciding where decision.local != nil && decision.target == nil {
+            gone.insert(decision.key)
+            if decision.key.type == "TaskItem" {
+                cause[decision.key.name] = decision.outcome.merged?.deletedAt ?? decision.server?.record.deletedAt ?? now
             }
+        }
+        var out = Underneath()
+        guard !gone.isEmpty else { return out }
+        // From the device, not the bases: a sub-task made or moved here is not in the ledger.
+        let records = try await store.records()
+        // Where every task will be once this settle is written: the device's, or for a record this settle decides, its
+        // result (one arriving now may land under a sub-task that goes: seed 79 with conflicts, a grandchild new here).
+        var children: [String: [SyncRecord]] = [:]
+        for record in records where record.key.type == "TaskItem" && settling[record.key] == nil {
+            if case .reference(let parent)? = record.fields["parent"] { children[parent, default: []].append(record) }
+        }
+        for decision in settling.values where decision.key.type == "TaskItem" {
+            guard let target = decision.target, case .reference(let parent)? = target.fields["parent"] else { continue }
+            children[parent, default: []].append(decision.local ?? target)
+        }
+        var newWaits: [SyncKey: [String: SyncValue]] = [:]
+        func wait(_ key: SyncKey, _ field: String, _ value: SyncValue) {
+            var fields = newWaits[key] ?? waitsFor(key)
+            if case .referenceList(let names) = value, case .referenceList(let had)? = fields[field] {
+                fields[field] = .references(Set(names).union(had))
+            } else {
+                fields[field] = value
+            }
+            newWaits[key] = fields
+        }
+        var queue = cause.keys.sorted()
+        while !queue.isEmpty {
+            let parent = queue.removeFirst()
+            guard let at = cause[parent] else { continue }
+            for child in (children[parent] ?? []).sorted(by: { $0.key < $1.key }) {
+                guard !out.keys.contains(child.key) else { continue }
+                if let decision = settling[child.key] {
+                    // Decided by this settle on its own record. Kept alive under a parent that goes: freed from it.
+                    if decision.target != nil {
+                        out.freed.insert(child.key)
+                        out.keys.insert(child.key)
+                    }
+                    continue
+                }
+                out.keys.insert(child.key)
+                let entry = entries[child.key]
+                let base = entry?.base
+                let sameParent = base?.isDeleted == false && base?.fields["parent"] == .reference(parent)
+                let unchanged = base.map { RecordMerge.same(Self.whole(child, waiting: waitsFor(child.key)), $0) } ?? false
+                let before = (child.updatedAt ?? .distantPast) <= at
+                if sameParent, unchanged || before {
+                    out.writes.append(LocalWrite(key: child.key, expected: child, record: nil))
+                    if var noticed = entry, noticed.deletedHereAt == nil {
+                        noticed.deletedHereAt = at
+                        out.ledgerWrite.upsert.append(noticed)
+                    }
+                    cause[child.key.name] = at
+                    queue.append(child.key.name)
+                    log("\(child.key): goes with the task above it, deleted in iCloud; its marker carries that deletion's time")
+                } else {
+                    var free = child
+                    free.fields["parent"] = nil
+                    out.writes.append(LocalWrite(key: child.key, expected: child, record: free))
+                    wait(child.key, "parent", .reference(parent))
+                    log("\(child.key): made or changed here after the task above it was deleted in iCloud; it stays")
+                }
+            }
+        }
+        // Records pointing at a Group, label or board deleted here (a sub-task's parent is handled above).
+        let pointed = gone.filter { $0.type != "TaskItem" }
+        if !pointed.isEmpty {
+            for record in records where settling[record.key] == nil && !gone.contains(record.key) {
+                guard let type = SyncSchema.type(record.key.type) else { continue }
+                for field in type.fields {
+                    switch (field.kind, record.fields[field.key]) {
+                    case (.reference(let target), .reference(let name)?):
+                        if pointed.contains(SyncKey(type: target, name: name)) {
+                            wait(record.key, field.key, .reference(name))
+                            out.keys.insert(record.key)
+                        }
+                    case (.references(let target), .referenceList(let names)?):
+                        let hit = names.filter { pointed.contains(SyncKey(type: target, name: $0)) }
+                        if !hit.isEmpty {
+                            wait(record.key, field.key, .references(hit))
+                            out.keys.insert(record.key)
+                        }
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+        for key in newWaits.keys.sorted() {
+            guard let fields = newWaits[key], fields != waitsFor(key) else { continue }
+            out.ledgerWrite.deferUpsert.append(Self.waitRecord(key, fields))
         }
         return out
     }
@@ -361,12 +502,15 @@ extension SyncCore {
             write.upsert.append(LedgerEntry(key: record.key, base: Self.base(record.record), system: record.system))
         }
         write.remove = removed.filter { entries[$0] != nil }
+        // The answer came: a send remembered for want of a base is replaced by the base itself.
+        forgetSends(saved.map(\.key).sorted(), in: &write)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return
         }
+        for record in saved { remembered[record.key] = nil }
         let accepted = Set(saved.map(\.key)).union(removed)
         for key in accepted { refused[key] = nil }
         if !accepted.isEmpty {

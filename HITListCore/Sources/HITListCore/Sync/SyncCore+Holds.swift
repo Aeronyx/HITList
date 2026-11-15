@@ -316,12 +316,16 @@ extension SyncCore {
         }
         write.deferRemove = waits.keys.sorted()
         if !keepFirstFetch { write.facts.updateValue(nil, forKey: LedgerFact.firstFetchDone) }
+        // What was remembered of sends with no answer belongs to the memory forgotten: a new epoch makes it worth
+        // nothing without naming every fact (M5's amendment, `SyncCore+Sent`).
+        write.facts[Self.epochFact] = Data(String(sentEpoch + 1).utf8)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false
         }
+        remembered = [:]
         refused = [:]
         sentAs = [:]
         if !keepFirstFetch { waiting = [] }
@@ -353,8 +357,18 @@ extension SyncCore {
         guard !keys.isEmpty else { return }
         do {
             let here = try await localRecords(keys)
-            let writes = here.values.sorted { $0.key < $1.key }.map { LocalWrite(key: $0.key, expected: $0, record: nil) }
-            let kept = try await store.apply(writes)
+            // A sub-task iCloud never held stays, as every such item does: written out from under a parent that goes
+            // (the store deletes no row a write does not name).
+            var free: [LocalWrite] = []
+            for record in try await store.records() where record.key.type == "TaskItem" && here[record.key] == nil {
+                guard case .reference(let parent)? = record.fields["parent"],
+                      here[SyncKey(type: "TaskItem", name: parent)] != nil else { continue }
+                var out = record
+                out.fields["parent"] = nil
+                free.append(LocalWrite(key: record.key, expected: record, record: out))
+            }
+            let writes = free + here.values.sorted { $0.key < $1.key }.map { LocalWrite(key: $0.key, expected: $0, record: nil) }
+            let kept = try await store.apply(writes).intersection(here.keys)
             let removed = Set(here.keys).subtracting(kept)
             log("\(removed.count) items iCloud held removed from this device (\(why)); \(kept.count) changed meanwhile and kept")
             if !removed.isEmpty { host?.didWrite(removed) }
@@ -375,5 +389,8 @@ extension SyncCore {
         sentAs = [:]
         massSeenAt = nil
         switchTo = nil
+        // A ledger reset takes every fact with it, the remembered sends and their epoch among them.
+        remembered = [:]
+        sentEpoch = 0
     }
 }

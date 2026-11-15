@@ -22,11 +22,17 @@ extension SyncCore {
         waits[key]?.record.fields ?? [:]
     }
 
+    /// A to-one field the person cleared while the base still points at an item: no reference is waited for there.
+    static let clearedMark = SyncValue.referenceList([])
+
     /// The device's record with every reference it waits for honoured: a set gets the names it waits for, a to-one
     /// gets the one it waits for only while the device's field is empty (a value there is the person's choice).
     static func whole(_ local: SyncRecord?, waiting: [String: SyncValue]) -> SyncRecord? {
         guard var out = local, !waiting.isEmpty else { return local }
+        let type = SyncSchema.type(out.key.type)
         for field in waiting.keys.sorted() {
+            // A to-one's `clearedMark` (an empty list) is a note, not a reference.
+            if case .reference? = type?.fields.first(where: { $0.key == field })?.kind { if case .referenceList? = waiting[field] { continue } }
             switch waiting[field] {
             case .reference?:
                 if out.fields[field] == nil { out.fields[field] = waiting[field] }
@@ -58,18 +64,40 @@ extension SyncCore {
         return out
     }
 
-    /// What a record waits for, from its base and the device: every reference in `base` to an item that is not on
-    /// the device (a to-one only while the device's field is empty). Nothing for an item that is not here itself.
-    static func waitFields(local: SyncRecord?, base: SyncRecord?, present: (SyncKey) -> Bool) -> [String: SyncValue] {
-        guard let local, let base, !base.isDeleted, let type = SyncSchema.type(base.key.type) else { return [:] }
+    /// What a record waits for: the references of its whole record to items that are not on the device (a to-one
+    /// only while the device's field is empty). The whole record is what the record waited for until now (`current`:
+    /// what the last settle decided, or what a deletion here took off it) and, beside it, `base`. A to-one the record
+    /// already waits for keeps its name over the base's (brief 145, seed 93: a person's unsent move to a Group whose
+    /// deletion then arrived was dropped, and the base's older Group honoured instead); a set waits for the names of
+    /// both. Nothing for an item that is not here itself.
+    static func waitFields(local: SyncRecord?, base: SyncRecord?, current: [String: SyncValue] = [:],
+                           present: (SyncKey) -> Bool) -> [String: SyncValue] {
+        guard let local, let type = SyncSchema.type(local.key.type) else { return [:] }
+        let base = base?.isDeleted == false ? base : nil
         var out: [String: SyncValue] = [:]
         for field in type.fields {
-            switch (field.kind, base.fields[field.key]) {
-            case (.reference(let target), .reference(let name)?):
-                if local.fields[field.key] == nil, !present(SyncKey(type: target, name: name)) {
+            switch field.kind {
+            case .reference(let target):
+                guard local.fields[field.key] == nil else { continue }
+                if case .reference(let name)? = current[field.key], !present(SyncKey(type: target, name: name)) {
                     out[field.key] = .reference(name)
+                } else if case .reference(let name)? = base?.fields[field.key] {
+                    if present(SyncKey(type: target, name: name)) {
+                        // The base points at an item that is here and the field is empty: the person cleared it.
+                        // Remembered (an empty list, `clearedMark`), so that a deletion of that item here before the
+                        // change went does not bring the old reference back as one waited for (brief 145, everyday
+                        // seeds 166, 210, 261). It ends when the base no longer holds the reference, or a settle.
+                        out[field.key] = Self.clearedMark
+                    } else if current[field.key] == Self.clearedMark {
+                        out[field.key] = Self.clearedMark
+                    } else {
+                        out[field.key] = .reference(name)
+                    }
                 }
-            case (.references(let target), .referenceList(let names)?):
+            case .references(let target):
+                var names = Set<String>()
+                if case .referenceList(let list)? = current[field.key] { names.formUnion(list) }
+                if case .referenceList(let list)? = base?.fields[field.key] { names.formUnion(list) }
                 let missing = names.filter { !present(SyncKey(type: target, name: $0)) }
                 if !missing.isEmpty { out[field.key] = .references(missing) }
             default:
@@ -107,19 +135,22 @@ extension SyncCore {
     }
 
     /// The device's record with the waited-for references whose items are here now written in (a to-one only into
-    /// an empty field), each only while `base` still holds it. Nil when there is nothing to write.
+    /// an empty field). Nil when there is nothing to write. (What a record waits for is its whole record, kept up to
+    /// date by every settle, so it no longer has to be in `base` too: a reference a person gave here and a deletion
+    /// then took off is waited for although iCloud has not heard of it yet.)
     static func arrived(_ local: SyncRecord, waiting: [String: SyncValue], base: SyncRecord?,
                         present: (SyncKey) -> Bool) -> SyncRecord? {
-        guard let base, let type = SyncSchema.type(local.key.type) else { return nil }
+        guard let type = SyncSchema.type(local.key.type) else { return nil }
+        _ = base
         var out = local
         for field in type.fields {
-            switch (field.kind, waiting[field.key], base.fields[field.key]) {
-            case (.reference(let target), .reference(let name)?, .reference(let held)?):
-                if name == held, out.fields[field.key] == nil, present(SyncKey(type: target, name: name)) {
+            switch (field.kind, waiting[field.key]) {
+            case (.reference(let target), .reference(let name)?):
+                if out.fields[field.key] == nil, present(SyncKey(type: target, name: name)) {
                     out.fields[field.key] = .reference(name)
                 }
-            case (.references(let target), .referenceList(let names)?, .referenceList(let held)?):
-                let come = names.filter { held.contains($0) && present(SyncKey(type: target, name: $0)) }
+            case (.references(let target), .referenceList(let names)?):
+                let come = names.filter { present(SyncKey(type: target, name: $0)) }
                 if !come.isEmpty {
                     var all = Set(come)
                     if case .referenceList(let have)? = out.fields[field.key] { all.formUnion(have) }
