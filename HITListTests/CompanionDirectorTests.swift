@@ -754,7 +754,7 @@ final class CompanionDirectorTests: XCTestCase {
         case .routine(let i):
             let routines = character.posture(place).mode(look).routines
             return routines.indices.contains(i) && routines[i].little
-        case .answer, .flourish: return false
+        case .answer, .flourish, .cheer: return false
         }
     }
 
@@ -1000,6 +1000,8 @@ final class CompanionDirectorTests: XCTestCase {
                     counts["routine", default: 0] += 1
                 case .answer:
                     counts["reply", default: 0] += 1
+                case .cheer:
+                    counts["cheer", default: 0] += 1
                 case .flourish:
                     counts["flourish", default: 0] += 1
                     hourRoutines.append("★ flourish \(short.string(from: act.start))")

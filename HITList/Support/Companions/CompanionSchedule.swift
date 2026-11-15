@@ -279,6 +279,41 @@ enum CompanionSchedule {
         return .answer
     }
 
+    /// Brief 132: what a completed task plays.
+    enum CheerReply: Equatable {
+        /// Its cheer (`CompanionCheers`): awake, in plain weather.
+        case cheer
+        /// Its answer, drawn over the still as it is: asleep the sleepy peek, under a sky that holds the answer the
+        /// weather already wears.
+        case answer
+        case nothing
+    }
+
+    /// At most one cheer in any this long (ten tasks ticked in a row cheer once).
+    static let cheerRest: TimeInterval = 6
+    /// Asleep, the sleepy peek for a completed task at most once in this long.
+    static let sleepyCheerRest: TimeInterval = 60
+
+    /// What a completed task plays (brief 132).
+    /// - Parameters:
+    ///   - onScreen: the app in front (a companion is on screen when it asks).
+    ///   - busy: a flourish or a routine (not a little loop) is playing: never cut short, so the cheer is dropped.
+    ///   - still: Reduce Motion (nothing moves); `calm`, `lowPower`: Reduce Effects and Low Power Mode (idles only).
+    ///   - lastCheer: when a completed task last played anything; `lastSleepy`: the last sleepy peek for one.
+    ///   - answerDraws: its answer can be drawn over the still as it is (the weather's water and snow carried, not a
+    ///     dry frame; not through a pile of snow).
+    static func cheerReply(now: Date, onScreen: Bool, look: CompanionLook, busy: Bool, still: Bool, calm: Bool,
+                           lowPower: Bool, lastCheer: Date?, lastSleepy: Date?, answerDraws: Bool) -> CheerReply {
+        guard onScreen, !busy, !still, !calm, !lowPower else { return .nothing }
+        if let lastCheer, now.timeIntervalSince(lastCheer) < cheerRest { return .nothing }
+        if look.asleep {
+            if let lastSleepy, now.timeIntervalSince(lastSleepy) < sleepyCheerRest { return .nothing }
+            return answerDraws ? .answer : .nothing
+        }
+        if look.weather != .plain { return answerDraws ? .answer : .nothing }
+        return .cheer
+    }
+
     /// Whether a routine may play now on its own: awake, motion and effects allowed, on screen past its first 20
     /// seconds, nothing else playing.
     static func mayRoutine(now: Date, look: CompanionLook, onScreenSince: Date?, acting: Bool, still: Bool, calm: Bool,
@@ -298,7 +333,8 @@ enum CompanionSchedule {
 ///   and the flourish. `-companionPlay routine` takes turns through the routines and loops it may play now (the
 ///   everyday ones and the sky's), `-companionPlay routine:<name>` plays that one (a little loop too) again and again.
 ///   `-companionDemo` is the old name. `-companionPlay pace` is the real schedule kept going in the background (for a
-///   CPU reading). Without any of these the real schedule is quick enough to film: an idle every 4 to 12 seconds in plain weather.
+///   CPU reading); `-companionPlay cheer` plays what a completed task plays, every few seconds. Without any of these
+///   the real schedule is quick enough to film: an idle every 4 to 12 seconds in plain weather.
 /// `-companionSky rain` and `-companionZone Asia/Tokyo` (`CompanionSkySource`'s own) force the sky and the zone;
 /// `-companionSnowDepth 2` piles the snow that deep (beside `-companionSky snow`).
 struct CompanionLaunchOptions: Equatable {
@@ -315,6 +351,8 @@ struct CompanionLaunchOptions: Equatable {
         /// Brief 132: the real schedule, kept going while the app is in the background and keeping nothing, so a
         /// Debug Mac build's CPU can be read at the real pace without taking the front.
         case pace
+        /// Brief 132: what a completed task plays, every few seconds.
+        case cheer
     }
 
     var play: Play?
@@ -355,6 +393,7 @@ struct CompanionLaunchOptions: Equatable {
             case "all", "yes", "true", "1", "": play = .all
             case "routine", "routines": play = .routines
             case "pace": play = .pace
+            case "cheer", "cheers": play = .cheer
             default:
                 if raw.lowercased().hasPrefix("routine:") {
                     play = .routine(String(raw.dropFirst("routine:".count)))

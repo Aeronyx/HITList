@@ -107,6 +107,7 @@
 		2FF5A3242F9DAE77D98BFBBB /* RareVisitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD386A4BD2EBC4BD7D42B97B /* RareVisitor.swift */; };
 		3001B22517A77E865AE0FBF1 /* Preferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470E9FA3AA856BA92FBFC6FA /* Preferences.swift */; };
 		314F390CE31AB982B5B4678D /* MacAppearanceSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */; };
+		319F2685C0A45338FB35A29C /* CompanionCheers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 302B5D722636EEE0FEE0BEB8 /* CompanionCheers.swift */; };
 		31BBC88473658DE0A316EBC6 /* InboxProcessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F65E2352DC18108A2E7F789F /* InboxProcessView.swift */; };
 		31DE44D598D32E4C48C7A127 /* CompanionFlintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D883CA20A727EB3CD3454424 /* CompanionFlintTests.swift */; };
 		327B06BE2D01D16EC7DD8FB7 /* Inter_18pt-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9C832680D598EE37681991A1 /* Inter_18pt-Light.ttf */; };
@@ -280,6 +281,7 @@
 		7F600F45E5CD9A4E535D951A /* ThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AB0E811BC8B9E3BBF492DED /* ThemeTests.swift */; };
 		7FAF1E998F06E600F7C27C6A /* PopoutPickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83ED57A0F53865C13BDA236D /* PopoutPickers.swift */; };
 		812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */; };
+		817FD6D5A94591F85AACB820 /* CompanionCheerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 709AFC412A7ED89460CC2911 /* CompanionCheerTests.swift */; };
 		818B7609A1BA74F19A476E4F /* MobileShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C81CBED17342C9994FC47A6E /* MobileShell.swift */; };
 		819BC8DBBF310A714A544191 /* FilterDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = E794A04C45093448EE7DE18B /* FilterDraft.swift */; };
 		8277F66F7DAC7671A53DC2FF /* SchemaV3Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = E95FD3BD15A5E836DBD6E4B3 /* SchemaV3Models.swift */; };
@@ -693,6 +695,7 @@
 		2E600A506E7434AD07AF144F /* DateServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateServices.swift; sourceTree = "<group>"; };
 		2F6AFEFFA87882EF8F46AA3C /* ShareCardRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardRenderTests.swift; sourceTree = "<group>"; };
 		2FF631693F1C48C03F264CB0 /* Quill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quill.swift; sourceTree = "<group>"; };
+		302B5D722636EEE0FEE0BEB8 /* CompanionCheers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCheers.swift; sourceTree = "<group>"; };
 		30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingBoardTests.swift; sourceTree = "<group>"; };
 		315D24154A9ABD69200C164B /* PickerTimeField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerTimeField.swift; sourceTree = "<group>"; };
 		31EED87BAB4D02BA4465BA09 /* SyncHealth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncHealth.swift; sourceTree = "<group>"; };
@@ -831,6 +834,7 @@
 		6F47544BF23E1A61CD9357EA /* MacSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsTests.swift; sourceTree = "<group>"; };
 		6F9ADC9193AEBE5D489A484F /* CompletionRowBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletionRowBackground.swift; sourceTree = "<group>"; };
 		7079E225F1FC9E6B9F9072BD /* SharedRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRows.swift; sourceTree = "<group>"; };
+		709AFC412A7ED89460CC2911 /* CompanionCheerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionCheerTests.swift; sourceTree = "<group>"; };
 		71906FD6A69511E19F1911F9 /* SyncStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStatusViews.swift; sourceTree = "<group>"; };
 		71D7AFD21F170C23857C5C17 /* ClaudeSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeSettings.swift; sourceTree = "<group>"; };
 		71F3ADF0D750CBF64FA6C0A7 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
@@ -1652,6 +1656,7 @@
 				C30C52D93F8827A9A1FF9CC4 /* CompanionBehindTests.swift */,
 				CA9BD27B56EBA4D8307553E6 /* CompanionButtonTests.swift */,
 				1783B0C50F9E3DBF2734E065 /* CompanionCastFlavorTests.swift */,
+				709AFC412A7ED89460CC2911 /* CompanionCheerTests.swift */,
 				453738DB09EEE9FAE6BD7859 /* CompanionClockTests.swift */,
 				B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */,
 				D883CA20A727EB3CD3454424 /* CompanionFlintTests.swift */,
@@ -1963,6 +1968,7 @@
 			children = (
 				56DACB21927B25ADAFE9D6B2 /* CompanionCast.swift */,
 				56B50236E12799A3CA38ADFD /* CompanionCharacter.swift */,
+				302B5D722636EEE0FEE0BEB8 /* CompanionCheers.swift */,
 				545918A6DC1F63DDA774EB2D /* CompanionClock.swift */,
 				84BA75B32715E4CC319201B2 /* CompanionDirector.swift */,
 				0AF2EA158533BAD33E2AE682 /* CompanionSchedule.swift */,
@@ -2462,6 +2468,7 @@
 				BBA03541FDB89C91A4755D0E /* CompactQuickAddCard.swift in Sources */,
 				F75521C3E58CCBE5CDAAAC78 /* CompanionCast.swift in Sources */,
 				B3D16F7D17069A337217F788 /* CompanionCharacter.swift in Sources */,
+				319F2685C0A45338FB35A29C /* CompanionCheers.swift in Sources */,
 				08A0EDCE7C01E6FAC8B6858D /* CompanionClock.swift in Sources */,
 				0D2B8E1D4C4A93150CD9B06E /* CompanionDirector.swift in Sources */,
 				BAF56EF764B66D617C08BAB3 /* CompanionPerch.swift in Sources */,
@@ -2776,6 +2783,7 @@
 				714095B9D6D2E61ABF7F9547 /* CompanionBehindTests.swift in Sources */,
 				6DE21FA23CD585AE4FE40CDD /* CompanionButtonTests.swift in Sources */,
 				00AE08A4120A9520190FC873 /* CompanionCastFlavorTests.swift in Sources */,
+				817FD6D5A94591F85AACB820 /* CompanionCheerTests.swift in Sources */,
 				F1E57121A758A7BE8F241ADF /* CompanionClockTests.swift in Sources */,
 				812924A3F6F6EFD9EB9845C6 /* CompanionDirectorTests.swift in Sources */,
 				31DE44D598D32E4C48C7A127 /* CompanionFlintTests.swift in Sources */,

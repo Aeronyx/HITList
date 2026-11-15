@@ -60,6 +60,9 @@ final class CompanionDirector {
     /// A demo's turns so far.
     @ObservationIgnored private var recent: [String: [Int]] = [:]
     @ObservationIgnored private var lastAnswer: [String: Date] = [:]
+    /// Brief 132: when a completed task last played anything (one in any 6 seconds), and the last sleepy peek for one.
+    @ObservationIgnored private(set) var lastCheer: Date?
+    @ObservationIgnored private var lastSleepyCheer: Date?
     /// Which way each companion faced when it last left the screen (Quill keeps its side).
     @ObservationIgnored private var turned: [String: Bool] = [:]
     @ObservationIgnored private var timer: Task<Void, Never>?
@@ -212,6 +215,50 @@ final class CompanionDirector {
             reschedule(now: now)
         case .nothing: break
         }
+    }
+
+    /// A task was completed somewhere in the app (brief 132): the companion on screen plays its cheer, one to two
+    /// seconds of frames it already has; asleep its sleepy peek at most once a minute; under a sky that holds its
+    /// answer over the weather's still, or nothing. At most one in any 6 seconds; dropped over a flourish or a routine
+    /// (a flicker or a little loop gives way); Reduce Motion, Reduce Effects and Low Power Mode play nothing. The next
+    /// idle's wait starts when it ends.
+    func cheer(now: Date = .now) {
+        var played = false
+        var sleepy = false
+        for id in stages.keys.sorted() {
+            guard let character = character(id), let stage = stages[id] else { continue }
+            let clock = clock(for: character)
+            var busy = false
+            if let act = stage.act, clock.isActing(at: now, stage: stage) {
+                switch act.kind {
+                case .flourish: busy = true
+                case .routine(let i):
+                    let routines = character.posture(stage.place).mode(stage.look).routines
+                    busy = !(routines.indices.contains(i) && routines[i].little)
+                default: break
+                }
+            }
+            let reply = CompanionSchedule.cheerReply(now: now, onScreen: isAppActive, look: stage.look, busy: busy,
+                                                     still: still[id] ?? true, calm: calm[id] ?? true,
+                                                     lowPower: isLowPower, lastCheer: lastCheer,
+                                                     lastSleepy: lastSleepyCheer,
+                                                     answerDraws: clock.canDraw(.answer, stage: stage))
+            let kind: CompanionAct.Kind
+            switch reply {
+            case .cheer: kind = .cheer
+            case .answer: kind = .answer
+            case .nothing: continue
+            }
+            start(id, kind, now: now)
+            played = true
+            if stage.look.asleep { sleepy = true }
+            // The next idle a whole wait after the cheer ends.
+            if let act = stages[id]?.act { scheduleIdle(id, after: clock.end(of: act, stage: stages[id] ?? stage)) }
+        }
+        guard played else { return }
+        lastCheer = now
+        if sleepy { lastSleepyCheer = now }
+        reschedule(now: now)
     }
 
     // MARK: - The schedule
@@ -433,6 +480,15 @@ final class CompanionDirector {
             return
         case .answer?:
             start(id, .answer, now: now)
+        case .cheer?:
+            // What a completed task plays, as `cheer` decides it (the demo keeps no clock between cheers).
+            lastCheer = nil
+            lastSleepyCheer = nil
+            cheer(now: now)
+            if let act = stages[id]?.act, act.start == now {
+                quietAfter(id, end: clock(for: character).end(of: act, stage: stages[id] ?? stage))
+                return
+            }
         case .gesture(let name)?:
             let i = mode.gestures.firstIndex { $0.name == name }
             if let i { start(id, .gesture(i), now: now) } else if name == "flourish" { playFlourish(id, now: now); return }
@@ -548,6 +604,7 @@ final class CompanionDirector {
                 name = (routine?.little == true ? "loop " : "routine ") + (routine?.name ?? "\(i)")
             case .answer: name = "reply"
             case .flourish: name = "flourish"
+            case .cheer: name = "cheer"
             }
             Self.log.info("Companion \(id, privacy: .public) plays \(name, privacy: .public)")
         }

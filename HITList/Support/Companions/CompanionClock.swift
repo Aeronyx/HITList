@@ -8,13 +8,15 @@ struct CompanionPose: Equatable {
 }
 
 /// One thing a companion does: a small gesture (by its index in the mode's `gestures`), a routine (by its index in
-/// the mode's `routines`), the reply to a tap, or the rare flourish, from `start`.
+/// the mode's `routines`), the reply to a tap, the rare flourish, or its cheer for a completed task, from `start`.
 struct CompanionAct: Equatable {
     enum Kind: Hashable {
         case gesture(Int)
         case routine(Int)
         case answer
         case flourish
+        /// Brief 132: a completed task, awake in plain weather (`CompanionCheers`).
+        case cheer
     }
 
     let kind: Kind
@@ -54,6 +56,8 @@ struct CompanionClock {
             return (posture.flourish, character.flourishFPS)
         case .answer:
             return (mode.answer.ticks, character.gestureFPS)
+        case .cheer:
+            return (CompanionCheers.ticks(for: character, place: stage.place), character.gestureFPS)
         case .gesture(let i):
             let gestures = mode.gestures
             guard gestures.indices.contains(i) else { return ([], character.gestureFPS) }
