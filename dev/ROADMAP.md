@@ -5,7 +5,7 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.12 (round 28, 2026-11-15, the night 0.9.11 was released)
+## Now: 0.9.12 (rounds 28 and 29, 2026-11-15: the night 0.9.11 was released, and the afternoon after)
 
 George, minutes after releasing 0.9.11 (`dev/briefs/ROUND-28.md`): the creatures in the Theme menu had "got so
 small" and Quill looked "like he's melting"; and "If we need to make our own engine for proper cloud sync, let's get
@@ -26,13 +26,15 @@ SwiftData's mirror exactly as in 0.9.11. The design is `dev/SYNC-ENGINE.md`.
 | 144 `sync-status` | The bolt and Settings → iCloud on the engine's own status: exact counts, the holds and their buttons | merged, switched off |
 | 145 `sync-sim` | The brain on the rig: thousands of random histories on several devices, every fault, the invariants held | see the Round 28 record |
 | 146 `sync-review` | An independent review: twenty findings, twelve of them ways to lose data, each proven where it could be | merged; open ones listed in the record |
+| supervisor (round 29) | A tapped reminder crashed the app on iOS 26 (two reports from a friend): the system is answered on the main thread | merged, awaiting release |
+| supervisor (round 29) | The engine reviewed "as a lead Apple developer with a focus on efficient simplicity" (`dev/briefs/ROUND-29.md`): it deletes only what was deleted, so the mass-deletion hold, its numbers and the vouch are gone; a released build cannot switch it on; no whole-store reads per save or per fetch; a lost answer no longer undoes the person's next change | merged, switched off |
 
 Next, on George's word (`dev/SYNC-ENGINE.md` section 12): **a container of its own for the engine** (the mirror
 reads every zone of its container, so the engine's records must live where no older build looks; registering one
 is permanent and waits for him); plain or encrypted fields; then the move rehearsed on a copy of real data, his
-devices first, then the friends. Before any of that: the review's open findings (the Round 28 record lists them),
-a push waking the engine proven on a device, and one contract suite run against both the pretend iCloud and
-CloudKit Development, so a rule the two read differently is found by a test and not by a reviewer.
+devices first, then the friends. Before any of that: what is still open (`dev/SYNC-ENGINE.md` section 13, as
+round 29 left it), a push waking the engine proven on a device, and one contract suite run against both the pretend
+iCloud and CloudKit Development, so a rule the two read differently is found by a test and not by a reviewer.
 
 ## Before: 0.9.11 (round 27, 2026-11-14, the evening after 0.9.10's release stopped at Apple's agreement; released 2026-11-15)
 

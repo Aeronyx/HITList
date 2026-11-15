@@ -787,6 +787,26 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 29 (2026-11-15, afternoon; the supervisor alone, no briefs): what a session must know about the engine now
+
+`dev/briefs/ROUND-29.md` has the round. Two things in the Round 28 blocks above and the record below are no longer
+true, and `dev/SYNC-ENGINE.md` is right where they differ:
+
+- **There is no mass-deletion hold, no `confirmDeletions`, no `vouchForDeletions`, no `restoreFromICloud`, no
+  `SyncCore.Limits`.** The engine never reads absence as a deletion. A deletion is known only from the store's note
+  of it: `SyncSaveHintObserver` takes each deleted row's key (and a task's sub-tasks) at `ModelContext.willSave`
+  into `SyncDeletionLog` (the ledger's file), the brain reads `SyncLocalStore.deletions()` before it compares or
+  settles, and an item iCloud holds that is not here with no deletion written down is missing and comes back
+  (`RecordMerge` rule M14). In a test on `MemoryLocalStore`, `delete(_:)` is a person's deletion (written down);
+  `lose(_:)` and `loseEverything()` are rows gone with none.
+- **A released build cannot run the engine** (`SyncEngineSwitch.isAvailable`), whatever the preference says.
+
+Rules for anyone touching sync: never delete in iCloud what no person deleted; never a batch delete
+(`context.delete(model:)`) of a synced model (it bypasses the note); the rig and the in-memory store are behind
+`#if DEBUG` (the long runs add `-Xswiftc -DDEBUG`); a failing seed is compared with the commit before (a detached
+worktree, the same command) before it is called new; crash reports and tester feedback stay out of git
+(`crashreports/` is ignored) and no tester's name or address goes into a brief, a note or a commit.
+
 ## Round 28 record (2026-11-15, 02:56 to about 07:00 Eastern; sessions 138–142 and agents 143–146 merged for 0.9.12)
 George released 0.9.11 and wrote at 02:56 (`ROUND-28.md`). The Theme menu was fixed and photographed by 03:20; the
 engine's design, its contract in code and the merge rules were on master at 03:30 with briefs 138 to 142; the five

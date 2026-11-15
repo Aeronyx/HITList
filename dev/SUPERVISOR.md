@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-28.md`, and for anything about sync `dev/SYNC-ENGINE.md`.
+session reads), then the newest round, `dev/briefs/ROUND-29.md` (and `ROUND-28.md` before it), and for anything about sync `dev/SYNC-ENGINE.md`.
 The memory folder under `~/.claude/projects/-Users-user-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1047 (the sync engine's brain, rules and simulation are most of the growth), Mac 2184, iOS 2147, and 159 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1045 (the sync engine's brain, rules and simulation are most of the growth), Mac 2197, iOS 2160, and 159 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -123,6 +123,14 @@ How George works with you:
   the Key ID `<key-id>` and Issuer ID `<issuer-id>` may be written, the key's
   contents never. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
   $200 promotional credit behind it expires 2026-11-05 and is not used any more).
+- HITList's own sync engine (switched off): **a released build never runs it** (`SyncEngineSwitch.isAvailable`
+  answers no in every build that is not a Debug build; that line changes only in the release George says switches
+  it on). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
+  it (`SyncDeletionLog`, taken at `willSave`), and an item that is merely not on a device comes back from iCloud.
+  Never add a rule, a repair or a "tidy up" that deletes in iCloud what no person deleted, and never a batch delete
+  (`context.delete(model:)`) of a synced model: it bypasses the note.
+- Crash reports and tester feedback hold names and addresses: `crashreports/` is ignored by git; never commit one,
+  and never put a tester's name or address in a brief, a note or a commit.
 - Delegated sessions never push, open PRs, merge, switch branches, run `scripts/release.sh`, use `sudo`,
   or `rm -rf`. The supervisor pushes `master` only. George runs `scripts/release.sh` (the permission
   classifier denies it to sessions anyway).
@@ -425,11 +433,14 @@ files" is obeyed; one that does not produces merge conflicts.
   `SyncRecovery`, `SyncStoreGuard`; `SyncAudit` (`compare` for the bolt, `run` for Check iCloud…), `ICloudZoneReader`,
   `SyncComparison`, `StoreInventory`), `CloudSyncMonitor.swift`, `ModelContainerFactory.swift`, `Deduplicator.swift`.
   `ROUND-26.md` says what was taken out and why, `ROUND-27.md` what came back and how.
-- HITList's own sync engine (round 28, switched off; design `dev/SYNC-ENGINE.md`): core
+- HITList's own sync engine (rounds 28 and 29, switched off; design `dev/SYNC-ENGINE.md`, what the review of
+  round 29 changed and why in `dev/briefs/ROUND-29.md`): core
   `HITListCore/Sources/HITListCore/Sync/` (the contract: `SyncRecord`, `SyncSchema`, `SyncTransport`, `SyncStorage`,
   `SyncMemory`; `RecordMerge` = how one record is settled; `SyncCore*.swift` = the brain; `SyncStatus`, `SyncHost`;
-  `Testing/` = `FakeCloud`, `FakeTransport`, `SyncSimulation`, `SyncInvariants`), app `Services/SyncEngine/`
-  (`SwiftDataSyncStore`, `SyncRecordMapping`, `SyncLedgerStore`, `SyncSaveHints`, `CloudKitTransport`,
+  `Testing/` = `FakeCloud`, `FakeTransport`, `SyncSimulation`, `SyncInvariants`, compiled into Debug builds only,
+  as `SyncMemory` is), app `Services/SyncEngine/`
+  (`SwiftDataSyncStore`, `SyncRecordMapping`, `SyncLedgerStore`, `SyncSaveHints` = the observer of every save,
+  `SyncDeletionLog` = each deletion taken down before its save commits, `CloudKitTransport`,
   `CloudRecordCodec`, `SyncTransportProbe`, `SyncEngine*.swift` = the facade, the switch, the host, the move, the
   pretend run; `SyncEngineBoard` = what the bolt's side reads), `Views/Settings/SyncEngineSettings.swift`, and the
   engine's branch in `CloudSyncMonitor` and `SyncState.engine`. A model that gains a stored property must gain a
@@ -750,7 +761,35 @@ deleted with its switches); a seeded filter is stamped 2001 on the engine so it 
 deletion; the editors save only the fields the person changed; released builds stay on the mirror and the switch
 is shown only in Debug builds on a side store.
 
-## 8. Where things stand (2026-11-15, round 28 on master)
+Round 29 (2026-11-15, afternoon). George's words: before releasing 0.9.12, "clean up, ensure that my friends won't
+lose data (or instruct them to export it before they do), and fix some crashing bugs", and "finalize and critically
+review your new CloudSync engine as if you were a lead Apple developer with a focus on efficient simplicity". My
+choices in it, which he can reverse: the engine no longer stops and asks when many items are gone, because it no
+longer reads absence as deletion at all (an item not on a device with no deletion taken down comes back from
+iCloud; round 28's ten-and-a-half rule, its question and the app's vouch are deleted, superseding that line above);
+a released build cannot run the engine whatever a preference says; a deletion made in the instant before the app
+is killed, if even its note was not written, brings the item back rather than risk the opposite; an item deleted
+before the device and iCloud ever agreed on it is deleted in iCloud too; the app compares everything when it comes
+forward (a few thousand rows read off the main thread), not after every fetch. He has been asked about the 72
+merged session worktrees (about 105 GB) and, again, about a container of its own for the engine.
+
+## 8. Where things stand (2026-11-15, round 29 on master)
+
+**2026-11-15, afternoon: round 29 on master for 0.9.12 (Fable 5.2 supervisor, no sessions), which George had not
+released** (`dev/briefs/ROUND-29.md` has his message, the crash, the review and its proof). A tapped reminder no
+longer crashes the app on iOS 26 (two reports from a friend; the system is answered on the main thread). The sync
+engine was reviewed at his word "as a lead Apple developer with a focus on efficient simplicity" and is still
+switched off, now by a line no preference can cross (`SyncEngineSwitch.isAvailable`): **it deletes in iCloud only
+what was deleted** (each deletion taken down as it is saved; an item merely absent comes back), so the mass-deletion
+hold, its numbers and the vouch are gone; a save or a fetch no longer reads the whole store; a lost answer no longer
+undoes the person's next change; finding 18 is fixed; the rigs compile into Debug builds only. Suites on the final
+tree: core 1045, Mac 2197, iOS 2160, no failures. No schema change. George releases with `scripts/release.sh
+--version 0.9.12 --quick`, and can press Reset Environment for the tasks' container's Development side at any time
+(it touches no tester's data; **nobody presses Deploy Schema Changes there before it is reset**). Open: his word on
+a container of its own for the engine and on the 72 merged session worktrees (about 105 GB); section 13 of the
+design; a push waking the engine; the engine on a phone and on real data. The next brief number is 147.
+
+### Round 28 (kept for the record; 0.9.12, prepared the morning of 2026-11-15)
 
 **2026-11-15, round 28 merged for 0.9.12 (Fable 5.2 supervisor), the night George released 0.9.11.** The Theme menu
 is put right (Quill in his own sprite on his corner; the Mac's creatures grow with their boxes), the task, Group,
