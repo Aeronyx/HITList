@@ -13,14 +13,35 @@ struct ExportImportGroup: View {
     @State private var exportDocument: SnapshotDocument?
     @State private var showImporter = false
     @State private var importMessage: String?
+    // Brief 137: Import from Todoist, its preview and Undo last import.
+    @State private var todoist = TodoistImportModel()
+    @State private var showTodoistPicker = false
+    @State private var confirmTodoistUndo = false
+
+    static let todoistFooter = "From Todoist: Settings → Backups → Download (a .zip), or a project's ⋯ → Import & export → Export as CSV."
 
     var body: some View {
-        HITGroup("Export & Import") {
-            HITMenuRow("Export JSON…", systemImage: "square.and.arrow.up", accessory: .none) {
-                if let snap = try? SnapshotBuilder.build(from: context) { exportDocument = SnapshotDocument(snapshot: snap) }
+        Group {
+            HITGroup("Export & Import", footer: Self.todoistFooter) {
+                HITMenuRow("Export JSON…", systemImage: "square.and.arrow.up", accessory: .none) {
+                    if let snap = try? SnapshotBuilder.build(from: context) { exportDocument = SnapshotDocument(snapshot: snap) }
+                }
+                HITMenuRow("Import JSON…", systemImage: "square.and.arrow.down", accessory: .none) { showImporter = true }
+                if let importMessage { SettingsMessage(text: importMessage) }
+                HITMenuRow("Import from Todoist…", systemImage: "tray.and.arrow.down", accessory: .none) { showTodoistPicker = true }
+                    .accessibilityIdentifier("todoist-import-row")
+                if let receipt = todoist.receipt {
+                    HITMenuRow("Undo last import", subtitle: receipt.summary, systemImage: "arrow.uturn.backward",
+                               role: .destructive, accessory: .none) { confirmTodoistUndo = true }
+                        .accessibilityIdentifier("todoist-undo-row")
+                }
+                if let message = todoist.message {
+                    SettingsMessage(text: message).accessibilityIdentifier("todoist-message")
+                }
             }
-            HITMenuRow("Import JSON…", systemImage: "square.and.arrow.down", accessory: .none) { showImporter = true }
-            if let importMessage { SettingsMessage(text: importMessage) }
+            if let plan = todoist.plan {
+                TodoistImportCard(model: todoist, plan: plan)
+            }
         }
         .fileExporter(isPresented: Binding(get: { exportDocument != nil }, set: { if !$0 { exportDocument = nil } }),
                       document: exportDocument, contentType: .json,
@@ -36,6 +57,29 @@ struct ExportImportGroup: View {
             } catch {
                 importMessage = "Import failed: \(error.localizedDescription)"
             }
+        }
+        .fileImporter(isPresented: $showTodoistPicker, allowedContentTypes: [.zip, .commaSeparatedText, .plainText],
+                      allowsMultipleSelection: true) { result in
+            guard case .success(let urls) = result else { return }
+            let files = urls.compactMap { url -> TodoistFiles.File? in
+                let accessed = url.startAccessingSecurityScopedResource()
+                defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+                return (try? Data(contentsOf: url)).map { TodoistFiles.File(name: url.lastPathComponent, data: $0) }
+            }
+            todoist.load(files, context: context)
+        }
+        .confirmationDialog("Undo the last Todoist import?", isPresented: $confirmTodoistUndo, titleVisibility: .visible) {
+            Button("Remove \(TodoistMapping.count(todoist.receipt?.taskIDs.count ?? 0, "task"))", role: .destructive) {
+                todoist.undo(context: context)
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(todoist.undoQuestion)
+        }
+        .onAppear {
+            guard TodoistFixture.isRequested, !TodoistImportModel.fixtureShown else { return }
+            TodoistImportModel.fixtureShown = true
+            todoist.load(TodoistFixture.files, context: context)
         }
     }
 }

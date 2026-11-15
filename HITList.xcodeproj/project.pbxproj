@@ -472,6 +472,7 @@
 		D9CA52DD51B58886AF2C50FB /* TodayWidgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57E547415BCBD0B870811056 /* TodayWidgetView.swift */; };
 		D9D6A5DE04D75E2ACA0BB3FF /* WidgetTaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5067D2966FCA991CAA17780D /* WidgetTaskRow.swift */; };
 		D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD6C97C47ED1D5A101D9B418 /* TokenHighlightField.swift */; };
+		DA8B789D4910A21D67B9B0BB /* TodoistImportCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B99134E8B48C0FE25EAAABA1 /* TodoistImportCard.swift */; };
 		DADDAC552653674841536C86 /* CloudKitSchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2383CCF0E885DBE6A113EF3 /* CloudKitSchemaTests.swift */; };
 		DAEC3A3C2B322A4C3345C624 /* TaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42AC4E971C5262969197F1F3 /* TaskRow.swift */; };
 		DB2233C69DF38E7D751C4A4B /* PickerTime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92811CBB96DCB3B993F65CEF /* PickerTime.swift */; };
@@ -973,6 +974,7 @@
 		B8E41CC5DF5CD82D26856412 /* CompanionDirectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionDirectorTests.swift; sourceTree = "<group>"; };
 		B8F6B86A1DE4B35411DA72E5 /* HITTips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTips.swift; sourceTree = "<group>"; };
 		B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedTasksDebug.swift; sourceTree = "<group>"; };
+		B99134E8B48C0FE25EAAABA1 /* TodoistImportCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoistImportCard.swift; sourceTree = "<group>"; };
 		B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DelightSettingsSection.swift; sourceTree = "<group>"; };
 		BA7DFDB7F08CAF6DE9B96FA3 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		BB606C235A41C872012BAFC7 /* ProfileMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenuTests.swift; sourceTree = "<group>"; };
@@ -1303,6 +1305,7 @@
 				7C434BB7372CC0AAE65EDBDE /* Flipboard */,
 				8627308C9A2A7755BD542F35 /* Groups */,
 				EA8416DFEC765C67455F23F9 /* Help */,
+				6078B37F8290D775E0ED118B /* Import */,
 				AA043ED05F7A6CA7A1D00831 /* Inbox */,
 				DA1B4D6FE766D8B8EE495BD8 /* MacChrome */,
 				00AEE90E0FD17817958FFD1A /* Popouts */,
@@ -1404,6 +1407,14 @@
 				994FA0B078605DDC99DC19C2 /* ShareInbox.swift */,
 			);
 			path = Share;
+			sourceTree = "<group>";
+		};
+		6078B37F8290D775E0ED118B /* Import */ = {
+			isa = PBXGroup;
+			children = (
+				B99134E8B48C0FE25EAAABA1 /* TodoistImportCard.swift */,
+			);
+			path = Import;
 			sourceTree = "<group>";
 		};
 		60FFE16C61B13DE945518AE5 /* HITListWidgets */ = {
@@ -2729,6 +2740,7 @@
 				85E3E278D179F9BE1945F24E /* TodayTasksIntent.swift in Sources */,
 				D9CA52DD51B58886AF2C50FB /* TodayWidgetView.swift in Sources */,
 				1EBCC1F0065217E3631D357D /* TodoistFixture.swift in Sources */,
+				DA8B789D4910A21D67B9B0BB /* TodoistImportCard.swift in Sources */,
 				9F771CFF3139B84B5BA560D9 /* TodoistImporter.swift in Sources */,
 				F3E1EAC998993F03436D0A13 /* TodoistZip.swift in Sources */,
 				D9F6E7337DFCE39D31C95274 /* TokenHighlightField.swift in Sources */,
