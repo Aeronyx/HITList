@@ -333,6 +333,21 @@ public actor FakeTransport: SyncTransport {
         }
     }
 
+    /// The transport sends by itself, without fetching first: `CKSyncEngine` schedules a send soon after changes are
+    /// added to its list, whatever another device sent meanwhile. This is how two devices' saves of one record meet in
+    /// iCloud (T6); a rig whose devices always fetch before they send never sees a conflict (brief 145).
+    public func sendByItself() async {
+        guard (try? checkNotInHandle("sendByItself()")) != nil, started, !dead else { return }
+        await acquire()
+        defer { release() }
+        do {
+            try await announceAccount()
+            try await runSend()
+        } catch {
+            // Reported through the events already.
+        }
+    }
+
     /// The device tells the running transport what changed under it (an account signed in, out or switched): the
     /// account event now, if there is one.
     public func noticeChanges() async {

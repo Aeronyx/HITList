@@ -102,6 +102,61 @@ final class SyncInvariantsTests: XCTestCase {
                                                  intent: intent), [])
     }
 
+    /// Brief 145, seed 34 (memory faults): a label's deletion arrived on A and the store took it off the task; A's person
+    /// then added another label; the first label was put back elsewhere (an undo) and section 8 gave the task its label
+    /// back everywhere. I2 judged the person's save as the whole set and called the label that came back a lost edit.
+    /// A set of references is judged name by name: only the names a person added or removed are theirs.
+    func testI2_aSetOfReferencesIsJudgedNameByName_aNameTheStoreTookOffIsNotAPersonsRemoval() {
+        let l1 = SyncRecord(type: "TaskLabel", name: "l1", fields: ["name": .string("one"), "updatedAt": .millis(1)])
+        let l2 = SyncRecord(type: "TaskLabel", name: "l2", fields: ["name": .string("two"), "updatedAt": .millis(1)])
+        func labelled(_ names: [String]) -> SyncRecord {
+            var record = task("t1", "x")
+            if !names.isEmpty { record["labels"] = .references(names) }
+            return record
+        }
+        var intent = SimIntent()
+        intent.record(step: 1, device: "B", before: [:], after: [l1.key: l1, l2.key: l2])
+        intent.record(step: 2, device: "A", before: [:], after: [key("t1"): labelled(["l1"])])
+        // On A the store took l1 off when l1's deletion arrived (no person's action), then A's person added l2.
+        intent.record(step: 3, device: "A", before: [key("t1"): labelled([])], after: [key("t1"): labelled(["l2"])])
+        let both = labelled(["l1", "l2"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [both, l1, l2]), holder("B", [both, l1, l2])],
+                                                 cloud: [cloud(both), cloud(l1), cloud(l2)], intent: intent), [],
+                       "l1 was made with the task and nobody removed it; l2 was added by A")
+        // The same history with l2 lost, or with l1 dropped, is a lost edit, named by the name.
+        let onlyOne = labelled(["l1"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [onlyOne, l1, l2]), holder("B", [both, l1, l2])],
+                                                 cloud: [cloud(both), cloud(l1), cloud(l2)], intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should hold →l2: device A added it at step 3 and no other device changed it; device A does not",
+        ])
+        let dropped = labelled(["l2"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [dropped, l1, l2]), holder("B", [dropped, l1, l2])],
+                                                 cloud: [cloud(dropped), cloud(l1), cloud(l2)], intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should hold →l1: device A made it so at step 2 and nobody changed it; device A does not; device B does not; iCloud does not",
+        ])
+    }
+
+    func testI2_aNameAPersonRemovedIsGoneEverywhere_andTwoDevicesTouchingOneNameAreNotJudged() {
+        let l1 = SyncRecord(type: "TaskLabel", name: "l1", fields: ["name": .string("one"), "updatedAt": .millis(1)])
+        func labelled(_ names: [String]) -> SyncRecord {
+            var record = task("t1", "x")
+            if !names.isEmpty { record["labels"] = .references(names) }
+            return record
+        }
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [l1.key: l1, key("t1"): labelled(["l1"])])
+        intent.record(step: 2, device: "B", before: [key("t1"): labelled(["l1"])], after: [key("t1"): labelled([])])
+        let kept = labelled(["l1"])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [kept, l1])], cloud: [cloud(kept), cloud(l1)],
+                                                 intent: intent).map(\.description), [
+            "I2 TaskItem/t1 labels should not hold →l1: device B removed it at step 2 and no other device changed it; device A holds it; iCloud holds it",
+        ])
+        intent.record(step: 3, device: "A", before: [key("t1"): labelled(["l1"])], after: [key("t1"): labelled([])])
+        intent.record(step: 4, device: "A", before: [key("t1"): labelled([])], after: [key("t1"): labelled(["l1"])])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [kept, l1])], cloud: [cloud(kept), cloud(l1)],
+                                                 intent: intent), [], "A and B both touched l1: either outcome")
+    }
+
     // MARK: I3 Nothing comes back
 
     func testI3_holdsWhenADeletedItemIsGoneEverywhereAndIcloudKeepsOnlyItsMarker() {
