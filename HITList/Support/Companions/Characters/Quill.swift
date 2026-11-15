@@ -3382,6 +3382,34 @@ extension CompanionCharacter {
                 "................ddd.",
                 ".................dd.",
             ]),
+            // Brief 135 (George: "Quill is misplaced in Theme menu on iOS"), for Settings' theme box only: `drape` slid
+            // off the box's top right corner. His head and front half as `drape` has them, raised to the top rows,
+            // lie on the flat of the top edge; each column of his back half dropped as far as the corner falls under
+            // it (a point, two, three … seven), so his belly follows the curve; a hind leg and the inked tip of his
+            // tail hang down the box's right side. Named as a composite ("drape" over a "swatch" no host has) so the
+            // engine never draws it: `ThemeCompanion.cornerFrame` alone does.
+            Frame(name: "drape@swatch", rows: [
+                ".ll....ll...........",
+                "ldll..ldlll.........",
+                "lmmmmmmmmdmmm.......",
+                "mmmmmmmmmmmmdl......",
+                "mddmmmddmmdmdm......",
+                "mmmmdmmmmddmmml.....",
+                ".mmlllmmdmmmmmdl....",
+                "..llllddddmmmmdll...",
+                "..........dmmmdmlm..",
+                "...........dmmmmlm..",
+                ".............mmmmm..",
+                "..............mmmlm.",
+                "..............mmmlm.",
+                "...............mmmmd",
+                "................mmmd",
+                ".................dmm",
+                ".................m.m",
+                ".................m.a",
+                ".................l.a",
+                "....................",
+            ]),
         ],
         gestureFPS: 8,
         flourishFPS: 9,

@@ -274,6 +274,7 @@ struct ThemeSwatch: View {
             RoundedRectangle(cornerRadius: metrics.radius + Self.ringInset, style: .continuous)
                 .strokeBorder(isSelected ? palette.accent : .clear, lineWidth: 2)
                 .frame(width: outer, height: outer)
+                .mask { ringMask(companion, layout, outer: outer) }
             if let companion, let layout, layout.visibleRows != nil {
                 sprite(companion, layout)
             }
@@ -306,6 +307,38 @@ struct ThemeSwatch: View {
         .frame(width: side, height: side, alignment: .topLeading)
         .clipShape(shape)
         .overlay(shape.strokeBorder(palette.separator, lineWidth: 1))
+    }
+
+    /// Where the ring is drawn: everywhere, less a point round a companion that lies across its line (Quill over the
+    /// corner, brief 135), so the ring passes behind him instead of under him.
+    private func ringMask(_ character: CompanionCharacter?, _ layout: ThemeCompanion.Layout?, outer: CGFloat) -> some View {
+        let holes: Set<ThemeSwatch.Cell> = {
+            guard let character, let layout, layout.clearsRing else { return [] }
+            return Self.ringHoles(ThemeCompanion.drawnPixels(for: character, layout: layout))
+        }()
+        return Path { path in
+            path.addRect(CGRect(x: 0, y: 0, width: outer, height: outer))
+            for cell in holes {
+                path.addRect(CGRect(x: CGFloat(cell.x) + Self.ringInset, y: CGFloat(cell.y) + Self.ringInset, width: 1, height: 1))
+            }
+        }
+        .fill(style: FillStyle(eoFill: true))
+    }
+
+    /// One point of the swatch, from its square's top-left corner.
+    struct Cell: Hashable {
+        let x: Int
+        let y: Int
+    }
+
+    /// The points the ring leaves out round `pixels`: each pixel and the eight round it.
+    static func ringHoles(_ pixels: [CGRect]) -> Set<Cell> {
+        var out = Set<Cell>()
+        for pixel in pixels {
+            let x = Int(pixel.minX.rounded()), y = Int(pixel.minY.rounded())
+            for dx in -1...1 { for dy in -1...1 { out.insert(Cell(x: x + dx, y: y + dy)) } }
+        }
+        return out
     }
 
     private func sprite(_ character: CompanionCharacter, _ layout: ThemeCompanion.Layout) -> some View {

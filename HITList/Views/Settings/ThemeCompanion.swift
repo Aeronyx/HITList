@@ -28,9 +28,11 @@ enum ThemeCompanion {
         /// columns before it) go over the edge, off the corner (its "+" pose; round 25, George: "Glim in the bottom
         /// right, having his tail almost hanging over the 'Tokyo Night' text").
         case onFloorRight
-        /// Asleep on the top edge at its right end, `past` points of it beyond the right edge, what hangs below its
-        /// seat row (Quill's hindquarters) down past the corner, about to slide off (its "+" pose at night; round 25,
-        /// George: "Quill asleep and almost falling/slumping off the top right corner").
+        /// Asleep on the top right corner and sliding off it (round 25, George: "Quill asleep and almost
+        /// falling/slumping off the top right corner"; round 27: "Quill is misplaced in Theme menu on iOS"): its swatch
+        /// frame (`cornerFrame`, its "+" pose at night until it has one), what lies on the flat of the top edge, what
+        /// hangs following the corner down the box's right side, as far right as no part of its underside is more than
+        /// a point from the box (`cornerFit`). The selection ring gives way round it (`Layout.clearsRing`).
         case overCorner
         /// In the air at the middle of the swatch's left edge, `past` points of it beyond the edge, mirrored to face into
         /// the box (its `fly` frame, its "+" pose until it has one; round 25, George: "flying in the middle left slightly
@@ -40,6 +42,13 @@ enum ThemeCompanion {
 
     /// The frame a companion flies in (`inAir`), if it has one.
     static let flyFrame = "fly"
+
+    /// The frame a companion slides off the corner in (`overCorner`), if it has one: drawn for the swatch alone (named
+    /// as a composite over a "swatch" no host has, so the engine never shows it).
+    static let cornerFrame = "drape@swatch"
+
+    /// The most a companion over the corner may lie off the box: a sprite pixel, never more (brief 135).
+    static let cornerGap: CGFloat = 1
 
     /// The swatch's border line (`ThemeSwatch`'s separator stroke, inside the square): what one standing on the floor
     /// stands on.
@@ -52,8 +61,8 @@ enum ThemeCompanion {
         /// the dot decides.)
         var along: CGFloat
         var mirrored = false
-        /// How far its drawn pixels reach beyond the swatch's edge, in points: the right edge over the corner, the left
-        /// in the air. (Elsewhere it stays on the swatch across.)
+        /// How far its drawn pixels reach beyond the swatch's left edge in the air, in points. (Elsewhere it stays on
+        /// the swatch across; over the corner the box decides.)
         var past: CGFloat = 0
     }
 
@@ -67,9 +76,9 @@ enum ThemeCompanion {
         "nod": Seat(placement: .onCard, along: 0.27),
         // Graphite: Flint in the air at the middle of the left edge, 5 pt of him outside the box, facing into it.
         "flint": Seat(placement: .inAir, along: 0, mirrored: true, past: 5),
-        // Midnight: Quill asleep on the top edge at its right end, 7 pt of him past the corner, his hindquarters hanging
-        // down the side.
-        "quill": Seat(placement: .overCorner, along: 1, past: 7),
+        // Midnight: Quill asleep on the top right corner, sliding off it: his head on the flat of the top edge, his
+        // belly along the curve, a hind leg and his tail down the right side (round 27).
+        "quill": Seat(placement: .overCorner, along: 1),
         // Moss: Tuck on the floor of his box, in the middle, his sprout under the accent dot (George: "center one of
         // them": Button keeps the place George saw him in).
         "tuck": Seat(placement: .onFloor, along: 0.5),
@@ -120,6 +129,8 @@ enum ThemeCompanion {
         var visibleRows: Int?
         /// How far its highest drawn pixel rises above the swatch's top edge (0 when it doesn't).
         var rise: CGFloat
+        /// The selection ring gives way a point round it (over the corner it lies across the ring's line).
+        var clearsRing = false
     }
 
     static func layout(for character: CompanionCharacter, seat: Seat, side: CGFloat) -> Layout {
@@ -127,7 +138,8 @@ enum ThemeCompanion {
         let frame: String
         switch seat.placement {
         case .alongTop: frame = character.posture(.field).awake.rest
-        case .asleepOnDot, .overCorner: frame = posture.asleep.rest
+        case .asleepOnDot: frame = posture.asleep.rest
+        case .overCorner: frame = character.rows(cornerFrame) == nil ? posture.asleep.rest : cornerFrame
         case .inAir: frame = character.rows(flyFrame) == nil ? posture.awake.rest : flyFrame
         case .onCard, .peeking, .onTop, .onFloor, .onFloorRight: frame = posture.awake.rest
         }
@@ -163,8 +175,8 @@ enum ThemeCompanion {
             y = side - floorLine - CGFloat(character.seatRow)
             x = rightmostFit(rows, character: character, side: side, y: y)
         case .overCorner:
-            x = side + seat.past - CGFloat((drawn?.maxX ?? character.width - 1) + 1)
-            y = -CGFloat(character.seatRow)
+            y = -CGFloat(lieRow(rows, width: character.width))
+            x = cornerFit(rows, side: side, y: y)
         case .inAir:
             let box = drawn ?? (minX: 0, maxX: character.width - 1, minY: 0, maxY: character.height - 1)
             x = -seat.past - CGFloat(box.minX)
@@ -176,7 +188,8 @@ enum ThemeCompanion {
             x = min(max(x, -1), side - width + 1)
         }
         let rise = max(0, -(y + first))
-        return Layout(frame: frame, origin: CGPoint(x: x, y: y), mirrored: seat.mirrored, visibleRows: visibleRows, rise: rise)
+        return Layout(frame: frame, origin: CGPoint(x: x, y: y), mirrored: seat.mirrored, visibleRows: visibleRows, rise: rise,
+                      clearsRing: seat.placement == .overCorner)
     }
 
     /// How far `palette`'s companion reaches above the swatch's selection ring (the top of its cell in the grid): the
@@ -236,6 +249,75 @@ enum ThemeCompanion {
                         CGPoint(x: left + near, y: top + far), CGPoint(x: left + far, y: top + far)].allSatisfy { box.contains($0) }
             }
             if fits { return x }
+            x -= 1
+        }
+        return x
+    }
+
+    /// The row under what lies on the top edge: the row under the lowest pixel left of the frame's middle (its head
+    /// and front paws; for `drape`, its seat row).
+    static func lieRow(_ rows: [String], width: Int) -> Int {
+        var lowest = -1
+        for (y, row) in rows.enumerated() {
+            for (x, letter) in row.enumerated() where x < width / 2 && letter != CompanionInk.clear && !CompanionInk.isBehind(letter) {
+                lowest = max(lowest, y)
+            }
+        }
+        return lowest + 1
+    }
+
+    /// The swatch's face as `ThemeSwatch` draws it (continuous corners, its border line included).
+    static func face(side: CGFloat) -> Path {
+        RoundedRectangle(cornerRadius: ThemeSwatch.Metrics(side: side).radius, style: .continuous)
+            .path(in: CGRect(x: 0, y: 0, width: side, height: side))
+    }
+
+    /// How far the underside of a frame drawn at `origin` lies off the box at the most, in points (negative where it
+    /// lies on it): under each of its columns over the corner's curve (where the top edge has fallen half a point or
+    /// more, short of the last column), from its lowest pixel down to the box; beside the box's right side (where it
+    /// stands straight), from the box across to its leftmost pixel in each row. Sampled down the middle of each column
+    /// and row.
+    static func cornerGaps(_ rows: [String], origin: CGPoint, side: CGFloat) -> [CGFloat] {
+        let face = face(side: side)
+        let step: CGFloat = 1.0 / 12
+        var pixels: [(x: CGFloat, y: CGFloat)] = []
+        for (y, row) in rows.enumerated() {
+            for (x, letter) in row.enumerated() where letter != CompanionInk.clear && !CompanionInk.isBehind(letter) {
+                pixels.append((origin.x + CGFloat(x), origin.y + CGFloat(y)))
+            }
+        }
+        var gaps: [CGFloat] = []
+        // Not the box's last column: its side stands nearly straight there, and the rows measure it.
+        for column in Set(pixels.map(\.x)) where column >= 0 && column + 2 <= side {
+            let middle = column + 0.5
+            var top: CGFloat = 0
+            while top < side / 2, !face.contains(CGPoint(x: middle, y: top)) { top += step }
+            guard top >= 0.5, top < side / 2 else { continue }
+            let bottom: CGFloat = pixels.filter { $0.x == column }.map { $0.y + 1 }.max() ?? 0
+            gaps.append(top - bottom)
+        }
+        for line in Set(pixels.map(\.y)) where line >= 0 && line + 1 <= side {
+            let middle = line + 0.5
+            var edge: CGFloat = side
+            while edge > side / 2, !face.contains(CGPoint(x: edge, y: middle)) { edge -= step }
+            guard edge >= side - 1.5 else { continue }
+            let mine = pixels.filter { $0.y == line && $0.x >= side / 2 }.map(\.x)
+            guard let left = mine.min() else { continue }
+            gaps.append(left - edge)
+        }
+        return gaps
+    }
+
+    /// The rightmost whole-point x at which the frame, lying on the top edge at `y`, is nowhere more than `cornerGap`
+    /// off the box (`cornerGaps`, give of `cornerSlack`, half an iPhone device pixel, where the curve is sampled): its
+    /// head on the flat, its belly along the curve, what hangs against the right side.
+    /// The leftmost place tried when none fits.
+    static func cornerFit(_ rows: [String], side: CGFloat, y: CGFloat) -> CGFloat {
+        let width = CGFloat(rows.first?.count ?? 0)
+        var x: CGFloat = side - 1
+        while x > side - width - 1 {
+            let gaps = cornerGaps(rows, origin: CGPoint(x: x, y: y), side: side)
+            if !gaps.isEmpty, (gaps.max() ?? 0) <= cornerGap + cornerSlack { return x }
             x -= 1
         }
         return x
