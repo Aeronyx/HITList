@@ -188,6 +188,67 @@ final class SyncLedgerStoreTests: XCTestCase {
         XCTAssertEqual(after, [entry(1)])
     }
 
+    // MARK: - Which store file
+
+    /// A store file's identity is its Core Data store UUID: what a saved row's `PersistentIdentifier` names, kept
+    /// when the file is reopened, new when Reset local cache moves the file aside and an empty store is made.
+    func testAStoreFilesIdentityIsItsStoreUUIDAndANewFileHasANewOne() throws {
+        let url = folder.appending(path: "HITList.store")
+        XCTAssertNil(SyncLedgerStore.storeIdentity(at: url), "no file, no identity")
+        var first: String?
+        do {
+            let opened = ModelContainerFactory.open(schema: HITListSchema.schema, url: url, useCloudKit: false)
+            let context = ModelContext(opened.container)
+            let task = TaskItem(title: "t")
+            context.insert(task)
+            try context.save()
+            first = SyncLedgerStore.storeIdentity(at: url)
+            XCTAssertNotNil(first)
+            XCTAssertEqual(task.persistentModelID.storeIdentifier, first, "the UUID a row's identifier carries")
+        }
+        do {
+            _ = ModelContainerFactory.open(schema: HITListSchema.schema, url: url, useCloudKit: false)
+            XCTAssertEqual(SyncLedgerStore.storeIdentity(at: url), first, "the same file keeps it")
+        }
+        XCTAssertNotNil(try ModelContainerFactory.trashStore(at: url, into: folder.appending(path: "Trash")))
+        _ = ModelContainerFactory.open(schema: HITListSchema.schema, url: url, useCloudKit: false)
+        let second = try XCTUnwrap(SyncLedgerStore.storeIdentity(at: url))
+        XCTAssertNotEqual(second, first, "a new store file is another store")
+    }
+
+    func testALedgerWrittenForAnotherStoreIsForgottenWhenBound() async throws {
+        let ledger = SyncLedgerStore.inMemory()
+        let first = try await ledger.bind(toStore: "A")
+        XCTAssertFalse(first, "an empty ledger is simply bound")
+        var write = LedgerWrite()
+        write.upsert = [entry(1)]
+        write.facts = [LedgerFact.firstFetchDone: Data([1])]
+        try await ledger.write(write)
+        await ledger.saveTransportState(Data("bookmark".utf8))
+
+        let same = try await ledger.bind(toStore: "A")
+        XCTAssertFalse(same)
+        let kept = try await ledger.entries()
+        XCTAssertEqual(kept, [entry(1)])
+
+        let other = try await ledger.bind(toStore: "B")
+        XCTAssertTrue(other, "reset: the transport must be reset too")
+        let entries = try await ledger.entries()
+        let done = try await ledger.fact(LedgerFact.firstFetchDone)
+        let state = await ledger.loadTransportState()
+        let bound = try await ledger.fact(SyncLedgerStore.storeFact)
+        XCTAssertEqual(entries, [])
+        XCTAssertNil(done)
+        XCTAssertNil(state)
+        XCTAssertEqual(bound, Data("B".utf8))
+
+        // A ledger with something in it and no store named (written before binding existed) is forgotten too.
+        let unbound = SyncLedgerStore.inMemory()
+        try await unbound.write(write)
+        let reset = try await unbound.bind(toStore: "A")
+        XCTAssertTrue(reset)
+    }
+
     // MARK: - Size
 
     func testFiveThousandEntriesWrittenAndReadBack() async throws {

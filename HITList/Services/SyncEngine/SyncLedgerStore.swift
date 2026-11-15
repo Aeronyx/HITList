@@ -1,3 +1,4 @@
+import CoreData
 import Foundation
 import OSLog
 import SwiftData
@@ -208,6 +209,46 @@ actor SyncLedgerStore: SyncLedger {
         } catch {
             Self.log.error("Sync ledger: the transport's state was not saved: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    // MARK: - Which store file the ledger belongs to
+
+    /// The ledger's own fact naming the store file it was written for (`storeIdentity(at:)`).
+    static let storeFact = "store"
+
+    /// The identity of the store file at `url`: the UUID Core Data gives a SQLite store when the file is made
+    /// (`NSStoreUUIDKey` in its metadata, read without opening the store; the same UUID a saved row's
+    /// `PersistentIdentifier.storeIdentifier` carries). It survives a move of the file (the App Group move, a
+    /// relaunch) and a restore of a backup into it; a new file (Settings → Reset local cache moves the store aside and
+    /// starts an empty one) has a new one. Nil when there is no file or its metadata cannot be read (an in-memory store
+    /// has no file: its ledger is in memory too). Public Core Data API, on every OS the app runs on.
+    static func storeIdentity(at url: URL) -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: url, options: nil)
+        return metadata?[NSStoreUUIDKey] as? String
+    }
+
+    /// Binds the ledger to the store file whose identity is `identity`: a ledger written for another file (an old
+    /// ledger beside a store made new by Reset local cache would read as "everything deleted here"), or one with
+    /// something in it and no store named at all, is reset first. Returns whether it was reset: the transport must
+    /// then be reset too (T13), since its state was a fact of the ledger and is gone. Call it before the engine starts.
+    @discardableResult
+    func bind(toStore identity: String) async throws -> Bool {
+        let context = makeContext()
+        let bound = try factValue(Self.storeFact, in: context).flatMap { String(data: $0, encoding: .utf8) }
+        if bound == identity { return false }
+        let entries = try context.fetchCount(FetchDescriptor<LedgerEntryRow>())
+        let deferred = try context.fetchCount(FetchDescriptor<LedgerDeferredRow>())
+        let facts = try context.fetchCount(FetchDescriptor<LedgerFactRow>())
+        let holdsSomething = entries + deferred + facts > 0
+        if holdsSomething {
+            Self.log.notice("Sync ledger was written for store \(bound ?? "none", privacy: .public), this store is \(identity, privacy: .public): forgetting it, the engine merges afresh")
+            try await reset()
+        }
+        var change = LedgerWrite()
+        change.facts = [Self.storeFact: Data(identity.utf8)]
+        try await write(change)
+        return holdsSomething
     }
 
     // MARK: - Tests
