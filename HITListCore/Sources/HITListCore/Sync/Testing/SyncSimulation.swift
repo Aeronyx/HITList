@@ -415,14 +415,20 @@ public actor SyncSimulation {
         await afterBrainCall(name)
     }
 
-    private func sync(_ name: String) async {
-        guard let device = slots[name] else { return }
+    /// The device's "sync now". False when it failed or the process crashed in it.
+    @discardableResult
+    private func sync(_ name: String) async -> Bool {
+        guard let device = slots[name] else { return false }
+        var done = true
         do {
             try await device.brain.syncNow()
         } catch {
             note("\(name) sync: \(error)")
+            done = false
         }
+        if await device.transport.hasCrashed { done = false }
         await afterBrainCall(name)
+        return done
     }
 
     private func apply(_ fault: SimFault, on name: String) async {
@@ -493,6 +499,7 @@ public actor SyncSimulation {
     public func heal() async {
         await cloud.setQuotaFull(false, account: config.account)
         quotaFull = false
+        down = []
         for name in deviceNames {
             guard let device = slots[name] else { continue }
             await device.transport.setNetwork(up: true)
@@ -508,20 +515,22 @@ public actor SyncSimulation {
         absorb()
     }
 
-    /// Every device syncs, in name order, round after round, until a round in which nothing is waiting anywhere and
-    /// iCloud did not change (I7). `rounds`: how many it took; nil when it was not quiet within `config.quietRounds`,
+    /// Every device syncs, in name order, round after round, until a round in which every sync went through, nothing
+    /// is waiting anywhere and iCloud did not change (I7). (A sync that crashed or failed halfway may have left the
+    /// device short of what iCloud holds, with nothing waiting: not quiet.) `rounds`: how many it took; nil when it was not quiet within `config.quietRounds`,
     /// then `lastRound` is what iCloud accepted in the last one.
     public func syncUntilQuiet() async -> (rounds: Int?, lastRound: [SyncKey]) {
         var lastRound: [SyncKey] = []
         for round in 1...max(1, config.quietRounds) {
             let before = await cloud.records(account: config.account)
-            for name in deviceNames { await sync(name) }
+            var everyOneWent = true
+            for name in deviceNames where await !sync(name) { everyOneWent = false }
             absorb()
             let after = await cloud.records(account: config.account)
             lastRound = SyncSimulation.changed(before, after)
             var waiting = false
             for name in deviceNames where await !(slots[name]?.transport.pending() ?? []).isEmpty { waiting = true }
-            if lastRound.isEmpty, !waiting { return (round, []) }
+            if lastRound.isEmpty, !waiting, everyOneWent { return (round, []) }
         }
         return (nil, lastRound)
     }

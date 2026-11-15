@@ -436,10 +436,12 @@ final class SyncInvariantsTests: XCTestCase {
         config.log = { line in if keys.contains(where: { line.contains($0) }) { lines.append(line) } }
         if environment["HITLIST_SIM_FAULTS"] == "ledger" { config.faults = SimFaultKind.everyday.union([.ledgerLost]); config.faultPercent = 10 }
         if environment["HITLIST_SIM_FAULTS"] == "zone" { config.faults = SimFaultKind.everyday.union([.zoneDeleted, .zoneReset]); config.faultPercent = 10 }
+        if environment["HITLIST_SIM_FAULTS"] == "memory" { config.faults = SimFaultKind.everyday.union([.ledgerLost, .zoneDeleted, .zoneReset]) }
         let steps = environment["HITLIST_SIM_STEPS"].flatMap(Int.init) ?? 300
         let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: steps, config: config, brain: MergingBrain.make)
         for line in report.script where keys.contains(where: { line.contains($0) }) || line.contains("fault") { print("SCRIPT \(line)") }
         for line in lines.all { print("BRAIN \(line)") }
+        for line in report.notes { print("NOTE \(line)") }
         print(report.description)
     }
 
@@ -657,7 +659,10 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
 
     /// Section 4: an item that differs from its base, an item deleted here, an item made again: waiting to go.
     private func reconcile(_ keys: Set<SyncKey>?) async throws {
-        guard try await ledger.fact(LedgerFact.firstFetchDone) != nil else { return }
+        guard try await ledger.fact(LedgerFact.firstFetchDone) != nil else {
+            log("\(device) reconcile skipped: no whole fetch yet")
+            return
+        }
         let entries = Dictionary(try await ledger.entries().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let records = Dictionary(try await store.records().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let all = keys ?? Set(entries.keys).union(records.keys)
@@ -689,6 +694,8 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
     func handle(_ event: TransportEvent) async {
         switch event {
         case .account, .zoneLost, .didFetch: log("\(device) hears \(event)")
+        case .fetched(let changed, let removed): log("\(device) hears fetched \(changed.count) changed, \(removed.count) removed")
+        case .sent(let saved, _, let failed): log("\(device) hears sent \(saved.count) saved, \(failed.count) failed")
         default: break
         }
         do {
