@@ -45,9 +45,11 @@ final class PopoutCloseTests: XCTestCase {
     }
 
     #if os(macOS)
-    /// The real editor in a window, as the host shows it: with nothing typed the guard is off; once the
-    /// draft differs from the task (here the task is renamed under it, so Confirm would write the old
-    /// title back) it is on, and a backdrop click asks instead of closing.
+    /// The real editor in a window, as the host shows it: with nothing typed the guard is off, and it stays off
+    /// when the task is renamed under the open editor (another device's edit arriving: nothing was typed, there
+    /// is nothing to lose, and Confirm no longer writes the old title back: round 28, the sync review's finding 5).
+    /// With typing (here an editor that starts from typing carried over from another editor) it is on, and a
+    /// backdrop click asks instead of closing.
     func testTheEditorPanelArmsTheGuardFromItsDirtyCheck() throws {
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
@@ -56,24 +58,39 @@ final class PopoutCloseTests: XCTestCase {
         try context.save()
         let popouts = PopoutController()
         popouts.open(task)
-        let dismissGuard = PanelDismissGuard()
 
-        let root = TaskPopout(task: task)
-            .environment(\.panelDismissGuard, dismissGuard)
-            .environment(popouts)
-            .modelContainer(container)
-            .frame(width: 560, height: 600)
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600), styleMask: [.titled],
-                              backing: .buffered, defer: false)
-        window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: root)
-        defer { window.close() }
+        func window(_ carryOver: EditorCarryOver?, _ dismissGuard: PanelDismissGuard) -> NSWindow {
+            let root = TaskPopout(task: task, carryOver: carryOver)
+                .environment(\.panelDismissGuard, dismissGuard)
+                .environment(popouts)
+                .modelContainer(container)
+                .frame(width: 560, height: 600)
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 600), styleMask: [.titled],
+                                  backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            window.contentView = NSHostingView(rootView: root)
+            return window
+        }
+
+        let quiet = PanelDismissGuard()
+        let first = window(nil, quiet)
         spin()
-        XCTAssertFalse(dismissGuard.isActive, "nothing typed")
-
+        XCTAssertFalse(quiet.isActive, "nothing typed")
         task.title = "Buy oat milk"
+        spin()
+        XCTAssertFalse(quiet.isActive, "renamed under the editor, nothing typed: nothing to lose")
+        first.close()
+
+        var typed = TaskEditorDraft(task: task)
+        typed.title = "Buy oat milk and bread"
+        let carry = EditorCarryOver()
+        carry.keep(typed, showsNotes: false, for: task)
+        XCTAssertNotNil(carry.kept(for: task.id), "typing to carry over")
+        let dismissGuard = PanelDismissGuard()
+        let second = window(carry, dismissGuard)
+        defer { second.close() }
         spin(until: { dismissGuard.isActive })
-        XCTAssertTrue(dismissGuard.isActive, "the draft's title differs from the task's: there is typing to lose")
+        XCTAssertTrue(dismissGuard.isActive, "the draft holds typing: there is something to lose")
         XCTAssertTrue(dismissGuard.attempt())
         XCTAssertTrue(popouts.state.isTaskOpen, "the click asked; the editor is still open")
     }

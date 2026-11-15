@@ -168,6 +168,12 @@ final class SyncEngine {
             hints.yield(Hint(keys: keys, serial: count.next()))
         }
         await core.start()
+        // The brain has read the ledger: rows of it that could not be read were forgotten alone (the review's finding
+        // 6), and everything is fetched again because of it. Said once, for the sync log.
+        let unreadable = await ledger.unreadable
+        if !unreadable.isEmpty {
+            say("\(unreadable.count) row(s) of the sync memory could not be read and were forgotten; everything is fetched again")
+        }
         await syncNow(reason: "launch")
     }
 

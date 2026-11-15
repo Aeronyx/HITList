@@ -23,6 +23,35 @@ The Theme menu:
   showed that page. The Mac's box is now the iPhone's one and a half times the size, creature and all (three device
   pixels a sprite pixel), so each sits exactly as on the iPhone. The iPhone's and iPad's boxes are as they were.
 
+Editing while another device edits:
+
+- **An open editor no longer puts old text back.** With a task open in the editor, if its notes were changed on
+  another device meanwhile and you then changed only the title, Confirm saved the notes the editor had opened with
+  over the newer ones, and they won on every device. The same held for the title, and for a Group's, a label's and a
+  filter's name, colour and query. Each editor now saves only what you changed. (Found by the review of the new sync
+  engine; the hole was there under today's sync too.)
+
+HITList's own sync engine (built this round, **switched off in this version**: every device syncs exactly as in 0.9.11):
+
+- **Why.** Today's sync is Apple's mirror of the database. It keeps to itself the list of what is waiting to go, so
+  the bolt can only be worked out from the outside; it names iCloud's records itself, so two can stand for one item;
+  it says "succeeded" for an export that sent nothing. The engine replaces it with records of HITList's own (one per
+  item, named by the item), a list of what is waiting that the app holds, written rules for two devices changing one
+  thing, and Apple's `CKSyncEngine` underneath for the scheduling, the retries and the pushes. The design is
+  `dev/SYNC-ENGINE.md`.
+- **How it was built.** A design and a contract in code first; then nine sessions in two waves. One proved the rules
+  that settle a record (21,700 generated cases), one built a pretend iCloud that keeps the real one's rules with every
+  failure on a switch, one ran the engine through thousands of random histories on several devices against it, one
+  read all of it as a stranger looking for the bug that loses data and found twenty, and one probed the real service
+  on its Development side. The design was corrected on evidence more than a dozen times in three hours.
+- **What it will change when it is switched on**: the bolt is exact ("3 changes waiting to go to iCloud", filled
+  only when nothing is waiting and iCloud has been read); the same item on two devices is always one record;
+  a deleted item stays deleted on a device that was away; an undo of a deleted label gives its tasks the label back;
+  and the engine stops and asks, instead of acting, when a device suddenly holds none of what iCloud holds.
+- **What is not done**: it has not run on real data or on a phone; a push waking it is not proven; moving a device
+  over from today's sync is built and rehearsed only on test data. The decisions that are George's are in section 12
+  of the design.
+
 ## 0.9.11 — build 28, 2026-11-15
 
 0.9.10 was prepared on 2026-11-13 and never uploaded: Apple had a new Program License Agreement waiting for George to

@@ -233,6 +233,13 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         // still found lost at the next fetch instead of read as "not made yet".
         stored = stored.afterReset()
         await save()
+        // Before `start()` there is no engine to replace: the state is forgotten, and `start()` makes the engine
+        // with its delegate. (Making one here would leave `start()` nothing to do, and the delegate never set: found
+        // by session 143.)
+        guard engine != nil else {
+            log.write("reset before start: the saved state is forgotten")
+            return
+        }
         let old = engine
         engine = makeEngine(nil)
         batchLimit = CloudKitTransportRules.maximumBatch
