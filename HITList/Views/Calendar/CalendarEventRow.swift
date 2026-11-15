@@ -1,8 +1,8 @@
 import SwiftUI
 import HITListCore
 
-/// A calendar event among the tasks (brief 77). Not a task: no checkbox, no priority, no swipe, no drag, no editor,
-/// and a tap does nothing. As tall as a task row so the list keeps its rhythm: a 3 pt bar in the calendar's colour
+/// A calendar event among the tasks (brief 77). Not a task: no checkbox, no priority, no swipe, no drag, no editor.
+/// A tap opens its read-only card where a list hosts one (`calendarEventCards()`, brief 136). As tall as a task row so the list keeps its rhythm: a 3 pt bar in the calendar's colour
 /// where the checkbox would be, the title in the secondary text colour, and the time on the second line in the meta
 /// style ("9:30 – 10:15 AM", "All day"). Today's past events dim.
 ///
@@ -13,6 +13,8 @@ struct CalendarEventRow: View {
     var calendar: Calendar = .current
     /// Beside the upright island (the Duo's outer display) a step larger, as the task rows are.
     @Environment(\.listIslandPlacement) private var islandPlacement
+    /// Opens the event's card (brief 136); nil where no list hosts one.
+    @Environment(\.openCalendarEvent) private var openEvent
 
     /// The checkbox's column: the bar sits centred in it, so titles line up with the tasks' titles.
     static let markerWidth = TaskRowMetrics.checkSize + 2
@@ -48,9 +50,13 @@ struct CalendarEventRow: View {
                 .frame(width: Self.markerWidth)
         }
         .opacity(isPast ? Self.pastOpacity : 1)
+        .contentShape(Rectangle())
+        .onTapGesture { openEvent?(event.event) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(event.event.title), \(timeText)")
-        .accessibilityHint("Calendar event")
+        .accessibilityHint(openEvent == nil ? "Calendar event" : "Calendar event. Opens its details")
+        .accessibilityAddTraits(openEvent == nil ? [] : .isButton)
+        .accessibilityAction { openEvent?(event.event) }
         .accessibilityIdentifier("calendarEvent")
     }
 }
@@ -81,7 +87,7 @@ struct CalendarEventsHeader: View {
 }
 
 /// An event on the Upcoming board (Mac, iPad), at the top of its day's column: the row in a task card's frame
-/// (`Theme.surface`, the card radius, a hairline), with no hover, since a click does nothing.
+/// (`Theme.surface`, the card radius, a hairline). A click opens its card (brief 136).
 struct CalendarEventCard: View {
     let event: DayEvent
     let now: Date
