@@ -72,6 +72,47 @@ final class CompanionIdleTests: XCTestCase {
         }
     }
 
+    /// Brief 132, item 1, pure: in the default states every wait from one idle's end to the next's start lies between
+    /// a floor drawn anew each time (4 to 7 s) and 12 s; the median between 6 and 10, most of them there; the floor
+    /// really varying; no two waits in a row equal (half a second apart at least); the first 1.5 to 4 s in.
+    func testThePaceInTheDefaultStates() {
+        var waits: [TimeInterval] = []
+        var floors: [TimeInterval] = []
+        var last: TimeInterval?
+        for i in 0..<600 {
+            let floorUnit = CompanionRandom.unit(132, 2 * i)
+            let unit = CompanionRandom.unit(132, 2 * i + 1)
+            let floor = CompanionSchedule.paceFloor(unit: floorUnit)
+            XCTAssertTrue(CompanionSchedule.paceFloors.contains(floor))
+            floors.append(floor)
+            let wait = CompanionSchedule.paceGap(floor: floorUnit, unit: unit, after: last)
+            XCTAssertTrue((4...12).contains(wait), "every wait in 4 to 12 s: \(wait)")
+            XCTAssertGreaterThanOrEqual(wait, floor - 0.001, "never under its own floor")
+            if let last { XCTAssertGreaterThanOrEqual(abs(wait - last), CompanionSchedule.paceApart - 0.001, "two in a row") }
+            waits.append(wait)
+            last = wait
+        }
+        let sorted = waits.sorted()
+        let median = sorted[sorted.count / 2]
+        XCTAssertTrue((6...10).contains(median), "median \(median)")
+        let middle = waits.filter { (6...10).contains($0) }.count
+        XCTAssertGreaterThan(Double(middle) / Double(waits.count), 0.5, "most between 6 and 10 s: \(middle)")
+        XCTAssertLessThan(floors.min()!, 4.2)
+        XCTAssertGreaterThan(floors.max()!, 6.8)
+        XCTAssertGreaterThan(Set(floors.map { ($0 * 100).rounded() }).count, 200, "the floor is drawn anew each time")
+        XCTAssertGreaterThan(waits.filter { $0 < 5 }.count, 10, "some come quickly")
+        XCTAssertGreaterThan(waits.filter { $0 > 11 }.count, 10, "some wait nearly the twelve")
+        for i in 0..<300 {
+            let first = CompanionSchedule.paceFirst(unit: CompanionRandom.unit(7, i))
+            XCTAssertTrue((1.5...4).contains(first), "the first idle 1.5 to 4 s in: \(first)")
+        }
+        XCTAssertEqual(CompanionSchedule.paceFirst(unit: 0), 1.5)
+        XCTAssertEqual(CompanionSchedule.paceFirst(unit: 1), 4)
+        // Under a sky that holds, today's pace exactly (brief 100's).
+        XCTAssertEqual(CompanionSchedule.idleGap, 6...36)
+        XCTAssertEqual(CompanionSchedule.firstIdle, 2...6)
+    }
+
     /// Ten minutes on the "+" by day and ten asleep, as George watched: how many different idles came up.
     func testTenMinutesOfIdles() {
         var report: [String] = []

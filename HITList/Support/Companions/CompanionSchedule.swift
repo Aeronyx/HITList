@@ -18,11 +18,13 @@ extension Preferences {
     static let companionLastRoutineName = "delight.companions.lastRoutineName"
 }
 
-/// The rules of a companion's day (briefs 79, 84 and 100), pure so tests can pin them. Never a dead minute: an idle
-/// every 6 to 36 seconds of showing time, awake or asleep, the first 2 to 6 seconds after it comes on screen. An
-/// idle is one flicker (a blink, one swing of a foot; about two in three) or one little loop (a blink and two swings,
-/// a second or two; about one in three), never the same one twice running, by weight (the plainest, a blink, the
-/// heaviest); while a sky holds, about every other one is the sky's own. Asleep the idles are its breaths, a twitch, a
+/// The rules of a companion's day (briefs 79, 84, 100 and 132), pure so tests can pin them. Never a dead minute: in its
+/// default states (plain weather, awake or asleep) an idle 4 to 12 seconds after the last one ends, over a floor drawn
+/// anew each time between 4 and 7, the first 1.5 to 4 seconds after it comes on screen; under a sky that holds (rain,
+/// storm, snow, heat) every 6 to 36 seconds, the first 2 to 6, as before brief 132. An idle is one flicker (a blink,
+/// one swing of a foot; about two in three) or one little loop (a blink and two swings, a second or two; about one in
+/// three), by weight (the plainest, a blink, the heaviest), never the same one twice running; while a sky holds, about
+/// every other one is the sky's own. Asleep the idles are its breaths, a twitch, a
 /// murmur: flickers only. A routine (a few seconds of small moves) after 3 to 8 minutes of showing time since the
 /// last, never the same one twice running, never a little loop; while a sky holds, its own routine takes about every
 /// other one. The flourish is rare: about once in three hours of its screen showing with the app in front, never
@@ -35,6 +37,15 @@ enum CompanionSchedule {
     static let idleGap: ClosedRange<TimeInterval> = 6...36
     /// The first idle after a companion comes on screen (launch, back to the app, its tab, a sheet closing).
     static let firstIdle: ClosedRange<TimeInterval> = 2...6
+    /// Brief 132, the pace in the default states (plain weather, awake or asleep): George found the creatures too
+    /// still. From the end of one idle to the start of the next, never more than this…
+    static let paceCeiling: TimeInterval = 12
+    /// …and never less than a floor drawn anew for each wait from this range, so the quickest comes at a varying beat.
+    static let paceFloors: ClosedRange<TimeInterval> = 4...7
+    /// Two waits in a row are at least this far apart, so the beat never repeats.
+    static let paceApart: TimeInterval = 0.5
+    /// The first idle after coming on screen, in the default states.
+    static let paceFirstIdle: ClosedRange<TimeInterval> = 1.5...4
     /// Showing time between one routine and the next (briefs 84 and 100), at random.
     static let routineGap: ClosedRange<TimeInterval> = 180...480
     /// The chance that an idle is a little loop rather than a flicker, when it has both to choose from.
@@ -79,6 +90,26 @@ enum CompanionSchedule {
 
     /// The still time before the first idle on coming on screen, from a number in 0..<1: anywhere in `firstIdle`.
     static func firstIdle(unit: Double) -> TimeInterval { within(firstIdle, unit: unit) }
+
+    /// The floor for one wait in the default states, from a number in 0..<1: anywhere in `paceFloors`.
+    static func paceFloor(unit: Double) -> TimeInterval { within(paceFloors, unit: unit) }
+
+    /// The still time before the next idle in the default states (brief 132): a floor from `floor` (in `paceFloors`),
+    /// then anywhere from it to `paceCeiling` by `unit`; at least `paceApart` from the wait `after` it (the last one).
+    static func paceGap(floor floorUnit: Double, unit: Double, after last: TimeInterval? = nil) -> TimeInterval {
+        let floor: TimeInterval = paceFloor(unit: floorUnit)
+        var gap: TimeInterval = within(floor...paceCeiling, unit: unit)
+        if let last, abs(gap - last) < paceApart {
+            // Moved off the last one: up if there is room under the ceiling, else down (still over the floor, since
+            // the last one was within half a second of a gap over it).
+            let up: TimeInterval = last + paceApart
+            gap = up <= paceCeiling ? up : last - paceApart
+        }
+        return gap
+    }
+
+    /// The still time before the first idle on coming on screen in the default states: anywhere in `paceFirstIdle`.
+    static func paceFirst(unit: Double) -> TimeInterval { within(paceFirstIdle, unit: unit) }
 
     private static func within(_ range: ClosedRange<TimeInterval>, unit: Double) -> TimeInterval {
         let u: Double = min(max(unit, 0), 1)
@@ -251,8 +282,8 @@ enum CompanionSchedule {
 ///   few seconds. `all` takes turns through every gesture, every routine and little loop it may play now, the reply
 ///   and the flourish. `-companionPlay routine` takes turns through the routines and loops it may play now (the
 ///   everyday ones and the sky's), `-companionPlay routine:<name>` plays that one (a little loop too) again and again.
-///   `-companionDemo` is the old name. Without any of these the real schedule is quick enough to film: an idle every
-///   6 to 36 seconds.
+///   `-companionDemo` is the old name. `-companionPlay pace` is the real schedule kept going in the background (for a
+///   CPU reading). Without any of these the real schedule is quick enough to film: an idle every 4 to 12 seconds in plain weather.
 /// `-companionSky rain` and `-companionZone Asia/Tokyo` (`CompanionSkySource`'s own) force the sky and the zone;
 /// `-companionSnowDepth 2` piles the snow that deep (beside `-companionSky snow`).
 struct CompanionLaunchOptions: Equatable {
@@ -266,6 +297,9 @@ struct CompanionLaunchOptions: Equatable {
         case routines
         /// One routine, by name.
         case routine(String)
+        /// Brief 132: the real schedule, kept going while the app is in the background and keeping nothing, so a
+        /// Debug Mac build's CPU can be read at the real pace without taking the front.
+        case pace
     }
 
     var play: Play?
@@ -305,6 +339,7 @@ struct CompanionLaunchOptions: Equatable {
             case "answer", "tap": play = .answer
             case "all", "yes", "true", "1", "": play = .all
             case "routine", "routines": play = .routines
+            case "pace": play = .pace
             default:
                 if raw.lowercased().hasPrefix("routine:") {
                     play = .routine(String(raw.dropFirst("routine:".count)))
@@ -318,5 +353,8 @@ struct CompanionLaunchOptions: Equatable {
         if let raw = value("-companionSnowDepth"), let depth = Int(raw), depth >= 0 { snowDepth = depth }
     }
 
-    var isDemo: Bool { play != nil }
+    /// A demo: acts on cue every few seconds instead of the schedule (everything but `.pace`).
+    var isDemo: Bool { play != nil && play != .pace }
+    /// Whether it keeps going in the background and keeps nothing on the device: any `-companionPlay`.
+    var keepsGoing: Bool { play != nil }
 }
