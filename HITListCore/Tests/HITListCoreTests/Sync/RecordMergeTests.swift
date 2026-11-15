@@ -73,6 +73,34 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(outcome.device, server)
     }
 
+    func testM3WithADeletionStillToSendAfterTheLedgerWasForgottenIsOrderedAsM8() {
+        // The brain keeps a deletion it had not yet sent as an entry with no base when its ledger is forgotten
+        // (section 7). iCloud's record stands only if it changed after that deletion.
+        for (t, comesBack): (Int64, Bool) in [(49, false), (50, false), (51, true)] {
+            let server = F.task(["title": .string("Edited on the Mac")], updated: t)
+            let outcome = F.merge(base: nil, local: nil, deletedHereAt: 50, server: server)
+            XCTAssertEqual(outcome.rule, .deletedHere, "the explicit deletion decides, either way")
+            XCTAssertEqual(outcome.merged, comesBack ? server : F.marker(at: 50), "changed there at \(t)")
+        }
+        // `now` never stands in: without an explicit time it is plain M3.
+        let server = F.task(updated: 10)
+        let plain = F.merge(base: nil, local: nil, server: server, now: 90)
+        XCTAssertEqual(plain.rule, .newThere)
+        XCTAssertEqual(plain.merged, server)
+    }
+
+    func testM4WithADeletionStillToSendKeepsTheLaterTime() {
+        let later = F.merge(base: nil, local: nil, deletedHereAt: 60, server: F.marker(at: 40))
+        XCTAssertEqual(later.rule, .deletedBoth)
+        XCTAssertEqual(later.merged, F.marker(at: 60), "as M10: the later of the two")
+        let earlier = F.merge(base: nil, local: nil, deletedHereAt: 30, server: F.marker(at: 40))
+        XCTAssertEqual(earlier.rule, .deletedBoth)
+        XCTAssertEqual(earlier.merged, F.marker(at: 40))
+        let plain = F.merge(base: nil, local: nil, server: F.marker(at: 40), now: 90)
+        XCTAssertEqual(plain.rule, .deletedThereUnknownHere)
+        XCTAssertEqual(plain.merged, F.marker(at: 40), "`now` never stands in")
+    }
+
     func testM4MarkerThereNothingHereStaysAMarker() {
         let outcome = F.merge(base: nil, local: nil, server: F.marker(at: 7))
         XCTAssertEqual(outcome.rule, .deletedThereUnknownHere)
@@ -431,8 +459,10 @@ final class RecordMergeTests: XCTestCase {
             }
         }
         for (b, here, s, rule) in expected {
-            let outcome = F.merge(base: record(b, 10), local: here ? F.task(updated: 20) : nil, deletedHereAt: 30,
-                                  server: record(s, 25))
+            // A deletion here is noticed only where the brain keeps one: an item gone that iCloud was agreed to hold.
+            let deletedHereAt: Int64? = b == .alive && !here ? 30 : nil
+            let outcome = F.merge(base: record(b, 10), local: here ? F.task(updated: 20) : nil,
+                                  deletedHereAt: deletedHereAt, server: record(s, 25))
             XCTAssertEqual(outcome.rule, rule, "B \(b), here \(here), there \(s)")
         }
         XCTAssertEqual(Set(expected.map(\.3)).count, MergeOutcome.Rule.allCases.count - 1, "every rule but M0 is used")

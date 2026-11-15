@@ -107,6 +107,18 @@ public enum RecordMerge {
 
         case (nil, nil, let server?):
             // M3 and M4: iCloud's, new to this device (alive: it arrives; a marker: there is nothing to delete).
+            // Unless this device holds a deletion of its own still to send, kept as an entry with no base when the
+            // ledger was forgotten (section 7; an explicit `deletedHereAt`, never `now`): against a live record it
+            // is settled as M8 (iCloud's stands only if changed after the deletion, else the marker goes), against
+            // a marker as M10 (the later of the two times).
+            if let at = input.deletedHereAt {
+                if server.isDeleted {
+                    let later = isLater(.date(at), than: server[SyncSchema.deletedAt])
+                    return MergeOutcome(merged: later ? .marker(key, deletedAt: at) : server, rule: .deletedBoth)
+                }
+                let changedAfter = (server.updatedAt ?? .distantPast) > at
+                return MergeOutcome(merged: changedAfter ? server : .marker(key, deletedAt: at), rule: .deletedHere)
+            }
             return MergeOutcome(merged: server, rule: server.isDeleted ? .deletedThereUnknownHere : .newThere)
 
         case (nil, let local?, let server?):
