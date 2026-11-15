@@ -33,6 +33,9 @@ struct HITListApp: App {
         CloudSyncMonitor.shared.recordLaunchGuards(waitedForPrevious: waited, isolatedStoreSuffix: isolated)
         container = ModelContainerFactory.make()
         CloudSyncMonitor.shared.containerReady(container)
+        #if DEBUG
+        SyncTransportProbe.runIfAsked() // brief 142: the engine's transport proved on CloudKit Development, side stores only
+        #endif
         IntentStore.register(container) // Siri and Shortcuts write through this one container (brief 46).
         HITTips.configure() // first-run tips, once, on this store's own datastore (brief 52).
         // Briefs 80, 83: the companions' sky and local time when the app comes forward, and the location question
