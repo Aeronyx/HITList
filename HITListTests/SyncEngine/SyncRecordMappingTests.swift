@@ -127,6 +127,26 @@ final class SyncRecordMappingTests: XCTestCase {
         XCTAssertEqual(SyncSchema.filled(record), record)
     }
 
+    /// A fresh row of each of the six models reads as a record carrying every required field, each plain one at the
+    /// table's own `required` value (a record without the field stands for exactly that value).
+    func testAFreshRowOfEachModelCarriesEveryRequiredFieldAtItsDefault() {
+        func check<M: SyncMappedModel>(_ model: M.Type) {
+            let row = M.syncInsert(id: UUID())
+            context.insert(row)
+            let record = SyncRecordMapping.record(of: row)
+            for field in M.syncType.fields {
+                guard let required = field.required else { continue }
+                XCTAssertNotNil(record[field.key], "\(M.syncType.name).\(field.key) is required")
+                if field.kind != .date { XCTAssertEqual(record[field.key], required, "\(M.syncType.name).\(field.key)") }
+            }
+            XCTAssertEqual(SyncSchema.filled(record), record)
+        }
+        for type in SyncSchema.types {
+            guard let model = SyncRecordMapping.models[type.name] else { XCTFail("no model for \(type.name)"); continue }
+            check(model)
+        }
+    }
+
     func testAProfileIsTheRecordProfileWhateverItsRowsId() {
         let profile = Profile()
         context.insert(profile)

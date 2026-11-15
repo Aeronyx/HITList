@@ -123,12 +123,13 @@ actor SwiftDataSyncStore: SyncLocalStore {
     /// `SyncLocalStore.apply`, in one context and one save: every write whose `expected` still holds, none of the
     /// others, all or nothing.
     ///
-    /// Order: the rows of every written key are read first, as saved now, and each write's `expected` is checked
-    /// against them (all before anything changes, so a write is never checked against another write of the same
-    /// call). Then every inserted or updated row gets its values (in `SyncSchema.types` order, a task after its
+    /// Order: the rows of every written key are read first, as the context holds them (on the main context: with the
+    /// person's unsaved edits), and each write's `expected` is checked against them (all before anything changes, so a
+    /// write is never checked against another write of the same call). Then every inserted or updated row gets its values (in `SyncSchema.types` order, a task after its
     /// parent), then its references (so a reference to an item the same call inserts is found, whatever the order),
     /// then the deletions (`context.delete`; SwiftData's own rules then take a task's sub-tasks and clear references to
-    /// what went). One `save()`; when it throws, the context is rolled back and nothing of the call is in the store.
+    /// what went). One `save()`; when it throws, nothing of the call is in the store (a context of its own is rolled
+    /// back; the main context is handled as `apply(_:on:shared:)` says).
     /// A call that changes nothing itself (every write stale, or every value already equal) does not save at all.
     ///
     /// `beforeSave` is for tests: it runs with every change made in the context and nothing saved, and a throw there
