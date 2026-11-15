@@ -22,14 +22,16 @@ final class CompanionFlintTests: XCTestCase {
 
     private func water(_ name: String) -> Int { flint.rows(name)!.joined().filter { "phu".contains($0) }.count }
 
-    /// The pixels of `ink` in a frame with no neighbour of that ink above, below or beside them.
-    private func lonely(_ ink: Character, _ name: String) -> [String] {
+    /// The pixels of `ink` in a frame with no neighbour of that ink above, below or beside them (or, with `corners`, on a
+    /// diagonal either: a lash drawn as an arc steps on its corners).
+    private func lonely(_ ink: Character, _ name: String, corners: Bool = false) -> [String] {
         let r = rows(name)
         var out: [String] = []
+        let around = [(1, 0), (-1, 0), (0, 1), (0, -1)] + (corners ? [(1, 1), (-1, 1), (1, -1), (-1, -1)] : [])
         for y in 0..<flint.height {
             for x in 0..<flint.width where r[y][x] == ink {
                 var near = false
-                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                for (dx, dy) in around {
                     let a = x + dx, b = y + dy
                     if a >= 0, a < flint.width, b >= 0, b < flint.height, r[b][a] == ink { near = true }
                 }
@@ -64,14 +66,38 @@ final class CompanionFlintTests: XCTestCase {
     func testHisRestAndSleepArePinned() {
         let pinned: [String: String] = [
             "rest": "2f94fb391643886aced814d44a5d6dcccdfce699503e453ab2a499f1e26023a4",
-            "sleep": "d0a696098f607f0c43dc618b65b1be6fe228b9b76ec1c0b3fe1bfd8b58e4f666",
+            // Brief 133: round 25's asleep pose, its eyes shut as lids (the closed eye of `blink`); nothing else moved.
+            "sleep": "811b4c2684c9302c5225d38442c8245c3abf417eb8241446edceda1e8fc486da",
         ]
         for (name, digest) in pinned {
             let joined: String = flint.rows(name)!.joined(separator: "\n")
             let hash: String = SHA256.hash(data: Data(joined.utf8)).map { String(format: "%02x", $0) }.joined()
             XCTAssertEqual(hash, digest, "\(name) is the drawing that was passed")
         }
+        // Brief 133 (round 27; George, on 0.9.9: "My friend overall likes Flint though so don't change his actual character
+        // too much yet, just his animations and non-Day sprites"): the daytime Flint is kept pixel for pixel. Every frame
+        // not on the list below, in name order, is 0.9.9's (master as brief 133 was cut from it).
+        let moved: Set<String> = Self.redrawnIn133
+        func everyFrame(_ frames: [CompanionCharacter.Frame]) -> String {
+            let joined = frames.sorted { $0.name < $1.name }.map { $0.name + "\n" + $0.rows.joined(separator: "\n") }
+            return SHA256.hash(data: Data(joined.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+        let kept = flint.frames.filter { !moved.contains($0.name) }
+        XCTAssertEqual(kept.count, 32, "32 frames of 0.9.9's Flint are kept whole")
+        XCTAssertEqual(Set(moved).subtracting(flint.frames.map(\.name)), [], "every frame named is one of his")
+        XCTAssertEqual(everyFrame(kept), "944a0cc7339d68210f37f9aa54fa3cffd57d5324076c9df6da96da5c936081fe",
+                       "his daytime frames are 0.9.9's pixel for pixel")
     }
+
+    /// Brief 133's frames: the blink and the closed eyes (every frame his eyes are shut in), the rain under his own wing,
+    /// asleep and asleep in the rain, and the snow shake's squint. Nothing else of his may change.
+    static let redrawnIn133: Set<String> = [
+        "half", "blink", "happy", "giggle", "screech", "yawn2",
+        "rain", "rainPeek", "rainBlink", "rainDuck", "drip1", "drip2", "drip3", "drip4", "drip5",
+        "sleep", "sleepBreathe", "sleepTwitch", "sleepWing", "sleepPeek", "sleepSnow", "sleepSnow2",
+        "sleepRain", "sleepDrip1", "sleepDrip2", "sleepDrip3", "sleepDrip4",
+        "offShakeL", "offShakeR",
+    ]
 
     /// A gryphon cub, as the others are drawn: the theme's greys, its light and its warm peach (no accent); his head facing
     /// you with two feathered ear tufts and two eyes, each a dark 2 x 2 pupil in a ring of light (not Button's big round
@@ -132,12 +158,57 @@ final class CompanionFlintTests: XCTestCase {
     }
 
     /// Flat tones (the supervisor's rule for round 25: speckle is what made Gargle an illustration): in his rest no dark
-    /// pixel stands alone. And no open eye is a single pixel, in any frame (round 24).
+    /// pixel stands alone. And no open eye is a single pixel, in any frame (round 24); a shut eye's lash (brief 133) is an
+    /// arc whose ends step down on a diagonal, never a dot.
     func testFlatTonesAndNoEyeIsASinglePixel() {
         XCTAssertEqual(lonely("d", "rest"), [], "no stray dark pixel")
         XCTAssertEqual(lonely("w", "rest"), [])
         for frame in flint.frames {
-            XCTAssertEqual(lonely("k", frame.name), [], "\(frame.name): a dark of one pixel")
+            XCTAssertEqual(lonely("k", frame.name, corners: true), [], "\(frame.name): a dark of one pixel")
+            if !Self.redrawnIn133.contains(frame.name) {
+                XCTAssertEqual(lonely("k", frame.name), [], "\(frame.name): a dark of one pixel")
+            }
+        }
+    }
+
+    /// Brief 133 (George, on 0.9.9: "Both Flint's rain animation and blinking animation are a bit weird"): a blink is a
+    /// lid closing over his eye and opening again, in three ticks. The eye keeps its pale four-by-four shape and its place
+    /// all through (no flash of the face's grey where it was, no jump in size): `half` covers the pupil's top row in the
+    /// eye's own light; shut, the pupil is gone under the lid and a dark lash arcs low across it, its ends a pixel lower.
+    func testHisBlinkIsALidOverTheSameEye() {
+        let blink = flint.plus.awake.gesture(named: "blink")!
+        XCTAssertEqual(blink.ticks.map(\.frame), ["half", "blink", "half"])
+        XCTAssertTrue(blink.flicker)
+        let socket = [(1, 0), (2, 0), (0, 1), (1, 1), (2, 1), (3, 1), (0, 2), (1, 2), (2, 2), (3, 2), (1, 3), (2, 3)]
+        for x in [2, 8] {
+            XCTAssertEqual(eye("half", x: x), ["mllm", "llll", "lkkl", "mllm"], "half: the lid over the pupil's top")
+            XCTAssertEqual(eye("blink", x: x), ["mllm", "llll", "lkkl", "kllk"], "shut: the lash low, its ends down")
+            for name in ["half", "blink"] {
+                let e = eye(name, x: x).map(Array.init)
+                for (dx, dy) in socket { XCTAssertNotEqual(e[dy][dx], "m", "\(name): the eye never goes grey") }
+            }
+        }
+        // Every frame his eyes are shut in has that same eye, awake or asleep, rain or snow.
+        for name in ["blink", "yawn2", "rainBlink"] {
+            for x in [2, 8] { XCTAssertEqual(eye(name, x: x), eye("blink", x: x), "\(name)") }
+        }
+        for name in ["rainDuck"] {
+            for x in [2, 8] { XCTAssertEqual(eye(name, x: x, y: 6), eye("blink", x: x), "\(name): a pixel lower") }
+        }
+        for name in ["sleep", "sleepBreathe", "sleepTwitch", "sleepWing", "sleepSnow", "sleepSnow2", "sleepRain"] {
+            for x in [2, 8] { XCTAssertEqual(eye(name, x: x, y: 9), eye("blink", x: x), "\(name): asleep, shut the same way") }
+        }
+        for name in ["offShakeL", "offShakeR"] {
+            let r = rows(name)
+            XCTAssertTrue(r[7...8].map { String($0) }.joined().contains("kllk"), "\(name): the squint is the same lash")
+        }
+        // Glad, two dark arcs curving up in the eye's light: not a brow over a white bar.
+        for name in ["happy", "giggle", "screech"] {
+            for x in [2, 8] { XCTAssertEqual(eye(name, x: x), ["mllm", "lkkl", "kllk", "mllm"], "\(name): a glad arc") }
+        }
+        // Only the eyes move: the rest of him is his rest, pixel for pixel.
+        for name in ["half", "blink"] {
+            XCTAssertLessThanOrEqual(flint.difference(name, "rest"), 8, name)
         }
     }
 
@@ -231,42 +302,76 @@ final class CompanionFlintTests: XCTestCase {
     }
 
     /// Asleep he lies down, his head low on his front with his eyes shut, the wing folded on his side as by day and the
-    /// tuft over his talons; woken, one eye opens.
+    /// tuft over his talons; woken, one eye opens. Brief 133: the same animal asleep, his head round 25's, as by day (its
+    /// width, its ear tufts, its beak) settled four rows lower, his eyes shut as lids over the same eyes.
     func testAsleepHeLiesDown() {
         let sleep = rows("sleep")
+        let rest = rows("rest")
         let top = sleep.firstIndex { $0.contains { $0 != CompanionInk.clear } }!
         XCTAssertGreaterThanOrEqual(top, 5, "lying down")
-        XCTAssertEqual(eye("sleep", x: 2, y: 9), ["mmmm", "mmmm", "lkkl", "mllm"], "his eyes shut: a dark line, light under it")
-        XCTAssertEqual(eye("sleep", x: 8, y: 9), ["mmmm", "mmmm", "lkkl", "mllm"])
+        for y in 1...9 where !(5...8).contains(y) {
+            XCTAssertEqual(String(sleep[y + 4][0...11]), String(rest[y][0...11]), "his head as by day, row \(y)")
+        }
+        for x in [2, 8] {
+            XCTAssertEqual(eye("sleep", x: x, y: 9), eye("blink", x: x), "his eyes shut as in a blink")
+            XCTAssertEqual(eye("sleep", x: x, y: 9)[0...1].joined().filter { $0 == "l" }.count, 6, "the eye's pale shape stays")
+        }
         XCTAssertEqual(String(sleep[12][13...16]), "llll", "the wing's leading edge along his back")
         XCTAssertEqual(String(sleep[15][11...15]), "ldldl", "its three light tips")
         XCTAssertEqual(String(sleep[17][0...2]), "lll", "the tuft over his talons")
         XCTAssertEqual(eye("sleepPeek", x: 8, y: 9), ["mllm", "lkkl", "lkkl", "mllm"], "one eye opens")
-        XCTAssertEqual(eye("sleepPeek", x: 2, y: 9)[1], "mmmm", "only one")
+        XCTAssertEqual(eye("sleepPeek", x: 2, y: 9), eye("blink", x: 2), "only one")
         XCTAssertGreaterThanOrEqual(flint.difference("sleep", "rest"), 60, "a pose of its own")
     }
 
-    /// The weather, as round 24's water recipe and round 22's powder have it. In the rain he holds his wing over his head
-    /// like a roof (its light leading edge on top), wet: two to four blue beads that stay, one hanging from the wing's front
-    /// tip; a puddle round his front talons on the bar, four to eight wide, `p` with one glint and a deep pixel; now and then
-    /// the drop lets go and lands in the puddle (a flicker); he peeks out; at thunder he ducks right under. Every frame the
-    /// rain draws whole carries the puddle. Asleep in the rain too, the drop slower. On a hot day he pants, his wing held off
-    /// his side.
+    /// The weather, as round 24's water recipe and round 22's powder have it. In the rain (brief 133) he lifts his own wing
+    /// off his back and holds it over his head, in its daytime bands, and the rest of him is as by day; wet: two to four
+    /// blue beads that stay, one hanging from the wing's front tip; a puddle round his front talons on the bar, four to
+    /// eight wide, `p` with one glint and a deep pixel; now and then the drop lets go, falls past his face and lands in the
+    /// puddle (a flicker), and only the water moves; he peeks out; at thunder he ducks a pixel lower under it. Every frame
+    /// the rain draws whole carries the puddle. Asleep in the rain too, the drop slower. On a hot day he pants, his wing
+    /// held off his side.
     func testTheRainIsWaterOnHim() {
         let awake = flint.plus.awake
         XCTAssertEqual(awake.rain, "rain")
         let rain = rows("rain")
-        // The wing an arc over his head, never a lid (the supervisor, round 25): its light top a curve whose ends sit lower
-        // than its middle, dark under it, rising from his shoulder on a lean.
-        XCTAssertEqual(String(rain[1][5...9]), "lllll", "the wing's leading edge over his head")
-        XCTAssertEqual(String(rain[2][5...13]), "ddddddddd", "the wing over his head")
-        XCTAssertEqual(rain[1][3], ".")
-        XCTAssertEqual(rain[2][3], "l", "the front end lower than the middle")
-        XCTAssertEqual(rain[5][0], "l", "the front edge down before his brow")
-        var rims = Set<Int>()
-        for y in 4...10 { if let x = rain[y].lastIndex(of: "l"), x > 12 { rims.insert(x) } }
-        XCTAssertGreaterThanOrEqual(rims.count, 3, "his wing's back edge on a lean, not a bar")
+        let rest = rows("rest")
+        // A wing, not a hood (the supervisor, round 27: master's white ring round his head read as a helmet): the day
+        // wing's bands over his head, its light leading edge on top, the dark vanes under it with its wrist bent down at
+        // the back, its light-and-dark tips over his brow between his ears, the root rising behind his head from the
+        // shoulder; no light edge down either side of his head.
+        XCTAssertEqual(String(rain[0][3...15]).replacingOccurrences(of: "p", with: "l"), String(repeating: "l", count: 13),
+                       "the leading edge over his head")
+        XCTAssertEqual(String(rain[1][3...16]), String(repeating: "d", count: 14), "the vanes")
+        XCTAssertEqual(rain[1][17], "l", "the wrist bent down at the back")
+        XCTAssertEqual(String(rain[2][4...8]), "ldldl", "the day wing's tips")
+        XCTAssertEqual(String(rain[2][2...3]), "mm", "his ear under it")
+        XCTAssertEqual(String(rain[2][10...11]), "mm", "his other ear under it")
+        for y in 3...9 { XCTAssertTrue(rain[y][12...15].contains("d"), "the root behind his head, row \(y)") }
+        for y in 3...16 {
+            XCTAssertFalse("lm".contains(rain[y][0]), "no edge down before his face, row \(y)")
+            XCTAssertFalse(rain[y][13...15].contains("l"), "no light edge down his back, row \(y)")
+        }
+        // The rest of him as by day: his head and face, ruff, talons, hind paw and tail.
+        for y in 3...9 { XCTAssertEqual(String(rain[y][1...11]), String(rest[y][1...11]), "his head as by day, row \(y)") }
+        for y in 10...16 { XCTAssertEqual(String(rain[y][1...9]), String(rest[y][1...9]), "his front as by day, row \(y)") }
+        for y in 3...16 { XCTAssertEqual(String(rain[y][16...19]), String(rest[y][16...19]), "his tail as by day, row \(y)") }
         for x in [2, 8] { XCTAssertEqual(eye("rain", x: x), eye("rest", x: x), "his eyes as they are") }
+        // In the drip and the peek only the water moves (and in the peek his eyes): never his head or his wing.
+        let moves = (awake.gesture(named: "drip")!.ticks.map(\.frame)
+            + awake.ticks(of: awake.routines.first { $0.sky == .rain }!).map(\.tick.frame))
+        for name in Set(moves) where name != awake.rest {
+            let r = rows(name)
+            for y in 0..<flint.height {
+                for x in 0..<flint.width where r[y][x] != rain[y][x] {
+                    let water = "phu".contains(r[y][x]) || "phu".contains(rain[y][x])
+                    let eyes = (5...8).contains(y) && x <= 11
+                    XCTAssertTrue(water || eyes, "\(name) moves \(x),\(y)")
+                }
+            }
+        }
+        XCTAssertEqual(Array(rows("rainDuck")[0...1]), Array(rain[0...1]), "ducking under the same wing")
+        XCTAssertEqual(Array(rows("sleepRain")[4...6]), Array(rain[0...2]), "asleep, the same wing over his head")
         func beads(_ name: String) -> Int { rows(name)[0...16].joined().filter { "ph".contains($0) }.count }
         for name in ["rain", "sleepRain"] {
             XCTAssertTrue((2...4).contains(beads(name)), "\(name): two to four beads, \(beads(name))")
