@@ -100,8 +100,9 @@ final class CloudSyncMonitor {
     /// The session still waits for its first import, or for its first comparison with iCloud's records: the words say
     /// "checking…" (`SyncWords`).
     private(set) var isChecking = false
-    /// When the latest import or export finished well, once the session's first import is in: each advance may play
-    /// the bolt's "good to go" (`BoltStrikeGate` decides whether it does).
+    /// When the bolt last had reason to be filled: the read that found this device and iCloud the same, and each
+    /// import or export that finished well after it. Each advance may play the bolt's "good to go" (`BoltStrikeGate`
+    /// decides whether it does).
     private(set) var confirmedAt: Date?
     @ObservationIgnored private var container: ModelContainer?
     /// The app is in front (iPhone, iPad): the process runs and the marks can be seen.
@@ -1029,6 +1030,14 @@ final class CloudSyncMonitor {
         ModelContainerFactory.isCloudKitEnabled && !ModelContainerFactory.isRunningInMemory && !SyncAppDelegateSupport.isTesting
     }
 
+    /// Nothing about the records stands in the way of a filled bolt: no check this launch (sync off, a test), the two
+    /// found the same, or the check given up on (iCloud wouldn't answer its reads).
+    private var recordsAllowAFilledBolt: Bool {
+        guard recordCheck.hasBegun, !recordCheck.hasGivenUp else { return true }
+        if case .agrees = recordCheck.verdict { return true }
+        return false
+    }
+
     /// The mirror started or ended an event, or the app saved something: a read waits until it is quiet again, and
     /// one that was running describes a moment that is gone.
     private func mirrorMoved(_ now: Date) {
@@ -1083,6 +1092,11 @@ final class CloudSyncMonitor {
             let found = SyncRecordCheck.Difference(comparison.result)
             recordCheck.finished(found.isEmpty ? nil : found, at: now)
             logRecordCheck(comparison, tainted: wasTainted, before: before)
+            // The two were just found the same for the first time this session, or again after differing: the bolt
+            // fills now, and this is the moment its "good to go" may play.
+            if case .agrees = recordCheck.verdict, !sessionGate.isWaiting {
+                if case .agrees = before {} else { confirmedAt = now }
+            }
         }
         let since = recordCheck.differingSince
         let key = Self.syncTimeKey(Self.differingSinceKey)
@@ -1314,7 +1328,11 @@ final class CloudSyncMonitor {
             // The session's first import is in: from here the bolt may be filled, and each good exchange with iCloud
             // may play its "good to go" (`BoltStrikeGate` decides).
             if event.type == .import { sessionGate.imported(at: now) }
-            if event.type == .import || event.type == .export, !sessionGate.isWaiting { confirmedAt = now }
+            // (Not while the records are unchecked or differ: "good to go" over a hollow bolt would be a lie. The
+            // read that first finds them the same is the moment instead, `recordReadEnded`.)
+            if event.type == .import || event.type == .export, !sessionGate.isWaiting, recordsAllowAFilledBolt {
+                confirmedAt = now
+            }
             if event.type == .import || event.type == .export {
                 recordCheck.exchanged(imported: event.type == .import, at: now)
             }
