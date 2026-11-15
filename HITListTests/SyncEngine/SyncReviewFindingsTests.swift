@@ -51,10 +51,9 @@ final class SyncReviewFindingsTests: XCTestCase {
         let stale = try await store.apply([LocalWrite(key: parentKey, expected: expected, record: nil)])
         let childLeft = try await store.records([childKey])
 
-        XCTExpectFailure("Finding 1: apply deletes a sub-task that no LocalWrite named (the cascade)", strict: true) {
-            XCTAssertTrue(stale.contains(parentKey) || !childLeft.isEmpty,
-                          "either the parent comes back stale for the brain to decide again, or the sub-task stays")
-        }
+        // Fixed on master 6743b04 (the store deletes exactly the rows named): the wrapper is off, the test guards it.
+        XCTAssertTrue(stale.contains(parentKey) || !childLeft.isEmpty,
+                      "either the parent comes back stale for the brain to decide again, or the sub-task stays")
     }
 
     // MARK: Finding 5: an open editor writes its old notes over another device's edit
@@ -81,9 +80,8 @@ final class SyncReviewFindingsTests: XCTestCase {
 
         XCTAssertEqual(task.title, "Trip to Oslo", "the person's typing is saved")
         let notes = task.notes
-        XCTExpectFailure("Finding 5: TaskEditorDraft saves the notes it opened with over a newer value it never showed", strict: true) {
-            XCTAssertEqual(notes, "Ferry moved to ten (typed on the Mac)", "notes the person never touched keep the other device's edit")
-        }
+        // Fixed on master b17f77b (the draft saves only what the person changed): the wrapper is off.
+        XCTAssertEqual(notes, "Ferry moved to ten (typed on the Mac)", "notes the person never touched keep the other device's edit")
     }
 
     // MARK: Finding 6: one entry the ledger cannot decode stops the engine for good
@@ -110,9 +108,8 @@ final class SyncReviewFindingsTests: XCTestCase {
         await core.start()
         let hold = await core.status.hold
 
-        XCTExpectFailure("Finding 6: a ledger entry that does not decode holds the engine as failed for good", strict: true) {
-            XCTAssertNil(hold, "an unreadable memory is forgotten and merged afresh (section 7), not held for ever")
-        }
+        // Fixed on master b17f77b and fdd3804 (an unreadable row is forgotten alone and everything is fetched again).
+        XCTAssertNil(hold, "an unreadable memory is forgotten and merged afresh (section 7), not held for ever")
     }
 
     // MARK: Finding 18: a change that arrives while the person has the row unsaved is let go until the next launch
