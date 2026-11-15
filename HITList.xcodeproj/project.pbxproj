@@ -446,6 +446,7 @@
 		CB638BE591C90BF8A10832EC /* CompletionToast.swift in Sources */ = {isa = PBXBuildFile; fileRef = A338322304B439BDD33BB454 /* CompletionToast.swift */; };
 		CBC85972EC6ECCA882D6257C /* TapHaptic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50D1CD0271090C56E5828586 /* TapHaptic.swift */; };
 		CBC9B3B7528A150F91703102 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DF96EABAFDE73C7753F296E /* Diagnostics.swift */; };
+		CCA6A270A4B0547DE88E0E6C /* SyncTransportProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D21D0E06EFF2DB073B59D10 /* SyncTransportProbe.swift */; };
 		CD0AC6C2182CF5849ACF96D1 /* FilterQueryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37C0958121EE9D09C269B3F /* FilterQueryBadge.swift */; };
 		CDC6DFCBDDA49143749B87FB /* HITButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3094BCC8365554FCA2A2A8C /* HITButtonStyle.swift */; };
 		CEB71333D59B52E195073154 /* HITField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DE63E2D5D5BA8429AB8933 /* HITField.swift */; };
@@ -889,6 +890,7 @@
 		7B6279771E752E69247E713B /* DeepLinkRouting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouting.swift; sourceTree = "<group>"; };
 		7C1C596DE872D32372F5F68A /* AccountSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSettingsSection.swift; sourceTree = "<group>"; };
 		7CB85DA6DE63807E72172494 /* MacAppearanceSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppearanceSection.swift; sourceTree = "<group>"; };
+		7D21D0E06EFF2DB073B59D10 /* SyncTransportProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncTransportProbe.swift; sourceTree = "<group>"; };
 		7F38EDF888144D224A88014C /* SyncWordsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncWordsTests.swift; sourceTree = "<group>"; };
 		7F3E4AD4D3A2631F86168556 /* LaunchScreenProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchScreenProbe.swift; sourceTree = "<group>"; };
 		7F439DDDC70AF3027767BC01 /* ClaudeGatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeGatingTests.swift; sourceTree = "<group>"; };
@@ -1317,6 +1319,7 @@
 			children = (
 				2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */,
 				47ACB41056989FD3EE57A52A /* CloudRecordCodec.swift */,
+				7D21D0E06EFF2DB073B59D10 /* SyncTransportProbe.swift */,
 			);
 			path = SyncEngine;
 			sourceTree = "<group>";
@@ -2789,6 +2792,7 @@
 				01FE0AE2920CBFF2521EE4FD /* SyncStatusViews.swift in Sources */,
 				E0C67B46C8E0D66BE68A6434 /* SyncSteadiness.swift in Sources */,
 				D7C4627599AB47D55BF7BC04 /* SyncStoreGuard.swift in Sources */,
+				CCA6A270A4B0547DE88E0E6C /* SyncTransportProbe.swift in Sources */,
 				A6DA9DF74D818DD89E711D05 /* SyncWatchdog.swift in Sources */,
 				C62F035E75273E9BB5DC9F04 /* SyncWords.swift in Sources */,
 				CBC85972EC6ECCA882D6257C /* TapHaptic.swift in Sources */,
