@@ -186,8 +186,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
 - **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds the zone missing. By then the
   transport has forgotten its bookmark and its list.
 - **T12 The account.** `account(change)` when the signed-in account is not the one the transport's state belongs to:
-  first thing after `start` if it changed while the app was not running, or when it happens. The transport has
-  forgotten its bookmark and its list by then. With no account nothing is fetched or sent.
+  the first event of the first sync after `start` if it changed while the app was not running (never inside
+  `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
+  account nothing is fetched or sent. A transport that lost its own state announces `signedIn` for the account that
+  is signed in, even when that is the account the ledger belongs to: the brain reads a sign-in to its own account
+  as no change of account (only the bookmark and the list are gone, as after T13).
 - **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
