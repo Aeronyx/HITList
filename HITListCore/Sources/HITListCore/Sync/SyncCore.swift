@@ -43,9 +43,9 @@ public actor SyncCore: SyncTransportDelegate {
     var heldUnder: SyncHold?
     /// A sign-in whose ledger write failed: joined on `resume()` (the transport will not say it twice).
     var joinTo: String?
-    /// What this device last sent for a record it holds no base for, while no answer has come (M5's amendment of
-    /// 2026-11-15, brief 145): kept on disk as one fact per key (`sentFact`), read when iCloud's record arrives, and
-    /// only valid for the memory it was written in (`sentEpoch`, moved on by every forget).
+    /// What this device last sent for a record while no answer has come (`SyncCore+Sent`): kept on disk as one fact
+    /// per key (`sentFact`), read whole at a start, and only valid for the memory it was written in (`sentEpoch`,
+    /// moved on by every forget).
     var remembered: [SyncKey: SyncRecord] = [:]
     var sentEpoch = 0
     /// Records iCloud sent that could not be written because the person had the item changed and not saved, three
@@ -77,6 +77,11 @@ public actor SyncCore: SyncTransportDelegate {
     /// What `recordToSend` last answered for each key (nil inside: a marker), so a refusal remembers the version
     /// iCloud refused rather than whatever the device holds by the time the answer comes.
     var sentAs: [SyncKey: SyncRecord?] = [:]
+    /// The items sent for a key that has a base and had no answer since (the newest last, a few at most). A save
+    /// can land while its answer is lost; when iCloud's record then turns out to be exactly one of these, that
+    /// record, not the older base, is what the two last agreed on (`decide`). Cleared when a send is answered.
+    var unanswered: [SyncKey: [SyncRecord]] = [:]
+    static let unansweredKept = 4
     var fetchError: String?
     var sendError: String?
     /// Words that go with the current hold (a backup that failed).
@@ -105,7 +110,6 @@ public actor SyncCore: SyncTransportDelegate {
     static let switchFact = "switchTo"
     static let epochFact = "sentEpoch"
     static let unsettledFact = "unsettled"
-    static func sentFact(_ key: SyncKey) -> String { "sentNoBase|\(key)" }
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
     /// before it is set aside for the next.
@@ -351,7 +355,8 @@ public actor SyncCore: SyncTransportDelegate {
             let next = try await ledger.fact(Self.switchFact)
             let epoch = try await ledger.fact(Self.epochFact)
             sentEpoch = epoch.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
-            remembered = [:]
+            try await loadRememberedSends()
+            unanswered = [:]
             unsettled = [:]
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             waits = Dictionary(waitList.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })

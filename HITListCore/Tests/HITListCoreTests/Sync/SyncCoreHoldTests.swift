@@ -588,6 +588,7 @@ actor UnreadableLedger: SyncLedger {
     }
     func deferred() async throws -> [CloudRecord] { try await inner.deferred() }
     func fact(_ name: String) async throws -> Data? { try await inner.fact(name) }
+    func facts(prefix: String) async throws -> [String: Data] { try await inner.facts(prefix: prefix) }
     func write(_ write: LedgerWrite) async throws { try await inner.write(write) }
     func reset() async throws { try await inner.reset() }
     func loadTransportState() async -> Data? { await inner.loadTransportState() }

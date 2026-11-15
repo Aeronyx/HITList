@@ -21,6 +21,7 @@ enum WhatsNew {
 
     static let entries: [Entry] = [
         Entry(version: "0.9.12", items: [
+            "Tapping a reminder on the Lock Screen or in Notification Centre no longer crashes HITList.",
             "Quill sleeps on the corner of his theme's box as himself again, and on the Mac every companion is drawn to fit its larger box. See them in Settings → Appearance → Themes.",
             "Editing a task while it changes on another device no longer puts old text back: the editor saves only what you changed. The same goes for a Group, a label and a filter.",
             "Under the hood, a new sync engine of HITList's own is being built and tested. It is switched off in this version: sync works exactly as before.",

@@ -162,6 +162,8 @@ public actor MemoryLedger: SyncLedger {
 
     public func fact(_ name: String) async throws -> Data? { facts[name] }
 
+    public func facts(prefix: String) async throws -> [String: Data] { facts.filter { $0.key.hasPrefix(prefix) } }
+
     public func write(_ write: LedgerWrite) async throws {
         if failNextWrite {
             failNextWrite = false

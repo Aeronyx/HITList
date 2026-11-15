@@ -115,6 +115,8 @@ public protocol SyncLedger: SyncTransportState {
     func entries() async throws -> [LedgerEntry]
     func deferred() async throws -> [CloudRecord]
     func fact(_ name: String) async throws -> Data?
+    /// Every fact whose name begins with `prefix`, by name (read once at a start, for the facts kept one per record).
+    func facts(prefix: String) async throws -> [String: Data]
     /// All of `write` or none of it.
     func write(_ write: LedgerWrite) async throws
     /// Forgets everything: every entry, every deferred record, every fact (the transport's state among them).

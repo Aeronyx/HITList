@@ -315,6 +315,39 @@ an `NSToolbar` item. Compare two Debug builds on the same `-syncReplay YES` scri
 build.noindex/<round>/wt-<version> <commit>`, its own `-derivedDataPath`) takes five minutes and makes "before" a
 number.
 
+Lessons from round 29 (no sessions: the supervisor alone; a crash from a friend's two reports, then George's
+"finalize and critically review your new CloudSync engine as if you were a lead Apple developer with a focus on
+efficient simplicity"):
+**A guard is a sign that the rule under it is wrong.** The engine read an item that was not on the device as
+deleted there, so a store that read empty looked like everything deleted, and round 28 answered with a guard of
+numbers, a hold that asked the person, a vouch the app had to remember before every bulk delete and a third way
+out, each added by a finding. The review removed the cause: a deletion is known only when the store wrote it down
+as it was saved (`willSave`, where a row can still say its `id`), and absence means missing. When a design needs a
+heuristic to be safe, look for the fact it should have asked for.
+**One sentence of George's did what four agents' findings had not.** The agents were asked for bugs and found
+twenty; "efficient simplicity" asked what should not be there. Review your own design once with that question
+before anyone is asked to test it.
+**The rig is what makes a bold change cheap.** The brain's central rule was replaced in an afternoon because
+1,040 tests and 1,000 random histories said within a minute whether it still held, and each failure named a seed
+and a step: records pointing at a deleted item were no longer looked at once a save named only its own rows; a
+transport reset forgot the pending list; a rig "sync" needed to be the app coming forward. Add a fault for the
+new rule (`rowsLost`) the same hour.
+**Compare on the same seed before calling a simulation failure new**: `git worktree add --detach <dir> <commit
+before>`, the same command, then remove it. Account seed 362 looked new and was not.
+**The `async` form of an Objective-C delegate method with a completion handler calls that handler on any thread.**
+UIKit's handler for a notification response must run on the main thread and iOS 26 aborts the app otherwise (two
+reports, every tapped reminder since the delegate was written). Use the completion-handler form for
+`UNUserNotificationCenterDelegate` and `UIApplicationDelegate` and call it on main by hand; the frame to look for
+in a crash log is `@objc closure #1 in <Type>.<method>` under `_performBlockAfterCATransactionCommitSynchronizes`.
+**A crash on a friend's iOS could not be reproduced here**: the simulators are iOS 27 and a Debug build stands down
+from reminders (it opens a side store). Say so in the notes instead of implying a reproduction.
+**Crash reports and feedback files hold a tester's name and address**: `crashreports/` is in `.gitignore`.
+**Code that only tests use belongs behind `#if DEBUG`** when it lives in the shipping library (the rig, the
+in-memory store): 3,000 lines were being compiled into every release. The long simulation runs add `-Xswiftc
+-DDEBUG`.
+**77 worktrees held 113 GB.** Every branch was merged and every tree clean. Agent worktrees are removed when their
+branch is merged; the older sessions' need George's word (he has now been asked with the number in front of him).
+
 Lessons from round 28 (the Theme menu put right; HITList's own sync engine begun: a design, a contract in code,
 five sessions, then four agents):
 **"Position him properly" means move the sprite.** Round 27's session answered "Quill is misplaced" by drawing a

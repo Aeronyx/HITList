@@ -12,6 +12,20 @@ get so small? And why does Quill look like he's melting in the Theme menu now? I
 properly, not change his Theme menu sprite." And: "If we need to make our own engine for proper cloud sync, let's get
 started. I want it to be professionally built."
 
+Then, before releasing it, on 2026-11-15: "we first need to clean up, ensure that my friends won't lose data (or
+instruct them to export it before they do), and fix some crashing bugs", with two crash reports from a friend, and
+"finalize and critically review your new CloudSync engine as if you were a lead Apple developer with a focus on
+efficient simplicity."
+
+A crash:
+
+- **Tapping a reminder no longer crashes HITList.** Two reports from a friend's iPhone 17 Pro on iOS 26.5.1 (0.9.3
+  and 0.9.9): tapping a reminder on the Lock Screen, or in Notification Centre, opened HITList and it crashed. The
+  app answered the system on a background thread, where iOS requires the main one; iOS 26 aborts the app for it.
+  It answers on the main thread now, for a reminder tapped, completed, snoozed, or shown while the app is open.
+  (Not reproduced here: the only simulators on this Mac run iOS 27, and a Debug build never handles reminders. The
+  cause is in the crash logs themselves, and a test pins the thread.)
+
 The Theme menu:
 
 - **Quill is himself again.** 0.9.11 drew him a frame of his own for his theme's box, bent to follow its corner; it
@@ -44,13 +58,26 @@ HITList's own sync engine (built this round, **switched off in this version**: e
   failure on a switch, one ran the engine through thousands of random histories on several devices against it, one
   read all of it as a stranger looking for the bug that loses data and found twenty, and one probed the real service
   on its Development side. The design was corrected on evidence more than a dozen times in three hours.
+- **The review, the same day.** Read again as a lead engineer would, the engine's weakest idea was that it found a
+  deletion by comparing: an item iCloud held that was not on the device was "deleted here". A store that read empty
+  therefore looked like everything deleted, and that took a guard of numbers (ten items and half of everything), a
+  hold that asked the person, a vouch the app had to remember before every bulk delete, and a third way out. All of
+  that is gone. **The engine now deletes in iCloud only what was deleted**: each deletion is written down as it is
+  saved, before the save commits, and an item that is merely not on a device is missing and comes back from
+  iCloud. A store that reads empty, loses rows or is put back from an older copy cannot delete anything for anyone,
+  and nobody is ever asked whether they meant it.
+- **Also from the review**: a released build cannot run the engine at all (before, a stored preference could have
+  switched it on); a save that deletes names its rows instead of asking for a read of the whole store, and a fetch no
+  longer ends with one; a change that arrives while you have the same item open and unsaved is applied as soon as
+  your edit is saved or dropped, not at the next launch; a task un-completed just after its completion was sent, when
+  the network dropped before iCloud's answer, no longer completes itself again; the test rigs are no longer compiled
+  into released builds.
 - **What it will change when it is switched on**: the bolt is exact ("3 changes waiting to go to iCloud", filled
   only when nothing is waiting and iCloud has been read); the same item on two devices is always one record;
-  a deleted item stays deleted on a device that was away; an undo of a deleted label gives its tasks the label back;
-  and the engine stops and asks, instead of acting, when a device suddenly holds none of what iCloud holds.
+  a deleted item stays deleted on a device that was away; an undo of a deleted label gives its tasks the label back.
 - **What is not done**: it has not run on real data or on a phone; a push waking it is not proven; moving a device
   over from today's sync is built and rehearsed only on test data. The decisions that are George's are in section 12
-  of the design.
+  of the design, and what is still open in section 13.
 
 ## 0.9.11 — build 28, 2026-11-15
 

@@ -350,10 +350,16 @@ extension SyncCore {
         let entry = entries[key]
         if let local {
             if let base = entry?.base, !base.isDeleted, RecordMerge.same(local, base) { return nil }
-            // No base: what goes is written down first (M5's amendment, `SyncCore+Sent`), so that an answer that never
-            // comes still leaves this device something to settle iCloud's record against.
-            if entry?.base == nil, !(await rememberSend(local, for: key)) { return nil }
+            // What goes is written down first (`SyncCore+Sent`), so that an answer that never comes still leaves this
+            // device something to settle iCloud's record against.
+            guard await rememberSend(local, for: key) else { return nil }
             sentAs[key] = .some(local)
+            if entry?.base?.isDeleted == false {
+                // Kept until this send is answered: the save may land and its answer be lost (`decide`).
+                var sends = unanswered[key] ?? []
+                if sends.last.map({ !RecordMerge.same($0, local) }) ?? true { sends.append(Self.base(local)) }
+                unanswered[key] = Array(sends.suffix(Self.unansweredKept))
+            }
             return OutgoingRecord(record: local, system: entry?.system)
         }
         guard let entry, let base = entry.base else { return nil }

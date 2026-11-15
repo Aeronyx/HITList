@@ -30,6 +30,11 @@ does not throw the memory away lightly: a row of it that cannot be read is forgo
 unsent deletions across every forgetting it does itself. The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
 engine: it stays as it was at the moment a device moved over.
 
+**The engine deletes in iCloud only what was deleted** (round 29, the review). A deletion is known when the store
+wrote it down as it was saved, and in no other way; an item that is merely not on a device is missing and comes
+back from iCloud (section 4, M14). A store that reads empty, loses rows or is put back from an older copy cannot
+delete anything for anyone, and the engine never has to ask a person whether they meant it.
+
 ## 2. The parts
 
 ```
@@ -55,6 +60,7 @@ engine: it stays as it was at the moment a device moved over.
 | `MemoryLocalStore`, `MemoryLedger` | core | The device's side in memory, for tests |
 | `SwiftDataSyncStore` | app | The six models as records, and records written back (`SyncLocalStore`). Reads on contexts of its own, off the main actor; **writes through the app's main context**: SwiftData's main context does not take in a save made by another context, and the person's next save of a row it held would write its old copy back over the engine's (found by session 141) |
 | `SyncLedgerStore` | app | The engine's memory on disk, a small store of its own (`SyncLedger`) |
+| `SyncDeletionLog`, `SyncSaveHintObserver` | app | Every save watched: the rows it is about to delete taken down in the ledger's file before it commits (`willSave`, where a row can still say its `id`), and after it the keys it touched handed to the brain |
 | `CloudKitTransport` | app | `SyncTransport` on `CKSyncEngine`; `CKRecord` ↔ `SyncRecord` |
 | `SyncEngine` (wave 2) | app | Wires the parts, the app's life cycle, the switch from the mirror, the bolt |
 
@@ -98,32 +104,40 @@ iCloud last agreed (known fields, data as digests; a marker when they agreed it 
 token for that version; **`deletedHereAt`**, when this device noticed the item was deleted here. Plus fetched
 records set aside (section 8) and a few facts (`LedgerFact`).
 
-**Nothing is journalled.** The engine never depends on being told that something changed. It compares:
+**A change is found by comparing.** The engine never depends on being told that something was made or changed:
 
 - an item here with no `base`, or whose record differs from `base` (`RecordMerge.same`): **waiting to go**;
-- a `base` that is alive with no item here: **deleted here**, `deletedHereAt` is set to now, its marker is waiting
-  to go;
-- an item that is here again while `deletedHereAt` is set (an undo before the marker went): `deletedHereAt` is
-  cleared, and set afresh if the item is deleted again;
 - an item here whose `base` is a marker: **made again here** (an undo), waiting to go;
 - a marker `base` past its lifetime: waiting to be removed for good.
 
-A deletion here is noticed by the compare and nowhere else (not by `recordToSend`, not by a fetch: a fetch that
-meets an item gone here runs the compare on it first), so one guard covers every way a deletion can reach iCloud
-(`massDeletion`, section 10); a save's hint that finds many gone is decided on a whole compare.
+**A deletion is never found by comparing** (round 29; the first engine did, and needed a guard of numbers, a
+question to the person and a vouch from the app to live with it). It is known only when the store wrote it down as
+it happened (`SyncLocalStore.deletions`): the app watches every save and takes down the key of each row about to be
+deleted, and of a task's sub-tasks that go with it, before the save commits, in the ledger's own file. The brain
+notes them (`deletedHereAt`) before it compares or settles anything, held or not:
 
-`SyncCore` compares every record (at start, on return to the app, after a whole fetch) or the keys a save touched
-(`localChanged`: the app passes them on `ModelContext.didSave`; a hint, never the truth). The transport's pending
-list is made to match. Whatever writes the store (a view, an intent, an import, the day anchoring, a restore of a
-backup) and whether or not `updatedAt` moved, the change is found, because the records differ. A crash between any
+- a deletion written down, `base` alive: **deleted here**, its marker is waiting to go;
+- a deletion written down, no `base` (never agreed with iCloud, or before the first fetch): kept until a fetch
+  shows whether iCloud holds the item (M3 against the deletion), then dropped;
+- an item that is here again while `deletedHereAt` is set (an undo before the marker went): cleared;
+- **an item iCloud holds that is not here and has no deletion written down: missing.** Its entry is forgotten and
+  every record is asked for again, so iCloud's comes back (M14). Nothing is deleted in iCloud, nobody is asked.
+
+The engine's own deletions (a marker that arrived, a sign-out) are never written down as a person's. The notes
+live and die with the ledger: one made for another store file can never delete anything.
+
+`SyncCore` compares every record at a start and when the app comes forward (a change whose hint was missed is found
+there), and otherwise the keys a save touched (`localChanged`: the rows it made, changed or deleted, by name). The
+transport's pending list is made to match. Whatever writes the store (a view, an intent, an import, the day
+anchoring) and whether or not `updatedAt` moved, a change is found, because the records differ. A crash between any
 two steps leaves a state the same comparison reads correctly.
 
 **The count of what is waiting is exact**, and so is the bolt (section 10).
 
 ## 5. How a record is settled (`RecordMerge`)
 
-Inputs: `base` B, the item here L (or none), `deletedHereAt` D (now, if nobody noticed yet), iCloud's record S (alive,
-a marker, or none). "Same" means equal on the fields this build knows, required fields filled in, data by digest.
+Inputs: `base` B, the item here L (or none), `deletedHereAt` D (when a deletion here was written down; nothing stands
+in for it), iCloud's record S (alive, a marker, or none). "Same" means equal on the fields this build knows, required fields filled in, data by digest.
 The result is what both sides should end with: the item, a marker, or nothing.
 
 | | Situation | Result |
@@ -134,13 +148,14 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M4 | Not here, no B, a marker there | S (nothing to delete). With a deletion of this device's own still to send: a marker at the later of the two times |
 | M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock. Unless this device remembers what it last sent for the record and never had an answer (the save was accepted and the reply lost): then what it sent is the base and the two are settled as M7, so an edit here after that send and an edit elsewhere both survive (found by session 145's rig) |
 | M6 | Here, no B, a marker there | L if `L.updatedAt` is after the deletion (it comes back there), else the marker (it goes here) |
-| M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
-| M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D. The marker is never earlier than the version it deletes (the later of D and `S.updatedAt`): a device whose clock runs behind still deletes what it held |
+| M7 | Here and alive there, B alive | (When this device sent the record and never had an answer, the save may have landed: for each field, the value it sent and iCloud holds is taken as agreed, so a field the person has since changed back still counts as changed here; round 29, seed 284.) Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
+| M8 | Deleted here (D written down), B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D. The marker is never earlier than the version it deletes (the later of D and `S.updatedAt`): a device whose clock runs behind still deletes what it held |
 | M9 | Here, B alive, a marker there | L same as B: the marker (it goes here). L changed after the deletion: L (it comes back there). Else the marker |
-| M10 | Not here, a marker there | B alive (deleted here too): a marker at the later of D and S's deletion, so the time does not depend on who reached iCloud first; it is sent if it differs from S. B a marker: S, unless this device still has a later marker of its own to send (`deletedHereAt` set, never "now"): then that one |
+| M10 | Not here, a marker there | With a deletion here written down: a marker at the later of D and S's deletion, so the time does not depend on who reached iCloud first; it is sent if it differs from S. Without one: S |
 | M11 | B present, not there at all | L same as B, or not here: nothing. L changed: L, new again |
 | M12 | Here, B a marker | S the marker this device knew (the same time as B's): L, it was made again here, whatever its dates (an undo, an import). S a newer marker (deleted again elsewhere since): as M6. Alive there too: as M5 |
-| M13 | Not here, B a marker, alive there | S: it was made again elsewhere. Unless this device still has a later deletion of its own to send (`deletedHereAt` set, never "now"): then as M8 against that time (S if S changed after it, else a marker at it) |
+| M13 | Not here, B a marker, alive there | S: it was made again elsewhere. Unless this device still has a later deletion of its own to send: then as M8 against that time (S if S changed after it, else a marker at it) |
+| M14 | Not here, B alive, alive there, **no deletion written down** | S: the item is missing here, not deleted, and comes back. Nothing goes to iCloud |
 
 Then: the device is written if it differs from the result (through `LocalWrite.expected`: if the person changed the
 item meanwhile, nothing is written and it is settled again); `base` becomes S; and if the result differs from S it
@@ -150,17 +165,16 @@ A marker is read as its key and its time and nothing else, and a set of referenc
 an empty one the same as none), whatever a transport hands over. A type this build does not know never reaches
 the merge: the brain leaves such records alone (section 8).
 
-A contest between a change and a deletion at the same millisecond goes to the deletion. `D` is when the deletion
-was noticed, which the brain writes down (never earlier than the deleted version's own time) before it settles
+A contest between a change and a deletion at the same millisecond goes to the deletion. `D` is when the brain took
+note of the deletion the store wrote down (never earlier than the deleted version's own time), before it settles
 anything with it, so a marker sent twice is the same marker.
 
 Known limits, on purpose: clocks are the devices' own (a device with a wrong clock can win or lose a contest it
 should not); two devices that both change the same field of the same item while apart keep one of the two values;
 when their `updatedAt` are equal the one that reached iCloud first stands (every device still ends with the same
-record); `flipCount` is last-writer like any field (two devices flipping the same switch apart count once); an item
-deleted on a device before that device and iCloud ever agreed on it leaves no marker (another device's copy of it
-arrives as new: the seeded filters, the `flipboard` label and the profile have fixed keys, so this can be seen with
-them); an undo is ordered against a deletion elsewhere by the item's `updatedAt`, so the app moves `updatedAt` when
+record); `flipCount` is last-writer like any field (two devices flipping the same switch apart count once); a deletion made
+in the instant before the app is killed, if even its note did not reach the ledger's file, brings the item back
+(never the other way); an undo is ordered against a deletion elsewhere by the item's `updatedAt`, so the app moves `updatedAt` when
 it puts a deleted item back; a change that does not move `updatedAt` (the day anchoring, a board moving its switches)
 is found and sent like any other but is ordered by the old time, so it loses a contest with a deletion or with
 another device's change to the same field; two devices that meet for the first time with different labels on the
@@ -235,7 +249,8 @@ This one path is the migration, the repair, and the answer to "what if the engin
 facts, so they are lost together; and when the transport says its state is gone (T12) the brain forgets the ledger.
 One thing is carried across: a deletion this device made and has not yet sent (`deletedHereAt`) is kept as an entry
 with no base, and settles against iCloud's record like M8 (iCloud's stands if it changed after the deletion, else
-the marker goes). Without that, an item deleted here a moment before the memory was lost would come back.
+the marker goes). Without that, an item deleted here a moment before the memory was lost would come back. (A
+ledger file lost whole, or one that belonged to another store file, takes these notes with it: the items come back.)
 
 ## 8. What arrives
 
@@ -289,7 +304,8 @@ the marker goes). Without that, an item deleted here a moment before the memory 
      references is judged name by name (a label the store took off a task because the label was deleted is not
      a person's removal).
    - **I3 Nothing comes back**: an item deleted on one device and not changed elsewhere afterwards is gone
-     everywhere, on a device that merges without a memory too.
+     everywhere, on a device that merges without a memory too. And nothing goes that nobody deleted: an item a
+     store lost with no deletion written down is back on that device and deleted nowhere (the rig's `rowsLost`).
    - **I4 Twice is once**: any event delivered twice, any crash, changes nothing in the end.
    - **I5 One of each**: never two items with one key.
    - **I6 Whole**: no item points at one that is not there.
@@ -301,6 +317,11 @@ the marker goes). Without that, an item deleted here a moment before the memory 
    As run in round 28 (`SyncCoreSimulationTests`; the commands are at the top of that file): about 3,200 histories
    of 300 to 1,000 steps on three devices, some 310,000 records made and 610,000 saves accepted, 14,000 crashes
    ridden out, 172 conflicts settled. Nineteen kept seeds and a spread of short runs are part of `swift test`.
+   As run in round 29, after deletions stopped being read from absence: 5,000 histories of 300 steps on three
+   devices (1,000 each of `everyday`, `conflict` and the new `rows`, a store that loses rows; 400 each of `memory`,
+   `account`, `zone`, `quota` and `refusal`): 407,000 records made, 783,000 saves accepted, 22,500 crashes ridden
+   out, 589 conflicts settled. Compared seed for seed with the engine before: no finding it did not have, and four
+   of its failing seeds pass (section 13).
 3. The app's parts against an in-memory SwiftData store (every field of every model there and back; an edit made
    while the engine writes is not lost).
 4. End to end on CloudKit **Development**: two Debug Mac apps on two side stores, as two devices (run in round
@@ -321,14 +342,17 @@ person or the world can lift:
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `massDeletion` | A whole compare finds no item here that iCloud holds while iCloud holds some (the store is not the one the ledger describes), or at least 10 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
 again. An account switched: as sign-out, then sign-in.
 
+There is no hold for "many items gone": the engine never infers a deletion (section 4), so a store that reads
+empty is not a question for the person. It sends nothing and everything comes back.
+
 While held (a full iCloud excepted) nothing is compared, `recordToSend` answers nil, and fetched records are let go
-unread; when the hold lifts the transport is reset, so everything comes again. A full iCloud still reads what
+unread; when the hold lifts the transport is reset, so everything comes again. Deletions the person makes while
+held are still taken down and noted. A full iCloud still reads what
 arrives and counts what waits, and is tried again on return to the app only (never by itself: no loop).
 
 **The bolt** is filled exactly when: idle, nothing waiting, the first fetch finished, no error. Hollow with the
@@ -337,8 +361,10 @@ guessing; Check iCloud… stays as the person's own audit.
 
 ## 11. Moving from the mirror
 
-- `Preferences` holds which engine a device uses; **every released build until George says otherwise uses the
-  mirror**, as today. The engine's code ships dark.
+- **Every released build until George says otherwise uses the mirror**, as today, and cannot do otherwise: a build
+  that is not a Debug build answers "mirror" before it looks at any preference or argument
+  (`SyncEngineSwitch.isAvailable`). The engine's code ships dark. In a Debug build a preference per store says
+  which engine a store uses.
 - Moving a device: the app backs up, merges rows that share an `id`, reopens the same store file without the mirror
   (`cloudKitDatabase: .none`, the store itself is untouched), and the engine starts with an empty ledger
   (section 7). The first device sends everything; each later one finds its items already there.
@@ -366,25 +392,46 @@ guessing; Check iCloud… stays as the person's own audit.
 3. **A purge in iCloud's settings asks** instead of deleting the device's copy (Apple's guidance is to delete).
 4. **When devices move**: his first, then friends.
 
-## 13. Open, as round 28 left it
+## 13. Open, as round 29 left it
 
-Found and not yet fixed or not yet traced; none of it can matter while the engine is switched off.
+Found and not yet fixed or not yet traced; none of it can matter while the engine is switched off (and a released
+build cannot switch it on, section 11).
 
-- **From the review** (`146-sync-review/FINDINGS.md` in the notes folder): 18, a change that arrives while the person
-  has the same item edited and unsaved is set aside and fetched again only at the next launch; 19, a store file
-  put back from a backup beside a newer ledger (same file identity) would send its older values over newer ones:
-  the ledger should also know how far the store's own history had got; 16c, a fetched record this build cannot
-  read (an asset too large or missing) is dropped while the bookmark moves on; 16e, an expired change token is
-  only given words; 14, two devices that each make a Group of the same name, and a task filed into the one the
-  name merge then removes; the ledger file is moved aside for any error at opening, not only a damaged file; the
-  switch card's draft was not re-read after the other editors were fixed; an account switch has two owners (the
-  mirror-era `AccountSwitch` and the brain's backup) that are not ordered.
-- **From the simulation** (seeds to replay, `SyncCoreSimulationTests.testTrace`): everyday 133, 210, 261, 559
-  (references to a Group deleted and put back around an unsent change); 284 (a save accepted whose answer was
-  lost while a base exists: a field changed and changed back reads as unchanged; proposal: remember what was sent
-  for every key); memory 36; zone 270 (after a lost zone every device sends everything again, and copies meet by
-  M5 until each holds a base again: to be written as a limit or fixed); quota 59 and 86; refusal 148; a set of
-  references a person emptied and whose items were then deleted here before the change went.
+- **From the first review** (`146-sync-review/FINDINGS.md` in the notes folder). Fixed in round 29: 18 (a change
+  that arrived while its item was open and unsaved is applied when the save comes or the next fetch ends). Smaller
+  now: 19, a store file put back from an older copy beside a newer ledger: nothing is deleted any more and items
+  made since come back (M14), but its older values of items changed since still go to iCloud over the newer ones.
+  Still open: 16c, a fetched record this build cannot read (an asset too large or missing) is dropped while the
+  bookmark moves on; 16e, an expired change token is only given words; 14, two devices that each make a Group of
+  the same name, and a task filed into the one the name merge then removes; the ledger file is moved aside for any
+  error at opening, not only a damaged file; the switch card's draft was not re-read after the other editors were
+  fixed; an account switch has two owners (the mirror-era `AccountSwitch` and the brain's backup) that are not
+  ordered.
+- **From the second review (round 29), named and not done.** The brain still carries a flag for each way a step
+  can half fail (`heldUnder`, `joinTo`, `switchTo`, `holdNote`): one recovery, "forget the memory and merge
+  afresh", already exists and could replace them. What a task's deletion arriving does to its sub-tasks
+  (`underneath`) decides for each sub-task; writing every sub-task out from under the task and letting its own
+  marker decide would be half the code. A first sync writes on the main thread, a batch at a time (5,000 rows took
+  1.4 s in all on this Mac; not measured on a phone). The ledger keeps a copy of every record as its base (twice
+  the data on disk, every entry in memory). `CloudSyncMonitor` carries a branch for the engine; when the mirror
+  retires, most of that file goes. A deletion is taken down from `ModelContext.willSave` in the app's process:
+  SwiftData's own history (`fetchHistory`, with `.preserveValueOnDeletion` on each model's `id`) would be the
+  store's own record of it and needs a change to the models, which is why it waits for the release that switches
+  the engine on.
+- **From the simulation** (seeds to replay, `SyncCoreSimulationTests.testTrace`, 300 steps, three devices).
+  Compared seed for seed with the engine before the review: it failed everyday 133, 210, 261, 284, 559, quota 59,
+  86 and refusal 86, 148, 314; the engine now fails everyday 210, 261, 559 (references to a Group deleted and put
+  back around an unsent change), quota 59, refusal 148 and 314, memory 36, account 362 (a Group's deletion against
+  a sign-out), zone 270 (after a lost zone every device sends everything again, and copies meet by M5 until each
+  holds a base again: to be written as a limit or fixed). Refusal 314 and the new set's `rows` 174 and 805 are one
+  thing: a deletion racing two devices that each bring the item back, where M5 keeps one device's record whole and
+  the other's label or parent is lost. `rows` 5, 196, 967: a person's change to a reference whose item the store
+  had lost cannot be told from the store's own clearing of it, so iCloud's reference comes back. And a reference
+  to a row the store lost is remembered only in the ledger: a ledger forgotten before the row is back forgets it
+  (why `rows` runs without the transport losing its state).
 - **Not proven at all**: a push waking the engine (none reached a Debug build on this Mac in any run); the engine
   on a phone; the move from the mirror on real data; the way back to the mirror; one contract suite run against
-  both the pretend iCloud and CloudKit (four of the review's findings were a rule the two read differently).
+  both the pretend iCloud and CloudKit (four of the first review's findings were a rule the two read differently);
+  the engine against CloudKit since the review (the transport did not change; the two-device run of round 28 was
+  not repeated on the service, only on the pretend iCloud in the app: a task deleted with its sub-task on one Debug
+  Mac app left the other).

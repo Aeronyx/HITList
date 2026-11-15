@@ -183,8 +183,6 @@ extension SyncCore {
             await storeFailed(error)
             return false
         }
-        // A record this device sent with no base and heard nothing back for: the base its meeting is settled on.
-        await recallSends(sendCandidates(Array(keys), local: local, server: byKey))
         var settling: [SyncKey: Settling] = [:]
         for key in keys { settling[key] = decide(key, server: byKey[key], local: local[key]) }
         let present: Set<SyncKey>
@@ -344,10 +342,34 @@ extension SyncCore {
             // M5's amendment: no base, but this device remembers what it sent and heard no answer: that is the base,
             // and the two are settled as M7.
             base = sent
+        } else if let agreed = base, !agreed.isDeleted, local != nil, let server, !server.record.isDeleted {
+            let sends = sendsWithoutAnswer(key)
+            if !sends.isEmpty { base = Self.agreedThroughSends(agreed, sends: sends, server: server.record) }
         }
         let input = MergeInput(base: base, local: Self.whole(local, waiting: waitsFor(key)),
                                deletedHereAt: entry?.deletedHereAt, server: server?.record)
         return Settling(key: key, server: server, local: local, outcome: RecordMerge.merge(input))
+    }
+
+    /// The base to settle a record on when this device sent it and never had an answer (`unanswered`): a save can
+    /// land while its answer is lost, and another device may have built on it since. For each field, if iCloud holds
+    /// the value this device sent (and the old base holds another), that sent value is what the two last agreed on.
+    /// Against the old base, a field the person has since changed back would read as never changed here, and
+    /// iCloud's copy of this device's own earlier value would win over the person's later one (the rig's seed 284).
+    static func agreedThroughSends(_ agreed: SyncRecord, sends: [SyncRecord], server: SyncRecord) -> SyncRecord {
+        guard let type = SyncSchema.type(agreed.key.type),
+              let old = RecordMerge.normal(agreed)?.comparable, let there = RecordMerge.normal(server)?.comparable else {
+            return agreed
+        }
+        var out = agreed
+        for sent in sends {
+            guard let sent = RecordMerge.normal(sent)?.comparable else { continue }
+            for field in type.fields where sent.fields[field.key] != old.fields[field.key]
+                && there.fields[field.key] == sent.fields[field.key] {
+                out.fields[field.key] = sent.fields[field.key]
+            }
+        }
+        return out
     }
 
     /// The items that will be on the device once `settling` is written: those it settles to something, and those
@@ -525,15 +547,15 @@ extension SyncCore {
             write.upsert.append(LedgerEntry(key: record.key, base: Self.base(record.record), system: record.system))
         }
         write.remove = removed.filter { entries[$0] != nil }
-        // The answer came: a send remembered for want of a base is replaced by the base itself.
-        forgetSends(saved.map(\.key).sorted(), in: &write)
+        // The answer came: what was remembered of these sends is replaced by the answer itself.
+        forgetSends((saved.map(\.key) + removed + Array(failed.keys)).sorted(), in: &write)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return
         }
-        for record in saved { remembered[record.key] = nil }
+        for key in saved.map(\.key) + removed + Array(failed.keys) { remembered[key] = nil }
         let accepted = Set(saved.map(\.key)).union(removed)
         for key in accepted { refused[key] = nil }
         if !accepted.isEmpty {
@@ -581,6 +603,8 @@ extension SyncCore {
         // A change made here while its save was on the way: the transport took it off the list with the save. (The
         // zone's meta among them, so the count drops when iCloud accepts it.)
         let looked = accepted.union(failed.keys)
+        // Answered, one way or the other: what was sent for these is no longer a send without an answer (`decide`).
+        for key in looked { unanswered[key] = nil }
         if !looked.isEmpty { await compare(looked) }
     }
 

@@ -314,6 +314,7 @@ extension SyncCore {
         remembered = [:]
         refused = [:]
         sentAs = [:]
+        unanswered = [:]
         unsettled = [:]
         if !keepFirstFetch { waiting = [] }
         return true
@@ -374,6 +375,7 @@ extension SyncCore {
         waiting = []
         refused = [:]
         sentAs = [:]
+        unanswered = [:]
         unsettled = [:]
         switchTo = nil
         // A ledger reset takes every fact with it, the remembered sends and their epoch among them.

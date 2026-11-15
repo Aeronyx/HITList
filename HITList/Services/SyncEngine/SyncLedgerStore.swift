@@ -215,6 +215,11 @@ actor SyncLedgerStore: SyncLedger {
         try factValue(name, in: makeContext())
     }
 
+    func facts(prefix: String) async throws -> [String: Data] {
+        let rows = try makeContext().fetch(FetchDescriptor<LedgerFactRow>(predicate: #Predicate { $0.name.starts(with: prefix) }))
+        return Dictionary(rows.map { ($0.name, $0.value) }, uniquingKeysWith: { first, _ in first })
+    }
+
     /// All of `write` or none of it: one context, one save, rolled back when anything throws. Within the write, as
     /// `MemoryLedger` does: upserts, then removals (a key in both is removed); facts with a nil value are forgotten.
     func write(_ write: LedgerWrite) async throws {
