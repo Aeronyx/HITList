@@ -298,6 +298,8 @@ public actor SyncSimulation {
                                             shuffleFetches: config.shuffleFetches, echo: config.echo,
                                             seed: seed &+ UInt64(launches) &* 7919 &+ UInt64(name.unicodeScalars.first?.value ?? 0))
         let transport = FakeTransport(cloud: cloud, device: name, state: ledger, options: options)
+        // The network is the device's, not the process's: a relaunch does not bring it back.
+        if down.contains(name) { await transport.setNetwork(up: false) }
         let observed = self.observed
         await transport.observe { delivery in
             // A lost zone or an account change empties a correct brain's memory (section 10): from here on a merge
@@ -426,7 +428,9 @@ public actor SyncSimulation {
     private func apply(_ fault: SimFault, on name: String) async {
         guard let device = slots[name] else { return }
         switch fault {
-        case .network(let up): await device.transport.setNetwork(up: up)
+        case .network(let up):
+            if up { down.remove(name) } else { down.insert(name) }
+            await device.transport.setNetwork(up: up)
         case .dropNetwork(let count): await device.transport.dropNetwork(after: count)
         case .loseNextResponse: await device.transport.loseNextResponse()
         case .crash(let point): await device.transport.crash(point)
@@ -600,12 +604,7 @@ public actor SyncSimulation {
         guard let kind = random.pick(kinds) else { return nil }
         switch kind {
         case .networkDown:
-            if down.contains(name) {
-                down.remove(name)
-                return .fault(name, .network(up: true))
-            }
-            down.insert(name)
-            return .fault(name, .network(up: false))
+            return .fault(name, .network(up: down.contains(name)))
         case .networkDrop: return .fault(name, .dropNetwork(after: random.below(3)))
         case .responseLost: return .fault(name, .loseNextResponse)
         case .crashAfterFetched: return .fault(name, .crash(.afterHandling(.fetched)))

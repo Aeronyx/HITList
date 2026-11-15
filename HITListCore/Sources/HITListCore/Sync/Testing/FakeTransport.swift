@@ -110,6 +110,10 @@ public actor FakeTransport: SyncTransport {
         var pending: [PendingChange] = []
         /// With `echo` off: the version of each record this device saved since it last fetched that record.
         var ownSaves: [String: Int] = [:]
+        /// An account change found and not yet handled by the brain: kept with the state, so that a relaunch before
+        /// it is delivered delivers it then (as `CKSyncEngine`'s saved state still names the old account until a
+        /// later state is stored). Cleared only after `handle` returned for it.
+        var announce: AccountChange?
 
         init() {}
 
@@ -128,6 +132,12 @@ public actor FakeTransport: SyncTransport {
                 }
             }
             for name in ownSaves.keys.sorted() { lines.append("own \(ownSaves[name]!) \(name)") }
+            switch announce {
+            case .signedIn(let current)?: lines.append("announce in \(current)")
+            case .signedOut(let previous)?: lines.append("announce out \(previous)")
+            case .switched(let previous, let current)?: lines.append("announce switch \(previous)\u{1F}\(current)")
+            case nil: break
+            }
             return Data(lines.joined(separator: "\n").utf8)
         }
 
@@ -148,6 +158,17 @@ public actor FakeTransport: SyncTransport {
                 case "own":
                     guard parts.count == 3, let tag = Int(parts[1]) else { return nil }
                     ownSaves[parts[2]] = tag
+                case "announce":
+                    guard parts.count == 3 else { return nil }
+                    switch parts[1] {
+                    case "in": announce = .signedIn(current: parts[2])
+                    case "out": announce = .signedOut(previous: parts[2])
+                    case "switch":
+                        let both = parts[2].split(separator: "\u{1F}", omittingEmptySubsequences: false).map(String.init)
+                        guard both.count == 2 else { return nil }
+                        announce = .switched(previous: both[0], current: both[1])
+                    default: return nil
+                    }
                 default: return nil
                 }
             }
@@ -167,9 +188,6 @@ public actor FakeTransport: SyncTransport {
     /// Changes on every `reset()` and every forgetting (an account change, a lost zone), so an operation in flight
     /// does not move a bookmark that was forgotten under it.
     private var generation = 0
-    /// An account change noticed at `start` (the state was forgotten then), delivered as the first event of the next
-    /// operation.
-    private var accountToAnnounce: AccountChange?
     private var random: SimRandom
 
     // Switches.
@@ -212,13 +230,25 @@ public actor FakeTransport: SyncTransport {
         // (or of `noticeChanges()`): never delivered from inside `start`, as `CKSyncEngine` delivers nothing from
         // its initialiser, and a brain that holds its own queue while it starts the transport must not be called
         // back into it.
+        await compareAccount()
+    }
+
+    /// T12: the device's account against the one the state belongs to. When they differ the bookmark and the list are
+    /// forgotten now, and one change is kept to announce: from the account the brain last heard of to this one (SDK:
+    /// several changes while the app was away are one event).
+    private func compareAccount() async {
         let current = await cloud.account(of: device)
-        if current != state.account {
-            accountToAnnounce = FakeTransport.change(from: state.account, to: current)
-            forget()
-            state.account = current
-            await persist()
+        guard current != state.account else { return }
+        let heard: String?
+        switch state.announce {
+        case .signedIn?: heard = nil
+        case .signedOut(let previous)?, .switched(let previous, _)?: heard = previous
+        case nil: heard = state.account
         }
+        state.announce = FakeTransport.change(from: heard, to: current)
+        forget()
+        state.account = current
+        await persist()
     }
 
     public func stop() async {
@@ -282,7 +312,7 @@ public actor FakeTransport: SyncTransport {
     /// The transport syncs by itself, as on a push or its schedule: a fetch, then a send. The same events arrive as
     /// for `fetch()` and `send()`; trouble is reported only in `didFetch` / `didSend` (and a crash stops it).
     public func syncByItself() async {
-        guard started, !dead else { return }
+        guard (try? checkNotInHandle("syncByItself()")) != nil, started, !dead else { return }
         await acquire()
         defer { release() }
         do {
@@ -297,7 +327,7 @@ public actor FakeTransport: SyncTransport {
     /// The device tells the running transport what changed under it (an account signed in, out or switched): the
     /// account event now, if there is one.
     public func noticeChanges() async {
-        guard started, !dead else { return }
+        guard (try? checkNotInHandle("noticeChanges()")) != nil, started, !dead else { return }
         await acquire()
         defer { release() }
         try? await announceAccount()
@@ -589,17 +619,13 @@ public actor FakeTransport: SyncTransport {
     }
 
     private func announceAccount() async throws {
-        let current = await cloud.account(of: device)
-        if current != state.account {
-            // Changed while running: forgotten now, announced now.
-            accountToAnnounce = FakeTransport.change(from: state.account, to: current)
-            forget()
-            state.account = current
-            await persist()
-        }
-        if let change = accountToAnnounce {
-            accountToAnnounce = nil
+        // Changed while running: forgotten now, announced now.
+        await compareAccount()
+        if let change = state.announce {
             try await deliver(.account(change))
+            // Handled (a crash in `deliver` throws before this): only now is it off the state.
+            state.announce = nil
+            await persist()
         }
     }
 
@@ -615,14 +641,21 @@ public actor FakeTransport: SyncTransport {
     // MARK: -
 
     private func check(_ call: String) throws {
+        try checkNotInHandle(call)
+        if dead { throw FakeTransportError.crashed }
+        guard started, delegate != nil else { throw FakeTransportError.notStarted }
+    }
+
+    /// T1: a call that waits for events, made while one is being handled, would hang the real engine. Said loudly.
+    /// (A `Task` started inside `handle` inherits the mark and is flagged too: it would not hang, but it is the same
+    /// mistake one step removed.)
+    private func checkNotInHandle(_ call: String) throws {
         if FakeTransportContext.handling.contains(identity) {
             options.onMisuse("FakeTransport(\(device)).\(call) was called from inside the transport's own delegate "
                 + "call (handle or recordToSend). CKSyncEngine deadlocks there: \(call) waits for events the delegate "
                 + "has not finished handling (T1). Call it after handle returns.")
             throw FakeTransportError.calledFromHandle
         }
-        if dead { throw FakeTransportError.crashed }
-        guard started, delegate != nil else { throw FakeTransportError.notStarted }
     }
 
     private func networkStillUp() -> Bool {

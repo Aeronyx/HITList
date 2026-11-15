@@ -580,6 +580,44 @@ final class FakeCloudTests: XCTestCase {
         XCTAssertEqual(alices, ["t1"])
     }
 
+    func testT12_anAccountChangeNotYetHandledIsAnnouncedAfterAnotherRelaunch_andChangesAwayAreOneEvent() async throws {
+        let cloud = FakeCloud()
+        let ledger = MemoryLedger()
+        let a = await FakeDevice(cloud, "A", ledger: ledger)
+        try await a.transport.fetch()
+        await a.transport.stop()
+        await cloud.setAccount("bob", for: "A")
+        // Launched, and quit before anything ran: the switch was found but never handled.
+        let once = await FakeDevice(cloud, "A", ledger: ledger, announce: false)
+        await once.transport.stop()
+        await cloud.setAccount("carol", for: "A")
+        let twice = await FakeDevice(cloud, "A", ledger: ledger, announce: false)
+        try await twice.transport.fetch()
+        let log = await twice.recorder.log
+        XCTAssertEqual(log.first, "account switched alice carol", "one event, from the account the brain last heard of")
+        // Handled now: a third launch hears nothing.
+        await twice.transport.stop()
+        let third = await FakeDevice(cloud, "A", ledger: ledger, announce: false)
+        try await third.transport.fetch()
+        let quiet = await third.recorder.log
+        XCTAssertEqual(quiet, ["willFetch", "didFetch"])
+    }
+
+    func testT1_syncByItselfAndNoticeChangesFromInsideHandleAreSaidLoudlyToo() async throws {
+        let cloud = FakeCloud()
+        let words = FakeWords()
+        let a = await FakeDevice(cloud, "A", options: FakeTransport.Options(onMisuse: { words.append($0) }))
+        let transport = a.transport
+        await a.recorder.setDuring { event in
+            if case .willFetch = event {
+                await transport.syncByItself()
+                await transport.noticeChanges()
+            }
+        }
+        try await a.transport.fetch()
+        XCTAssertEqual(words.all.count, 2, "\(words.all)")
+    }
+
     func testT12_signedOutWhileRunningNothingIsFetchedOrSentUntilSignedIn() async throws {
         let cloud = FakeCloud()
         let a = await FakeDevice(cloud, "A")

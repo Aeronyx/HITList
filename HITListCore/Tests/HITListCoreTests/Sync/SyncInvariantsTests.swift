@@ -434,6 +434,8 @@ final class SyncInvariantsTests: XCTestCase {
         let lines = FakeWords()
         var config = SimConfig()
         config.log = { line in if keys.contains(where: { line.contains($0) }) { lines.append(line) } }
+        if environment["HITLIST_SIM_FAULTS"] == "ledger" { config.faults = SimFaultKind.everyday.union([.ledgerLost]); config.faultPercent = 10 }
+        if environment["HITLIST_SIM_FAULTS"] == "zone" { config.faults = SimFaultKind.everyday.union([.zoneDeleted, .zoneReset]); config.faultPercent = 10 }
         let steps = environment["HITLIST_SIM_STEPS"].flatMap(Int.init) ?? 300
         let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: steps, config: config, brain: MergingBrain.make)
         for line in report.script where keys.contains(where: { line.contains($0) }) || line.contains("fault") { print("SCRIPT \(line)") }
@@ -685,13 +687,18 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
     }
 
     func handle(_ event: TransportEvent) async {
+        switch event {
+        case .account, .zoneLost, .didFetch: log("\(device) hears \(event)")
+        default: break
+        }
         do {
             switch event {
             case .account(let change):
-                if case .signedIn(let current) = change,
-                   let mine = try await ledger.fact(LedgerFact.account), String(decoding: mine, as: UTF8.self) == current {
-                    return
-                }
+                // Every account event empties the memory, a sign-in to the account it already belongs to too: that one
+                // means the transport's state was lost (or could not be read), and a ledger must not outlive its
+                // bookmark. A zone lost meanwhile is never announced to a state that never knew it, and bases kept
+                // for records the new zone lacks would keep this device's items out of iCloud for good (seed 4 with
+                // lost zones found it: I1).
                 try await forget()
                 if case .signedIn(let current) = change { try await setAccount(current) }
                 if case .switched(_, let current) = change { try await setAccount(current) }
