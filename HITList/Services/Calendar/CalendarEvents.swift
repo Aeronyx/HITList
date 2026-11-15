@@ -50,6 +50,8 @@ final class CalendarEvents {
     private(set) var hidden: Set<String>
     /// Where Add to Calendar puts a task (`Preferences.calendarAddTarget`); nil is the device's default calendar.
     private(set) var addTarget: String?
+    /// The device's default calendar for new events, read with the calendars.
+    private(set) var defaultCalendarID: String?
     /// Every occurrence from the start of today up to `horizon`.
     private(set) var loaded: [CalendarEvent] = []
     /// How many loads have finished (tests wait on it).
@@ -88,6 +90,9 @@ final class CalendarEvents {
         guard let addTarget else { return nil }
         return writableCalendars.first { $0.id == addTarget }
     }
+
+    /// The device's default calendar, by name, while it can be read.
+    var defaultCalendar: CalendarInfo? { calendars.first { $0.id == defaultCalendarID } }
 
     /// Picks where Add to Calendar puts a task; nil goes back to the device's default calendar.
     func setAddTarget(_ calendarID: String?) {
@@ -212,11 +217,12 @@ final class CalendarEvents {
         let end = max(minimum, horizon ?? minimum)
         horizon = end
         let source = source
-        let (calendars, events) = await Task.detached(priority: .userInitiated) {
-            (source.calendars(), source.events(from: start, to: end))
+        let (calendars, events, defaultID) = await Task.detached(priority: .userInitiated) {
+            (source.calendars(), source.events(from: start, to: end), source.defaultCalendarID())
         }.value
         guard mine == generation, isOn else { return }
         self.calendars = calendars
+        defaultCalendarID = defaultID
         loaded = events
         dayCache = [:]
         loads += 1

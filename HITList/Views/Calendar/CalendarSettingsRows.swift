@@ -97,7 +97,7 @@ struct CalendarSettingsPage: View {
                 Menu {
                     Picker("Add tasks to", selection: Binding(get: { events.addTargetCalendar?.id ?? "" },
                                                               set: { events.setAddTarget($0.isEmpty ? nil : $0) })) {
-                        Text(Self.defaultChoice).tag("")
+                        Text(Self.defaultChoice(events.defaultCalendar)).tag("")
                         ForEach(Self.accounts(writable), id: \.name) { account in
                             Section(account.name) {
                                 ForEach(account.calendars) { calendar in Text(calendar.title).tag(calendar.id) }
@@ -106,7 +106,7 @@ struct CalendarSettingsPage: View {
                     }
                     .pickerStyle(.inline)
                 } label: {
-                    MenuValueLabel(text: events.addTargetCalendar?.title ?? Self.defaultChoice)
+                    MenuValueLabel(text: Self.addTargetValue(picked: events.addTargetCalendar, default: events.defaultCalendar))
                 }
                 .menuStyle(.button)
                 .buttonStyle(.plain)
@@ -115,7 +115,7 @@ struct CalendarSettingsPage: View {
             .accessibilityIdentifier("settings-calendar-add-target")
         } else {
             HITMenuRow("Add tasks to", subtitle: "Switch on Calendar events to pick one", systemImage: "calendar.badge.plus",
-                       value: Self.defaultChoice)
+                       value: Self.defaultChoice(nil))
                 .accessibilityIdentifier("settings-calendar-add-target")
         }
     }
@@ -139,8 +139,16 @@ struct CalendarSettingsPage: View {
     /// Where the switch is, under the system's settings (the row above it opens them).
     static let settingsPath = "Privacy & Security → Calendars → HITList"
 
-    /// "Add tasks to" before anything is picked.
-    static let defaultChoice = "Default calendar"
+    /// The menu's first choice: the device's default calendar, by name once it can be read.
+    static func defaultChoice(_ calendar: CalendarInfo?) -> String {
+        calendar.map { "Default (\($0.title))" } ?? "Default calendar"
+    }
+
+    /// "Add tasks to"'s value: the picked calendar, or the default one named ("Work (default)").
+    static func addTargetValue(picked: CalendarInfo?, default fallback: CalendarInfo?) -> String {
+        if let picked { return picked.title }
+        return fallback.map { "\($0.title) (default)" } ?? "Default calendar"
+    }
 
     /// The Add to Calendar group's footer: said once, here.
     static let copyNote = "A dated task's menu has Add to Calendar: one event at its time (30 minutes) or all day. "
