@@ -1,8 +1,8 @@
 import SwiftUI
 import SwiftData
 
-/// Settings → General: where the iPhone opens, the first day of the week, the app icon badge, whether
-/// deleting asks first, and calendar events (brief 77). Keys in `SettingsPreferences.swift`. No header: the page's
+/// Settings → General: where the iPhone opens, the first day of the week, the app icon badge and whether
+/// deleting asks first (calendar events have their own page since brief 136, `CalendarSettingsPage`). Keys in `SettingsPreferences.swift`. No header: the page's
 /// title says General (the Mac adds the keyboard shortcuts under it).
 struct GeneralSettingsSection: View {
     @Environment(\.modelContext) private var context
@@ -68,8 +68,6 @@ struct GeneralSettingsSection: View {
             .toggleStyle(.hit)
             .hitRowPadding()
             .accessibilityIdentifier("settings-confirm-delete")
-            // Calendar events beside the tasks (brief 77): off by default.
-            CalendarSettingsRows()
         }
         // Brief 98: the quick add guide, a page on iPhone and iPad, shown below the row on the Mac.
         QuickAddGuideSettingsRow()

@@ -5,7 +5,7 @@ import SwiftUI
 /// are stored (`Preferences.macSettingsSection`), so keep them stable once shipped; the order may change (Appearance
 /// moved up to second in 0.9.3). `completing` is Extras' id from before it was called Extras.
 enum MacSettingsSection: String, CaseIterable, Identifiable {
-    case account, appearance, general, reminders, completing, iCloud, data, claude, about
+    case account, appearance, general, calendar, reminders, completing, iCloud, data, claude, about
 
     var id: String { rawValue }
 
@@ -13,6 +13,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .account: "Account"
         case .general: "General"
+        case .calendar: "Calendar"
         case .iCloud: "iCloud"
         case .reminders: "Reminders"
         case .completing: "Extras"
@@ -28,6 +29,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .account: "Name, picture, iCloud"
         case .general: "Week, badge, shortcuts"
+        case .calendar: "Events, accounts, adding"
         case .iCloud: "Sync status and checks"
         case .reminders: "Alerts and summary"
         case .completing: "Sound, companions, bolt"
@@ -42,6 +44,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .account: "person.crop.circle.fill"
         case .general: "gearshape.fill"
+        case .calendar: "calendar"
         case .iCloud: "icloud.fill"
         case .reminders: "bell.badge.fill"
         case .completing: "wand.and.stars"
@@ -58,6 +61,7 @@ enum MacSettingsSection: String, CaseIterable, Identifiable {
         switch self {
         case .account: Color(hex: "#14B8A6")
         case .general: Color(hex: "#8E8E93")
+        case .calendar: Color(hex: "#6366F1")
         case .iCloud: Color(hex: "#3B82F6")
         case .reminders: Color(hex: "#EF4444")
         case .completing: Color(hex: "#22C55E")
