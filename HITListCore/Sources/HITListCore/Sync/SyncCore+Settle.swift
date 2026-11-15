@@ -208,8 +208,19 @@ extension SyncCore {
             }
             reached.formUnion(under.keys)
             // Sub-tasks written out from under their parent come first: the store deletes no row a write does not name.
-            let writes = under.writes + toWrite.sorted { $0.key < $1.key }.map {
-                LocalWrite(key: $0.key, expected: $0.local, record: shown($0))
+            // A record this settle keeps alive under a sub-task that goes (seed 79 with conflicts: a grandchild of the
+            // deleted task, in the same fetch) is written out from under it too.
+            var writes = under.writes + toWrite.sorted { $0.key < $1.key }.map { decision -> LocalWrite in
+                var record = shown(decision)
+                if under.freed.contains(decision.key) { record?.fields["parent"] = nil }
+                return LocalWrite(key: decision.key, expected: decision.local, record: record)
+            }
+            let writing = Set(toWrite.map(\.key))
+            for key in under.freed.sorted() where !writing.contains(key) {
+                guard let local = settling[key]?.local else { continue }
+                var free = local
+                free.fields["parent"] = nil
+                writes.append(LocalWrite(key: key, expected: local, record: free))
             }
             let stale: Set<SyncKey>
             do {
@@ -339,6 +350,8 @@ extension SyncCore {
         var ledgerWrite = LedgerWrite()
         /// Every item reached (compared again after the settle).
         var keys = Set<SyncKey>()
+        /// Records of this settle that it keeps alive under a sub-task that goes: written without their `parent`.
+        var freed = Set<SyncKey>()
     }
 
     /// The supervisor's rule of 2026-11-15 (review finding 1): **a deletion arriving from iCloud never takes with it
@@ -366,9 +379,15 @@ extension SyncCore {
         guard !gone.isEmpty else { return out }
         // From the device, not the bases: a sub-task made or moved here is not in the ledger.
         let records = try await store.records()
+        // Where every task will be once this settle is written: the device's, or for a record this settle decides, its
+        // result (one arriving now may land under a sub-task that goes: seed 79 with conflicts, a grandchild new here).
         var children: [String: [SyncRecord]] = [:]
-        for record in records where record.key.type == "TaskItem" {
+        for record in records where record.key.type == "TaskItem" && settling[record.key] == nil {
             if case .reference(let parent)? = record.fields["parent"] { children[parent, default: []].append(record) }
+        }
+        for decision in settling.values where decision.key.type == "TaskItem" {
+            guard let target = decision.target, case .reference(let parent)? = target.fields["parent"] else { continue }
+            children[parent, default: []].append(decision.local ?? target)
         }
         var newWaits: [SyncKey: [String: SyncValue]] = [:]
         func wait(_ key: SyncKey, _ field: String, _ value: SyncValue) {
@@ -384,8 +403,16 @@ extension SyncCore {
         while !queue.isEmpty {
             let parent = queue.removeFirst()
             guard let at = cause[parent] else { continue }
-            for child in (children[parent] ?? []).sorted(by: { $0.key < $1.key }) where settling[child.key] == nil {
+            for child in (children[parent] ?? []).sorted(by: { $0.key < $1.key }) {
                 guard !out.keys.contains(child.key) else { continue }
+                if let decision = settling[child.key] {
+                    // Decided by this settle on its own record. Kept alive under a parent that goes: freed from it.
+                    if decision.target != nil {
+                        out.freed.insert(child.key)
+                        out.keys.insert(child.key)
+                    }
+                    continue
+                }
                 out.keys.insert(child.key)
                 let entry = entries[child.key]
                 let base = entry?.base

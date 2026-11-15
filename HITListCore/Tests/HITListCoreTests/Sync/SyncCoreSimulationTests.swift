@@ -224,6 +224,16 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "open in wave 1: I9 with the test brain (a task sent without a label while the label was re-sent)"),
             KeptSeed(seed: 34, faults: "memory", keys: ["9DB28ABA", "C4499ED9", "37A1A87E"],
                      found: "open in wave 1: I2 under lost memories, an extra label honoured (the test brain)"),
+            // Brief 145's own (62, 4, 16 of the list above also found, with SyncCore, the rig missing a lost memory when
+            // unsent deletions were kept as entries with no base).
+            KeptSeed(seed: 27, faults: "conflict", keys: ["8200F2DC", "DC462D6C", "02628CC7"],
+                     found: "I9 judged an M5 decided in the exposure but sent a step after it (rig)"),
+            KeptSeed(seed: 100, faults: "conflict", keys: ["C2352F8C", "5C2A5735"],
+                     found: "the same as 27 with conflicts (rig)"),
+            KeptSeed(seed: 93, faults: "memory", keys: ["3F49A6D4", "B004951A", "4EEC2C9C"],
+                     found: "brain: a person's unsent move to a Group whose deletion arrived was dropped; the base's older Group came back"),
+            KeptSeed(seed: 79, faults: "conflict", keys: ["03755E0F", "13B58FC9", "B83108A4"],
+                     found: "brain (review finding 1's first fix): a grandchild arriving in the same fetch under a sub-task that goes kept the parent's deletion stale; devices kept a task iCloud held deleted"),
         ]
         return seeds
     }
