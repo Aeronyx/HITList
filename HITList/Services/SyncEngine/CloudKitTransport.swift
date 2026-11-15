@@ -59,6 +59,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// Whether this fetch ended a fetch of the zone without error (or found the zone not made yet): the one sign a
     /// scheduled fetch gives that it reached iCloud at all (`didFetchChanges` carries no error).
     private var zoneFetchEnded = false
+    /// How many fetches the engine has ended (`didFetchChanges`), so `fetch()` can tell that the engine really ran
+    /// one for it rather than returning at once (no account, or joined to nothing).
+    private var fetchesEnded = 0
     private var sendTrouble: String?
     /// Saves refused before they reached iCloud (the record could not be made): told with the next `sent`.
     private var unsentFailures: [SyncKey: SendFailure] = [:]
@@ -150,6 +153,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         guard let engine else { throw TransportError.notStarted }
         await tellOwedAccount()
         manualFetches += 1
+        let endedBefore = fetchesEnded
         var thrown: Error?
         do {
             try await engine.fetchChanges(CKSyncEngine.FetchChangesOptions(scope: .zoneIDs([zoneID])))
@@ -158,8 +162,14 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         }
         manualFetches -= 1
         let failure = thrown.map { CloudKitTransportRules.words(for: $0) }
-        // A fetch asked for here that returned without throwing did reach iCloud: the proof of a whole fetch.
-        if failure == nil, fetchTrouble == nil { await wholeFetchSeen() }
+        // A fetch asked for here that the engine ran to its end without throwing, for an account, did reach iCloud:
+        // the proof of a whole fetch. One that returned without the engine ending a fetch at all (no account; a call
+        // that joined nothing) proves nothing (the review's finding 17).
+        if CloudKitTransportRules.provesWholeFetch(threw: failure != nil, trouble: fetchTrouble,
+                                                   engineEndedAFetch: fetchesEnded > endedBefore,
+                                                   account: stored.account) {
+            await wholeFetchSeen()
+        }
         if heldDidFetch || (failure != nil && fetchOpen) {
             heldDidFetch = false
             fetchOpen = false
@@ -258,9 +268,15 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
         case .accountChange(let change):
             let mapped = CloudKitTransportRules.accountChange(change.changeType, known: stored.account)
-            // The engine has already forgotten its pending changes (and its bookmark) for the old account.
-            stored.zoneReady = false
-            stored.fetchedWhole = false
+            // A real change of account: the engine has already forgotten its pending changes and its bookmark for
+            // the old one, and what was known of the old account's zone says nothing of the new one's. A sign-in to
+            // the account this state already belongs to (a new engine after `reset()` announces one) changes
+            // nothing here: what was known of the zone must stay, or a zone deleted meanwhile would read as "not
+            // made yet" (the review's findings 10 and 17).
+            if mapped != nil {
+                stored.zoneReady = false
+                stored.fetchedWhole = false
+            }
             stored.account = CloudKitTransportRules.currentAccount(change.changeType)
             // The change is written down as owed to the brain before it is told, and crossed off only when the brain
             // has handled it: the engine announces an account change once, so one saved as known here and lost
@@ -317,6 +333,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             }
 
         case .didFetchChanges(let done):
+            fetchesEnded += 1
             if done.context.reason == .manual, manualFetches > 0 {
                 heldDidFetch = true // `fetch()` tells it, with the error it gets, if any
             } else {
@@ -891,6 +908,12 @@ enum CloudKitTransportRules {
     }
 
     static let notReached = "the fetch ended before it reached iCloud"
+
+    /// Whether a fetch the app asked for (`fetch()`) proves that iCloud was reached: it did not throw, the zone's
+    /// fetch had no trouble, the engine really ended a fetch during the call, and someone is signed in.
+    static func provesWholeFetch(threw: Bool, trouble: String?, engineEndedAFetch: Bool, account: String?) -> Bool {
+        !threw && trouble == nil && engineEndedAFetch && account != nil
+    }
 
     /// The end of a fetch of the zone (`didFetchRecordZoneChanges`).
     static func fetchOutcome(_ failure: CloudFailure?, zoneKnown: Bool) -> FetchOutcome {

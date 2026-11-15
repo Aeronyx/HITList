@@ -103,6 +103,13 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertEqual(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: false), Rules.notReached)
         XCTAssertNil(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: true), "the bookmark has not moved: nothing is taken for whole")
         XCTAssertEqual(Rules.scheduledFetchEnding(trouble: "no network", reachedZone: true, wholeFetchSeen: true), "no network")
+        // The review's finding 17: a fetch the app asked for proves a whole fetch only if the engine ended one
+        // during the call, without trouble, for an account.
+        XCTAssertTrue(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: true, account: "_me"))
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: false, account: "_me"), "returned at once")
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: true, account: nil), "nobody signed in")
+        XCTAssertFalse(Rules.provesWholeFetch(threw: true, trouble: nil, engineEndedAFetch: true, account: "_me"))
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: "busy", engineEndedAFetch: true, account: "_me"))
         // A state saved before the field existed reads as "not known".
         let old = try? JSONDecoder().decode(StoredState.self, from: Data(#"{"version":1,"zoneReady":true,"account":"_me"}"#.utf8))
         XCTAssertNotNil(old)
