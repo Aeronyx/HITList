@@ -160,23 +160,6 @@ final class SyncCoreOrderTests: XCTestCase {
         XCTAssertEqual(pending, [])
     }
 
-    func testRecordsSetAsideSurviveACrashAndAreSettledWhenTheFetchEnds() async {
-        let device = await synced([])
-        await device.transport.deliver(.willFetch)
-        await device.transport.deliver(.fetched(changed: [cloud(task("C", "Child", parent: "P"))], removed: []))
-        let relaunched = device.relaunched(transport: ScriptedTransport())
-        await relaunched.core.start()
-        let early = await relaunched.item(taskKey("C"))
-        XCTAssertNil(early, "still set aside: the fetch has not ended")
-        await relaunched.transport.deliver(.willFetch)
-        await relaunched.transport.deliver(.fetched(changed: [cloud(task("P", "Parent"))], removed: []))
-        await relaunched.transport.deliver(.didFetch(error: nil))
-        let c = await relaunched.item(taskKey("C"))
-        XCTAssertEqual(c?["parent"], .reference("P"))
-        let pending = await relaunched.pending()
-        XCTAssertEqual(pending, [])
-    }
-
     // MARK: A big list
 
     func testFiveThousandRecords() async throws {
@@ -279,15 +262,19 @@ actor DyingLedger: SyncLedger {
     struct Dead: Error {}
     let inner = MemoryLedger()
     private var dead = false
-    private var dying = false
+    private var countdown: Int?
 
-    func dieAtNextWrite() { dying = true }
+    func dieAtNextWrite() { countdown = 1 }
+    /// Dies at the `n`th write from now (1: the next).
+    func dieAtWrite(_ n: Int) { countdown = n }
 
     func entries() async throws -> [LedgerEntry] { try await inner.entries() }
     func deferred() async throws -> [CloudRecord] { try await inner.deferred() }
     func fact(_ name: String) async throws -> Data? { try await inner.fact(name) }
     func write(_ write: LedgerWrite) async throws {
-        if dying { dead = true }
+        if let left = countdown {
+            if left <= 1 { dead = true } else { countdown = left - 1 }
+        }
         if dead { throw Dead() }
         try await inner.write(write)
     }

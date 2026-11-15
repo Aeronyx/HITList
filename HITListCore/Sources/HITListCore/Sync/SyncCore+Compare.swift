@@ -28,11 +28,31 @@ extension SyncCore {
         if let hold, hold != .storageFull {
             guard case .massDeletion = hold, keys == nil, !inEvent else { return }
         }
-        let here: [SyncKey: SyncRecord]
+        var here: [SyncKey: SyncRecord]
+        var universe: Set<SyncKey>
+        let present: Set<SyncKey>
         do {
             let records: [SyncRecord]
             if let keys { records = try await store.records(keys) } else { records = try await store.records() }
             here = Dictionary(records.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+            universe = keys ?? Set(here.keys).union(entries.keys)
+            if keys != nil {
+                // Records waiting for an item among these that is here now are looked at with them (section 8).
+                let more = waiters(of: Set(here.keys)).subtracting(universe)
+                if !more.isEmpty {
+                    here.merge(try await localRecords(more)) { first, _ in first }
+                    universe.formUnion(more)
+                }
+            }
+            // Whether the items the bases (and the waits) point at are on the device.
+            var targets = Set<SyncKey>()
+            for key in universe {
+                if let base = entries[key]?.base { targets.formUnion(Self.references(base)) }
+                targets.formUnion(Self.targets(of: waitsFor(key), type: key.type))
+            }
+            let unknown = keys == nil ? Set<SyncKey>() : targets.subtracting(here.keys)
+            let found = unknown.isEmpty ? Set<SyncKey>() : Set(try await localRecords(unknown).keys)
+            present = keys == nil ? Set(here.keys) : Set(here.keys).union(found)
         } catch let SyncStoreError.duplicates(keys) {
             await enterHold(.duplicates(keys.sorted()))
             return
@@ -40,16 +60,30 @@ extension SyncCore {
             await fail("The device's items could not be read: \(error)")
             return
         }
-
-        var universe = keys ?? Set(here.keys).union(entries.keys)
         if keys == nil { universe.insert(Self.metaKey) }
+        let isHere: (SyncKey) -> Bool = { present.contains($0) }
         let now = clock()
         var desired: [SyncKey: PendingChange] = [:]
         var write = LedgerWrite()
+        var arrivals: [LocalWrite] = []
         var gone = 0
         // In key order: nothing a `Set` happens to iterate first decides what is written or logged (replays).
-        for key in universe.sorted() {
-            let finding = key == Self.metaKey ? metaFinding() : self.finding(key, local: here[key], now: confirmedAt ?? now)
+        for key in universe.sorted() where key != Self.metaKey {
+            var local = here[key]
+            // A waited-for item that is here now: its reference goes on the device (written below, before the ledger).
+            if let device = local, waits[key] != nil,
+               let arrived = Self.arrived(device, waiting: waitsFor(key), base: entries[key]?.base, present: isHere) {
+                arrivals.append(LocalWrite(key: key, expected: device, record: arrived))
+                local = arrived
+                here[key] = arrived
+            }
+            // What it waits for now: the base's references to items not on the device.
+            let wait = Self.waitFields(local: local, base: entries[key]?.base, present: isHere)
+            if wait != waitsFor(key) {
+                if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
+            }
+            let whole = Self.whole(local, waiting: wait)
+            let finding = self.finding(key, local: whole, now: confirmedAt ?? now)
             if let change = finding.change { desired[key] = change }
             if let entry = finding.entry {
                 write.upsert.append(entry)
@@ -57,6 +91,7 @@ extension SyncCore {
             }
             if finding.drop { write.remove.append(key) }
         }
+        if universe.contains(Self.metaKey), let change = metaFinding().change { desired[Self.metaKey] = change }
 
         if confirmedAt == nil {
             if keys != nil, gone > limits.massDeletionCount {
@@ -79,6 +114,23 @@ extension SyncCore {
             }
         }
 
+        // The device first (the references that arrived), then the ledger. One the person overtook keeps waiting:
+        // its wait is left as it was, and the next compare writes it.
+        if !arrivals.isEmpty {
+            do {
+                let stale = try await store.apply(arrivals)
+                if !stale.isEmpty {
+                    write.deferUpsert.removeAll { stale.contains($0.key) }
+                    write.deferRemove.removeAll { stale.contains($0) }
+                }
+                let written = Set(arrivals.map(\.key)).subtracting(stale)
+                for key in written.sorted() { log("\(key): an item it points at is here now; the reference is written here") }
+                if !written.isEmpty { host?.didWrite(written) }
+            } catch {
+                await storeFailed(error)
+                return
+            }
+        }
         do {
             try await commit(write)
         } catch {
@@ -97,12 +149,30 @@ extension SyncCore {
                 log("\(entry.key): deleted here; its marker is waiting to go")
             }
         }
-        await matchPending(desired, within: keys == nil ? nil : universe)
+        await matchPending(desired, within: keys == nil ? nil : universe, depth: Self.depths(here))
+    }
+
+    /// How deep each task is under its parents, as far as `records` tell: the order sub-tasks are added in.
+    static func depths(_ records: [SyncKey: SyncRecord]) -> [SyncKey: Int] {
+        var out: [SyncKey: Int] = [:]
+        for (key, record) in records where key.type == "TaskItem" {
+            var depth = 0
+            var current = record
+            while depth < 64, case .reference(let parent)? = current.fields["parent"],
+                  let next = records[SyncKey(type: "TaskItem", name: parent)] {
+                depth += 1
+                current = next
+            }
+            out[key] = depth
+        }
+        return out
     }
 
     /// Makes the transport's list hold exactly `desired` for the keys in `within` (nil: for every key). Nothing is
-    /// added before the first whole fetch has finished (section 7) or while iCloud is full.
-    func matchPending(_ desired: [SyncKey: PendingChange], within: Set<SyncKey>?) async {
+    /// added before the first whole fetch has finished (section 7) or while iCloud is full. Added with the items
+    /// pointed at before those that point at them (`SyncSchema.types`, a task after its parent), so iCloud rarely
+    /// holds a record ahead of its target.
+    func matchPending(_ desired: [SyncKey: PendingChange], within: Set<SyncKey>?, depth: [SyncKey: Int] = [:]) async {
         let pending = await transport.pending()
         let listed = Set(pending)
         var remove: [PendingChange] = []
@@ -111,7 +181,14 @@ extension SyncCore {
         }
         var add: [PendingChange] = []
         if firstFetchDone, hold == nil {
-            for key in desired.keys.sorted(by: Self.sendOrder) {
+            let ordered = desired.keys.sorted { a, b in
+                let ra = Self.rank(a.type), rb = Self.rank(b.type)
+                if ra != rb { return ra < rb }
+                let da = depth[a] ?? 0, db = depth[b] ?? 0
+                if da != db { return da < db }
+                return a.name < b.name
+            }
+            for key in ordered {
                 if let change = desired[key], !listed.contains(change) { add.append(change) }
             }
         }
@@ -205,7 +282,9 @@ extension SyncCore {
         }
         let local: SyncRecord?
         do {
-            local = try await store.records([key]).first
+            // The whole record: the device's, with the references it waits for (section 8). A reference to an item
+            // that is not on this device is never sent away.
+            local = Self.whole(try await store.records([key]).first, waiting: waitsFor(key))
         } catch let SyncStoreError.duplicates(keys) {
             await enterHold(.duplicates(keys.sorted()))
             return nil
@@ -217,18 +296,20 @@ extension SyncCore {
         let entry = entries[key]
         if let local {
             if let base = entry?.base, !base.isDeleted, RecordMerge.same(local, base) { return nil }
-            if entry?.base == nil, SyncSchema.type(key.type) == nil { return nil }
+            sentAs[key] = .some(local)
             return OutgoingRecord(record: local, system: entry?.system)
         }
         guard let entry, let base = entry.base else { return nil }
         if base.isDeleted {
             // A marker later than iCloud's (M10), or nothing: iCloud already holds the marker.
             guard let at = entry.deletedHereAt, !RecordMerge.same(.marker(key, deletedAt: at), base) else { return nil }
+            sentAs[key] = .some(nil)
             return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
         }
         // A deletion is only ever noticed by the compare, which guards against a store that reads wrong: one it has
         // not noticed is not sent (the transport drops the change; the compare adds the marker when it notices).
         guard let at = entry.deletedHereAt else { return nil }
+        sentAs[key] = .some(nil)
         return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
     }
 }

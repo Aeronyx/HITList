@@ -193,7 +193,7 @@ extension SyncCore {
             log("HITList's zone is gone from iCloud (\(reason.rawValue)): everything here goes again")
             var write = LedgerWrite()
             write.remove = entries.keys.sorted()
-            write.deferRemove = deferred.keys.sorted()
+            write.deferRemove = waits.keys.sorted()
             write.facts[LedgerFact.firstFetchDone] = Data([1])
             do {
                 try await commit(write)
@@ -286,7 +286,7 @@ extension SyncCore {
     /// The brain's copy of a ledger that was just reset.
     func forgetCache(keepAccount: Bool) {
         entries = [:]
-        deferred = [:]
+        waits = [:]
         firstFetchDone = false
         if !keepAccount { account = nil }
         refetch = false

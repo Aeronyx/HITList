@@ -343,49 +343,6 @@ final class SyncCoreTests: XCTestCase {
         XCTAssertEqual(next?.system, token("c2"))
     }
 
-    func testAFetchInTwoBatchesWithATaskBeforeItsProjectAndItsParent() async {
-        let device = await synced([])
-        let child = task("C", "Child", project: "P", parent: "T")
-        let parent = task("T", "Parent", project: "P")
-        let proj = project("P", "Home")
-        await device.transport.deliver(.willFetch)
-        await device.transport.deliver(.fetched(changed: [cloud(child)], removed: []))
-        let early = await device.item(taskKey("C"))
-        XCTAssertNil(early, "set aside: what it points at is not here yet")
-        let aside = try? await device.ledger.deferred()
-        XCTAssertEqual(aside?.map(\.key), [taskKey("C")])
-
-        // The parent before its project in the second batch: settled together.
-        await device.transport.deliver(.fetched(changed: [cloud(parent), cloud(proj)], removed: []))
-        await device.transport.deliver(.didFetch(error: nil))
-        let c = await device.item(taskKey("C"))
-        let t = await device.item(taskKey("T"))
-        XCTAssertEqual(c?["parent"], .reference("T"))
-        XCTAssertEqual(c?["project"], .reference("P"))
-        XCTAssertEqual(t?["project"], .reference("P"))
-        let left = try? await device.ledger.deferred()
-        XCTAssertEqual(left?.count, 0)
-        let pending = await device.pending()
-        XCTAssertEqual(pending, [], "nothing differs from iCloud")
-    }
-
-    func testAFetchThatStopsEarlyKeepsWhatWasSetAsideAside() async {
-        let device = await synced([])
-        await device.transport.deliver(.willFetch)
-        await device.transport.deliver(.fetched(changed: [cloud(task("C", "Child", parent: "P"))], removed: []))
-        await device.transport.deliver(.didFetch(error: "The network went away"))
-        let c = await device.item(taskKey("C"))
-        XCTAssertNil(c, "not written without its parent: the fetch will be tried again")
-        let aside = try? await device.ledger.deferred()
-        XCTAssertEqual(aside?.map(\.key), [taskKey("C")])
-        let status = await device.status()
-        XCTAssertEqual(status.lastError, "The network went away")
-
-        await device.deliverFetch([cloud(task("P", "Parent"))])
-        let child = await device.item(taskKey("C"))
-        XCTAssertEqual(child?["parent"], .reference("P"))
-    }
-
     func testATaskBeforeItsParentInOneBatch() async {
         let device = await synced([])
         await device.deliverFetch([cloud(task("C", "Child", parent: "T")), cloud(task("T", "Parent"))])
@@ -393,20 +350,6 @@ final class SyncCoreTests: XCTestCase {
         XCTAssertEqual(c?["parent"], .reference("T"))
         let pending = await device.pending()
         XCTAssertEqual(pending, [])
-    }
-
-    func testAReferenceThatNeverArrivesIsWrittenAsNoneAndClearedInICloud() async {
-        let device = await synced([])
-        await device.deliverFetch([cloud(task("C", "Orphan", project: "gone", labels: ["L", "lost"])),
-                                   cloud(label("L", "Errand"))])
-        let c = await device.item(taskKey("C"))
-        XCTAssertEqual(c?["title"], .string("Orphan"))
-        XCTAssertNil(c?["project"])
-        XCTAssertEqual(c?["labels"], .references(["L"]))
-        let entry = await device.entry(taskKey("C"))
-        XCTAssertEqual(entry?.base?["project"], .reference("gone"), "the base is iCloud's record")
-        let pending = await device.pending()
-        XCTAssertEqual(pending, [.save(taskKey("C"))], "the dangling reference is cleared by the next send")
     }
 
     func testAFetchDeliveredTwiceChangesNothing() async {

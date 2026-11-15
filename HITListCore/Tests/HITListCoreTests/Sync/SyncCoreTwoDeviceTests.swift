@@ -38,7 +38,12 @@ final class SyncCoreTwoDeviceTests: XCTestCase {
         func assertSame(_ context: String = "", file: StaticString = #filePath, line: UInt = #line) async throws {
             let a = try await one.store.records().map { RecordMerge.normal($0)!.comparable }
             let b = try await two.store.records().map { RecordMerge.normal($0)!.comparable }
-            let there = await cloud.alive().map { RecordMerge.normal($0)!.comparable }
+            // iCloud may keep a reference to an item it no longer holds alive (section 8: no device clears a
+            // reference to an item it lacks): compared as a device shows it. A reference to an item that IS alive
+            // there and missing on a device is still a difference.
+            let held = await cloud.alive()
+            let alive = Set(held.map(\.key))
+            let there = held.map { RecordMerge.normal(SyncCore.shown($0, present: { alive.contains($0) }))!.comparable }
             XCTAssertEqual(Set(a), Set(b), "the two devices \(context)", file: file, line: line)
             XCTAssertEqual(Set(a), Set(there), "a device and iCloud \(context)", file: file, line: line)
             XCTAssertEqual(a.count, Set(a).count, file: file, line: line)

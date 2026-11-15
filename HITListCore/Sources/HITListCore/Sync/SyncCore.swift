@@ -42,7 +42,8 @@ public actor SyncCore: SyncTransportDelegate {
     // MARK: The ledger, as read at start and kept in step with every write (`commit`)
 
     var entries: [SyncKey: LedgerEntry] = [:]
-    var deferred: [SyncKey: CloudRecord] = [:]
+    /// What records wait for (the ledger's `deferred` list, section 8): by record, the reference fields it waits for.
+    var waits: [SyncKey: CloudRecord] = [:]
     var firstFetchDone = false
     var account: String?
     var hold: SyncHold?
@@ -70,6 +71,9 @@ public actor SyncCore: SyncTransportDelegate {
     /// Records iCloud refused for good, and what the device held when it did: kept out of the list until the item
     /// changes. Not kept across a launch: each launch tries a refused record once more, never in a loop.
     var refused: [SyncKey: Refusal] = [:]
+    /// What `recordToSend` last answered for each key (nil inside: a marker), so a refusal remembers the version
+    /// iCloud refused rather than whatever the device holds by the time the answer comes.
+    var sentAs: [SyncKey: SyncRecord?] = [:]
     var fetchError: String?
     var sendError: String?
     /// Words that go with the current hold (a backup that failed).
@@ -313,8 +317,8 @@ public actor SyncCore: SyncTransportDelegate {
         try await ledger.write(write)
         for entry in write.upsert { entries[entry.key] = entry }
         for key in write.remove { entries[key] = nil }
-        for record in write.deferUpsert { deferred[record.key] = record }
-        for key in write.deferRemove { deferred[key] = nil }
+        for record in write.deferUpsert { waits[record.key] = record }
+        for key in write.deferRemove { waits[key] = nil }
         for (name, value) in write.facts {
             switch name {
             case LedgerFact.account: account = value.flatMap { String(data: $0, encoding: .utf8) }
@@ -340,14 +344,14 @@ public actor SyncCore: SyncTransportDelegate {
             let again = try await ledger.fact(Self.refetchFact)
             let seen = try await ledger.fact(Self.massSeenFact)
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
-            deferred = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
+            waits = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil
             account = owner.flatMap { String(data: $0, encoding: .utf8) }
             refetch = refetch || again != nil
             massSeenAt = seen.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             if let held { hold = try? JSONDecoder().decode(SyncHold.self, from: held) } else if hold?.persists == true { hold = nil }
             loaded = true
-            log("Started: \(entries.count) records remembered, \(deferred.count) set aside" +
+            log("Started: \(entries.count) records remembered, \(waits.count) waiting for an item" +
                 (hold.map { ", held: \($0.words)" } ?? ""))
             return true
         } catch {
@@ -421,7 +425,7 @@ public actor SyncCore: SyncTransportDelegate {
         return a.name < b.name
     }
 
-    private static func rank(_ type: String) -> Int {
+    static func rank(_ type: String) -> Int {
         if type == SyncSchema.metaType { return -1 }
         return SyncSchema.types.firstIndex { $0.name == type } ?? Int.max
     }
