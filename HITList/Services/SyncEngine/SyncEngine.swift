@@ -206,20 +206,34 @@ final class SyncEngine {
     func syncWithin(_ limit: Duration, reason: String) async -> Bool {
         guard isStarted else { return false }
         let core = self.core
-        let finished = await withTaskGroup(of: Bool?.self) { group -> Bool in
-            group.addTask {
-                do { try await core.syncNow(); return true } catch { return false }
+        // Two tasks and the first answer, not a task group: a group waits for every child, and the sync does not stop
+        // when it is cancelled, so a group would not keep to the limit. The sync goes on after the limit if it must.
+        let finished: Bool = await withCheckedContinuation { (answer: CheckedContinuation<Bool, Never>) in
+            let once = FirstAnswer(answer)
+            Task {
+                do { try await core.syncNow(); once.give(true) } catch { once.give(false) }
             }
-            group.addTask {
+            Task {
                 try? await Task.sleep(for: limit)
-                return nil
+                once.give(false)
             }
-            let first = await group.next() ?? nil
-            group.cancelAll()
-            return first ?? false
         }
-        say("Sync for \(reason): \(finished ? "done" : "not finished in \(limit)")")
+        say("Sync for \(reason): \(finished ? "done" : "not finished within \(limit), or it stopped")")
         return finished
+    }
+
+    /// Resumes a continuation once, with whichever answer comes first.
+    private final class FirstAnswer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<Bool, Never>?
+        init(_ continuation: CheckedContinuation<Bool, Never>) { self.continuation = continuation }
+        func give(_ value: Bool) {
+            lock.lock()
+            let waiting = continuation
+            continuation = nil
+            lock.unlock()
+            waiting?.resume(returning: value)
+        }
     }
 
     /// Returns once everything the brain said before this call has been handled here (posted, re-read), and every save
