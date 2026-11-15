@@ -443,3 +443,180 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(RecordMerge.normal(raw)?["labels"], .referenceList(["L1", "L2"]))
     }
 }
+
+// MARK: - Each field's own rule
+
+/// How a field both sides changed since they last agreed is settled (`SyncField.Merge`): `lastWriter` (the record
+/// changed last, a tie to iCloud), `clock` (the profile's name and picture, each by its own time) and `union` (a
+/// task's labels).
+final class RecordMergeFieldRuleTests: XCTestCase {
+    private typealias F = MergeFixture
+
+    // MARK: lastWriter
+
+    func testLastWriterBothChangedTheRecordChangedLastWins() {
+        let base = F.task(["title": .string("Milk")], updated: 10)
+        let local = F.task(["title": .string("Oat milk")], updated: 31)
+        let server = F.task(["title": .string("Soy milk")], updated: 30)
+        XCTAssertEqual(F.merge(base: base, local: local, server: server).merged?["title"], .string("Oat milk"))
+        let later = F.task(["title": .string("Soy milk")], updated: 32)
+        XCTAssertEqual(F.merge(base: base, local: local, server: later).merged?["title"], .string("Soy milk"))
+    }
+
+    func testLastWriterTieGoesToICloud() {
+        let base = F.task(["title": .string("Milk")], updated: 10)
+        let local = F.task(["title": .string("Oat milk")], updated: 30)
+        let server = F.task(["title": .string("Soy milk")], updated: 30)
+        XCTAssertEqual(F.merge(base: base, local: local, server: server).merged?["title"], .string("Soy milk"))
+    }
+
+    func testLastWriterDecidesEachFieldOnItsOwn() {
+        // The later record wins only the fields both changed; a field the earlier side alone changed stays.
+        let base = F.task(["title": .string("Milk"), "priority": .int(4), "notes": .string("")], updated: 10)
+        let local = F.task(["title": .string("Oat milk"), "priority": .int(2), "notes": .string("")], updated: 20)
+        let server = F.task(["title": .string("Soy milk"), "priority": .int(4), "notes": .string("aisle 3")],
+                            updated: 30)
+        let merged = F.merge(base: base, local: local, server: server).merged
+        XCTAssertEqual(merged?["title"], .string("Soy milk"))
+        XCTAssertEqual(merged?["priority"], .int(2))
+        XCTAssertEqual(merged?["notes"], .string("aisle 3"))
+        XCTAssertEqual(merged?.updatedAt, F.at(30))
+    }
+
+    func testLastWriterFlipCountCountsOnce() {
+        // A known limit (section 5): two devices flipping the same switch apart count once.
+        let base = F.task(["flipCount": .int(0)], updated: 10)
+        let local = F.task(["flipCount": .int(1)], updated: 20)
+        let server = F.task(["flipCount": .int(1)], updated: 21)
+        XCTAssertEqual(F.merge(base: base, local: local, server: server).merged?["flipCount"], .int(1))
+    }
+
+    // MARK: clock: the profile
+
+    func testClockNameLaterHereAndPictureLaterThereBothSurviveWithABase() {
+        let x = Data([1]), y = Data([2, 2])
+        let base = F.profile(["displayName": .string("G"), "nameUpdatedAt": F.ms(1),
+                              "avatarData": .data(x), "avatarUpdatedAt": F.ms(1)], updated: 1)
+        let local = F.profile(["displayName": .string("George"), "nameUpdatedAt": F.ms(10),
+                               "avatarData": .data(x), "avatarUpdatedAt": F.ms(1)], updated: 10)
+        let server = F.profile(["displayName": .string("G"), "nameUpdatedAt": F.ms(1),
+                                "avatarData": .data(y), "avatarUpdatedAt": F.ms(20)], updated: 20)
+        for (l, s) in [(local, server), (server, local)] {
+            let merged = F.merge(base: base, local: l, server: s).merged
+            XCTAssertEqual(merged?["displayName"], .string("George"))
+            XCTAssertEqual(merged?["nameUpdatedAt"], F.ms(10))
+            XCTAssertEqual(merged?["avatarData"], .data(y))
+            XCTAssertEqual(merged?["avatarUpdatedAt"], F.ms(20))
+            XCTAssertEqual(merged?.updatedAt, F.at(20))
+        }
+    }
+
+    func testClockNameLaterHereAndPictureLaterThereBothSurviveWithoutABase() {
+        // Two devices that each made a profile before they first met (M5): neither record wins whole.
+        let x = Data([1]), y = Data([2, 2])
+        let local = F.profile(["displayName": .string("George"), "nameUpdatedAt": F.ms(30),
+                               "avatarData": .data(x), "avatarUpdatedAt": F.ms(5)], updated: 30)
+        let server = F.profile(["displayName": .string("G"), "nameUpdatedAt": F.ms(10),
+                                "avatarData": .data(y), "avatarUpdatedAt": F.ms(40)], updated: 40)
+        for (l, s) in [(local, server), (server, local)] {
+            let outcome = F.merge(base: nil, local: l, server: s)
+            XCTAssertEqual(outcome.rule, .firstMeeting)
+            XCTAssertEqual(outcome.merged?["displayName"], .string("George"))
+            XCTAssertEqual(outcome.merged?["nameUpdatedAt"], F.ms(30))
+            XCTAssertEqual(outcome.merged?["avatarData"], .data(y))
+            XCTAssertEqual(outcome.merged?["avatarUpdatedAt"], F.ms(40))
+            XCTAssertEqual(outcome.merged?.updatedAt, F.at(40))
+        }
+    }
+
+    func testClockBothSetTheNameTheLaterClockWinsNotTheLaterRecord() {
+        let base = F.profile(["displayName": .string("G"), "nameUpdatedAt": F.ms(1)], updated: 1)
+        let local = F.profile(["displayName": .string("George"), "nameUpdatedAt": F.ms(25)], updated: 25)
+        // iCloud's record is later (its picture was set at 50), but its name is older.
+        let server = F.profile(["displayName": .string("Geo"), "nameUpdatedAt": F.ms(20),
+                                "avatarUpdatedAt": F.ms(50)], updated: 50)
+        let merged = F.merge(base: base, local: local, server: server).merged
+        XCTAssertEqual(merged?["displayName"], .string("George"))
+        XCTAssertEqual(merged?["nameUpdatedAt"], F.ms(25))
+        XCTAssertEqual(merged?["avatarUpdatedAt"], F.ms(50))
+    }
+
+    func testClockTieGoesToICloud() {
+        let base = F.profile(["displayName": .string("G"), "nameUpdatedAt": F.ms(1)], updated: 1)
+        let local = F.profile(["displayName": .string("George"), "nameUpdatedAt": F.ms(25)], updated: 25)
+        let server = F.profile(["displayName": .string("Geo"), "nameUpdatedAt": F.ms(25)], updated: 25)
+        XCTAssertEqual(F.merge(base: base, local: local, server: server).merged?["displayName"], .string("Geo"))
+        XCTAssertEqual(F.merge(base: nil, local: local, server: server).merged?["displayName"], .string("Geo"))
+    }
+
+    func testClockASideWithNoClockLosesToASideWithOne() {
+        let base = F.profile(["displayName": .string("G")], updated: 1)
+        let local = F.profile(["displayName": .string("George"), "nameUpdatedAt": F.ms(5)], updated: 5)
+        let server = F.profile(["displayName": .string("Geo")], updated: 9)
+        XCTAssertEqual(F.merge(base: base, local: local, server: server).merged?["displayName"], .string("George"))
+        XCTAssertEqual(F.merge(base: nil, local: local, server: server).merged?["displayName"], .string("George"))
+    }
+
+    func testClockAPictureRemovedLaterStaysRemoved() {
+        let x = Data([1, 2])
+        let base = F.profile(["avatarData": .data(x), "avatarUpdatedAt": F.ms(1)], updated: 1)
+        let local = F.profile(["avatarUpdatedAt": F.ms(30)], updated: 30)
+        let server = F.profile(["avatarData": .data(Data([7])), "avatarUpdatedAt": F.ms(20)], updated: 20)
+        XCTAssertNil(F.merge(base: base, local: local, server: server).merged?["avatarData"])
+        XCTAssertNil(F.merge(base: nil, local: local, server: server).merged?["avatarData"])
+        XCTAssertNil(F.merge(base: nil, local: server, server: local).merged?["avatarData"])
+    }
+
+    // MARK: union: a task's labels
+
+    private func labels(_ names: String...) -> SyncValue? { names.isEmpty ? nil : .references(names) }
+
+    private func mergedLabels(base: [String], local: [String], server: [String]) -> SyncValue? {
+        func task(_ names: [String], _ t: Int64) -> SyncRecord {
+            var record = F.task(updated: t)
+            record["labels"] = names.isEmpty ? nil : .references(names)
+            return record
+        }
+        return F.merge(base: task(base, 10), local: task(local, 20), server: task(server, 30)).merged?["labels"]
+    }
+
+    func testUnionAddedOnBothSides() {
+        XCTAssertEqual(mergedLabels(base: ["a"], local: ["a", "b"], server: ["a", "c"]), labels("a", "b", "c"))
+        XCTAssertEqual(mergedLabels(base: [], local: ["b"], server: ["c"]), labels("b", "c"))
+        XCTAssertEqual(mergedLabels(base: [], local: ["b"], server: ["b", "c"]), labels("b", "c"))
+    }
+
+    func testUnionRemovedOnOneSide() {
+        XCTAssertEqual(mergedLabels(base: ["a", "b"], local: ["b"], server: ["a", "b", "c"]), labels("b", "c"))
+        XCTAssertEqual(mergedLabels(base: ["a", "b"], local: ["a", "b", "c"], server: ["b"]), labels("b", "c"))
+    }
+
+    func testUnionAddedOnOneSideAndRemovedOnTheOther() {
+        // Here added b; there removed a. Both stand.
+        XCTAssertEqual(mergedLabels(base: ["a"], local: ["a", "b"], server: []), labels("b"))
+        XCTAssertEqual(mergedLabels(base: ["a"], local: [], server: ["a", "b"]), labels("b"))
+    }
+
+    func testUnionRemovedDifferentLabelsOnEachSide() {
+        XCTAssertEqual(mergedLabels(base: ["a", "b", "c"], local: ["b", "c"], server: ["a", "c"]), labels("c"))
+    }
+
+    func testUnionBothEmptied() {
+        XCTAssertNil(mergedLabels(base: ["a", "b"], local: [], server: []))
+        XCTAssertNil(mergedLabels(base: ["a", "b"], local: ["b"], server: ["a"]), "each removed the other's")
+    }
+
+    func testUnionOneSideOnlyIsThatSides() {
+        XCTAssertEqual(mergedLabels(base: ["a", "b"], local: ["a"], server: ["a", "b"]), labels("a"))
+        XCTAssertEqual(mergedLabels(base: ["a", "b"], local: ["a", "b"], server: ["c"]), labels("c"))
+    }
+
+    func testUnionWithoutABaseIsTheWholeRecordsLabels() {
+        // M5 has no base to tell additions from removals: the record changed last, whole, labels and all.
+        var local = F.task(updated: 20)
+        local["labels"] = .references(["a"])
+        var server = F.task(updated: 30)
+        server["labels"] = .references(["b"])
+        XCTAssertEqual(F.merge(base: nil, local: local, server: server).merged?["labels"], labels("b"))
+    }
+}
