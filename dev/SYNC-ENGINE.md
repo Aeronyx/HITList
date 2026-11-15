@@ -205,10 +205,29 @@ This one path is the migration, the repair, and the answer to "what if the engin
 
 ## 8. What arrives
 
-- Records are settled in `SyncSchema.types` order, a task after its parent. A record that points at an item which
-  is neither here nor in the same batch is **set aside** in the ledger (`deferUpsert`) until the fetch ends; then
-  what is still missing is written as no reference, and because that differs from S, iCloud's dangling reference
-  is cleared on the next send.
+- Records are settled in `SyncSchema.types` order, a task after its parent.
+- **A reference to an item that is not on this device is never cleared by this device.** (The first design wrote a
+  fetched record without a reference whose target had not arrived by the end of the fetch, and sent that back:
+  session 140's rig showed a label made on one device and sent a batch after its task being wiped from the task
+  everywhere. An item that is absent may only be late.) Instead:
+  - The brain reasons about a record **as it would be with every reference honoured**: the device's record plus the
+    references it is *waiting* for. That whole record is what is compared with `base`, what goes into the merge as L,
+    and what `recordToSend` sends. So a reference iCloud holds to an item this device lacks is neither a difference
+    nor ever sent away.
+  - The device is written with what it can show: the whole record less the references to items that are not here.
+    The ledger lists, per record, the references it is waiting for (the `deferred` list: the record's key and those
+    reference fields).
+  - A record starts waiting for an item whenever its `base` points at an item that is not on the device: a fetched
+    record whose target has not arrived, or an item deleted here (the store itself took the reference off the rows
+    that pointed at it).
+  - When an item that is waited for appears on the device (fetched, or made again here by an undo), the reference is
+    written on the device and the record stops waiting for it. So an undo of a deleted label gives its tasks their
+    label back, on every device.
+  - Only a person's own change to the field is sent: another Group chosen, a label removed while the label exists.
+    A to-one reference the device holds a value for is the person's; the waited-for one is honoured only while the
+    field is empty.
+  - What is waiting to go is sent with the items pointed at before those that point at them (`SyncSchema.types`
+    order, a task after its parent), so iCloud rarely holds a record ahead of its target.
 - A type this build does not know is ignored and nothing is kept for it.
 - `Meta/meta` with a `formatVersion` above `SyncSchema.formatVersion`: the engine holds (`needsUpdate`).
 - After a fetch that wrote anything the app runs what the mirror's import used to trigger (the name deduplication,

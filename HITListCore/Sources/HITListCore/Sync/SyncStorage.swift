@@ -77,7 +77,8 @@ public struct LedgerEntry: Hashable, Sendable, Codable {
 public struct LedgerWrite: Sendable {
     public var upsert: [LedgerEntry] = []
     public var remove: [SyncKey] = []
-    /// Fetched records set aside until a record they point at arrives (replaced by key).
+    /// Records waiting for an item they point at (`dev/SYNC-ENGINE.md` section 8), replaced by key: per record, its
+    /// key and the reference fields it is waiting for (`system` is not used and may be empty).
     public var deferUpsert: [CloudRecord] = []
     public var deferRemove: [SyncKey] = []
     /// Named facts to set (a value) or forget (nil).
@@ -91,7 +92,7 @@ public struct LedgerWrite: Sendable {
 }
 
 /// The engine's memory, kept on the device beside the items and never synced: for every record, what iCloud last
-/// held (`LedgerEntry`); fetched records waiting for another to arrive; and a few named facts (the account the
+/// held (`LedgerEntry`); the references records are waiting for (`deferred`); and a few named facts (the account the
 /// memory belongs to, whether the first fetch has finished, the transport's own state). Losing it loses nothing of
 /// the person's: the engine then merges everything afresh (`dev/SYNC-ENGINE.md`, "A merge without a memory").
 public protocol SyncLedger: SyncTransportState {
