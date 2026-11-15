@@ -375,10 +375,11 @@ final class SyncInvariantsTests: XCTestCase {
         let report = await SyncSimulation.randomRun(seed: 3, devices: 3, steps: 400, config: config, brain: NaiveBrain.make)
         XCTAssertEqual(report.script.count, 400)
         for kind in ["without its ledger", "fault account", "iCloud deleteZone", "iCloud quotaFull", "iCloud refuseNextSave",
-                     "fault crash", "fault deliverTwice", "transport syncs by itself", "iCloud poke"] {
+                     "fault crash", "fault deliverTwice", "transport syncs by itself", "iCloud poke", "fault network down"] {
             XCTAssertTrue(report.script.contains { $0.contains(kind) }, "no step '\(kind)' in seed 3")
         }
-        print("Every fault kind, seed 3: \(report.findings.count) findings, \(report.notes.count) notes")
+        print("Every fault kind, seed 3: \(report.findings.count) findings, \(report.notes.count) notes; the script begins:\n"
+              + report.script.prefix(12).joined(separator: "\n"))
     }
 
     /// Measured in the test process's own CPU time: on a Mac shared with other builds the wall clock says more about

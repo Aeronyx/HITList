@@ -110,6 +110,34 @@ public enum SimCloudFault: Sendable {
     case poke(SyncKey, [String: SyncValue?])
 }
 
+extension SimFault: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .network(let up): return up ? "network up" : "network down"
+        case .dropNetwork(let count): return "network drops after \(count) more batches or pages"
+        case .loseNextResponse: return "next answer from iCloud lost"
+        case .crash(.afterHandling(let kind)): return "crash after handling the next \(kind.rawValue)"
+        case .crash(.beforeSent): return "crash before the next sent"
+        case .deliverTwice(let kind): return "deliverTwice the next \(kind.rawValue)"
+        case .loseBookmark: return "bookmark lost"
+        case .account(let account?): return "account signed in to \(account)"
+        case .account(nil): return "account signed out"
+        }
+    }
+}
+
+extension SimCloudFault: CustomStringConvertible {
+    public var description: String {
+        switch self {
+        case .deleteZone(let reason): return "deleteZone \(reason.rawValue)"
+        case .quotaFull(let full): return "quotaFull \(full)"
+        case .refuseNextSave(let key, let failure): return "refuseNextSave \(key) \(failure)"
+        case .poke(let key, let fields):
+            return "poke \(key) " + fields.keys.sorted().map { "\($0) \(SyncInvariants.say(fields[$0] ?? nil))" }.joined(separator: ", ")
+        }
+    }
+}
+
 public enum SimStep: Sendable, CustomStringConvertible {
     case act(String, SimAction, hint: SimHint = .keys)
     case sync(String)
