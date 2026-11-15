@@ -123,7 +123,7 @@ The result is what both sides should end with: the item, a marker, or nothing.
 |---|---|---|
 | M1 | Nothing here, nothing there | Nothing |
 | M2 | Here, no B, not there | L (new: it goes to iCloud) |
-| M3 | Not here, no B, alive there | S (new: it arrives) |
+| M3 | Not here, no B, alive there | S (new: it arrives). Unless this device holds a deletion of its own still to send for it (`deletedHereAt` set, kept across a forgotten ledger, never "now"): then as M8 against that time |
 | M4 | Not here, no B, a marker there | S (nothing to delete) |
 | M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock |
 | M6 | Here, no B, a marker there | L if `L.updatedAt` is after the deletion (it comes back there), else the marker (it goes here) |
@@ -189,8 +189,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   the first event of the first sync after `start` if it changed while the app was not running (never inside
   `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
   account nothing is fetched or sent. A transport that lost its own state announces `signedIn` for the account that
-  is signed in, even when that is the account the ledger belongs to: the brain reads a sign-in to its own account
-  as no change of account (only the bookmark and the list are gone, as after T13).
+  is signed in, even when that is the account the ledger belongs to. The brain reads a sign-in to its own account
+  as no change of account (nothing of the person's leaves the device) but as **the transport's memory lost**, and
+  forgets its own with it (section 7): a bookmark that starts afresh never tells of a zone lost in the meantime, so
+  a ledger kept would hold bases for records iCloud no longer has, and nothing would send them again (found by
+  session 140's rig).
 - **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
@@ -202,6 +205,12 @@ here has no `base`. Nothing is sent before the first whole fetch has finished (`
 device first learns what iCloud holds; each record is then settled by M2 to M6: the same item on both sides becomes
 one record, an item deleted elsewhere is found deleted by its marker, and only what iCloud truly lacks is sent.
 This one path is the migration, the repair, and the answer to "what if the engine's own file is damaged".
+
+**The ledger never outlives the bookmark, nor the bookmark the ledger.** The transport's state is one of the ledger's
+facts, so they are lost together; and when the transport says its state is gone (T12) the brain forgets the ledger.
+One thing is carried across: a deletion this device made and has not yet sent (`deletedHereAt`) is kept as an entry
+with no base, and settles against iCloud's record like M8 (iCloud's stands if it changed after the deletion, else
+the marker goes). Without that, an item deleted here a moment before the memory was lost would come back.
 
 ## 8. What arrives
 
