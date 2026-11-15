@@ -126,14 +126,16 @@ public enum RecordMerge {
 
         case (let base?, nil, let server?):
             if server.isDeleted {
-                // M10: deleted there, not here either. With the base a marker too, nothing was deleted here since
-                // the two agreed (`deletedHere` would only be "now"): iCloud's marker stands, or every sync would
-                // send a fresher one. Deleted on both sides apart: the marker carries the later of the two
-                // deletions, whichever device reached iCloud first (round 28, brief 138: with iCloud's time alone,
-                // the order of arrival decided the marker's time, and a deletion here after an edit elsewhere was
-                // forgotten).
-                if !base.isDeleted, isLater(.date(deletedHere), than: server[SyncSchema.deletedAt]) {
-                    return MergeOutcome(merged: .marker(key, deletedAt: deletedHere), rule: .deletedBoth)
+                // M10: deleted there, not here either. Deleted on both sides apart: the marker carries the later of
+                // the two deletions, whichever device reached iCloud first (round 28, brief 138: with iCloud's time
+                // alone, the order of arrival decided the marker's time, and a deletion here after an edit elsewhere
+                // was forgotten). With the base a marker too, only an explicit `deletedHereAt` is a deletion here:
+                // a later marker this device still has to send over iCloud's earlier one, kept when that earlier
+                // marker is delivered again (T2; session 139). `now` never stands in for it, or two devices would
+                // send each other fresher markers at every sync.
+                let stillToGo: Date? = base.isDeleted ? input.deletedHereAt : deletedHere
+                if let at = stillToGo, isLater(.date(at), than: server[SyncSchema.deletedAt]) {
+                    return MergeOutcome(merged: .marker(key, deletedAt: at), rule: .deletedBoth)
                 }
                 return MergeOutcome(merged: server, rule: .deletedBoth)
             }

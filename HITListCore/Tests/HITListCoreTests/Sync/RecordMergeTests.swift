@@ -284,6 +284,26 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(unnoticed.merged, F.marker(at: 90), "nobody noticed: now, as M8")
     }
 
+    func testM10AMarkerStillToGoSurvivesICloudsEarlierMarkerDeliveredAgain() {
+        // The brain keeps a later marker still to go as base = iCloud's earlier marker and `deletedHereAt` = this
+        // device's later time (M10's result when the base was alive). iCloud's earlier marker delivered again (T2)
+        // before the later one is sent must not drop it: twice is once.
+        let first = F.merge(base: F.task(updated: 10), local: nil, deletedHereAt: 60, server: F.marker(at: 40))
+        XCTAssertEqual(first.merged, F.marker(at: 60))
+        let again = F.merge(base: F.marker(at: 40), local: nil, deletedHereAt: 60, server: F.marker(at: 40))
+        XCTAssertEqual(again.rule, .deletedBoth)
+        XCTAssertEqual(again.merged, F.marker(at: 60), "the later marker is still to go")
+
+        let older = F.merge(base: F.marker(at: 40), local: nil, deletedHereAt: 30, server: F.marker(at: 40))
+        XCTAssertEqual(older.merged, F.marker(at: 40), "an earlier time here is no news")
+        let newerThere = F.merge(base: F.marker(at: 40), local: nil, deletedHereAt: 60, server: F.marker(at: 70))
+        XCTAssertEqual(newerThere.merged, F.marker(at: 70))
+        // With a marker base, `now` never stands in for a deletion here: two devices would send fresher markers
+        // to each other at every sync.
+        let unnoticed = F.merge(base: F.marker(at: 40), local: nil, server: F.marker(at: 40), now: 90)
+        XCTAssertEqual(unnoticed.merged, F.marker(at: 40))
+    }
+
     func testM11GoneForGoodUnchangedHereGoes() {
         let base = F.task(updated: 10)
         let outcome = F.merge(base: base, local: base, server: nil)
