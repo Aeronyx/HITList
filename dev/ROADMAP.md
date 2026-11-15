@@ -5,17 +5,30 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.10 (round 26, 2026-11-13, the day after 0.9.9 was released)
+## Now: 0.9.11 (round 27, 2026-11-14, the evening after 0.9.10's release stopped at Apple's agreement)
 
-George's Mac idled at 18 to 24% CPU with a hollow bolt that said "Sending 3 changes to iCloud…"; he asked for a
-robust, lightweight sync foundation. No briefs: the supervisor alone (`dev/briefs/ROUND-26.md`). Sync's marks now
-say only what CloudKit's mirror reports (`SyncSessionGate`); the polling of iCloud, the kept index, the comparison
-that drove the bolt and the hollow bolt's breath are gone; Check iCloud… still compares on request. On master,
-tested, packaged; George releases it.
+0.9.10 (round 26: sync's marks from the mirror's own events, no polling, no endless animation) was prepared and
+never uploaded; its work ships in 0.9.11. George's notes on it and on 0.9.9 (`dev/briefs/ROUND-27.md`): the bolt
+must not be filled while records differ, the creatures are too still, Flint's blink and rain, Phase's rain look,
+Quill's place on his box, the calendar, the app's long name, an import from Todoist.
 
-Next, if George wants it (each needs his word): a `CKSyncEngine` engine of our own (a new record schema in
-Production and a migration of every tester's data); a check that `Deduplicator`'s winner is in iCloud before it
-deletes the other copies.
+| Brief | What | Status |
+|---|---|---|
+| supervisor | The bolt's record check: filled only once a fresh read of iCloud's records matched this device's; on events, never on a timer; what differs said in words; Check iCloud… settles it | merged, awaiting release |
+| 132 `alive` | An idle every 4 to 12 s in the default states; a cheer of its own for each creature when a task is completed | merged, awaiting release |
+| 133 `flint-moves` | Flint's blink as a lid, his own wing over his head in the rain, the same head asleep; his daytime frames pinned | merged, awaiting release |
+| 134 `phase-rain` | Phase looks down and to the left in the rain | merged, awaiting release |
+| 135 `small-things` | Quill on the corner of Midnight's box; "short for Human-In-The-List" in About | merged, awaiting release |
+| 136 `calendar` | Settings → Calendar, calendars by account, Google Calendar's way in, an event's card, Add to Calendar | merged, awaiting release |
+| 137 `todoist-import` | Import from Todoist's backup ZIP or a project's CSV: preview, nothing doubled, undo | merged, awaiting release |
+
+Next, on George's word: **a `CKSyncEngine` engine of our own** (he asked: "eventually we do need to write our own
+engine, no?"). HITList would own its records and its list of pending changes, so the bolt would be exact without
+comparing, two devices seeding the same record would meet in one record instead of two, and a record that fails
+would say so at once. It needs new record types in Production (additive), every device's data moved across once
+with the old zone left in place, and two or three rounds: the engine behind a switch on CloudKit Development,
+the move rehearsed on copies, George's devices first, then the friends. Also open: `Deduplicator`'s survivor rule
+ties when two copies share an id and a `createdAt`.
 
 ## Before: 0.9.9 (round 25, 2026-11-12, the evening 0.9.8 was held back; released that night)
 

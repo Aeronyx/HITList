@@ -703,6 +703,81 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 27 record (2026-11-14, 20:05 to about 22:30 Eastern; sessions 132–137 merged for 0.9.11)
+0.9.10's release stopped at Apple's agreement and nothing was uploaded; George's notes came at about 20:05
+(`ROUND-27.md`). The briefs were on master at 20:20, six sessions started at 20:21, the first sheets were in the
+notes folder by 20:22 and 20:31, 134 was done at 20:38, 133 at 20:50, 132 at 21:06, 137 at 21:10, 135 at 21:13 and
+136 at 21:22; all six were on master at 21:31. No schema change.
+- **The supervisor's own, the bolt's record check**, written and tested while the sessions ran:
+  `Services/Sync/SyncRecordCheck.swift` (pure: when a read of iCloud's records is due, when a difference is
+  believed, when it turns from waiting to trouble, when to give up), `SyncState.differs(words, stuck:)`,
+  `CloudSyncMonitor`'s wiring (a read on the session's first import, on coming back after half an hour, when
+  trouble clears, after Check iCloud… or its repairs, and after an import or export while the two differ),
+  `SyncAudit.compare` (the comparison both the bolt and Check iCloud… rest on), `SyncWords.difference`, a note under
+  Settings' status line, the iCloud row's second line on Settings' first screen, the bolt's "good to go" moved to
+  the read that finds the two the same, and `-syncCheckHide N` (Debug, side stores: iCloud read as if it lacked N
+  filters and labels). An automatic re-send of records only on this device was written and taken out the same
+  hour (below). Run for real on CloudKit Development on a side store (`e2e.sh` in `round-27/sync`): a fresh store
+  agreed 8 s after launch (49 records, a 0.4 s read); a task made in a session with sync off was exported by the
+  mirror at the next synced launch and the check agreed 2 s after that export; with three records hidden the marks
+  read "1 label and 2 filters on this device aren't in iCloud", hollow, then red at exactly two minutes, with
+  Check iCloud… listing the same three; at rest that app read 0.0% in 18 of 20 one-second samples (a companion's
+  idle is the rest).
+- **What the Development run settled about George's three records.** One of them has the same short hash
+  (`f659be7c`) and the same stamps (created 2026-10-26 00:02:52, changed 2026-10-29 12:45:27) as a filter in the
+  Development zone: they were exported to Development from the real store by Debug builds in the app's first days
+  (before `SyncStoreGuard` gave Debug builds a store of their own), never changed since, and so never sent to
+  Production by the TestFlight build that took the store over. A session with sync off is not how records get
+  stranded (the mirror sends them later from its history), and a deletion always comes back, so a true "only here"
+  cannot be made on purpose. What the mirror does when such a record is saved again is not known for certain,
+  which is why nothing is re-sent unasked.
+- **132 `alive`** (xhigh, 45 minutes, four commits): the pace in the default states (a wait of 4 to 12 s over a
+  floor redrawn between 4 and 7, half a second off the wait before, the first idle 1.5 to 4 s after appearing),
+  never one of the last two idles when there are three; weather keeps 6 to 36 s; `CompanionDirector.cheer()` from
+  `CompletionDelightHook`; `CompanionCheers.swift`, eight cheers of 1.1 to 1.5 s from existing frames (its strip
+  went to George at 20:40). No whole-sprite hop: an offset would have touched every seat. Mac CPU over two minutes:
+  0.83% at the new pace against 0.37% at the old, 0.0% between moves; a move costs about 70 ms, nearly all of it
+  the window laid out again. It could not tick a real task (no simulator access; a system alert over its Mac
+  window); the supervisor did on the Mac ("Companion flint plays cheer" in the log at the click).
+- **133 `flint-moves`** (xhigh, 29 minutes): the pin first (32 daytime frames by digest), then 29 frames: the
+  blink as a lid over the same pale eye with a low lash, the shut eye asleep, glad eyes as two arcs (`happy`,
+  `giggle`, `screech`: changed on the supervisor's note although the brief listed `happy` as kept), the rain as his
+  own wing over his head ("G4", after nine candidates) with ears and tuft showing, asleep in the rain under the same
+  wing. In the rain `earFlick` cannot play. The supervisor's notes (what was weird, from master's frames at 1x)
+  went with a stop in its second minute.
+- **134 `phase-rain`** (xhigh, 17 minutes): four pixels in each of seventeen frames by script; its first script
+  found rows by their text and moved the wrong one of two identical rows in six frames, which its own new test
+  caught. `watch` keeps the down-left look throughout.
+- **135 `small-things`** (xhigh, 52 minutes): found in the running app first: 0.9.9's Quill lay 7 pt past the box
+  over the corner's curve, and on the selection ring when Midnight was picked. A swatch-only frame `drape@swatch`
+  (the "@" keeps the engine from drawing it), a placement found by search (no part of his underside more than 1 pt
+  off the box), a 1 pt gap in the ring round him, the first row of boxes 6 pt shorter. "HITList, short for
+  Human-In-The-List" at the head of About (candidate A, the foot of the first screen, fell off an iPhone 16), and
+  `NSHumanReadableCopyright` for the Mac's About panel (outside its list; accepted).
+- **136 `calendar`** (xhigh, 61 minutes, 14 commits): Settings → Calendar (a page after General; a section on the
+  Mac), calendars by `EKSource`, "Add tasks to" (only calendars that take changes; "Work (default)"), the Google
+  words with the paths checked on the iOS 27 simulator's Settings app (Apps → Calendar → Add Account…; no
+  "Calendar Accounts" row any more) and in this Mac's Internet Accounts strings, an event's card, Add to Calendar
+  with its toast, Undo and "Already on your calendar", write-only access while events are off (and a new purpose
+  string for full access: the old one said HITList never adds an event), one tip in Today, the privacy page,
+  demo accounts and a writable fake. Its row made Settings' first screen 48 pt taller than an iPhone 17 shows: the
+  supervisor let About sit below the fold (`testFirstScreenFitsAnIPhone17ButForItsLastRow`) rather than squeeze
+  eight rows. Not verified: an iPad; Undo under write-only access on a real device.
+- **137 `todoist-import`** (xhigh, 49 minutes, nine commits): `TodoistReader`, `TodoistMapping`, `TodoistDates` in
+  core (HITList's own quick-add reader first, then what Todoist writes: "ev", "every!", "after", "until", an ISO
+  date and time, `TIMEZONE`; a day without a year stays this year when it is at most 31 days past), `TodoistZip`
+  (stored and deflated entries over `Compression`), `TodoistImporter` (additive; a backup first on the real store;
+  batches of 50; a receipt in Application Support; undo), the preview card, `-todoistImportFixture`. No toast (it
+  would sit behind the Settings sheet): a line under the rows. Its own write path beside `TaskActions.create`
+  (which saves per task). The pages it read: Todoist's help articles 360000748525 (CSV columns), 208821185
+  (exporting a project), 115001799989 (backups).
+- **Open after the round**: a `CKSyncEngine` engine (George: "eventually we do need to write our own engine, no?";
+  proposed in the hand-over, his to start); `Deduplicator`'s survivor rule ties when two copies share an id and a
+  `createdAt` (each device may then delete the other's survivor); the first screen of Settings scrolls by one row;
+  a system notification alert sat on George's screen over the sessions' Mac windows; the read for the bolt is the
+  whole zone each time (an in-session change token would make re-reads nearly free if stores grow); everything
+  open from round 25.
+
 ## Round 25 record (2026-11-12, 15:50 to about 19:00 Eastern; sessions 127–131 merged for 0.9.9)
 0.9.8 was held back; George's notes came at about 15:50 with a friend's screenshot (`ROUND-25.md`). Gargle was
 renamed Flint on master at 16:21, five sessions started at 16:22, the first sheets were in by 16:31, 129 and 130

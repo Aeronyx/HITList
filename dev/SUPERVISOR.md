@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-26.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-27.md`.
 The memory folder under `~/.claude/projects/-Users-user-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.10: core 706, Mac 1955, iOS 1918 (35 fewer each: brief 95's beats and truth went with their tests), and 141 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.11: core 737, Mac 2014, iOS 1977, and 149 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -99,17 +99,23 @@ How George works with you:
   see a field missing from both: three `TaskItem` fields from 0.4.0 went undeployed for a week that way, and the
   first flip of a switch on a friend's Mac stopped his sync for good (2026-11-06). `release.sh` now also fails its
   preflight while Production lacks a field the models have (`CloudKitSchemaCheck`).
-- **Sync says only what CloudKit's mirror says** (round 26, after George's Mac idled at 18 to 24% CPU with a bolt
-  that never filled). SwiftData's CloudKit mirror is the engine; HITList never pokes it, polls for it or second-guesses
-  it. What the app knows about sync is the mirror's own events (`NSPersistentCloudKitContainer.eventChangedNotification`:
-  each setup, import and export with its start, end and error), the account status and the network path, and the
-  marks are a pure function of those (`SyncState.derive` → `SyncSteadiness` → `SyncSessionGate`). Three nevers, each
-  of which was true of 0.9.4 to 0.9.9 and each of which cost a release: **no request to iCloud that the mirror
-  didn't make**, unless the person asked for it (Check iCloud…); **no timer with nothing pending** (every timer is one
-  `Task.sleep` to a known deadline, armed by an event); **no animation without an end**, anywhere a mark of sync is
-  drawn, and nothing endless in the Mac's toolbar at all (each frame lays the toolbar out again). Before a round
-  ships anything that draws or schedules, the Mac app's idle CPU is measured (`sync26/cpu-run.sh` in the round-26
-  notes): at rest it is 0.0%.
+- **The bolt is filled only when the mirror has fetched and the records were found the same; and sync costs
+  nothing at rest** (rounds 26 and 27). SwiftData's CloudKit mirror is the engine; HITList never pokes it. The marks
+  are a pure function of the mirror's own events, the account, the network (`SyncState.derive` → `SyncSteadiness` →
+  `SyncSessionGate`) and, since George's "the bolt should not be able to be filled while the three records differ",
+  of a comparison of iCloud's records with this device's (`SyncRecordCheck`, `SyncAudit.compare`). What made 0.9.4
+  to 0.9.9 fail stays out, each of which cost a release: **no read of iCloud on a timer** (a read follows something
+  that happened: the session's first import, coming back after half an hour, trouble clearing, Check iCloud… or
+  its repairs, an import or export while the two differ); **nothing about iCloud kept between launches or between
+  reads** (a stale copy disagrees for good); **a difference believed only when two whole reads both find it**;
+  **words that say what is known** ("1 label and 2 filters on this device aren't in iCloud", never "Sending");
+  **no timer with nothing pending** (every timer is one `Task.sleep` to a known deadline, armed by an event);
+  **no animation without an end**, and nothing endless in the Mac's toolbar at all (each frame lays the toolbar out
+  again); **a way back** (when iCloud won't answer the read, the bolt follows the mirror's word again); and
+  **nothing repaired by itself** (a record here and not in iCloud was never sent or was deleted elsewhere; what the
+  mirror does with a record it thinks it sent is not known). Before a round ships anything that draws or
+  schedules, the Mac app's idle CPU is measured (`round-26/sync26/cpu-run.sh`, `round-27/sync/e2e.sh`): between a
+  companion's moves it is 0.0%.
 - Never add `com.apple.developer.icloud-container-development-container-identifiers` to any entitlements.
   Never open the real store under the Development environment. Never call `ModelContainer.deleteAllData()`
   or delete objects as a "reset": deletions mirror to CloudKit and wipe every device.
@@ -309,6 +315,30 @@ an `NSToolbar` item. Compare two Debug builds on the same `-syncReplay YES` scri
 build.noindex/<round>/wt-<version> <commit>`, its own `-derivedDataPath`) takes five minutes and makes "before" a
 number.
 
+Lessons from round 27 (six sessions in an hour, the supervisor's own sync work beside them):
+**a fingerprint in the log settled what a week of guessing had not.** The log names a record by a short hash that
+is the same on every device and in both CloudKit environments; a Debug run against Development showed one of
+George's three stranded records there, hash and October timestamps alike, which said where they came from (Debug
+builds on the real store in the app's first days). Read old logs beside new ones before theorising. **Test what the
+engine already does before designing a repair**: a task made with sync off was sent by the mirror at the next
+synced launch, so that was never the cause, and the planned automatic re-send (written, tested, removed within the
+hour) would have acted on a guess. **A state that can't be made on purpose needs a harmless stand-in**:
+`-syncCheckHide N` reads iCloud as if it lacked N records, which showed the bolt, the words, the two minutes and
+Check iCloud… end to end on CloudKit Development with nothing damaged. **The supervisor can do one piece itself
+while six sessions run**, if its files are its own and it merges as each session ends; an integration checkout
+(`git worktree add -b integ-27 build.noindex/integ27 master`) merged the unfinished tips early and built them
+together, so no conflict was a surprise. **The clock runs slower than it feels**: twenty minutes of work felt like
+fifty; run `date` before writing a time into a brief (the sessions' clocks were set half an hour late, then moved).
+**Session notes do not arrive while the supervisor's own turn runs**: read `list_sessions {"linked": true}` on a
+background `sleep`, and look in the notes folder, where sheets appear minutes before any message. **A new row on a
+measured screen is a decision** (the Calendar page made Settings' first screen 48 pt too tall; each session passed
+alone): say in the brief which rule wins, and expect the test that pins the old rule to fail only in the merged
+run. **A UI test that passes on the session's iPhone 17 can fail on an iPhone 16 or a busy Mac**: rerun on a quiet
+machine before judging. **The simulator tool needs George's yes per device**: without it, `simctl` launches and
+screenshots plus XCUITest do the same work. **A system alert over the test window stops the click driver** (it
+refuses, rightly): click a row it doesn't cover, never the alert, and tell George it is there. And again: **a `cd`
+inside a compound command moves this session's directory** (twice this round); use `git -C` and subshells.
+
 Lessons that cost time: sessions sometimes leave a Debug Mac app running or a spare simulator
 ("HITList-33"); check `pgrep -x HITList` and `xcrun simctl list devices` and tell George. A session that
 stops early with coherent commits is finished best by you on master. A brief that says "touch only these
@@ -325,17 +355,22 @@ files" is obeyed; one that does not produces merge conflicts.
 - Lists: `TaskListView.swift`, `Inbox/`, `Upcoming/`, `Tabs/` (iPhone shell: `MobileShell`, `MobileTabBar`,
   `BrowseView`, `ScreenMenu` = the top-right controls), `TaskRow.swift`, `ListChrome.swift` (`ListMetrics`),
   `Flipboard/`, `SidebarView.swift` + `ContentView.swift` (Mac).
-- Sync: `Services/Sync/*` (`SyncSessionGate` = when the bolt may be filled, `SyncSteadiness`, `SyncWatchdog`,
-  `SyncLog`, `SyncEnvironment`, `SyncAppDelegate`, `SyncRecovery`, `SyncStoreGuard`; `SyncAudit`, `ICloudZoneReader`,
-  `SyncComparison`, `StoreInventory` = Check iCloud… only, on request), `CloudSyncMonitor.swift`,
-  `ModelContainerFactory.swift`, `Deduplicator.swift`. `ROUND-26.md` says what was taken out and why.
+- Sync: `Services/Sync/*` (`SyncSessionGate` = the mirror has fetched this session, `SyncRecordCheck` = the records
+  were found the same, `SyncSteadiness`, `SyncWatchdog`, `SyncLog`, `SyncEnvironment`, `SyncAppDelegate`,
+  `SyncRecovery`, `SyncStoreGuard`; `SyncAudit` (`compare` for the bolt, `run` for Check iCloud…), `ICloudZoneReader`,
+  `SyncComparison`, `StoreInventory`), `CloudSyncMonitor.swift`, `ModelContainerFactory.swift`, `Deduplicator.swift`.
+  `ROUND-26.md` says what was taken out and why, `ROUND-27.md` what came back and how.
+- Calendar: `Services/Calendar/*` (the source protocol, EventKit, the demo, `CalendarAdds`), `Views/Calendar/*` (rows,
+  the event's card, Add to Calendar's toast, the settings page, the tip), core `CalendarDay`.
+- Import: core `Todoist*.swift` (reader, mapping, dates), `Services/Import/*` (ZIP, importer, receipt),
+  `Views/Import/*`; the rows are in `DataSettingsGroups.swift`.
 - Model: `Models/Models.swift`, `SchemaVersions.swift`, frozen `SchemaV1Models.swift`, `SchemaV2Models.swift`.
 - Settings: `SettingsView.swift`, `Views/Settings/*` (+ `Mac/`), `WhatsNew.swift`, `Support/Preferences.swift`.
 - Design system: `Support/DesignSystem/*` (`HITTokens.swift` = fonts/spacing/colours; README).
 - Companions: `Support/Companions/*` (the engine: `CompanionCharacter` holds frames, modes and inks, with snow's
   `s b c` and water's `p h u` the same in every theme, `glow:` for inks that give light (only Glim's lantern since
   round 25), `Frame(fade:, light:)`, a see-through body thinning down its rows; `CompanionDirector`,
-  `CompanionSchedule`, `CompanionClock`),
+  `CompanionSchedule`, `CompanionClock`, `CompanionCheers` = what each plays when a task is completed),
   `Support/Companions/Characters/*.swift` (one file a creature), `Views/Companions/*` (`CompanionSprite` draws,
   `CompanionPerch` seats), `Views/Settings/ThemeCompanion.swift` (the swatches' seats: `onCard`, `alongTop`,
   `peeking`, `asleepOnDot`, `onTop`, `onFloor`, `overCorner`, `inAir`, `onFloorRight`). Graphite's creature is
@@ -602,7 +637,48 @@ a minute without the launch's import reads "iCloud isn't answering, HITList will
 error; "Last change" names both directions at once; SwiftData's mirror stays the engine (a `CKSyncEngine` rewrite
 was weighed and not begun: new record types in Production and a migration of every tester's data need his word).
 
-## 8. Where things stand (2026-11-13, round 26 on master)
+Round 27 (2026-11-14, on 0.9.10's notes; its release had stopped at Apple's agreement; `ROUND-27.md` has his
+message whole): **"the bolt should not be able to be filled while the three records differ; doesn't that defeat the
+purpose of the bolt?"** So a filled bolt means the records were compared and found the same (this reverses the
+supervisor's round 26 choice, and stands). "I feel like eventually we do need to write our own engine, no?": yes,
+`CKSyncEngine`, as a project of its own on his word (proposed in the hand-over). Creatures: "animations do have to
+happen more often; we made them too sparse … at least once every like 12 seconds and at most once every 4-7 seconds
+with some randomness … It's still okay to have creatures skip most of their idle animations during weather effects
+… Perhaps they should also have task completion animations" (this replaces round 20's 6 to 36 seconds in the
+default states). Flint: "My friend overall likes Flint though so don't change his actual character too much yet,
+just his animations and non-Day sprites." Phase: "looking down left for rain instead". "Please add calendar/GCal
+integration" (round 17's "calendar events are read-only" now reads: HITList adds an event only when the person
+chooses Add to Calendar, and never changes one afterwards). "Make it clear once somewhere in the intro/title menus
+that the app is actually named 'Human-In-The-List' just for fun." "Is there an easy way to allow importing my
+tasks from Todoist?" The supervisor's own choices that round, which George may reverse: **nothing is repaired by
+itself** when records differ (Check iCloud… offers Send and Remove); a difference is drawn hollow for two minutes
+and red after; re-reads only on coming back after half an hour; **when iCloud won't answer the read after two
+retries the bolt follows the mirror's word again**; the pace's floor of 4 to 7 s and the half second between
+waits; one cheer in six seconds, a sleepy peek asleep, the usual reply in weather, none with Reduce Effects or Low
+Power Mode; Flint's wing as a flat roof with his ears under it ("G4") and his glad eyes as arcs; **Calendar is a
+page on Settings' first screen, so About sits below the fold on an iPhone** (the other ways: Reduce effects moved
+to Extras, or Calendar inside General); Google Calendar through the device's accounts and no Google sign-in in
+HITList; an added event is 30 minutes and a copy; the long name at the head of About rather than the first
+screen's foot; in the import, sections become labels, sub-tasks with a date of their own become tasks, a task with
+the same title in the same Group is skipped, an empty priority is none, and Undo removes imported tasks even if
+edited since.
+
+## 8. Where things stand (2026-11-14, round 27 on master)
+
+**2026-11-14, round 27 merged for 0.9.11 (Fable 5.2 supervisor), the evening after 0.9.10's release stopped at
+Apple's Program License Agreement** (nothing was uploaded; George accepts the agreement at
+developer.apple.com/account). Briefs 132 to 137 are merged on master (`dev/briefs/ROUND-27.md` has George's
+message): the bolt's record check (the supervisor's own), the creatures' pace and their cheer, Flint's blink and
+rain, Phase's rain look, Quill's corner, Settings → Calendar with an event's card and Add to Calendar, "short for
+Human-In-The-List" in About, and Import from Todoist. 0.9.10 was never uploaded: its notes are in 0.9.11's. No
+schema change. George releases with `scripts/release.sh --version 0.9.11 --quick`. Open: his word on a
+`CKSyncEngine` engine and on the choices in §7; his three records (Check iCloud… → Send to iCloud; what the mirror
+does with them is the first real evidence); 0.9.11 has not run against Production or on a real iPhone;
+`Deduplicator`'s tie when two copies share an id and a `createdAt`; an iPad was not looked at this round; Undo of
+an added event under write-only access on a real device; everything open from round 25. Details in COMMON's Round
+27 record. The next brief number is 138.
+
+### Round 26 (kept for the record; 0.9.10, prepared 2026-11-13 and not released)
 
 **2026-11-13, round 26 on master for 0.9.10 (Fable 5.2 supervisor), the day after 0.9.9 (27) was released.** No
 briefs and no sessions: the supervisor alone (`dev/briefs/ROUND-26.md` has George's message, what the running app

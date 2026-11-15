@@ -90,7 +90,9 @@ final class CalendarEventsUITests: XCTestCase {
         app.launchArguments += ["-seedDemoEvents", "YES"]
         app.launch()
         tab("today")
-        let task = text("Buy groceries")
+        // The day's first task: on an iPhone 16 with the demo's events above, the third ("Buy groceries") lies under the
+        // tab bar and a press there never reaches its row.
+        let task = text("Reply to Sam about the lease")
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         task.press(forDuration: 1.0)
         let item = app.buttons["Add to Calendar"].firstMatch
@@ -102,7 +104,7 @@ final class CalendarEventsUITests: XCTestCase {
         XCTAssertTrue(toast.label.hasPrefix("Added to Work"), toast.label)
         XCTAssertTrue(toast.label.hasSuffix("Undo"), toast.label)
         snapshot("15 Added to Work, with Undo")
-        XCTAssertTrue(event(containing: "Buy groceries").waitForExistence(timeout: 5), "the copy shows among today's events")
+        XCTAssertTrue(event(containing: "Reply to Sam about the lease").waitForExistence(timeout: 5), "the copy shows among today's events")
         XCTAssertTrue(toast.waitForNonExistence(timeout: 8), "the toast goes by itself")
 
         task.press(forDuration: 1.0)
@@ -119,15 +121,15 @@ final class CalendarEventsUITests: XCTestCase {
         app.launchArguments += ["-seedDemoEvents", "YES"]
         app.launch()
         tab("today")
-        let task = text("Buy groceries")
+        let task = text("Reply to Sam about the lease")
         XCTAssertTrue(task.waitForExistence(timeout: 10))
         task.press(forDuration: 1.0)
         app.buttons["Add to Calendar"].firstMatch.tap()
         let toast = app.descendants(matching: .any)["calendarNotice"].firstMatch
         XCTAssertTrue(toast.waitForExistence(timeout: 5))
-        XCTAssertTrue(event(containing: "Buy groceries").waitForExistence(timeout: 5))
+        XCTAssertTrue(event(containing: "Reply to Sam about the lease").waitForExistence(timeout: 5))
         toast.tap()
-        XCTAssertTrue(event(containing: "Buy groceries").waitForNonExistence(timeout: 5), "Undo removed it")
+        XCTAssertTrue(event(containing: "Reply to Sam about the lease").waitForNonExistence(timeout: 5), "Undo removed it")
         XCTAssertTrue(toast.label.hasPrefix("Removed"), toast.label)
     }
 
