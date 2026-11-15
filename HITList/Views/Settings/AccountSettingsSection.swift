@@ -51,7 +51,9 @@ enum AccountState: Equatable {
     @MainActor
     static var current: AccountState {
         let monitor = CloudSyncMonitor.shared
-        return derive(cloudKitEnabled: ModelContainerFactory.isCloudKitEnabled,
+        // iCloud is in use on either engine: SwiftData's mirror, or HITList's own (round 28), which opens the store
+        // without the mirror. (With only the mirror's flag, every launch on the engine said "Not in use".)
+        return derive(cloudKitEnabled: ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isOwnEngineEnabled,
                       localOnlyReason: ModelContainerFactory.localOnlyReason,
                       status: monitor.accountStatus, notice: monitor.accountNotice,
                       everSignedIn: AppGroup.defaults.bool(forKey: AccountWatch.everSignedInKey))
