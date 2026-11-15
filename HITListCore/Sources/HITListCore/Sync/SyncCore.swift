@@ -58,6 +58,10 @@ public actor SyncCore: SyncTransportDelegate {
 
     /// An event is being handled: nothing may reset the transport now.
     var inEvent = false
+    /// Items found missing (M14) for which every record was already asked for again and that have not been seen on
+    /// the device since: not asked for a second time, so an item iCloud holds that this device can never write (a
+    /// record a broken build made) does not have everything fetched again at every compare.
+    var askedAgain: Set<SyncKey> = []
     /// Deletions noted (`noteDeletions`) whose keys no compare has looked at yet: the next one does, whatever keys
     /// it was asked for (a save's hint names the rows it knows of; the store may have written down more).
     var noted: Set<SyncKey> = []

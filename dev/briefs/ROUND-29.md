@@ -101,7 +101,7 @@ of a deletion (it needs a change to the models, so it waits for the release that
 
 ## Proof
 
-- Core: 1,045 tests. New: `SyncCoreDeletionTests` (a deletion written down goes; absence deletes nothing and the
+- Core: 1,046 tests. New: `SyncCoreDeletionTests` (a deletion written down goes; absence deletes nothing and the
   item comes back; a store that reads empty; a deletion while held; a note that could not be written is told
   again; a deletion before the two ever agreed), `SyncCoreLostAnswerTests`.
 - The app, on real SwiftData: the observer takes down a deleted row, and a task's sub-tasks at any depth, before

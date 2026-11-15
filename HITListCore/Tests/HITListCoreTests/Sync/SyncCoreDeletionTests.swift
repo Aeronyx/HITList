@@ -115,6 +115,46 @@ final class SyncCoreDeletionTests: XCTestCase {
         XCTAssertEqual(pending, [], "nothing goes back")
     }
 
+    /// An item iCloud holds that this device cannot put back (a record a broken build made, which the store has no
+    /// row for) does not have everything fetched again at every compare: once, until the item has been seen here.
+    func testAnItemThatCannotBePutBackIsAskedForAgainOnlyOnce() async {
+        let records = names(3).map { task($0, $0) }
+        let memory = MemoryLocalStore(records)
+        let store = UnwritableStore(memory)
+        let transport = ScriptedTransport()
+        let core = SyncCore(store: store, ledger: MemoryLedger(), transport: transport, host: nil)
+        await core.start()
+        func fetchEverything() async {
+            await transport.deliver(.willFetch)
+            await transport.deliver(.fetched(changed: records.map { cloud($0) } + [meta()], removed: []))
+            await transport.deliver(.didFetch(error: nil))
+        }
+        await fetchEverything()
+        await memory.lose(taskKey("T0001"))
+        await store.refuse(taskKey("T0001"))
+        await core.localChanged(nil)
+        var resets = await transport.resets
+        XCTAssertEqual(resets, 1, "missing: every record is asked for again")
+        // It arrives and cannot be written; the next compares find it missing again.
+        await fetchEverything()
+        await core.localChanged(nil)
+        await core.localChanged(nil)
+        resets = await transport.resets
+        XCTAssertEqual(resets, 1, "not asked for a second time")
+        let status = await core.status
+        XCTAssertNil(status.hold)
+        XCTAssertEqual(status.waiting, 0, "and never deleted in iCloud")
+        // Once the store can hold it, it comes back, and a later loss is asked for again.
+        await store.refuse(nil)
+        await fetchEverything()
+        let back = await memory.record(taskKey("T0001"))
+        XCTAssertNotNil(back)
+        await memory.lose(taskKey("T0001"))
+        await core.localChanged(nil)
+        resets = await transport.resets
+        XCTAssertEqual(resets, 2)
+    }
+
     // MARK: The note is kept through holds, crashes and a first sync
 
     func testADeletionMadeWhileHeldIsKeptForWhenTheHoldLifts() async throws {
@@ -183,5 +223,20 @@ final class SyncCoreDeletionTests: XCTestCase {
         XCTAssertNil(entry?.deletedHereAt)
         let pending = await device.pending()
         XCTAssertEqual(pending, [.save(taskKey("T0000"))], "it goes as the changed item it is")
+    }
+}
+
+/// A store that silently writes nothing for one key (as the app's store does for a record that names no row).
+actor UnwritableStore: SyncLocalStore {
+    let inner: MemoryLocalStore
+    private var refused: SyncKey?
+    init(_ inner: MemoryLocalStore) { self.inner = inner }
+    func refuse(_ key: SyncKey?) { refused = key }
+    func records() async throws -> [SyncRecord] { try await inner.records() }
+    func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord] { try await inner.records(keys) }
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
+    func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> {
+        try await inner.apply(writes.filter { $0.key != refused })
     }
 }

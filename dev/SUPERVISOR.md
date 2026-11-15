@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1045 (the sync engine's brain, rules and simulation are most of the growth), Mac 2197, iOS 2160, and 159 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1046 (the sync engine's brain, rules and simulation are most of the growth), Mac 2197, iOS 2160, and 159 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -783,7 +783,7 @@ switched off, now by a line no preference can cross (`SyncEngineSwitch.isAvailab
 what was deleted** (each deletion taken down as it is saved; an item merely absent comes back), so the mass-deletion
 hold, its numbers and the vouch are gone; a save or a fetch no longer reads the whole store; a lost answer no longer
 undoes the person's next change; finding 18 is fixed; the rigs compile into Debug builds only. Suites on the final
-tree: core 1045, Mac 2197, iOS 2160, no failures. No schema change. George releases with `scripts/release.sh
+tree: core 1046, Mac 2197, iOS 2160, no failures. No schema change. George releases with `scripts/release.sh
 --version 0.9.12 --quick`, and can press Reset Environment for the tasks' container's Development side at any time
 (it touches no tester's data; **nobody presses Deploy Schema Changes there before it is reset**). Open: his word on
 a container of its own for the engine and on the 72 merged session worktrees (about 105 GB); section 13 of the

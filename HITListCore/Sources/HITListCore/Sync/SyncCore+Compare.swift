@@ -161,6 +161,7 @@ extension SyncCore {
             if let entry = finding.entry { write.upsert.append(entry) }
             if finding.drop || finding.missing { write.remove.append(key) }
             if finding.missing { missing.append(key) }
+            if local != nil, !askedAgain.isEmpty { askedAgain.remove(key) }
         }
         if universe.contains(Self.metaKey), let change = metaFinding().change { desired[Self.metaKey] = change }
 
@@ -188,9 +189,16 @@ extension SyncCore {
             return
         }
         if !missing.isEmpty {
-            // Not deleted by anyone: what iCloud holds of them comes back with the next fetch of everything.
-            log("\(missing.count) item\(missing.count == 1 ? "" : "s") iCloud holds \(missing.count == 1 ? "is" : "are") not on this device and nobody deleted \(missing.count == 1 ? "it" : "them") here (the first: \(missing[0])): fetched again, nothing is deleted in iCloud")
-            await markRefetch()
+            // Not deleted by anyone: what iCloud holds of them comes back with the next fetch of everything. Once
+            // for an item until it has been seen here again.
+            let first = missing.filter { !askedAgain.contains($0) }
+            askedAgain.formUnion(missing)
+            if first.isEmpty {
+                log("\(missing.count) item\(missing.count == 1 ? "" : "s") iCloud holds could not be put back on this device (the first: \(missing[0])); left for the next launch")
+            } else {
+                log("\(missing.count) item\(missing.count == 1 ? "" : "s") iCloud holds \(missing.count == 1 ? "is" : "are") not on this device and nobody deleted \(missing.count == 1 ? "it" : "them") here (the first: \(missing[0])): fetched again, nothing is deleted in iCloud")
+                await markRefetch()
+            }
         }
         if keys == nil {
             // Everything was looked at: what waits is exactly what this compare found.
