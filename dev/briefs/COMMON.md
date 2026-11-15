@@ -66,6 +66,64 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 28 (2026-11-15, from 03:00 Eastern; wave 1: briefs 138–142 in parallel, all five at once; `ROUND-28.md` says why)
+0.9.11 is released. George: "If we need to make our own engine for proper cloud sync, let's get started. I want it
+to be professionally built." This round begins **HITList's own sync engine**, designed in `dev/SYNC-ENGINE.md`
+(read all of it before your brief's own list) and built against a contract in code,
+`HITListCore/Sources/HITListCore/Sync/`. Sessions are Opus 5.5 (commits end `Co-Authored-By: Claude Opus 5.5
+<noreply@anthropic.com>`), the supervisor a Fable 5.2 chat. George is asleep and not waiting on you; nobody waits
+for him. The round's version is 0.9.12, and **nothing you build is switched on in it**: released builds keep the
+mirror, the engine ships dark.
+- **What "professionally built" means here.** Every rule is written down before it is coded and has a test named
+  after it. Nothing is assumed about iCloud that is not in the SDK notes or the rules T1 to T14; where they are
+  silent, say what you chose and why. A crash between any two lines must leave a state the engine reads correctly:
+  when you write two things, say in the code which goes first and what a crash in between leaves. No timer with
+  nothing pending, no polling, no sleeping in tests. A finding that the design or the contract is wrong is worth
+  more than code written round it: send it at once.
+- **The contract is the supervisor's**: `SyncRecord.swift`, `SyncSchema.swift`, `SyncTransport.swift`,
+  `SyncStorage.swift`, `SyncMemory.swift`. Four sessions build on them at once, so nobody edits them. A flaw: write
+  the fix as a diff in your notes folder, message the supervisor its path and one line of why, and carry on (add
+  what you need in a file of your own as an `extension`). `RecordMerge.swift` is session 138's from now on; its
+  public names stay.
+- **Ownership** (each brief's own list is the contract; this is the map). 138 `sync-proof`: `RecordMerge.swift`,
+  core tests `Sync/RecordMerge*Tests`, `SyncContractTests`. 139 `sync-core`: core `Sync/SyncCore*.swift`,
+  `SyncStatus.swift`, `SyncHost.swift`, tests `Sync/SyncCore*Tests`, `ScriptedTransport`. 140 `sync-fake-cloud`:
+  core `Sync/Testing/*` (`FakeCloud`, `FakeTransport`, `SyncSimulation`, `SyncInvariants`), tests
+  `Sync/FakeCloudTests`, `SyncInvariantsTests`. 141 `sync-swiftdata`: app `Services/SyncEngine/SwiftDataSyncStore`,
+  `SyncRecordMapping`, `SyncLedgerStore`, `SyncSaveHints`, tests `HITListTests/SyncEngine/` of the same names. 142
+  `sync-cloudkit`: app `Services/SyncEngine/CloudKitTransport`, `CloudRecordCodec`, `SyncTransportProbe`, tests of
+  the same names. Nobody: the models and `HITListSchema` (**no schema change, no new entity**), the mirror's side
+  (`Services/Sync/*`, `CloudSyncMonitor.swift`, `SyncState.swift`, `Deduplicator.swift`, the bolt's views, the
+  iCloud settings: round 26's and 27's rules below still hold for them, untouched), `ModelContainerFactory`,
+  entitlements, `project.yml` (except what `xcodegen generate` needs for your new files: nothing, the folders are
+  already sources), `scripts/`, `dev/`, `CHANGELOG.md`, `WhatsNew.swift`.
+- **iCloud**: only session 142 talks to it, only to **Development** (a signed Debug Mac build), only from a side
+  store (`HITLIST_STORE_SUFFIX=s142`), only in a zone the probe makes and removes. Nobody runs a Release build,
+  opens the real store, or touches Production. No session answers a system dialog.
+- **The notes folder** (`~/Library/Application Support/Claude/side-session-notes/
+  local_8995b93d-4779-400a-855f-77db7b4e0b1d/`): `round-28/SDK-CKSyncEngine.md` (the API and its documented
+  behaviour, from this Mac's SDK), `round-28/SDK-SwiftData-History.md`, `round-28/DATA-LAYER.md` (every model, every
+  writer, every consumer of the mirror's events, with line numbers). Your own notes, diffs and outputs go in a
+  folder named after your brief there (`139-sync-core/`), never in the repository.
+- **Talking to the supervisor**: `mcp__ccd_session_mgmt__send_message` with `session_id: "parent"`. A note at the
+  time your brief names (where you are, any question), findings about the contract at once, and your report at the
+  end as your final message: what changed per commit, test counts before and after, the public surface the next
+  wave will use, every choice the brief left you and what you chose, what is not built, the branch name.
+- **The clock**: your brief names the times, in Eastern (`TZ=America/New_York date`). Work in the brief's order and
+  commit each item as it becomes whole; ten minutes before the report time stop starting things, run the tests,
+  write the report. Fewer things, all proven, beats many.
+- **Code**: Swift 5 mode, the CI runner has Swift 6.3 and Xcode 26.6 (no API or syntax that only this Mac's 27.2
+  has; break long expressions into typed steps: the runner's type checker gives up sooner). Core is
+  `swift-tools-version 5.10`, platforms iOS 17 and macOS 14: no CloudKit, no SwiftData, no XCTest in its Sources.
+  Core tests are deterministic and fast (the whole package under a minute); a random test prints its seed.
+  Comments say why, in plain words, as the files around them do.
+- **The machine**: five sessions and the supervisor on one Mac. 138, 139 and 140 only run `swift build` and `swift
+  test` in `HITListCore` (no Xcode build at all). 141 and 142 each give every `xcodebuild` its own
+  `-derivedDataPath build.noindex/…-sNN`; 141 makes one simulator (`HITList-141`) near its end and deletes it. A
+  Debug Mac app of your own runs with `HITLIST_STORE_SUFFIX=sNN -ApplePersistenceIgnoreState YES` (and
+  `-disableCloudKit YES` unless you are 142's probe), is found with `pgrep -x HITList` and quit by its pid; never
+  George's `/Applications/HITList.app`. Never push or merge.
+
 ## Round 27 (2026-11-14, evening; briefs 132–137 in parallel, all six at once; `ROUND-27.md` says why)
 0.9.10 was prepared and its release stopped at Apple's door (an agreement George must accept); nothing was
 uploaded, and this round is **0.9.11**: a bolt that checks the records again, creatures that move every 4 to 12
