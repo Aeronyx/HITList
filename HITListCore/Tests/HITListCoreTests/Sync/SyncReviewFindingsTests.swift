@@ -108,6 +108,117 @@ final class SyncReviewFindingsTests: XCTestCase {
         }
     }
 
+    // MARK: Finding 10: on CloudKit a transport reset makes the brain forget its memory
+
+    /// Device A edits a task's notes while its brain is held by a ledger write that failed once; meanwhile device B
+    /// edits the same task's title. When A's hold lifts, the brain resets the transport to fetch everything again
+    /// (T13) and both edits survive (M7, I2), because the reset keeps the account and the brain its memory. Finding 10
+    /// was that `CloudKitTransport.reset()` forgot the account, the new engine announced a sign-in, and the brain then
+    /// forgot its memory and settled the task as a first meeting (M5), losing A's edit: shown at 05:52 with a transport
+    /// that reset that way, fixed on master (ce610d7, T13 and `StoredState.afterReset()`). This test stays as the
+    /// guard of the brain's side: a reset that keeps the account keeps both edits.
+    func testFinding10_aResetThatKeepsTheAccountKeepsAnEditNotYetSent() async throws {
+        let notes = try await twoEditsAcrossAHeldLedger()
+        XCTAssertEqual(notes, "Ferry at ten", "A's edit, made while held, survives B's later edit of another field")
+    }
+
+    /// The notes A ends with.
+    private func twoEditsAcrossAHeldLedger() async throws -> String? {
+        let cloud = FakeCloud()
+        let clock = SimClock()
+        let ledgerA = MemoryLedger()
+        let task = Self.task("T", "Trip", at: clock)
+        let a = await Phone("A", cloud, clock, [Self.project("H", at: clock), task], ledger: ledgerA)
+        let b = await Phone("B", cloud, clock, [])
+        try await a.sync()
+        try await b.sync()
+
+        clock.advance(milliseconds: 60_000)
+        await a.store.edit(Self.taskKey("T"), ["notes": .string("Ferry at ten"), "updatedAt": .millis(clock.millis)])
+        await a.core.localChanged([Self.taskKey("T")])
+        clock.advance(milliseconds: 60_000)
+        await b.store.edit(Self.taskKey("T"), ["title": .string("Trip to Oslo"), "updatedAt": .millis(clock.millis)])
+        await b.core.localChanged([Self.taskKey("T")])
+        try await b.sync()
+
+        // A's next fetch cannot be kept: one ledger write fails, the brain holds `failed` and lets the fetch go.
+        await ledgerA.failNext()
+        try? await a.core.syncNow()
+        let held = await a.core.status.hold
+        if case .failed? = held {} else { XCTFail("setup: A is held by the failed write, got \(String(describing: held))") }
+
+        // A relaunch: the failure is tried again and everything is fetched again (`liftForStart`, `lift`).
+        await a.core.stop()
+        await a.core.start()
+        for _ in 0..<3 { try? await a.core.syncNow() }
+        try await b.sync()
+        try await a.sync()
+        let record = await a.store.record(Self.taskKey("T"))
+        XCTAssertEqual(record?["title"], .string("Trip to Oslo"), "B's edit arrives on A")
+        if case .string(let notes)? = record?["notes"] { return notes }
+        return nil
+    }
+
+    // MARK: Finding 11: a seeded filter deleted on one device comes back with every new device
+
+    /// A filter the app seeds with a fixed id (`SeedIdentity`) is deleted on device A. A new device seeds it again at
+    /// its first launch, stamped with that moment, before its first fetch: M6 compares that stamp with the deletion,
+    /// the seed is newer, and the filter comes back on every device.
+    func testFinding11_aDeletedSeededFilterComesBackWithEveryNewDevice() async throws {
+        let cloud = FakeCloud()
+        let clock = SimClock()
+        let a = await Phone("A", cloud, clock, [Self.project("H", at: clock), Self.filter("Focus", at: clock)])
+        try await a.sync()
+        clock.advance(milliseconds: 86_400_000)
+        await a.store.delete(SyncKey(type: "SavedFilter", name: "Focus"))
+        await a.core.localChanged(nil)
+        try await a.sync()
+        let marker = await cloud.record(SyncKey(type: "SavedFilter", name: "Focus"))
+        XCTAssertEqual(marker?.record.isDeleted, true, "setup: iCloud holds the deletion")
+
+        clock.advance(milliseconds: 86_400_000)
+        let b = await Phone("B", cloud, clock, [Self.filter("Focus", at: clock)]) // seeded at B's first launch
+        try await b.sync()
+        try await a.sync()
+
+        let onA = await a.store.record(SyncKey(type: "SavedFilter", name: "Focus"))
+        let onB = await b.store.record(SyncKey(type: "SavedFilter", name: "Focus"))
+        XCTExpectFailure("Finding 11: a seed stamped at first launch beats an older deletion (M6)", strict: true) {
+            XCTAssertNil(onA, "the filter A deleted stays deleted on A")
+            XCTAssertNil(onB, "and the new device learns of the deletion instead of sending the filter back")
+        }
+    }
+
+    // MARK: Finding 12: undoing an import holds sync as a mass deletion
+
+    /// The person imports 100 tasks (Todoist), they sync, and the person taps "Undo last import". The guard reads
+    /// 100 gone of 110 as a store that reads wrong and holds everything until the person confirms.
+    func testFinding12_undoingAnImportIsHeldAsAMassDeletion() async throws {
+        let cloud = FakeCloud()
+        let clock = SimClock()
+        var mine = [Self.project("H", at: clock)]
+        for i in 0..<10 { mine.append(Self.task("M\(i)", "Mine \(i)", at: clock)) }
+        let a = await Phone("A", cloud, clock, mine)
+        try await a.sync()
+        clock.advance(milliseconds: 60_000)
+        var imported = Set<SyncKey>()
+        for i in 0..<100 {
+            await a.store.put(Self.task("I\(i)", "Imported \(i)", at: clock))
+            imported.insert(Self.taskKey("I\(i)"))
+        }
+        await a.core.localChanged(imported)
+        try await a.sync()
+
+        clock.advance(milliseconds: 60_000)
+        for key in imported { await a.store.delete(key) }
+        await a.core.localChanged(imported)
+        let hold = await a.core.status.hold
+
+        XCTExpectFailure("Finding 12: the undo of an import is read as a store that reads wrong", strict: true) {
+            XCTAssertNil(hold, "an import undone by the person is not a mass deletion to confirm")
+        }
+    }
+
     // MARK: The parts
 
     /// One device: its store, its ledger, a transport on the shared pretend iCloud, and a brain, started.
@@ -137,6 +248,13 @@ final class SyncReviewFindingsTests: XCTestCase {
                 try await core.syncNow()
             }
         }
+    }
+
+    static func filter(_ name: String, at clock: SimClock) -> SyncRecord {
+        SyncRecord(type: "SavedFilter", name: name, fields: [
+            "name": .string(name), "query": .string("(p1 | p2) & (overdue | today)"),
+            "createdAt": .millis(clock.millis), "updatedAt": .millis(clock.millis),
+        ])
     }
 
     static func taskKey(_ name: String) -> SyncKey { SyncKey(type: "TaskItem", name: name) }
