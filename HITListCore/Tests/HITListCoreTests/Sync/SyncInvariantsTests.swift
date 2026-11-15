@@ -64,6 +64,20 @@ final class SyncInvariantsTests: XCTestCase {
         XCTAssertEqual(findings, [], "title: two devices; notes: changed before B lost its memory")
     }
 
+    func testI2_doesNotJudgeTheFieldsOfAnItemMadeOnTwoDevices() {
+        let profile = SyncKey(type: "Profile", name: "profile")
+        func named(_ name: String, at ms: Int64) -> SyncRecord {
+            SyncRecord(key: profile, fields: ["displayName": .string(name), "nameUpdatedAt": .millis(ms), "updatedAt": .millis(ms)])
+        }
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [profile: named("A's", at: 1)])
+        intent.record(step: 2, device: "A", before: [profile: named("A's", at: 1)], after: [profile: named("A's again", at: 2)])
+        intent.record(step: 3, device: "B", before: [:], after: [profile: named("B's", at: 3)])
+        let final = SyncSchema.filled(named("B's", at: 3))
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: [holder("A", [final]), holder("B", [final])], cloud: [cloud(final)],
+                                                 intent: intent), [])
+    }
+
     func testI2_breaksWhenAnItemMadeAndNeverDeletedIsMissing() {
         var intent = SimIntent()
         intent.record(step: 1, device: "A", before: [:], after: [key("t1"): task("t1", "x")])

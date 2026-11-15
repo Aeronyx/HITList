@@ -232,7 +232,8 @@ public enum SyncInvariants {
 
     /// I2: a field one device changed and no other did has that value on every device and in iCloud; an item made and
     /// never deleted is on every device and alive in iCloud. Not held to account: a field changed on two devices (the
-    /// merge keeps one of the two, section 5), an edit up to a device's loss of memory (`SimIntent.exposedThrough`),
+    /// merge keeps one of the two, section 5), an item made on two devices (they first meet by M5: the record changed
+    /// last, whole), an edit up to a device's loss of memory (`SimIntent.exposedThrough`),
     /// the clocks (`updatedAt` and the fields a clock field times), and a sub-task whose parent a person deleted (it
     /// goes with its parent, whenever it was made).
     public static func noLostEdit(devices: [DeviceHoldings], cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
@@ -259,6 +260,9 @@ public enum SyncInvariants {
             let makers = Set(events.compactMap { event -> String? in
                 if case .made = event.change { return event.device } else { return nil }
             })
+            // Made on two devices (the profile: one per account, made wherever a person first named themselves): the
+            // two meet without a common base, and the record changed last wins whole (M5). No field is held to account.
+            guard makers.count == 1 else { continue }
             let skip = clockFields(type).union([SyncSchema.updatedAt])
             for field in type.fields where !skip.contains(field.key) {
                 var setters: [String: SimIntent.Event] = [:]
@@ -275,7 +279,7 @@ public enum SyncInvariants {
                     guard only.value.step > intent.exposedThrough else { continue }
                     expected = value
                     because = "device \(only.key) set it at step \(only.value.step) and no other device changed it"
-                } else if setters.isEmpty, makers.count == 1, case .made(let record) = made.change {
+                } else if setters.isEmpty, case .made(let record) = made.change {
                     expected = SyncSchema.filled(record).fields[field.key]
                     because = "device \(made.device) made it so at step \(made.step) and nobody changed it"
                 } else {
