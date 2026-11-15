@@ -28,12 +28,14 @@ public actor SyncCore: SyncTransportDelegate {
 
     /// The numbers the brain's guards use, in one place.
     public struct Limits: Sendable, Equatable {
-        /// A whole compare that finds more than this many items gone here (that iCloud holds alive)...
+        /// A whole compare that finds at least this many items gone here (that iCloud holds alive)...
         public var massDeletionCount: Int
         /// ...that are also more than this share of everything iCloud holds alive, holds (`SyncHold.massDeletion`).
+        /// (Also held, whatever the numbers: no item here that iCloud holds alive, while it holds some.) 10 and a half
+        /// since 2026-11-15 (review finding 2: an account of 40 items losing 30 must ask).
         public var massDeletionShare: Double
 
-        public init(massDeletionCount: Int = 50, massDeletionShare: Double = 0.5) {
+        public init(massDeletionCount: Int = 10, massDeletionShare: Double = 0.5) {
             self.massDeletionCount = massDeletionCount
             self.massDeletionShare = massDeletionShare
         }

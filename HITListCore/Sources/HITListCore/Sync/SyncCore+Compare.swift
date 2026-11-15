@@ -77,8 +77,8 @@ extension SyncCore {
                 local = arrived
                 here[key] = arrived
             }
-            // What it waits for now: the base's references to items not on the device.
-            let wait = Self.waitFields(local: local, base: entries[key]?.base, present: isHere)
+            // What it waits for now: its whole record's references to items not on the device.
+            let wait = Self.waitFields(local: local, base: entries[key]?.base, current: waitsFor(key), present: isHere)
             if wait != waitsFor(key) {
                 if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }
@@ -94,15 +94,25 @@ extension SyncCore {
         if universe.contains(Self.metaKey), let change = metaFinding().change { desired[Self.metaKey] = change }
 
         if confirmedAt == nil {
-            if keys != nil, gone > limits.massDeletionCount {
+            if keys != nil, gone >= limits.massDeletionCount {
                 // Many gone at once in a save's hint: measured against everything before anything is decided.
                 await compare(nil)
                 return
             }
             if keys == nil {
-                let living = entries.values.filter { $0.key != Self.metaKey && $0.base?.isDeleted == false }.count
-                let empty = here.isEmpty && living > 0
-                let tooMany = gone > limits.massDeletionCount && Double(gone) > limits.massDeletionShare * Double(living)
+                // The supervisor's rule of 2026-11-15 (review finding 2). (a) The store is not the one the ledger
+                // describes: no item here has a living base while the ledger holds living bases (one stray row, a
+                // seeded filter or the profile, no longer defeats "empty"). (b) Many gone at once: at least the count
+                // AND more than the share of the living bases.
+                // Living: what iCloud holds alive that this device has not already found deleted here (a deletion
+                // noticed before, confirmed or under the numbers, is decided: counting it again would ask again after
+                // every "I deleted them", in a loop, until iCloud took the markers; brief 145).
+                let living = entries.values.filter {
+                    $0.key != Self.metaKey && $0.base?.isDeleted == false && $0.deletedHereAt == nil
+                }.count
+                let known = here.keys.contains { entries[$0]?.base?.isDeleted == false }
+                let empty = living > 0 && !known
+                let tooMany = gone >= limits.massDeletionCount && Double(gone) > limits.massDeletionShare * Double(living)
                 if empty || tooMany {
                     await holdMassDeletion(empty ? living : gone, of: living, at: now)
                     return

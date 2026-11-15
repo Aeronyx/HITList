@@ -39,9 +39,31 @@ public actor MemoryLocalStore: SyncLocalStore {
         saves.sort { (order[$0.key.type] ?? .max, $0.fields["parent"] == nil ? 0 : 1) < (order[$1.key.type] ?? .max, $1.fields["parent"] == nil ? 0 : 1) }
         for record in saves { items[record.key] = SyncSchema.filled(record) }
         for record in saves { items[record.key] = whole(items[record.key] ?? record) }
-        for key in deletes { remove(key) }
-        if !saves.isEmpty || !deletes.isEmpty { applyCount += 1 }
+        // Strict (the supervisor's rule of 2026-11-15, brief 145 for review finding 1): the engine deletes exactly the
+        // rows its writes name. A deletion whose cascade would take a row no write names (a sub-task the engine did not
+        // decide on) comes back stale and deletes nothing, so the engine decides again instead of losing it silently.
+        // The saves of the same apply land first: a sub-task written out from under its parent is no longer taken.
+        let named = Set(deletes)
+        var removing: [SyncKey] = []
+        for key in deletes {
+            if descendants(of: key).isSubset(of: named) { removing.append(key) } else { stale.insert(key) }
+        }
+        for key in removing { remove(key) }
+        if !saves.isEmpty || !removing.isEmpty { applyCount += 1 }
         return stale
+    }
+
+    /// The sub-tasks a task's deletion takes with it, at any depth (none for anything else).
+    private func descendants(of key: SyncKey) -> Set<SyncKey> {
+        guard key.type == "TaskItem" else { return [] }
+        var out = Set<SyncKey>()
+        var next = [key]
+        while let parent = next.popLast() {
+            for item in items.values where item.key.type == "TaskItem" && item.fields["parent"] == .reference(parent.name) {
+                if out.insert(item.key).inserted { next.append(item.key) }
+            }
+        }
+        return out
     }
 
     // MARK: What a person does on the device (tests)
@@ -58,7 +80,8 @@ public actor MemoryLocalStore: SyncLocalStore {
         items[key] = whole(SyncSchema.filled(record))
     }
 
-    /// Deletes an item, as the app would: a task's sub-tasks with it, and references to it cleared.
+    /// Deletes an item, as the app would: a task's sub-tasks with it, and references to it cleared. (A person's own
+    /// deletion cascades; the engine's writes through `apply` never do.)
     public func delete(_ key: SyncKey) { remove(key) }
 
     public func record(_ key: SyncKey) -> SyncRecord? { items[key] }

@@ -2,8 +2,9 @@ import Foundation
 import XCTest
 @testable import HITListCore
 
-/// The guard against a store that reads wrong (`SyncHold.massDeletion`): a whole compare that finds the store empty
-/// while iCloud holds items, or more than 50 items gone that are also more than half of what iCloud holds, notices
+/// The guard against a store that reads wrong (`SyncHold.massDeletion`): a whole compare that finds no item here that
+/// iCloud holds alive while it holds some, or at least 10 items gone that are also more than half of what iCloud holds
+/// (50 and "nothing here" until review finding 2, 2026-11-15), notices
 /// nothing, sends nothing, reads nothing, and holds until the person confirms or the items are back.
 final class SyncCoreMassDeletionTests: XCTestCase {
     func names(_ count: Int) -> [String] { (0..<count).map { String(format: "T%04d", $0) } }
@@ -43,6 +44,53 @@ final class SyncCoreMassDeletionTests: XCTestCase {
         await assertHeldWithNothingGoing(device, 3)
         let words = await device.status().hold?.words
         XCTAssertEqual(words, "3 items are missing from this device: nothing goes to iCloud until you confirm you deleted them")
+    }
+
+    // MARK: The guard's two conditions since 2026-11-15 (review finding 2, the supervisor's numbers: 10 and a half)
+
+    /// Review finding 2: a store that reads empty but for one row (a seeded filter, the profile, a new task) walked
+    /// round "empty": with 50 items or fewer every one was deleted everywhere. Now: no item here that the ledger holds
+    /// a living base for, while it holds some, holds.
+    func testAStoreHoldingOneUnrelatedRowWhileTheLedgerHasThirtyLivingBasesIsHeld() async {
+        let device = await synced(30)
+        _ = await delete(30, on: device)
+        await device.store.put(task("Stray", "a row the ledger never heard of"))
+        await device.core.localChanged(nil)
+        await assertHeldWithNothingGoing(device, 30)
+    }
+
+    func testNineOfTwelveGoneIsNotHeld_underTheCount() async {
+        let device = await synced(12)
+        _ = await delete(9, on: device)
+        await device.core.localChanged(nil)
+        let status = await device.status()
+        XCTAssertNil(status.hold)
+        let marked = await noticed(device)
+        XCTAssertEqual(marked, 9)
+    }
+
+    func testTenOfTwelveGoneIsHeld() async {
+        let device = await synced(12)
+        _ = await delete(10, on: device)
+        await device.core.localChanged(nil)
+        await assertHeldWithNothingGoing(device, 10)
+    }
+
+    func testTenOfThirtyGoneIsNotHeld_notMoreThanHalf() async {
+        let device = await synced(30)
+        _ = await delete(10, on: device)
+        await device.core.localChanged(nil)
+        let status = await device.status()
+        XCTAssertNil(status.hold)
+        let marked = await noticed(device)
+        XCTAssertEqual(marked, 10)
+    }
+
+    func testThirtyOfFortyGoneIsHeld() async {
+        let device = await synced(40)
+        _ = await delete(30, on: device)
+        await device.core.localChanged(nil)
+        await assertHeldWithNothingGoing(device, 30)
     }
 
     func testFiftyOneOfAHundredGoneIsHeld() async {

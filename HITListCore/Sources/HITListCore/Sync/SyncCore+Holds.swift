@@ -353,8 +353,18 @@ extension SyncCore {
         guard !keys.isEmpty else { return }
         do {
             let here = try await localRecords(keys)
-            let writes = here.values.sorted { $0.key < $1.key }.map { LocalWrite(key: $0.key, expected: $0, record: nil) }
-            let kept = try await store.apply(writes)
+            // A sub-task iCloud never held stays, as every such item does: written out from under a parent that goes
+            // (the store deletes no row a write does not name).
+            var free: [LocalWrite] = []
+            for record in try await store.records() where record.key.type == "TaskItem" && here[record.key] == nil {
+                guard case .reference(let parent)? = record.fields["parent"],
+                      here[SyncKey(type: "TaskItem", name: parent)] != nil else { continue }
+                var out = record
+                out.fields["parent"] = nil
+                free.append(LocalWrite(key: record.key, expected: record, record: out))
+            }
+            let writes = free + here.values.sorted { $0.key < $1.key }.map { LocalWrite(key: $0.key, expected: $0, record: nil) }
+            let kept = try await store.apply(writes).intersection(here.keys)
             let removed = Set(here.keys).subtracting(kept)
             log("\(removed.count) items iCloud held removed from this device (\(why)); \(kept.count) changed meanwhile and kept")
             if !removed.isEmpty { host?.didWrite(removed) }

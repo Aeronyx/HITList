@@ -311,8 +311,16 @@ final class SyncContractTests: XCTestCase {
             task("C1", ["parent": .reference("P")]), task("C2", ["parent": .reference("P")]),
             task("Other", ["project": .reference("G")]),
         ])
-        _ = try await store.apply([LocalWrite(key: key("TaskItem", "P"), expected: await store.record(key("TaskItem", "P")),
-                                              record: nil)])
+        // Strict since 2026-11-15 (review finding 1): the engine's deletion of P alone would take C1 and C2, which no
+        // write names, so it comes back stale and deletes nothing; named with its sub-tasks, all three go.
+        let parent = LocalWrite(key: key("TaskItem", "P"), expected: await store.record(key("TaskItem", "P")), record: nil)
+        let alone = try await store.apply([parent])
+        XCTAssertEqual(alone, [key("TaskItem", "P")])
+        let untouched = await store.count
+        XCTAssertEqual(untouched, 5, "nothing was deleted")
+        _ = try await store.apply([parent,
+                                   LocalWrite(key: key("TaskItem", "C1"), expected: await store.record(key("TaskItem", "C1")), record: nil),
+                                   LocalWrite(key: key("TaskItem", "C2"), expected: await store.record(key("TaskItem", "C2")), record: nil)])
         let count = await store.count
         XCTAssertEqual(count, 2, "the task and its sub-tasks are gone")
         await store.delete(key("Project", "G"))

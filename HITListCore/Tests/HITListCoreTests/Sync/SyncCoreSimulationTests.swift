@@ -261,6 +261,108 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
+    // MARK: Fixes in the brain, each by a script of its own
+
+    static func task(_ name: String, _ title: String, _ more: [String: SyncValue] = [:]) -> SyncRecord {
+        SyncRecord(type: "TaskItem", name: name, fields: ["title": .string(title)].merging(more) { _, new in new })
+    }
+
+    static func group(_ name: String) -> SyncRecord {
+        SyncRecord(type: "Project", name: name, fields: ["name": .string("Group \(name)")])
+    }
+
+    /// Two devices that agree on `records`.
+    static func twoDevices(_ records: [SyncRecord]) async -> SyncSimulation {
+        var config = SimConfig()
+        // HITLIST_SIM_DEBUG=1 prints the brains' lines of these scripts.
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        await sim.play(records.map { .act("A", .put($0)) } + [.sync("A"), .sync("B"), .sync("A")])
+        return sim
+    }
+
+    func held(_ sim: SyncSimulation, _ device: String, _ name: String) async -> SyncRecord? {
+        await sim.device(device)?.store.record(SyncKey(type: "TaskItem", name: name))
+    }
+
+    /// Review finding 1 (146), the supervisor's rule: a sub-task made on B under a task A had deleted stays (it was
+    /// made after the deletion); before, the store's cascade took it with its parent and nothing remembered it.
+    func testFinding1_aSubTaskMadeUnderATaskDeletedElsewhereStays() async {
+        let sim = await Self.twoDevices([Self.task("P", "parent")])
+        await sim.play([.advance(milliseconds: 10), .act("A", .delete(SyncKey(type: "TaskItem", name: "P"))), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .put(Self.task("C", "made after", ["parent": .reference("P")]))),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let child = await held(sim, device, "C")
+            XCTAssertNotNil(child, "C on \(device)")
+            XCTAssertNil(child?["parent"], "C is a task of its own on \(device)")
+            let parent = await held(sim, device, "P")
+            XCTAssertNil(parent, "P stays deleted on \(device)")
+        }
+        let inCloud = await sim.cloud.record(SyncKey(type: "TaskItem", name: "C"))
+        XCTAssertEqual(inCloud?.record.isDeleted, false)
+        XCTAssertEqual(inCloud?.record["parent"], .reference("P"), "iCloud keeps the reference (section 8)")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Review finding 1: a task moved under P on B after A deleted P stays, on every device (before, it was deleted on
+    /// B with P and its marker then deleted it everywhere).
+    func testFinding1_aTaskMovedUnderATaskDeletedElsewhereStaysEverywhere() async {
+        let sim = await Self.twoDevices([Self.task("P", "parent"), Self.task("C", "moved")])
+        await sim.play([.advance(milliseconds: 10), .act("A", .delete(SyncKey(type: "TaskItem", name: "P"))), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(SyncKey(type: "TaskItem", name: "C"), ["parent": .reference("P")])),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let child = await held(sim, device, "C")
+            XCTAssertNotNil(child, "C on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Review finding 1: a sub-task B changed after A deleted its parent stays, whichever of the two markers (P's,
+    /// and C's own from A's cascade) reaches B first. A sub-task nobody changed goes with its parent.
+    func testFinding1_aSubTaskChangedAfterItsParentWasDeletedStays_andAnUnchangedOneGoes() async {
+        let sim = await Self.twoDevices([Self.task("P", "parent"), Self.task("C", "child", ["parent": .reference("P")]),
+                                         Self.task("U", "unchanged child", ["parent": .reference("P")])])
+        await sim.play([.advance(milliseconds: 10), .act("A", .delete(SyncKey(type: "TaskItem", name: "P"))), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(SyncKey(type: "TaskItem", name: "C"), ["title": .string("changed after")])),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let child = await held(sim, device, "C")
+            XCTAssertEqual(child?["title"], .string("changed after"), "C on \(device)")
+            let unchanged = await held(sim, device, "U")
+            XCTAssertNil(unchanged, "U went with P on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Brief 145, memory seed 93: B's person moved a task to Group G2 and, before B sent it, G2's deletion arrived (the
+    /// store took the reference off); the task then waited for its old Group G1 (deleted too) from the base, and when
+    /// G1 was put back the task went back into it everywhere. A person's own change to the field is sent (section 8):
+    /// the task keeps G2 in its whole record, and G1's return does not move it.
+    func testAPersonsUnsentMoveToAGroupWhoseDeletionArrivesIsKept_notTheBasesOlderGroup() async {
+        let g1 = Self.group("G1"), g2 = Self.group("G2")
+        let sim = await Self.twoDevices([g1, g2, Self.task("T", "task", ["project": .reference("G1")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.advance(milliseconds: 10), .act("A", .delete(g1.key)), .act("A", .delete(g2.key)), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(t, ["project": .reference("G2")])),
+                        .sync("B"),
+                        .advance(milliseconds: 10), .act("A", .put(g1)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "T is in no Group on \(device): G2 is gone and G1 is not where the person put it")
+        }
+        let inCloud = await sim.cloud.record(t)
+        XCTAssertEqual(inCloud?.record["project"], .reference("G2"), "the person's move went to iCloud")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
     // MARK: Long runs, when asked for
 
     func testManySeeds_whenAskedFor() async throws {
