@@ -83,14 +83,17 @@ public struct SyncStatus: Equatable, Sendable {
     /// When iCloud last accepted a batch of this device's changes.
     public var lastSendEnded: Date?
     /// The words of the last thing that went wrong and has not been put right since: a fetch or a send that stopped
-    /// early, or a record iCloud refused for good (`refused`).
+    /// early, or a backup that failed. (Refusals for good are `refusal`, apart, since 2026-11-15.)
     public var lastError: String?
     /// Records iCloud refused for good (too large, or rejected): kept out of the pending list until the item
     /// changes again, never retried in a loop.
     public var refused: [SyncKey]
+    /// The words for the records iCloud refused for good (`refused`); nil when there are none. Kept apart from
+    /// `lastError` (added beside, brief 145, at the status session's request): a refusal is not a passing error.
+    public var refusal: String?
 
     public init(state: State = .off, waiting: Int = 0, firstFetchDone: Bool = false, lastFetchEnded: Date? = nil,
-                lastSendEnded: Date? = nil, lastError: String? = nil, refused: [SyncKey] = []) {
+                lastSendEnded: Date? = nil, lastError: String? = nil, refused: [SyncKey] = [], refusal: String? = nil) {
         self.state = state
         self.waiting = waiting
         self.firstFetchDone = firstFetchDone
@@ -98,12 +101,13 @@ public struct SyncStatus: Equatable, Sendable {
         self.lastSendEnded = lastSendEnded
         self.lastError = lastError
         self.refused = refused
+        self.refusal = refusal
     }
 
     /// The filled bolt, exactly as `dev/SYNC-ENGINE.md` section 10 defines it: idle, nothing waiting, the first
-    /// fetch finished, no error.
+    /// fetch finished, no error; and nothing iCloud refused for good waiting on the person.
     public var isSynced: Bool {
-        state == .idle && waiting == 0 && firstFetchDone && lastError == nil
+        state == .idle && waiting == 0 && firstFetchDone && lastError == nil && refused.isEmpty
     }
 
     /// The hold, if the engine is held.

@@ -466,6 +466,107 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
+    // MARK: Beside the surface (the supervisor's three additions): a vouch, "download them again", refusals apart
+
+    /// One device that synced `count` tasks (T00…), its brain called directly (the rig's person does not answer).
+    func oneDevice(_ count: Int) async -> (SyncSimulation, SyncCore) {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        let puts: [SimStep] = (0..<count).map { .act("A", .put(Self.task(String(format: "T%02d", $0), "task \($0)"))) }
+        await sim.play(puts + [.sync("A"), .sync("A")])
+        let brain = await sim.device("A")?.brain as? SyncCoreSimBrain
+        return (sim, brain!.core)
+    }
+
+    func keys(_ range: Range<Int>) -> Set<SyncKey> {
+        Set(range.map { SyncKey(type: "TaskItem", name: String(format: "T%02d", $0)) })
+    }
+
+    func testVouchedDeletionsDoNotCountTowardTheGuard_undoingAnImport() async throws {
+        let (sim, core) = await oneDevice(40)
+        let gone = keys(0..<30)
+        await core.vouchForDeletions(gone)
+        for key in gone { await sim.device("A")?.store.delete(key) }
+        await core.localChanged(gone)
+        let status = await core.status
+        XCTAssertNil(status.hold, "30 of 40, vouched for: ordinary deletions")
+        try await core.syncNow()
+        let alive = await sim.cloud.records().filter { !$0.record.isDeleted && $0.key.type == "TaskItem" }.count
+        XCTAssertEqual(alive, 10)
+    }
+
+    func testAVouchCoversOnlyItsKeys_othersStillCount() async {
+        let (sim, core) = await oneDevice(30)
+        await core.vouchForDeletions(keys(0..<10))
+        for key in keys(0..<25) { await sim.device("A")?.store.delete(key) }
+        await core.localChanged(nil)
+        let hold = await core.status.hold
+        XCTAssertEqual(hold, .massDeletion(15), "15 unvouched of the 20 not vouched for")
+    }
+
+    func testAVouchLapsesWhenAWholeCompareFindsTheItemsStillHere() async {
+        let (sim, core) = await oneDevice(12)
+        await core.vouchForDeletions(keys(0..<10))
+        await core.localChanged(nil)
+        let fact = try? await sim.device("A")?.ledger.fact(SyncCore.vouchedFact)
+        XCTAssertNil(fact ?? nil, "lapsed")
+        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
+        await core.localChanged(nil)
+        let hold = await core.status.hold
+        XCTAssertEqual(hold, .massDeletion(10))
+    }
+
+    func testAVouchNeverLiftsAHoldAlreadyStanding() async {
+        let (sim, core) = await oneDevice(12)
+        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
+        await core.localChanged(nil)
+        await core.vouchForDeletions(keys(0..<10))
+        await core.localChanged(nil)
+        let hold = await core.status.hold
+        XCTAssertEqual(hold, .massDeletion(10))
+    }
+
+    func testDownloadThemAgain_theMissingItemsComeBackFromIcloudAndNothingIsDeletedThere() async throws {
+        let (sim, core) = await oneDevice(12)
+        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
+        await sim.device("A")?.store.put(Self.task("NEW", "made while the store read wrong"))
+        await core.localChanged(nil)
+        let held = await core.status.hold
+        XCTAssertEqual(held, .massDeletion(10))
+        try await core.restoreFromICloud()
+        try await core.syncNow()
+        let status = await core.status
+        XCTAssertNil(status.hold)
+        let here = try await sim.device("A")?.store.records().count
+        XCTAssertEqual(here, 13, "the 10 back from iCloud, the 2 kept, the new one")
+        let alive = await sim.cloud.records().filter { !$0.record.isDeleted && $0.key.type == "TaskItem" }.count
+        XCTAssertEqual(alive, 13, "nothing deleted in iCloud; the new one went up")
+        do {
+            try await core.restoreFromICloud()
+            XCTFail("not asking any more")
+        } catch {
+            XCTAssertEqual(error as? SyncCoreError, .noQuestion)
+        }
+    }
+
+    func testARefusalIsApartFromErrors_andTheBoltStaysHollow() async {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        let key = SyncKey(type: "TaskItem", name: "BIG")
+        await sim.play([.sync("A"), .act("A", .put(Self.task("BIG", "too large"))), .cloud(.refuseNextSave(key, .tooLarge)),
+                        .sync("A")])
+        let core = (await sim.device("A")?.brain as? SyncCoreSimBrain)!.core
+        let status = await core.status
+        XCTAssertEqual(status.refused, [key])
+        XCTAssertNotNil(status.refusal)
+        XCTAssertNil(status.lastError, "a refusal for good is not a passing error")
+        XCTAssertFalse(status.isSynced)
+        let built = SyncStatus(state: .idle, waiting: 0, firstFetchDone: true, lastFetchEnded: nil, lastSendEnded: nil,
+                               lastError: nil, refused: [])
+        XCTAssertNil(built.refusal, "the initialiser stays source-compatible")
+        XCTAssertTrue(built.isSynced)
+    }
+
     // MARK: Long runs, when asked for
 
     func testManySeeds_whenAskedFor() async throws {
