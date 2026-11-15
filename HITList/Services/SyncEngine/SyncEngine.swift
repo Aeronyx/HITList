@@ -88,16 +88,18 @@ final class SyncEngine {
     /// From `HITListApp.init`, after the container opened. On the mirror: the board hears `.mirror` with only the move
     /// wired, and nothing else happens (no engine object, no ledger, no observer). On the engine: the engine is made and
     /// started, or, on the in-memory fallback, the board says why it does not run.
-    static func launchIfSwitchedOn(container: ModelContainer) {
-        let board = SyncEngineBoard.shared
-        guard SyncEngineSwitch.current == .own else {
+    static func launchIfSwitchedOn(container: ModelContainer, engine choice: SyncEngineBoard.Engine = SyncEngineSwitch.current,
+                                   inMemory: Bool = ModelContainerFactory.isRunningInMemory,
+                                   board: SyncEngineBoard = .shared) {
+        guard choice == .own else {
             board.launched(.mirror, actions: mirrorActions(container: container))
             return
         }
-        guard !ModelContainerFactory.isRunningInMemory, let url = ModelContainerFactory.storeURL() else {
-            // The in-memory fallback is empty: an engine on it would read "everything deleted here". It never runs.
+        guard !inMemory, let url = ModelContainerFactory.storeURL() else {
+            // The in-memory fallback is empty: an engine on it would read "everything deleted here" (and walk round
+            // the mass-deletion guard as soon as one row is made: 146's finding 2). It never runs.
             board.launched(.own, actions: nil)
-            let why = ModelContainerFactory.isRunningInMemory ? ModelContainerFactory.localOnlyReason : "the store has no file of its own"
+            let why = inMemory ? "couldn't open this device's data" : "the store has no file of its own"
             board.publish(SyncStatus(state: .held(.failed("The sync engine is not running: \(why)."))))
             osLog.error("sync engine: not started: \(why, privacy: .public)")
             return
@@ -107,7 +109,7 @@ final class SyncEngine {
         let arguments = ProcessInfo.processInfo.arguments
         let zone = SyncEngineSwitch.zoneName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild, arguments: arguments)
         let pretend = SyncEngineSwitch.pretendName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild, arguments: arguments)
-        let engine = SyncEngine(container: container, ledger: ledger, storeURL: url) { ledger in
+        let engine = SyncEngine(container: container, ledger: ledger, storeURL: url, board: board) { ledger in
             #if DEBUG
             if let pretend {
                 return PretendCloudTransport(name: pretend, device: storeName, state: ledger)

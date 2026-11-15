@@ -94,6 +94,53 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertFalse(ModelContainerFactory.isOwnEngineEnabled)
     }
 
+    func testTheInMemoryFallbackNeverRunsTheEngineAndTheStatusSaysWhy() {
+        let board = SyncEngineBoard()
+        SyncEngine.launchIfSwitchedOn(container: ModelContainerFactory.preview(), engine: .own, inMemory: true, board: board)
+        XCTAssertNil(SyncEngine.shared, "no engine on an empty store that only reads as one")
+        XCTAssertEqual(board.engine, .own)
+        XCTAssertNil(board.actions)
+        guard case .held(.failed(let words))? = board.status?.state else { return XCTFail("\(String(describing: board.status))") }
+        XCTAssertTrue(words.contains("couldn't open this device's data"), words)
+    }
+
+    // MARK: - The move
+
+    func testTheMoveBacksUpMergesWritesThePreferenceAndAsksToBeReopenedOnASideStore() async throws {
+        let container = ModelContainerFactory.preview()
+        let id = UUID()
+        for title in ["One", "Two"] {
+            let task = TaskItem(title: title)
+            task.id = id
+            container.mainContext.insert(task)
+        }
+        try container.mainContext.save()
+        var backedUp = 0
+        do {
+            try await SyncEngine.move(to: .own, container: container, storeName: "HITList-s143t.store", defaults: defaults,
+                                      backUp: { _ in backedUp += 1; return nil })
+            XCTFail("a side store is reopened by hand")
+        } catch let error as SyncEngine.MoveError {
+            XCTAssertEqual(error, .reopenToFinish(.own))
+            XCTAssertTrue(error.localizedDescription.contains("open it again"))
+        }
+        XCTAssertEqual(backedUp, 1)
+        XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TaskItem>()), 1, "rows that shared an id merged")
+        XCTAssertEqual(SyncEngineSwitch.decide(storeName: "HITList-s143t.store", isTesting: false, isDebug: false,
+                                               arguments: [], defaults: defaults), .own, "the next launch opens it on the engine")
+    }
+
+    func testAMoveWhoseBackupFailsChangesNothing() async throws {
+        let container = ModelContainerFactory.preview()
+        struct NoBackup: Error {}
+        do {
+            try await SyncEngine.move(to: .own, container: container, storeName: "HITList-s143t.store", defaults: defaults,
+                                      backUp: { _ in throw NoBackup() }, relaunch: false)
+            XCTFail("no backup, no move")
+        } catch is NoBackup {}
+        XCTAssertNil(defaults.object(forKey: SyncEngineSwitch.preferenceKey(storeName: "HITList-s143t.store")))
+    }
+
     // MARK: - The host
 
     func testTheHostPostsWhatTheMirrorsImportAndExportPostedInOrder() async throws {
