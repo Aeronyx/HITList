@@ -20,6 +20,9 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.12", items: [
+            "Quill sleeps on the corner of his theme's box as himself again, and on the Mac every companion is drawn to fit its larger box. See them in Settings → Appearance → Themes.",
+        ]),
         Entry(version: "0.9.11", items: [
             "The sync bolt is filled only when this device and iCloud hold the same tasks. HITList compares the two after you open it; if something differs the bolt says what, and Settings → iCloud & data → Check iCloud: names it and can send or remove it.",
             "HITList is quiet when it has nothing to do. The hollow sync bolt no longer pulses, which on the Mac used a fifth of a processor core, and HITList no longer asks iCloud every 15 seconds whether anything changed.",
