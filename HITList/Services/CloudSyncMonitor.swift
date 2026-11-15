@@ -5,6 +5,7 @@ import Network
 import OSLog
 import SwiftData
 import SwiftUI
+import HITListCore
 #if os(macOS)
 import AppKit
 #else
@@ -156,14 +157,26 @@ final class CloudSyncMonitor {
         recordCheck = SyncRecordCheck(differingSince: AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.differingSinceKey)) as? Date)
     }
 
-    /// The latest moment anything is known to have reached or come from iCloud: the mirror's last import or export.
-    var lastSyncedAt: Date? { [lastImportAt, lastExportAt].compactMap { $0 }.max() }
+    /// The latest moment anything is known to have reached or come from iCloud: the mirror's last import or export; on
+    /// HITList's own engine, its last fetch or accepted send.
+    var lastSyncedAt: Date? {
+        if isOnEngine { return SyncEngineMarks.lastSynced(SyncEngineBoard.shared.status) }
+        return [lastImportAt, lastExportAt].compactMap { $0 }.max()
+    }
 
     /// What every sync mark shows (the bolt, the dot, Settings' status lines, the Account row): `rawState` steadied
     /// over time (`SyncSteadiness`, brief 78), so it says "status is green" and keeps still rather than reporting
     /// every export and import, and shows trouble only once it stayed; then never "synced" before the session's first
     /// import (`SyncSessionGate`).
-    var state: SyncState { displayState ?? shownState ?? rawState }
+    /// On HITList's own engine, the engine's exact status instead (`SyncEngineMarks.state` of the board's status, read
+    /// as it is now, so a view sees a change at once), and nothing of the above runs.
+    var state: SyncState {
+        if isOnEngine {
+            _ = engineTick  // the error's moment (`engineChanged`) redraws what reads this
+            return engineMarks(now: Date())
+        }
+        return displayState ?? shownState ?? rawState
+    }
 
     /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Synced 3 min ago", "Last synced 3 min ago,
     /// checking…".
@@ -177,6 +190,8 @@ final class CloudSyncMonitor {
     /// What the signals say this instant (`SyncState.derive`): the sync log's "Sync state:" lines and the strike
     /// gate read it, unchanged.
     var rawState: SyncState {
+        // HITList's own engine says exactly what is so: there is no raw state to steady.
+        if isOnEngine { return state }
         #if DEBUG
         if let replayed = SyncReplayPlayer.shared.state { return replayed }
         #endif
@@ -266,6 +281,13 @@ final class CloudSyncMonitor {
         }
         pathMonitor.start(queue: DispatchQueue(label: "com.trammells.hitlist.network"))
         AccountSwitch.simulateIfRequested()
+        // HITList's own engine (round 28): its lines go to the sync log through the one door, and a change of which
+        // engine runs, or of its status, reaches the marks (`boardChanged`).
+        SyncEngineBoard.shared.onLog = { [weak self] line in self?.write(.note, "Engine: \(line)") }
+        observeBoard()
+        // The engine was chosen before the monitor started: no change will say so. (Never on the mirror, where
+        // nothing here may run earlier than it did.)
+        if isOnEngine { boardChanged() }
     }
 
     /// What `HITListApp.init` did before opening the store: waited for a relaunched-from instance to
@@ -288,7 +310,9 @@ final class CloudSyncMonitor {
         let url = container.configurations.first?.url
         var fields = ["store": url?.path ?? "unknown"]
         if ModelContainerFactory.didResetStore { fields["reset"] = "store moved to Trash; CloudKit re-imports" }
-        if ModelContainerFactory.isCloudKitEnabled {
+        if isOnEngine {
+            write(.container, "Store opened for HITList's own engine (the mirror is off)", level: .notice, fields: fields)
+        } else if ModelContainerFactory.isCloudKitEnabled {
             write(.container, "Store opened with CloudKit sync", level: .notice, fields: fields)
         } else {
             if let error = ModelContainerFactory.startupError { fields["startupError"] = error }
@@ -303,10 +327,14 @@ final class CloudSyncMonitor {
             recordReader = HidingZoneReader(count: hidden)
         }
         #endif
-        if ModelContainerFactory.isCloudKitEnabled {
+        if ModelContainerFactory.isCloudKitEnabled, !isOnEngine {
             sessionGate.begin(at: Date())
             if Self.checksRecords { recordCheck.begin(at: Date()) }
         }
+        #if DEBUG
+        // `-syncEngineDemo <state>`, on a side store only: the engine's marks with a made-up status (`SyncEngineDemo`).
+        SyncEngineDemo.applyIfRequested(container: container)
+        #endif
         // The first state the marks show: only now is it known whether this launch syncs at all.
         stateChanged()
         logStoreCounts("at launch")
@@ -448,6 +476,12 @@ final class CloudSyncMonitor {
     /// re-arms its single timer. Returns the findings, so an event's own line can carry its latency.
     @discardableResult
     func watch(_ signal: SyncSignal?, log: Bool = true) -> [SyncWatchdog.Finding] {
+        // The watchdog watches the mirror: on HITList's own engine it neither runs nor arms a timer.
+        if isOnEngine {
+            watchdogTimer?.cancel()
+            watchdogTimer = nil
+            return []
+        }
         let now = Date()
         var findings = signal.map { watchdog.handle($0) } ?? []
         findings += watchdog.tick(now)
@@ -575,7 +609,7 @@ final class CloudSyncMonitor {
         steadiness = SyncSteadiness()
         // And the session: an import was about the other store or account.
         confirmedAt = nil
-        if ModelContainerFactory.isCloudKitEnabled, container != nil {
+        if ModelContainerFactory.isCloudKitEnabled, container != nil, !isOnEngine {
             sessionGate.begin(at: Date())
             if Self.checksRecords { recordCheck.begin(at: Date()) }
         }
@@ -661,7 +695,7 @@ final class CloudSyncMonitor {
         // anything had been fetched).
         // Only after a definite "no": "could not determine" says nothing about the account, and no import follows it.
         if status == .available, let previous, blocking.contains(previous),
-           ModelContainerFactory.isCloudKitEnabled, container != nil {
+           ModelContainerFactory.isCloudKitEnabled, container != nil, !isOnEngine {
             sessionGate.begin(at: now)
             if Self.checksRecords { recordCheck.begin(at: now) }
         }
@@ -921,7 +955,7 @@ final class CloudSyncMonitor {
         saveFlush = nil
         var message = pending.count == 1 ? "Local save" : "\(pending.count) local saves"
         message += ": \(pending.summary.text)"
-        if !ModelContainerFactory.isCloudKitEnabled { message += " (local only, not synced)" }
+        if !ModelContainerFactory.isCloudKitEnabled, !isOnEngine { message += " (local only, not synced)" }
         var fields = ["entities": pending.summary.entityText]
         if pending.count > 1 { fields["over"] = SyncLogFormat.duration(pending.last.timeIntervalSince(pending.first)) }
         syncLog.record(.save, message, date: pending.first, fields: fields)
@@ -942,6 +976,10 @@ final class CloudSyncMonitor {
     /// change ("Synced …" counts as one state whatever its time), feeds the steadiness and publishes what the marks
     /// show.
     private func stateChanged() {
+        if isOnEngine {
+            engineChanged()
+            return
+        }
         let now = Date()
         let raw = rawState
         let key = raw.isSynced ? "synced" : raw.summary()
@@ -963,6 +1001,11 @@ final class CloudSyncMonitor {
     /// change of look or words to the sync log ("Marks show: …", rare by design, so the log says what the person saw);
     /// and sleeps until the steadiness's next deadline (the gate keeps one of its own, `publishGate`).
     private func publishShown(_ now: Date) {
+        // The steadiness, the session gate and the record check are the mirror's: none runs on HITList's own engine.
+        if isOnEngine {
+            stopMirrorTimers()
+            return
+        }
         if let shown = steadiness.shown, shown != shownState {
             shownState = shown
         }
@@ -980,6 +1023,125 @@ final class CloudSyncMonitor {
             let now = Date()
             self.steadiness.tick(now)
             self.publishShown(now)
+        }
+    }
+
+    // MARK: - HITList's own engine (round 28)
+
+    /// This launch syncs on HITList's own engine (`SyncEngineBoard`, written by the side that runs it): the marks come
+    /// from the engine's exact status by one pure function (`SyncEngineMarks.state`), and none of the instruments built
+    /// round the mirror runs or arms a timer (the steadiness, the session gate, the record check, the watchdog). Every
+    /// released build runs the mirror, where this is false and everything above is as it was.
+    var isOnEngine: Bool { SyncEngineBoard.shared.engine == .own }
+
+    /// What the marks showed on the engine when last looked at, for the log's line per change and the bolt's "good to
+    /// go"; nil on the mirror.
+    @ObservationIgnored private var engineState: SyncState?
+    /// Moves on when the marks change with nothing on the board changing (the error's moment): views reading `state`
+    /// draw again.
+    private(set) var engineTick = 0
+    /// When the engine's current sync error (`SyncEngineMarks.syncError`) was first seen; nil while there is none.
+    @ObservationIgnored private var engineErrorSince: Date?
+    /// Its one timer: the moment "will keep trying" gives way to the error's own words, armed when an error appears,
+    /// cancelled when it clears.
+    @ObservationIgnored private var engineErrorTimer: Task<Void, Never>?
+    /// The moment the engine's status first read synced without a time of its own (`lastSyncedFallback`).
+    @ObservationIgnored private var engineSyncedSeenAt: Date?
+    @ObservationIgnored private var wasOnEngine = false
+
+    /// The marks for the board's status now (pure: `SyncEngineMarks.state`).
+    private func engineMarks(now: Date) -> SyncState {
+        var account = rawAccountStatus
+        #if DEBUG
+        // The demo's made-up status stands for the whole picture: a simulator with no iCloud account still shows it.
+        if SyncEngineDemo.requested != nil { account = nil }
+        #endif
+        return SyncEngineMarks.state(status: SyncEngineBoard.shared.status, account: account, isOnline: isOnline ?? true,
+                                     errorSince: engineErrorSince, lastSyncedFallback: engineSyncedSeenAt ?? now, now: now)
+    }
+
+    /// Watches the board for a change of engine or status, once per change (Observation: nothing polls).
+    private func observeBoard() {
+        withObservationTracking {
+            let board = SyncEngineBoard.shared
+            _ = board.engine
+            _ = board.status
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.boardChanged()
+                self?.observeBoard()
+            }
+        }
+    }
+
+    private func boardChanged() {
+        // On the mirror a write to the board (the launch saying `.mirror`) changes nothing here: the mirror's marks run
+        // only on the mirror's own signals, as before the engine existed.
+        guard isOnEngine || wasOnEngine else { return }
+        if isOnEngine != wasOnEngine {
+            wasOnEngine = isOnEngine
+            if isOnEngine {
+                // What the mirror's instruments had armed or shown describes a sync that is not this one.
+                stopMirrorTimers()
+                watchdogTimer?.cancel()
+                watchdogTimer = nil
+                if isChecking { isChecking = false }
+                if stall != nil { stall = nil }
+                if stalledSince != nil { stalledSince = nil }
+                if recordDifference != nil { recordDifference = nil }
+                if recordDifferenceIsStuck { recordDifferenceIsStuck = false }
+                write(.note, "Sync runs on HITList's own engine this launch", level: .notice)
+            } else {
+                engineState = nil
+                engineErrorSince = nil
+                engineErrorTimer?.cancel()
+                engineErrorTimer = nil
+            }
+        }
+        stateChanged()
+    }
+
+    private func stopMirrorTimers() {
+        steadyTimer?.cancel()
+        steadyTimer = nil
+        gateTimer?.cancel()
+        gateTimer = nil
+        recordTimer?.cancel()
+        recordTimer = nil
+    }
+
+    /// The board's status, the account or the network changed (or the error's moment came): the marks again, a line in
+    /// the log per change of look or words, and the bolt's "good to go" when it fills.
+    private func engineChanged() {
+        let now = Date()
+        let status = SyncEngineBoard.shared.status
+        let error = status.flatMap(SyncEngineMarks.syncError)
+        if error == nil { engineErrorSince = nil } else if engineErrorSince == nil { engineErrorSince = now }
+        if let status, status.isSynced, SyncEngineMarks.lastSynced(status) == nil {
+            if engineSyncedSeenAt == nil { engineSyncedSeenAt = now }
+        } else {
+            engineSyncedSeenAt = nil
+        }
+        let next = engineMarks(now: now)
+        let wasSynced = engineState?.isSynced ?? false
+        if next != engineState { engineState = next }
+        // The bolt fills: the moment its "good to go" may play (`BoltStrikeGate` decides whether it does).
+        if next.isSynced, !wasSynced { confirmedAt = now }
+        let key = "engine \(SyncSteadiness.kind(next))"
+        if key != loggedMarks {
+            loggedMarks = key
+            write(.note, "Marks show: \(statusWords(now: now))")
+        }
+        engineErrorTimer?.cancel()
+        engineErrorTimer = nil
+        if let since = engineErrorSince, case .retrying = next {
+            let delay = max(0.01, since.addingTimeInterval(SyncEngineMarks.errorWordsAfter).timeIntervalSince(now)) + 0.02
+            engineErrorTimer = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(200))
+                guard !Task.isCancelled, let self else { return }
+                self.engineTick &+= 1
+                self.engineChanged()
+            }
         }
     }
 
@@ -1041,7 +1203,7 @@ final class CloudSyncMonitor {
     /// The mirror started or ended an event, or the app saved something: a read waits until it is quiet again, and
     /// one that was running describes a moment that is gone.
     private func mirrorMoved(_ now: Date) {
-        guard recordCheck.hasBegun else { return }
+        guard recordCheck.hasBegun, !isOnEngine else { return }
         recordCheck.mirror(busy: !inFlight.isEmpty || watchdog.waitingSaves > 0, at: now)
         driveRecordCheck(now)
     }
@@ -1049,7 +1211,7 @@ final class CloudSyncMonitor {
     /// Starts a read when one is due, and sleeps once until the check's next moment (a read becoming due, a
     /// difference turning from waiting to trouble). Nothing is armed while nothing is wanted.
     private func driveRecordCheck(_ now: Date) {
-        guard recordCheck.hasBegun else { return }
+        guard recordCheck.hasBegun, !isOnEngine else { return }
         // The mirror may have gone quiet without an event of its own (a save's export covered it).
         let busy = !inFlight.isEmpty || watchdog.waitingSaves > 0
         if busy != recordCheck.isBusy { recordCheck.mirror(busy: busy, at: recordCheck.lastActivityAt ?? now) }
