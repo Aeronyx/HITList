@@ -248,6 +248,37 @@ final class SyncContractTests: XCTestCase {
         XCTAssertTrue(stale.isEmpty)
     }
 
+    func testExpectedIsComparedAsTheMergeReadsIt() async throws {
+        // `expected` is compared with `RecordMerge.same`: what the merge reads as the same record lets the write go
+        // ahead (before, an exact comparison made a list in another order "changed meanwhile", for ever).
+        let store = MemoryLocalStore([
+            SyncRecord(type: "TaskLabel", name: "L1"), SyncRecord(type: "TaskLabel", name: "L2"),
+            task("T", ["labels": .references(["L1", "L2"])]), task("U"), task("V", ["notes": .string("")]),
+        ])
+        var reordered = await store.record(key("TaskItem", "T"))!
+        reordered["labels"] = .referenceList(["L2", "L1", "L2"])
+        var emptyList = await store.record(key("TaskItem", "U"))!
+        emptyList["labels"] = .referenceList([])
+        var unfilled = await store.record(key("TaskItem", "V"))!
+        unfilled["notes"] = nil
+        unfilled["fieldFromANewerBuild"] = .int(1)
+        let stale = try await store.apply([
+            LocalWrite(key: key("TaskItem", "T"), expected: reordered, record: task("T", ["title": .string("T2")])),
+            LocalWrite(key: key("TaskItem", "U"), expected: emptyList, record: task("U", ["title": .string("U2")])),
+            LocalWrite(key: key("TaskItem", "V"), expected: unfilled, record: task("V", ["title": .string("V2")])),
+        ])
+        XCTAssertEqual(stale, [])
+        for name in ["T", "U", "V"] {
+            let record = await store.record(key("TaskItem", name))
+            XCTAssertEqual(record?["title"], .string("\(name)2"))
+        }
+
+        var changed = await store.record(key("TaskItem", "T"))!
+        changed["labels"] = .references(["L1"])
+        let still = try await store.apply([LocalWrite(key: key("TaskItem", "T"), expected: changed, record: nil)])
+        XCTAssertEqual(still, [key("TaskItem", "T")], "a label truly different is still a change meanwhile")
+    }
+
     func testAReferenceToNothingIsWrittenAsNone() async throws {
         let store = MemoryLocalStore([SyncRecord(type: "TaskLabel", name: "L1")])
         _ = try await store.apply([LocalWrite(key: key("TaskItem", "T"), expected: nil, record: task("T", [
@@ -298,9 +329,6 @@ final class SyncContractTests: XCTestCase {
         let store = MemoryLocalStore(records)
         await store.delete(key("TaskItem", "A"))
         let left = try await store.records().map(\.key.name)
-        // `SyncMemory.swift` is the supervisor's: its fix is `138-sync-proof/SyncMemory-remove.diff` in the notes
-        // folder. Take this line out with it.
-        XCTExpectFailure("MemoryLocalStore.remove puts back sub-tasks its own recursion removed", strict: false)
         XCTAssertEqual(left, [], "left behind: \(left)")
     }
 
