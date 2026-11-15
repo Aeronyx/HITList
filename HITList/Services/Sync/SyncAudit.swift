@@ -48,11 +48,31 @@ enum SyncAudit {
         case failed(String)
     }
 
-    /// Reads iCloud and this device and compares them. `progress` hears how many of iCloud's records have been read.
+    /// How long the bolt's own comparison may take (`SyncRecordCheck`): a read that takes longer counts as unanswered.
+    static let checkTimeout: TimeInterval = 30
+
+    /// One comparison of iCloud's records with this device's: what the bolt's check and Check iCloud… both rest on.
+    struct Comparison: Equatable {
+        var result: SyncComparison.Result
+        var otherRecords = 0
+        var recordsRead = 0
+        var zoneMissing = false
+        var duration: TimeInterval = 0
+    }
+
+    enum Compared: Equatable {
+        case compared(Comparison)
+        /// iCloud didn't answer, or this device's store couldn't be read: the reason, in plain words.
+        case failed(String)
+    }
+
+    /// Reads the whole zone from iCloud, fresh (every record's kind, id and change stamp, nothing kept from an earlier
+    /// read), then this device's store, and compares them. `whole`: a read cut short counts as unanswered (the bolt's
+    /// check); the audit takes what it got.
     @MainActor
-    static func run(container: ModelContainer, reader: ICloudZoneReading = ICloudZoneReader(),
-                    timeout: TimeInterval = SyncAudit.readTimeout,
-                    progress: @escaping @MainActor (Int) -> Void = { _ in }) async -> Outcome {
+    static func compare(container: ModelContainer, reader: ICloudZoneReading = ICloudZoneReader(),
+                        timeout: TimeInterval = SyncAudit.readTimeout, whole: Bool = false,
+                        progress: @escaping @MainActor (Int) -> Void = { _ in }) async -> Compared {
         let started = Date()
         // A small request first: iCloud answers at all before the whole zone is asked for.
         let database = await reader.zoneChanged(since: nil, timeout: SyncAudit.requestTimeout)
@@ -64,6 +84,7 @@ enum SyncAudit {
         case .failure(let failure): return .failed(failure.reason)
         case .success(let value): changes = value
         }
+        if whole, !changes.reachedEnd, !changes.zoneMissing { return .failed("iCloud didn't finish answering") }
         var index = ICloudZoneIndex()
         index.apply(changes, at: Date())
         let snapshot: StoreInventory.Snapshot
@@ -73,11 +94,27 @@ enum SyncAudit {
             return .failed("couldn't read this device's tasks: \(error.localizedDescription)")
         }
         let entities = StoreInventory.entities
-        let comparison = SyncComparison.compare(remote: index.remoteRecords(entities: entities), local: snapshot.records,
-                                                entities: entities)
-        var result = Report(comparison: comparison, otherRecords: index.otherRecords(entities: entities),
-                            recordsRead: changes.changed.count, zoneMissing: changes.zoneMissing)
-        result.names = await names(for: comparison, container: container, reader: reader)
+        let result = SyncComparison.compare(remote: index.remoteRecords(entities: entities), local: snapshot.records,
+                                            entities: entities)
+        return .compared(Comparison(result: result, otherRecords: index.otherRecords(entities: entities),
+                                    recordsRead: changes.changed.count, zoneMissing: changes.zoneMissing,
+                                    duration: Date().timeIntervalSince(started)))
+    }
+
+    /// Reads iCloud and this device and compares them. `progress` hears how many of iCloud's records have been read.
+    @MainActor
+    static func run(container: ModelContainer, reader: ICloudZoneReading = ICloudZoneReader(),
+                    timeout: TimeInterval = SyncAudit.readTimeout,
+                    progress: @escaping @MainActor (Int) -> Void = { _ in }) async -> Outcome {
+        let started = Date()
+        let comparison: Comparison
+        switch await compare(container: container, reader: reader, timeout: timeout, progress: progress) {
+        case .failed(let reason): return .failed(reason)
+        case .compared(let value): comparison = value
+        }
+        var result = Report(comparison: comparison.result, otherRecords: comparison.otherRecords,
+                            recordsRead: comparison.recordsRead, zoneMissing: comparison.zoneMissing)
+        result.names = await names(for: comparison.result, container: container, reader: reader)
         result.duration = Date().timeIntervalSince(started)
         result.finishedAt = Date()
         return .report(result)
@@ -151,12 +188,16 @@ enum SyncAuditWords {
 
     /// "2 tasks and 1 label", by kind in the audit's order.
     static func counted(_ items: [SyncComparison.Difference]) -> String {
-        let byEntity = Dictionary(grouping: items, by: \.entity)
+        counted(Dictionary(grouping: items, by: \.entity).mapValues(\.count))
+    }
+
+    /// The same from counts by entity.
+    static func counted(_ byEntity: [String: Int]) -> String {
         let order = SyncComparison.kindNames.map(\.entity) + byEntity.keys.sorted()
         var seen: Set<String> = []
         let parts = order.compactMap { entity -> String? in
-            guard seen.insert(entity).inserted, let group = byEntity[entity] else { return nil }
-            return SyncComparison.name(of: entity).count(group.count)
+            guard seen.insert(entity).inserted, let count = byEntity[entity], count > 0 else { return nil }
+            return SyncComparison.name(of: entity).count(count)
         }
         switch parts.count {
         case 0: return "Nothing"

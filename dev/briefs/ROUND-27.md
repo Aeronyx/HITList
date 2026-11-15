@@ -36,8 +36,11 @@ refusal). Nothing was uploaded; the version bump the run left in the tree was pu
   could reverse. He has: a filled bolt must mean this device and iCloud hold the same records. So the comparison is
   part of the bolt again, without what made 0.9.4 to 0.9.9 fail: it runs when something happened (a launch's first
   import, a return after time away, trouble clearing, a repair), never on a timer; a difference is believed only
-  from a fresh, whole read; the words say what differs and never "Sending"; what can be mended is mended once, by
-  itself; and nothing animates while it waits. The supervisor's own work this round, as round 26 was.
+  from a fresh, whole read, made twice; the words say what differs and never "Sending"; nothing animates while it
+  waits; and when iCloud won't answer the read, the bolt falls back on the mirror's own word instead of staying
+  hollow. Nothing is repaired by itself (a record here and not in iCloud was never sent, or was deleted elsewhere:
+  only the person knows which): Check iCloud… names the records and offers both repairs. The supervisor's own work
+  this round, as round 26 was.
 - **"Our own engine".** Yes, in the end: a bolt that is exact needs the list of what is waiting to go, and Apple's
   mirror keeps that list to itself. Todoist owns its queue (every change is a command with an id, sent to its own
   server, answered one by one), so "all sent" is a fact it holds. The Apple way to own the queue is `CKSyncEngine`:

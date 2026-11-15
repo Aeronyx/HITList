@@ -18,6 +18,11 @@ enum SyncState: Equatable {
     /// marks say what is known rather than the error's own alarming words (brief 78: George's account blip read
     /// "Sync paused: iCloud needs you to sign in again", untrue ten seconds later).
     case retrying(since: Date)
+    /// Only ever shown, never derived (`SyncRecordCheck`, 0.9.11): the mirror reports nothing wrong, and a fresh read
+    /// of iCloud's records, made twice, found that this device and iCloud don't hold the same ones. The words say
+    /// what differs ("1 label and 2 filters on this device aren't in iCloud"). `stuck` once it has lasted
+    /// (`SyncRecordCheck.Rules.patience`): drawn as trouble, and Check iCloud… settles it; before that, as waiting.
+    case differs(String, stuck: Bool)
 
     /// The one-line status, e.g. "Synced 2 min ago".
     func summary(now: Date = .now) -> String {
@@ -30,6 +35,7 @@ enum SyncState: Equatable {
         case .error(let reason, _): return "Sync paused: \(reason)"
         case .localOnly(let reason): return "Local only: \(reason)"
         case .retrying: return Self.retryingWords
+        case .differs(let words, _): return words
         }
     }
 
@@ -43,6 +49,7 @@ enum SyncState: Equatable {
         case .offline: return "icloud.slash"
         case .notSignedIn, .restricted, .localOnly: return "xmark.icloud"
         case .error: return "exclamationmark.icloud"
+        case .differs(_, let stuck): return stuck ? "exclamationmark.icloud" : "arrow.triangle.2.circlepath.icloud"
         }
     }
 
@@ -54,6 +61,7 @@ enum SyncState: Equatable {
         switch self {
         case .offline, .error, .notSignedIn, .restricted: true
         case .synced, .syncing, .retrying, .localOnly: false
+        case .differs(_, let stuck): stuck
         }
     }
 
@@ -258,7 +266,7 @@ extension SyncState {
     var isHealthyForStrike: Bool {
         switch self {
         case .synced, .syncing: true
-        case .offline, .error, .notSignedIn, .restricted, .localOnly, .retrying: false
+        case .offline, .error, .notSignedIn, .restricted, .localOnly, .retrying, .differs: false
         }
     }
 }

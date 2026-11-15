@@ -85,7 +85,7 @@ struct SyncSteadiness: Equatable {
         switch state {
         case .synced, .localOnly:
             troubleSince = nil
-        case .offline, .error, .notSignedIn, .restricted, .retrying:
+        case .offline, .error, .notSignedIn, .restricted, .retrying, .differs:
             if troubleSince == nil { troubleSince = now }
         case .syncing:
             break
@@ -154,6 +154,9 @@ struct SyncSteadiness: Equatable {
             return troubleFor >= windows.error ? .retrying(since: troubleSince ?? at) : nil
         case .retrying:
             return troubleFor >= windows.error ? raw : nil
+        case .differs:
+            // Never derived (`SyncRecordCheck` adds it after the steadying): shown as it comes.
+            return raw
         }
     }
 
@@ -214,6 +217,7 @@ struct SyncSteadiness: Equatable {
     /// The look a state draws, ignoring its dates: two states of one kind never need a dwell between them.
     enum Kind: Equatable {
         case synced, syncing, retrying, offline, error(String), notSignedIn, restricted, localOnly
+        case differs(String, stuck: Bool)
     }
 
     static func kind(_ state: SyncState) -> Kind {
@@ -226,6 +230,7 @@ struct SyncSteadiness: Equatable {
         case .notSignedIn: .notSignedIn
         case .restricted: .restricted
         case .localOnly: .localOnly
+        case .differs(let words, let stuck): .differs(words, stuck: stuck)
         }
     }
 }

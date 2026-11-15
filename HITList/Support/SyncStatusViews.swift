@@ -57,9 +57,9 @@ struct SyncStatusLine: View {
     private func color(for state: SyncState) -> Color {
         switch state {
         case .synced: return .green
-        case .syncing, .offline, .retrying: return Theme.secondaryText
+        case .syncing, .offline, .retrying, .differs(_, stuck: false): return Theme.secondaryText
         case .notSignedIn where !SyncBolt.everSignedIn(): return Theme.secondaryText
-        case .notSignedIn, .restricted, .error, .localOnly: return .orange
+        case .notSignedIn, .restricted, .error, .localOnly, .differs(_, stuck: true): return .orange
         }
     }
 }
@@ -250,12 +250,15 @@ struct SyncBolt: View {
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .synced:
             return Look(symbol: "bolt.fill", color: Theme.bolt, opacity: 0.85)
-        case .syncing, .retrying:
+        case .syncing, .retrying, .differs(_, stuck: false):
             return Look(symbol: "bolt", color: Theme.bolt, opacity: 0.85)
         case .offline, .localOnly:
             return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
         case .notSignedIn, .restricted, .error:
             return Look(symbol: "bolt.slash.fill", color: HITColor.dueOverdue, opacity: 0.85)
+        case .differs(_, stuck: true):
+            // Not struck through: sync itself works. A hollow bolt in the colour of trouble: something here needs settling.
+            return Look(symbol: "bolt", color: HITColor.dueOverdue, opacity: 0.85)
         }
     }
 }
@@ -345,9 +348,9 @@ struct SyncIndicatorDot: View {
     static func color(for state: SyncState, everSignedIn: Bool = SyncBolt.everSignedIn()) -> Color {
         switch state {
         case .synced: return HITColor.dueToday
-        case .syncing, .offline, .retrying: return Theme.secondaryText
+        case .syncing, .offline, .retrying, .differs(_, stuck: false): return Theme.secondaryText
         case .notSignedIn where !everSignedIn: return Theme.secondaryText
-        case .notSignedIn, .restricted, .error, .localOnly: return HITColor.dueTomorrow
+        case .notSignedIn, .restricted, .error, .localOnly, .differs(_, stuck: true): return HITColor.dueTomorrow
         }
     }
 }

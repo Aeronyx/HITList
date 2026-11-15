@@ -97,8 +97,9 @@ final class CloudSyncMonitor {
     /// Hollow from a launch until the mirror's first import of the session, filled after it (`SyncSessionGate`). Fed by
     /// the mirror's own events only: nothing here asks iCloud anything.
     @ObservationIgnored private var sessionGate = SyncSessionGate()
-    /// The session still waits for its first import: the words say "checking…" (`SyncWords`).
-    private(set) var isWaitingForFirstImport = false
+    /// The session still waits for its first import, or for its first comparison with iCloud's records: the words say
+    /// "checking…" (`SyncWords`).
+    private(set) var isChecking = false
     /// When the latest import or export finished well, once the session's first import is in: each advance may play
     /// the bolt's "good to go" (`BoltStrikeGate` decides whether it does).
     private(set) var confirmedAt: Date?
@@ -108,6 +109,28 @@ final class CloudSyncMonitor {
     @ObservationIgnored private var gateTimer: Task<Void, Never>?
     /// What "Marks show: …" said last, so the log gets a line per change of look or words.
     @ObservationIgnored private var loggedMarks: String?
+
+    // MARK: - Whether the records are the same (0.9.11)
+
+    /// Filled only once a fresh read of iCloud's records found them the same as this device's (`SyncRecordCheck`).
+    /// A read is started by something that happened (the session's first import, a return after a while, trouble
+    /// clearing, a repair in Check iCloud…), never by a timer of its own. Nothing is repaired by itself: a record
+    /// here and not in iCloud was never sent, or was deleted elsewhere, and only the person knows which.
+    @ObservationIgnored private var recordCheck = SyncRecordCheck()
+    /// What reads iCloud for it; tests answer instead.
+    @ObservationIgnored var recordReader: ICloudZoneReading = ICloudZoneReader()
+    @ObservationIgnored private var recordTimer: Task<Void, Never>?
+    @ObservationIgnored private var recordRead: Task<Void, Never>?
+    /// The mirror reported trouble when the state was last looked at: its clearing asks for a read.
+    @ObservationIgnored private var rawShowedTrouble = false
+    /// What the last believed comparison found to differ; nil while the two agree or nothing is known. Settings shows
+    /// a note under the status line from it.
+    private(set) var recordDifference: SyncRecordCheck.Difference?
+    /// That difference has lasted (`SyncRecordCheck.Rules.patience`): the person may have to settle it.
+    private(set) var recordDifferenceIsStuck = false
+
+    /// Since when this store has differed from iCloud, kept across launches.
+    static let differingSinceKey = "sync.differingSince"
 
     /// The defaults key for this store's `key` (`lastImportKey`, `lastExportKey`). Every build on a device
     /// shares the app group's defaults, so a Debug build's own store (HITList-Development.store) quoted the
@@ -129,6 +152,7 @@ final class CloudSyncMonitor {
         watchdog = SyncWatchdog(lastExportAt: lastExportAt, lastImportAt: lastImportAt)
         accountSteadiness = AccountSteadiness(remembered: accountWatch.lastStatus)
         troubleTracker = SyncTroubleTracker(defaults: AppGroup.defaults)
+        recordCheck = SyncRecordCheck(differingSince: AppGroup.defaults.object(forKey: Self.syncTimeKey(Self.differingSinceKey)) as? Date)
     }
 
     /// The latest moment anything is known to have reached or come from iCloud: the mirror's last import or export.
@@ -143,7 +167,7 @@ final class CloudSyncMonitor {
     /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Synced 3 min ago", "Last synced 3 min ago,
     /// checking…".
     func statusWords(now: Date = Date()) -> String {
-        SyncWords.status(state: state, waiting: isWaitingForFirstImport, lastSynced: lastSyncedAt, now: now)
+        SyncWords.status(state: state, waiting: isChecking, lastSynced: lastSyncedAt, now: now)
     }
 
     /// What the marks draw: the steadied state held to the session gate, once there is one.
@@ -230,6 +254,8 @@ final class CloudSyncMonitor {
         // iOS may launch the app in the background (a push, a widget's button): the minute of silence counts from the
         // first time the app is in front, when someone can see the bolt (`sceneChanged`).
         sessionGate.suspend(true, at: Date())
+        // And nothing is read from iCloud for the record check until then.
+        recordCheck.suspend(true)
         #endif
         forgetBeats()
         pathMonitor.pathUpdateHandler = { [weak self] path in
@@ -268,8 +294,18 @@ final class CloudSyncMonitor {
             write(.container, "Store opened without CloudKit: \(ModelContainerFactory.localOnlyReason)",
                            level: ModelContainerFactory.startupError == nil ? .notice : .error, fields: fields)
         }
-        // The mirror imports at every launch: until that import is in, nothing has been fetched for this session.
-        if ModelContainerFactory.isCloudKitEnabled { sessionGate.begin(at: Date()) }
+        // The mirror imports at every launch: until that import is in, nothing has been fetched for this session,
+        // and until a comparison follows it, nothing says the two hold the same records.
+        #if DEBUG
+        // `-syncCheckHide N`, on a side store only: iCloud read as if it lacked N filters and labels.
+        if let hidden = HidingZoneReader.requested(), !ModelContainerFactory.isMainStoreOpen {
+            recordReader = HidingZoneReader(count: hidden)
+        }
+        #endif
+        if ModelContainerFactory.isCloudKitEnabled {
+            sessionGate.begin(at: Date())
+            if Self.checksRecords { recordCheck.begin(at: Date()) }
+        }
         // The first state the marks show: only now is it known whether this launch syncs at all.
         stateChanged()
         logStoreCounts("at launch")
@@ -322,6 +358,7 @@ final class CloudSyncMonitor {
                 self?.write(.scene, "Mac going to sleep", fields: self?.inFlightFields() ?? [:])
                 self?.watch(.suspended(at: Date()))
                 self?.sessionGate.suspend(true, at: Date())
+                self?.recordCheck.suspend(true)
             }
         })
         observers.append(workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -329,6 +366,8 @@ final class CloudSyncMonitor {
                 self?.write(.scene, "Mac woke from sleep")
                 self?.watch(.resumed(at: Date()))
                 self?.sessionGate.suspend(false, at: Date())
+                self?.recordCheck.suspend(false)
+                self?.recordCheck.returned(at: Date())
                 self?.publishShown(Date())
                 self?.refreshAccountStatus(force: true)
             }
@@ -359,8 +398,11 @@ final class CloudSyncMonitor {
             if !isInFront { steadiness.resumed(at: now) }
             isInFront = true
             sessionGate.suspend(false, at: now)
-            publishShown(now)
+            recordCheck.suspend(false)
             #endif
+            // Back in the app: the mirror imports now by itself; a comparison follows it if the last one is old.
+            recordCheck.returned(at: now)
+            publishShown(now)
             watch(.activated(at: now, idle: idle))
             refreshAccountStatus()
         case .inactive:
@@ -373,6 +415,7 @@ final class CloudSyncMonitor {
             watch(.suspended(at: now))
             isInFront = false
             sessionGate.suspend(true, at: now)
+            recordCheck.suspend(true)
             publishShown(now)
             #endif
         @unknown default:
@@ -531,7 +574,10 @@ final class CloudSyncMonitor {
         steadiness = SyncSteadiness()
         // And the session: an import was about the other store or account.
         confirmedAt = nil
-        if ModelContainerFactory.isCloudKitEnabled, container != nil { sessionGate.begin(at: Date()) }
+        if ModelContainerFactory.isCloudKitEnabled, container != nil {
+            sessionGate.begin(at: Date())
+            if Self.checksRecords { recordCheck.begin(at: Date()) }
+        }
         stateChanged()
     }
 
@@ -616,6 +662,7 @@ final class CloudSyncMonitor {
         if status == .available, let previous, blocking.contains(previous),
            ModelContainerFactory.isCloudKitEnabled, container != nil {
             sessionGate.begin(at: now)
+            if Self.checksRecords { recordCheck.begin(at: now) }
         }
         stateChanged()
         guard status == .available else { return }
@@ -843,7 +890,12 @@ final class CloudSyncMonitor {
 
     private func localSaved(_ summary: SaveSummary, at: Date) {
         // Gathered into the log's line first, so a "waiting: offline" finding follows the save it is about.
-        defer { if ModelContainerFactory.isCloudKitEnabled { watch(.localSave(at: at, records: summary.total)) } }
+        defer {
+            if ModelContainerFactory.isCloudKitEnabled {
+                watch(.localSave(at: at, records: summary.total))
+                mirrorMoved(at)
+            }
+        }
         if var pending = pendingSaves {
             pending.count += 1
             pending.last = at
@@ -900,6 +952,9 @@ final class CloudSyncMonitor {
             write(.note, note.message, level: .notice, fields: note.fields)
         }
         steadiness.observe(raw, at: now)
+        // Trouble the mirror reported has cleared: what happened to the records meanwhile is unknown.
+        if rawShowedTrouble, !raw.showsTrouble { recordCheck.troubleCleared(at: now) }
+        rawShowedTrouble = raw.showsTrouble
         publishShown(now)
     }
 
@@ -934,10 +989,13 @@ final class CloudSyncMonitor {
     /// no timer runs while the marks are at rest.
     private func publishGate(_ now: Date) {
         sessionGate.block(isBlocked, at: now)
-        let waiting = sessionGate.isWaiting
-        if waiting != isWaitingForFirstImport { isWaitingForFirstImport = waiting }
+        recordCheck.block(isBlocked)
+        let waiting = sessionGate.isWaiting || recordCheck.isChecking
+        if waiting != isChecking { isChecking = waiting }
         let shown = shownState ?? rawState
         var gated = sessionGate.gate(shown, inFlight: isSyncing, at: now)
+        // Then the records: never "synced" until a fresh read of iCloud found the same ones here.
+        gated = recordCheck.gate(gated, at: now)
         #if DEBUG
         // A replay (`-syncReplay`) runs with sync off: its states stand as they are, to record the looks.
         if SyncReplayPlayer.shared.state != nil { gated = shown }
@@ -950,6 +1008,8 @@ final class CloudSyncMonitor {
             loggedMarks = key
             write(.note, "Marks show: \(statusWords(now: now))")
         }
+        publishRecordDifference(now)
+        driveRecordCheck(now)
         gateTimer?.cancel()
         gateTimer = nil
         guard let deadline = sessionGate.nextDeadline(after: now) else { return }
@@ -960,6 +1020,135 @@ final class CloudSyncMonitor {
             self.publishGate(Date())
         }
     }
+
+    // MARK: - The record check (0.9.11)
+
+    /// Whether this launch compares records at all: with CloudKit on, on a real store, outside the tests (hosted
+    /// tests share the installed app's account on the Mac and must ask iCloud nothing).
+    static var checksRecords: Bool {
+        ModelContainerFactory.isCloudKitEnabled && !ModelContainerFactory.isRunningInMemory && !SyncAppDelegateSupport.isTesting
+    }
+
+    /// The mirror started or ended an event, or the app saved something: a read waits until it is quiet again, and
+    /// one that was running describes a moment that is gone.
+    private func mirrorMoved(_ now: Date) {
+        guard recordCheck.hasBegun else { return }
+        recordCheck.mirror(busy: !inFlight.isEmpty || watchdog.waitingSaves > 0, at: now)
+        driveRecordCheck(now)
+    }
+
+    /// Starts a read when one is due, and sleeps once until the check's next moment (a read becoming due, a
+    /// difference turning from waiting to trouble). Nothing is armed while nothing is wanted.
+    private func driveRecordCheck(_ now: Date) {
+        guard recordCheck.hasBegun else { return }
+        // The mirror may have gone quiet without an event of its own (a save's export covered it).
+        let busy = !inFlight.isEmpty || watchdog.waitingSaves > 0
+        if busy != recordCheck.isBusy { recordCheck.mirror(busy: busy, at: recordCheck.lastActivityAt ?? now) }
+        if recordCheck.shouldRead(at: now) { startRecordRead(now) }
+        recordTimer?.cancel()
+        recordTimer = nil
+        guard let deadline = recordCheck.nextDeadline(after: now) else { return }
+        let delay = max(0.01, deadline.timeIntervalSince(now)) + 0.02
+        recordTimer = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(delay), tolerance: .milliseconds(200))
+            guard !Task.isCancelled, let self else { return }
+            self.publishGate(Date())
+        }
+    }
+
+    private func startRecordRead(_ now: Date) {
+        guard let container else { return }
+        recordCheck.started(at: now)
+        let reader = recordReader
+        recordRead = Task { @MainActor [weak self] in
+            let compared = await SyncAudit.compare(container: container, reader: reader, timeout: SyncAudit.checkTimeout,
+                                                   whole: true)
+            guard !Task.isCancelled, let self else { return }
+            self.recordReadEnded(compared)
+        }
+    }
+
+    private func recordReadEnded(_ compared: SyncAudit.Compared) {
+        let now = Date()
+        switch compared {
+        case .failed(let reason):
+            recordCheck.failed(at: now)
+            let again = recordCheck.wantedAt.map { "again in \(SyncLogFormat.duration($0.timeIntervalSince(now)))" }
+                ?? "the bolt follows iCloud's own reports until something asks again"
+            write(.note, "Record check: iCloud didn't answer (\(reason)); \(again)", level: .notice,
+                  fields: ["attempt": "\(recordCheck.failures)"])
+        case .compared(let comparison):
+            let wasTainted = recordCheck.isTainted
+            let before = recordCheck.verdict
+            let found = SyncRecordCheck.Difference(comparison.result)
+            recordCheck.finished(found.isEmpty ? nil : found, at: now)
+            logRecordCheck(comparison, tainted: wasTainted, before: before)
+        }
+        let since = recordCheck.differingSince
+        let key = Self.syncTimeKey(Self.differingSinceKey)
+        if since != AppGroup.defaults.object(forKey: key) as? Date {
+            if let since { AppGroup.defaults.set(since, forKey: key) } else { AppGroup.defaults.removeObject(forKey: key) }
+        }
+        publishGate(now)
+    }
+
+    /// One line per read that says something new: the first agreement of a session, a difference seen, a difference
+    /// believed, a difference gone. Counts, short hashes and times only (`SyncComparison.logFields`).
+    private func logRecordCheck(_ comparison: SyncAudit.Comparison, tainted: Bool, before: SyncRecordCheck.Verdict) {
+        var fields = SyncComparison.logFields(comparison.result)
+        fields["records"] = "\(comparison.recordsRead)"
+        fields["duration"] = SyncLogFormat.duration(comparison.duration)
+        if comparison.zoneMissing { fields["zone"] = "missing" }
+        let summary = SyncComparison.differenceSummary(comparison.result)
+        if tainted {
+            write(.note, "Record check: sync was busy during the read; reading again once it is quiet", fields: fields)
+            return
+        }
+        switch recordCheck.verdict {
+        case .agrees:
+            if case .agrees = before {
+                write(.note, "Record check: this device and iCloud still agree", fields: fields)
+            } else {
+                write(.note, "Record check: this device and iCloud agree", level: .notice, fields: fields)
+            }
+        case .differs:
+            let level: SyncLogEntry.Level = before == recordCheck.verdict ? .info : .notice
+            write(.note, "Record check: this device and iCloud differ (\(summary))", level: level, fields: fields)
+        case .unknown:
+            write(.note, "Record check: a difference (\(summary)); reading again before believing it", fields: fields)
+        }
+        if case .agrees = before, recordCheck.suspect != nil {
+            write(.note, "Record check: a difference since the last read (\(summary)); reading again before believing it",
+                  fields: fields)
+        }
+    }
+
+    /// What Settings shows under the status line.
+    private func publishRecordDifference(_ now: Date) {
+        var difference: SyncRecordCheck.Difference?
+        if case .differs(let found, _) = recordCheck.verdict { difference = found }
+        if difference != recordDifference { recordDifference = difference }
+        let stuck = difference != nil && recordCheck.isStuck(at: now)
+        if stuck != recordDifferenceIsStuck { recordDifferenceIsStuck = stuck }
+    }
+
+    /// Check iCloud… finished, or one of its repairs was made: the bolt's own comparison runs again.
+    func recordCheckAsked() {
+        let now = Date()
+        recordCheck.asked(at: now)
+        driveRecordCheck(now)
+    }
+
+    /// Check iCloud…'s "Send to iCloud" saved records again for the mirror to send: the difference is drawn as
+    /// waiting while the export runs, and the export's end prompts the comparison at once.
+    func recordsSentAgain() {
+        recordCheck.resent(at: Date())
+    }
+
+    #if DEBUG
+    /// Tests: the check as it stands.
+    var recordCheckForTests: SyncRecordCheck { recordCheck }
+    #endif
 
     /// Nothing can sync at all right now, known without asking: no network, or no usable iCloud account. "Could not
     /// determine" and "not checked yet" don't count: the mirror's own events say how that went.
@@ -1047,6 +1236,7 @@ final class CloudSyncMonitor {
                                            line: SyncRetryBursts.Line(date: started, message: "\(type.title) started",
                                                                       level: .info, fields: ["id": shortID])))
             watch(.eventStarted(id: event.identifier, type: type, at: event.startDate))
+            mirrorMoved(started)
             return
         }
         inFlight[event.identifier] = nil
@@ -1125,6 +1315,9 @@ final class CloudSyncMonitor {
             // may play its "good to go" (`BoltStrikeGate` decides).
             if event.type == .import { sessionGate.imported(at: now) }
             if event.type == .import || event.type == .export, !sessionGate.isWaiting { confirmedAt = now }
+            if event.type == .import || event.type == .export {
+                recordCheck.exchanged(imported: event.type == .import, at: now)
+            }
             if event.type == .import, let why = countAfterNextImport {
                 countAfterNextImport = nil
                 logStoreCounts(why)
@@ -1135,6 +1328,7 @@ final class CloudSyncMonitor {
             }
             if event.type == .export { NotificationCenter.default.post(name: .cloudKitExportSucceeded, object: nil) }
         }
+        mirrorMoved(now)
     }
 
     /// A failure that only says what is already known: "not signed in to iCloud" on a device with no

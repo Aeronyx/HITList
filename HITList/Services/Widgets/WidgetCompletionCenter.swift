@@ -389,7 +389,8 @@ extension CloudSyncMonitor: WidgetSyncFacts {
 
     var widgetSync: WidgetSnapshot.Sync {
         switch state {
-        case .synced, .syncing: .fine
+        // Records that differ say nothing about a completion made now: the mirror sends it as ever.
+        case .synced, .syncing, .differs: .fine
         case .offline, .error, .retrying: .waiting
         case .localOnly, .notSignedIn, .restricted: .localOnly
         }

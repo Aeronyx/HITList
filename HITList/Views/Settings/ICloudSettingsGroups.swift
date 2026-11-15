@@ -18,6 +18,12 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
+            // Records that differ (0.9.11): the status line says what; this says where it is settled.
+            if CloudSyncMonitor.shared.recordDifference != nil {
+                SettingsNote(text: CloudSyncMonitor.shared.recordDifferenceIsStuck ? SyncWords.differenceNote
+                                                                                   : SyncWords.differenceWaitingNote)
+                    .accessibilityIdentifier("settings-sync-difference-note")
+            }
             if let stall = CloudSyncMonitor.shared.stall {
                 SyncStuckRow(stall: stall)
             }
@@ -318,7 +324,7 @@ final class SyncAuditModel {
 
     private func audit(container: ModelContainer) async {
         phase = .checking(read: report == nil ? nil : 0)
-        let outcome = await SyncAudit.run(container: container, progress: { [weak self] count in
+        let outcome = await SyncAudit.run(container: container, reader: monitor.recordReader, progress: { [weak self] count in
             self?.phase = .checking(read: count)
         })
         switch outcome {
@@ -327,6 +333,8 @@ final class SyncAuditModel {
             let line = SyncAuditWords.logLine(found)
             monitor.write(.note, line.message, level: found.agree ? .info : .notice, fields: line.fields)
             phase = .done
+            // The bolt's own comparison follows what was just found or mended (`SyncRecordCheck`).
+            monitor.recordCheckAsked()
         case .failed(let words):
             monitor.write(.note, "Check iCloud couldn't compare: \(words)", level: .notice)
             phase = .failed(words)
@@ -351,6 +359,7 @@ final class SyncAuditModel {
                 }
                 monitor.write(.note, "Check iCloud: sending \(sent) on request", level: .notice,
                               fields: ["records": Self.hashes(items), "backup": backup?.lastPathComponent ?? "none (store empty)"])
+                monitor.recordsSentAgain()
             } catch {
                 repairMessage = "Nothing was sent: \(error.localizedDescription)"
                 monitor.write(.note, "Check iCloud: sending failed", level: .error, fields: SyncLogFormat.errorFields(error))

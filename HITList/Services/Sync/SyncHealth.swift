@@ -10,8 +10,9 @@ import Foundation
 struct SyncHealth: Equatable {
     var account: AccountState
     var sync: SyncState
-    /// The session still waits for its first import (`CloudSyncMonitor.isWaitingForFirstImport`). Left out, the live
-    /// monitor's, so a row that builds its own line (`AccountStatusRow`) speaks as Settings does.
+    /// The session still waits for its first import or its first comparison with iCloud's records
+    /// (`CloudSyncMonitor.isChecking`). Left out, the live monitor's, so a row that builds its own line
+    /// (`AccountStatusRow`) speaks as Settings does.
     var waiting: Bool
     var lastSynced: Date?
 
@@ -46,7 +47,7 @@ struct SyncHealth: Equatable {
     /// tests both build lines there); false before the monitor started (hosted tests) or where nothing syncs.
     static var liveWaiting: Bool {
         guard Thread.isMainThread else { return false }
-        return MainActor.assumeIsolated { CloudSyncMonitor.shared.isWaitingForFirstImport }
+        return MainActor.assumeIsolated { CloudSyncMonitor.shared.isChecking }
     }
 
     static var liveLastSynced: Date? {

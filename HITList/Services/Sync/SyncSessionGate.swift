@@ -16,8 +16,13 @@ import Foundation
 /// It replaces brief 95's beats (a CloudKit request of HITList's own every 15 s, a copy of iCloud's record index and a
 /// record-by-record comparison that held the bolt hollow whenever the two differed). On George's Mac on 2026-11-13
 /// three records from October that iCloud didn't have kept the bolt hollow for good, in words that weren't true
-/// ("Sending 3 changes to iCloud…"), while every import and export of the mirror succeeded. The comparison is still
-/// there, on request: Settings → iCloud → Check iCloud… (`SyncAudit`).
+/// ("Sending 3 changes to iCloud…"), while every import and export of the mirror succeeded.
+///
+/// Since 0.9.11 a second gate follows this one (`SyncRecordCheck`): George asked that the bolt never be filled while
+/// this device and iCloud hold different records, so after the session's first import a fresh read of iCloud's
+/// records is compared with this device's, on events and never on a timer, and what differs is said in words. This
+/// gate still answers only "has the mirror fetched for this session"; Check iCloud… (`SyncAudit`) is the same
+/// comparison on request, with names and repairs.
 ///
 /// Pure: `CloudSyncMonitor` feeds it and wakes it once at `nextDeadline(after:)`. Nothing here runs on a timer of its
 /// own, asks iCloud anything, or animates.

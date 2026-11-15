@@ -344,3 +344,42 @@ struct ICloudReadFailure: Error, Equatable, Hashable, Sendable {
         ICloudReadFailure(.timeout, "no answer within \(SyncLogFormat.duration(seconds))")
     }
 }
+
+#if DEBUG
+/// `-syncCheckHide N` (Debug builds only, a side store with sync on): iCloud is read through a reader that leaves out
+/// N of its filters and labels, so the bolt's record check (`SyncRecordCheck`) and Check iCloud… find "N on this
+/// device aren't in iCloud" without anything being damaged anywhere. For seeing and photographing what a difference
+/// looks like: a real one can't be made on purpose (the mirror sends what a session with sync off made, and brings
+/// every deletion back).
+struct HidingZoneReader: ICloudZoneReading {
+    var base: ICloudZoneReading = ICloudZoneReader()
+    var count: Int
+
+    /// The number after `-syncCheckHide`, if any.
+    static func requested(arguments: [String] = CommandLine.arguments) -> Int? {
+        guard let flag = arguments.firstIndex(of: "-syncCheckHide"), arguments.indices.contains(flag + 1),
+              let count = Int(arguments[flag + 1]), count > 0 else { return nil }
+        return count
+    }
+
+    func zoneChanged(since token: Data?, timeout: TimeInterval) async -> Result<ICloudDatabaseAnswer, ICloudReadFailure> {
+        await base.zoneChanged(since: token, timeout: timeout)
+    }
+
+    func zoneChanges(since token: Data?, timeout: TimeInterval,
+                     progress: @escaping @Sendable (Int) -> Void) async -> Result<ICloudZoneIndex.ZoneChanges, ICloudReadFailure> {
+        let result = await base.zoneChanges(since: token, timeout: timeout, progress: progress)
+        guard case .success(var changes) = result else { return result }
+        // The same records at every read: by record name.
+        let hidden = changes.changed
+            .filter { ["SavedFilter", "TaskLabel"].contains($0.value.entity) && $0.value.id != nil }
+            .keys.sorted().prefix(count)
+        for name in hidden { changes.changed[name] = nil }
+        return .success(changes)
+    }
+
+    func names(of recordNames: [String], timeout: TimeInterval) async -> Result<[String: String], ICloudReadFailure> {
+        await base.names(of: recordNames, timeout: timeout)
+    }
+}
+#endif
