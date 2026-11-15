@@ -66,6 +66,61 @@ Simulator tool using that UDID, and run iOS tests as `SIMULATOR=HITList-NN scrip
 `xcrun simctl shutdown <UDID>` then `xcrun simctl delete <UDID>`, and say so in the report. Never touch another
 session's simulator, never quit George's `/Applications/HITList.app`, and quit any Debug Mac app you started.
 
+## Round 27 (2026-11-14, evening; briefs 132–137 in parallel, all six at once; `ROUND-27.md` says why)
+0.9.10 was prepared and its release stopped at Apple's door (an agreement George must accept); nothing was
+uploaded, and this round is **0.9.11**: a bolt that checks the records again, creatures that move every 4 to 12
+seconds and cheer a completed task, Flint's blink and rain, Phase's rain look, Quill's corner, the calendar made
+findable with a card and Add to Calendar, "Human-In-The-List" once, and an import from Todoist. Sessions are Opus
+5.5 (commits end `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), the supervisor a Fable 5.2 chat.
+George has 0.9.9 in hand and is not waiting on you: nobody waits for him, and the supervisor forwards your sheet
+to him the moment it arrives. **No schema change, by anyone.**
+- **Sync is the supervisor's own this round** (`Services/Sync/*`, `CloudSyncMonitor.swift`, `SyncState.swift`,
+  `Deduplicator.swift`, `Support/SyncStatusViews.swift`, `Views/Settings/ICloudSettingsGroups.swift`,
+  `ICloudCheck.swift`, `SyncLogView.swift`, `Mac/LastSyncChange.swift`, their tests): George asked that the bolt
+  never be filled while this device and iCloud hold different records, so the comparison comes back into the
+  bolt, on events and never on a timer. Nobody else edits those files, pokes the mirror or asks iCloud anything.
+  Round 26's rules below still bind everything you draw or schedule: no timer with nothing pending, no animation
+  without an end, nothing endless in the Mac's toolbar, and a CPU reading in your report if you draw or schedule.
+- **Ownership** (each brief's own list is the contract; this is the map). 132 `alive`: the companion engine
+  (`CompanionSchedule`, `CompanionDirector`, `CompanionClock`, `CompanionCharacter`, `Views/Companions/*`), a new
+  `CompanionCheers.swift`, the one call in `CompletionDelightHook`. 133 `flint-moves`: `Characters/Flint.swift`,
+  `CompanionFlintTests`. 134 `phase-rain`: `Characters/Phase.swift`, `CompanionPhaseTests`. 135 `small-things`:
+  `ThemeCompanion.swift`, the swatch's sprite in `AppearanceSettingsSection.swift`, a swatch-only frame appended
+  to `Quill.swift`, the About groups, one footer line in `SettingsView.swift`. 136 `calendar`:
+  `Services/Calendar/*`, `Views/Calendar/*`, core `CalendarDay`, the Calendar page (`SettingsView.swift`'s page
+  list, the Mac's sections, General's rows leaving), an event row's tap, one menu item on a task, one tip, one
+  usage string. 137 `todoist-import`: new `Todoist*` files in core, `Services/Import/*`, `Views/Import/*`, the
+  rows in `DataSettingsGroups.swift`. In a shared test file change only the lines that are yours. Nobody:
+  `scripts/`, `dev/`, `CHANGELOG.md`, `WhatsNew.swift`, the What's New pin, the models' shape.
+- **Creatures: every frame, gesture and routine name stays** in every character file (132's cheers name them,
+  135's boxes show them). The six George has signed off (Nod, Quill, Tuck, Hush, Glim, Button) do not change by a
+  pixel in any frame the app's "+" or search field shows. **Everything in Round 25's and Round 24's blocks below
+  still holds**: the water recipe, no open eye a single pixel, the format's limits, original characters only,
+  change the least that answers his words, judge at 1x beside what he has.
+- **The clock**: your brief names when your sheet or picture and your report are due, in Eastern time
+  (`TZ=America/New_York date`). Work in the brief's order and commit each item as it becomes whole; ten minutes
+  before the report time stop starting things, run your tests, write the report. Fewer things, all good, beats
+  many. If an item will not fit, finish the ones before it and say plainly what is left.
+- **The sheet**: small, and at real size (1x, 2x and 3x on the "+" in the creature's own theme, once on the Mac's
+  field). Send the supervisor its path and your pick with one line of why
+  (`mcp__ccd_session_mgmt__send_message`, `session_id: "parent"`), and carry on with your pick; the supervisor
+  stops you only if it is wrong, and may send you rows or a picture of its own: those are the starting point.
+- **Tools**, in the shared notes folder (`~/Library/Application Support/Claude/side-session-notes/
+  local_8995b93d-4779-400a-855f-77db7b4e0b1d/`): `round-25/draw/kit.py`, `view.py <Swift file> <theme> <seatRow>
+  <out.png> frame…`, `cast.py` (the line-up); earlier workshops by brief number (`128-flint/workshop`,
+  `129-phase-eyes/workshop`, `131-swatch-seats`); `round-26/sync26/cpu-run.sh` (two Debug Mac builds' CPU on the
+  same script). Themes and seat rows: slate nod 17, graphite flint 18, midnight quill 16, moss tuck 20, nord hush
+  17, tokyo glim 15, mocha phase 20, rose button 19. Your own pictures and scripts go in a folder named after
+  your brief there, never in the repository.
+- **The machine**: six sessions and the supervisor build on one Mac. 133 and 134 draw first, build once at the
+  end and use no simulator. 132, 135, 136 and 137 each make one simulator of their own (`HITList-NN`; 135's is an
+  "iPhone 16"), boot it only after the time their brief names and delete it at the end. Give every `xcodebuild`
+  its own `-derivedDataPath build.noindex/…-sNN`. A Debug Mac app of your own runs with
+  `HITLIST_STORE_SUFFIX=sNN -disableCloudKit YES -ApplePersistenceIgnoreState YES`, is found with `pgrep -x
+  HITList` (never `pgrep -f`) and quit by its pid; never George's `/Applications/HITList.app`. No session answers
+  a system dialog or changes a permission on the Mac; a simulator of your own may be granted calendar access with
+  `xcrun simctl privacy <udid> grant calendar com.trammells.hitlist`. Never push or merge.
+
 ## Round 26 (2026-11-13; no briefs: the supervisor alone; `ROUND-26.md` says why). Standing rules for every session since
 
 Sync says only what CloudKit's mirror says. These hold for any brief that touches sync, its marks, or anything that
