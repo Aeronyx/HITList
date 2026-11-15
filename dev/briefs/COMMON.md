@@ -124,6 +124,32 @@ mirror, the engine ships dark.
   `-disableCloudKit YES` unless you are 142's probe), is found with `pgrep -x HITList` and quit by its pid; never
   George's `/Applications/HITList.app`. Never push or merge.
 
+### Round 28, wave 2 (from about 05:15 Eastern; briefs 143–146 in parallel)
+Wave 1 is on master: the contract, `RecordMerge` (138), `SyncCore` (139), `FakeCloud` and the rig (140),
+`SwiftDataSyncStore`, `SyncLedgerStore`, `SyncSaveHints` (141), `CloudKitTransport`, `CloudRecordCodec`, the probe
+(142). Core: 1,013 tests. Everything in the Round 28 block above still holds; what is new:
+- **The design moved during wave 1; read `dev/SYNC-ENGINE.md` as it is now.** Section 8 (a reference to an item that
+  is not on this device is never cleared by it), T4 and T12, the mass-deletion hold, M3, M8, M10, M12 and M13, the
+  mirror's reach (record types are `HL` + the type in CloudKit; the engine is meant for a container of its own,
+  which waits for George), writes through the main context.
+- **The reports are the interfaces**: `139-sync-core/REPORT.md`, `140-sync-fake-cloud/REPORT.md`,
+  `141-sync-swiftdata/WAVE2.md`, `142-sync-cloudkit/REPORT.md` in the notes folder. Call what they say; if the code
+  differs from its report, the code is right and you tell the supervisor.
+- **Ownership.** 143 `sync-wire`: new `Services/SyncEngine/SyncEngine*.swift`, `SyncEngineSwitch`, `SyncEngineHost`;
+  small edits in `ModelContainerFactory`, `HITListApp`, `SyncAppDelegate`, `LocalCacheReset`, `Deduplicator`, the
+  background refresh, `WidgetCompletionCenter`, and the writers that should move `updatedAt`. 144 `sync-status`:
+  `CloudSyncMonitor`, `SyncState`, `Services/Sync/SyncWords`, the bolt's views, the iCloud settings, the sync log's
+  view, new `Views/Settings/SyncEngineSettings.swift`. 145 `sync-sim`: everything in core's `Sync/` but the contract
+  files, and all core sync tests. 146 `sync-review`: no source; two new test files of findings. The seam between 143
+  and 144 is `Services/SyncEngine/SyncEngineBoard.swift`, the supervisor's: 143 writes to it, 144 reads it, neither
+  edits it. The public names of `SyncCore`, `SyncStatus`, `SyncHold`, `SyncHost` are frozen for the wave (143 and
+  144 build on them while 145 works inside).
+- **iCloud**: nobody this wave. The supervisor alone runs the engine against CloudKit Development. 143 and 144 prove
+  their work on `FakeCloud` and on Debug launch arguments that need no network.
+- **The machine**: 145 and 146 mostly run `swift test` in `HITListCore` (146 also one Mac test run at its end). 143
+  and 144 each use their own `-derivedDataPath build.noindex/…-sNN` and one simulator each (`HITList-143`,
+  `HITList-144`, the second an "iPhone 16"), booted only when needed and deleted at the end.
+
 ## Round 27 (2026-11-14, evening; briefs 132–137 in parallel, all six at once; `ROUND-27.md` says why)
 0.9.10 was prepared and its release stopped at Apple's door (an agreement George must accept); nothing was
 uploaded, and this round is **0.9.11**: a bolt that checks the records again, creatures that move every 4 to 12

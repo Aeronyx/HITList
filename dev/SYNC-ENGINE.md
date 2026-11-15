@@ -105,8 +105,12 @@ records set aside (section 8) and a few facts (`LedgerFact`).
 - an item here whose `base` is a marker: **made again here** (an undo), waiting to go;
 - a marker `base` past its lifetime: waiting to be removed for good.
 
-`SyncCore.reconcile` does that for every record (at start, on return to the app, after a fetch) or for the keys a
-save touched (the app passes them on `ModelContext.didSave`; a hint, never the truth). The transport's pending
+A deletion here is noticed by the compare and nowhere else (not by `recordToSend`, not by a fetch: a fetch that
+meets an item gone here runs the compare on it first), so one guard covers every way a deletion can reach iCloud
+(`massDeletion`, section 10); a save's hint that finds more than 50 gone is decided on a whole compare.
+
+`SyncCore` compares every record (at start, on return to the app, after a whole fetch) or the keys a save touched
+(`localChanged`: the app passes them on `ModelContext.didSave`; a hint, never the truth). The transport's pending
 list is made to match. Whatever writes the store (a view, an intent, an import, the day anchoring, a restore of a
 backup) and whether or not `updatedAt` moved, the change is found, because the records differ. A crash between any
 two steps leaves a state the same comparison reads correctly.
@@ -175,7 +179,8 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent.
 - **T3 Pending.** The list is ordered, holds a key once (a save and a delete of one key replace each other, the last
   added stays), and survives a relaunch. The record is asked for when its turn comes (`recordToSend`); nil drops
-  the change.
+  the change. `pending`, `add`, `remove` and `reset` never wait for the delegate: the brain calls them from inside
+  `handle` too.
 - **T4 A save accepted.** Every field of the record's type (`SyncSchema`) is written: one present with its value, one
   absent emptied; `deletedAt` likewise. A key the type does not list is neither sent nor cleared. `saved` carries
   the record as iCloud now holds it and its new token. The change leaves the list **before** `sent` is delivered
@@ -203,7 +208,8 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   forgets its own with it (section 7): a bookmark that starts afresh never tells of a zone lost in the meantime, so
   a ledger kept would hold bases for records iCloud no longer has, and nothing would send them again (found by
   session 140's rig).
-- **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record.
+- **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record. A fetch in flight
+  when it is called ends there.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
 
@@ -286,11 +292,15 @@ person or the world can lift:
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `massDeletion` | A compare finds nothing on the device at all, or more than 50 items gone that are also more than half of what iCloud holds | Nothing is sent and nothing is marked deleted: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. It lifts by itself when the items are there again, or when the person says they did delete them (found by session 139) |
+| `massDeletion` | A whole compare finds no item while iCloud holds some, or more than 50 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
 again. An account switched: as sign-out, then sign-in.
+
+While held (a full iCloud excepted) nothing is compared, `recordToSend` answers nil, and fetched records are let go
+unread; when the hold lifts the transport is reset, so everything comes again. A full iCloud still reads what
+arrives and counts what waits, and is tried again on return to the app only (never by itself: no loop).
 
 **The bolt** is filled exactly when: idle, nothing waiting, the first fetch finished, no error. Hollow with the
 number when changes are waiting ("3 changes waiting to go to iCloud"). No comparison of every record, no gates, no

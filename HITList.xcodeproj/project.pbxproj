@@ -432,6 +432,7 @@
 		BF6C8A16CA2986BDA92FEBAF /* CloudKitTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D13FF3061ABA6048533466 /* CloudKitTransportTests.swift */; };
 		BF9FE919E6B7F4C346BA2D10 /* UpcomingBoardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */; };
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
+		BFC377140291B7A0FE7765AB /* SyncEngineBoard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B028B6895A9501171AF8712E /* SyncEngineBoard.swift */; };
 		BFF005FD97C83745468C4B9B /* CalendarSettingsRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBF2BCE9B5B554BD54596CF /* CalendarSettingsRows.swift */; };
 		C09211C77F010492FDC5B15F /* InboxText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DD387014332B38314461584 /* InboxText.swift */; };
 		C165F9451F0C656CC31FA2C2 /* DemoWeatherSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39FF83865AE7DA41FD1A7B26 /* DemoWeatherSource.swift */; };
@@ -998,6 +999,7 @@
 		AEBF2BCE9B5B554BD54596CF /* CalendarSettingsRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarSettingsRows.swift; sourceTree = "<group>"; };
 		AF22F4F7DDF5D28105EFED56 /* LastSyncChange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastSyncChange.swift; sourceTree = "<group>"; };
 		B0199FC09B0CD7E70354010A /* AccountWatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountWatchTests.swift; sourceTree = "<group>"; };
+		B028B6895A9501171AF8712E /* SyncEngineBoard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineBoard.swift; sourceTree = "<group>"; };
 		B0F161F1073708868471BC88 /* WidgetSamples.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSamples.swift; sourceTree = "<group>"; };
 		B13FB0B92F7378AC2FAF38D2 /* SyncLedgerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLedgerStore.swift; sourceTree = "<group>"; };
 		B14F345068D3531E3379FE53 /* RemindersSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersSettingsSection.swift; sourceTree = "<group>"; };
@@ -1334,6 +1336,7 @@
 				2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */,
 				47ACB41056989FD3EE57A52A /* CloudRecordCodec.swift */,
 				A63469CE09FF74292351C28B /* SwiftDataSyncStore.swift */,
+				B028B6895A9501171AF8712E /* SyncEngineBoard.swift */,
 				B13FB0B92F7378AC2FAF38D2 /* SyncLedgerStore.swift */,
 				37D7C29C7E3D5F8A18412E1F /* SyncRecordMapping.swift */,
 				79EFB3C006D88CB8D2F1CEF6 /* SyncSaveHints.swift */,
@@ -2799,6 +2802,7 @@
 				058B3B6E0DD68DAF9CBA67D7 /* SyncAppDelegate.swift in Sources */,
 				7C8559B92495C2085EF300E5 /* SyncAudit.swift in Sources */,
 				AE5AFD9CC9865C6CDDD9C335 /* SyncComparison.swift in Sources */,
+				BFC377140291B7A0FE7765AB /* SyncEngineBoard.swift in Sources */,
 				AC0A5906024DDBA597C16B87 /* SyncEnvironment.swift in Sources */,
 				22D93F0119F5F5869060BA2B /* SyncHealth.swift in Sources */,
 				5B847FF0E25D7565D7DBB94F /* SyncLedgerStore.swift in Sources */,

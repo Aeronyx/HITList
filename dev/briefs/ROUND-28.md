@@ -38,11 +38,26 @@ verbatim:
 All xhigh: this is the layer every tester's data will pass through, and a mistake in it is not seen until it has
 cost someone a task.
 
-## Wave 2 (briefed when wave 1 is on master)
-The engine wired into the app behind the switch (life cycle, the mirror's events re-pointed, the move from the
-mirror, Reset local cache), the bolt and Settings → iCloud on the engine's own status, the simulation at scale
-with every invariant, an independent review of the whole, end to end on CloudKit Development with two side stores,
-the schema's guard in `release.sh` for the new record types.
+## Wave 1 as it went (03:30 to 05:00)
+All five reported early and all are on master (core 737 → 1,013 tests). What they found mattered more than what
+they built: the merge rules had six holes (138, with 95 tests and 21,700 generated cases); SwiftData's main context
+does not take in another context's save, so the engine writes through the main context (141); the mirror imports
+every zone of its container and mangled the engine's records, so record types are `HL` + the type and the engine is
+meant for a container of its own (142's probe on Development); nothing guarded iCloud against a store that reads
+empty, so there is a mass-deletion hold (139); the design's rule for a reference whose target had not arrived lost
+labels, Groups and parents, and is rewritten (140's rig, seed 58); a transport that lost its state must take the
+ledger with it (140's rig, seed 4). The design was corrected nine times in ninety minutes, each time on evidence.
+
+## Wave 2 (05:15, four sessions, all Opus 5.5 at xhigh)
+| Brief | Session | What |
+|---|---|---|
+| 143 | `sync-wire` | The engine in the app behind the switch: life cycle, the mirror's events fed on the engine, the move, Reset local cache, two whole devices in hosted tests |
+| 144 | `sync-status` | The bolt and Settings → iCloud on the engine's own status: exact counts, the holds and their buttons |
+| 145 | `sync-sim` | The brain on the rig: thousands of random histories, every fault, I1 to I9, fixes |
+| 146 | `sync-review` | An independent review of the whole, findings proven by tests |
+
+The supervisor's own: the seam between 143 and 144 (`SyncEngineBoard`), `release.sh`'s schema check, the run of two
+devices on CloudKit Development, the record, the hand-over.
 
 ## The supervisor's own
 - The Theme menu (done), its pictures.
