@@ -600,16 +600,138 @@ class SwiftDataSyncStoreTests: XCTestCase {
                                           context: main), .keys([key(task)]), "a set, as the doc comment says, reads too")
     }
 
-    func testTheObserverHandsTheEnginesOwnSaveOnWithItsKeys() async throws {
+    /// The engine's own save tells the brain nothing (it would only be told to look at what it just wrote), while
+    /// every other listener of `didSave` (reminders, widgets, Spotlight) still hears it; another container's save is
+    /// nothing either.
+    func testTheEnginesOwnSaveIsNoHintButOtherListenersStillHearIt() async throws {
         let handed = Locked<[Set<SyncKey>?]>([])
         let observer = SyncSaveHintObserver(container: container) { keys in handed.mutate { $0.append(keys) } }
         defer { observer.stop() }
+        let heard = Locked(0)
+        let main = main!
+        observers.append(NotificationCenter.default.addObserver(forName: ModelContext.didSave, object: main, queue: nil) { _ in
+            heard.mutate { $0 += 1 }
+        })
         let record = SyncRecord(type: "TaskItem", name: UUID().uuidString, fields: ["title": .string("x")])
         _ = try await store.apply([LocalWrite(key: record.key, expected: nil, record: record)])
         let other = ModelContainerFactory.preview()
         other.mainContext.insert(TaskItem(title: "elsewhere"))
         try other.mainContext.save()
-        XCTAssertEqual(handed.value, [[record.key]], "the engine's own save is a hint like any other; another container's is none")
+        XCTAssertEqual(handed.value.count, 0, "nothing handed to the brain")
+        XCTAssertEqual(heard.value, 1, "the main context's didSave was posted")
+        XCTAssertNil(SwiftDataSyncStore.savingOnMainContext, "the flag is cleared after the save")
+
+        // The person's own save afterwards is a hint again.
+        let task = try XCTUnwrap(try main.fetch(FetchDescriptor<TaskItem>()).first)
+        task.title = "edited"
+        try main.save()
+        XCTAssertEqual(handed.value, [[record.key]])
+    }
+
+    /// The person's pending edits that go with the engine's save are still hinted: their rows' keys, without the rows
+    /// the engine wrote; a pending deletion of the person's makes the hint everything.
+    func testThePersonsPendingRowsInTheEnginesSaveAreStillHinted() async throws {
+        main.autosaveEnabled = false
+        let mine = TaskItem(title: "Mine")
+        let theirs = TaskItem(title: "Theirs")
+        let doomed = TaskItem(title: "Doomed")
+        main.insert(mine)
+        main.insert(theirs)
+        main.insert(doomed)
+        try main.save()
+        let handed = Locked<[Set<SyncKey>?]>([])
+        let observer = SyncSaveHintObserver(container: container) { keys in handed.mutate { $0.append(keys) } }
+        defer { observer.stop() }
+
+        mine.title = "Mine, edited"
+        let label = TaskLabel(name: "new label of mine")
+        main.insert(label)
+        let before = try await record(key(theirs))
+        var after = before
+        after["title"] = .string("Theirs, from iCloud")
+        _ = try await store.apply([LocalWrite(key: key(theirs), expected: before, record: after)])
+        XCTAssertEqual(handed.value, [[key(mine), SyncKey(type: "TaskLabel", name: label.id.uuidString)]],
+                       "the person's rows, not the engine's")
+
+        main.delete(doomed)
+        let now = try await record(key(theirs))
+        var again = now
+        again["title"] = .string("Theirs, again")
+        _ = try await store.apply([LocalWrite(key: key(theirs), expected: now, record: again)])
+        XCTAssertEqual(handed.value.count, 2)
+        XCTAssertEqual(handed.value.last, .some(nil), "a deletion of the person's went with it: everything")
+    }
+
+    func testASaveFromAContextOfItsOwnIsNoHint() async throws {
+        let hints = collectHints()
+        let ownContext = SwiftDataSyncStore(container: container, writer: .ownContext)
+        let record = SyncRecord(type: "TaskItem", name: UUID().uuidString, fields: ["title": .string("x")])
+        _ = try await ownContext.apply([LocalWrite(key: record.key, expected: nil, record: record)])
+        XCTAssertEqual(hints.value, [.unrelated])
+    }
+
+    // MARK: - The expected check
+
+    /// `expected` is compared as the contract says (`RecordMerge.same`): a record that leaves out its required fields
+    /// stands for their values and is the same as the row; a field that differs is not.
+    func testExpectedIsComparedAsTheContractsSameness() async throws {
+        let task = TaskItem(title: "")
+        main.insert(task)
+        try main.save()
+        let sparse = SyncRecord(key: key(task), fields: ["createdAt": .date(task.createdAt), "updatedAt": .date(task.updatedAt)])
+        var after = try await record(key(task))
+        after["title"] = .string("written")
+        let stale = try await store.apply([LocalWrite(key: key(task), expected: sparse, record: after)])
+        XCTAssertEqual(stale, [], "required fields left out stand for their values")
+        var wrong = sparse
+        wrong["priority"] = .int(1)
+        let refused = try await store.apply([LocalWrite(key: key(task), expected: wrong, record: after)])
+        XCTAssertEqual(refused, [key(task)])
+    }
+
+    // MARK: - A fetched batch on the main actor
+
+    /// What an apply of a fetched batch costs the main thread (the whole apply runs there): 200 and 500 new tasks with
+    /// a Group, two labels each and a tenth of them sub-tasks, into a store that already has the Groups and labels.
+    func testTheMainThreadTimeOfAnApplyOf200And500Inserts() async throws {
+        var line: [String] = []
+        for count in [200, 500] {
+            let target = ModelContainerFactory.preview()
+            var groups: [String] = []
+            var labels: [String] = []
+            for n in 0..<20 {
+                let group = Project(name: "G\(n)")
+                target.mainContext.insert(group)
+                groups.append(group.id.uuidString)
+            }
+            for n in 0..<12 {
+                let label = TaskLabel(name: "l\(n)")
+                target.mainContext.insert(label)
+                labels.append(label.id.uuidString)
+            }
+            try target.mainContext.save()
+            var records: [SyncRecord] = []
+            var previous: String?
+            for n in 0..<count {
+                let name = UUID().uuidString
+                var fields: [String: SyncValue] = [
+                    "title": .string("Task \(n)"), "notes": .string("notes \(n)"), "priority": .int(Int64(1 + n % 4)),
+                    "dueDate": .millis(1_763_000_000_000 + Int64(n) * 3_600_000), "project": .reference(groups[n % 20]),
+                    "labels": .references([labels[n % 12], labels[(n * 7 + 3) % 12]]),
+                    "createdAt": .millis(1_763_000_000_000), "updatedAt": .millis(1_763_000_000_000),
+                ]
+                if n % 10 == 9, let previous { fields["parent"] = .reference(previous) }
+                records.append(SyncRecord(type: "TaskItem", name: name, fields: fields))
+                previous = name
+            }
+            let store = SwiftDataSyncStore(container: target)
+            let writes = records.map { LocalWrite(key: $0.key, expected: nil, record: $0) }
+            let elapsed = try await ContinuousClock().measure { _ = try await store.apply(writes) }
+            let back = try await store.records(Set(records.map(\.key)))
+            XCTAssertEqual(back.count, count)
+            line.append("\(count) inserts \(elapsed)")
+        }
+        print("141 batch on the main actor: " + line.joined(separator: "; "))
     }
 }
 

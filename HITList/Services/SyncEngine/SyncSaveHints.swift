@@ -42,6 +42,15 @@ enum SyncSaveHints {
     static func hint(for note: Notification, container: ModelContainer) -> SyncSaveHint {
         let context = note.object as? ModelContext
         if let context, context.container !== container { return .unrelated }
+        if let context, context.author == SwiftDataSyncStore.author {
+            // The engine's own save: the brain is not told to look at what it just wrote. On the main context the
+            // store has said what the person had pending in the same save; a context of its own holds nothing else.
+            if Thread.isMainThread, let saving = SwiftDataSyncStore.savingOnMainContext,
+               saving.context == ObjectIdentifier(context) {
+                return saving.others
+            }
+            return .unrelated
+        }
         return hint(userInfo: note.userInfo, context: context)
     }
 

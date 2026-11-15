@@ -140,7 +140,14 @@ actor SwiftDataSyncStore: SyncLocalStore {
     }
 
     /// `apply` on `context`. `shared`: the context is the app's main context, which may hold the person's unsaved
-    /// edits, so a failed save is never answered with `rollback()` (that would drop them too): the engine's own
+    /// edits. What that means:
+    /// - **A row the person is in the middle of changing is never saved over**: the `expected` check reads the row
+    ///   as the main context holds it, the unsaved edit included, so it differs from what the brain read (the saved
+    ///   row) and the key comes back stale; nothing is written to it. The brain decides again once the person has
+    ///   saved (that save's hint names the row).
+    /// - **Rows the person is not touching are saved with the person's pending edits**: the main context saves whole,
+    ///   as the app's autosave would have a moment later. Nothing of the person's is lost or reverted.
+    /// - A failed save is never answered with `rollback()` (that would drop the person's edits too): the engine's own
     /// changes are undone by hand instead (rows it changed are written back to what they were, rows it inserted are
     /// deleted). Rows it deleted cannot be brought back in the context: they stay deleted and go with the next save,
     /// which is what the brain decided for them anyway.
@@ -154,7 +161,9 @@ actor SwiftDataSyncStore: SyncLocalStore {
         var saves: [(order: Int, key: SyncKey, record: SyncRecord)] = []
         var deletes: [SyncKey] = []
         for write in writes {
-            guard before[write.key]?.comparable == write.expected?.comparable else {
+            // The contract's sameness (`SyncStorage.swift`, master 24c9cdd): known fields, required ones filled in, data
+            // by digest, a set of references as a set.
+            guard RecordMerge.same(before[write.key], write.expected) else {
                 stale.insert(write.key)
                 continue
             }
@@ -224,9 +233,22 @@ actor SwiftDataSyncStore: SyncLocalStore {
         }
 
         guard changedSomething else { return stale }
+        // The save is labelled the engine's for its length (`author`), and on the main context the store says what
+        // the person had pending in it (`savingOnMainContext`): `SyncSaveHints` then tells the brain of the person's
+        // rows only, not of what it just wrote itself. The notification still goes to every other listener
+        // (reminders, widgets, Spotlight), which must hear of the engine's writes.
         let author = context.author
         context.author = Self.author
-        defer { context.author = author }
+        if shared {
+            var mine = Set<ObjectIdentifier>()
+            for item in written { if let row = rows[item.key] { mine.insert(ObjectIdentifier(row)) } }
+            for key in deletes { if let row = rows[key] { mine.insert(ObjectIdentifier(row)) } }
+            savingOnMainContext = EngineSave(context: ObjectIdentifier(context), others: pendingHint(in: context, excluding: mine))
+        }
+        defer {
+            context.author = author
+            if shared { savingOnMainContext = nil }
+        }
         do {
             try beforeSave?()
             try context.save()
@@ -241,6 +263,37 @@ actor SwiftDataSyncStore: SyncLocalStore {
         }
         return stale
     }
+
+    /// What the engine's own save on the main context carries besides the engine's writes, set on the main thread
+    /// for exactly the length of that `save()` (and read there, by `SyncSaveHints`, inside it).
+    struct EngineSave {
+        let context: ObjectIdentifier
+        /// The person's rows pending in the same save, as a hint: their keys, `.everything` when the person had a
+        /// deletion pending, `.unrelated` when the person had nothing pending.
+        let others: SyncSaveHint
+    }
+
+    /// Only ever touched on the main thread (set and cleared round the engine's save on the main context, read by the
+    /// `didSave` observer that runs synchronously inside it).
+    nonisolated(unsafe) static var savingOnMainContext: EngineSave?
+
+    /// The person's own pending changes in `context`, leaving out the rows the engine is writing: a row inserted or
+    /// changed names its key (a row the engine's references touched on their other side may be named too: a hint may
+    /// name too much); a pending deletion of the person's is `.everything` (a deleted row cannot say its `id` after
+    /// the save).
+    static func pendingHint(in context: ModelContext, excluding engineRows: Set<ObjectIdentifier>) -> SyncSaveHint {
+        for model in context.deletedModelsArray where !engineRows.contains(ObjectIdentifier(model)) {
+            if model is any SyncMappedModel { return .everything }
+        }
+        var keys = Set<SyncKey>()
+        for model in context.insertedModelsArray + context.changedModelsArray where !engineRows.contains(ObjectIdentifier(model)) {
+            guard let mapped = model as? any SyncMappedModel else { continue }
+            keys.insert(key(of: mapped))
+        }
+        return keys.isEmpty ? .unrelated : .keys(keys)
+    }
+
+    private static func key<M: SyncMappedModel>(of row: M) -> SyncKey { SyncSchema.key(M.syncType, id: row.id) }
 
     /// The engine's changes taken back out of a shared context after its save failed: inserted rows deleted (a row
     /// never saved simply goes), changed rows written back to their records from before the call.
