@@ -117,10 +117,9 @@ final class SyncEngine {
                                      automaticallySync: true)
         }
         #if DEBUG
-        if pretend != nil {
-            // The pretend run is watched from a terminal: one line per thing on stdout, as well as in the board's log.
-            engine.echo = { line in print("SYNCENGINE \(line)"); fflush(stdout) }
-        }
+        // A Debug run on a side store (the pretend run, the supervisor's run on CloudKit Development) is watched from a
+        // terminal: one line per thing on stdout (`open --stdout <file>`), as well as in the board's log and os_log.
+        engine.echo = { line in print("SYNCENGINE \(line)"); fflush(stdout) }
         #endif
         shared = engine
         if let moved = ledger.movedAside { engine.say("The ledger could not be read and was set aside (\(moved.lastPathComponent)); merging afresh") }
