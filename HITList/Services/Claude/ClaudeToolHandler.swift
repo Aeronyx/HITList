@@ -140,6 +140,7 @@ struct ClaudeToolHandler {
         let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: nil, in: context)
         if let notes = arguments["description"]?.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines), !notes.isEmpty {
             task.notes = notes
+            task.touch() // brief 143: the notes carry their own moment
             try context.save()
         }
         log("Claude added a task", ["tool": ClaudeTools.addTask, "task": task.id.uuidString])

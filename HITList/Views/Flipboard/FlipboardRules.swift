@@ -808,7 +808,10 @@ enum Flipboard {
             item.createdAt = sub.createdAt
             context.insert(item)
             item.parent = task
+            item.touch()
         }
+        // Brief 143: an undo is an edit made now, so it beats the deletion it undoes and loses to a later one elsewhere.
+        task.touch()
         do {
             try context.save()
         } catch {
@@ -843,6 +846,7 @@ enum Flipboard {
         if task.flipTarget != target { task.flipTarget = target; changed = true }
         if let board { task.switchboard = board; changed = true }
         if overdueBecomesTask { task.overdueBecomesTask = true; changed = true }
+        if changed { task.touch() } // brief 143: the fields set after the create carry their own moment
         if changed { try context.save() }
         return task
     }

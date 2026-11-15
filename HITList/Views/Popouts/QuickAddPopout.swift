@@ -570,6 +570,7 @@ struct QuickAddPopout: View {
                 let task = try TaskActions.create(from: result, defaultProject: nil, defaultLabel: nil, in: modelContext)
                 if !notes.isEmpty {
                     task.notes = notes
+                    task.touch() // brief 143: the notes carry their own moment
                     try? modelContext.save()
                 }
                 try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)

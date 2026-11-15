@@ -148,6 +148,7 @@ extension Flipboard {
                 : schedule.dueAfterFlipBack(due: nil, hasTime: false, now: now, calendar: cal)
         }
         task.recurrenceRule = cadenceRule(board.cadenceValue).timed(to: task.dueDate, hasTime: timed, calendar: cal)
+        task.touch() // brief 143: an edit of the switch's own fields, so it orders against another device's by its time
     }
 
     /// The switch's time of day, if it has one.
