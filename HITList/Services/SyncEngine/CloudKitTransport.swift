@@ -72,6 +72,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// for want of it are then refused with that reason instead of being tried again in a loop.
     private var zoneRefusal: CloudFailure?
     private var zoneRemade = false
+    /// Keys whose save lost to a version of iCloud's that could not be read, and was tried once more (16b).
+    private var unreadableConflicts: Set<SyncKey> = []
 
     // T1: one event at a time to the brain, whichever road it comes by (an engine event, or a `didFetch`/`didSend`
     // held for a manual fetch or send until its error is known).
@@ -84,7 +86,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// just before a clean stop survives the relaunch (T3). After a crash it is lost, and the brain's comparison at
     /// the next start finds the same changes again.
     private var stateBehind = false
-    private var stateWaiter: CheckedContinuation<Void, Never>?
+    private var stateWaiters: [CheckedContinuation<Void, Never>] = []
     /// How long `stop()` waits for that state: the engine hands it over within moments; past this the stop goes on.
     static let stateFlushWait: Double = 3
     /// How many times the state was written (the probe reads it).
@@ -139,7 +141,12 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         if !stored.zoneReady, changes.contains(where: { if case .save = $0 { return true } else { return false } }) {
             engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
         }
-        engine.state.add(pendingRecordZoneChanges: changes.map { CloudKitTransportRules.engineChange($0, in: zoneID) })
+        let added = changes.map { CloudKitTransportRules.engineChange($0, in: zoneID) }
+        engine.state.add(pendingRecordZoneChanges: added)
+        // A batch may be gathering right now, each record asked for in its own turn of the brain: a save answered
+        // "nothing to send" a moment ago and added again since (the person changed the item in between) must not be
+        // struck from the list when the gathering ends (the review's finding 16a).
+        if !dropped.isEmpty { dropped.removeAll { added.contains($0) } }
         stateBehind = true
     }
 
@@ -261,10 +268,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             await save()
             stateSaves += 1
             stateBehind = false
-            if let waiter = stateWaiter {
-                stateWaiter = nil
-                waiter.resume()
-            }
+            stateWaitEnded()
 
         case .accountChange(let change):
             let mapped = CloudKitTransportRules.accountChange(change.changeType, known: stored.account)
@@ -476,7 +480,19 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 if let server = failure.error.serverRecord, let record = try? CloudRecordCodec.cloudRecord(from: server) {
                     failed[key] = .conflict(server: record)
                 } else {
-                    failed[key] = .rejected(code: cloud.code.rawValue, message: "a conflict without iCloud's record")
+                    // iCloud's version came without a record this build can read (a picture not downloaded with
+                    // it): not a refusal for good, which would keep the item out until it changes again (the
+                    // review's finding 16b), but trouble that passes: the save is tried again at the next send, by
+                    // when a fetch has usually brought the version it lost to.
+                    // Once per launch for a key: a second time in a row it is told as refused, so a version that
+                    // can never be read is not sent against for ever.
+                    if unreadableConflicts.insert(key).inserted {
+                        leaveList.removeLast()
+                        sendTrouble = "a conflict whose record could not be read (\(key))"
+                        resaveAtEnd.append(.saveRecord(id))
+                    } else {
+                        failed[key] = .rejected(code: cloud.code.rawValue, message: "a conflict without iCloud's record")
+                    }
                 }
             case .refused(let reason):
                 leaveList.append(.saveRecord(id))
@@ -659,7 +675,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private func waitForState() async {
         let started = Date()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            stateWaiter = continuation
+            // A list: two `stop()` calls may overlap, and each must be let go (the review's finding 16d).
+            stateWaiters.append(continuation)
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(Self.stateFlushWait * 1_000_000_000))
                 await self?.stateWaitEnded()
@@ -671,9 +688,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     }
 
     private func stateWaitEnded() {
-        guard let waiter = stateWaiter else { return }
-        stateWaiter = nil
-        waiter.resume()
+        let waiting = stateWaiters
+        stateWaiters = []
+        for waiter in waiting { waiter.resume() }
     }
 
     private func save() async {
