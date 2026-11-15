@@ -401,8 +401,9 @@ struct TaskListView: View {
                     .frame(maxHeight: .infinity)
                 }
             }
-            // An event's read-only card, over Today's list (brief 136).
+            // An event's read-only card, over Today's list, and Today's one calendar tip (brief 136).
             .calendarEventCards()
+            .calendarInTodayTip(isToday: selection == .today)
             // iPhone: drawn by PopoutHost above the island and the "+".
             .completionToast(toast.isVisible ? toast.message : nil, onUndo: undoToast,
                              onDismiss: { withAnimation(HITMotion.exit) { _ = toast.takeAll() } })
