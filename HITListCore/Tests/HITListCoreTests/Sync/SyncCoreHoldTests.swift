@@ -225,6 +225,39 @@ final class SyncCoreHoldTests: XCTestCase {
         }
     }
 
+    func testAWholeCompareCountsExactlyWhatWaitsAfterTheMemoryWasForgotten() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.store.delete(taskKey("B"))
+        await device.core.localChanged([taskKey("B")])
+        let before = await device.status().waiting
+        XCTAssertEqual(before, 1, "B's marker")
+        await device.transport.deliver(.zoneLost(.deleted))
+        let after = await device.status().waiting
+        XCTAssertEqual(after, 2, "A and the meta: B's marker has no zone to go to")
+    }
+
+    func testSigningOutWithNothingSyncedNeedsNoBackup() async {
+        let device = Device([task("N", "Never synced")])
+        await device.transport.setStartEvents([.account(.signedIn(current: "alice"))])
+        await device.core.start()
+        await device.transport.deliver(.account(.signedOut(previous: "alice")))
+        XCTAssertEqual(device.host.backups, [])
+        let n = await device.item(taskKey("N"))
+        XCTAssertNotNil(n)
+        let status = await device.status()
+        XCTAssertEqual(status.state, .held(.noAccount))
+    }
+
+    func testTheLogNamesWhatChangedAndCountsWhatWasAlreadyInStep() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread"), task("C", "Cheese")])
+        await device.deliverFetch([cloud(task("A", "Oat milk", updated: 30), "c2"), cloud(task("B", "Bread")),
+                                   cloud(task("C", "Cheese"))])
+        let lines = device.log.lines
+        XCTAssertTrue(lines.contains { $0.hasPrefix("TaskItem/A: fetched, M7") && $0.contains("written here") }, "\(lines)")
+        XCTAssertTrue(lines.contains("2 fetched records already settled; nothing new"), "\(lines)")
+        XCTAssertFalse(lines.contains { $0.hasPrefix("TaskItem/B") })
+    }
+
     // MARK: storageFull
 
     func testAFullICloudKeepsWhatIsWaitingAndTriesAgainOnReturnToTheApp() async throws {

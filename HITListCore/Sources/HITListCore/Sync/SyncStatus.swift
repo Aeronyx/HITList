@@ -131,4 +131,6 @@ public enum SyncCoreError: Error, Equatable {
     case notStarted
     /// `answer(_:)` while the engine is not waiting for one.
     case noQuestion
+    /// `answer(.removeHere)` with no host to write the backup: nothing was removed.
+    case noBackup
 }

@@ -191,6 +191,82 @@ final class SyncCoreTests: XCTestCase {
         XCTAssertEqual(entry?.base?.isDeleted, false)
     }
 
+    func testDeletedAgainAfterAnUndoIsNoticedAfresh() async {
+        let device = await synced([task("A", "Milk")])
+        await device.store.delete(taskKey("A"))
+        await device.core.localChanged([taskKey("A")])
+        await device.store.put(task("A", "Milk"))
+        await device.core.localChanged([taskKey("A")])
+        device.clock.advance(300)
+        let second = device.clock.now
+        await device.store.delete(taskKey("A"))
+        await device.core.localChanged([taskKey("A")])
+        let entry = await device.entry(taskKey("A"))
+        XCTAssertEqual(entry?.deletedHereAt, second, "not the first deletion's time")
+        let record = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(record?.record, .marker(taskKey("A"), deletedAt: second))
+    }
+
+    func testAMarkerLaterThanICloudsIsKeptAndSent() async throws {
+        // What M10 leaves when this device deleted the item after another did: iCloud's marker as the base, and
+        // this device's later deletion still to go.
+        let device = await synced([])
+        let theirs = SyncRecord.marker(taskKey("A"), deletedAt: epoch.addingTimeInterval(10))
+        let mine = epoch.addingTimeInterval(50)
+        var write = LedgerWrite()
+        write.upsert = [LedgerEntry(key: taskKey("A"), base: theirs, system: token("c2"), deletedHereAt: mine)]
+        try await device.ledger.write(write)
+        let relaunched = device.relaunched(transport: ScriptedTransport())
+        await relaunched.core.start()
+        let pending = await relaunched.pending()
+        XCTAssertEqual(pending, [.save(taskKey("A"))])
+        let record = await relaunched.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(record?.record, .marker(taskKey("A"), deletedAt: mine))
+        XCTAssertEqual(record?.system, token("c2"))
+        // iCloud's marker delivered again before the later one went: nothing new, the later marker still goes.
+        await relaunched.deliverFetch([cloud(theirs, "c2")])
+        let still = await relaunched.pending()
+        XCTAssertEqual(still, [.save(taskKey("A"))])
+        let kept = await relaunched.entry(taskKey("A"))
+        XCTAssertEqual(kept?.deletedHereAt, mine)
+
+        try await relaunched.transport.send()
+        let after = await relaunched.entry(taskKey("A"))
+        XCTAssertNil(after?.deletedHereAt)
+        let none = await relaunched.pending()
+        XCTAssertEqual(none, [])
+    }
+
+    func testDeletedOnBothSidesGoesWhereverTheMergeSays() async {
+        // Whatever `RecordMerge` makes of a deletion on both sides (M10), a result that differs from iCloud's
+        // marker waits to go, and one that is the same does not.
+        for (here, there) in [(50.0, 10.0), (10.0, 50.0)] {
+            let device = await synced([task("A", "Milk")])
+            device.clock.advance(here)
+            await device.store.delete(taskKey("A"))
+            await device.core.localChanged([taskKey("A")])
+            let entry = await device.entry(taskKey("A"))
+            let server = SyncRecord.marker(taskKey("A"), deletedAt: epoch.addingTimeInterval(there))
+            let expected = RecordMerge.merge(MergeInput(base: entry?.base, local: nil, deletedHereAt: entry?.deletedHereAt,
+                                                        server: server, now: device.clock.now))
+            await device.deliverFetch([cloud(server, "c2")])
+            let pending = await device.pending()
+            let differs = !RecordMerge.same(expected.merged, server)
+            XCTAssertEqual(pending, differs ? [.save(taskKey("A"))] : [], "here \(here), there \(there)")
+            let record = await device.core.recordToSend(taskKey("A"))
+            XCTAssertEqual(record?.record, differs ? expected.merged : nil, "here \(here), there \(there)")
+        }
+    }
+
+    func testARemovedRecordOfATypeThisBuildDoesNotKnowIsLeftAlone() async {
+        let device = await synced([task("A", "Milk")])
+        await device.deliverFetch([], removed: [SyncKey(type: "Notebook", name: "N")])
+        let status = await device.status()
+        XCTAssertTrue(status.isSynced)
+        let count = await device.store.count
+        XCTAssertEqual(count, 1)
+    }
+
     func testAMarkerPastItsLifetimeIsRemovedForGood() async throws {
         let device = await synced([])
         await device.deliverFetch([cloud(.marker(taskKey("Z"), deletedAt: epoch))])

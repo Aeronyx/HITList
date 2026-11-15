@@ -50,8 +50,13 @@ extension SyncCore {
             await fail("The engine's memory could not be written: \(error)")
             return
         }
-        for key in universe { waiting.remove(key) }
-        waiting.formUnion(desired.keys)
+        if keys == nil {
+            // Everything was looked at: what waits is exactly what this compare found.
+            waiting = Set(desired.keys)
+        } else {
+            for key in universe { waiting.remove(key) }
+            waiting.formUnion(desired.keys)
+        }
         if !write.upsert.isEmpty {
             for entry in write.upsert where entry.deletedHereAt != nil {
                 log("\(entry.key): deleted here; its marker is waiting to go")
@@ -109,8 +114,13 @@ extension SyncCore {
                 return finding
             }
             if base.isDeleted {
-                // A marker both sides know: removed for good once past its lifetime.
-                if Self.expired(base, now: now) { finding.change = .delete(key) }
+                if let at = entry.deletedHereAt, !RecordMerge.same(.marker(key, deletedAt: at), base) {
+                    // Deleted here too, later than iCloud's marker says (M10): the later marker goes.
+                    finding.change = .save(key)
+                } else if Self.expired(base, now: now) {
+                    // A marker both sides know: removed for good once past its lifetime.
+                    finding.change = .delete(key)
+                }
             } else {
                 // iCloud holds it alive and it is gone here: deleted here, its marker waits to go.
                 finding.change = .save(key)
@@ -175,7 +185,12 @@ extension SyncCore {
             if entry?.base == nil, SyncSchema.type(key.type) == nil { return nil }
             return OutgoingRecord(record: local, system: entry?.system)
         }
-        guard var entry, let base = entry.base, !base.isDeleted else { return nil }
+        guard var entry, let base = entry.base else { return nil }
+        if base.isDeleted {
+            // A marker later than iCloud's (M10), or nothing: iCloud already holds the marker.
+            guard let at = entry.deletedHereAt, !RecordMerge.same(.marker(key, deletedAt: at), base) else { return nil }
+            return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
+        }
         if entry.deletedHereAt == nil {
             // Not noticed yet: noticed now, and kept, so the marker carries the same time if it is asked for again.
             entry.deletedHereAt = clock()

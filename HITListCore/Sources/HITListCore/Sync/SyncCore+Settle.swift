@@ -118,9 +118,27 @@ extension SyncCore {
     /// and nothing after the failed write was done.
     func settle(_ incoming: [CloudRecord], removed: [SyncKey], final: Bool, why: String) async -> Bool {
         var byKey: [SyncKey: CloudRecord] = [:]
-        for record in incoming where SyncSchema.type(record.key.type) != nil { byKey[record.key] = record }
-        // A record removed for good after it changed, in one event: removed.
-        let gone = Set(removed.filter { $0 != Self.metaKey })
+        var known: [SyncKey] = []
+        for record in incoming where SyncSchema.type(record.key.type) != nil {
+            if let entry = entries[record.key], entry.system == record.system, RecordMerge.same(entry.base, record.record) {
+                // Exactly the version this device already settled (an echo, a fetch delivered twice, everything
+                // again after a lost bookmark): nothing new to decide (T2). Deciding again could only lose what this
+                // device still has to send, such as a later marker (M10).
+                known.append(record.key)
+                continue
+            }
+            byKey[record.key] = record
+        }
+        let knownAside = known.filter { deferred[$0] != nil }
+        if !knownAside.isEmpty {
+            var write = LedgerWrite()
+            write.deferRemove = knownAside
+            do { try await commit(write) } catch { await fail("The engine's memory could not be written: \(error)"); return false }
+        }
+        if !known.isEmpty { log("\(known.count) \(why) record\(known.count == 1 ? "" : "s") already settled; nothing new") }
+        // A record removed for good after it changed, in one event: removed. A type this build does not know never
+        // reaches the merge: left alone, nothing kept, nothing sent, nothing deleted.
+        let gone = Set(removed.filter { $0 != Self.metaKey && SyncSchema.type($0.type) != nil })
         for key in gone { byKey[key] = nil }
         let keys = Set(byKey.keys).union(gone)
         guard !keys.isEmpty else { return true }
@@ -205,8 +223,11 @@ extension SyncCore {
                 if entries[key] != nil { write.remove.append(key) }
                 continue
             }
-            let markerToGo = decision.outcome.merged?.isDeleted == true && !server.record.isDeleted
-            let deletedHereAt = markerToGo ? (entries[key]?.deletedHereAt ?? now) : nil
+            // A marker this device must still send (M8: iCloud holds the item alive; M10: iCloud's marker is
+            // earlier than the deletion here): its time is kept, and the compare and `recordToSend` send it.
+            let merged = decision.outcome.merged
+            let markerToGo = merged?.isDeleted == true && decision.target == nil && !RecordMerge.same(merged, server.record)
+            let deletedHereAt = markerToGo ? merged?.deletedAt : nil
             let entry = LedgerEntry(key: key, base: Self.base(server.record), system: server.system,
                                     deletedHereAt: deletedHereAt)
             if entries[key] != entry { write.upsert.append(entry) }
@@ -220,10 +241,17 @@ extension SyncCore {
 
         // 3. The transport's list, from what each key now is.
         await compare(keys)
+        // One line for each record that changed something; one for all those already in step.
+        var inStep = 0
         for key in keys.sorted() {
             guard let decision = settling[key] else { continue }
-            log(describe(decision, why: why, written: written.contains(key), setAside: setAside.contains(key)))
+            if written.contains(key) || setAside.contains(key) || unsettled.contains(key) || waiting.contains(key) {
+                log(describe(decision, why: why, written: written.contains(key), setAside: setAside.contains(key)))
+            } else {
+                inStep += 1
+            }
         }
+        if inStep > 0 { log("\(inStep) \(why) record\(inStep == 1 ? "" : "s") already as this device holds them") }
         if !written.isEmpty { host?.didWrite(written) }
         return true
     }

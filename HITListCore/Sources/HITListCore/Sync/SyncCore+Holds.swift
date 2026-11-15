@@ -127,7 +127,9 @@ extension SyncCore {
     func leaveAccount(reason: SyncRemovalReason) async -> Bool {
         await enterHold(.noAccount)
         let synced = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
-        guard await backup(reason) else { return false }
+        if !synced.isEmpty {
+            guard await backup(reason) else { return false }
+        }
         do {
             try await ledger.reset()
             forgetCache(keepAccount: false)
@@ -191,8 +193,12 @@ extension SyncCore {
     /// iCloud had held; nothing is removed if the backup throws.
     func answerPurge(_ choice: PurgeAnswer) async throws {
         let synced = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
-        if choice == .removeHere {
-            guard let host else { throw SyncCoreError.noQuestion }
+        if choice == .removeHere, !synced.isEmpty {
+            guard let host else {
+                holdNote = "Nothing was removed from this device: no backup could be written"
+                publish()
+                throw SyncCoreError.noBackup
+            }
             do {
                 try await host.willRemoveLocalData(reason: .zonePurged)
             } catch {
