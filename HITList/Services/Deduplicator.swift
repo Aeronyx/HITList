@@ -11,6 +11,19 @@ protocol DeduplicatedModel: PersistentModel {
     var updatedAt: Date { get set }
 }
 
+/// A model whose rows are merged by `id` alone for HITList's own engine (`Deduplicator.mergeSharedIDs`).
+protocol SharedIDModel: PersistentModel {
+    var id: UUID { get }
+    var createdAt: Date { get }
+    var updatedAt: Date { get set }
+}
+
+extension Project: SharedIDModel {}
+extension TaskLabel: SharedIDModel {}
+extension SavedFilter: SharedIDModel {}
+extension TaskItem: SharedIDModel {}
+extension Switchboard: SharedIDModel {}
+
 extension Project: DeduplicatedModel {}
 extension TaskLabel: DeduplicatedModel {}
 extension SavedFilter: DeduplicatedModel {}
@@ -108,6 +121,81 @@ enum Deduplicator {
                     .error, SyncLogFormat.errorFields(error))
             return .failed(error.localizedDescription)
         }
+    }
+
+    // MARK: - Rows that share an id (HITList's own engine, brief 143)
+
+    /// What `mergeSharedIDs` merged, per model.
+    struct SharedIDReport: Equatable, CustomStringConvertible {
+        var counts: [String: Int] = [:]
+        var removed: Int { counts.values.reduce(0, +) }
+        var description: String {
+            guard removed > 0 else { return "nothing shared an id" }
+            let names = counts.keys.sorted().filter { (counts[$0] ?? 0) > 0 }
+            return names.map { "\(counts[$0] ?? 0) \($0)" }.joined(separator: ", ")
+        }
+    }
+
+    /// Rows that share an `id`, merged for every synced model, before HITList's own engine starts and when it holds for
+    /// `duplicates` (its records are keyed by `id`, one record per item: two rows with one key cannot be synced). Not
+    /// part of `run`, so the mirror's launches and imports do exactly what they did (on the mirror, a `TaskItem` or a
+    /// `Switchboard` that shares an id is two records in iCloud, and is left alone as before).
+    ///
+    /// The copy changed last stays (newest `updatedAt`; a tie goes to the earliest `createdAt`, then to the first the
+    /// fetch returned); everything that pointed at a loser points at the survivor (tasks' Group, labels and board; a
+    /// sub-task under either copy ends under the survivor, moved there before the loser is deleted, since a task's
+    /// deletion takes its sub-tasks with it), and the survivor takes the group's newest `updatedAt`. `Profile` rows are
+    /// merged by `ProfileStore.mergeDuplicates` (every profile row is one), in `run`. Saves when anything changed; a
+    /// second pass changes nothing.
+    @discardableResult
+    static func mergeSharedIDs(in context: ModelContext) throws -> SharedIDReport {
+        var report = SharedIDReport()
+        report.counts["groups"] = try mergeByID(Project.self, in: context) { loser, winner in
+            for task in loser.tasks ?? [] { task.project = winner }
+        }
+        report.counts["labels"] = try mergeByID(TaskLabel.self, in: context) { loser, winner in
+            for task in loser.tasks ?? [] {
+                var labels = (task.labels ?? []).filter { $0.persistentModelID != loser.persistentModelID }
+                if !labels.contains(where: { $0.persistentModelID == winner.persistentModelID }) { labels.append(winner) }
+                task.labels = labels
+            }
+        }
+        report.counts["filters"] = try mergeByID(SavedFilter.self, in: context) { _, _ in }
+        report.counts["boards"] = try mergeByID(Switchboard.self, in: context) { loser, winner in
+            for task in loser.switches ?? [] { task.switchboard = winner }
+        }
+        report.counts["tasks"] = try mergeByID(TaskItem.self, in: context) { loser, winner in
+            for sub in loser.subtasks ?? [] where sub.persistentModelID != winner.persistentModelID { sub.parent = winner }
+            loser.subtasks = []
+            if winner.parent?.persistentModelID == loser.persistentModelID { winner.parent = loser.parent }
+        }
+        if context.hasChanges { try context.save() }
+        return report
+    }
+
+    private static func mergeByID<M: SharedIDModel>(_ type: M.Type, in context: ModelContext,
+                                                    repoint: (_ loser: M, _ winner: M) -> Void) throws -> Int {
+        var removed = 0
+        let rows: [M] = try context.fetch(FetchDescriptor<M>())
+        let groups: [UUID: [M]] = Dictionary(grouping: rows, by: { $0.id })
+        let ids: [UUID] = groups.keys.sorted { $0.uuidString < $1.uuidString }
+        for id in ids {
+            guard let group = groups[id], group.count > 1 else { continue }
+            var winner = group[0]
+            for row in group.dropFirst() {
+                let newer = row.updatedAt > winner.updatedAt
+                let older = row.updatedAt == winner.updatedAt && row.createdAt < winner.createdAt
+                if newer || older { winner = row }
+            }
+            let newest: Date = group.map { $0.updatedAt }.max() ?? winner.updatedAt
+            if winner.updatedAt != newest { winner.updatedAt = newest }
+            for loser in group where loser.persistentModelID != winner.persistentModelID {
+                repoint(loser, winner)
+                context.delete(loser)
+                removed += 1
+            }
+        }
+        return removed
     }
 
     /// Survivor order: earliest `createdAt`, then smallest `id.uuidString`.
