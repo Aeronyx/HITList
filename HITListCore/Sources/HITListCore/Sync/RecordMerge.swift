@@ -140,7 +140,12 @@ public enum RecordMerge {
                 return MergeOutcome(merged: server, rule: .deletedBoth)
             }
             if base.isDeleted {
-                // M13: deleted as far as this device knew, made again on another.
+                // M13: deleted as far as this device knew, made again on another: it arrives. Unless this device
+                // still has a later deletion of its own to send (an explicit `deletedHereAt`, never `now`): then the
+                // revival is ordered against that time as in M8 (it arrives only if changed after it).
+                if let at = input.deletedHereAt, (server.updatedAt ?? .distantPast) <= at {
+                    return MergeOutcome(merged: .marker(key, deletedAt: at), rule: .cameBackThere)
+                }
                 return MergeOutcome(merged: server, rule: .cameBackThere)
             }
             // M8: deleted here while iCloud holds it. Untouched there since: the deletion stands. Changed there

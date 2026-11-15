@@ -380,6 +380,21 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(outcome.device, server)
     }
 
+    func testM13AgainstALaterDeletionStillToGoIsOrderedAsM8() {
+        // This device holds a later marker of its own still to send (base = iCloud's marker at 1, `deletedHereAt`
+        // 6) when another device's revival arrives. The revival is ordered against that deletion as in M8.
+        for (t, comesBack): (Int64, Bool) in [(3, false), (6, false), (7, true)] {
+            let server = F.task(["title": .string("Back")], updated: t)
+            let outcome = F.merge(base: F.marker(at: 1), local: nil, deletedHereAt: 6, server: server)
+            XCTAssertEqual(outcome.rule, .cameBackThere)
+            XCTAssertEqual(outcome.merged, comesBack ? server : F.marker(at: 6), "revived at \(t), deleted here at 6")
+        }
+        // Without a deletion of its own still to go, `now` never stands in: the revival arrives.
+        let server = F.task(["title": .string("Back")], updated: 3)
+        let outcome = F.merge(base: F.marker(at: 1), local: nil, server: server, now: 90)
+        XCTAssertEqual(outcome.merged, server)
+    }
+
     func testAMarkerBothKnewAndNothingHereIsDeletedOnBothSides() {
         // Not in the table (M10 needs B alive, M13 a live record there). Nothing has happened: iCloud's marker.
         let outcome = F.merge(base: F.marker(at: 40), local: nil, server: F.marker(at: 40))
