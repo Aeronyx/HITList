@@ -567,7 +567,8 @@ public actor FakeTransport: SyncTransport {
                     batch.sent.append(change)
                     continue
                 }
-                if let wire = FakeTransport.wire(outgoing) {
+                if var wire = FakeTransport.wire(outgoing) {
+                    wire.device = device
                     batch.saves.append(wire)
                 } else {
                     batch.failed[key] = .rejected(code: 12, message: "\(key.type) is not a type this build syncs")

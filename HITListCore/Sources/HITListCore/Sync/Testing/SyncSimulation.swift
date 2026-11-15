@@ -359,13 +359,14 @@ public actor SyncSimulation {
         case .advance(let ms):
             clock.advance(milliseconds: ms)
         }
-        absorb()
+        await absorb()
     }
 
-    /// What the transports' observers noticed (a memory emptied by a lost zone or an account change), into the model,
-    /// at the step it happened in.
-    private func absorb() {
+    /// What the transports' observers noticed (a memory emptied by a lost zone or an account change), and the
+    /// references iCloud saw taken away (I9), into the model, at the step it happened in.
+    private func absorb() async {
         for name in observed.takeForgotten() { intent.recordAmnesia(step: step, device: name) }
+        intent.recordDrops(step: step, await cloud.takeDrops())
     }
 
     private func act(_ name: String, _ action: SimAction, hint: SimHint) async {
@@ -400,8 +401,12 @@ public actor SyncSimulation {
                 if base == nil || base?.isDeleted == true { blind.append(key) }
             }
             if !blind.isEmpty { intent.recordBlindDeletions(step: step, device: name, keys: blind) }
+            // A deletion is the person's; the references the store took off the rows that pointed at what went are
+            // not (section 8: they are waited for, and come back with the item).
+            intent.record(step: step, device: name, before: before, after: before.filter { after[$0.key] != nil })
+        } else {
+            intent.record(step: step, device: name, before: before, after: after)
         }
-        intent.record(step: step, device: name, before: before, after: after)
         let touched = Set(Set(before.keys).union(after.keys).filter { before[$0] != after[$0] })
         do {
             switch hint {
@@ -512,7 +517,7 @@ public actor SyncSimulation {
         }
         down = []
         away = [:]
-        absorb()
+        await absorb()
     }
 
     /// Every device syncs, in name order, round after round, until a round in which every sync went through, nothing
@@ -525,7 +530,7 @@ public actor SyncSimulation {
             let before = await cloud.records(account: config.account)
             var everyOneWent = true
             for name in deviceNames where await !sync(name) { everyOneWent = false }
-            absorb()
+            await absorb()
             let after = await cloud.records(account: config.account)
             lastRound = SyncSimulation.changed(before, after)
             var waiting = false
@@ -568,6 +573,7 @@ public actor SyncSimulation {
         findings += SyncInvariants.quiet(devices: devices, savedInExtraRound: quiet.lastRound, rounds: quiet.rounds,
                                          limit: config.quietRounds)
         findings += SyncInvariants.newerFieldsSurvive(cloud: cloud, intent: intent)
+        findings += SyncInvariants.referencesKept(intent: intent)
         return findings.enumerated().sorted { ($0.element.invariant, $0.offset) < ($1.element.invariant, $1.offset) }.map(\.element)
     }
 

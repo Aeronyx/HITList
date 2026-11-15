@@ -178,8 +178,6 @@ final class SyncInvariantsTests: XCTestCase {
         XCTAssertEqual(SyncInvariants.whole(devices: [holder("A", [child])], cloud: [cloud(child), parentMarker]).map(\.description), [
             "I6 device A: TaskItem/c points at TaskLabel/l1, which it does not hold",
             "I6 device A: TaskItem/c points at TaskItem/p, which it does not hold",
-            "I6 iCloud: TaskItem/c points at TaskLabel/l1, which iCloud does not hold alive",
-            "I6 iCloud: TaskItem/c points at TaskItem/p, which iCloud does not hold alive",
         ])
     }
 
@@ -214,6 +212,39 @@ final class SyncInvariantsTests: XCTestCase {
         XCTAssertEqual(SyncInvariants.newerFieldsSurvive(cloud: [cloud(task("t1", "x"))], intent: intent).map(\.description), [
             "I8 TaskItem/t1 futureField was written by a newer build at step 4 as 'v'; iCloud now holds nothing",
         ])
+    }
+
+    // MARK: I9 References kept
+
+    func testI9_holdsWhenTheDeviceThatDroppedAReferenceHadAPersonChangeIt() {
+        var placed = task("t1", "x")
+        placed["project"] = .reference("g")
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [key("t1"): placed])
+        intent.record(step: 2, device: "B", before: [key("t1"): placed], after: [key("t1"): task("t1", "x")])
+        intent.recordDrops(step: 3, [FakeCloud.ReferenceDrop(device: "B", key: key("t1"), field: "project", removed: ["g"])])
+        XCTAssertEqual(SyncInvariants.referencesKept(intent: intent), [])
+    }
+
+    func testI9_breaksWhenADeviceDroppedAReferenceNoPersonThereChanged() {
+        var placed = task("t1", "x")
+        placed["project"] = .reference("g")
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [key("t1"): placed])
+        intent.recordDrops(step: 3, [FakeCloud.ReferenceDrop(device: "B", key: key("t1"), field: "project", removed: ["g"])])
+        XCTAssertEqual(SyncInvariants.referencesKept(intent: intent).map(\.description), [
+            "I9 device B sent TaskItem/t1 without project →g at step 3, which iCloud held; no person on B changed project",
+        ])
+    }
+
+    func testI1AndI2_judgeIcloudAsADeviceShowsIt_aReferenceToAnItemThatIsGoneIsNoDifference() {
+        var dangling = task("t1", "x")
+        dangling["labels"] = .references(["gone"])
+        var intent = SimIntent()
+        intent.record(step: 1, device: "A", before: [:], after: [key("t1"): task("t1", "x")])
+        let devices = [holder("A", [task("t1", "x")])]
+        XCTAssertEqual(SyncInvariants.sameEverywhere(devices: devices, cloud: [cloud(dangling)]), [])
+        XCTAssertEqual(SyncInvariants.noLostEdit(devices: devices, cloud: [cloud(dangling)], intent: intent), [])
     }
 
     // MARK: The rig, with a brain of the tests' own
@@ -302,11 +333,11 @@ final class SyncInvariantsTests: XCTestCase {
         XCTAssertNotEqual(first.script, other.script)
     }
 
-    /// A flaw in the design's section 8, found by the rig with the rules-keeping brain (seeds 58 and 62 of 100) and
-    /// pinned here by script: a record that points at a target which is late (still on its way, here in the sender's
-    /// next batch) is written without the reference and sent so, and iCloud's reference is cleared for everyone. When
-    /// section 8 changes, this test should find nothing; until then it shows I2 finding the loss.
-    func testSection8_aReferenceToALateTargetIsClearedEverywhere() async {
+    /// Section 8 as rewritten (4d402a1), on the case the rig found against the first version (seeds 58 and 62 of 100): a
+    /// task sent in one batch, its label in the next, and a device that fetches in between. Under the first design that
+    /// device wrote the task without the label and sent it so, and the label was gone from the task everywhere (I2
+    /// said so). Now it waits for the label, sends nothing of it, and shows it when it arrives: every invariant holds.
+    func testSection8_aReferenceToALateTargetIsWaitedForAndKeptEverywhere() async {
         var config = SimConfig()
         config.batchSize = 1
         let sim = SyncSimulation(seed: 1, config: config, brain: MergingBrain.make)
@@ -318,21 +349,20 @@ final class SyncInvariantsTests: XCTestCase {
             .act("C", .put(SyncRecord(key: t, fields: ["title": .string("task")]))),
             .act("C", .put(SyncRecord(key: l, fields: ["name": .string("label")]))),
             .act("C", .edit(t, ["labels": .references([l.name])])),
-            // C's first sync sends the task in one batch, and the network drops before the label's.
+            // The task already waits to go ahead of the label; C sends it, and the network drops before the label.
             .fault("C", .dropNetwork(after: 1)),
             .sync("C"),
-            // A fetches the task, does not find the label, and clears the reference in iCloud.
+            // A fetches the task and not the label: it waits for it, and sends nothing.
             .sync("A"),
             .fault("C", .network(up: true)),
             .sync("C"),
         ])
         let findings = await sim.check()
-        XCTAssertTrue(findings.contains { $0.invariant == .noLostEdit && $0.words.contains("labels should be [22222222]") },
-                      findings.map(\.description).joined(separator: "\n"))
-        let held = await sim.cloud.record(t)?.record["labels"]
-        XCTAssertNil(held, "iCloud's reference was cleared although the label exists")
-        let label = await sim.cloud.record(l)
-        XCTAssertNotNil(label)
+        XCTAssertEqual(findings, [], findings.map(\.description).joined(separator: "\n"))
+        let inCloud = await sim.cloud.record(t)?.record["labels"]
+        XCTAssertEqual(inCloud, .references([l.name]))
+        let onA = await sim.device("A")?.store.record(t)?["labels"]
+        XCTAssertEqual(onA, .references([l.name]))
     }
 
     /// Brief 140, item 6: the rig finds what an honest but simple brain gets wrong. This brain sends whatever differs
@@ -398,6 +428,67 @@ final class SyncInvariantsTests: XCTestCase {
         }
     }
 
+    /// Seeds that once found something, kept for wave 2 to run against the real brain: swap `MergingBrain.make` for
+    /// `SyncCore` wrapped as a `SimBrain`. Each says what it found, under which faults, and the record names to trace it
+    /// by (`HITLIST_SIM_TRACE=<seed> HITLIST_SIM_KEYS=<keys> [HITLIST_SIM_FAULTS=<faults>] swift test -c release
+    /// -Xswiftc -enable-testing --filter testTrace`). A seed whose keys no longer appear in its script means the
+    /// generator has drifted and the seed no longer plays the case: find it again with `testManySeeds`.
+    struct KeptSeed {
+        var seed: UInt64
+        var steps = 300
+        /// "everyday", "ledger", "zone" or "memory" (`HITLIST_SIM_FAULTS`).
+        var faults = "everyday"
+        var keys: [String]
+        var found: String
+    }
+
+    static let keptSeeds: [KeptSeed] = [
+        KeptSeed(seed: 58, keys: ["29222198", "039713C8"],
+                 found: "section 8's first version: a label sent a batch after its task was cleared from the task everywhere"),
+        KeptSeed(seed: 62, keys: ["D3B8B1A9", "D88598D6"],
+                 found: "section 8's first version, a parent reference cleared everywhere"),
+        KeptSeed(seed: 60, keys: ["A34441B4"],
+                 found: "deletedHereAt kept after an undo: a second deletion offline carried the first one's time; M8 brought the item back (I3)"),
+        KeptSeed(seed: 85, keys: ["C0B472C5", "473723E0"],
+                 found: "a sub-task two levels under a deleted task goes with it (the model's cascade, at any depth)"),
+        KeptSeed(seed: 27, steps: 500, keys: ["project"],
+                 found: "a device's clearing of a deleted Group's reference beat a person's later move in M7 (reviewer; section 8 now forbids the clearing)"),
+        KeptSeed(seed: 4, faults: "zone", keys: ["33D4268A"],
+                 found: "the transport's state lost, then the zone: no zoneLost ever comes; a kept ledger left items out of iCloud (I1; T12 now)"),
+        KeptSeed(seed: 18, faults: "memory", keys: ["hears"],
+                 found: "a crash halfway through a fetch in the last round: the rig called it quiet with a device short of iCloud (rig bug, fixed)"),
+        KeptSeed(seed: 1, faults: "ledger", keys: ["29636A12"],
+                 found: "edits made before a lost memory finished its first fetch (the model's exposure, fixed)"),
+        KeptSeed(seed: 7, keys: ["641C6D76", "B0C90D89"], found: "section 8's first version, a parent reference"),
+        KeptSeed(seed: 18, keys: ["7B99BE4C", "3D715A3A"], found: "section 8's first version, a label"),
+        KeptSeed(seed: 99, keys: ["4A88A6F0", "8C1632AF"], found: "section 8's first version, a label"),
+        KeptSeed(seed: 16, faults: "memory", keys: ["5A7ADDAC", "78E1A262"], found: "section 8's first version, a label"),
+    ]
+
+    static func config(_ faults: String) -> SimConfig {
+        var config = SimConfig()
+        switch faults {
+        case "ledger": config.faults = SimFaultKind.everyday.union([.ledgerLost]); config.faultPercent = 10
+        case "zone": config.faults = SimFaultKind.everyday.union([.zoneDeleted, .zoneReset]); config.faultPercent = 10
+        case "memory": config.faults = SimFaultKind.everyday.union([.ledgerLost, .zoneDeleted, .zoneReset])
+        default: break
+        }
+        return config
+    }
+
+    /// Every kept seed with the brain under test: no findings. (Wave 2: the same list with `SyncCore`.)
+    func testKeptSeeds() async {
+        for kept in SyncInvariantsTests.keptSeeds {
+            let report = await SyncSimulation.randomRun(seed: kept.seed, devices: 3, steps: kept.steps,
+                                                        config: SyncInvariantsTests.config(kept.faults), brain: MergingBrain.make)
+            XCTAssertEqual(report.findings, [], "seed \(kept.seed) (\(kept.faults)), which found: \(kept.found)\n\(report.description)")
+            // Record names are hex; a word ("project", "hears") is a trace filter, not a name to look for.
+            let names = kept.keys.filter { $0.allSatisfy(\.isHexDigit) }
+            let plays = names.allSatisfy { name in report.script.contains { $0.contains(name) } }
+            print("Kept seed \(kept.seed) (\(kept.faults), \(kept.steps) steps): \(names.isEmpty ? "no record names to look for" : (plays ? "still plays \(names.joined(separator: ", "))" : "DRIFTED: \(names.joined(separator: ", ")) not in its script"))")
+        }
+    }
+
     /// Many seeds, only when asked: `HITLIST_SIM_SEEDS=100 swift test -c release -Xswiftc -enable-testing --filter
     /// testManySeeds` (optionally `HITLIST_SIM_STEPS`, default 300, and `HITLIST_SIM_FAULTS=memory` to add the faults
     /// that lose a memory). Runs the rules-keeping brain; wave 2 swaps in `SyncCore`. Prints every seed with a finding.
@@ -434,9 +525,9 @@ final class SyncInvariantsTests: XCTestCase {
         let lines = FakeWords()
         var config = SimConfig()
         config.log = { line in if keys.contains(where: { line.contains($0) }) { lines.append(line) } }
-        if environment["HITLIST_SIM_FAULTS"] == "ledger" { config.faults = SimFaultKind.everyday.union([.ledgerLost]); config.faultPercent = 10 }
-        if environment["HITLIST_SIM_FAULTS"] == "zone" { config.faults = SimFaultKind.everyday.union([.zoneDeleted, .zoneReset]); config.faultPercent = 10 }
-        if environment["HITLIST_SIM_FAULTS"] == "memory" { config.faults = SimFaultKind.everyday.union([.ledgerLost, .zoneDeleted, .zoneReset]) }
+        let faults = SyncInvariantsTests.config(environment["HITLIST_SIM_FAULTS"] ?? "everyday")
+        config.faults = faults.faults
+        config.faultPercent = faults.faultPercent
         let steps = environment["HITLIST_SIM_STEPS"].flatMap(Int.init) ?? 300
         let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: steps, config: config, brain: MergingBrain.make)
         for line in report.script where keys.contains(where: { line.contains($0) }) || line.contains("fault") { print("SCRIPT \(line)") }
@@ -621,9 +712,10 @@ actor NaiveBrain: SimBrain, SyncTransportDelegate {
 
 /// A brain that settles every record by the design's own rules (`RecordMerge`, section 5), kept as small as it can be:
 /// not the engine (session 139 builds that), but enough to show that the rig and the invariants do not cry wolf at a
-/// brain that keeps the rules. It sets fetched records aside in the ledger until the fetch ends (section 8), sends
-/// nothing before its first whole fetch (section 7), forgets its memory on a lost zone or another account (section 10),
-/// and compares again after every answer from iCloud.
+/// brain that keeps the rules. It sets fetched records aside in the ledger until the fetch ends (section 8), keeps the
+/// references a record is waiting for and never clears one itself (section 8 as rewritten at 4d402a1), sends what is
+/// pointed at before what points at it, sends nothing before its first whole fetch (section 7), forgets its memory on
+/// a lost zone and on every account event (section 10, T12), and compares again after every answer from iCloud.
 actor MergingBrain: SimBrain, SyncTransportDelegate {
     private let store: MemoryLocalStore
     private let ledger: MemoryLedger
@@ -657,21 +749,51 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         try await transport.send()
     }
 
-    /// Section 4: an item that differs from its base, an item deleted here, an item made again: waiting to go.
+    /// Section 4: an item that differs from its base, an item deleted here, an item made again: waiting to go. Each
+    /// record is compared as it would be with every reference honoured (section 8).
     private func reconcile(_ keys: Set<SyncKey>?) async throws {
         guard try await ledger.fact(LedgerFact.firstFetchDone) != nil else {
             log("\(device) reconcile skipped: no whole fetch yet")
             return
         }
+        try await honourWaits()
         let entries = Dictionary(try await ledger.entries().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
         let records = Dictionary(try await store.records().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        var waits = try await allWaits()
         let all = keys ?? Set(entries.keys).union(records.keys)
         var changes: [PendingChange] = []
         var write = LedgerWrite()
         for key in all.sorted() {
             let entry = entries[key]
             if let local = records[key] {
-                if entry?.base == nil || !RecordMerge.same(local, entry?.base) { changes.append(.save(key)) }
+                // A reference the base holds to an item that is not here (deleted here, or never arrived): waited for,
+                // not a change. A to-one field the person filled is theirs.
+                if let base = entry?.base, !base.isDeleted {
+                    var wait = waits[key] ?? [:]
+                    for (field, value) in references(base) {
+                        switch value {
+                        case .reference(let name):
+                            if local.fields[field] == nil, !present(field, name, key, records) { wait[field] = value }
+                        case .referenceList(let names):
+                            var held: Set<String> = []
+                            if case .referenceList(let list)? = local.fields[field] { held = Set(list) }
+                            let missing = names.filter { !held.contains($0) && !present(field, $0, key, records) }
+                            var waited: Set<String> = []
+                            if case .referenceList(let old)? = wait[field] { waited = Set(old) }
+                            if !missing.isEmpty || !waited.isEmpty { wait[field] = .references(waited.union(missing)) }
+                        default: break
+                        }
+                    }
+                    for (field, value) in wait {
+                        if case .reference = value, local.fields[field] != nil { wait[field] = nil }
+                    }
+                    if wait != (waits[key] ?? [:]) {
+                        waits[key] = wait
+                        if wait.isEmpty { write.deferRemove.append(waitKey(key)) } else { write.deferUpsert.append(waitRecord(key, wait)) }
+                    }
+                }
+                let whole = honoured(local, waits[key])
+                if entry?.base == nil || !RecordMerge.same(whole, entry?.base) { changes.append(.save(key)) }
                 if var back = entry, back.deletedHereAt != nil {
                     // Here again (an undo): the deletion noticed before is over. Kept, a later deletion would carry
                     // its old time, and M8 would bring the item back (seed 60 found it).
@@ -688,7 +810,114 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
             }
         }
         if !write.isEmpty { try await ledger.write(write) }
-        await transport.add(changes)
+        await transport.add(try await inSendingOrder(changes))
+    }
+
+    // MARK: Waiting references (section 8)
+
+    /// The waited-for references are kept in the ledger's deferred list under a key of their own type, apart from
+    /// fetched records set aside.
+    private func waitKey(_ key: SyncKey) -> SyncKey { SyncKey(type: "Waiting." + key.type, name: key.name) }
+
+    private func waitRecord(_ key: SyncKey, _ fields: [String: SyncValue]) -> CloudRecord {
+        CloudRecord(record: SyncRecord(key: waitKey(key), fields: fields), system: Data())
+    }
+
+    private func allWaits() async throws -> [SyncKey: [String: SyncValue]] {
+        var out: [SyncKey: [String: SyncValue]] = [:]
+        for cloud in try await ledger.deferred() where cloud.key.type.hasPrefix("Waiting.") {
+            out[SyncKey(type: String(cloud.key.type.dropFirst("Waiting.".count)), name: cloud.key.name)] = cloud.record.fields
+        }
+        return out
+    }
+
+    private func references(_ record: SyncRecord) -> [(String, SyncValue)] {
+        guard let type = SyncSchema.type(record.key.type) else { return [] }
+        return type.fields.compactMap { field -> (String, SyncValue)? in
+            switch (field.kind, record.fields[field.key]) {
+            case (.reference, let value?), (.references, let value?): return (field.key, value)
+            default: return nil
+            }
+        }
+    }
+
+    private func target(_ field: String, of key: SyncKey) -> String? {
+        switch SyncSchema.type(key.type)?.field(field)?.kind {
+        case .reference(let type)?, .references(let type)?: return type
+        default: return nil
+        }
+    }
+
+    private func present(_ field: String, _ name: String, _ key: SyncKey, _ records: [SyncKey: SyncRecord]) -> Bool {
+        guard let type = target(field, of: key) else { return true }
+        return records[SyncKey(type: type, name: name)] != nil
+    }
+
+    /// The device's record with the references it waits for: what is compared, merged and sent.
+    private func honoured(_ local: SyncRecord?, _ wait: [String: SyncValue]?) -> SyncRecord? {
+        guard var out = local, let wait else { return local }
+        for (field, value) in wait {
+            switch value {
+            case .reference: if out.fields[field] == nil { out.fields[field] = value }
+            case .referenceList(let names):
+                var held: Set<String> = []
+                if case .referenceList(let list)? = out.fields[field] { held = Set(list) }
+                out.fields[field] = .references(held.union(names))
+            default: break
+            }
+        }
+        return out
+    }
+
+    /// After the device was written with `merged`: what it could not show is waited for.
+    private func wait(for merged: SyncRecord?, _ key: SyncKey) async throws {
+        var wait: [String: SyncValue] = [:]
+        if let merged, !merged.isDeleted, let here = await store.record(key) {
+            for (field, value) in references(merged) {
+                switch value {
+                case .reference: if here.fields[field] != value { wait[field] = value }
+                case .referenceList(let names):
+                    var held: Set<String> = []
+                    if case .referenceList(let list)? = here.fields[field] { held = Set(list) }
+                    let missing = names.filter { !held.contains($0) }
+                    if !missing.isEmpty { wait[field] = .references(missing) }
+                default: break
+                }
+            }
+        }
+        var write = LedgerWrite()
+        if wait.isEmpty { write.deferRemove = [waitKey(key)] } else { write.deferUpsert = [waitRecord(key, wait)] }
+        try await ledger.write(write)
+    }
+
+    /// An item waited for is here now: its references are written on the device and stop waiting.
+    private func honourWaits() async throws {
+        let waits = try await allWaits()
+        guard !waits.isEmpty else { return }
+        for key in waits.keys.sorted() {
+            guard let local = await store.record(key), let whole = honoured(local, waits[key]) else { continue }
+            if whole != local { _ = try await store.apply([LocalWrite(key: key, expected: local, record: whole)]) }
+            try await wait(for: whole, key)
+        }
+    }
+
+    /// What is pointed at before what points at it: `SyncSchema.types` order, a task after its parent.
+    private func inSendingOrder(_ changes: [PendingChange]) async throws -> [PendingChange] {
+        let order = Dictionary(uniqueKeysWithValues: SyncSchema.types.enumerated().map { ($1.name, $0) })
+        var depth: [SyncKey: Int] = [:]
+        for change in changes where change.key.type == SyncSchema.taskItem.name {
+            var level = 0
+            var at = await store.record(change.key)
+            while case .reference(let parent)? = at?.fields["parent"], level < 8 {
+                level += 1
+                at = await store.record(SyncKey(type: SyncSchema.taskItem.name, name: parent))
+            }
+            depth[change.key] = level
+        }
+        return changes.enumerated().sorted { a, b in
+            (order[a.element.key.type] ?? .max, depth[a.element.key] ?? 0, a.offset)
+                < (order[b.element.key.type] ?? .max, depth[b.element.key] ?? 0, b.offset)
+        }.map(\.element)
     }
 
     func handle(_ event: TransportEvent) async {
@@ -716,7 +945,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
             case .fetched(let changed, let removed):
                 var write = LedgerWrite()
                 write.deferUpsert = changed.filter { SyncSchema.type($0.key.type) != nil }
-                try await ledger.write(write)
+                if !write.deferUpsert.isEmpty { try await ledger.write(write) }
                 for key in removed { try await settle(key, server: nil, system: nil) }
             case .didFetch(nil):
                 try await settleSetAside()
@@ -746,7 +975,8 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
 
     func recordToSend(_ key: SyncKey) async -> OutgoingRecord? {
         let entry = await ledger.entry(key)
-        if let local = await store.record(key) {
+        let waits = (try? await allWaits()) ?? [:]
+        if let local = honoured(await store.record(key), waits[key]) {
             log("\(device) sends \(key): \(local.fields.keys.sorted().map { "\($0)=\(SyncInvariants.say(local.fields[$0]))" }.joined(separator: " "))")
             return OutgoingRecord(record: local, system: entry?.system)
         }
@@ -772,13 +1002,16 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
     /// The fetch is whole: everything set aside is settled in one go, so that a task finds its Group and its parent
     /// whichever page brought them.
     private func settleSetAside() async throws {
-        let waiting = try await ledger.deferred()
+        let waiting = try await ledger.deferred().filter { !$0.key.type.hasPrefix("Waiting.") }
         guard !waiting.isEmpty else { return }
+        let waits = try await allWaits()
         var writes: [LocalWrite] = []
         var write = LedgerWrite()
         var again: [PendingChange] = []
+        var merged: [SyncKey: SyncRecord?] = [:]
         for cloud in waiting {
-            let (local, outcome, entry) = try await decide(cloud.key, server: cloud.record)
+            let (local, outcome, entry) = try await decide(cloud.key, server: cloud.record, waits: waits)
+            merged[cloud.key] = .some(outcome.device)
             log("\(device) settles fetched \(cloud.key) by \(outcome.rule.rawValue): here \(local.map(SyncInvariants.sketch) ?? "nothing"), iCloud \(SyncInvariants.sketch(cloud.record)) \(cloud.record.fields.keys.sorted().map { "\($0)=\(SyncInvariants.say(cloud.record.fields[$0]))" }.joined(separator: " "))")
             if !RecordMerge.same(local, outcome.device) {
                 writes.append(LocalWrite(key: cloud.key, expected: local, record: outcome.device))
@@ -790,12 +1023,14 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         write.deferRemove = waiting.map(\.key)
         _ = try await store.apply(writes)
         try await ledger.write(write)
-        await transport.add(again)
+        for key in merged.keys.sorted() { try await wait(for: merged[key] ?? nil, key) }
+        try await honourWaits()
+        await transport.add(try await inSendingOrder(again))
     }
 
     /// One record, settled at once: a conflict, a removal for good, a change unknown to iCloud.
     private func settle(_ key: SyncKey, server: SyncRecord?, system: Data?) async throws {
-        let (local, outcome, entry) = try await decide(key, server: server)
+        let (local, outcome, entry) = try await decide(key, server: server, waits: try await allWaits())
         log("\(device) settles \(key) by \(outcome.rule.rawValue) (conflict or removal): iCloud \(server.map(SyncInvariants.sketch) ?? "nothing")")
         if !RecordMerge.same(local, outcome.device) {
             _ = try await store.apply([LocalWrite(key: key, expected: local, record: outcome.device)])
@@ -808,14 +1043,18 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
             write.remove = [key]
         }
         try await ledger.write(write)
+        try await wait(for: outcome.device, key)
         if outcome.merged != nil, !RecordMerge.same(outcome.merged, server) { await transport.add([.save(key)]) }
     }
 
-    private func decide(_ key: SyncKey, server: SyncRecord?) async throws -> (SyncRecord?, MergeOutcome, LedgerEntry?) {
+    /// The merge, with the device's record as it would be with every waited-for reference honoured (section 8). The
+    /// first value is the device's record as it is, for `LocalWrite.expected`.
+    private func decide(_ key: SyncKey, server: SyncRecord?, waits: [SyncKey: [String: SyncValue]]) async throws
+        -> (SyncRecord?, MergeOutcome, LedgerEntry?) {
         let local = await store.record(key)
         let entry = await ledger.entry(key)
-        let input = MergeInput(base: entry?.base, local: local, deletedHereAt: entry?.deletedHereAt, server: server,
-                               now: clock.now())
+        let input = MergeInput(base: entry?.base, local: honoured(local, waits[key]), deletedHereAt: entry?.deletedHereAt,
+                               server: server, now: clock.now())
         return (local, RecordMerge.merge(input), entry)
     }
 
@@ -826,7 +1065,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         write.upsert = [LedgerEntry(key: cloud.key, base: RecordMerge.normal(cloud.record)?.comparable, system: cloud.system,
                                     deletedHereAt: cloud.record.isDeleted ? entry?.deletedHereAt : nil)]
         try await ledger.write(write)
-        let local = await store.record(cloud.key)
+        let local = honoured(await store.record(cloud.key), try await allWaits()[cloud.key])
         if let local, !RecordMerge.same(local, cloud.record) { await transport.add([.save(cloud.key)]) }
         if local == nil, !cloud.record.isDeleted { await transport.add([.save(cloud.key)]) }
     }

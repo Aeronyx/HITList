@@ -22,6 +22,9 @@ public enum SyncInvariant: String, Hashable, Sendable, CaseIterable, Comparable 
     case quiet = "I7"
     /// A newer build's fields survive an older build's edit.
     case newerFieldsSurvive = "I8"
+    /// References kept (section 8): no device sends a record that takes away a reference iCloud holds, unless a person
+    /// on that device changed that field.
+    case referencesKept = "I9"
 
     public static func < (a: SyncInvariant, b: SyncInvariant) -> Bool { a.rawValue < b.rawValue }
 }
@@ -122,6 +125,24 @@ public struct SimIntent: Sendable {
     public private(set) var amnesia: [(step: Int, device: String)] = []
     /// When the zone was lost (deleted, purged, reset): what only iCloud held (a newer build's fields) went with it.
     public private(set) var zoneLosses: [Int] = []
+    /// Saves iCloud accepted that took a reference away, and when (I9).
+    public private(set) var drops: [(step: Int, drop: FakeCloud.ReferenceDrop)] = []
+
+    public mutating func recordDrops(step: Int, _ drops: [FakeCloud.ReferenceDrop]) {
+        for drop in drops { self.drops.append((step, drop)) }
+    }
+
+    /// Whether a person on `device` made the item or changed `field` of it at `step` or before.
+    func personChanged(_ key: SyncKey, _ field: String, on device: String, by step: Int) -> Bool {
+        events(of: key).contains { event in
+            guard event.device == device, event.step <= step else { return false }
+            switch event.change {
+            case .made: return true
+            case .changed(let fields): return fields[field] != nil
+            case .deleted: return false
+            }
+        }
+    }
     /// Deletions a device made of items its ledger held no living base for ("step|device|key"): section 4 finds a
     /// deletion only by its base, so nothing can tell iCloud (an item never agreed on, or one a lost memory or a lost
     /// zone left without a base).
@@ -256,8 +277,9 @@ public enum SyncInvariants {
         var findings: [SyncFinding] = []
         var there: [SyncKey: SyncRecord] = [:]
         var markers = Set<SyncKey>()
+        let alive = livingKeys(cloud)
         for record in cloud where SyncSchema.type(record.key.type) != nil {
-            if record.record.isDeleted { markers.insert(record.key) } else { there[record.key] = normal(record.record) }
+            if record.record.isDeleted { markers.insert(record.key) } else { there[record.key] = normal(shown(record.record, alive)) }
         }
         for device in devices.sorted(by: { $0.name < $1.name }) {
             var here: [SyncKey: SyncRecord] = [:]
@@ -292,7 +314,8 @@ public enum SyncInvariants {
         let holders: [(String, [SyncKey: SyncRecord])] = devices.sorted(by: { $0.name < $1.name }).map { device in
             (device.name, Dictionary(device.records.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a }))
         }
-        let iCloud = Dictionary(cloud.map { ($0.key, $0.record) }, uniquingKeysWith: { a, _ in a })
+        let alive = livingKeys(cloud)
+        let iCloud = Dictionary(cloud.map { ($0.key, shown($0.record, alive)) }, uniquingKeysWith: { a, _ in a })
         for key in intent.keys {
             guard let type = SyncSchema.type(key.type), !intent.everDeleted(key) else { continue }
             if key.type == SyncSchema.taskItem.name, intent.underDeletedParent(key) { continue }
@@ -460,8 +483,9 @@ public enum SyncInvariants {
 
     // MARK: I6
 
-    /// I6: every reference on a device points at an item the device holds, and every reference in a living record in
-    /// iCloud at a living record there.
+    /// I6: every reference on a device points at an item the device holds. (iCloud may keep a reference to an item
+    /// that is not there, section 8: it may only be late, or come back by an undo, and devices honour it then.
+    /// `cloud` is kept in the signature for the callers; it is not judged.)
     public static func whole(devices: [DeviceHoldings], cloud: [CloudRecord]) -> [SyncFinding] {
         var findings: [SyncFinding] = []
         for device in devices.sorted(by: { $0.name < $1.name }) {
@@ -472,12 +496,7 @@ public enum SyncInvariants {
                 }
             }
         }
-        let alive = Set(cloud.filter { !$0.record.isDeleted }.map(\.key))
-        for record in cloud.sorted(by: { $0.key < $1.key }) where !record.record.isDeleted {
-            for missing in dangling(record.record, in: alive) {
-                findings.append(SyncFinding(.whole, "iCloud: \(record.key) points at \(missing), which iCloud does not hold alive"))
-            }
-        }
+        _ = cloud
         return findings
     }
 
@@ -539,7 +558,46 @@ public enum SyncInvariants {
         return findings
     }
 
+    // MARK: I9
+
+    /// I9: every save iCloud accepted that took a reference away (`FakeCloud.ReferenceDrop`) was a person's own change on
+    /// the device that sent it: they made the item there (an undo too: M12) or changed that field there. Not held to
+    /// account: a save up to a device's loss of memory (M5 keeps the record changed last, whole).
+    public static func referencesKept(intent: SimIntent) -> [SyncFinding] {
+        var findings: [SyncFinding] = []
+        for (step, drop) in intent.drops {
+            guard step > intent.exposedThrough,
+                  !intent.personChanged(drop.key, drop.field, on: drop.device, by: step) else { continue }
+            let names = drop.removed.map(short).joined(separator: ", ")
+            findings.append(SyncFinding(.referencesKept, "device \(drop.device) sent \(drop.key) without \(drop.field) →\(names) at step \(step), which iCloud held; no person on \(drop.device) changed \(drop.field)"))
+        }
+        return findings
+    }
+
     // MARK: Words
+
+    /// The keys of the records iCloud holds alive.
+    static func livingKeys(_ cloud: [CloudRecord]) -> Set<SyncKey> {
+        Set(cloud.filter { !$0.record.isDeleted }.map(\.key))
+    }
+
+    /// A record of iCloud's as a device shows it: references to records iCloud does not hold alive left out (section 8
+    /// lets iCloud keep them).
+    static func shown(_ record: SyncRecord, _ alive: Set<SyncKey>) -> SyncRecord {
+        guard let type = SyncSchema.type(record.key.type), !record.isDeleted else { return record }
+        var out = record
+        for field in type.fields {
+            switch (field.kind, record.fields[field.key]) {
+            case (.reference(let target), .reference(let name)?):
+                if !alive.contains(SyncKey(type: target, name: name)) { out.fields[field.key] = nil }
+            case (.references(let target), .referenceList(let names)?):
+                let kept = names.filter { alive.contains(SyncKey(type: target, name: $0)) }
+                out.fields[field.key] = kept.isEmpty ? nil : .references(kept)
+            default: break
+            }
+        }
+        return out
+    }
 
     static func normal(_ record: SyncRecord) -> SyncRecord {
         (RecordMerge.normal(record) ?? record).comparable

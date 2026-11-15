@@ -192,6 +192,48 @@ public actor FakeCloud {
         var key: SyncKey
         var system: Data?
         var write: [String: SyncValue?]
+        /// Which device sent it (for `drops`).
+        var device: String = ""
+    }
+
+    /// An accepted save that took a reference away from what iCloud held (section 8: a device sends that only as a
+    /// person's own change). A marker is not one: a deletion is I3's.
+    public struct ReferenceDrop: Hashable, Sendable {
+        public var device: String
+        public var key: SyncKey
+        public var field: String
+        /// The names the field pointed at that the save took away.
+        public var removed: [String]
+    }
+
+    private var drops: [ReferenceDrop] = []
+
+    /// The reference drops since the last call, in the order iCloud accepted them.
+    public func takeDrops() -> [ReferenceDrop] {
+        defer { drops = [] }
+        return drops
+    }
+
+    private func noteDrops(_ save: WireSave, before: Stored?) {
+        guard let before, let type = SyncSchema.type(save.key.type) else { return }
+        if case .some(.some) = save.write[SyncSchema.deletedAt] { return }
+        for field in type.fields {
+            guard let written = save.write[field.key] else { continue }
+            let old = before.fields[field.key]
+            var removed: [String] = []
+            switch (field.kind, old) {
+            case (.reference, .reference(let name)?):
+                if written != old { removed = [name] }
+            case (.references, .referenceList(let names)?):
+                var now: Set<String> = []
+                if case .referenceList(let list)?? = written { now = Set(list) }
+                removed = names.filter { !now.contains($0) }
+            default: break
+            }
+            if !removed.isEmpty {
+                drops.append(ReferenceDrop(device: save.device, key: save.key, field: field.key, removed: removed))
+            }
+        }
     }
 
     struct BatchResult: Sendable {
@@ -236,6 +278,7 @@ public actor FakeCloud {
             case (nil, nil):
                 break
             }
+            noteDrops(save, before: current)
             var stored = current ?? Stored(fields: [:], tag: 0, seq: 0)
             for (name, value) in save.write { stored.fields[name] = value }
             stored.tag = takeTag()
