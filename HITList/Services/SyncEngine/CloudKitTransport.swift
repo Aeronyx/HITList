@@ -201,8 +201,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     func reset() async {
         // The state forgotten on disk first: a crash before the new engine exists leaves a forgotten state, which is
         // what was asked. (The other order could leave the old bookmark to be restored at the next launch.)
-        let account = stored.account
-        stored = StoredState(engine: nil, zoneReady: false, account: account)
+        // The account goes too: the new engine announces `signedIn` for whoever is signed in, and T12 has the brain
+        // read a sign-in to its own account as no change.
+        stored = StoredState()
         await save()
         let old = engine
         engine = makeEngine(nil)
@@ -610,7 +611,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
 /// What `CloudKitTransport` keeps through `SyncTransportState`: the engine's serialization (its bookmarks and pending
 /// list), whether the zone is known to exist (so it is made only when needed), and the account the state belongs to
-/// (so a new engine's "signed in" for the same account is not told as a change). JSON, versioned.
+/// (so an engine that announces the same account again, its state not yet saved, is not told as a change).
+/// JSON, versioned.
 struct StoredState: Codable {
     var version = 1
     var engine: CKSyncEngine.State.Serialization?
@@ -790,8 +792,10 @@ enum CloudKitTransportRules {
         }
     }
 
-    /// T12: the change, by user record names; nil when a new engine (after `reset()`, or one whose state was lost)
-    /// reports signing in to the account the transport already belonged to, which is no change at all.
+    /// T12: the change, by user record names; nil when the engine reports signing in to the account the transport's
+    /// own saved state already belongs to (a launch that ended between the account event and the engine's first
+    /// saved state), which is no change at all. After `reset()` or a lost state nothing is known, so the sign-in is
+    /// told, and the brain reads a sign-in to its own account as no change (T12).
     static func accountChange(_ change: CKSyncEngine.Event.AccountChange.ChangeType, known: String?) -> AccountChange? {
         switch change {
         case .signIn(let current):
