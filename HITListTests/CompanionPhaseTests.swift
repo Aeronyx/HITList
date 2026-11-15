@@ -10,7 +10,8 @@ import HITListCore
 /// and the "+", and see-through drawing (`seeThrough`, and the veil while it phases) at the right opacity. Round 24
 /// (brief 121): see-through for the eye (thinning to a nearly clear hem that breaks into a checker of the veil), fading
 /// in its moves, one mound of snow, rain in blue going through it. Round 25 (brief 129): 0.9.7's black eyes with a white
-/// pupil back, no glow; in the snow he looks at the pile, in deep snow a little worried.
+/// pupil back, no glow; in the snow he looks at the pile, in deep snow a little worried. Round 27 (brief 134): in the
+/// rain he looks down and to the left, at the water, no longer up.
 /// `CompanionSpriteTests` also runs every check that holds for every companion on it.
 @MainActor
 final class CompanionPhaseTests: XCTestCase {
@@ -366,6 +367,55 @@ final class CompanionPhaseTests: XCTestCase {
         }
     }
 
+    /// Round 27 (brief 134, George: "Have Phase looking down left for rain instead, he looks weird looking up
+    /// constantly"): in the rain each white pupil sits at the lower left of its black eye, watching the water gather
+    /// under him, in every awake frame the rain shows. Thunder may glance elsewhere for a tick, but the watch and the
+    /// thunder end on that look and every hold in them is the rain's still. By day he still looks down to the right and
+    /// in the snow down at the pile; an open eye is several black pixels round one white pupil, never a white eye.
+    func testHeLooksDownLeftInTheRain() {
+        let awake = phase.plus.awake
+        XCTAssertEqual(awake.base(.rain), "rain", "a hold in the rain or the storm is the rain's still")
+        let downLeft = ["rain"] + (0...3).map { "rainFall\($0)" } + (0...4).map { "rainDrop\($0)" } + ["stormBack"]
+            + ["half", "ripple1", "ripple2", "shiver1", "shiver2", "shiver3"].map { "\($0)@rain" }
+        func looks(_ name: String, low: Bool, left: Bool) {
+            let eyes = Self.eyes(phase.rows(name)!)
+            XCTAssertEqual(eyes.count, 2, "\(name): two open eyes")
+            for eye in eyes {
+                XCTAssertGreaterThanOrEqual(eye.black, 3, "\(name): an eye of several pixels")
+                XCTAssertEqual(eye.pupil.y, low ? eye.box.y.upperBound : eye.box.y.lowerBound, "\(name): its pupil \(low ? "low" : "high")")
+                XCTAssertEqual(eye.pupil.x, left ? eye.box.x.lowerBound : eye.box.x.upperBound, "\(name): its pupil to the \(left ? "left" : "right")")
+            }
+        }
+        for name in downLeft { looks(name, low: true, left: true) }
+        looks("rest", low: true, left: false)
+        for name in ["snow", "snowDeep1", "snowDeep2"] { looks(name, low: true, left: true) }
+        // The shiver squeezes his eyes shut: nothing to look with.
+        XCTAssertFalse(phase.rows("rainShiver")!.joined().contains("l"))
+        XCTAssertTrue(phase.rows("rainShiver")!.joined().contains("k"))
+        // The watch and the thunder end on the look; their holds are the rain's still.
+        for name in ["watch", "thunder"] {
+            let routine = awake.routines.first { $0.name == name }!
+            let own = routine.steps.flatMap { step -> [String] in
+                if case .frames(let ticks) = step { return ticks.map(\.frame) }
+                return []
+            }
+            XCTAssertTrue(downLeft.contains(own.last!), "\(name) ends on \(own.last!)")
+            XCTAssertTrue(routine.steps.contains { if case .hold = $0 { true } else { false } }, "\(name) holds the still")
+        }
+        // Never a white eye: every white pixel is one pupil in a black eye.
+        for frame in phase.frames {
+            let rows = frame.rows.map(Array.init)
+            for eye in Self.eyes(frame.rows) {
+                XCTAssertGreaterThan(eye.black, 0, "\(frame.name): a white pupil in a black eye")
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                    let x = eye.pupil.x + dx, y = eye.pupil.y + dy
+                    guard (0..<20).contains(x), (0..<20).contains(y) else { continue }
+                    XCTAssertNotEqual(rows[y][x], "l", "\(frame.name) \(x),\(y): one white pixel, not a white eye")
+                }
+            }
+        }
+    }
+
     /// Asleep it hovers low and slack over the bar, its eyes shut, no smile, no light in them.
     func testAsleepLowAndSlack() {
         let sleep = phase.rows("sleep")!
@@ -577,6 +627,28 @@ final class CompanionPhaseTests: XCTestCase {
             let on = x < row.count && "arv".contains(row[x])
             if on, start == nil { start = x }
             if !on, let s = start { out.append(s...(x - 1)); start = nil }
+        }
+        return out
+    }
+
+    /// Each white pupil (`l`) and its black eye: the run of `k` touching it, and the eye's box with the pupil in it.
+    static func eyes(_ rows: [String]) -> [(pupil: (x: Int, y: Int), black: Int, box: (x: ClosedRange<Int>, y: ClosedRange<Int>))] {
+        let g = rows.map(Array.init)
+        let h = g.count, w = g.first?.count ?? 0
+        let steps = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        func black(_ x: Int, _ y: Int) -> Bool { (0..<w).contains(x) && (0..<h).contains(y) && g[y][x] == "k" }
+        var out: [(pupil: (x: Int, y: Int), black: Int, box: (x: ClosedRange<Int>, y: ClosedRange<Int>))] = []
+        for y in 0..<h {
+            for x in 0..<w where g[y][x] == "l" {
+                var seen = Set<[Int]>()
+                var stack = steps.filter { black(x + $0.0, y + $0.1) }.map { [x + $0.0, y + $0.1] }
+                while let p = stack.popLast() {
+                    guard seen.insert(p).inserted else { continue }
+                    stack += steps.filter { black(p[0] + $0.0, p[1] + $0.1) }.map { [p[0] + $0.0, p[1] + $0.1] }
+                }
+                let xs = seen.map { $0[0] } + [x], ys = seen.map { $0[1] } + [y]
+                out.append((pupil: (x: x, y: y), black: seen.count, box: (x: xs.min()!...xs.max()!, y: ys.min()!...ys.max()!)))
+            }
         }
         return out
     }
