@@ -73,6 +73,17 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private var waiters: [CheckedContinuation<Void, Never>] = []
     private var stopped = false
 
+    /// The pending list was changed here (`add`, `remove`) and the engine has not yet handed over the state that
+    /// holds the change (`stateUpdate` comes a moment later, on its own). `stop()` waits for it, so a list changed
+    /// just before a clean stop survives the relaunch (T3). After a crash it is lost, and the brain's comparison at
+    /// the next start finds the same changes again.
+    private var stateBehind = false
+    private var stateWaiter: CheckedContinuation<Void, Never>?
+    /// How long `stop()` waits for that state: the engine hands it over within moments; past this the stop goes on.
+    static let stateFlushWait: Double = 3
+    /// How many times the state was written (the probe reads it).
+    private(set) var stateSaves = 0
+
     init(containerID: String, zoneName: String = SyncSchema.zoneName, state: any SyncTransportState,
          automaticallySync: Bool = true, log: SyncTransportLog = .system) {
         self.containerID = containerID
@@ -97,6 +108,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     }
 
     func stop() async {
+        if stateBehind, engine != nil { await waitForState() }
         stopped = true
         // No event after this returns (the protocol's promise): wait out the one being handled, if any.
         await acquireDelivery()
@@ -122,11 +134,13 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             engine.state.add(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
         }
         engine.state.add(pendingRecordZoneChanges: changes.map { CloudKitTransportRules.engineChange($0, in: zoneID) })
+        stateBehind = true
     }
 
     func remove(_ changes: [PendingChange]) async {
         guard let engine, !changes.isEmpty else { return }
         engine.state.remove(pendingRecordZoneChanges: changes.map { CloudKitTransportRules.engineChange($0, in: zoneID) })
+        stateBehind = true
     }
 
     func fetch() async throws {
@@ -215,6 +229,12 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             // same changes again: an echo the brain takes as it is (T2).
             stored.engine = update.stateSerialization
             await save()
+            stateSaves += 1
+            stateBehind = false
+            if let waiter = stateWaiter {
+                stateWaiter = nil
+                waiter.resume()
+            }
 
         case .accountChange(let change):
             let mapped = CloudKitTransportRules.accountChange(change.changeType, known: stored.account)
@@ -551,6 +571,28 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private func releaseDelivery() {
         delivering = false
         if !waiters.isEmpty { waiters.removeFirst().resume() }
+    }
+
+    /// Waits for the engine's next `stateUpdate`, at most `stateFlushWait` seconds (a deadline for one thing that
+    /// is pending, not a poll).
+    private func waitForState() async {
+        let started = Date()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            stateWaiter = continuation
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.stateFlushWait * 1_000_000_000))
+                await self?.stateWaitEnded()
+            }
+        }
+        let waited = Int(Date().timeIntervalSince(started) * 1000)
+        let how = stateBehind ? "was not handed over in time" : "was written"
+        log.write("stop: the state \(how) (\(waited) ms)")
+    }
+
+    private func stateWaitEnded() {
+        guard let waiter = stateWaiter else { return }
+        stateWaiter = nil
+        waiter.resume()
     }
 
     private func save() async {
