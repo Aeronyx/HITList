@@ -131,6 +131,32 @@ final class SyncCoreTests: XCTestCase {
         XCTAssertEqual(next?.system, token("s2"))
     }
 
+    /// The real transports deduplicate a save added while the same key's save is in flight, and take the change off
+    /// the list when the save in flight is accepted. The brain compares again after `saved` and adds it back.
+    func testAChangeHintedWhileItsSaveIsInFlightGoesAgainAfterTheSaveIsAccepted() async throws {
+        let device = await synced([task("A", "Milk")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk"), "updatedAt": at(20)])
+        await device.core.localChanged([taskKey("A")])
+        let inFlight = await device.core.recordToSend(taskKey("A"))
+        // While it is on the way: the person edits again, the app hints, the add is a duplicate of the one in flight.
+        await device.store.edit(taskKey("A"), ["title": .string("Soy milk"), "updatedAt": at(25)])
+        await device.core.localChanged([taskKey("A")])
+        let during = await device.pending()
+        XCTAssertEqual(during, [.save(taskKey("A"))], "one change for the key, not two")
+        // The save in flight is accepted: the transport takes the change off the list before `sent`.
+        await device.transport.deliver(.willSend)
+        await device.transport.deliver(.sent(saved: [CloudRecord(record: inFlight!.record, system: token("s2"))],
+                                             removed: [], failed: [:]))
+        await device.transport.deliver(.didSend(error: nil))
+        let after = await device.pending()
+        XCTAssertEqual(after, [.save(taskKey("A"))], "added again: the item differs from what iCloud accepted")
+        let next = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(next?.record["title"], .string("Soy milk"))
+        XCTAssertEqual(next?.system, token("s2"))
+        let waiting = await device.status().waiting
+        XCTAssertEqual(waiting, 1)
+    }
+
     func testRecordToSendIsNilWhenThereIsNothingToSendAfterAll() async {
         let device = await synced([task("A", "Milk")])
         let record = await device.core.recordToSend(taskKey("A"))

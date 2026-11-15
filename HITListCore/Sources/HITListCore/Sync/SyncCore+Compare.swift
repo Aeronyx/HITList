@@ -47,7 +47,8 @@ extension SyncCore {
         var desired: [SyncKey: PendingChange] = [:]
         var write = LedgerWrite()
         var gone = 0
-        for key in universe {
+        // In key order: nothing a `Set` happens to iterate first decides what is written or logged (replays).
+        for key in universe.sorted() {
             let finding = key == Self.metaKey ? metaFinding() : self.finding(key, local: here[key], now: confirmedAt ?? now)
             if let change = finding.change { desired[key] = change }
             if let entry = finding.entry {

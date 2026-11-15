@@ -192,8 +192,8 @@ extension SyncCore {
             // this one as a conflict and merges (M5).
             log("HITList's zone is gone from iCloud (\(reason.rawValue)): everything here goes again")
             var write = LedgerWrite()
-            write.remove = Array(entries.keys)
-            write.deferRemove = Array(deferred.keys)
+            write.remove = entries.keys.sorted()
+            write.deferRemove = deferred.keys.sorted()
             write.facts[LedgerFact.firstFetchDone] = Data([1])
             do {
                 try await commit(write)

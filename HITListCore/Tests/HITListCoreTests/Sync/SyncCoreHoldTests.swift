@@ -74,6 +74,51 @@ final class SyncCoreHoldTests: XCTestCase {
         XCTAssertEqual(pending, [.save(taskKey("N"))])
     }
 
+    /// T12 as CKSyncEngine does it: a transport whose own state was lost (the ledger kept) announces a sign-in to the
+    /// account the ledger already belongs to. That is no change of account.
+    func testASignInToTheLedgersOwnAccountIsNoChange() async throws {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk")])
+        await device.core.localChanged([taskKey("A")])
+        // The transport's bookmark and list are gone; it announces alice again.
+        await device.transport.forgetList()
+        await device.transport.deliver(.account(.signedIn(current: "alice")))
+        XCTAssertEqual(device.host.backups, [], "nothing removed")
+        let count = await device.store.count
+        XCTAssertEqual(count, 2)
+        let entries = try await device.ledger.entries()
+        XCTAssertEqual(entries.count, 3, "A, B and the meta: the ledger kept")
+        let pending = await device.pending()
+        XCTAssertEqual(pending, [.save(taskKey("A"))], "what was waiting is added again")
+        let status = await device.status()
+        XCTAssertNil(status.hold)
+        // The next fetch brings every record again: settled as already known, nothing more to send.
+        await device.deliverFetch([cloud(task("A", "Milk")), cloud(task("B", "Bread")), meta()])
+        let after = await device.pending()
+        XCTAssertEqual(after, [.save(taskKey("A"))])
+        let a = await device.item(taskKey("A"))
+        XCTAssertEqual(a?["title"], .string("Oat milk"))
+    }
+
+    /// T12: the account event comes as the first event of the first fetch after `start`, never inside it; what the
+    /// brain added to the list after `start` is kept.
+    func testTheAccountEventAfterStartKeepsWhatWasAdded() async throws {
+        let device = await synced([task("A", "Milk")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk")])
+        let transport = ScriptedTransport()
+        let relaunched = device.relaunched(transport: transport)
+        await relaunched.core.start()
+        let added = await transport.pending()
+        XCTAssertEqual(added, [.save(taskKey("A"))], "found by the start's compare")
+        await transport.setFetches([[.account(.signedIn(current: "alice")), .willFetch,
+                                     .fetched(changed: [], removed: []), .didFetch(error: nil)]])
+        try await relaunched.core.syncNow()
+        let sent = await transport.sentRecords
+        XCTAssertEqual(sent.map(\.record.key), [taskKey("A")])
+        let status = await relaunched.status()
+        XCTAssertTrue(status.isSynced)
+    }
+
     func testAnotherAccountWhileTheAppWasNotRunningIsASwitch() async {
         let device = await synced([task("A", "Milk")], account: "alice")
         await device.transport.deliver(.account(.signedIn(current: "bob")))

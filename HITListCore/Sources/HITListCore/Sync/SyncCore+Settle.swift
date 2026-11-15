@@ -59,7 +59,8 @@ extension SyncCore {
         // What an earlier batch set aside is looked at again with this one: what it pointed at may have come.
         var incoming = deferred
         for record in records { incoming[record.key] = record }
-        guard await settle(Array(incoming.values), removed: removed, final: false, why: "fetched") else {
+        let ordered = incoming.values.sorted { $0.key < $1.key }
+        guard await settle(ordered, removed: removed, final: false, why: "fetched") else {
             await markRefetch()
             return
         }
@@ -77,7 +78,8 @@ extension SyncCore {
         // none, and because that differs from iCloud's record, the reference is cleared there by the next send.
         if !deferred.isEmpty {
             log("\(deferred.count) set-aside records written; what they point at never came")
-            guard await settle(Array(deferred.values), removed: [], final: true, why: "set aside") else {
+            let aside = deferred.values.sorted { $0.key < $1.key }
+            guard await settle(aside, removed: [], final: true, why: "set aside") else {
                 await markRefetch()
                 return
             }
