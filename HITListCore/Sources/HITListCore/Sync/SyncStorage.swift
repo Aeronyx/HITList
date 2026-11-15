@@ -58,8 +58,9 @@ public struct LedgerEntry: Hashable, Sendable, Codable {
     public var base: SyncRecord?
     /// iCloud's token for the version `base` is (`CloudRecord.system`). Nil with a nil `base`.
     public var system: Data?
-    /// When this device noticed that the item had been deleted here while `base` says iCloud holds it. The time
-    /// the marker will carry; nil otherwise.
+    /// The time of the marker this device still has to send: when it noticed the item was deleted here while
+    /// `base` says iCloud holds it, or (M10) its own deletion when that is later than iCloud's marker in `base`.
+    /// Nil when there is no marker to send, and cleared when the item is here again.
     public var deletedHereAt: Date?
 
     public init(key: SyncKey, base: SyncRecord? = nil, system: Data? = nil, deletedHereAt: Date? = nil) {
