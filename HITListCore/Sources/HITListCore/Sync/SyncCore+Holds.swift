@@ -13,6 +13,9 @@ extension SyncCore {
 
     func enterHold(_ next: SyncHold) async {
         if hold != next {
+            // A failure over a hold the person or the world must lift (its fact stays in the ledger): when the
+            // failure lifts, that hold comes back, not nothing.
+            if !next.persists, let current = hold, current.persists { heldUnder = current }
             hold = next
             holdNote = nil
             log("Held: \(next.words)")
@@ -32,7 +35,8 @@ extension SyncCore {
     /// person confirms); a hold already asking keeps its first moment.
     func holdMassDeletion(_ count: Int, of living: Int, at now: Date) async {
         if case .massDeletion? = hold { return }
-        let seen = massSeenAt ?? now
+        // This moment, never one left from an earlier hold: a relaunch while asking returns above, with its own.
+        let seen = now
         log("\(count) of the \(living) items iCloud holds are missing here: nothing is deleted in iCloud until the person confirms, or they are back")
         var write = LedgerWrite()
         write.facts[Self.massSeenFact] = Data(String(seen.timeIntervalSince1970).utf8)
@@ -63,6 +67,15 @@ extension SyncCore {
     /// first (then its list, which the next compare rebuilds), so everything comes again. Not from inside `handle`
     /// (an account's change has already reset the transport by itself, T12).
     func lift(resetTransport: Bool) async {
+        if let under = heldUnder, hold?.persists == false {
+            // The failure goes; the hold it fell on stays (its fact was never cleared).
+            log("\(hold?.words ?? ""): tried again; still held: \(under.words)")
+            heldUnder = nil
+            hold = under
+            holdNote = nil
+            return
+        }
+        heldUnder = nil
         if refetch, resetTransport {
             // The transport first, then the fact: a crash in between resets it once more, which costs a fetch.
             await transport.reset()
@@ -71,6 +84,7 @@ extension SyncCore {
         var write = LedgerWrite()
         if hold?.persists == true { write.facts.updateValue(nil, forKey: LedgerFact.hold) }
         if case .massDeletion? = hold { write.facts.updateValue(nil, forKey: Self.massSeenFact) }
+        if hold == .noAccount { write.facts.updateValue(nil, forKey: Self.switchFact) }
         if refetch, resetTransport || hold == .noAccount { write.facts.updateValue(nil, forKey: Self.refetchFact) }
         do {
             try await commit(write)
@@ -86,6 +100,16 @@ extension SyncCore {
     /// What a new start lifts: a failure and duplicates are tried again, a full iCloud is tried again (a launch is
     /// a return to the app), and a format this build now reads lets it read.
     func liftForStart() async {
+        // iCloud's format newer than this build's, whether or not the hold's fact reached the ledger.
+        if Self.formatVersion(of: entries[Self.metaKey]?.base) > SyncSchema.formatVersion, hold != .needsUpdate {
+            await enterHold(.needsUpdate)
+            await markRefetch()
+            return
+        }
+        if hold == .noAccount, let next = switchTo {
+            await retrySwitch(to: next)
+            return
+        }
         switch hold {
         case .failed?, .duplicates?, .storageFull?:
             await lift(resetTransport: true)
@@ -115,12 +139,12 @@ extension SyncCore {
             _ = await leaveAccount(reason: .signedOut)
         case .switched(let previous, let current):
             log("iCloud account switched (\(previous) to \(current))")
-            if await leaveAccount(reason: .accountSwitched) { await joinAccount(current) }
+            await switchAccount(to: current)
         case .signedIn(let current):
             log("Signed in to iCloud (\(current))")
             if let account, account != current {
                 // Another account came while the app was not running: as a switch.
-                if await leaveAccount(reason: .accountSwitched) { await joinAccount(current) }
+                await switchAccount(to: current)
             } else if account == nil, !entries.isEmpty {
                 // A memory nobody's account owns: not trusted. Forgotten, every item kept, merged afresh (section 7).
                 do {
@@ -160,20 +184,52 @@ extension SyncCore {
         return true
     }
 
+    /// Another account: the previous one's items leave (after a backup), then this one is joined. If the backup
+    /// fails, the brain stays held with the account it is to join remembered (`switchFact`), and `resume()` or the
+    /// next start tries again: the transport has moved on and will not say it twice.
+    func switchAccount(to current: String) async {
+        if await leaveAccount(reason: .accountSwitched) {
+            await joinAccount(current)
+        } else {
+            var write = LedgerWrite()
+            write.facts[Self.switchFact] = Data(current.utf8)
+            try? await commit(write)
+            switchTo = current
+        }
+    }
+
+    func retrySwitch(to current: String) async {
+        log("Trying the switch to \(current) again")
+        await switchAccount(to: current)
+    }
+
+    /// The account the memory now belongs to, and the sign-in's lift of `noAccount`, in one write: a crash or a
+    /// failure leaves both or neither.
     func joinAccount(_ current: String) async {
+        let lifting = hold == .noAccount || heldUnder == .noAccount
         var write = LedgerWrite()
         write.facts[LedgerFact.account] = Data(current.utf8)
+        write.facts.updateValue(nil, forKey: Self.switchFact)
+        if lifting {
+            write.facts.updateValue(nil, forKey: LedgerFact.hold)
+            // The transport has forgotten its bookmark and its list by now (T12): the next fetch brings everything.
+            write.facts.updateValue(nil, forKey: Self.refetchFact)
+        }
         do {
             try await commit(write)
         } catch {
+            joinTo = current
             await fail("The engine's memory could not be written: \(error)")
             return
         }
-        if hold == .noAccount {
-            // The transport has forgotten its bookmark and its list by now (T12): the next fetch brings everything,
-            // and the compare puts back what is waiting.
-            await lift(resetTransport: false)
+        switchTo = nil
+        joinTo = nil
+        if lifting {
+            log("Hold lifted: signed in")
+            if hold == .noAccount { hold = nil; holdNote = nil }
+            if heldUnder == .noAccount { heldUnder = nil }
         }
+        // The compare puts back what is waiting.
         await compare(nil)
     }
 
@@ -292,5 +348,8 @@ extension SyncCore {
         refetch = false
         waiting = []
         refused = [:]
+        sentAs = [:]
+        massSeenAt = nil
+        switchTo = nil
     }
 }

@@ -53,6 +53,13 @@ public actor SyncCore: SyncTransportDelegate {
     /// When a whole compare first found the items a `massDeletion` hold is about: the time their markers carry if
     /// the person confirms. Kept as a fact with the hold.
     var massSeenAt: Date?
+    /// The account a switch is to join once the previous account's items could be backed up and removed (a backup
+    /// that failed). Kept as a fact.
+    var switchTo: String?
+    /// The hold a failure (`failed`, `duplicates`) fell on, which comes back when the failure lifts.
+    var heldUnder: SyncHold?
+    /// A sign-in whose ledger write failed: joined on `resume()` (the transport will not say it twice).
+    var joinTo: String?
 
     // MARK: Working state, not kept
 
@@ -100,6 +107,7 @@ public actor SyncCore: SyncTransportDelegate {
     /// The ledger's own fact this brain adds (`LedgerFact` names the contract's).
     static let refetchFact = "refetch"
     static let massSeenFact = "massDeletionSeen"
+    static let switchFact = "switchTo"
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
     /// before it is set aside for the next.
@@ -182,7 +190,8 @@ public actor SyncCore: SyncTransportDelegate {
     }
 
     /// Tries again after a hold the app or time can lift: `duplicates` (after the app merged them), `failed`,
-    /// `storageFull`. Everything iCloud brought while held is fetched again. Other holds stay.
+    /// `storageFull`, and an account switch whose backup failed (`noAccount` with the account to join remembered).
+    /// Everything iCloud brought while held is fetched again. Other holds stay.
     public func resume() async {
         await serially {
             guard loaded else { return }
@@ -191,6 +200,15 @@ public actor SyncCore: SyncTransportDelegate {
                 log("Resumed after: \(hold?.words ?? "")")
                 await lift(resetTransport: true)
             default: break
+            }
+            if hold == .noAccount {
+                if let next = switchTo {
+                    // An account switch whose backup failed: tried again.
+                    await retrySwitch(to: next)
+                } else if let next = joinTo {
+                    // A sign-in the ledger could not take: taken again.
+                    await joinAccount(next)
+                }
             }
             await compare(nil)
             publish()
@@ -324,6 +342,7 @@ public actor SyncCore: SyncTransportDelegate {
             case LedgerFact.account: account = value.flatMap { String(data: $0, encoding: .utf8) }
             case LedgerFact.firstFetchDone: firstFetchDone = value != nil
             case Self.refetchFact: refetch = value != nil
+            case Self.switchFact: switchTo = value.map { String(decoding: $0, as: UTF8.self) }
             case Self.massSeenFact:
                 massSeenAt = value.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             default: break
@@ -343,13 +362,20 @@ public actor SyncCore: SyncTransportDelegate {
             let held = try await ledger.fact(LedgerFact.hold)
             let again = try await ledger.fact(Self.refetchFact)
             let seen = try await ledger.fact(Self.massSeenFact)
+            let next = try await ledger.fact(Self.switchFact)
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             waits = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil
             account = owner.flatMap { String(data: $0, encoding: .utf8) }
             refetch = refetch || again != nil
+            switchTo = next.map { String(decoding: $0, as: UTF8.self) }
             massSeenAt = seen.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
-            if let held { hold = try? JSONDecoder().decode(SyncHold.self, from: held) } else if hold?.persists == true { hold = nil }
+            if let held {
+                hold = try? JSONDecoder().decode(SyncHold.self, from: held)
+                heldUnder = nil
+            } else if hold?.persists == true {
+                hold = nil
+            }
             loaded = true
             log("Started: \(entries.count) records remembered, \(waits.count) waiting for an item" +
                 (hold.map { ", held: \($0.words)" } ?? ""))
