@@ -124,8 +124,8 @@ struct SyncWorld {
     /// The latest deletion of the item on any device, and the latest edit or making again.
     var lastDeletion: Int64?
     var lastLife: Int64?
-    /// A deletion was made while another device held the item made again and not yet sent (see
-    /// `testLimitAMakeAgainNotYetSentOutlivesALaterDeletionElsewhere`).
+    /// A deletion was made while another device held the item made again and not yet sent (M12 against a newer
+    /// marker, `testAMakeAgainNotYetSentIsOrderedAgainstALaterDeletionElsewhere`).
     var revivalRace = false
     /// What happened, in order; words only when a test fails (building strings at every step is most of the time a
     /// debug build spends here).
@@ -408,8 +408,8 @@ final class RecordMergePropertyTests: XCTestCase {
     /// Two devices converge: whatever each did and in whatever order they synced, once both have settled against
     /// what iCloud then holds they hold the same record, iCloud holds it, another round sends nothing, and a third
     /// device with no base at all (holding nothing, or the record as it first was) ends with it too. A deletion
-    /// nobody edited or made again after stays a deletion, on every one of them, except where another device held
-    /// the item made again and not yet sent at the time (`testLimitAMakeAgainNotYetSentOutlivesALaterDeletionElsewhere`).
+    /// nobody edited or made again after stays a deletion, on every one of them (a deletion that left no marker,
+    /// `testLimitADeletionOfAnItemNotYetSentLeavesNoMarker`, is not counted).
     func testTwoDevicesConvergeAndDeletionsStay() {
         var failures = 0
         var rounds = [Int](repeating: 0, count: 7)
@@ -440,12 +440,9 @@ final class RecordMergePropertyTests: XCTestCase {
                 }
             }
             if start != .madeOnBoth, let deleted = world.lastDeletion, deleted > (world.lastLife ?? .min) {
-                if world.revivalRace {
-                    races += 1
-                } else {
-                    deletionsChecked += 1
-                    if held != nil { problems.append("deleted at \(deleted), nobody edited after, but it is back") }
-                }
+                deletionsChecked += 1
+                if world.revivalRace { races += 1 }
+                if held != nil { problems.append("deleted at \(deleted), nobody edited after, but it is back") }
             }
             if !problems.isEmpty {
                 failures += 1
@@ -453,7 +450,7 @@ final class RecordMergePropertyTests: XCTestCase {
             }
         }
         print("RecordMergePropertyTests converge: \(merges) merges; worlds settled after 0...6 rounds: \(rounds); "
-              + "deletions that stayed: \(deletionsChecked); left out for a make-again not yet sent: \(races)")
+              + "deletions that stayed: \(deletionsChecked), \(races) of them against a make-again not yet sent")
     }
 
     /// The design's stronger claim (section 9.1): the result is the same whatever order two devices learn of
@@ -507,28 +504,34 @@ final class RecordMergePropertyTests: XCTestCase {
         XCTAssertEqual(final(first: b, second: a)?["title"], .string("Soy milk"))
     }
 
-    /// M12 lets an item made again here stand "whatever its dates", because a make-again (an undo, an import)
-    /// keeps the item's old `updatedAt`. So when another device deletes the item after it was made again here but
-    /// before this device has sent it, the make-again wins and the later deletion is undone (seed
-    /// 12641660605823510791 of the first run). Pinned as the design has it; the fix needs the make-again's own
-    /// moment (the report proposes stamping it).
-    func testLimitAMakeAgainNotYetSentOutlivesALaterDeletionElsewhere() {
+    /// M12 against a newer marker (round 28's decision on brief 138's finding A): an item made again here and not
+    /// yet sent, when another device deletes it afterwards, is ordered by its `updatedAt` as M6. An undo with the
+    /// item's old dates loses to the later deletion (found by seed 12641660605823510791 of the first run, when M12
+    /// let it stand whatever its dates); an undo that moves `updatedAt` (as the app will) after the deletion wins.
+    func testAMakeAgainNotYetSentIsOrderedAgainstALaterDeletionElsewhere() {
         let original = MergeFixture.task(["title": .string("Milk")], updated: 0)
-        var world = SyncWorld(cloud: original, devices: [
-            SyncWorld.Device(local: original, base: original.comparable, lastHeld: original),
-            SyncWorld.Device(local: original, base: original.comparable, lastHeld: original),
-        ])
-        world.now = 1; world.delete(1)
-        world.now = 3; world.sync(1)                  // M8: iCloud holds a marker at 1
-        world.now = 5; world.makeAgain(1)             // undone on device 1, not sent yet
-        world.now = 6; world.delete(0)                // deleted on device 0 after the undo
-        world.now = 7; world.sync(0)                  // M10: a marker at 6
-        world.now = 8; world.sync(1)                  // M12: made again here, whatever its dates
-        world.settle(order: [0, 1])
-        XCTAssertTrue(world.problems.isEmpty, "\(world.problems)")
-        XCTAssertEqual(world.lastDeletion, 6)
-        XCTAssertNotNil(SyncWorld.held(world.cloud), "the deletion at 6, after the undo at 5, is undone")
-        XCTAssertTrue(RecordMerge.same(world.devices[0].local, world.devices[1].local))
+        func run(undoStamped: Bool, undoAt: Int64) -> SyncWorld {
+            var world = SyncWorld(cloud: original, devices: [
+                SyncWorld.Device(local: original, base: original.comparable, lastHeld: original),
+                SyncWorld.Device(local: original, base: original.comparable, lastHeld: original),
+            ])
+            var gen = SyncRecordGenerator(rng: SyncRandom(seed: 2))
+            world.now = 1; world.delete(1)
+            world.now = 3; world.sync(1)                  // M8: iCloud holds a marker at 1
+            world.now = undoAt; world.makeAgain(1)        // undone on device 1, not sent yet
+            if undoStamped { world.edit(1, &gen, touch: true) }
+            world.now = 6; world.delete(0)                // deleted on device 0
+            world.now = 7; world.sync(0)                  // M10: a marker at 6, the later deletion
+            world.now = 8; world.sync(1)                  // M12 against the newer marker
+            world.settle(order: [0, 1])
+            XCTAssertTrue(world.problems.isEmpty, "\(world.problems)")
+            XCTAssertTrue(RecordMerge.same(world.devices[0].local, world.devices[1].local))
+            return world
+        }
+        XCTAssertNil(SyncWorld.held(run(undoStamped: false, undoAt: 5).cloud), "old dates: the deletion at 6 stands")
+        XCTAssertNil(SyncWorld.held(run(undoStamped: true, undoAt: 5).cloud), "undone at 5, deleted at 6: gone")
+        XCTAssertNil(SyncWorld.held(run(undoStamped: true, undoAt: 6).cloud), "the same millisecond: the deletion")
+        XCTAssertNotNil(SyncWorld.held(run(undoStamped: true, undoAt: 9).cloud), "undone at 9 after the deletion")
     }
 
     /// A deletion leaves a marker only when this device last agreed that iCloud holds the item (`deletedHereAt` is

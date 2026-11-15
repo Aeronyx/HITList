@@ -309,15 +309,28 @@ final class RecordMergeTests: XCTestCase {
 
     // MARK: M12, M13: made again
 
-    func testM12MadeAgainHereStandsWhateverItsDates() {
+    func testM12MadeAgainHereStandsWhateverItsDatesAgainstTheMarkerItKnew() {
         // An undo brings the item back with its old `updatedAt`, long before the deletion.
         let local = F.task(["title": .string("Undone")], updated: 1)
         let outcome = F.merge(base: F.marker(at: 40), local: local, server: F.marker(at: 40))
         XCTAssertEqual(outcome.rule, .cameBackHere)
         XCTAssertEqual(outcome.merged, local)
+        var stray = F.marker(at: 40)
+        stray["title"] = .string("left behind")
+        XCTAssertEqual(F.merge(base: F.marker(at: 40), local: local, server: stray).merged, local,
+                       "the same marker, whatever was left on it")
+    }
 
-        let newer = F.merge(base: F.marker(at: 40), local: local, server: F.marker(at: 90))
-        XCTAssertEqual(newer.merged, local, "even against a later deletion there")
+    func testM12AgainstANewerMarkerIsOrderedAsM6() {
+        // Deleted again elsewhere (at 90) since this device agreed on the deletion at 40.
+        for (t, comesBack): (Int64, Bool) in [(1, false), (89, false), (90, false), (91, true)] {
+            let local = F.task(["title": .string("Undone")], updated: t)
+            let outcome = F.merge(base: F.marker(at: 40), local: local, server: F.marker(at: 90))
+            XCTAssertEqual(outcome.rule, .cameBackHere)
+            XCTAssertEqual(outcome.merged, comesBack ? local : F.marker(at: 90), "made again at \(t)")
+        }
+        let older = F.merge(base: F.marker(at: 40), local: F.task(updated: 1), server: F.marker(at: 30))
+        XCTAssertEqual(older.merged, F.task(updated: 1), "a marker older than the one it knew is no news")
     }
 
     func testM12MadeAgainOnBothSidesIsAFirstMeeting() {
@@ -419,10 +432,15 @@ final class RecordMergeTests: XCTestCase {
         let foreign = SyncRecord(type: "Attachment", name: "A1", fields: ["blob": .string("x")])
         XCTAssertEqual(RecordMerge.normal(foreign), foreign)
         let outcome = RecordMerge.merge(MergeInput(base: nil, local: nil, server: foreign, now: F.at(0)))
-        XCTAssertNil(outcome.merged, "nothing is written here and nothing is kept for it")
-        XCTAssertEqual(outcome.rule, .nothing)
+        XCTAssertEqual(outcome.rule, .unknownType, "M0: the caller does nothing")
+        XCTAssertEqual(MergeOutcome.Rule.unknownType.rawValue, "M0")
+        XCTAssertNil(outcome.merged, "the device's record, untouched: it holds none")
         let withBase = RecordMerge.merge(MergeInput(base: foreign, local: nil, server: foreign, now: F.at(0)))
+        XCTAssertEqual(withBase.rule, .unknownType)
         XCTAssertNil(withBase.device)
+        let held = RecordMerge.merge(MergeInput(base: nil, local: foreign, server: nil, now: F.at(0)))
+        XCTAssertEqual(held.merged, foreign)
+        XCTAssertEqual(held.rule, .unknownType)
     }
 
     func testKeysThisBuildDoesNotKnowOnEitherSideAreIgnored() {

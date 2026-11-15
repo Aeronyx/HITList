@@ -29,6 +29,9 @@ public struct MergeInput: Sendable {
 
 public struct MergeOutcome: Equatable, Sendable {
     public enum Rule: String, Sendable, CaseIterable {
+        /// A key whose type this build does not know: `merged` is the device's record untouched, and the caller
+        /// does nothing with it (the brain filters such records out before the merge, `dev/SYNC-ENGINE.md` section 8).
+        case unknownType = "M0"
         case nothing = "M1", newHere = "M2", newThere = "M3", deletedThereUnknownHere = "M4",
              firstMeeting = "M5", firstMeetingDeletedThere = "M6", threeWay = "M7", deletedHere = "M8",
              deletedThere = "M9", deletedBoth = "M10", goneForGood = "M11", cameBackHere = "M12",
@@ -80,11 +83,16 @@ public enum RecordMerge {
         return out
     }
 
+    /// Settles one record (rules M1 to M13). For a key whose type this build does not know the answer is
+    /// `.unknownType` with the device's record untouched: the caller must not act on it (not write, not send, not
+    /// remove), because nothing of such a record is this build's to decide.
     public static func merge(_ input: MergeInput) -> MergeOutcome {
         let base = normal(input.base), local = normal(input.local), server = normal(input.server)
-        guard let key = (local ?? server ?? base)?.key, let type = SyncSchema.type(key.type) else {
-            // Nothing anywhere, or a type this build does not know: leave the device as it is.
-            return MergeOutcome(merged: local, rule: .nothing)
+        guard let key = (local ?? server ?? base)?.key else {
+            return MergeOutcome(merged: nil, rule: .nothing)
+        }
+        guard let type = SyncSchema.type(key.type) else {
+            return MergeOutcome(merged: input.local, rule: .unknownType)
         }
         let deletedHere: Date = input.deletedHereAt ?? input.now
 
@@ -141,9 +149,18 @@ public enum RecordMerge {
 
         case (let base?, let local?, let server?):
             if base.isDeleted {
-                // M12: the device knew it deleted and holds it again: made again here (an undo, an import). It
-                // stands, whatever its dates. If another device made it again too, the two meet for the first time.
-                if server.isDeleted { return MergeOutcome(merged: local, rule: .cameBackHere) }
+                // M12: the device knew it deleted and holds it again: made again here (an undo, an import). Against
+                // the marker this device knew, it stands whatever its dates. Against a newer marker (deleted again
+                // elsewhere since), it is ordered as M6: it stands only if changed after that deletion (the app moves
+                // `updatedAt` when it puts a deleted item back, so an undo beats an older deletion and loses to a
+                // later one). If another device made it again too, the two meet for the first time.
+                if server.isDeleted {
+                    guard isLater(server[SyncSchema.deletedAt], than: base[SyncSchema.deletedAt]) else {
+                        return MergeOutcome(merged: local, rule: .cameBackHere)
+                    }
+                    let revived = (local.updatedAt ?? .distantPast) > (server.deletedAt ?? .distantPast)
+                    return MergeOutcome(merged: revived ? local : server, rule: .cameBackHere)
+                }
                 return MergeOutcome(merged: firstMeeting(type, local: local, server: server), rule: .cameBackHere)
             }
             if server.isDeleted {
