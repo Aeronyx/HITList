@@ -50,7 +50,7 @@ engine: it stays as it was at the moment a device moved over.
 | `SyncTransport` | core (protocol) | The road to iCloud (section 6) |
 | `FakeCloud` | core | A pretend iCloud in memory that keeps the transport's rules, for tests with many devices |
 | `MemoryLocalStore`, `MemoryLedger` | core | The device's side in memory, for tests |
-| `SwiftDataSyncStore` | app | The six models as records, and records written back (`SyncLocalStore`) |
+| `SwiftDataSyncStore` | app | The six models as records, and records written back (`SyncLocalStore`). Reads on contexts of its own, off the main actor; **writes through the app's main context**: SwiftData's main context does not take in a save made by another context, and the person's next save of a row it held would write its old copy back over the engine's (found by session 141) |
 | `SyncLedgerStore` | app | The engine's memory on disk, a small store of its own (`SyncLedger`) |
 | `CloudKitTransport` | app | `SyncTransport` on `CKSyncEngine`; `CKRecord` ↔ `SyncRecord` |
 | `SyncEngine` (wave 2) | app | Wires the parts, the app's life cycle, the switch from the mirror, the bolt |
