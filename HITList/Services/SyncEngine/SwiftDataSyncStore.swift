@@ -127,8 +127,8 @@ actor SwiftDataSyncStore: SyncLocalStore {
     /// person's unsaved edits), and each write's `expected` is checked against them (all before anything changes, so a
     /// write is never checked against another write of the same call). Then every inserted or updated row gets its values (in `SyncSchema.types` order, a task after its
     /// parent), then its references (so a reference to an item the same call inserts is found, whatever the order),
-    /// then the deletions (`context.delete`; SwiftData's own rules then take a task's sub-tasks and clear references to
-    /// what went). One `save()`; when it throws, nothing of the call is in the store (a context of its own is rolled
+    /// then the deletions (`context.delete`, exactly the rows named: a task whose sub-tasks are not all named too
+    /// comes back stale; SwiftData's own rules clear references to what went). One `save()`; when it throws, nothing of the call is in the store (a context of its own is rolled
     /// back; the main context is handled as `apply(_:on:shared:)` says).
     /// A call that changes nothing itself (every write stale, or every value already equal) does not save at all.
     ///
@@ -137,6 +137,15 @@ actor SwiftDataSyncStore: SyncLocalStore {
     static func apply(_ writes: [LocalWrite], in container: ModelContainer,
                       beforeSave: (() throws -> Void)? = nil) throws -> Set<SyncKey> {
         try apply(writes, on: makeContext(container), shared: false, beforeSave: beforeSave)
+    }
+
+    /// Whether every row SwiftData would delete with `task` (its sub-tasks, and theirs) is among `keys`.
+    private static func everySubtask(of task: TaskItem, isNamedIn keys: Set<SyncKey>) -> Bool {
+        for sub in task.subtasks ?? [] {
+            guard keys.contains(SyncSchema.key(SyncSchema.taskItem, id: sub.id)) else { return false }
+            guard everySubtask(of: sub, isNamedIn: keys) else { return false }
+        }
+        return true
     }
 
     /// `apply` on `context`. `shared`: the context is the app's main context, which may hold the person's unsaved
@@ -226,8 +235,19 @@ actor SwiftDataSyncStore: SyncLocalStore {
             if !writeReferences(item.record, to: row, lookup: lookup).isEmpty { changedSomething = true }
         }
 
+        // A deletion removes exactly the rows the writes name (`SyncStorage.swift`; `dev/SYNC-ENGINE.md` section 8;
+        // the review's finding 1). SwiftData's cascade would take a task's sub-tasks with it, among them one the
+        // person made or changed after the deletion happened elsewhere, or has not even saved yet. So a task whose
+        // sub-tasks (as the context holds them now, after this call's own writes moved any out from under it) are
+        // not every one named as a deletion too is not deleted: it comes back stale, and the brain settles each
+        // sub-task first.
+        let named = Set(deletes)
         for key in deletes {
             guard let row = rows[key] else { continue }
+            if let task = row as? TaskItem, !Self.everySubtask(of: task, isNamedIn: named) {
+                stale.insert(key)
+                continue
+            }
             context.delete(row)
             changedSomething = true
         }

@@ -369,12 +369,35 @@ class SwiftDataSyncStoreTests: XCTestCase {
         main.insert(sub)
         try main.save()
         let groupKey = SyncKey(type: "Project", name: group.id.uuidString)
-        _ = try await store.apply([
+        // The review's finding 1: a deletion removes exactly the rows named. The task alone, with a sub-task under
+        // it that no write names: stale, nothing deleted.
+        let alone = try await store.apply([LocalWrite(key: key(parent), expected: try await record(key(parent)), record: nil)])
+        XCTAssertEqual(alone, [key(parent)], "a sub-task no write names would go with it: stale")
+        let still = try await store.records()
+        XCTAssertEqual(still.count, 3, "nothing was deleted")
+        // A sub-task the person has made and not saved yet protects its parent too.
+        let unsaved = TaskItem(title: "Typed a moment ago", project: group)
+        unsaved.parent = parent
+        main.insert(unsaved)
+        let withUnsaved = try await store.apply([
+            LocalWrite(key: key(parent), expected: try await record(key(parent)), record: nil),
+            LocalWrite(key: key(sub), expected: try await record(key(sub)), record: nil),
+        ])
+        XCTAssertTrue(withUnsaved.contains(key(parent)), "the unsaved sub-task is not named: the parent stays")
+        main.delete(unsaved)
+        try main.save()
+        XCTAssertNotNil(try saved(parent.id))
+        // Named, every one: the task and its sub-task go, and the Group.
+        let subStillHere = try saved(sub.id) != nil
+        var writes = [
             LocalWrite(key: key(parent), expected: try await record(key(parent)), record: nil),
             LocalWrite(key: groupKey, expected: try await record(groupKey), record: nil),
-        ])
+        ]
+        if subStillHere { writes.append(LocalWrite(key: key(sub), expected: try await record(key(sub)), record: nil)) }
+        let stale = try await store.apply(writes)
+        XCTAssertEqual(stale, [])
         let left = try await store.records()
-        XCTAssertEqual(left, [], "the sub-task went with its parent (the model's cascade), the Group was deleted")
+        XCTAssertEqual(left, [], "the task and the sub-task named with it went, the Group was deleted")
 
         let h0 = Project(name: "H")
         main.insert(h0)
