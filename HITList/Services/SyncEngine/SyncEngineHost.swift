@@ -20,7 +20,12 @@ final class SyncEngineHost: SyncHost, @unchecked Sendable {
         case accepted(Set<SyncKey>, at: Date)
         /// One plain line from the brain, for the board's log.
         case log(String)
+        /// Everything before it has been handled (`SyncEngine.settle`).
+        case barrier(@Sendable () -> Void)
     }
+
+    /// Puts a barrier on the stream: `reached` runs once everything before it has been handled.
+    func barrier(_ reached: @escaping @Sendable () -> Void) { feed.yield(.barrier(reached)) }
 
     /// Read once, by the engine.
     let events: AsyncStream<Event>

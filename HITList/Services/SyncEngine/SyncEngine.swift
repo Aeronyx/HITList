@@ -48,6 +48,8 @@ final class SyncEngine {
     private struct Hint: Sendable {
         var keys: Set<SyncKey>?
         var serial: Int
+        /// Not a hint: `settle()`'s marker, run when every hint before it has been through the brain.
+        var barrier: (@Sendable () -> Void)? = nil
     }
 
     private static let osLog = Logger(subsystem: "com.trammells.hitlist", category: "sync")
@@ -220,6 +222,17 @@ final class SyncEngine {
         return finished
     }
 
+    /// Returns once everything the brain said before this call has been handled here (posted, re-read), and every save
+    /// hint posted before it has been through the brain. Never waits on time: two markers, one down each stream. For
+    /// the hosted tests, which then know what the engine knows.
+    func settle() async {
+        guard isStarted else { return }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in host.barrier { done.resume() } }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            hints.yield(Hint(keys: nil, serial: 0, barrier: { done.resume() }))
+        }
+    }
+
     /// Quit: the transport stopped (its state written), no event after.
     func stop() async {
         guard isStarted else { return }
@@ -265,6 +278,8 @@ final class SyncEngine {
                 NotificationCenter.default.post(name: .cloudKitExportSucceeded, object: nil)
             case .log(let line):
                 say(line)
+            case .barrier(let reached):
+                reached()
             }
         }
     }
@@ -272,6 +287,7 @@ final class SyncEngine {
     /// Passes the save hints to the brain one at a time, in order.
     private func feedHints() async {
         for await hint in hintStream {
+            if let barrier = hint.barrier { barrier(); continue }
             await core.localChanged(hint.keys)
             hintsDone = max(hintsDone, hint.serial)
             noteQuietIfSo(await core.status)
