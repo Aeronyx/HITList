@@ -422,6 +422,30 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
+    /// Everyday seeds 166, 210, 261: a person took a task out of its Group (not sent yet), then deleted the Group and put
+    /// it back (an undo) before syncing. The base still named the Group, so once it was gone the task waited for it, and
+    /// the undo gave the task its Group back everywhere: the person's change lost. The clearing is remembered now.
+    func testAPersonsUnsentClearingOfAGroupSurvivesTheGroupsDeletionAndUndo() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g, Self.task("T", "task", ["project": .reference("G")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        // Offline, so nothing goes before the undo; the deletion is compared whole (the app's "anything may have
+        // changed"), as a sync's fetch would.
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["project": nil])),
+                        .advance(milliseconds: 10), .act("A", .delete(g.key), hint: .everything),
+                        .advance(milliseconds: 10), .act("A", .put(g), hint: .everything),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "the person took T out of G, on \(device)")
+        }
+        let inCloud = await sim.cloud.record(t)
+        XCTAssertNil(inCloud?.record["project"])
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
     // MARK: M5's amendment: a send with no base whose answer was lost (zone seed 270, memory seed 259)
 
     /// A plays out: A makes T and sends it; iCloud takes it, and A dies before the answer (no base for T on A). B gets

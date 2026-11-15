@@ -22,11 +22,17 @@ extension SyncCore {
         waits[key]?.record.fields ?? [:]
     }
 
+    /// A to-one field the person cleared while the base still points at an item: no reference is waited for there.
+    static let clearedMark = SyncValue.referenceList([])
+
     /// The device's record with every reference it waits for honoured: a set gets the names it waits for, a to-one
     /// gets the one it waits for only while the device's field is empty (a value there is the person's choice).
     static func whole(_ local: SyncRecord?, waiting: [String: SyncValue]) -> SyncRecord? {
         guard var out = local, !waiting.isEmpty else { return local }
+        let type = SyncSchema.type(out.key.type)
         for field in waiting.keys.sorted() {
+            // A to-one's `clearedMark` (an empty list) is a note, not a reference.
+            if case .reference? = type?.fields.first(where: { $0.key == field })?.kind { if case .referenceList? = waiting[field] { continue } }
             switch waiting[field] {
             case .reference?:
                 if out.fields[field] == nil { out.fields[field] = waiting[field] }
@@ -75,8 +81,18 @@ extension SyncCore {
                 guard local.fields[field.key] == nil else { continue }
                 if case .reference(let name)? = current[field.key], !present(SyncKey(type: target, name: name)) {
                     out[field.key] = .reference(name)
-                } else if case .reference(let name)? = base?.fields[field.key], !present(SyncKey(type: target, name: name)) {
-                    out[field.key] = .reference(name)
+                } else if case .reference(let name)? = base?.fields[field.key] {
+                    if present(SyncKey(type: target, name: name)) {
+                        // The base points at an item that is here and the field is empty: the person cleared it.
+                        // Remembered (an empty list, `clearedMark`), so that a deletion of that item here before the
+                        // change went does not bring the old reference back as one waited for (brief 145, everyday
+                        // seeds 166, 210, 261). It ends when the base no longer holds the reference, or a settle.
+                        out[field.key] = Self.clearedMark
+                    } else if current[field.key] == Self.clearedMark {
+                        out[field.key] = Self.clearedMark
+                    } else {
+                        out[field.key] = .reference(name)
+                    }
                 }
             case .references(let target):
                 var names = Set<String>()
