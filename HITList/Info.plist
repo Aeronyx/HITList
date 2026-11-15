@@ -50,7 +50,9 @@
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device.</string>
+	<string>HITList shows your calendar events beside your tasks in Today and Upcoming. It reads them to show them, they stay on this device, and it adds an event only when you choose Add to Calendar.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Add to Calendar puts the task you chose on your calendar as one event. HITList adds nothing else.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 	<key>NSLocationDefaultAccuracyReduced</key>

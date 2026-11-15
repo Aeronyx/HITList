@@ -97,8 +97,10 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         # Shared Tasks (brief 51): lets a CloudKit share link open in HITList and reach the share-acceptance callbacks.
         CKSharingSupported: true
-        # Calendar events beside the tasks (brief 77), off until switched on in Settings → General. Read-only.
-        NSCalendarsFullAccessUsageDescription: "HITList shows your calendar events beside your tasks in Today and Upcoming. It only reads them: it never adds, changes or deletes an event, and they stay on this device."
+        # Calendar events beside the tasks (brief 77), off until switched on in Settings → Calendar (brief 136); Add to
+        # Calendar writes one event when chosen, asking for write-only access while events are off.
+        NSCalendarsFullAccessUsageDescription: "HITList shows your calendar events beside your tasks in Today and Upcoming. It reads them to show them, they stay on this device, and it adds an event only when you choose Add to Calendar."
+        NSCalendarsWriteOnlyAccessUsageDescription: "Add to Calendar puts the task you chose on your calendar as one event. HITList adds nothing else."
         # The companion's local time and sky (briefs 80, 83): asked once at the first launch, on unless switched off in
         # Settings → Extras → Weather. While in use, and approximate only: the prompt offers no precise location.
         NSLocationWhenInUseUsageDescription: "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. It is never stored or shared."
