@@ -266,8 +266,9 @@ public actor FakeCloud {
     // MARK: Tokens
 
     /// What `CloudRecord.system` holds: which zone, which record, which version. No field values: nothing a device
-    /// could use instead of fetching the record.
-    struct Token: Codable, Hashable, Sendable {
+    /// could use instead of fetching the record. Written as one line of text (`fc|zone|type|name|tag`): cheap enough
+    /// for thousands of runs, and a token from anywhere else does not read as one.
+    struct Token: Hashable, Sendable {
         var zone: Int
         var type: String
         var name: String
@@ -281,13 +282,17 @@ public actor FakeCloud {
         }
     }
 
-    static func token(_ data: Data) -> Token? { try? JSONDecoder().decode(Token.self, from: data) }
+    static func token(_ data: Data) -> Token? {
+        let parts = String(decoding: data, as: UTF8.self).split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count >= 5, parts[0] == "fc", let zone = Int(parts[1]), let tag = Int(parts[parts.count - 1]) else {
+            return nil
+        }
+        let name = parts[3..<(parts.count - 1)].joined(separator: "|")
+        return Token(zone: zone, key: SyncKey(type: String(parts[2]), name: name), tag: tag)
+    }
 
     static func system(_ token: Token) -> Data {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        // A struct of four plain fields always encodes.
-        return try! encoder.encode(token)
+        Data("fc|\(token.zone)|\(token.type)|\(token.name)|\(token.tag)".utf8)
     }
 
     // MARK: -

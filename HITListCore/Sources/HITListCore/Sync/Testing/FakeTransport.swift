@@ -97,7 +97,7 @@ public actor FakeTransport: SyncTransport {
 
     /// What the transport keeps between launches, through `SyncTransportState` (CloudKit: the engine's state
     /// serialization). Forgotten with the ledger.
-    struct State: Codable, Equatable, Sendable {
+    struct State: Equatable, Sendable {
         /// The account this state belongs to; nil before the transport first saw one.
         var account: String?
         /// The making of the zone this device knows (`FakeCloud.Zone.incarnation`); nil when it knows none.
@@ -108,6 +108,48 @@ public actor FakeTransport: SyncTransport {
         var pending: [PendingChange] = []
         /// With `echo` off: the version of each record this device saved since it last fetched that record.
         var ownSaves: [String: Int] = [:]
+
+        init() {}
+
+        // Kept as lines of text, one fact per line ("account alice", "save TaskItem 6B1F…"): what the state holds is
+        // readable in a failing test, and a run of thousands of steps does not spend its time in a JSON coder. A
+        // record's type never holds a space; its name is the rest of the line.
+        var data: Data {
+            var lines = ["fake-transport 1"]
+            if let account { lines.append("account \(account)") }
+            if let zone { lines.append("zone \(zone)") }
+            if let bookmark { lines.append("bookmark \(bookmark)") }
+            for change in pending {
+                switch change {
+                case .save(let key): lines.append("save \(key.type) \(key.name)")
+                case .delete(let key): lines.append("delete \(key.type) \(key.name)")
+                }
+            }
+            for name in ownSaves.keys.sorted() { lines.append("own \(ownSaves[name]!) \(name)") }
+            return Data(lines.joined(separator: "\n").utf8)
+        }
+
+        init?(_ data: Data) {
+            let lines = String(decoding: data, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false)
+            guard lines.first == "fake-transport 1" else { return nil }
+            for line in lines.dropFirst() {
+                let parts = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: false).map(String.init)
+                guard parts.count >= 2 else { return nil }
+                switch parts[0] {
+                case "account": account = parts.dropFirst().joined(separator: " ")
+                case "zone": zone = Int(parts[1])
+                case "bookmark": bookmark = Int(parts[1])
+                case "save", "delete":
+                    guard parts.count == 3 else { return nil }
+                    let key = SyncKey(type: parts[1], name: parts[2])
+                    pending.append(parts[0] == "save" ? .save(key) : .delete(key))
+                case "own":
+                    guard parts.count == 3, let tag = Int(parts[1]) else { return nil }
+                    ownSaves[parts[2]] = tag
+                default: return nil
+                }
+            }
+        }
     }
 
     public nonisolated let device: String
@@ -155,7 +197,7 @@ public actor FakeTransport: SyncTransport {
 
     public func start(delegate: any SyncTransportDelegate) async {
         guard !dead else { return }
-        if let data = await store.loadTransportState(), let saved = try? JSONDecoder().decode(State.self, from: data) {
+        if let data = await store.loadTransportState(), let saved = State(data) {
             state = saved
         } else {
             // No state, or one this build cannot read: as `CKSyncEngine` with a nil serialization, a first launch.
@@ -604,9 +646,7 @@ public actor FakeTransport: SyncTransport {
 
     private func persist() async {
         guard !dead else { return }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        await store.saveTransportState(try? encoder.encode(state))
+        await store.saveTransportState(state.data)
     }
 
     private func acquire() async {
