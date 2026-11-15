@@ -5,7 +5,7 @@ briefs, starts Opus 5.5 sessions in worktrees, merges and tests their branches, 
 iPhone simulator, writes the release notes and hands George the release command. Fable 5.1 did this for
 rounds 1–8 (2026-10-26 to 2026-11-04), an Opus 5.5 session for rounds 9–12 and 15, Fable for 13–14; from round 16
 (2026-11-10) a Fable 5.2 chat does it. Read this file first, then `dev/briefs/COMMON.md` (the facts every delegated
-session reads), then the newest queue, `dev/briefs/ROUND-27.md`.
+session reads), then the newest queue, `dev/briefs/ROUND-28.md`, and for anything about sync `dev/SYNC-ENGINE.md`.
 The memory folder under `~/.claude/projects/-Users-user-Desktop-HITList/memory/` is loaded into every
 session in this folder and holds the same rules in shorter form; keep both in step when something changes.
 
@@ -314,6 +314,38 @@ an `NSToolbar` item. Compare two Debug builds on the same `-syncReplay YES` scri
 21% each second the bolt was hollow, the fix 0%. **A side checkout for the old build** (`git worktree add --detach
 build.noindex/<round>/wt-<version> <commit>`, its own `-derivedDataPath`) takes five minutes and makes "before" a
 number.
+
+Lessons from round 28 (the Theme menu put right; HITList's own sync engine begun: a design, a contract in code,
+five sessions, then four agents):
+**"Position him properly" means move the sprite.** Round 27's session answered "Quill is misplaced" by drawing a
+frame bent round the box; George: "I simply wanted you to position Quill properly, not change his Theme menu
+sprite". A brief for a placement says in those words that no drawing changes, and its test pins the frame's rows.
+**A picture of a screen he has not seen reads as a change**: the hand-over showed the Mac's Theme page (creatures
+at the iPhone's size on bigger boxes, as always) and he asked why they had got so small. Say which platform a
+picture is, and look at each platform's version of a screen before sending either.
+**For a system that must not lose data, the first wave's job is to prove the design wrong.** The supervisor wrote
+the design, the contract (types and protocols, compiled, on master) and the merge rules before any session
+started, then gave one session nothing to do but prove them (95 tests, 21,700 generated cases: six holes), one a
+pretend iCloud with a rig and invariants (it found the design losing labels, and a ledger outliving its
+bookmark), one a probe against the real service (it found the mirror importing the engine's records), one the
+SwiftData side (it found the main context never takes in another context's save). Nine corrections to the design
+in ninety minutes, each from evidence, each written into `dev/SYNC-ENGINE.md` and pushed within minutes so the
+others could read it. Build the instruments in the first wave and the product in the second.
+**A contract in code beats a contract in words**: sessions that never spoke built parts that compiled together at
+the first merge. Its owner must answer findings in minutes, or everyone works round a flaw differently.
+**Sessions start only on George's own turn.** A turn begun by a background task or another session's message
+cannot start one (the app refuses, rightly). The second wave ran as agents of this session instead (the Agent
+tool: its own worktree each, Opus 5.5 at the brief's effort, a self-contained prompt that names the brief): they
+commit on their worktree's branch and report where it is; `SendMessage` to an agent's id reaches it at its next
+tool round and it can write to "main"; give them a file in the notes folder to append findings to as well.
+**Stopping a session to hand it a note has a price**: a queued message waits for the session's turn to end, and
+`stop_session` delivers it at once, but a session stopped in the middle of a run against iCloud then had its
+permission check refuse to run it again ("the user stopped it"). Stop a session only between commands that do
+not matter, never during a probe; otherwise let the note wait.
+**A probe against CloudKit Development leaves its record types in Development's schema**, and `release.sh`'s plain
+diff then refused every release. The check now compares only the record types a release syncs through. Until
+Development is reset, nobody presses Deploy Schema Changes for the tasks' container: a deploy carries everything.
+**Reports saved as files are the next wave's interfaces** (`NNN-…/REPORT.md` with signatures in a code block).
 
 Lessons from round 27 (six sessions in an hour, the supervisor's own sync work beside them):
 **a fingerprint in the log settled what a week of guessing had not.** The log names a record by a short hash that
