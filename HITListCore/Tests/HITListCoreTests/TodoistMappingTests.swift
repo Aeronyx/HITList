@@ -141,6 +141,15 @@ final class TodoistMappingTests: XCTestCase {
         XCTAssertEqual(plan.labelsToMake, ["Errands"], "home goes with Pay rent; Bills is there")
     }
 
+    func testTheChoicesCountOnlyWhatWillBeMadeInPlainWords() throws {
+        XCTAssertTrue(try plan().choices.contains("1 heading comes in as a task, the star removed."))
+        let titles = ["Pay rent", "Big picture", "Groceries", "Pick up dry cleaning", "Return library books"]
+        let again = try plan(existing: TodoistExisting(openTasks: titles.map { .init(title: $0, groupName: "Home") }))
+        XCTAssertEqual(again.taskCount, 0)
+        XCTAssertEqual(again.headingCount, 0)
+        XCTAssertEqual(again.choices, ["5 tasks already in HITList are skipped."])
+    }
+
     func testASkippedParentsDatedSubtaskIsMatchedOnItsOwn() throws {
         let plan = try plan(existing: TodoistExisting(openTasks: [.init(title: "Groceries", groupName: "Home")]))
         XCTAssertEqual(plan.skipped.map(\.title), ["Groceries"])

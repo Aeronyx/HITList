@@ -138,12 +138,8 @@ public enum TodoistMapping {
                     if isHeading { title = String(title.dropFirst(2)) }
                     (title, labels) = splitLabels(title)
                     if isHeading { labels = [] }
-                    if let name = section.name, !name.isEmpty, !isHeading {
-                        if options.sectionsAsLabels {
-                            labels.append(name)
-                            if !sectionLabels.contains(name) { sectionLabels.append(name) }
-                        }
-                    }
+                    let sectionName = section.name.flatMap { $0.isEmpty ? nil : $0 }
+                    if let sectionName, !isHeading, options.sectionsAsLabels { labels.append(sectionName) }
                     task.title = TaskLimits.clampedTitle(TaskLimits.singleLine(title))
                     if task.title.isEmpty { task.title = TaskLimits.clampedTitle(TaskLimits.singleLine(source.content)) }
                     if let p = source.priority { task.priority = Priority(clamping: p) }
@@ -203,14 +199,8 @@ public enum TodoistMapping {
                     let assignee = source.responsible.replacingOccurrences(of: #"\s*\(\d+\)$"#, with: "", options: .regularExpression)
                     if !assignee.isEmpty { notes.append("Assigned in Todoist to \(assignee)") }
                     if let under { notes.append("Under: \(under)") }
-                    if isHeading {
-                        notes.append("Heading in Todoist")
-                        plan.headingCount += 1
-                    }
-                    if let name = section.name, !name.isEmpty, !options.sectionsAsLabels {
-                        notes.append("Section in Todoist: \(name)")
-                        sectionsInNotes += 1
-                    }
+                    if isHeading { notes.append("Heading in Todoist") }
+                    if let sectionName, !options.sectionsAsLabels { notes.append("Section in Todoist: \(sectionName)") }
                     task.notes = notes.joined(separator: "\n")
 
                     // Labels: an existing one's spelling, each once.
@@ -233,7 +223,13 @@ public enum TodoistMapping {
                         labelSpelling[key(name)] = name
                         plan.labelsToMake.append(name)
                     }
+                    // Counted for tasks that will be made only.
                     if under != nil { plan.subtasksAsTasks += 1 }
+                    if isHeading { plan.headingCount += 1 }
+                    if let sectionName {
+                        if !options.sectionsAsLabels { sectionsInNotes += 1 }
+                        else if !isHeading, !sectionLabels.contains(sectionName) { sectionLabels.append(sectionName) }
+                    }
                     plan.tasks.append(task)
                     made += 1
                 }
@@ -266,7 +262,7 @@ public enum TodoistMapping {
 
     private static func choices(_ plan: TodoistPlan, sectionLabels: [String], sectionsInNotes: Int) -> [String] {
         var lines: [String] = []
-        for project in plan.projects {
+        for project in plan.projects where project.taskCount > 0 {
             switch project.destination {
             case .inbox: lines.append("\(project.name) goes to your Inbox.")
             case .newGroup(let name): lines.append("\(project.name) becomes a new Group, \(name).")
@@ -275,16 +271,28 @@ public enum TodoistMapping {
         }
         if !sectionLabels.isEmpty { lines.append("Sections become labels: \(sectionLabels.joined(separator: ", ")).") }
         if sectionsInNotes > 0 { lines.append("Sections are kept in the notes of \(count(sectionsInNotes, "task")).") }
-        if plan.checklistLineCount > 0 {
-            lines.append("\(count(plan.checklistLineCount, "sub-task")) with nothing of their own become checklist lines.")
+        let lines1 = plan.checklistLineCount, made = plan.subtasksAsTasks, headings = plan.headingCount
+        if lines1 > 0 {
+            lines.append(lines1 == 1 ? "1 sub-task with nothing of its own becomes a checklist line."
+                                     : "\(lines1) sub-tasks with nothing of their own become checklist lines.")
         }
-        if plan.subtasksAsTasks > 0 {
-            lines.append("\(count(plan.subtasksAsTasks, "sub-task")) with a date, priority or label of their own become tasks, with \"Under:\" in their notes.")
+        if made > 0 {
+            lines.append(made == 1 ? "1 sub-task with a date, priority or label of its own becomes a task, with \"Under:\" in its notes."
+                                   : "\(made) sub-tasks with a date, priority or label of their own become tasks, with \"Under:\" in their notes.")
         }
-        if plan.headingCount > 0 { lines.append("\(count(plan.headingCount, "heading")) come in as tasks, the star removed.") }
+        if headings > 0 {
+            lines.append(headings == 1 ? "1 heading comes in as a task, the star removed."
+                                       : "\(headings) headings come in as tasks, the star removed.")
+        }
         let unread = plan.unreadDates.count
-        if unread > 0 { lines.append("\(count(unread, "date")) HITList could not read: the words are kept in the notes.") }
-        if !plan.skipped.isEmpty { lines.append("\(count(plan.skipped.count, "task")) already in HITList are skipped.") }
+        if unread > 0 {
+            lines.append(unread == 1 ? "1 date HITList could not read: its words are the first line of the task's notes."
+                                     : "\(unread) dates HITList could not read: their words are the first line of each task's notes.")
+        }
+        let skipped = plan.skipped.count
+        if skipped > 0 {
+            lines.append(skipped == 1 ? "1 task already in HITList is skipped." : "\(skipped) tasks already in HITList are skipped.")
+        }
         return lines
     }
 

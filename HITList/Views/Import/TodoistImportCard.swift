@@ -61,6 +61,8 @@ final class TodoistImportModel {
                 self?.phase = .importing(done: done, of: plan.taskCount)
             }
             self.receipt = receipt
+            // As quick add does after it makes a task: reminders (and the badge) follow the store.
+            Task { await NotificationScheduler.reschedule(context: context) }
             message = "Imported \(receipt.summary) from Todoist."
                 + (plan.skipped.isEmpty ? "" : " \(TodoistMapping.count(plan.skipped.count, "task")) already here were skipped.")
         } catch {
@@ -76,11 +78,14 @@ final class TodoistImportModel {
         do {
             let undone = try TodoistImporter.undo(receipt, in: context)
             self.receipt = nil
+            Task { await NotificationScheduler.reschedule(context: context) }
             var parts = [TodoistMapping.count(undone.tasks, "task")]
             if undone.groups > 0 { parts.append(TodoistMapping.count(undone.groups, "Group")) }
             if undone.labels > 0 { parts.append(TodoistMapping.count(undone.labels, "label")) }
             message = "Removed \(parts.joined(separator: ", ")) from the last import."
                 + (undone.kept > 0 ? " \(undone.kept) that now hold something of yours stayed." : "")
+            // A preview still open was planned against the tasks just removed.
+            if plan != nil { try? replan(context: context) }
         } catch {
             message = "Undo failed: \(error.localizedDescription)"
         }
@@ -173,7 +178,7 @@ struct TodoistImportCard: View {
 
     static func destination(_ destination: TodoistPlan.Destination) -> String {
         switch destination {
-        case .inbox: "Inbox"
+        case .inbox: "Your Inbox"
         case .newGroup: "New Group"
         case .existingGroup(let name): "Your Group \(name)"
         }
