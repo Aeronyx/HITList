@@ -62,6 +62,11 @@ public actor SyncCore: SyncTransportDelegate {
     var heldUnder: SyncHold?
     /// A sign-in whose ledger write failed: joined on `resume()` (the transport will not say it twice).
     var joinTo: String?
+    /// What this device last sent for a record it holds no base for, while no answer has come (M5's amendment of
+    /// 2026-11-15, brief 145): kept on disk as one fact per key (`sentFact`), read when iCloud's record arrives, and
+    /// only valid for the memory it was written in (`sentEpoch`, moved on by every forget).
+    var remembered: [SyncKey: SyncRecord] = [:]
+    var sentEpoch = 0
 
     // MARK: Working state, not kept
 
@@ -110,6 +115,8 @@ public actor SyncCore: SyncTransportDelegate {
     static let refetchFact = "refetch"
     static let massSeenFact = "massDeletionSeen"
     static let switchFact = "switchTo"
+    static let epochFact = "sentEpoch"
+    static func sentFact(_ key: SyncKey) -> String { "sentNoBase|\(key)" }
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
     /// before it is set aside for the next.
@@ -345,6 +352,7 @@ public actor SyncCore: SyncTransportDelegate {
             case LedgerFact.firstFetchDone: firstFetchDone = value != nil
             case Self.refetchFact: refetch = value != nil
             case Self.switchFact: switchTo = value.map { String(decoding: $0, as: UTF8.self) }
+            case Self.epochFact: sentEpoch = value.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
             case Self.massSeenFact:
                 massSeenAt = value.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             default: break
@@ -365,6 +373,9 @@ public actor SyncCore: SyncTransportDelegate {
             let again = try await ledger.fact(Self.refetchFact)
             let seen = try await ledger.fact(Self.massSeenFact)
             let next = try await ledger.fact(Self.switchFact)
+            let epoch = try await ledger.fact(Self.epochFact)
+            sentEpoch = epoch.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
+            remembered = [:]
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             waits = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil

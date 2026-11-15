@@ -314,6 +314,9 @@ extension SyncCore {
         let entry = entries[key]
         if let local {
             if let base = entry?.base, !base.isDeleted, RecordMerge.same(local, base) { return nil }
+            // No base: what goes is written down first (M5's amendment, `SyncCore+Sent`), so that an answer that never
+            // comes still leaves this device something to settle iCloud's record against.
+            if entry?.base == nil, !(await rememberSend(local, for: key)) { return nil }
             sentAs[key] = .some(local)
             return OutgoingRecord(record: local, system: entry?.system)
         }

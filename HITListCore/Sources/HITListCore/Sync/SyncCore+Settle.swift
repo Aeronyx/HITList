@@ -166,6 +166,8 @@ extension SyncCore {
             await compare(nil)
             if let hold, hold.stopsFetching { return false }
         }
+        // A record this device sent with no base and heard nothing back for: the base its meeting is settled on.
+        await recallSends(sendCandidates(Array(keys), local: local, server: byKey))
         var settling: [SyncKey: Settling] = [:]
         for key in keys { settling[key] = decide(key, server: byKey[key], local: local[key], now: now) }
         let present: Set<SyncKey>
@@ -272,12 +274,16 @@ extension SyncCore {
                 if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }
         }
+        // A base lands for these: what was remembered of a send with no answer is worth nothing now.
+        let landed = keys.filter { settling[$0]?.server != nil && settling[$0]?.local != nil && !unsettled.contains($0) }
+        forgetSends(landed.sorted(), in: &write)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false
         }
+        for key in landed { remembered[key] = nil }
         if !unsettled.isEmpty { await markRefetch() }
 
         // 3. What each key now waits for, the references that arrived, and the transport's list.
@@ -299,7 +305,13 @@ extension SyncCore {
     /// The rule for one record, on what the device and the ledger hold now. The merge reads the whole record.
     func decide(_ key: SyncKey, server: CloudRecord?, local: SyncRecord?, now: Date) -> Settling {
         let entry = entries[key]
-        let input = MergeInput(base: entry?.base, local: Self.whole(local, waiting: waitsFor(key)),
+        var base = entry?.base
+        if base == nil, local != nil, let server, !server.record.isDeleted, let sent = remembered[key] {
+            // M5's amendment: no base, but this device remembers what it sent and heard no answer: that is the base,
+            // and the two are settled as M7.
+            base = sent
+        }
+        let input = MergeInput(base: base, local: Self.whole(local, waiting: waitsFor(key)),
                                deletedHereAt: entry?.deletedHereAt, server: server?.record, now: now)
         return Settling(key: key, server: server, local: local, outcome: RecordMerge.merge(input))
     }
@@ -463,12 +475,15 @@ extension SyncCore {
             write.upsert.append(LedgerEntry(key: record.key, base: Self.base(record.record), system: record.system))
         }
         write.remove = removed.filter { entries[$0] != nil }
+        // The answer came: a send remembered for want of a base is replaced by the base itself.
+        forgetSends(saved.map(\.key).sorted(), in: &write)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return
         }
+        for record in saved { remembered[record.key] = nil }
         let accepted = Set(saved.map(\.key)).union(removed)
         for key in accepted { refused[key] = nil }
         if !accepted.isEmpty {

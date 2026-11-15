@@ -316,12 +316,16 @@ extension SyncCore {
         }
         write.deferRemove = waits.keys.sorted()
         if !keepFirstFetch { write.facts.updateValue(nil, forKey: LedgerFact.firstFetchDone) }
+        // What was remembered of sends with no answer belongs to the memory forgotten: a new epoch makes it worth
+        // nothing without naming every fact (M5's amendment, `SyncCore+Sent`).
+        write.facts[Self.epochFact] = Data(String(sentEpoch + 1).utf8)
         do {
             try await commit(write)
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false
         }
+        remembered = [:]
         refused = [:]
         sentAs = [:]
         if !keepFirstFetch { waiting = [] }
@@ -385,5 +389,8 @@ extension SyncCore {
         sentAs = [:]
         massSeenAt = nil
         switchTo = nil
+        // A ledger reset takes every fact with it, the remembered sends and their epoch among them.
+        remembered = [:]
+        sentEpoch = 0
     }
 }

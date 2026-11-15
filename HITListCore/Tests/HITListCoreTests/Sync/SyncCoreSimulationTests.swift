@@ -363,6 +363,99 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
+    // MARK: M5's amendment: a send with no base whose answer was lost (zone seed 270, memory seed 259)
+
+    /// A plays out: A makes T and sends it; iCloud takes it, and A dies before the answer (no base for T on A). B gets
+    /// T and changes one field and sends; A changes `field` of T. Then A syncs.
+    func lostAnswer(_ field: String, on b: String) async -> SyncSimulation {
+        var config = SimConfig()
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.sync("A"), .sync("B"),
+                        .act("A", .put(Self.task("T", "first"))), .fault("A", .crash(.beforeSent)), .sync("A"),
+                        .advance(milliseconds: 10), .sync("B"), .act("B", .edit(t, [b: .string("B's")])), .sync("B"),
+                        .advance(milliseconds: 10), .act("A", .edit(t, [field: .string("A's")])), .sync("A"), .sync("B")])
+        return sim
+    }
+
+    /// Before: A's meeting with B's version had no base (M5) and kept the later record whole: B's notes were lost.
+    func testALostAnswerLeavesARememberedSend_anEditOnEachSideOfDifferentFieldsBothSurvive() async {
+        let sim = await lostAnswer("title", on: "notes")
+        for device in ["A", "B"] {
+            let t = await held(sim, device, "T")
+            XCTAssertEqual(t?["title"], .string("A's"), "A's title on \(device)")
+            XCTAssertEqual(t?["notes"], .string("B's"), "B's notes on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+        let fact = try? await sim.device("A")?.ledger.fact(SyncCore.sentFact(SyncKey(type: "TaskItem", name: "T")))
+        XCTAssertNil(fact ?? nil, "forgotten once a base landed")
+    }
+
+    /// The same field changed on both sides: the later change wins (lastWriter), as with a base.
+    func testALostAnswerWithTheSameFieldChangedOnBothSides_theLaterWins() async {
+        let sim = await lostAnswer("title", on: "title")
+        for device in ["A", "B"] {
+            let t = await held(sim, device, "T")
+            XCTAssertEqual(t?["title"], .string("A's"), "A changed it last, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// A remembered send that never reached iCloud: a seeded filter (a fixed key) made on both devices, B's in iCloud
+    /// first, A's save refused (a conflict) and that answer lost. A remembers its own version, which iCloud never took,
+    /// and settles B's against it: iCloud's record wins every field A did not change after its send; a field A changed
+    /// after it is A's. Both devices end with the same record.
+    func testARememberedSendThatNeverReachedIcloudMeetingAnotherDevicesRecord_converges() async {
+        var config = SimConfig()
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        let filter = SyncKey(type: "SavedFilter", name: "SEEDED")
+        func seeded(_ name: String, _ query: String) -> SyncRecord {
+            SyncRecord(key: filter, fields: ["name": .string(name), "query": .string(query)])
+        }
+        await sim.play([.sync("A"), .sync("B"),
+                        .act("B", .put(seeded("Today", "today"))), .sync("B"),
+                        .advance(milliseconds: 10), .act("A", .put(seeded("Today (A)", "today | overdue"))),
+                        .fault("A", .loseNextResponse), .sendByItself("A"),
+                        .advance(milliseconds: 10), .act("A", .edit(filter, ["name": .string("A's later name")])),
+                        .sync("A"), .sync("B"), .sync("A")])
+        let a = await sim.device("A")?.store.record(filter)
+        let b = await sim.device("B")?.store.record(filter)
+        XCTAssertEqual(a, b)
+        XCTAssertEqual(a?["name"], .string("A's later name"), "changed on A after its send")
+        XCTAssertEqual(a?["query"], .string("today"), "iCloud's: A did not change it after the send iCloud never took")
+        let findings = await sim.check()
+        XCTAssertEqual(findings.filter { $0.invariant != .noLostEdit }, [], "I2 does not judge an item made on two devices")
+    }
+
+    /// The remembered record is on disk before the send: the network drops after `recordToSend` answered and before
+    /// the save left, the app is quit and launched again; the next send goes, its answer lands, the fact is forgotten.
+    func testARememberedSendIsWrittenBeforeTheRecordGoes_andForgottenWhenTheAnswerLands() async {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.sync("A"), .act("A", .put(Self.task("T", "first"))),
+                        .fault("A", .dropNetwork(after: 0)), .sendByItself("A")])
+        let fact = try? await sim.device("A")?.ledger.fact(SyncCore.sentFact(t))
+        XCTAssertNotNil(fact ?? nil, "written before the record was handed over")
+        let inCloud = await sim.cloud.record(t)
+        XCTAssertNil(inCloud, "the save never left")
+        await sim.play([.relaunch("A"), .fault("A", .network(up: true)), .sync("A")])
+        let after = try? await sim.device("A")?.ledger.fact(SyncCore.sentFact(t))
+        XCTAssertNil(after ?? nil, "forgotten when the answer landed")
+        let sent = await sim.cloud.record(t)
+        XCTAssertEqual(sent?.record["title"], .string("first"))
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
     // MARK: Long runs, when asked for
 
     func testManySeeds_whenAskedFor() async throws {
