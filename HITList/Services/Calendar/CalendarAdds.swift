@@ -78,9 +78,10 @@ final class CalendarAdds {
             access = await source.requestWriteAccess()
             guard access.canWrite else { return show(.refused) }
         }
-        if addedThisRun[key] != nil || (access.canRead && alreadyThere(draft, calendar: calendar)) {
-            return show(.already)
-        }
+        // Full access reads what the calendar holds now (a copy deleted in Calendar can be added again); write-only
+        // access can't read, so it goes by what this run added.
+        let already = access.canRead ? alreadyThere(draft, calendar: calendar) : addedThisRun[key] != nil
+        if already { return show(.already) }
         do {
             let added = try await Task.detached(priority: .userInitiated) { [target = events.addTarget] in
                 try source.add(draft, calendarID: target)

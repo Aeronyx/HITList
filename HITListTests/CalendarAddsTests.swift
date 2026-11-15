@@ -80,6 +80,16 @@ final class CalendarAddsTests: XCTestCase {
         XCTAssertEqual(source.written.count, 1, "never a second copy")
     }
 
+    func testACopyDeletedInCalendarCanBeAddedAgain() async {
+        let (source, events, adds) = make(access: .fullAccess)
+        await events.setOn(true)
+        await adds.add(taskID: taskID, title: "Call", notes: "", due: date(14, 15), hasTime: true)
+        source.all.removeAll { $0.url != nil }
+        let again = await adds.add(taskID: taskID, title: "Call", notes: "", due: date(14, 15), hasTime: true)
+        XCTAssertTrue(again.canUndo, "full access reads the calendar as it is now")
+        XCTAssertEqual(source.written.count, 2)
+    }
+
     func testAnEventWithTheTasksLinkFromAnEarlierRunCounts() async {
         let (source, events, adds) = make(access: .fullAccess)
         source.all = [CalendarEvent(id: "kept", title: "Call", start: date(14, 10), end: date(14, 10, 30), isAllDay: false,
