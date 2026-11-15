@@ -365,13 +365,9 @@ struct SyncEngineMarks: Hashable {
         [status?.lastFetchEnded, status?.lastSendEnded].compactMap { $0 }.max()
     }
 
-    /// The words of a sync that stopped early, or nil. `SyncStatus.lastError` also carries a refusal for good for as
-    /// long as `refused` is not empty (`SyncCore`: fetch error, send error, a hold's note, then the first refusal's
-    /// "type/name: words"); a refusal is not a sync that keeps trying, so it is told apart here, and only here, until
-    /// core gives it a field of its own (the supervisor's plan after wave 2: swap this function's inside then).
+    /// The words of a sync that stopped early, or nil. A refusal for good is not one: core keeps its words apart
+    /// (`SyncStatus.refusal`, since the simulation's brief), so this is `lastError` as it stands.
     static func syncError(_ status: SyncStatus) -> String? {
-        guard let error = status.lastError else { return nil }
-        if let first = status.refused.first, error.hasPrefix("\(first):") { return nil }
-        return error
+        status.lastError
     }
 }

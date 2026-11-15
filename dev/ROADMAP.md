@@ -5,7 +5,36 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.11 (round 27, 2026-11-14, the evening after 0.9.10's release stopped at Apple's agreement)
+## Now: 0.9.12 (round 28, 2026-11-15, the night 0.9.11 was released)
+
+George, minutes after releasing 0.9.11 (`dev/briefs/ROUND-28.md`): the creatures in the Theme menu had "got so
+small" and Quill looked "like he's melting"; and "If we need to make our own engine for proper cloud sync, let's get
+started. I want it to be professionally built." So this version carries the Theme menu put right, a hole in the
+editors closed, and **HITList's own sync engine, built and switched off**: every device still syncs through
+SwiftData's mirror exactly as in 0.9.11. The design is `dev/SYNC-ENGINE.md`.
+
+| Brief | What | Status |
+|---|---|---|
+| supervisor | The Theme menu: Quill in his own sprite on his corner; the Mac's creatures grow with their boxes | merged, awaiting release |
+| supervisor | The engine's design, the contract in code, the merge rules; the fixes the review found in code nobody owned (the CloudKit transport, the ledger, the SwiftData store, the editors) | merged, awaiting release |
+| 138 `sync-proof` | The merge rules and the contract proven: every rule, 21,700 generated cases; six holes found and closed | merged |
+| 139 `sync-core` | The brain, `SyncCore`: finds what changed by comparing, settles what arrives, holds, the exact status | merged |
+| 140 `sync-fake-cloud` | A pretend iCloud that keeps the real one's rules, every failure on a switch; the simulation's rig; invariants I1 to I9 | merged |
+| 141 `sync-swiftdata` | The six models as records and back; the engine's memory on disk, bound to its store file | merged |
+| 142 `sync-cloudkit` | The transport on `CKSyncEngine`; `CKRecord` both ways; a probe that passes on CloudKit Development | merged |
+| 143 `sync-wire` | The engine in the app behind the switch: life cycle, the mirror's events fed on the engine, the move, two whole devices in hosted tests and by hand | merged, switched off |
+| 144 `sync-status` | The bolt and Settings → iCloud on the engine's own status: exact counts, the holds and their buttons | merged, switched off |
+| 145 `sync-sim` | The brain on the rig: thousands of random histories on several devices, every fault, the invariants held | see the Round 28 record |
+| 146 `sync-review` | An independent review: twenty findings, twelve of them ways to lose data, each proven where it could be | merged; open ones listed in the record |
+
+Next, on George's word (`dev/SYNC-ENGINE.md` section 12): **a container of its own for the engine** (the mirror
+reads every zone of its container, so the engine's records must live where no older build looks; registering one
+is permanent and waits for him); plain or encrypted fields; then the move rehearsed on a copy of real data, his
+devices first, then the friends. Before any of that: the review's open findings (the Round 28 record lists them),
+a push waking the engine proven on a device, and one contract suite run against both the pretend iCloud and
+CloudKit Development, so a rule the two read differently is found by a test and not by a reviewer.
+
+## Before: 0.9.11 (round 27, 2026-11-14, the evening after 0.9.10's release stopped at Apple's agreement; released 2026-11-15)
 
 0.9.10 (round 26: sync's marks from the mirror's own events, no polling, no endless animation) was prepared and
 never uploaded; its work ships in 0.9.11. George's notes on it and on 0.9.9 (`dev/briefs/ROUND-27.md`): the bolt
@@ -22,13 +51,7 @@ Quill's place on his box, the calendar, the app's long name, an import from Todo
 | 136 `calendar` | Settings → Calendar, calendars by account, Google Calendar's way in, an event's card, Add to Calendar | merged, awaiting release |
 | 137 `todoist-import` | Import from Todoist's backup ZIP or a project's CSV: preview, nothing doubled, undo | merged, awaiting release |
 
-Next, on George's word: **a `CKSyncEngine` engine of our own** (he asked: "eventually we do need to write our own
-engine, no?"). HITList would own its records and its list of pending changes, so the bolt would be exact without
-comparing, two devices seeding the same record would meet in one record instead of two, and a record that fails
-would say so at once. It needs new record types in Production (additive), every device's data moved across once
-with the old zone left in place, and two or three rounds: the engine behind a switch on CloudKit Development,
-the move rehearsed on copies, George's devices first, then the friends. Also open: `Deduplicator`'s survivor rule
-ties when two copies share an id and a `createdAt`.
+Open from this round: `Deduplicator`'s survivor rule ties when two copies share an id and a `createdAt`.
 
 ## Before: 0.9.9 (round 25, 2026-11-12, the evening 0.9.8 was held back; released that night)
 

@@ -127,7 +127,7 @@ struct SyncEngineHoldGroup: View {
                 Text(SyncEngineWords.confirmDeletionsMessage)
             }
             .confirmationDialog("Keep them in iCloud?", isPresented: $confirmKeep, titleVisibility: .visible) {
-                Button(SyncEngineWords.resetActionTitle, role: .destructive) { resetLocalCache() }
+                Button("Download them again") { run { try await $0.restore() } }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text(SyncEngineWords.keepMessage)
@@ -198,20 +198,6 @@ struct SyncEngineHoldGroup: View {
                 message = "Nothing changed: \(SyncEngineWords.error(error))"
             }
         }
-    }
-
-    /// "Keep them in iCloud": the device's copy is thrown away and everything comes again from iCloud, as Reset local
-    /// cache does (`ResetLocalCacheGroup`).
-    // TODO(after round 28, wave 2): the brain gets an action of its own for this (forget the engine's memory and
-    // download everything again, no Reset local cache needed; the supervisor's plan). Wire this call site to it then;
-    // the row and its words stay.
-    private func resetLocalCache() {
-        LocalCacheReset.request()
-        #if os(macOS)
-        LocalCacheReset.relaunch { showReopenAlert = true }
-        #else
-        showReopenAlert = true
-        #endif
     }
 }
 
@@ -326,7 +312,7 @@ enum SyncEngineWords {
     }
 
     static let deletedThemSubtitle = "iCloud deletes them too, on every device"
-    static let keepSubtitle = "Downloads everything from iCloud again into a fresh copy here"
+    static let keepSubtitle = "Puts back on this device what iCloud holds; nothing is deleted anywhere"
     static let removeSubtitle = "Saves a backup first, then what came from iCloud leaves this device"
     static let sendAgainSubtitle = "Everything on this device goes back to iCloud"
 
@@ -342,8 +328,8 @@ enum SyncEngineWords {
 
     static let confirmDeletionsMessage = "They are deleted on every device signed in to this iCloud account. "
         + "Everything else stays as it is."
-    static let keepMessage = "HITList resets this device's copy and downloads everything from iCloud again. "
-        + "Changes made here that haven't reached iCloud won't come back."
+    static let keepMessage = "HITList puts back on this device everything iCloud holds, and sync starts again. "
+        + "Nothing is deleted, here or in iCloud."
     static let removeMessage = "HITList saves a backup first (iCloud & data → Backups), then removes what came from "
         + "iCloud from this device. Items made here that iCloud never had are kept."
 
@@ -503,7 +489,7 @@ enum SyncEngineDemo {
         case "refused2":
             let first = refused.first.map { "\($0): too large" }
             return SyncStatus(state: .idle, waiting: 0, firstFetchDone: true, lastFetchEnded: fetched, lastSendEnded: sent,
-                              lastError: first, refused: refused)
+                              refused: refused, refusal: first)
         case "signedout":
             return SyncStatus(state: .held(.noAccount), waiting: 0, firstFetchDone: true, lastFetchEnded: fetched,
                               lastSendEnded: sent)
@@ -519,6 +505,7 @@ enum SyncEngineDemo {
             resume: { note("Try again") },
             answerPurge: { note("Purge answer \($0.rawValue)") },
             confirmDeletions: { note("I deleted them") },
+            restore: { note("Keep them in iCloud") },
             move: { _ in
                 note("Move")
                 throw DemoError()

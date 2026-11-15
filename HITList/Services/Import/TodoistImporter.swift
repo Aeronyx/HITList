@@ -155,6 +155,13 @@ enum TodoistImporter {
     static func undo(_ receipt: Receipt, in context: ModelContext, receiptURL: URL = receiptURL) throws -> Undone {
         var undone = Undone()
         let taskIDs = Set(receipt.taskIDs + receipt.checklistIDs)
+        // On HITList's own sync engine a device that suddenly lacks most of what iCloud holds is stopped and asked
+        // (the mass-deletion hold). The person asked for exactly this, a moment ago, with the counts in front of
+        // them: the app vouches for these, before the save that removes them (round 28, the sync review's finding 12).
+        var vouched = Set(taskIDs.map { SyncSchema.key(SyncSchema.taskItem, id: $0) })
+        vouched.formUnion(receipt.groupIDs.map { SyncSchema.key(SyncSchema.project, id: $0) })
+        vouched.formUnion(receipt.labelIDs.map { SyncSchema.key(SyncSchema.taskLabel, id: $0) })
+        SyncEngine.vouchForDeletions(vouched)
         let tasks = try context.fetch(FetchDescriptor<TaskItem>()).filter { taskIDs.contains($0.id) }
         // Top tasks first: their checklists go with them (cascade); a line moved elsewhere goes on its own.
         for task in tasks where task.parent == nil || !taskIDs.contains(task.parent!.id) {

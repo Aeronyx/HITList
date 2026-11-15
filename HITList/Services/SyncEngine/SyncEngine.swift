@@ -50,6 +50,9 @@ final class SyncEngine {
         var serial: Int
         /// Not a hint: `settle()`'s marker, run when every hint before it has been through the brain.
         var barrier: (@Sendable () -> Void)? = nil
+        /// Not a hint: items the person asked the app to delete in one go (`vouchForDeletions`), told to the brain
+        /// ahead of the hint of the save that deletes them, because it travels down the same stream before it.
+        var vouch: Set<SyncKey>? = nil
     }
 
     private static let osLog = Logger(subsystem: "com.trammells.hitlist", category: "sync")
@@ -137,6 +140,7 @@ final class SyncEngine {
             resume: {},
             answerPurge: { _ in throw SyncCoreError.notStarted },
             confirmDeletions: { throw SyncCoreError.notStarted },
+            restore: { throw SyncCoreError.notStarted },
             move: { engine in try await SyncEngine.move(to: engine, container: container) })
     }
 
@@ -146,7 +150,22 @@ final class SyncEngine {
             resume: { [core] in await core.resume() },
             answerPurge: { [core] choice in try await core.answer(choice) },
             confirmDeletions: { [core] in try await core.confirmDeletions() },
+            restore: { [core] in try await core.restoreFromICloud() },
             move: { [container] engine in try await SyncEngine.move(to: engine, container: container) })
+    }
+
+    /// The app vouches for a deletion the person asked for in one go (Undo last import, a Switchboard deleted with its
+    /// switches): those items do not count toward the mass-deletion hold (`SyncCore.vouchForDeletions`; the review's
+    /// finding 12). Call it BEFORE the save that deletes them: it goes down the same stream as that save's hint, ahead
+    /// of it. Nothing happens on the mirror, where there is no engine.
+    static func vouchForDeletions(_ keys: Set<SyncKey>) {
+        shared?.vouch(keys)
+    }
+
+    /// `vouchForDeletions` on this engine (the app's is `shared`; tests have their own).
+    func vouch(_ keys: Set<SyncKey>) {
+        guard !keys.isEmpty else { return }
+        hints.yield(Hint(keys: nil, serial: 0, vouch: keys))
     }
 
     // MARK: - Life cycle
@@ -309,6 +328,7 @@ final class SyncEngine {
     private func feedHints() async {
         for await hint in hintStream {
             if let barrier = hint.barrier { barrier(); continue }
+            if let vouch = hint.vouch { await core.vouchForDeletions(vouch); continue }
             await core.localChanged(hint.keys)
             hintsDone = max(hintsDone, hint.serial)
             noteQuietIfSo(await core.status)

@@ -23,9 +23,9 @@ final class SyncEngineStatusTests: XCTestCase {
     }
 
     private func idle(waiting: Int = 0, firstFetchDone: Bool = true, lastError: String? = nil,
-                      refused: [SyncKey] = []) -> SyncStatus {
+                      refused: [SyncKey] = [], refusal: String? = nil) -> SyncStatus {
         SyncStatus(state: .idle, waiting: waiting, firstFetchDone: firstFetchDone, lastFetchEnded: ago(5),
-                   lastSendEnded: ago(30), lastError: lastError, refused: refused)
+                   lastSendEnded: ago(30), lastError: lastError, refused: refused, refusal: refusal)
     }
 
     private func held(_ hold: SyncHold, waiting: Int = 0) -> SyncStatus {
@@ -181,14 +181,15 @@ final class SyncEngineStatusTests: XCTestCase {
 
     func testARefusalIsNotASyncThatKeepsTrying() {
         let keys = [SyncKey(type: "TaskItem", name: "A"), SyncKey(type: "TaskItem", name: "B")]
-        let status = idle(lastError: "TaskItem/A: too large", refused: keys)
-        XCTAssertNil(SyncEngineMarks.syncError(status), "the refusal's own words")
+        // Core keeps a refusal's words apart from `lastError` (`SyncStatus.refusal`).
+        let status = idle(refused: keys, refusal: "TaskItem/A: too large")
+        XCTAssertNil(SyncEngineMarks.syncError(status), "a refusal is not an error that keeps trying")
         XCTAssertEqual(words(marks(status, errorSince: ago(600))), "2 items couldn't go to iCloud; Settings → iCloud names them")
         XCTAssertEqual(look(marks(status)), hollow)
         // Another error while items are refused is still an error.
-        let both = idle(lastError: "network unavailable", refused: keys)
+        let both = idle(lastError: "network unavailable", refused: keys, refusal: "TaskItem/A: too large")
         XCTAssertEqual(SyncEngineMarks.syncError(both), "network unavailable")
-        XCTAssertEqual(words(marks(idle(lastError: "TaskItem/A: too large", refused: [keys[0]]))),
+        XCTAssertEqual(words(marks(idle(refused: [keys[0]], refusal: "TaskItem/A: too large"))),
                        "1 item couldn't go to iCloud; Settings → iCloud names it")
     }
 
