@@ -35,9 +35,10 @@ struct AppearanceSettingsSection: View {
 
 /// The themes in two rows of four, each a `ThemeSwatch` with its name under it and, on its own theme's swatch, its
 /// companion (`ThemeCompanion`). (Eight 44 pt swatches in one row are ~490 pt wide, which pushed the whole iPhone sheet
-/// past the screen's edges.) The iPhone's first screen draws it at 44 pt, the Mac's Appearance section at 64 pt with a
-/// hover preview. Laid out on whole points (`ThemeSwatchGrid`), so the 1 pt sprite pixels stay sharp, and each row
-/// keeps just the room its companions need above it.
+/// past the screen's edges.) The iPhone's first screen draws it at 44 pt, the Mac's Appearance section at 66 pt (the
+/// same drawing one and a half times the size, companion and all: `ThemeSwatch.unit`) with a hover preview. Laid out on
+/// whole points (`ThemeSwatchGrid`), so the sprite pixels stay sharp, and each row keeps just the room its companions
+/// need above it.
 struct ThemeSwatchRow: View {
     var selection: ThemePalette
     var palettes: [ThemePalette] = ThemePalette.all
@@ -224,9 +225,11 @@ struct ThemeSwatchButton: View {
     }
 }
 
-/// A rounded square previewing a palette (44 pt by default, 64 on the Mac page): its background, a surface card along
-/// the bottom and an accent dot, on whole points (`Metrics`); the selected one is ringed in its own accent, 3 pt out.
-/// A theme's companion sits on it (`ThemeCompanion`): in front of the ring, and behind the square when it peeks.
+/// A rounded square previewing a palette (44 pt by default, 66 on the Mac page): its background, a surface card along
+/// the bottom and an accent dot, on whole sprite pixels (`Metrics`); the selected one is ringed in its own accent, 3 pt
+/// out. A theme's companion sits on it (`ThemeCompanion`): in front of the ring, and behind the square when it peeks.
+/// A larger swatch is the 44 pt one grown (`unit`), its companion with it (round 28, George on the Mac's page, where
+/// 1 pt creatures sat on 64 pt boxes: "Why did all the creatures in the Theme menu get so small?").
 struct ThemeSwatch: View {
     let palette: ThemePalette
     var isSelected = false
@@ -240,26 +243,35 @@ struct ThemeSwatch: View {
     /// The square with its ring round it: the swatch's whole frame.
     static func outerSide(_ side: CGFloat) -> CGFloat { side + 2 * ringInset }
 
-    /// Where the square's parts are, from its top-left corner, in whole points: the inner card along the bottom and
-    /// the accent dot just above its top edge, right of the middle. The companions sit by these.
+    /// Points per sprite pixel on a swatch `side` across: 1 at 44 pt, 1.5 at the Mac's 66 (three device pixels at 2x).
+    /// Every measure of the square and its companion's seat is worked out at 44 and grown by this.
+    static func unit(_ side: CGFloat) -> CGFloat { side / size }
+
+    /// Where the square's parts are, from its top-left corner: the inner card along the bottom and the accent dot just
+    /// above its top edge, right of the middle, on whole points at 44 pt and grown with the swatch (`unit`). The
+    /// companions sit by these.
     struct Metrics: Equatable {
         let side: CGFloat
         let radius: CGFloat
         let inset: CGFloat
         let cardHeight: CGFloat
         let dot: CGRect
+        /// The border line's width (`ThemeCompanion.floorLine` sprite pixels).
+        let line: CGFloat
 
         init(side: CGFloat) {
             self.side = side
-            let scale: CGFloat = side / ThemeSwatch.size
+            let unit: CGFloat = ThemeSwatch.unit(side)
+            let base: CGFloat = ThemeSwatch.size
             radius = side / 4
-            inset = (4 * scale).rounded()
-            cardHeight = (side * 0.42).rounded()
-            let dotSide: CGFloat = (12 * scale).rounded()
-            let centreX: CGFloat = side / 2 + (8 * scale).rounded()
-            let lift: CGFloat = (2 * scale).rounded()
-            let dotBottom: CGFloat = side - cardHeight - lift
-            dot = CGRect(x: (centreX - dotSide / 2).rounded(), y: dotBottom - dotSide, width: dotSide, height: dotSide)
+            inset = 4 * unit
+            let card: CGFloat = (base * 0.42).rounded()
+            cardHeight = card * unit
+            let dotSide: CGFloat = 12
+            let centreX: CGFloat = base / 2 + 8
+            let dotBottom: CGFloat = base - card - 2
+            dot = CGRect(x: (centreX - dotSide / 2) * unit, y: (dotBottom - dotSide) * unit, width: dotSide * unit, height: dotSide * unit)
+            line = ThemeCompanion.floorLine * unit
         }
 
         /// The inner card's top edge.
@@ -274,7 +286,6 @@ struct ThemeSwatch: View {
             RoundedRectangle(cornerRadius: metrics.radius + Self.ringInset, style: .continuous)
                 .strokeBorder(isSelected ? palette.accent : .clear, lineWidth: 2)
                 .frame(width: outer, height: outer)
-                .mask { ringMask(companion, layout, outer: outer) }
             if let companion, let layout, layout.visibleRows != nil {
                 sprite(companion, layout)
             }
@@ -306,39 +317,7 @@ struct ThemeSwatch: View {
         }
         .frame(width: side, height: side, alignment: .topLeading)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(palette.separator, lineWidth: 1))
-    }
-
-    /// Where the ring is drawn: everywhere, less a point round a companion that lies across its line (Quill over the
-    /// corner, brief 135), so the ring passes behind him instead of under him.
-    private func ringMask(_ character: CompanionCharacter?, _ layout: ThemeCompanion.Layout?, outer: CGFloat) -> some View {
-        let holes: Set<ThemeSwatch.Cell> = {
-            guard let character, let layout, layout.clearsRing else { return [] }
-            return Self.ringHoles(ThemeCompanion.drawnPixels(for: character, layout: layout))
-        }()
-        return Path { path in
-            path.addRect(CGRect(x: 0, y: 0, width: outer, height: outer))
-            for cell in holes {
-                path.addRect(CGRect(x: CGFloat(cell.x) + Self.ringInset, y: CGFloat(cell.y) + Self.ringInset, width: 1, height: 1))
-            }
-        }
-        .fill(style: FillStyle(eoFill: true))
-    }
-
-    /// One point of the swatch, from its square's top-left corner.
-    struct Cell: Hashable {
-        let x: Int
-        let y: Int
-    }
-
-    /// The points the ring leaves out round `pixels`: each pixel and the eight round it.
-    static func ringHoles(_ pixels: [CGRect]) -> Set<Cell> {
-        var out = Set<Cell>()
-        for pixel in pixels {
-            let x = Int(pixel.minX.rounded()), y = Int(pixel.minY.rounded())
-            for dx in -1...1 { for dy in -1...1 { out.insert(Cell(x: x + dx, y: y + dy)) } }
-        }
-        return out
+        .overlay(shape.strokeBorder(palette.separator, lineWidth: metrics.line))
     }
 
     private func sprite(_ character: CompanionCharacter, _ layout: ThemeCompanion.Layout) -> some View {

@@ -1,8 +1,8 @@
 import SwiftUI
 import HITListCore
 
-/// Settings → Appearance on the Mac: the themes as 64 pt swatches (ringed in their own accent, each with its own
-/// companion) in two rows of four, a live preview card, Reduce effects and Compact rows. Picking a theme applies at
+/// Settings → Appearance on the Mac: the themes as 66 pt swatches (the iPhone's 44 pt swatch one and a half times the
+/// size, its companion grown with it; ringed in their own accent) in two rows of four, a live preview card, Reduce effects and Compact rows. Picking a theme applies at
 /// once to the whole window (`ThemeStore`); hovering a swatch previews it in the card first.
 struct MacAppearanceSection: View {
     @AppStorage(Preferences.reduceEffects, store: AppGroup.defaults) private var reduceEffects = false
@@ -11,7 +11,9 @@ struct MacAppearanceSection: View {
     @State private var hovered: ThemePalette?
     private let store = ThemeStore.shared
 
-    static let swatchSide: CGFloat = 64
+    /// One and a half times the iPhone's swatch: its companion's pixels are three device pixels at 2x (round 28; 64 pt
+    /// boxes with 1 pt creatures on them looked empty).
+    static let swatchSide: CGFloat = 66
 
     var body: some View {
         let shown = hovered ?? store.palette

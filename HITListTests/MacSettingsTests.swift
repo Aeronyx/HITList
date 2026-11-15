@@ -227,7 +227,7 @@ final class MacSettingsTests: XCTestCase {
     // MARK: Appearance
 
     func testAppearanceSwatchesAndCompactRowsKey() {
-        XCTAssertEqual(MacAppearanceSection.swatchSide, 64, "larger, for its companion (brief 86)")
+        XCTAssertEqual(MacAppearanceSection.swatchSide, 66, "the iPhone's swatch one and a half times the size, companion and all (round 28)")
         XCTAssertEqual(ThemeSwatch.size, 44, "the iPhone sheet keeps its 44 pt swatches")
         XCTAssertEqual(Preferences.compactRows, "pref.compactRows")
         XCTAssertFalse(Preferences.compactRowsDefault)

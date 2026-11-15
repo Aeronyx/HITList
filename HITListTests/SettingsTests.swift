@@ -522,7 +522,7 @@ final class SettingsTidyTests: XCTestCase {
     }
 
     func testEveryCompanionSitsOnItsSwatchOnWholePoints() {
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             let metrics = ThemeSwatch.Metrics(side: side)
             XCTAssertEqual(metrics.cardTop, metrics.cardTop.rounded(), "the card's edge on a whole point")
             XCTAssertEqual(metrics.dot.minX, metrics.dot.minX.rounded())
@@ -543,6 +543,7 @@ final class SettingsTidyTests: XCTestCase {
                     switch placement {
                     case .overCorner:
                         // Over the corner the box places it (`cornerFit`, on whole points); Quill's own test says where.
+                        XCTAssertEqual(layout.frame, character.posture(.plus).asleep.rest, "\(label): its own pose, asleep")
                         XCTAssertLessThanOrEqual(right, side + CGFloat(character.width), label)
                     case .inAir:
                         XCTAssertEqual(left, -5, "\(label): 5 pt past the left edge")
@@ -553,10 +554,7 @@ final class SettingsTidyTests: XCTestCase {
                     let seatY = layout.origin.y + CGFloat(character.seatRow)
                     switch placement {
                     case .onCard: XCTAssertEqual(seatY, metrics.cardTop, "\(label): legs over the card's edge")
-                    case .onTop: XCTAssertEqual(seatY, 0, "\(label): on the top edge")
-                    case .overCorner:
-                        let lie = ThemeCompanion.lieRow(character.rows(layout.frame) ?? [], width: character.width)
-                        XCTAssertEqual(layout.origin.y + CGFloat(lie), 0, "\(label): lying on the top edge")
+                    case .onTop, .overCorner: XCTAssertEqual(seatY, 0, "\(label): on the top edge")
                     case .onFloor, .onFloorRight:
                         XCTAssertEqual(seatY, side - ThemeCompanion.floorLine, "\(label): feet on the floor")
                     case .asleepOnDot: XCTAssertEqual(seatY, metrics.dot.minY, "\(label): on the dot")
@@ -579,7 +577,7 @@ final class SettingsTidyTests: XCTestCase {
 
     func testTheCompanionsSitTheirOwnWayAndANewOneGetsTheDefault() {
         XCTAssertEqual(ThemeCompanion.seats["nod"]?.placement, .onCard)
-        XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .overCorner, "round 25: slumping off the top right corner; round 27: sliding off it")
+        XCTAssertEqual(ThemeCompanion.seats["quill"]?.placement, .overCorner, "round 25: slumping off the top right corner")
         XCTAssertEqual(ThemeCompanion.seats["hush"]?.placement, .peeking)
         XCTAssertEqual(ThemeCompanion.seats["flint"]?.placement, .inAir, "round 25: flying at the middle left")
         XCTAssertEqual(ThemeCompanion.seats["tuck"]?.placement, .onFloor, "round 25: on the floor, in the middle")
@@ -692,7 +690,7 @@ final class SettingsTidyTests: XCTestCase {
         let button = try XCTUnwrap(CompanionCharacter.named("button"))
         XCTAssertEqual(ThemeCompanion.seat(for: button), ThemeCompanion.Seat(placement: .onFloor, along: 0.34),
                        "where George saw him in 0.9.8")
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             assertStandsInside(button, side: side)
             XCTAssertEqual(ThemeCompanion.layout(for: button, seat: ThemeCompanion.seat(for: button), side: side).frame,
                            button.plus.awake.rest)
@@ -704,7 +702,7 @@ final class SettingsTidyTests: XCTestCase {
     func testTuckStandsInTheMiddleOfHisFloor() throws {
         let tuck = try XCTUnwrap(CompanionCharacter.named("tuck"))
         XCTAssertEqual(ThemeCompanion.seat(for: tuck).along, 0.5)
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             assertStandsInside(tuck, side: side)
             let pixels = ThemeCompanion.drawnPixels(for: tuck, layout: ThemeCompanion.layout(for: tuck, seat: ThemeCompanion.seat(for: tuck), side: side))
             let left: CGFloat = pixels.map(\.minX).min() ?? 0
@@ -759,7 +757,7 @@ final class SettingsTidyTests: XCTestCase {
         let glim = try XCTUnwrap(CompanionCharacter.named("glim"))
         let name = try XCTUnwrap(ThemePalette.all.first { CompanionCast.byTheme[$0.id] == "glim" }).name
         XCTAssertEqual(name, "Tokyo Night")
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             assertStandsInside(glim, side: side)
             let layout = ThemeCompanion.layout(for: glim, seat: ThemeCompanion.seat(for: glim), side: side)
             XCTAssertEqual(layout.frame, glim.plus.awake.rest)
@@ -787,70 +785,117 @@ final class SettingsTidyTests: XCTestCase {
 
     /// George, round 25: "Have Quill asleep and almost falling/slumping off the top right corner"; round 27: "Quill is
     /// misplaced in Theme menu on iOS" (0.9.9 laid him 7 pt past the edge over the continuous corner's empty air, his
-    /// hindquarters hanging beside the box: he hovered). Now asleep on the corner and sliding off it, in his swatch frame
-    /// (`drape`'s asleep head, pixel for pixel, raised to the top rows): his head on the flat of the top edge, his belly
-    /// along the curve and a leg and his tail down the right side, nowhere more than a point off the box nor far into its
-    /// face; the selection ring gives way round him; clear of Moss's box and of the names.
-    func testQuillSleepsSlidingOffTheTopRightCorner() throws {
+    /// hindquarters hanging beside the box: he hovered); round 28, on 0.9.11's frame drawn to bend with the corner: "why
+    /// does Quill look like he's melting … I simply wanted you to position Quill properly, not change his Theme menu
+    /// sprite". So: his own pose asleep on the "+" (`drape`), every pixel of it, his seat row on the top edge, as far
+    /// right as his underside stays within a sprite pixel of the box where the corner falls away: his head and body on
+    /// the edge, his hindquarters over the corner, nothing of him hanging in the air beside the box; clear of Moss's box
+    /// and of the names. He has no frame drawn for the swatch.
+    func testQuillSleepsSlumpedOverTheTopRightCornerInHisOwnPose() throws {
         let quill = try XCTUnwrap(CompanionCharacter.named("quill"))
         let seat = ThemeCompanion.seat(for: quill)
         XCTAssertEqual(seat.placement, .overCorner)
-        let frame = try XCTUnwrap(quill.rows(ThemeCompanion.cornerFrame), "his swatch frame")
-        let drape = try XCTUnwrap(quill.rows(quill.plus.asleep.rest))
-        let lie = ThemeCompanion.lieRow(frame, width: quill.width)
-        XCTAssertEqual(lie, 8, "what lies: his head and front paws, rows 0 to 7")
-        for row in 0..<lie {
-            XCTAssertEqual(String(frame[row].prefix(10)), String(drape[row + quill.seatRow - lie].prefix(10)), "drape's face, row \(row)")
+        XCTAssertEqual(quill.plus.asleep.rest, "drape")
+        XCTAssertFalse(quill.frames.contains { $0.name.contains("swatch") }, "no frame of his is drawn for the swatch alone")
+        let frame = try XCTUnwrap(quill.rows("drape"))
+        // The pose George has seen since 0.9.6, pixel for pixel.
+        XCTAssertEqual(frame, [
+            "....................",
+            "....................",
+            "............mll.....",
+            "...........mllll....",
+            "...........ad.lll...",
+            "...........a...ldd..",
+            "...............llm..",
+            "..........lll..llm..",
+            ".ll....ll.lmmllllm..",
+            "ldll..ldllmmdmdllm..",
+            "lmmmmmmmmdmmdmdmlmm.",
+            "mmmmmmmmmmdmmmdmmlmd",
+            "mddmmmddmmdmmmmmmlmd",
+            "mmmmdmmmmdmmmmmmmmmd",
+            ".mmlllmmdmmmmmmmmmmd",
+            "..llllddddddmmmmmmd.",
+            ".........ddddddmmmd.",
+            "..............dddmd.",
+            "................ddd.",
+            ".................dd.",
+        ])
+        let side = ThemeSwatch.size
+        let layout = ThemeCompanion.layout(for: quill, seat: seat, side: side)
+        XCTAssertEqual(layout.frame, "drape", "asleep, as on the \"+\"")
+        XCTAssertEqual(layout.origin.y + CGFloat(quill.seatRow), 0, "his seat row on the top edge")
+        let pixels = ThemeCompanion.drawnPixels(for: quill, layout: layout)
+        let face = ThemeCompanion.face(side: side)
+        // His head and body on the flat: where the edge has fallen less than half a point, every column from his
+        // chin on lies on it.
+        let flat = Set(pixels.map(\.minX)).filter { x in
+            x >= layout.origin.x + 2 && x + 1 <= side && face.contains(CGPoint(x: x + 0.5, y: 0.5))
         }
-        XCTAssertEqual(frame.count, quill.height)
-        XCTAssertTrue(frame.allSatisfy { $0.count == quill.width })
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
-            let layout = ThemeCompanion.layout(for: quill, seat: seat, side: side)
-            XCTAssertEqual(layout.frame, ThemeCompanion.cornerFrame, "\(side): asleep, sliding off")
-            XCTAssertTrue(layout.clearsRing, "\(side): the ring gives way round him")
-            XCTAssertEqual(layout.origin.y + CGFloat(lie), 0, "\(side): lying on the top edge")
-            let pixels = ThemeCompanion.drawnPixels(for: quill, layout: layout)
-            let face = ThemeCompanion.face(side: side)
-            // His head on the flat: where the edge has fallen less than half a point, every column after his chin on it.
-            let flat = Set(pixels.map(\.minX)).filter { x in
-                x >= layout.origin.x + 2 && x + 1 <= side && face.contains(CGPoint(x: x + 0.5, y: 0.5))
-            }
-            XCTAssertGreaterThanOrEqual(flat.count, 5, "\(side): his head and front on the flat")
-            for x in flat {
-                XCTAssertEqual(pixels.filter { $0.minX == x }.map(\.maxY).max(), 0, "\(side): column \(x) lies on the edge")
-            }
-            // The rest follows the box: under each column over the curve, and beside the right side, within a point.
-            let gaps = ThemeCompanion.cornerGaps(frame, origin: layout.origin, side: side)
-            print("QUILL-CORNER \(side): x \(layout.origin.x), gaps \(gaps.sorted().map { ($0 * 100).rounded() / 100 })")
-            XCTAssertGreaterThanOrEqual(gaps.count, 8, "\(side): along the curve and down the side")
-            XCTAssertLessThanOrEqual(gaps.max() ?? 99, ThemeCompanion.cornerGap + ThemeCompanion.cornerSlack, "\(side): touching the box")
-            // In front of the corner a little: a point on the iPhone, three on the Mac's wider curve (his leg hangs over its
-            // face): no pixel's middle that deep inside the face.
-            let depth: CGFloat = side == ThemeSwatch.size ? 1 : 3
-            let deep = RoundedRectangle(cornerRadius: ThemeSwatch.Metrics(side: side).radius - depth, style: .continuous)
-                .path(in: CGRect(x: depth, y: depth, width: side - 2 * depth, height: side - 2 * depth))
-            XCTAssertFalse(pixels.contains { deep.contains(CGPoint(x: $0.midX, y: $0.midY)) }, "\(side): not sunk into the box")
-            // Something hangs down the right side, against it.
-            let hanging = pixels.filter { $0.minY >= ThemeSwatch.Metrics(side: side).radius / 2 }
-            XCTAssertFalse(hanging.isEmpty, "\(side): a leg and a tail down the side")
-            XCTAssertLessThanOrEqual(hanging.map(\.minX).min() ?? 0, side, "\(side): against the right side")
-            // Clear of the ring: no pixel of him on its line as drawn, a point between.
-            let holes = ThemeSwatch.ringHoles(pixels)
+        XCTAssertGreaterThanOrEqual(flat.count, 5, "his head and front on the flat")
+        for x in flat {
+            XCTAssertGreaterThanOrEqual(pixels.filter { $0.minX == x }.map(\.maxY).max() ?? -9, 0, "column \(x) lies on the edge")
+        }
+        // His underside is on the box or within a sprite pixel of it, every column of it that reaches the seat line:
+        // he doesn't hover, and nothing of him hangs in the air beside the box.
+        let gaps = ThemeCompanion.cornerGaps(frame, seatRow: quill.seatRow, origin: layout.origin, side: side)
+        print("QUILL-CORNER \(side): x \(layout.origin.x), gaps \(gaps.sorted().map { ($0 * 100).rounded() / 100 })")
+        XCTAssertGreaterThanOrEqual(gaps.count, 15, "his whole underside")
+        XCTAssertLessThanOrEqual(gaps.max() ?? 99, ThemeCompanion.cornerGap + ThemeCompanion.cornerSlack, "touching the box")
+        // What hangs below his seat row hangs over the corner, where the edge falls away.
+        let hanging = pixels.filter { $0.minY >= 0 }
+        XCTAssertFalse(hanging.isEmpty, "his hindquarters hang")
+        XCTAssertGreaterThan(hanging.map(\.maxX).max() ?? 0, side - ThemeSwatch.Metrics(side: side).radius / 2, "over the corner")
+        XCTAssertLessThanOrEqual(hanging.map(\.maxX).max() ?? 99, side, "not beside the box")
+        // Clear of Moss's box (half the grid's gap past his ring at most) and of the names under his box.
+        XCTAssertLessThanOrEqual((pixels.map(\.maxX).max() ?? 0) - side - ThemeSwatch.ringInset, HITSpacing.s / 2)
+        XCTAssertLessThan(pixels.map(\.maxY).max() ?? 0, side / 2, "far above the names")
+        XCTAssertEqual(layout.origin.x, ThemeCompanion.cornerFit(frame, seatRow: quill.seatRow, side: side, y: layout.origin.y))
+        // A point further right and he would hang in the air somewhere.
+        let further = ThemeCompanion.cornerGaps(frame, seatRow: quill.seatRow, origin: CGPoint(x: layout.origin.x + 1, y: layout.origin.y), side: side)
+        XCTAssertGreaterThan(further.max() ?? 0, ThemeCompanion.cornerGap + ThemeCompanion.cornerSlack, "as far right as he touches")
+        XCTAssertEqual(layout.origin.x, 25, "where the pictures show him (0.9.9: 31, in the air)")
+    }
+
+    /// Round 28 (George, on the Mac's Theme page, where 1 pt creatures sat on 64 pt boxes: "Why did all the creatures in
+    /// the Theme menu get so small?"): the Mac's swatch is the iPhone's one and a half times the size, the companion
+    /// with it. Every measure of the box and every seat is the iPhone's times 1.5, on whole device pixels at 2x.
+    func testTheMacsSwatchIsTheIPhonesGrownWithItsCompanion() {
+        let small = ThemeSwatch.size, large = MacAppearanceSection.swatchSide
+        XCTAssertEqual(small, 44)
+        XCTAssertEqual(large, 66)
+        XCTAssertEqual(ThemeSwatch.unit(small), 1, "a point a sprite pixel on the iPhone, as since 0.9.3")
+        XCTAssertEqual(ThemeSwatch.unit(large), 1.5, "three device pixels on the Mac")
+        let a = ThemeSwatch.Metrics(side: small), b = ThemeSwatch.Metrics(side: large)
+        XCTAssertEqual(b.radius, a.radius * 1.5)
+        XCTAssertEqual(b.inset, a.inset * 1.5)
+        XCTAssertEqual(b.cardHeight, a.cardHeight * 1.5)
+        XCTAssertEqual(b.cardTop, a.cardTop * 1.5)
+        XCTAssertEqual(b.line, a.line * 1.5)
+        XCTAssertEqual(b.dot, CGRect(x: a.dot.minX * 1.5, y: a.dot.minY * 1.5, width: a.dot.width * 1.5, height: a.dot.height * 1.5))
+        XCTAssertEqual([a.inset, a.cardHeight, a.dot.minX, a.dot.minY, a.dot.width], [4, 18, 24, 12, 12], "the iPhone's swatch as it was")
+        for character in CompanionCharacter.all {
+            let seat = ThemeCompanion.seat(for: character)
+            let phone = ThemeCompanion.layout(for: character, seat: seat, side: small)
+            let mac = ThemeCompanion.layout(for: character, seat: seat, side: large)
+            XCTAssertEqual(phone, ThemeCompanion.unitLayout(for: character, seat: seat), character.id)
+            XCTAssertEqual(phone.pixel, 1, character.id)
+            XCTAssertEqual(mac.pixel, 1.5, character.id)
+            XCTAssertEqual(mac.frame, phone.frame, character.id)
+            XCTAssertEqual(mac.mirrored, phone.mirrored, character.id)
+            XCTAssertEqual(mac.visibleRows, phone.visibleRows, character.id)
+            XCTAssertEqual(mac.origin, CGPoint(x: phone.origin.x * 1.5, y: phone.origin.y * 1.5), character.id)
+            XCTAssertEqual(mac.rise, phone.rise * 1.5, character.id)
+            let pixels = ThemeCompanion.drawnPixels(for: character, layout: mac)
+            XCTAssertEqual(pixels.count, ThemeCompanion.drawnPixels(for: character, layout: phone).count, character.id)
             for pixel in pixels {
-                for dx in -1...1 {
-                    for dy in -1...1 {
-                        XCTAssertTrue(holes.contains(ThemeSwatch.Cell(x: Int(pixel.minX) + dx, y: Int(pixel.minY) + dy)))
-                    }
-                }
+                XCTAssertEqual(pixel.width, 1.5, character.id)
+                XCTAssertEqual((pixel.minX * 2).rounded(), pixel.minX * 2, "\(character.id): on a whole device pixel at 2x")
+                XCTAssertEqual((pixel.minY * 2).rounded(), pixel.minY * 2, "\(character.id): on a whole device pixel at 2x")
             }
-            // Clear of Moss's box (half the grid's gap past his ring at most) and of the names under his box.
-            XCTAssertLessThanOrEqual((pixels.map(\.maxX).max() ?? 0) - side - ThemeSwatch.ringInset, HITSpacing.s / 2)
-            XCTAssertLessThan(pixels.map(\.maxY).max() ?? 0, side / 2, "\(side): far above the names")
-            XCTAssertEqual(layout.origin.x, ThemeCompanion.cornerFit(frame, side: side, y: layout.origin.y))
-            // A point further right and he would lie off the box somewhere.
-            let further = ThemeCompanion.cornerGaps(frame, origin: CGPoint(x: layout.origin.x + 1, y: layout.origin.y), side: side)
-            XCTAssertGreaterThan(further.max() ?? 0, ThemeCompanion.cornerGap + ThemeCompanion.cornerSlack, "\(side): as far right as he touches")
-            XCTAssertEqual(layout.origin.x, side == ThemeSwatch.size ? 27 : 43, "\(side): where the pictures show him")
+            // As much of its box as on the iPhone.
+            let share: (ThemeCompanion.Layout, CGFloat) -> CGFloat = { layout, side in CGFloat(character.width) * layout.pixel / side }
+            XCTAssertEqual(share(mac, large), share(phone, small), accuracy: 0.001, character.id)
         }
     }
 
@@ -862,7 +907,7 @@ final class SettingsTidyTests: XCTestCase {
         let seat = ThemeCompanion.seat(for: flint)
         XCTAssertEqual(seat.placement, .inAir)
         XCTAssertTrue(seat.mirrored, "his head on the right: facing into the box")
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             let layout = ThemeCompanion.layout(for: flint, seat: seat, side: side)
             XCTAssertEqual(layout.frame, flint.rows(ThemeCompanion.flyFrame) == nil ? flint.plus.awake.rest : ThemeCompanion.flyFrame)
             XCTAssertEqual(layout.rise, 0, "\(side): the row keeps its height")
@@ -888,22 +933,21 @@ final class SettingsTidyTests: XCTestCase {
         }
     }
 
-    /// The room each row of the grid keeps above it: 5 pt over the first row (Quill's ears since round 27, lying on the
-    /// top edge: 11 when he lay higher in `drape`), 4 over the second (Hush), so the first screen never grows.
+    /// The room each row of the grid keeps above it: 11 pt over the first row (the tip of Quill's tail, asleep in `drape`
+    /// on the top edge, as in 0.9.9), 4 over the second (Hush), so the first screen never grows.
     func testTheGridsRowsKeepTheirHeight() {
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             let rises = ThemePalette.all.map { ThemeCompanion.rise(for: $0, side: side) }
-            XCTAssertEqual(rises.prefix(4).max(), 5, "\(side): above the first row")
+            XCTAssertEqual(rises.prefix(4).max(), 11, "\(side): above the first row")
             XCTAssertEqual(rises.suffix(4).max(), 4, "\(side): above the second row")
         }
     }
 
     /// Where they reach out of their boxes: nothing over the accent dot's centre, the selection ring in sight (a seat
-    /// covers at most a sixth of it: Quill along the top covered 12% in 0.9.8; lying across its line over the corner, where it
-    /// gives way round him, a quarter), and what reaches past the ring sideways
+    /// covers at most a sixth of it: Quill along the top covered 12% in 0.9.8), and what reaches past the ring sideways
     /// fits half the gap between two cells (the grid's spacing), so neighbours never meet however narrow the cells.
     func testTheDotTheRingAndTheGapsStayClear() {
-        for side in [ThemeSwatch.size, MacAppearanceSection.swatchSide] {
+        for side in [ThemeSwatch.size] {
             let metrics = ThemeSwatch.Metrics(side: side)
             let centre = CGPoint(x: metrics.dot.midX, y: metrics.dot.midY)
             let r: CGFloat = metrics.radius
@@ -924,14 +968,9 @@ final class SettingsTidyTests: XCTestCase {
                 let pixels = ThemeCompanion.drawnPixels(for: character, layout: layout)
                 let label = "\(character.name) at \(side)"
                 XCTAssertFalse(pixels.contains { $0.contains(centre) }, "\(label): over the accent dot's centre")
-                // What it covers, and where the ring gives way round it (Quill over the corner).
-                let holes = layout.clearsRing ? ThemeSwatch.ringHoles(pixels) : []
-                let covered = ring.filter { point in
-                    pixels.contains { $0.contains(point) }
-                        || holes.contains(ThemeSwatch.Cell(x: Int(point.x.rounded(.down)), y: Int(point.y.rounded(.down))))
-                }.count
+                let covered = ring.filter { point in pixels.contains { $0.contains(point) } }.count
                 print("RING-HIDDEN \(label): \(Double(covered) / Double(ring.count))")
-                XCTAssertLessThanOrEqual(Double(covered) / Double(ring.count), layout.clearsRing ? 1.0 / 4 : 1.0 / 6, "\(label): the ring hidden")
+                XCTAssertLessThanOrEqual(Double(covered) / Double(ring.count), 1.0 / 6, "\(label): the ring hidden")
                 let left: CGFloat = -(pixels.map(\.minX).min() ?? 0) - inset
                 let right: CGFloat = (pixels.map(\.maxX).max() ?? 0) - side - inset
                 XCTAssertLessThanOrEqual(max(left, right), HITSpacing.s / 2, "\(label): past its ring into the gap")
