@@ -165,7 +165,12 @@ public enum RecordMerge {
             if !same(server, base), (server.updatedAt ?? .distantPast) > deletedHere {
                 return MergeOutcome(merged: server, rule: .deletedHere)
             }
-            return MergeOutcome(merged: .marker(key, deletedAt: deletedHere), rule: .deletedHere)
+            // The marker is never earlier than the version it deletes: this device deleted what it held, so the
+            // deletion came after that version whatever this device's clock says. (With a clock that runs behind,
+            // a marker stamped before the version would lose to it on a device that merges without a memory, M6,
+            // and the item would come back: brief 138, item 8.)
+            let at: Date = max(deletedHere, server.updatedAt ?? .distantPast)
+            return MergeOutcome(merged: .marker(key, deletedAt: at), rule: .deletedHere)
 
         case (let base?, let local?, let server?):
             if base.isDeleted {

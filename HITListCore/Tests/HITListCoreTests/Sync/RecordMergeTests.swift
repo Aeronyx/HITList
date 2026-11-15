@@ -253,6 +253,23 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(F.merge(base: base, local: nil, server: after, now: 77).merged, after)
     }
 
+    /// A device whose clock runs behind deletes an item another device stamped later than its "now": the marker
+    /// carries the version's time, not the earlier one, so a device that merges without a memory and still holds
+    /// that version does not bring it back (M6 needs the item changed after the deletion).
+    func testM8TheMarkerIsNeverEarlierThanTheVersionItDeletes() {
+        let base = F.task(updated: 90)
+        let outcome = F.merge(base: base, local: nil, deletedHereAt: 50, server: base)
+        XCTAssertEqual(outcome.rule, .deletedHere)
+        XCTAssertEqual(outcome.merged, F.marker(at: 90))
+        // The device with no memory, holding that version, meets the marker: the deletion stands.
+        let other = F.merge(base: nil, local: base, server: outcome.merged)
+        XCTAssertEqual(other.rule, .firstMeetingDeletedThere)
+        XCTAssertNil(other.device)
+        // Changed there too, before this device's deletion by its own clock, yet stamped later: still the later.
+        let server = F.task(["title": .string("Edited")], updated: 40)
+        XCTAssertEqual(F.merge(base: base, local: nil, deletedHereAt: 50, server: server).merged, F.marker(at: 50))
+    }
+
     func testM8ChangeThereOnlyInKeysThisBuildDoesNotKnowIsNoChange() {
         let base = F.task(updated: 10)
         var server = F.task(updated: 10)
