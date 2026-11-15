@@ -302,7 +302,8 @@ public actor SyncSimulation {
         await transport.observe { delivery in
             // A lost zone or an account change empties a correct brain's memory (section 10): from here on a merge
             // without a memory may settle what was changed before, and I2 takes that into account.
-            if delivery.round == 0, delivery.kind == .zoneLost || delivery.kind == .account,
+            // (A device that has never finished a fetch had nothing to lose: its first sign-in is not a loss.)
+            if delivery.round == 0, delivery.kind == .zoneLost || delivery.kind == .account, observed.hasFetched(name),
                ((try? await ledger.entries()) ?? []).isEmpty {
                 observed.forgot(name)
             }
@@ -785,6 +786,14 @@ final class Observed: @unchecked Sendable {
     private var forgotten: [String] = []
     /// Devices that lost their memory and have not finished a whole fetch since.
     private var amnesic: Set<String> = []
+    /// Devices that have finished a fetch at least once.
+    private var fetchedOnce: Set<String> = []
+
+    func hasFetched(_ device: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return fetchedOnce.contains(device)
+    }
 
     func forgot(_ device: String) {
         lock.lock()
@@ -795,6 +804,7 @@ final class Observed: @unchecked Sendable {
 
     func fetched(_ device: String) {
         lock.lock()
+        fetchedOnce.insert(device)
         if amnesic.remove(device) != nil { forgotten.append(device) }
         lock.unlock()
     }

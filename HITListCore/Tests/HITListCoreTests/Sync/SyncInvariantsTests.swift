@@ -302,6 +302,39 @@ final class SyncInvariantsTests: XCTestCase {
         XCTAssertNotEqual(first.script, other.script)
     }
 
+    /// A flaw in the design's section 8, found by the rig with the rules-keeping brain (seeds 58 and 62 of 100) and
+    /// pinned here by script: a record that points at a target which is late (still on its way, here in the sender's
+    /// next batch) is written without the reference and sent so, and iCloud's reference is cleared for everyone. When
+    /// section 8 changes, this test should find nothing; until then it shows I2 finding the loss.
+    func testSection8_aReferenceToALateTargetIsClearedEverywhere() async {
+        var config = SimConfig()
+        config.batchSize = 1
+        let sim = SyncSimulation(seed: 1, config: config, brain: MergingBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("C")
+        let t = key("11111111-0000-0000-0000-000000000001")
+        let l = SyncKey(type: "TaskLabel", name: "22222222-0000-0000-0000-000000000002")
+        await sim.play([
+            .act("C", .put(SyncRecord(key: t, fields: ["title": .string("task")]))),
+            .act("C", .put(SyncRecord(key: l, fields: ["name": .string("label")]))),
+            .act("C", .edit(t, ["labels": .references([l.name])])),
+            // C's first sync sends the task in one batch, and the network drops before the label's.
+            .fault("C", .dropNetwork(after: 1)),
+            .sync("C"),
+            // A fetches the task, does not find the label, and clears the reference in iCloud.
+            .sync("A"),
+            .fault("C", .network(up: true)),
+            .sync("C"),
+        ])
+        let findings = await sim.check()
+        XCTAssertTrue(findings.contains { $0.invariant == .noLostEdit && $0.words.contains("labels should be [22222222]") },
+                      findings.map(\.description).joined(separator: "\n"))
+        let held = await sim.cloud.record(t)?.record["labels"]
+        XCTAssertNil(held, "iCloud's reference was cleared although the label exists")
+        let label = await sim.cloud.record(l)
+        XCTAssertNotNil(label)
+    }
+
     /// Brief 140, item 6: the rig finds what an honest but simple brain gets wrong. This brain sends whatever differs
     /// from what it last knew of iCloud and takes iCloud's record whole on every fetch and every conflict: an edit not
     /// yet sent is lost when another device's change to the same item arrives first. I2 must say so.
@@ -363,6 +396,49 @@ final class SyncInvariantsTests: XCTestCase {
                 XCTAssertEqual(report.findings, [], "\(kinds.map(\.rawValue)): \(report.description)")
             }
         }
+    }
+
+    /// Many seeds, only when asked: `HITLIST_SIM_SEEDS=100 swift test -c release -Xswiftc -enable-testing --filter
+    /// testManySeeds` (optionally `HITLIST_SIM_STEPS`, default 300, and `HITLIST_SIM_FAULTS=memory` to add the faults
+    /// that lose a memory). Runs the rules-keeping brain; wave 2 swaps in `SyncCore`. Prints every seed with a finding.
+    func testManySeeds_whenAskedFor() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let count = environment["HITLIST_SIM_SEEDS"].flatMap(UInt64.init), count > 0 else {
+            throw XCTSkip("set HITLIST_SIM_SEEDS to run many seeds")
+        }
+        let steps = environment["HITLIST_SIM_STEPS"].flatMap(Int.init) ?? 300
+        var config = SimConfig()
+        if environment["HITLIST_SIM_FAULTS"] == "memory" {
+            config.faults = SimFaultKind.everyday.union([.ledgerLost, .zoneDeleted, .zoneReset])
+        }
+        var failing: [UInt64] = []
+        for seed in UInt64(1)...count {
+            let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: steps, config: config, brain: MergingBrain.make)
+            if !report.findings.isEmpty {
+                failing.append(seed)
+                print(report.description)
+            }
+        }
+        print("\(count) seeds × \(steps) steps: \(failing.isEmpty ? "every invariant holds" : "findings on seeds \(failing)")")
+        XCTAssertEqual(failing, [])
+    }
+
+    /// One seed traced, only when asked: `HITLIST_SIM_TRACE=<seed> HITLIST_SIM_KEYS=<name prefixes, comma separated>
+    /// swift test --filter testTrace` prints the script and the rules-keeping brain's log lines that name those keys.
+    func testTrace_whenAskedFor() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let seed = environment["HITLIST_SIM_TRACE"].flatMap(UInt64.init) else {
+            throw XCTSkip("set HITLIST_SIM_TRACE to a seed")
+        }
+        let keys = (environment["HITLIST_SIM_KEYS"] ?? "").split(separator: ",").map(String.init)
+        let lines = FakeWords()
+        var config = SimConfig()
+        config.log = { line in if keys.contains(where: { line.contains($0) }) { lines.append(line) } }
+        let steps = environment["HITLIST_SIM_STEPS"].flatMap(Int.init) ?? 300
+        let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: steps, config: config, brain: MergingBrain.make)
+        for line in report.script where keys.contains(where: { line.contains($0) }) || line.contains("fault") { print("SCRIPT \(line)") }
+        for line in lines.all { print("BRAIN \(line)") }
+        print(report.description)
     }
 
     /// Every fault kind, the ones that are not everyday among them (a memory lost, the zone deleted or reset, an
@@ -549,12 +625,16 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
     private let ledger: MemoryLedger
     private let transport: FakeTransport
     private let clock: SimClock
+    private let log: @Sendable (String) -> Void
+    private let device: String
 
     init(_ parts: SimParts) async {
         store = parts.store
         ledger = parts.ledger
         transport = parts.transport
         clock = parts.clock
+        log = parts.log
+        device = parts.device
     }
 
     static let make: SimBrainFactory = { parts in await MergingBrain(parts) }
@@ -585,6 +665,12 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
             let entry = entries[key]
             if let local = records[key] {
                 if entry?.base == nil || !RecordMerge.same(local, entry?.base) { changes.append(.save(key)) }
+                if var back = entry, back.deletedHereAt != nil {
+                    // Here again (an undo): the deletion noticed before is over. Kept, a later deletion would carry
+                    // its old time, and M8 would bring the item back (seed 60 found it).
+                    back.deletedHereAt = nil
+                    write.upsert.append(back)
+                }
             } else if let base = entry?.base, !base.isDeleted {
                 if entry?.deletedHereAt == nil {
                     var noticed = entry!
@@ -646,7 +732,10 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
 
     func recordToSend(_ key: SyncKey) async -> OutgoingRecord? {
         let entry = await ledger.entry(key)
-        if let local = await store.record(key) { return OutgoingRecord(record: local, system: entry?.system) }
+        if let local = await store.record(key) {
+            log("\(device) sends \(key): \(local.fields.keys.sorted().map { "\($0)=\(SyncInvariants.say(local.fields[$0]))" }.joined(separator: " "))")
+            return OutgoingRecord(record: local, system: entry?.system)
+        }
         if let base = entry?.base, !base.isDeleted {
             return OutgoingRecord(record: .marker(key, deletedAt: entry?.deletedHereAt ?? clock.now()), system: entry?.system)
         }
@@ -676,6 +765,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         var again: [PendingChange] = []
         for cloud in waiting {
             let (local, outcome, entry) = try await decide(cloud.key, server: cloud.record)
+            log("\(device) settles fetched \(cloud.key) by \(outcome.rule.rawValue): here \(local.map(SyncInvariants.sketch) ?? "nothing"), iCloud \(SyncInvariants.sketch(cloud.record)) \(cloud.record.fields.keys.sorted().map { "\($0)=\(SyncInvariants.say(cloud.record.fields[$0]))" }.joined(separator: " "))")
             if !RecordMerge.same(local, outcome.device) {
                 writes.append(LocalWrite(key: cloud.key, expected: local, record: outcome.device))
             }
@@ -692,6 +782,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
     /// One record, settled at once: a conflict, a removal for good, a change unknown to iCloud.
     private func settle(_ key: SyncKey, server: SyncRecord?, system: Data?) async throws {
         let (local, outcome, entry) = try await decide(key, server: server)
+        log("\(device) settles \(key) by \(outcome.rule.rawValue) (conflict or removal): iCloud \(server.map(SyncInvariants.sketch) ?? "nothing")")
         if !RecordMerge.same(local, outcome.device) {
             _ = try await store.apply([LocalWrite(key: key, expected: local, record: outcome.device)])
         }

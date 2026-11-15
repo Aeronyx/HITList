@@ -199,6 +199,35 @@ public struct SimIntent: Sendable {
     /// Whether anyone ever deleted `key`.
     func everDeleted(_ key: SyncKey) -> Bool { events(of: key).contains { $0.change == .deleted } }
 
+    /// Whether a task goes with a parent a person deleted: any parent any person ever gave it, or gave that parent,
+    /// and so on up, deleted by a person somewhere. The one cascade the models have takes a sub-task with its parent
+    /// on whichever device the deletion reaches, whatever the task's own history (section 5 does not save it).
+    func underDeletedParent(_ key: SyncKey) -> Bool {
+        var seen: Set<String> = []
+        var next = parentsEverSet(key)
+        while let name = next.popFirst() {
+            guard seen.insert(name).inserted else { continue }
+            let parent = SyncKey(type: key.type, name: name)
+            if everDeleted(parent) { return true }
+            next.formUnion(parentsEverSet(parent))
+        }
+        return false
+    }
+
+    private func parentsEverSet(_ key: SyncKey) -> Set<String> {
+        var out = Set<String>()
+        for event in events(of: key) {
+            switch event.change {
+            case .made(let record):
+                if case .reference(let name)? = record.fields["parent"] { out.insert(name) }
+            case .changed(let fields):
+                if case .reference(let name)?? = fields["parent"] { out.insert(name) }
+            case .deleted: break
+            }
+        }
+        return out
+    }
+
     /// The last parent a person gave a task (nil: none, or never set).
     func lastParent(_ key: SyncKey) -> String? {
         for event in events(of: key).reversed() {
@@ -256,8 +285,8 @@ public enum SyncInvariants {
     /// never deleted is on every device and alive in iCloud. Not held to account: a field changed on two devices (the
     /// merge keeps one of the two, section 5), an item made on two devices (they first meet by M5: the record changed
     /// last, whole), an edit up to a device's loss of memory (`SimIntent.exposedThrough`),
-    /// the clocks (`updatedAt` and the fields a clock field times), and a sub-task whose parent a person deleted (it
-    /// goes with its parent, whenever it was made).
+    /// the clocks (`updatedAt` and the fields a clock field times), and a sub-task under a parent a person deleted, at
+    /// any depth and through any parent anyone gave it (it goes with its parent, whenever it was made).
     public static func noLostEdit(devices: [DeviceHoldings], cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
         var findings: [SyncFinding] = []
         let holders: [(String, [SyncKey: SyncRecord])] = devices.sorted(by: { $0.name < $1.name }).map { device in
@@ -266,8 +295,7 @@ public enum SyncInvariants {
         let iCloud = Dictionary(cloud.map { ($0.key, $0.record) }, uniquingKeysWith: { a, _ in a })
         for key in intent.keys {
             guard let type = SyncSchema.type(key.type), !intent.everDeleted(key) else { continue }
-            if key.type == SyncSchema.taskItem.name, let parent = intent.lastParent(key),
-               intent.everDeleted(SyncKey(type: key.type, name: parent)) { continue }
+            if key.type == SyncSchema.taskItem.name, intent.underDeletedParent(key) { continue }
             let events = intent.events(of: key)
             guard let made = events.first(where: { if case .made = $0.change { return true } else { return false } }) else { continue }
             // Made and never deleted: everywhere.
