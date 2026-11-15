@@ -176,6 +176,17 @@ final class CloudKitTransportTests: XCTestCase {
 
     func testTheStoredStateRoundTripsAndUnreadableStateStartsAfresh() throws {
         let log = SyncTransportLog { _ in }
+        // The review's finding 10: a reset keeps the account (so the new engine's sign-in for the same account is
+        // not told to the brain as a lost memory) and what was known of the zone; the proof of a whole fetch goes.
+        var before = StoredState(engine: nil, zoneReady: true, account: "_me")
+        before.fetchedWhole = true
+        let after = before.afterReset()
+        XCTAssertEqual(after.account, "_me")
+        XCTAssertTrue(after.zoneReady)
+        XCTAssertNil(after.fetchedWhole)
+        XCTAssertNil(after.engine)
+        XCTAssertNil(Rules.accountChange(.signIn(currentUser: CKRecord.ID(recordName: "_me")), known: after.account),
+                     "the same account after a reset: not told again")
         let state = StoredState(engine: nil, zoneReady: true, account: "_me")
         let back = StoredState.decode(state.encoded(log: log), log: log)
         XCTAssertEqual(back.zoneReady, true)

@@ -206,9 +206,13 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     func reset() async {
         // The state forgotten on disk first: a crash before the new engine exists leaves a forgotten state, which is
         // what was asked. (The other order could leave the old bookmark to be restored at the next launch.)
-        // The account goes too: the new engine announces `signedIn` for whoever is signed in, and T12 has the brain
-        // read a sign-in to its own account as no change.
-        stored = StoredState()
+        // Only the bookmark and the list go (T13). The account stays: the new engine announces a sign-in for whoever
+        // is signed in, and the brain reads a sign-in to its own account as "the transport lost its memory" and
+        // forgets its own (T12); a reset the brain asked for, to have every record again WITH its memory, must not
+        // look like that (the review's finding 10: every lifted hold would have cost the brain its ledger, and unsent
+        // edits a field-by-field merge). What the device knew of the zone stays too, so a zone deleted meanwhile is
+        // still found lost at the next fetch instead of read as "not made yet".
+        stored = stored.afterReset()
         await save()
         let old = engine
         engine = makeEngine(nil)
@@ -650,6 +654,12 @@ struct StoredState: Codable {
         self.engine = engine
         self.zoneReady = zoneReady
         self.account = account
+    }
+
+    /// What `reset()` keeps (T13): the account this state belongs to and whether the zone was known to exist. The
+    /// engine's own state (its bookmark and its list) and the proof of a whole fetch go.
+    func afterReset() -> StoredState {
+        StoredState(engine: nil, zoneReady: zoneReady, account: account)
     }
 
     static func decode(_ data: Data?, log: SyncTransportLog) -> StoredState {

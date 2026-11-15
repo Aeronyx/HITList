@@ -210,8 +210,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   forgets its own with it (section 7): a bookmark that starts afresh never tells of a zone lost in the meantime, so
   a ledger kept would hold bases for records iCloud no longer has, and nothing would send them again (found by
   session 140's rig).
-- **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record. A fetch in flight
-  when it is called ends there.
+- **T13 Reset.** `reset()` forgets the bookmark and the list and nothing else; the next fetch brings every record. The
+  account and what the device knew of the zone are kept, and no account event follows from it: a reset is how the
+  brain asks for every record again with its memory intact, and must not look like a transport that lost its
+  state (T12), which costs the brain its ledger (the review's finding 10). A fetch in flight when it is called
+  ends there.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
 
