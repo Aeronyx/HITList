@@ -60,12 +60,20 @@ engine: it stays as it was at the moment a device moved over.
 ## 3. What iCloud holds
 
 - **Zone** `HITList` (`SyncSchema.zoneName`). The transport makes it when it first has something to send and it is
-  missing. Fetches are scoped to it: the mirror's zone is in the same database and is none of the engine's business.
+  missing. Fetches are scoped to it.
+- **Kept out of the mirror's reach** (found by session 142 on CloudKit Development): the mirror does not keep to its
+  own zone. It imports every zone of its container's private database and makes an item out of any record whose
+  type is a model's name: it turned the engine's `Project` record into an empty Group, wrote `CD_` fields back
+  onto it, and deleted the engine's profile record as a duplicate. So (a) in CloudKit a record's type is never a
+  model's name: it is `HL` + the type (`HLTaskItem`, `HLProject`, `HLProfile`, `HLMeta`), a name the mirror
+  cannot map; and (b) the engine is meant to live in **a container of its own**, where no mirror ever looks,
+  which is George's to approve (section 12): any older build still on the mirror, in anyone's hands, reads the
+  mirror's container for as long as it runs.
 - **One record per item**, type = the model's name (`TaskItem`, `Project`, `TaskLabel`, `SavedFilter`,
   `Switchboard`, `Profile`), keyed by the item's `id` as `UUID.uuidString` prints it (`SyncKey`). `Profile` is one
   per account: its key's name is `profile` whatever `id` a device's row has. In CloudKit the record's name is
   `<type>.<name>` (`TaskItem.6B1F3E2A-…`, `Profile.profile`, `Meta.meta`): a pending change names a record by its
-  name alone, and the name must say the type.
+  name alone, and the name must say the type. (Its CloudKit record type is `HL` + the type, see below.)
 - **Fields** are the model's stored properties under their own names (`SyncSchema.types` is the table). A
   relationship is the other record's name (`project`, `parent`, `switchboard`: a string; `labels`: a list of
   strings); none is a CloudKit reference, so iCloud never deletes or refuses anything on its own account. Dates are
@@ -255,13 +263,21 @@ guessing; Check iCloud… stays as the person's own audit.
   (`cloudKitDatabase: .none`, the store itself is untouched), and the engine starts with an empty ledger
   (section 7). The first device sends everything; each later one finds its items already there.
 - Devices still on the mirror and devices on the engine do not see each other's changes until they have all moved:
-  they move together, George's first.
+  they move together, George's first. (That is only true because the engine's records are out of the mirror's
+  reach, section 3: in the mirror's own container, under model names, a mirror would import them as empty items.)
 - Going back: the mirror's zone still holds everything as of the move.
 - iCloud's Production schema gains the new record types before any released build runs the engine (additive;
   George's click, as for every schema change).
 
 ## 12. Decisions that are George's (each can be changed before Production holds a record)
 
+0. **A container of its own for the engine** (`iCloud.com.trammells.hitlist.sync`, a third beside the tasks' and
+   Shared Tasks'). The mirror reads every zone of its own container (section 3), and builds on the mirror will be
+   in friends' hands for as long as they do not update. A separate container is the one arrangement in which
+   nothing an old build does can touch the engine's records. It is registered once (automatic signing does it, as
+   it did for Shared Tasks' container) and cannot be removed afterwards, which is why it waits for his word. Until
+   then everything runs in the tasks' container on Development only, under the `HL` record types, with the mirror
+   off on the stores that use the engine.
 1. **Plain or encrypted fields.** As built, fields are stored as the mirror stores them today (protected by the
    account, readable in the CloudKit dashboard for support). `SyncSchema` can mark fields end-to-end encrypted
    instead (titles, notes, names); the cost is a dashboard that shows nothing and one more way for a recovery to
