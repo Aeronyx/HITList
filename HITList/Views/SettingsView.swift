@@ -148,8 +148,9 @@ struct SettingsPageContent: View {
     }
 }
 
-/// The first screen: the profile, Appearance, then the pages. It fits an iPhone 17 without scrolling
-/// (`SettingsTests.testFirstScreenFitsAnIPhone17`).
+/// The first screen: the profile, Appearance, then the pages. It fits an iPhone 17 without scrolling but for its
+/// last row, About, since the calendar got a page of its own in round 27
+/// (`SettingsTests.testFirstScreenFitsAnIPhone17ButForItsLastRow`).
 struct SettingsHome: View {
     @Environment(\.hitPages) private var pages
 
@@ -235,6 +236,8 @@ struct SettingsPageRow: View {
         if stuck { return (Self.stuckWords, true) }
         switch sync {
         case .error, .offline: return (sync.summary(now: .now), true)
+        // Records that differ and have stayed so (0.9.11): what differs, on the first screen.
+        case .differs(_, stuck: true): return (sync.summary(now: .now), true)
         default: return (page.summary, false)
         }
     }

@@ -20,10 +20,14 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
-        Entry(version: "0.9.10", items: [
-            "HITList is quiet when it has nothing to do. The hollow sync bolt no longer pulses, which on the Mac used a fifth of a processor core for as long as it was hollow.",
-            "The sync bolt says what iCloud sync itself reports: hollow for a moment after you open the app, filled once it has fetched from iCloud, and it says so when something fails. HITList no longer asks iCloud every 15 seconds whether anything changed.",
-            "If you ever think a device is missing something, open Settings → iCloud & data → Check iCloud: it compares the device with iCloud and names what differs.",
+        Entry(version: "0.9.11", items: [
+            "The sync bolt is filled only when this device and iCloud hold the same tasks. HITList compares the two after you open it; if something differs the bolt says what, and Settings → iCloud & data → Check iCloud: names it and can send or remove it.",
+            "HITList is quiet when it has nothing to do. The hollow sync bolt no longer pulses, which on the Mac used a fifth of a processor core, and HITList no longer asks iCloud every 15 seconds whether anything changed.",
+            "Companions are livelier: a small move every few seconds, and a little cheer of their own when you complete a task.",
+            "Flint blinks properly and shelters under his own wing in the rain. Phase watches the puddle instead of the sky. Quill lies on the corner of his theme's box.",
+            "Your calendar has a page of its own: Settings → Calendar → Calendar events turns it on, lists your calendars by account and says how to bring Google Calendar in. Tap an event for its details; a dated task's menu has Add to Calendar.",
+            "Coming from Todoist? Settings → iCloud & data → Import from Todoist: choose Todoist's backup file, see what will come in, import, and undo it if you change your mind.",
+            "HITList is short for Human-In-The-List. It says so now, in Settings → About.",
         ]),
         Entry(version: "0.9.9", items: [
             "A reminder typed in a task's title works when the task has a time: type !30mb and the reminder shows before you confirm. One typed before the task had a time is set as soon as you give the task a time. And \"tonight\" now means today.",

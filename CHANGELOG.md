@@ -5,40 +5,119 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.10
+## 0.9.11
 
-Sync, back to what CloudKit itself reports. On 2026-11-13 George's Mac sat at 18 to 24% CPU doing nothing, its bolt
-hollow for good, saying "Sending 3 changes to iCloud…". Nothing was being sent, and nothing was wrong with sync: every
-import and export of that session finished well, in hundredths of a second. What was wrong was the layer HITList had
-built on top of CloudKit's mirror to check on it.
+0.9.10 was prepared on 2026-11-13 and never uploaded: Apple had a new Program License Agreement waiting for George to
+accept, and the export stopped there. He read its notes instead and wrote back the next evening: "the bolt should not
+be able to be filled while the three records differ; doesn't that defeat the purpose of the bolt?" So this is 0.9.10
+and the round after it together: a sync bolt that costs nothing at rest and is filled only when this device and
+iCloud hold the same records, creatures that move every few seconds and cheer a finished task, Flint's blink and
+rain, the calendar where it can be found, an import from Todoist, and the app's long name. Six sessions and the
+supervisor's own work on sync; George saw every sketch as it was made.
 
-- The bolt and every line about sync now say what CloudKit's mirror reports and nothing else: each setup, import and
-  export, with its start, its end and its error. Hollow from a launch until the mirror's first import of the session
-  (it imports at every launch, about a second in); filled after it for as long as nothing fails, with "Synced 3 min
-  ago" naming its last import or export; trouble in the mirror's own words once it has stayed, as before. With the
-  account fine, the network up and nothing running, a minute without that first import reads "iCloud isn't
-  answering, HITList will keep trying", never a hollow bolt with no words for why.
-- Gone: the request HITList made to iCloud every 15 seconds while a window could be seen, its own copy of iCloud's
-  record index, and the record-by-record comparison that held the bolt hollow whenever this device and iCloud
-  differed (0.9.4's rule that the bolt is filled only within 30 seconds of a confirmation). That rule could only be
-  kept by asking iCloud over and over, and it turned any old difference into a bolt that never filled: George's Mac
-  holds two filters and a label from October that iCloud doesn't have, so the bolt read "Sending 3 changes" for as
-  long as the window was open, then "This device and iCloud differ", then "Sending" again each time the window came
-  back.
-- The comparison is still there when you ask for it: Settings → iCloud → Check iCloud… reads iCloud afresh, lists what
-  differs by name, and offers "Send to iCloud" or "Remove from this device" for what is only here.
-- The hollow bolt stands still. It used to "breathe" (an opacity animation with no end), and in the Mac's toolbar
-  every frame of that laid the whole toolbar out again: a fifth of a processor core for as long as the bolt was
-  hollow, which on George's Mac was always. Nothing about sync animates without an end now: a change of look
-  crossfades once, the "good to go" plays once.
-- Settings' sync line redraws every 30 seconds instead of every second ("checked 12 s ago" is gone with the checks).
-- "Last change" in the Mac's Settings named only the newer of the last import and the last export, and the mirror
-  runs one of each every time the app comes to the front, so the row flipped between "Import from iCloud" and
-  "Export to iCloud" on every click into the window. It names both now, side by side ("Received 3 min ago · Sent
-  just now"), and changes only as they age.
-- Unchanged underneath: SwiftData's CloudKit mirror, the store, the schema, pushes, the sync log, the 5-second
-  watchdog's log lines and its "Sync is stuck" row, the steadied marks (trouble only once it stayed), the bolt's
-  "good to go" after a launch, a minute away or a minute of trouble.
+Sync:
+
+- **The bolt is filled only when two things are true.** iCloud's own sync (CloudKit's mirror) has fetched in this
+  session and nothing has failed since; and a fresh read of every record iCloud holds (its kind, id and change stamp,
+  nothing else) matched what is on this device. After a launch that takes a few seconds, about two after the
+  mirror's own import, and the words say "Checking with iCloud…" or "Last synced 3 min ago, checking…" meanwhile.
+  0.9.10 as prepared would have filled the bolt on the mirror's word alone.
+- **If the two differ, the bolt says what differs**, in counts: "1 label and 2 filters on this device aren't in
+  iCloud". A difference is believed only when two reads four seconds apart both find it with sync quiet, so a change
+  that is merely on its way never shows. It is drawn hollow for two minutes and hollow in red after; Settings →
+  iCloud & data says where it is settled, and Check iCloud… names the records and offers "Send to iCloud" or "Remove
+  from this device", as before. Nothing is repaired by itself: a record here and not in iCloud was either never sent
+  or deleted on another device, and only the person knows which.
+- **What the check never does**, each of which 0.9.4 to 0.9.9 did: ask iCloud on a timer (every 15 seconds while a
+  window could be seen), keep its own copy of iCloud's index between launches (a stale copy can disagree for good),
+  animate while it waits, or say "Sending 3 changes" about records nothing was sending. A read follows something
+  that happened: the launch's first import, coming back to the app after half an hour, trouble that cleared, Check
+  iCloud… or one of its repairs, and, only while the two differ, an import or export. At rest nothing is read and no
+  timer runs: the Mac app idles at 0.0% CPU.
+- **If iCloud won't answer the read**, the bolt says "iCloud isn't answering, HITList will keep trying", tries twice
+  more (20 seconds and two minutes later), and then follows the mirror's own word again until you come back to the
+  app: a check that can't run must not hold the bolt hollow for good, which is how 0.9.9 failed.
+- The bolt's "good to go" plays when the records have been found the same, not at the first import.
+- George's three records are explained. One of them carries the same fingerprint and the same October timestamps
+  as a starter filter that sits in iCloud's Development side: they were made on his Mac in the app's first days,
+  when test builds still shared the real store and synced with Apple's Development side of iCloud. The released app
+  took the store over later, and records never changed since were never sent to Production. Check iCloud… → Send to
+  iCloud sends them.
+- From 0.9.10, unchanged: the hollow bolt stands still (its endless "breath" cost a fifth of a processor core in the
+  Mac's toolbar, where every frame lays the toolbar out again); Settings' sync line redraws every 30 seconds, not
+  every second; "Last change" on the Mac names both directions at once ("Received 3 min ago · Sent just now")
+  instead of flipping between them at every click into the window. Underneath, SwiftData's CloudKit mirror, the
+  store, the schema, pushes, the sync log and the watchdog are as they were.
+
+Companions:
+
+- **They move.** George: "we made them too sparse. The creatures just feel idle now." In their default states (awake
+  by day, asleep at night, no weather holding) a small idle comes 4 to 12 seconds after the last one ended: the wait
+  is never longer than 12, never shorter than a floor that is itself drawn anew each time between 4 and 7, and never
+  within half a second of the wait before, so there is no beat to notice. The first comes 1.5 to 4 seconds after the
+  creature appears. With three or more idles to choose from, an idle is never one of the last two. Under rain, a
+  storm, snow or heat the pace and what is skipped stay as they were (6 to 36 seconds). The longer routines and the
+  flourish keep their rules. On the Mac the new pace averages 0.8% of a processor core, and reads 0.0% between moves.
+- **They cheer when a task is completed**, each in its own way and only with frames it already had: Nod's lamp
+  flares twice, Quill kneads, Tuck's sprout puts up a bud, Hush's ears shoot up, Glim's lantern burns brighter, Phase
+  jumps up tall, Button springs up blushing, Flint lifts his wings and giggles. One cheer in any six seconds (ten
+  tasks ticked in a row cheer once); it never cuts a routine or the flourish short; asleep, the creature opens an eye
+  instead, at most once a minute; in the rain or snow it gives its usual reply over its weather pose, never a dry
+  frame; nothing plays with Reduce Motion, Reduce Effects, Low Power Mode or Companions switched off. Any list's
+  task counts, shared tasks and Flipboard switches flipped green included.
+- **Flint's blink** painted his eyes grey and left a sliver of pupil over a white bar, so for two ticks his eyes
+  dropped and shrank to a scowl. Now the pale eye stays where it is and a lid closes over it, with a dark lash low
+  in the eye; the same shut eye is his asleep eye, and his glad eyes (the wink, the giggle, the cheer) are two arcs
+  curving up. **His rain** drew a white ring round his whole head: a helmet, with no ears and no tail tuft. Now he
+  is the daytime Flint holding his own wing over his head, with beads on it, a puddle at his talons and a drop that
+  falls past his face; in the drip and the peek only the water moves. Asleep in the rain the same wing lies over
+  him. His 32 daytime frames are 0.9.9's, byte for byte, pinned by a test: a friend likes him as he is.
+- **Phase looks down and to the left in the rain**, at the water gathering under him ("he looks weird looking up
+  constantly"): four pixels in each of seventeen frames, and his `watch` now follows where the drop will land. His
+  sudden looks at thunder are kept; the last frame of each is the down-left look.
+- **Quill on Midnight's box** in Settings → Appearance lay above the corner's curve, over empty air, and sat on the
+  selection ring when Midnight was picked. He lies on the corner and hangs down the side against the box now, picked
+  or not, on iPhone and Mac.
+
+Calendar:
+
+- HITList has shown the device's calendars in Today and Upcoming since 0.9.1, behind a switch in Settings → General
+  that George, who asked for "calendar/GCal integration", had never met. It has **a page of its own now: Settings →
+  Calendar** (a section on the Mac). The switch, the calendars listed by account with their colours (iCloud, Google,
+  Exchange, subscribed), and what to do when access was refused.
+- **Google Calendar** arrives through the device's own accounts; HITList signs in to nothing. The page says so, and
+  while the device has no Google account among its calendars it gives the path to add one.
+- **An event opens a card**: its title, day and time (and its own time zone when that differs), calendar, place,
+  the first lines of its notes and its link. Read-only, inside the window, closed by a tap outside or Escape.
+- **Add to Calendar** on a task with a date (the row's menu and the editor's): one event in the calendar chosen on
+  the page, at the task's time for 30 minutes or all day, with the task's notes and a link back to it. A toast says
+  "Added to Work" with Undo; a task already there says "Already on your calendar". It is a copy: changing the task
+  later does not change the event. With calendar events switched off it asks only for permission to add.
+- A tip in Today, once, says the day's calendar can show there.
+- Events still never enter the store, iCloud, backups, widgets, Spotlight or the Claude export.
+
+Import from Todoist:
+
+- **Settings → iCloud & data → Import from Todoist…** (Settings → Data on the Mac) reads Todoist's own backup (a ZIP
+  with a CSV for each project; no need to unzip it) or one or several project CSVs.
+- **A preview before anything is written**: where each project goes (a new Group, an existing one of the same name,
+  the Inbox), how many tasks, checklist lines and labels will be made, which tasks repeat, which dates could not be
+  read, and what is already in HITList. Then one button.
+- What comes across: titles, descriptions, comments (as text in the notes), priorities, labels typed as `@name`,
+  dates and times with their time zone, repeats ("every day", "every mon, wed at 9am", "every 2 weeks", "every
+  15th"), deadlines, and sub-tasks (plain ones as checklist lines; ones with a date, priority or label of their own
+  as tasks, with "Under: …" in their notes). Sections become labels (a switch on the preview). What HITList cannot
+  hold is kept as words in the task's notes: assignees, durations, a repeat's end, a repeat counted from
+  completion, a date in words it cannot read.
+- **Nothing is doubled**: a task with the same title in the same Group that isn't completed is skipped, so a second
+  run of the same file makes nothing. **Nothing already there is touched**, a backup is taken first, and **Undo last
+  import** removes exactly what the import made.
+- Not in Todoist's files at all: completed tasks, reminders, filters.
+
+Small things:
+
+- **HITList is short for Human-In-The-List**, and now says so once: at the head of Settings → About, and in the
+  Mac's About HITList panel.
 
 ## 0.9.9 — build 27, 2026-11-12
 
