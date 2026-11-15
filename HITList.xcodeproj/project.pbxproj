@@ -422,6 +422,7 @@
 		BDE4C42D1D8B213FF7A5EAA5 /* DayAnchorReviewStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25C5A54720809B30DFFB212A /* DayAnchorReviewStoreTests.swift */; };
 		BE49E81DF41EEBDFC398FED3 /* SpotlightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC0FEE2153047070EE100183 /* SpotlightTests.swift */; };
 		BED55740E9111D347C0906FE /* HighlightAreaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B7DF926CB02E19ED081AE9 /* HighlightAreaTests.swift */; };
+		BF6C8A16CA2986BDA92FEBAF /* CloudKitTransportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 57D13FF3061ABA6048533466 /* CloudKitTransportTests.swift */; };
 		BF9FE919E6B7F4C346BA2D10 /* UpcomingBoardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30C5C2F962AEE82DE475A0D8 /* UpcomingBoardTests.swift */; };
 		BFAE5D374AEAEAC4281734F3 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8741BC0F7AD7813965C7B1FF /* NotificationScheduler.swift */; };
 		BFF005FD97C83745468C4B9B /* CalendarSettingsRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEBF2BCE9B5B554BD54596CF /* CalendarSettingsRows.swift */; };
@@ -554,6 +555,7 @@
 		FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */; };
 		FBE90E33AC5B2887FEAA37AE /* AccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA944D78CF374D7711E2B51 /* AccessibilityTests.swift */; };
 		FC0766FE3ED25751E9FDDDB1 /* WidgetTaskRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5067D2966FCA991CAA17780D /* WidgetTaskRow.swift */; };
+		FC853A22E306CE362564FA13 /* CloudKitTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */; };
 		FD81E5A1EE7DD1D62094AFCE /* DuoSplit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430C53233DBC58D5311A9305 /* DuoSplit.swift */; };
 		FDC09C8B23A45F514ED8793F /* SharedRowsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6ADFFB2A9A1BF3CD82513AE1 /* SharedRowsTests.swift */; };
 		FEAFB01EBF34321D0AD75748 /* HighlightTextView+iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B25094CD0CFE92ECAF30B4A /* HighlightTextView+iOS.swift */; };
@@ -712,6 +714,7 @@
 		2D3D00811FB7ED869EAE0115 /* CloudKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CloudKit.framework; path = System/Library/Frameworks/CloudKit.framework; sourceTree = SDKROOT; };
 		2D5E80A8389E83BDA6DDEF55 /* Flint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Flint.swift; sourceTree = "<group>"; };
 		2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeCompanion.swift; sourceTree = "<group>"; };
+		2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitTransport.swift; sourceTree = "<group>"; };
 		2E600A506E7434AD07AF144F /* DateServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateServices.swift; sourceTree = "<group>"; };
 		2F6AFEFFA87882EF8F46AA3C /* ShareCardRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCardRenderTests.swift; sourceTree = "<group>"; };
 		2FF631693F1C48C03F264CB0 /* Quill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Quill.swift; sourceTree = "<group>"; };
@@ -810,6 +813,7 @@
 		5711B7525FE58D39FE0F5F5E /* QuickAddGuideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddGuideTests.swift; sourceTree = "<group>"; };
 		5749D786161083AEED602B59 /* SyncSessionGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSessionGateTests.swift; sourceTree = "<group>"; };
 		5764B62739B38F9D4F936CB1 /* SyncLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLog.swift; sourceTree = "<group>"; };
+		57D13FF3061ABA6048533466 /* CloudKitTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudKitTransportTests.swift; sourceTree = "<group>"; };
 		57E547415BCBD0B870811056 /* TodayWidgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayWidgetView.swift; sourceTree = "<group>"; };
 		59899B399310F301206E584F /* ToolbarPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolbarPill.swift; sourceTree = "<group>"; };
 		5A323EAA03324E42F9B45926 /* RepeatPhraseUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatPhraseUITests.swift; sourceTree = "<group>"; };
@@ -1311,6 +1315,7 @@
 		328D84D9DD83BCB4B13EDA6F /* SyncEngine */ = {
 			isa = PBXGroup;
 			children = (
+				2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */,
 				47ACB41056989FD3EE57A52A /* CloudRecordCodec.swift */,
 			);
 			path = SyncEngine;
@@ -2024,6 +2029,7 @@
 		C5C1F85884227D5A71DCB7A6 /* SyncEngine */ = {
 			isa = PBXGroup;
 			children = (
+				57D13FF3061ABA6048533466 /* CloudKitTransportTests.swift */,
 				33454169F554C36DC682669E /* CloudRecordCodecTests.swift */,
 			);
 			path = SyncEngine;
@@ -2549,6 +2555,7 @@
 				1A0B5FD5EBC029B36B56A375 /* ClaudeSetup.swift in Sources */,
 				0D03E2E0F0F64F6DCF05CA0E /* ClaudeToolHandler.swift in Sources */,
 				01AFA4B56374FCB5B29D005A /* CloudKitSchemaCheck.swift in Sources */,
+				FC853A22E306CE362564FA13 /* CloudKitTransport.swift in Sources */,
 				8BD5680F78A052C3D6B4682A /* CloudRecordCodec.swift in Sources */,
 				77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */,
 				BBA03541FDB89C91A4755D0E /* CompactQuickAddCard.swift in Sources */,
@@ -2871,6 +2878,7 @@
 				28501DADE2F939236C1A902B /* ClaudeConnectorTests.swift in Sources */,
 				B489C0EB889A8D0FD6AC644D /* ClaudeGatingTests.swift in Sources */,
 				DADDAC552653674841536C86 /* CloudKitSchemaTests.swift in Sources */,
+				BF6C8A16CA2986BDA92FEBAF /* CloudKitTransportTests.swift in Sources */,
 				2550E6882E3C8CD58C071A8F /* CloudRecordCodecTests.swift in Sources */,
 				FAC0F71DF47913CDEB23E6AB /* CompactQuickAddTests.swift in Sources */,
 				714095B9D6D2E61ABF7F9547 /* CompanionBehindTests.swift in Sources */,
