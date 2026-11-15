@@ -323,6 +323,48 @@ final class SyncInvariantsTests: XCTestCase {
         print("  replay: SyncSimulation.randomRun(seed: \(report.seed), devices: \(report.devices), steps: \(report.steps), brain: NaiveBrain.make)")
     }
 
+    /// The other side of the demonstration: a brain that keeps section 5's rules (`MergingBrain`, below) meets every
+    /// everyday fault on several seeds and the invariants find nothing. What they report is the brain's, not theirs.
+    func testABrainThatKeepsTheRulesGetsNoFindings() async {
+        var reports: [SimReport] = []
+        for seed in UInt64(1)...4 {
+            reports.append(await SyncSimulation.randomRun(seed: seed, devices: 3, steps: 300, brain: MergingBrain.make))
+        }
+        for report in reports {
+            XCTAssertEqual(report.findings, [], report.description)
+        }
+        // Not an empty victory: a longer run, and what it left in iCloud.
+        let sim = SyncSimulation(seed: 99, brain: MergingBrain.make)
+        for name in ["A", "B", "C"] { await sim.addDevice(name) }
+        await sim.runRandom(steps: 600)
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [], findings.map(\.description).joined(separator: "\n"))
+        let held = await sim.cloud.records()
+        let alive = held.filter { !$0.record.isDeleted }.count
+        let saves = await sim.cloud.acceptedSaves
+        let notes = await sim.notes
+        print("MergingBrain, seed 99, 600 steps: iCloud holds \(alive) items and \(held.count - alive) markers after "
+              + "\(saves) accepted saves; \(notes.count) notes (crashes, failed syncs)")
+        XCTAssertGreaterThan(alive, 50)
+    }
+
+    /// The faults that lose a memory (a ledger lost, the zone deleted or reset), with the rules-keeping brain: what the
+    /// design cannot keep (an edit or a deletion a merge without a memory may settle) is not held to account, and
+    /// everything else still holds. (Account changes are left to wave 2: a correct brain removes what was synced at
+    /// sign-out, section 10, and this one does not.)
+    func testABrainThatKeepsTheRulesGetsNoFindingsWhenMemoriesAreLostToo() async {
+        for kinds in [[SimFaultKind.ledgerLost], [.zoneDeleted, .zoneReset]] {
+            // Seeds 1 and 4 once showed what a merge without a memory may lose (before the model knew it).
+            for seed in UInt64(1)...4 {
+                var config = SimConfig()
+                config.faults = SimFaultKind.everyday.union(kinds)
+                config.faultPercent = 10
+                let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: 300, config: config, brain: MergingBrain.make)
+                XCTAssertEqual(report.findings, [], "\(kinds.map(\.rawValue)): \(report.description)")
+            }
+        }
+    }
+
     /// Every fault kind, the ones that are not everyday among them (a memory lost, the zone deleted or reset, an
     /// account switched or signed out, iCloud full, a refusal), drawn often: the rig plays them all through, relaunches
     /// what crashed, heals, and still reaches its checks. (The simple brain's findings are not the point here.)
@@ -493,5 +535,193 @@ actor NaiveBrain: SimBrain, SyncTransportDelegate {
         var write = LedgerWrite()
         write.upsert = [LedgerEntry(key: cloud.key, base: normal.comparable, system: cloud.system)]
         try? await ledger.write(write)
+    }
+}
+
+/// A brain that settles every record by the design's own rules (`RecordMerge`, section 5), kept as small as it can be:
+/// not the engine (session 139 builds that), but enough to show that the rig and the invariants do not cry wolf at a
+/// brain that keeps the rules. It sets fetched records aside in the ledger until the fetch ends (section 8), sends
+/// nothing before its first whole fetch (section 7), forgets its memory on a lost zone or another account (section 10),
+/// and compares again after every answer from iCloud.
+actor MergingBrain: SimBrain, SyncTransportDelegate {
+    private let store: MemoryLocalStore
+    private let ledger: MemoryLedger
+    private let transport: FakeTransport
+    private let clock: SimClock
+
+    init(_ parts: SimParts) async {
+        store = parts.store
+        ledger = parts.ledger
+        transport = parts.transport
+        clock = parts.clock
+    }
+
+    static let make: SimBrainFactory = { parts in await MergingBrain(parts) }
+
+    func start() async throws {
+        await transport.start(delegate: self)
+        try await reconcile(nil)
+    }
+
+    func stop() async { await transport.stop() }
+
+    func localChanged(_ keys: Set<SyncKey>?) async throws { try await reconcile(keys) }
+
+    func syncNow() async throws {
+        try await transport.fetch()
+        try await transport.send()
+    }
+
+    /// Section 4: an item that differs from its base, an item deleted here, an item made again: waiting to go.
+    private func reconcile(_ keys: Set<SyncKey>?) async throws {
+        guard try await ledger.fact(LedgerFact.firstFetchDone) != nil else { return }
+        let entries = Dictionary(try await ledger.entries().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let records = Dictionary(try await store.records().map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        let all = keys ?? Set(entries.keys).union(records.keys)
+        var changes: [PendingChange] = []
+        var write = LedgerWrite()
+        for key in all.sorted() {
+            let entry = entries[key]
+            if let local = records[key] {
+                if entry?.base == nil || !RecordMerge.same(local, entry?.base) { changes.append(.save(key)) }
+            } else if let base = entry?.base, !base.isDeleted {
+                if entry?.deletedHereAt == nil {
+                    var noticed = entry!
+                    noticed.deletedHereAt = clock.now()
+                    write.upsert.append(noticed)
+                }
+                changes.append(.save(key))
+            }
+        }
+        if !write.isEmpty { try await ledger.write(write) }
+        await transport.add(changes)
+    }
+
+    func handle(_ event: TransportEvent) async {
+        do {
+            switch event {
+            case .account(let change):
+                if case .signedIn(let current) = change,
+                   let mine = try await ledger.fact(LedgerFact.account), String(decoding: mine, as: UTF8.self) == current {
+                    return
+                }
+                try await forget()
+                if case .signedIn(let current) = change { try await setAccount(current) }
+                if case .switched(_, let current) = change { try await setAccount(current) }
+            case .zoneLost:
+                let account = try await ledger.fact(LedgerFact.account)
+                try await forget()
+                if let account { try await setAccount(String(decoding: account, as: UTF8.self)) }
+            case .fetched(let changed, let removed):
+                var write = LedgerWrite()
+                write.deferUpsert = changed.filter { SyncSchema.type($0.key.type) != nil }
+                try await ledger.write(write)
+                for key in removed { try await settle(key, server: nil, system: nil) }
+            case .didFetch(nil):
+                try await settleSetAside()
+                var write = LedgerWrite()
+                write.facts[LedgerFact.firstFetchDone] = Data([1])
+                try await ledger.write(write)
+                try await reconcile(nil)
+            case .sent(let saved, let removed, let failed):
+                for record in saved { try await accepted(record) }
+                var write = LedgerWrite()
+                write.remove = removed
+                if !write.isEmpty { try await ledger.write(write) }
+                for key in failed.keys.sorted() {
+                    switch failed[key]! {
+                    case .conflict(let server): try await settle(key, server: server.record, system: server.system)
+                    case .unknownItem: try await settle(key, server: nil, system: nil)
+                    default: break
+                    }
+                }
+            default:
+                break
+            }
+        } catch {
+            // A test brain: the ledger in memory does not fail unless told to.
+        }
+    }
+
+    func recordToSend(_ key: SyncKey) async -> OutgoingRecord? {
+        let entry = await ledger.entry(key)
+        if let local = await store.record(key) { return OutgoingRecord(record: local, system: entry?.system) }
+        if let base = entry?.base, !base.isDeleted {
+            return OutgoingRecord(record: .marker(key, deletedAt: entry?.deletedHereAt ?? clock.now()), system: entry?.system)
+        }
+        return nil
+    }
+
+    // MARK: -
+
+    private func forget() async throws {
+        try await ledger.reset()
+        await transport.reset()
+    }
+
+    private func setAccount(_ account: String) async throws {
+        var write = LedgerWrite()
+        write.facts[LedgerFact.account] = Data(account.utf8)
+        try await ledger.write(write)
+    }
+
+    /// The fetch is whole: everything set aside is settled in one go, so that a task finds its Group and its parent
+    /// whichever page brought them.
+    private func settleSetAside() async throws {
+        let waiting = try await ledger.deferred()
+        guard !waiting.isEmpty else { return }
+        var writes: [LocalWrite] = []
+        var write = LedgerWrite()
+        var again: [PendingChange] = []
+        for cloud in waiting {
+            let (local, outcome, entry) = try await decide(cloud.key, server: cloud.record)
+            if !RecordMerge.same(local, outcome.device) {
+                writes.append(LocalWrite(key: cloud.key, expected: local, record: outcome.device))
+            }
+            write.upsert.append(LedgerEntry(key: cloud.key, base: RecordMerge.normal(cloud.record)?.comparable,
+                                            system: cloud.system, deletedHereAt: outcome.merged?.isDeleted == true ? entry?.deletedHereAt : nil))
+            if !RecordMerge.same(outcome.merged, cloud.record) { again.append(.save(cloud.key)) }
+        }
+        write.deferRemove = waiting.map(\.key)
+        _ = try await store.apply(writes)
+        try await ledger.write(write)
+        await transport.add(again)
+    }
+
+    /// One record, settled at once: a conflict, a removal for good, a change unknown to iCloud.
+    private func settle(_ key: SyncKey, server: SyncRecord?, system: Data?) async throws {
+        let (local, outcome, entry) = try await decide(key, server: server)
+        if !RecordMerge.same(local, outcome.device) {
+            _ = try await store.apply([LocalWrite(key: key, expected: local, record: outcome.device)])
+        }
+        var write = LedgerWrite()
+        if let server {
+            write.upsert = [LedgerEntry(key: key, base: RecordMerge.normal(server)?.comparable, system: system,
+                                        deletedHereAt: outcome.merged?.isDeleted == true ? entry?.deletedHereAt : nil)]
+        } else {
+            write.remove = [key]
+        }
+        try await ledger.write(write)
+        if outcome.merged != nil, !RecordMerge.same(outcome.merged, server) { await transport.add([.save(key)]) }
+    }
+
+    private func decide(_ key: SyncKey, server: SyncRecord?) async throws -> (SyncRecord?, MergeOutcome, LedgerEntry?) {
+        let local = await store.record(key)
+        let entry = await ledger.entry(key)
+        let input = MergeInput(base: entry?.base, local: local, deletedHereAt: entry?.deletedHereAt, server: server,
+                               now: clock.now())
+        return (local, RecordMerge.merge(input), entry)
+    }
+
+    /// iCloud took a save: that version is the base now; if the item changed meanwhile, it goes again.
+    private func accepted(_ cloud: CloudRecord) async throws {
+        let entry = await ledger.entry(cloud.key)
+        var write = LedgerWrite()
+        write.upsert = [LedgerEntry(key: cloud.key, base: RecordMerge.normal(cloud.record)?.comparable, system: cloud.system,
+                                    deletedHereAt: cloud.record.isDeleted ? entry?.deletedHereAt : nil)]
+        try await ledger.write(write)
+        let local = await store.record(cloud.key)
+        if let local, !RecordMerge.same(local, cloud.record) { await transport.add([.save(cloud.key)]) }
+        if local == nil, !cloud.record.isDeleted { await transport.add([.save(cloud.key)]) }
     }
 }

@@ -258,6 +258,7 @@ public actor SyncSimulation {
         if !keepLedger {
             ledger = MemoryLedger()
             intent.recordAmnesia(step: step, device: name)
+            observed.forgot(name)
         } else if !keepTransportState {
             await ledger.saveTransportState(nil)
         }
@@ -277,6 +278,8 @@ public actor SyncSimulation {
                ((try? await ledger.entries()) ?? []).isEmpty {
                 observed.forgot(name)
             }
+            // The first whole fetch after a memory was lost: the device has a base for everything again.
+            if delivery.round == 0, delivery.kind == .didFetch, !delivery.failed { observed.fetched(name) }
             // I4: the device after the first delivery of an event that comes twice, and after the second.
             if delivery.willRepeat {
                 observed.keep(name, await DeviceSnapshot.of(store: store, ledger: ledger, transport: transport))
@@ -325,6 +328,12 @@ public actor SyncSimulation {
         case .advance(let ms):
             clock.advance(milliseconds: ms)
         }
+        absorb()
+    }
+
+    /// What the transports' observers noticed (a memory emptied by a lost zone or an account change), into the model,
+    /// at the step it happened in.
+    private func absorb() {
         for name in observed.takeForgotten() { intent.recordAmnesia(step: step, device: name) }
     }
 
@@ -353,6 +362,14 @@ public actor SyncSimulation {
         }
         let after = await items(device.store, only)
         acts[name, default: 0] += 1
+        if case .delete = action {
+            var blind: [SyncKey] = []
+            for key in before.keys.sorted() where after[key] == nil {
+                let base = await device.ledger.entry(key)?.base
+                if base == nil || base?.isDeleted == true { blind.append(key) }
+            }
+            if !blind.isEmpty { intent.recordBlindDeletions(step: step, device: name, keys: blind) }
+        }
         intent.record(step: step, device: name, before: before, after: after)
         let touched = Set(Set(before.keys).union(after.keys).filter { before[$0] != after[$0] })
         do {
@@ -395,7 +412,9 @@ public actor SyncSimulation {
 
     private func apply(_ fault: SimCloudFault) async {
         switch fault {
-        case .deleteZone(let reason): await cloud.deleteZone(reason, account: config.account)
+        case .deleteZone(let reason):
+            await cloud.deleteZone(reason, account: config.account)
+            intent.recordZoneLoss(step: step)
         case .quotaFull(let full): await cloud.setQuotaFull(full, account: config.account)
         case .refuseNextSave(let key, let failure): await cloud.refuseNextSave(of: key, with: failure)
         case .poke(let key, let fields):
@@ -453,6 +472,7 @@ public actor SyncSimulation {
         }
         down = []
         away = [:]
+        absorb()
     }
 
     /// Every device syncs, in name order, round after round, until a round in which nothing is waiting anywhere and
@@ -463,6 +483,7 @@ public actor SyncSimulation {
         for round in 1...max(1, config.quietRounds) {
             let before = await cloud.records(account: config.account)
             for name in deviceNames { await sync(name) }
+            absorb()
             let after = await cloud.records(account: config.account)
             lastRound = SyncSimulation.changed(before, after)
             var waiting = false
@@ -734,10 +755,19 @@ final class Observed: @unchecked Sendable {
     private var found: [SyncFinding] = []
     private var current = 0
     private var forgotten: [String] = []
+    /// Devices that lost their memory and have not finished a whole fetch since.
+    private var amnesic: Set<String> = []
 
     func forgot(_ device: String) {
         lock.lock()
         forgotten.append(device)
+        amnesic.insert(device)
+        lock.unlock()
+    }
+
+    func fetched(_ device: String) {
+        lock.lock()
+        if amnesic.remove(device) != nil { forgotten.append(device) }
         lock.unlock()
     }
 

@@ -118,8 +118,14 @@ public struct SimIntent: Sendable {
     /// change). Up to then an edit may meet a merge without a memory, which keeps the record changed last whole
     /// (section 5, M5): I2 does not hold such an edit to account.
     public private(set) var exposedThrough: Int = -1
-    /// Who lost their memory and when, for the words of a finding.
+    /// Who lost their memory and when.
     public private(set) var amnesia: [(step: Int, device: String)] = []
+    /// When the zone was lost (deleted, purged, reset): what only iCloud held (a newer build's fields) went with it.
+    public private(set) var zoneLosses: [Int] = []
+    /// Deletions a device made of items its ledger held no living base for ("step|device|key"): section 4 finds a
+    /// deletion only by its base, so nothing can tell iCloud (an item never agreed on, or one a lost memory or a lost
+    /// zone left without a base).
+    private var blind: Set<String> = []
 
     public init() {}
 
@@ -149,10 +155,26 @@ public struct SimIntent: Sendable {
         for name in fields.keys.sorted() { pokes.append(Poke(step: step, key: key, field: name, value: fields[name] ?? nil)) }
     }
 
-    /// A device lost its memory at this step.
+    /// A device lost its memory at this step, or (recorded again) finished the first whole fetch after it: until
+    /// then a merge without a memory may settle anything changed meanwhile, anywhere.
     public mutating func recordAmnesia(step: Int, device: String) {
         exposedThrough = max(exposedThrough, step)
         amnesia.append((step, device))
+    }
+
+    /// The zone was lost at this step.
+    public mutating func recordZoneLoss(step: Int) { zoneLosses.append(step) }
+
+    /// Whether a deletion can have been forgotten: the device that made it lost its memory at that step or later
+    /// (a deletion is known only from the base its ledger kept; section 4), before or without sending the marker.
+    func forgotten(_ deletion: Event) -> Bool {
+        if blind.contains("\(deletion.step)|\(deletion.device)|\(deletion.key)") { return true }
+        return amnesia.contains { $0.device == deletion.device && $0.step >= deletion.step }
+    }
+
+    /// The person on `device` deleted these items while its ledger held no living base for them.
+    public mutating func recordBlindDeletions(step: Int, device: String, keys: [SyncKey]) {
+        for key in keys { blind.insert("\(step)|\(device)|\(key)") }
     }
 
     private mutating func add(_ event: Event) {
@@ -312,13 +334,16 @@ public enum SyncInvariants {
         switch (field.kind, value) {
         case (.reference(let target), .reference(let name)?):
             let key = SyncKey(type: target, name: name)
-            if intent.gone(key) != nil { return .check(nil) }
+            if let deletion = intent.gone(key) { return intent.forgotten(deletion) ? .skip : .check(nil) }
             return intent.everDeleted(key) ? .skip : .check(value)
         case (.references(let target), .referenceList(let names)?):
             var kept: [String] = []
             for name in names {
                 let key = SyncKey(type: target, name: name)
-                if intent.gone(key) != nil { continue }
+                if let deletion = intent.gone(key) {
+                    if intent.forgotten(deletion) { return .skip }
+                    continue
+                }
                 if intent.everDeleted(key) { return .skip }
                 kept.append(name)
             }
@@ -340,12 +365,14 @@ public enum SyncInvariants {
     // MARK: I3
 
     /// I3: an item deleted on one device and not made or changed anywhere afterwards is on no device, and iCloud
-    /// holds at most its marker.
+    /// holds at most its marker. Not held to account: a deletion the deleting device may have forgotten (it lost its
+    /// memory at that step or later: section 4 knows a deletion only from the base the ledger kept). Another
+    /// device's loss of memory is no excuse: it merges with the marker (M6).
     public static func nothingComesBack(devices: [DeviceHoldings], cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
         var findings: [SyncFinding] = []
         let iCloud = Dictionary(cloud.map { ($0.key, $0.record) }, uniquingKeysWith: { a, _ in a })
         for key in intent.keys {
-            guard let deletion = intent.gone(key) else { continue }
+            guard let deletion = intent.gone(key), !intent.forgotten(deletion) else { continue }
             var back: [String] = []
             for device in devices.sorted(by: { $0.name < $1.name }) {
                 if let record = device.records.first(where: { $0.key == key }) {
@@ -468,7 +495,7 @@ public enum SyncInvariants {
     // MARK: I8
 
     /// I8: a key another build wrote (`FakeCloud.poke`) is still in iCloud's record, as it wrote it, whatever this
-    /// build has sent since; unless the record was removed for good.
+    /// build has sent since; unless the record was removed for good, or the zone was lost after (it went with it).
     public static func newerFieldsSurvive(cloud: [CloudRecord], intent: SimIntent) -> [SyncFinding] {
         var findings: [SyncFinding] = []
         let iCloud = Dictionary(cloud.map { ($0.key, $0.record) }, uniquingKeysWith: { a, _ in a })
@@ -476,7 +503,7 @@ public enum SyncInvariants {
         for poke in intent.pokes { last["\(poke.key)|\(poke.field)"] = poke }
         for id in last.keys.sorted() {
             let poke = last[id]!
-            guard let record = iCloud[poke.key] else { continue }
+            guard let record = iCloud[poke.key], !intent.zoneLosses.contains(where: { $0 >= poke.step }) else { continue }
             if record.fields[poke.field] != poke.value {
                 findings.append(SyncFinding(.newerFieldsSurvive, "\(poke.key) \(poke.field) was written by a newer build at step \(poke.step) as \(say(poke.value)); iCloud now holds \(say(record.fields[poke.field]))"))
             }

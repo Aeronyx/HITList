@@ -60,6 +60,8 @@ public struct FakeDelivery: Sendable {
     public var round: Int
     /// Whether this event will be delivered again right after.
     public var willRepeat: Bool
+    /// A `didFetch` or `didSend` that carried an error.
+    public var failed: Bool = false
 }
 
 enum FakeTransportContext {
@@ -573,7 +575,10 @@ public actor FakeTransport: SyncTransport {
             }
             deliveredCount += 1
             if let observer {
-                await observer(FakeDelivery(kind: kind, round: round, willRepeat: round + 1 < rounds))
+                var failed = false
+                if case .didFetch(let error?) = event { failed = !error.isEmpty }
+                if case .didSend(let error?) = event { failed = !error.isEmpty }
+                await observer(FakeDelivery(kind: kind, round: round, willRepeat: round + 1 < rounds, failed: failed))
             }
         }
         if crashPoint == .afterHandling(kind) {
