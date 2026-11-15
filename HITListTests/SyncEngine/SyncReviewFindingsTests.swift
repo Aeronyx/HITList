@@ -114,4 +114,50 @@ final class SyncReviewFindingsTests: XCTestCase {
             XCTAssertNil(hold, "an unreadable memory is forgotten and merged afresh (section 7), not held for ever")
         }
     }
+
+    // MARK: Finding 18: a change that arrives while the person has the row unsaved is let go until the next launch
+
+    /// The person has an unsaved change on a task in the main context when another device's edit of it arrives. The
+    /// write comes back stale (right: the person's edit is not saved over); the brain decides again on a fresh read,
+    /// which sees only the saved row, so it can never agree with the main context, and after three rounds it leaves the
+    /// record "for the next fetch". But the bookmark has moved, and the refetch happens only at the next launch: if
+    /// the person then drops the change (Discard, an undo), the other device's edit is missing here until a relaunch.
+    func testFinding18_anEditThatArrivesWhileARowIsUnsavedIsMissingUntilTheNextLaunch() async throws {
+        let notes = try await anEditArriving(whileTyping: true)
+        XCTExpectFailure("Finding 18: a fetched edit left 'for the next fetch' after three stale rounds waits for a relaunch", strict: true) {
+            XCTAssertEqual(notes, .string("Ferry moved to ten"), "the other device's edit is here once the person's typing is gone")
+        }
+    }
+
+    /// The same without the unsaved typing: the edit arrives (so the test above shows the stale rounds, not the rig).
+    func testFinding18_control_anEditThatArrivesWithNothingUnsavedIsWritten() async throws {
+        let notes = try await anEditArriving(whileTyping: false)
+        XCTAssertEqual(notes, .string("Ferry moved to ten"))
+    }
+
+    private func anEditArriving(whileTyping: Bool) async throws -> SyncValue? {
+        main.autosaveEnabled = false
+        let task = TaskItem(title: "Trip", notes: "Ferry at nine")
+        main.insert(task)
+        try main.save()
+        let ledger = SyncLedgerStore.inMemory()
+        let cloud = FakeCloud()
+        let transport = FakeTransport(cloud: cloud, device: "s146", state: ledger)
+        let core = SyncCore(store: store, ledger: ledger, transport: transport, host: nil)
+        await core.start()
+        try await core.syncNow()
+        try await core.syncNow()
+        let first = await cloud.record(key(task))
+        XCTAssertNotNil(first, "setup: the task is in iCloud")
+
+        // Another device's edit reaches iCloud while this person has the title half typed, unsaved.
+        _ = await cloud.poke(key(task), ["notes": .string("Ferry moved to ten"), "updatedAt": .date(Date().addingTimeInterval(60))])
+        if whileTyping { task.title = "Trip to O" }
+        try await core.syncNow()
+        // The person drops the typing (Discard); nothing is saved, so no save hint follows.
+        main.rollback()
+        try await core.syncNow()
+        try await core.syncNow()
+        return try await record(key(task))["notes"]
+    }
 }
