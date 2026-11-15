@@ -140,6 +140,16 @@ final class SyncAppDelegate: NSObject, UIApplicationDelegate {
             Task { @MainActor in completionHandler(await SharedTasksCenter.shared.handlePush() ? .newData : .noData) }
             return
         }
+        // HITList's own engine (brief 143): the mirror is off on this store, so the push is the engine's. A fetch (and a
+        // send) within the time the system gives, then the widgets, then the handler.
+        if let engine = SyncEngine.shared, engine.isStarted {
+            Task { @MainActor in
+                let done = await engine.syncWithin(SyncAppDelegateSupport.backgroundImportWait, reason: "a push")
+                await WidgetRefresh.settle(waitForMerge: false)
+                completionHandler(done ? .newData : .noData)
+            }
+            return
+        }
         let receivedAt = Date()
         let monitor = CloudSyncMonitor.shared
         let state = application.applicationState == .active ? "active" : application.applicationState == .background ? "background" : "inactive"
@@ -184,7 +194,29 @@ final class SyncAppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in _ = await SharedTasksCenter.shared.handlePush() }
             return
         }
+        // HITList's own engine (brief 143): CKSyncEngine fetches on a push by itself; one fetch more is harmless and
+        // does not rest on that being proven.
+        if let engine = SyncEngine.shared, engine.isStarted {
+            Task { @MainActor in _ = await engine.syncWithin(SyncAppDelegateSupport.backgroundImportWait, reason: "a push") }
+            return
+        }
         CloudSyncMonitor.shared.pushReceived(userInfo, appState: application.isActive ? "active" : "inactive")
+    }
+
+    /// Quit on HITList's own engine: the engine stops first (the transport writes its state, no event after), for 4 s
+    /// at most. On the mirror (every released build) the app quits at once, as before.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let engine = SyncEngine.shared, engine.isStarted else { return .terminateNow }
+        var replied = false
+        let reply = { @MainActor in
+            guard !replied else { return }
+            replied = true
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        // Two tasks, not a group: a group waits for both, and the cap is there for a stop that does not return.
+        Task { @MainActor in await engine.stop(); reply() }
+        Task { @MainActor in try? await Task.sleep(for: .seconds(4)); reply() }
+        return .terminateLater
     }
 
     /// A CloudKit invitation link opened on the Mac (Shared Tasks, brief 51).

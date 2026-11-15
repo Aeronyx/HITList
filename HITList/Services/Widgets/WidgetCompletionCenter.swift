@@ -21,6 +21,13 @@ protocol WidgetSyncFacts: AnyObject {
     var canTellGone: Bool { get }
     /// The sync state for the snapshot, as coarse as the widgets need it.
     var widgetSync: WidgetSnapshot.Sync { get }
+    /// Whether iCloud accepted this task's record at or after `date` (HITList's own engine knows; the mirror never
+    /// says, and answers false).
+    func accepted(_ taskID: UUID, since date: Date) -> Bool
+}
+
+extension WidgetSyncFacts {
+    func accepted(_ taskID: UUID, since date: Date) -> Bool { false }
 }
 
 /// Completes what the widgets ask (brief 81), in the app's process and nowhere else.
@@ -96,6 +103,8 @@ final class WidgetCompletionCenter {
         guard let outbox = WidgetOutbox(container: group, suffix: suffix) else { return }
         let monitor = CloudSyncMonitor.shared
         var sync: WidgetSyncFacts = monitor
+        // Brief 143: on HITList's own engine, "iCloud has it" is the engine's word, not the mirror's export.
+        if let engine = SyncEngine.shared { sync = engine.widgetFacts }
         #if DEBUG
         let delay = WidgetDebug.exportDelay()
         if let delay { sync = DelayedExports(delay: delay) }
@@ -216,6 +225,7 @@ final class WidgetCompletionCenter {
             // Recovered or not, a waiting entry is checked against the finish line in this same pass.
             guard let entry = ledger.entry(live.id), entry.stage == .waiting,
                   let resolution = WidgetCompletion.finish(entry, line: sync.finishLine, lastExportStart: sync.lastExportStart)
+                    ?? acceptedSince(entry)
             else { continue }
             resolve(entry.id, resolution, now: now)
             leaving.append(entry.id)
@@ -232,6 +242,13 @@ final class WidgetCompletionCenter {
             do { try outbox.remove(id) } catch { log("Widget: a finished tap couldn't leave the outbox: \(error.localizedDescription)", .error) }
         }
         holdAwake(!ledger.live.isEmpty)
+    }
+
+    /// HITList's own engine: the task's own record accepted by iCloud after the tap was applied finishes it too.
+    private func acceptedSince(_ entry: WidgetLedger.Entry) -> WidgetCompletion.Resolution? {
+        guard sync.finishLine == .export, let applied = entry.appliedAt,
+              sync.accepted(entry.request.taskID, since: applied) else { return nil }
+        return .exported
     }
 
     private func scheduleRecheck() {
