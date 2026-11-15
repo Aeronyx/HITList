@@ -10,7 +10,9 @@ import Foundation
 public struct LocalWrite: Hashable, Sendable {
     public var key: SyncKey
     /// What the device must hold for the write to go ahead: the record the decision was made on, or nil when the
-    /// item must not exist here. Compared as `SyncRecord.comparable`. (A person may have changed the item between
+    /// item must not exist here. Compared with `RecordMerge.same` (known fields, required ones filled in, data by
+    /// digest, a set of references as a set), never field by field as written: a store that hands out a list in
+    /// another order must not make every write stale. (A person may have changed the item between
     /// the read and the write: then nothing is written, the key comes back from `apply`, and the brain decides
     /// again on the newer record.)
     public var expected: SyncRecord?
@@ -42,7 +44,7 @@ public protocol SyncLocalStore: Sendable {
     func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord]
 
     /// Makes the writes in one transaction, in an order that keeps references whole (a record after the ones it
-    /// points at; deletions last), each only if its `expected` still holds. A reference to an item that does not
+    /// points at; deletions last), each only if its `expected` still holds (`RecordMerge.same`). A reference to an item that does not
     /// exist here is written as none. Returns the keys whose `expected` did not hold: nothing was written for them.
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey>
 }

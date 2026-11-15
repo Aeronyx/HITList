@@ -28,7 +28,7 @@ public actor MemoryLocalStore: SyncLocalStore {
         var saves: [SyncRecord] = []
         var deletes: [SyncKey] = []
         for write in writes {
-            guard items[write.key]?.comparable == write.expected?.comparable else {
+            guard RecordMerge.same(items[write.key], write.expected) else {
                 stale.insert(write.key)
                 continue
             }

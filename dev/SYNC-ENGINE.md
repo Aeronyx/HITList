@@ -122,7 +122,7 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
 | M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D |
 | M9 | Here, B alive, a marker there | L same as B: the marker (it goes here). L changed after the deletion: L (it comes back there). Else the marker |
-| M10 | Deleted here (or B a marker and not here), a marker there | A marker at the later of D and S's deletion (so the time does not depend on who reached iCloud first; it is sent if it differs from S) |
+| M10 | Not here, a marker there | B alive (deleted here too): a marker at the later of D and S's deletion, so the time does not depend on who reached iCloud first; it is sent if it differs from S. B a marker: S, unless this device still has a later marker of its own to send (`deletedHereAt` set, never "now"): then that one |
 | M11 | B present, not there at all | L same as B, or not here: nothing. L changed: L, new again |
 | M12 | Here, B a marker | S the marker this device knew (the same time as B's): L, it was made again here, whatever its dates (an undo, an import). S a newer marker (deleted again elsewhere since): as M6. Alive there too: as M5 |
 | M13 | Not here, B a marker, alive there | S: it was made again elsewhere |
