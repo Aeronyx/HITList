@@ -227,6 +227,8 @@ actor GatedStore: SyncLocalStore {
         return try await inner.records(keys)
     }
 
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> {
         if armed {
             armed = false
@@ -250,6 +252,8 @@ actor FailingStore: SyncLocalStore {
     func failWrites() { failing = true }
     func records() async throws -> [SyncRecord] { try await inner.records() }
     func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord] { try await inner.records(keys) }
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> {
         if failing { throw WriteFailed() }
         return try await inner.apply(writes)

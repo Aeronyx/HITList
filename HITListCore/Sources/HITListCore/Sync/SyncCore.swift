@@ -24,22 +24,6 @@ public actor SyncCore: SyncTransportDelegate {
     weak var host: (any SyncHost)?
     let clock: @Sendable () -> Date
     let log: @Sendable (String) -> Void
-    let limits: Limits
-
-    /// The numbers the brain's guards use, in one place.
-    public struct Limits: Sendable, Equatable {
-        /// A whole compare that finds at least this many items gone here (that iCloud holds alive)...
-        public var massDeletionCount: Int
-        /// ...that are also more than this share of everything iCloud holds alive, holds (`SyncHold.massDeletion`).
-        /// (Also held, whatever the numbers: no item here that iCloud holds alive, while it holds some.) 10 and a half
-        /// since 2026-11-15 (review finding 2: an account of 40 items losing 30 must ask).
-        public var massDeletionShare: Double
-
-        public init(massDeletionCount: Int = 10, massDeletionShare: Double = 0.5) {
-            self.massDeletionCount = massDeletionCount
-            self.massDeletionShare = massDeletionShare
-        }
-    }
 
     // MARK: The ledger, as read at start and kept in step with every write (`commit`)
 
@@ -52,9 +36,6 @@ public actor SyncCore: SyncTransportDelegate {
     /// Fetched records were let go unread (a hold, a write that failed): the transport must bring everything again
     /// before the brain trusts its memory. Kept as a fact too, so a relaunch does it.
     var refetch = false
-    /// When a whole compare first found the items a `massDeletion` hold is about: the time their markers carry if
-    /// the person confirms. Kept as a fact with the hold.
-    var massSeenAt: Date?
     /// The account a switch is to join once the previous account's items could be backed up and removed (a backup
     /// that failed). Kept as a fact.
     var switchTo: String?
@@ -67,13 +48,19 @@ public actor SyncCore: SyncTransportDelegate {
     /// only valid for the memory it was written in (`sentEpoch`, moved on by every forget).
     var remembered: [SyncKey: SyncRecord] = [:]
     var sentEpoch = 0
-    /// Deletions the app vouched for (`vouchForDeletions`), not noticed yet. Kept as a fact (`vouchedFact`).
-    var vouched: Set<SyncKey> = []
+    /// Records iCloud sent that could not be written because the person had the item changed and not saved, three
+    /// tries running (`staleRounds`): kept to be settled again when a save names the item, when everything is
+    /// compared, and at the end of every fetch. Their keys are kept as a fact too (`unsettledFact`), so that a launch
+    /// which finds any asks for every record again: the bookmark has moved past them.
+    var unsettled: [SyncKey: CloudRecord] = [:]
 
     // MARK: Working state, not kept
 
     /// An event is being handled: nothing may reset the transport now.
     var inEvent = false
+    /// Deletions noted (`noteDeletions`) whose keys no compare has looked at yet: the next one does, whatever keys
+    /// it was asked for (a save's hint names the rows it knows of; the store may have written down more).
+    var noted: Set<SyncKey> = []
 
     enum Phase { case off, starting, running }
     var phase = Phase.off
@@ -115,24 +102,9 @@ public actor SyncCore: SyncTransportDelegate {
 
     /// The ledger's own fact this brain adds (`LedgerFact` names the contract's).
     static let refetchFact = "refetch"
-    static let massSeenFact = "massDeletionSeen"
     static let switchFact = "switchTo"
     static let epochFact = "sentEpoch"
-    static let vouchedFact = "vouched"
-
-    /// Keeps `keys` as the vouched deletions, in the ledger first. Best effort: a vouch the ledger cannot take is kept
-    /// in memory only (the guard may then ask the person once after a relaunch, which is safe).
-    func setVouched(_ keys: Set<SyncKey>) async {
-        guard keys != vouched else { return }
-        var write = LedgerWrite()
-        if keys.isEmpty {
-            write.facts.updateValue(nil, forKey: Self.vouchedFact)
-        } else {
-            write.facts[Self.vouchedFact] = try? JSONEncoder().encode(keys.sorted())
-        }
-        try? await commit(write)
-        vouched = keys
-    }
+    static let unsettledFact = "unsettled"
     static func sentFact(_ key: SyncKey) -> String { "sentNoBase|\(key)" }
     static let metaKey = SyncKey(type: SyncSchema.metaType, name: SyncSchema.metaName)
     /// How many times a record the person changed between the read and the write is decided again within one event
@@ -141,14 +113,13 @@ public actor SyncCore: SyncTransportDelegate {
 
     public init(store: any SyncLocalStore, ledger: any SyncLedger, transport: any SyncTransport,
                 host: (any SyncHost)?, clock: @escaping @Sendable () -> Date = { Date() },
-                log: @escaping @Sendable (String) -> Void = { _ in }, limits: Limits = Limits()) {
+                log: @escaping @Sendable (String) -> Void = { _ in }) {
         self.store = store
         self.ledger = ledger
         self.transport = transport
         self.host = host
         self.clock = clock
         self.log = log
-        self.limits = limits
     }
 
     // MARK: - Public surface
@@ -169,6 +140,7 @@ public actor SyncCore: SyncTransportDelegate {
             phase = .running
             await liftForStart()
             await compare(nil)
+            await refetchIfOwed()
             publish()
         }
     }
@@ -188,13 +160,16 @@ public actor SyncCore: SyncTransportDelegate {
     }
 
     /// The device's items changed: compare them with the ledger and make the transport's list match (section 4).
-    /// `keys` is the app's hint of what a save touched; nil compares everything (at start, on return to the app,
-    /// after an import). A nil compare also tries a full iCloud again (`storageFull`).
+    /// `keys` is what a save touched (the rows it made or changed, and the ones it deleted, which the store has
+    /// written down: `SyncLocalStore.deletions`); nil compares everything, which only a launch and a save that could
+    /// not be named need. A nil compare also tries a full iCloud again (`storageFull`).
     public func localChanged(_ keys: Set<SyncKey>?) async {
         await serially {
             guard loaded else { return }
             if keys == nil, hold == .storageFull { await lift(resetTransport: false) }
             await compare(keys)
+            await settleUnsettled(keys)
+            await refetchIfOwed()
             publish()
         }
     }
@@ -248,67 +223,6 @@ public actor SyncCore: SyncTransportDelegate {
         try await serially {
             guard hold == .zonePurged else { throw SyncCoreError.noQuestion }
             try await answerPurge(choice)
-            publish()
-        }
-    }
-
-    /// The person's "yes, I deleted them" while held for a mass deletion (`SyncHold.massDeletion`): the items gone
-    /// are deleted in iCloud too, their markers carrying the moment the compare first found them gone. Throws
-    /// `SyncCoreError.noQuestion` when the brain is not asking.
-    public func confirmDeletions() async throws {
-        try await serially {
-            guard case .massDeletion? = hold else { throw SyncCoreError.noQuestion }
-            let seen = massSeenAt ?? clock()
-            log("The person confirmed the deletions found at \(seen)")
-            // The hold first, then the deletions noticed: a crash in between finds them again and asks again.
-            await lift(resetTransport: true)
-            await compare(nil, confirmedAt: seen)
-            publish()
-        }
-    }
-
-    /// The app vouches for a deletion the person asked for (added beside, brief 145, from review finding 12: "Undo last
-    /// import" of 100 synced tasks, a Group deleted with its tasks): call it just before or just after deleting `keys`
-    /// at the person's word. When a compare finds exactly those keys gone they do not count toward the mass-deletion
-    /// guard (others still do) and go as ordinary deletions. The vouch is kept in memory and in the ledger until those
-    /// keys are noticed gone, or a whole compare finds them still here (then it lapses). It never lifts a hold already
-    /// standing for other reasons.
-    public func vouchForDeletions(_ keys: Set<SyncKey>) async {
-        await serially {
-            guard loaded, !keys.isEmpty else { return }
-            await setVouched(vouched.union(keys))
-            log("The app vouches for \(keys.count) deletion\(keys.count == 1 ? "" : "s") the person asked for")
-        }
-    }
-
-    /// A third way out of a mass-deletion hold (added beside, brief 145, review finding 13c): "download them again".
-    /// The memory is forgotten as for a transport that lost its state (nothing of the person's is removed; deletions
-    /// noticed before the hold and not sent yet are kept; the items the hold is about are not stamped as deleted), the
-    /// transport reset, the hold lifted, and everything merged afresh: what iCloud holds comes back here (M3), what is
-    /// only here goes up (M2). Throws `SyncCoreError.noQuestion` when not held for a mass deletion.
-    public func restoreFromICloud() async throws {
-        try await serially {
-            guard case .massDeletion? = hold else { throw SyncCoreError.noQuestion }
-            log("The person asked for the missing items back from iCloud: everything is merged afresh")
-            // The memory first (in one write), then the transport, then the hold: a crash after the first finds the
-            // hold still standing over an empty memory, whose next whole compare finds nothing gone and lifts it.
-            guard await forgetMemory(keepFirstFetch: false) else { return }
-            await transport.reset()
-            var write = LedgerWrite()
-            write.facts.updateValue(nil, forKey: LedgerFact.hold)
-            write.facts.updateValue(nil, forKey: Self.massSeenFact)
-            write.facts.updateValue(nil, forKey: Self.refetchFact)
-            do {
-                try await commit(write)
-            } catch {
-                await fail("The engine's memory could not be written: \(error)")
-                return
-            }
-            hold = nil
-            holdNote = nil
-            heldUnder = nil
-            await setVouched([])
-            await compare(nil)
             publish()
         }
     }
@@ -416,8 +330,6 @@ public actor SyncCore: SyncTransportDelegate {
             case Self.refetchFact: refetch = value != nil
             case Self.switchFact: switchTo = value.map { String(decoding: $0, as: UTF8.self) }
             case Self.epochFact: sentEpoch = value.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
-            case Self.massSeenFact:
-                massSeenAt = value.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             default: break
             }
         }
@@ -429,25 +341,24 @@ public actor SyncCore: SyncTransportDelegate {
         publish()
         do {
             let list = try await ledger.entries()
-            let aside = try await ledger.deferred()
+            let waitList = try await ledger.deferred()
             let first = try await ledger.fact(LedgerFact.firstFetchDone)
             let owner = try await ledger.fact(LedgerFact.account)
             let held = try await ledger.fact(LedgerFact.hold)
             let again = try await ledger.fact(Self.refetchFact)
-            let seen = try await ledger.fact(Self.massSeenFact)
+            // Records set aside unwritten when the app last ran are gone with that process: everything is asked for again.
+            let aside = try await ledger.fact(Self.unsettledFact)
             let next = try await ledger.fact(Self.switchFact)
             let epoch = try await ledger.fact(Self.epochFact)
             sentEpoch = epoch.flatMap { Int(String(decoding: $0, as: UTF8.self)) } ?? 0
             remembered = [:]
-            let vouch = try await ledger.fact(Self.vouchedFact)
-            vouched = Set(vouch.flatMap { try? JSONDecoder().decode([SyncKey].self, from: $0) } ?? [])
+            unsettled = [:]
             entries = Dictionary(list.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
-            waits = Dictionary(aside.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
+            waits = Dictionary(waitList.map { ($0.key, $0) }, uniquingKeysWith: { _, last in last })
             firstFetchDone = first != nil
             account = owner.flatMap { String(data: $0, encoding: .utf8) }
-            refetch = refetch || again != nil
+            refetch = refetch || again != nil || aside != nil
             switchTo = next.map { String(decoding: $0, as: UTF8.self) }
-            massSeenAt = seen.flatMap { Double(String(decoding: $0, as: UTF8.self)) }.map { Date(timeIntervalSince1970: $0) }
             if let held {
                 hold = try? JSONDecoder().decode(SyncHold.self, from: held)
                 heldUnder = nil
@@ -525,13 +436,7 @@ public actor SyncCore: SyncTransportDelegate {
         return out
     }
 
-    /// The order changes are added to the list in: those pointed at first (`SyncSchema.types`), then by name.
-    static func sendOrder(_ a: SyncKey, _ b: SyncKey) -> Bool {
-        let ra = rank(a.type), rb = rank(b.type)
-        if ra != rb { return ra < rb }
-        return a.name < b.name
-    }
-
+    /// Where a type stands in the order changes are added to the list in: those pointed at first (`SyncSchema.types`).
     static func rank(_ type: String) -> Int {
         if type == SyncSchema.metaType { return -1 }
         return SyncSchema.types.firstIndex { $0.name == type } ?? Int.max

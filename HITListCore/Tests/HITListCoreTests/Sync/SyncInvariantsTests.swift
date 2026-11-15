@@ -598,14 +598,19 @@ final class SyncInvariantsTests: XCTestCase {
         var config = SimConfig()
         config.faults = Set(SimFaultKind.allCases)
         config.faultPercent = 30
-        let report = await SyncSimulation.randomRun(seed: 3, devices: 3, steps: 400, config: config, brain: NaiveBrain.make)
-        XCTAssertEqual(report.script.count, 400)
-        for kind in ["without its ledger", "fault account", "iCloud deleteZone", "iCloud quotaFull", "iCloud refuseNextSave",
-                     "fault crash", "fault deliverTwice", "transport syncs by itself", "iCloud poke", "fault network down"] {
-            XCTAssertTrue(report.script.contains { $0.contains(kind) }, "no step '\(kind)' in seed 3")
+        // Two seeds, so that every kind shows whatever the draw (a kind added later moves each seed's draws).
+        var script: [String] = []
+        for seed: UInt64 in [3, 4] {
+            let report = await SyncSimulation.randomRun(seed: seed, devices: 3, steps: 400, config: config, brain: NaiveBrain.make)
+            XCTAssertEqual(report.script.count, 400)
+            script += report.script
+            print("Every fault kind, seed \(seed): \(report.findings.count) findings, \(report.notes.count) notes")
         }
-        print("Every fault kind, seed 3: \(report.findings.count) findings, \(report.notes.count) notes; the script begins:\n"
-              + report.script.prefix(12).joined(separator: "\n"))
+        for kind in ["without its ledger", "fault account", "iCloud deleteZone", "iCloud quotaFull", "iCloud refuseNextSave",
+                     "fault crash", "fault deliverTwice", "transport syncs by itself", "iCloud poke", "fault network down",
+                     "fault store loses"] {
+            XCTAssertTrue(script.contains { $0.contains(kind) }, "no step '\(kind)' in seeds 3 and 4")
+        }
     }
 
     /// Measured in the test process's own CPU time: on a Mac shared with other builds the wall clock says more about
@@ -1109,7 +1114,7 @@ actor MergingBrain: SimBrain, SyncTransportDelegate {
         let local = await store.record(key)
         let entry = await ledger.entry(key)
         let input = MergeInput(base: entry?.base, local: honoured(local, waits[key]), deletedHereAt: entry?.deletedHereAt,
-                               server: server, now: clock.now())
+                               server: server)
         return (local, RecordMerge.merge(input), entry)
     }
 

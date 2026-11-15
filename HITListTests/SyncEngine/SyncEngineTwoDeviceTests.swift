@@ -68,77 +68,64 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
     private var cloud: FakeCloud!
     private var devices: [Device] = []
 
-    /// The sync review's finding 12: a deletion of most of what iCloud holds stops the engine and asks (a store that
-    /// reads wrong must never empty every device), unless the app vouches for it because the person asked for
-    /// exactly that a moment ago (Undo last import, a Switchboard deleted with its switches). The vouch goes down
-    /// the engine's stream ahead of the hint of the save that deletes.
-    func testABulkDeletionIsHeldUnlessTheAppVouchesForIt() async throws {
-        func deviceWithThirtyTasks(_ name: String) async throws -> (Device, [TaskItem]) {
-            let device = Device(name, cloud: FakeCloud())
-            devices.append(device)
-            await device.start()
-            var made: [TaskItem] = []
-            for i in 0..<30 {
-                let task = TaskItem(title: "Imported \(i)")
-                device.context.insert(task)
-                made.append(task)
-            }
-            try device.save()
-            try await device.sync()
-            let before = await device.status
-            XCTAssertNil(before.hold, name)
-            XCTAssertEqual(before.waiting, 0, name)
-            return (device, made)
-        }
-
-        // Not vouched for: held, nothing sent.
-        let (plain, plainTasks) = try await deviceWithThirtyTasks("plain")
-        for task in plainTasks.prefix(25) { plain.context.delete(task) }
-        try plain.save()
-        await plain.engine.settle()
-        let held = await plain.status
-        guard case .massDeletion(let count)? = held.hold else { return XCTFail("25 of 30 gone without a word: \(String(describing: held.hold))") }
-        XCTAssertEqual(count, 25)
-
-        // Vouched for, before the save: an ordinary deletion, sent.
-        let (vouched, vouchedTasks) = try await deviceWithThirtyTasks("vouched")
-        let going = vouchedTasks.prefix(25)
-        vouched.engine.vouch(Set(going.map { SyncSchema.key(SyncSchema.taskItem, id: $0.id) }))
-        for task in going { vouched.context.delete(task) }
-        try vouched.save()
-        try await vouched.sync()
-        let after = await vouched.status
-        XCTAssertNil(after.hold, "the person asked for it: nothing to ask")
-        XCTAssertEqual(after.waiting, 0, "the 25 markers went")
-        XCTAssertEqual(try vouched.tasks().count, 5)
-    }
-
-    /// The safe way out of a mass-deletion hold (the review's finding 13c): "Keep them in iCloud" puts back what
-    /// iCloud holds and deletes nothing anywhere.
-    func testKeepThemInICloudPutsBackWhatWentMissing() async throws {
+    /// A deletion the person asked for, however large (Undo last import, a Group with its tasks), is so many
+    /// deletions taken down as they were saved: they go, and nobody is asked anything. (The first engine read absence
+    /// as deletion, had to guard that with numbers, and needed the app to vouch for a bulk deletion.)
+    func testABulkDeletionThePersonAskedForSimplyGoes() async throws {
         let device = Device("A", cloud: cloud)
         devices.append(device)
         await device.start()
         var made: [TaskItem] = []
-        for i in 0..<20 {
-            let task = TaskItem(title: "Task \(i)")
+        for i in 0..<30 {
+            let task = TaskItem(title: "Imported \(i)")
             device.context.insert(task)
             made.append(task)
         }
         try device.save()
         try await device.sync()
-        for task in made { device.context.delete(task) }
-        try device.save()
-        await device.engine.settle()
-        let held = await device.status
-        guard case .massDeletion? = held.hold else { return XCTFail("not held: \(String(describing: held.hold))") }
 
-        try await device.engine.actions.restore()
+        for task in made.prefix(25) { device.context.delete(task) }
+        try device.save()
         try await device.sync()
         let after = await device.status
-        XCTAssertNil(after.hold)
-        XCTAssertEqual(try device.tasks().count, 20, "everything iCloud held is back on the device")
-        XCTAssertEqual(after.waiting, 0, "and nothing is waiting to be deleted")
+        XCTAssertNil(after.hold, "the person deleted them: nothing to ask")
+        XCTAssertEqual(after.waiting, 0, "the 25 markers went")
+        XCTAssertEqual(try device.tasks().count, 5)
+        let tasks = await cloud.records().filter { $0.key.type == "TaskItem" }
+        XCTAssertEqual(tasks.filter { $0.record.isDeleted }.count, 25)
+        XCTAssertEqual(tasks.filter { !$0.record.isDeleted }.count, 5)
+    }
+
+    /// Rows that are gone with no deletion taken down (here: deleted while nothing was watching the saves, as a store
+    /// that lost them would look) are not deletions. Nothing is deleted in iCloud, nobody is asked, and at the next
+    /// launch everything iCloud holds comes back.
+    func testRowsGoneWithNoDeletionTakenDownComeBackAndNothingIsDeletedInICloud() async throws {
+        let container = ModelContainerFactory.preview()
+        let ledger = SyncLedgerStore.inMemory()
+        let first = Device("A", cloud: cloud, container: container, ledger: ledger)
+        devices.append(first)
+        await first.start()
+        for i in 0..<20 { first.context.insert(TaskItem(title: "Task \(i)")) }
+        try first.save()
+        try await first.sync()
+        await first.engine.stop()
+
+        // The app is not running the engine: nothing takes these down.
+        for task in try first.tasks() { first.context.delete(task) }
+        try first.save()
+        XCTAssertEqual(try first.tasks().count, 0, "setup: the store reads empty")
+
+        let again = Device("A", cloud: cloud, container: container, ledger: ledger)
+        devices.append(again)
+        await again.start()
+        try await again.sync()
+        try await again.sync()
+        let after = await again.status
+        XCTAssertNil(after.hold, "nobody is asked anything")
+        XCTAssertEqual(after.waiting, 0)
+        XCTAssertEqual(try again.tasks().count, 20, "everything iCloud held is back on the device")
+        let markers = await cloud.records().filter { $0.record.isDeleted }.count
+        XCTAssertEqual(markers, 0, "and nothing was deleted in iCloud")
     }
 
     override func setUp() async throws {

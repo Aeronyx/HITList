@@ -1,3 +1,6 @@
+// Compiled into Debug builds only (tests, the Debug app's pretend iCloud): none of this is in a released build. The
+// long simulation runs build for release and pass `-Xswiftc -DDEBUG` (the command is in `SyncCoreSimulationTests`).
+#if DEBUG
 import Foundation
 
 // The rig the engine is proven on (`dev/SYNC-ENGINE.md`, section 9): several simulated devices, each a store, a ledger,
@@ -99,6 +102,9 @@ public enum SimFault: Sendable {
     case loseBookmark
     /// The device signed in to this account (nil: signed out); the running transport notices now.
     case account(String?)
+    /// The device's store loses these items with no deletion written down (a damaged file, a read that came back
+    /// short): nobody deleted them, so nothing may be deleted in iCloud and they must come back (M14).
+    case loseRows([SyncKey])
 }
 
 /// Something happening in iCloud itself.
@@ -122,6 +128,7 @@ extension SimFault: CustomStringConvertible {
         case .loseBookmark: return "bookmark lost"
         case .account(let account?): return "account signed in to \(account)"
         case .account(nil): return "account signed out"
+        case .loseRows(let keys): return "store loses \(keys.map(\.description).joined(separator: ", ")) (no deletion written down)"
         }
     }
 }
@@ -186,6 +193,8 @@ public enum SimFaultKind: String, Hashable, Sendable, CaseIterable, Comparable {
     /// Added by brief 145, outside `everyday` so that the seeds kept before it still play the same runs: a send without
     /// a fetch first (two devices' saves meet: T6), and the person removing HITList's data in iCloud's settings.
     case sendByItself, zonePurged
+    /// Added 2026-11-15 with the rule that only a deletion written down is a deletion: a store that loses rows.
+    case rowsLost
 
     public static let everyday: Set<SimFaultKind> = [.networkDown, .networkDrop, .responseLost, .crashAfterFetched,
                                                      .crashAfterSent, .crashBeforeSent, .deliverTwice, .loseBookmark,
@@ -467,6 +476,9 @@ public actor SyncSimulation {
             await cloud.setAccount(account, for: name)
             await device.transport.noticeChanges()
             await afterBrainCall(name)
+        case .loseRows(let keys):
+            // Nobody is told: the next whole compare finds them missing.
+            for key in keys { await device.store.lose(key) }
         }
     }
 
@@ -671,6 +683,46 @@ public actor SyncSimulation {
             guard let target = random.pick(alive) else { return nil }
             counter += 1
             return .cloud(.poke(target.key, ["futureField": .string("from a newer build \(counter)")]))
+        case .rowsLost:
+            guard let device = slots[name] else { return nil }
+            let records = (try? await device.store.records()) ?? []
+            let entries = (try? await device.ledger.entries()) ?? []
+            let bases = Dictionary(entries.compactMap { entry in entry.base.map { (entry.key, $0) } }, uniquingKeysWith: { first, _ in first })
+            let parents = Set(records.compactMap { record -> String? in
+                if case .reference(let parent)? = record.fields["parent"] { return parent }
+                return nil
+            })
+            // Only items iCloud holds exactly as the device does, with nothing under them, and that no change still
+            // to go points at: a row lost with a change not yet sent loses that change (and the store takes a
+            // reference to a lost row off the rows that held it), which is the store's loss and not the engine's to
+            // answer for.
+            var pointedAtByUnsent = Set<SyncKey>()
+            for record in records {
+                if let base = bases[record.key], !base.isDeleted, RecordMerge.same(base, record) { continue }
+                guard let type = SyncSchema.type(record.key.type) else { continue }
+                for field in type.fields {
+                    switch (field.kind, record.fields[field.key]) {
+                    case (.reference(let target), .reference(let name)?):
+                        pointedAtByUnsent.insert(SyncKey(type: target, name: name))
+                    case (.references(let target), .referenceList(let names)?):
+                        pointedAtByUnsent.formUnion(names.map { SyncKey(type: target, name: $0) })
+                    default: break
+                    }
+                }
+            }
+            let safe = records.filter { record in
+                guard let base = bases[record.key], !base.isDeleted, RecordMerge.same(base, record) else { return false }
+                if record.key.type == SyncSchema.profile.name || pointedAtByUnsent.contains(record.key) { return false }
+                return !(record.key.type == SyncSchema.taskItem.name && parents.contains(record.key.name))
+            }
+            var pool = safe.map(\.key)
+            var keys: [SyncKey] = []
+            for _ in 0..<min(1 + random.below(3), pool.count) {
+                guard let pick = random.pick(pool) else { break }
+                keys.append(pick)
+                pool.removeAll { $0 == pick }
+            }
+            return keys.isEmpty ? nil : .fault(name, .loseRows(keys))
         case .ledgerLost: return .relaunch(name, keepLedger: false, keepTransportState: false)
         case .zoneDeleted: return .cloud(.deleteZone(.deleted))
         case .zoneReset: return .cloud(.deleteZone(.encryptedDataReset))
@@ -897,3 +949,4 @@ final class Observed: @unchecked Sendable {
         return found
     }
 }
+#endif

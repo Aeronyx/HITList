@@ -5,15 +5,17 @@ import HITListCore
 /// so far, or HITList's own engine (`dev/SYNC-ENGINE.md`). One answer per launch, decided before the container opens,
 /// because the answer decides how it opens (the engine needs the same file without the mirror).
 ///
-/// `own` only when
+/// **A released build always answers `mirror`** (`isAvailable`): the engine's code ships switched off, and no
+/// preference, argument or leftover of a Debug run on the same device can switch it on. That line changes in the
+/// release in which George decides the engine goes live, and nowhere else.
+///
+/// In a Debug build, `own` only when
 /// - the store's own preference says so (`AppGroup.defaults`, a key per store name, written by the move,
 ///   `SyncEngine.move(to:)`), or
-/// - a Debug build was launched on a side store with `-syncEngine own` (`-syncEngine mirror` wins the other way, over
-///   the preference).
+/// - it was launched on a side store with `-syncEngine own` (`-syncEngine mirror` wins the other way, over the
+///   preference).
 /// Never under hosted tests (the tests call `decide` themselves), and the engine never runs on the in-memory fallback
-/// (`SyncEngine.launch` says why instead). Nothing writes the preference in a released build unless a person moves the
-/// device, and no released build offers that yet, so every released build answers `mirror` and runs nothing of the
-/// engine's.
+/// (`SyncEngine.launch` says why instead).
 enum SyncEngineSwitch {
     typealias Engine = SyncEngineBoard.Engine
 
@@ -36,9 +38,14 @@ enum SyncEngineSwitch {
     /// device shares the App Group's defaults, so the key names its store, as `resetLocalStoreOnNextLaunch` does.
     static func preferenceKey(storeName: String) -> String { "syncEngine.\(storeName)" }
 
+    /// Whether this build may run the engine at all. Debug builds only, until George says which release switches it
+    /// on (`dev/SYNC-ENGINE.md` section 11): in a released build nothing below is even looked at.
+    static func isAvailable(isDebug: Bool) -> Bool { isDebug }
+
     /// The answer, from what the launch was given. Pure, for the tests.
     static func decide(storeName: String, isTesting: Bool, isDebug: Bool, arguments: [String],
                        defaults: UserDefaults) -> Engine {
+        guard isAvailable(isDebug: isDebug) else { return .mirror }
         if isTesting { return .mirror }
         let isSideStore = storeName != ModelContainerFactory.mainStoreName
         if isDebug, isSideStore, let asked = value(of: argument, in: arguments).flatMap(Engine.init(rawValue:)) {

@@ -72,9 +72,6 @@ enum SyncWords {
     static func engineHold(_ hold: SyncHold, waiting: Int, duplicates: Int = 0) -> String {
         switch hold {
         case .noAccount: return SyncState.notSignedIn.summary()
-        case .massDeletion(let count):
-            let items = count == 1 ? "1 item is" : "\(count) items are"
-            return "\(items) missing from this device. Nothing has been deleted in iCloud."
         case .zonePurged: return "HITList's data was removed from iCloud in Settings."
         case .needsUpdate: return "Update HITList to sync: iCloud holds data from a newer version."
         case .storageFull:

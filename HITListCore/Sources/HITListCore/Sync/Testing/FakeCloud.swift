@@ -1,3 +1,6 @@
+// Compiled into Debug builds only (tests, the Debug app's pretend iCloud): none of this is in a released build. The
+// long simulation runs build for release and pass `-Xswiftc -DDEBUG` (the command is in `SyncCoreSimulationTests`).
+#if DEBUG
 import Foundation
 
 // A pretend iCloud, in memory, for the engine's tests (`dev/SYNC-ENGINE.md`, sections 6 and 9). Apple ships no test
@@ -430,3 +433,4 @@ public struct SimRandom: Sendable {
         }
     }
 }
+#endif

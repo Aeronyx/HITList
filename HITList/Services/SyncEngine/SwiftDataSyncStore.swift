@@ -46,13 +46,23 @@ actor SwiftDataSyncStore: SyncLocalStore {
 
     nonisolated let container: ModelContainer
     nonisolated let writer: Writer
+    /// What was deleted on this device and the brain has not written down yet (`deletions()`): filled by
+    /// `SyncSaveHintObserver` as each save deletes, and by `apply` for a person's deletion pending in the engine's
+    /// own save. The only way the engine learns of a deletion here (`dev/SYNC-ENGINE.md` section 4).
+    nonisolated let deletionLog: SyncDeletionLog
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
 
-    init(container: ModelContainer, writer: Writer = .mainContext) {
+    /// `deletions`: the engine passes one kept in its ledger's file; the default keeps them in memory (tests).
+    init(container: ModelContainer, writer: Writer = .mainContext, deletions: SyncDeletionLog = SyncDeletionLog(ledger: nil)) {
         self.container = container
         self.writer = writer
+        self.deletionLog = deletions
     }
+
+    func deletions() async throws -> Set<SyncKey> { deletionLog.all() }
+
+    func forget(deletions: Set<SyncKey>) async throws { deletionLog.forget(deletions) }
 
     func records() async throws -> [SyncRecord] {
         try Self.read(nil, in: container)
@@ -67,8 +77,8 @@ actor SwiftDataSyncStore: SyncLocalStore {
         guard !writes.isEmpty else { return [] }
         switch writer {
         case .mainContext:
-            let container = container
-            return try await MainActor.run { try Self.apply(writes, on: container.mainContext, shared: true) }
+            let container = container, log = deletionLog
+            return try await MainActor.run { try Self.apply(writes, on: container.mainContext, shared: true, deletions: log) }
         case .ownContext:
             return try Self.apply(writes, in: container)
         }
@@ -160,7 +170,7 @@ actor SwiftDataSyncStore: SyncLocalStore {
     /// changes are undone by hand instead (rows it changed are written back to what they were, rows it inserted are
     /// deleted). Rows it deleted cannot be brought back in the context: they stay deleted and go with the next save,
     /// which is what the brain decided for them anyway.
-    static func apply(_ writes: [LocalWrite], on context: ModelContext, shared: Bool,
+    static func apply(_ writes: [LocalWrite], on context: ModelContext, shared: Bool, deletions: SyncDeletionLog? = nil,
                       beforeSave: (() throws -> Void)? = nil) throws -> Set<SyncKey> {
         guard !writes.isEmpty else { return [] }
         var rows = try existingRows(Set(writes.map(\.key)), in: context)
@@ -263,7 +273,11 @@ actor SwiftDataSyncStore: SyncLocalStore {
             var mine = Set<ObjectIdentifier>()
             for item in written { if let row = rows[item.key] { mine.insert(ObjectIdentifier(row)) } }
             for key in deletes { if let row = rows[key] { mine.insert(ObjectIdentifier(row)) } }
-            savingOnMainContext = EngineSave(context: ObjectIdentifier(context), others: pendingHint(in: context, excluding: mine))
+            // A deletion the person has pending goes with this save: taken down now, as `willSave` would have.
+            let gone = SyncSaveHints.deletedKeys(in: context, excluding: mine)
+            deletions?.record(gone)
+            savingOnMainContext = EngineSave(context: ObjectIdentifier(context),
+                                             others: pendingHint(in: context, excluding: mine, deleted: gone))
         }
         defer {
             context.author = author
@@ -288,8 +302,8 @@ actor SwiftDataSyncStore: SyncLocalStore {
     /// for exactly the length of that `save()` (and read there, by `SyncSaveHints`, inside it).
     struct EngineSave {
         let context: ObjectIdentifier
-        /// The person's rows pending in the same save, as a hint: their keys, `.everything` when the person had a
-        /// deletion pending, `.unrelated` when the person had nothing pending.
+        /// The person's rows pending in the same save, as a hint: their keys (those about to be deleted among
+        /// them), `.unrelated` when the person had nothing pending.
         let others: SyncSaveHint
     }
 
@@ -299,13 +313,10 @@ actor SwiftDataSyncStore: SyncLocalStore {
 
     /// The person's own pending changes in `context`, leaving out the rows the engine is writing: a row inserted or
     /// changed names its key (a row the engine's references touched on their other side may be named too: a hint may
-    /// name too much); a pending deletion of the person's is `.everything` (a deleted row cannot say its `id` after
-    /// the save).
-    static func pendingHint(in context: ModelContext, excluding engineRows: Set<ObjectIdentifier>) -> SyncSaveHint {
-        for model in context.deletedModelsArray where !engineRows.contains(ObjectIdentifier(model)) {
-            if model is any SyncMappedModel { return .everything }
-        }
-        var keys = Set<SyncKey>()
+    /// name too much), and so does each row of the person's about to be deleted (`deleted`, taken down by the caller).
+    static func pendingHint(in context: ModelContext, excluding engineRows: Set<ObjectIdentifier>,
+                            deleted: Set<SyncKey> = []) -> SyncSaveHint {
+        var keys = deleted
         for model in context.insertedModelsArray + context.changedModelsArray where !engineRows.contains(ObjectIdentifier(model)) {
             guard let mapped = model as? any SyncMappedModel else { continue }
             keys.insert(key(of: mapped))

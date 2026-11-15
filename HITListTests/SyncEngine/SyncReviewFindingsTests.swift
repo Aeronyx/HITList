@@ -4,10 +4,9 @@ import HITListCore
 @testable import HITList
 
 /// Brief 146 (`sync-review`, round 28 wave 2): findings of an independent review of the engine, shown on the app's own
-/// parts against an in-memory SwiftData container (`SwiftDataSyncStore`, `SyncLedgerStore`, the task editor). A test
-/// here shows a bug: its failing assertion is wrapped in a strict `XCTExpectFailure` naming the finding, so the suite
-/// stays green today and turns red the day the bug is fixed (then take the wrapper off and keep the test). The
-/// findings, with the sequence, the lines and what to do, are in the notes folder (`146-sync-review/FINDINGS.md`).
+/// parts against an in-memory SwiftData container (`SwiftDataSyncStore`, `SyncLedgerStore`, the task editor). Each
+/// test showed a bug behind a strict `XCTExpectFailure`; every one here is fixed, the wrappers are off, and the tests
+/// stay as guards. The findings are in the notes folder (`146-sync-review/FINDINGS.md`).
 @MainActor
 final class SyncReviewFindingsTests: XCTestCase {
     private var container: ModelContainer!
@@ -112,18 +111,17 @@ final class SyncReviewFindingsTests: XCTestCase {
         XCTAssertNil(hold, "an unreadable memory is forgotten and merged afresh (section 7), not held for ever")
     }
 
-    // MARK: Finding 18: a change that arrives while the person has the row unsaved is let go until the next launch
+    // MARK: Finding 18: a change that arrives while the person has the row unsaved
 
     /// The person has an unsaved change on a task in the main context when another device's edit of it arrives. The
     /// write comes back stale (right: the person's edit is not saved over); the brain decides again on a fresh read,
-    /// which sees only the saved row, so it can never agree with the main context, and after three rounds it leaves the
-    /// record "for the next fetch". But the bookmark has moved, and the refetch happens only at the next launch: if
-    /// the person then drops the change (Discard, an undo), the other device's edit is missing here until a relaunch.
-    func testFinding18_anEditThatArrivesWhileARowIsUnsavedIsMissingUntilTheNextLaunch() async throws {
+    /// which sees only the saved row, so it can never agree with the main context, and after three rounds it sets
+    /// iCloud's record aside. The finding: it was then fetched again only at the next launch, so if the person dropped
+    /// the change (Discard, an undo) the other device's edit was missing here until a relaunch. Fixed 2026-11-15: the
+    /// record set aside is settled again when a save names the item, and at the end of the next fetch.
+    func testFinding18_anEditThatArrivesWhileARowIsUnsavedIsWrittenOnceTheTypingIsGone() async throws {
         let notes = try await anEditArriving(whileTyping: true)
-        XCTExpectFailure("Finding 18: a fetched edit left 'for the next fetch' after three stale rounds waits for a relaunch", strict: true) {
-            XCTAssertEqual(notes, .string("Ferry moved to ten"), "the other device's edit is here once the person's typing is gone")
-        }
+        XCTAssertEqual(notes, .string("Ferry moved to ten"), "the other device's edit is here once the person's typing is gone")
     }
 
     /// The same without the unsaved typing: the edit arrives (so the test above shows the stale rounds, not the rig).

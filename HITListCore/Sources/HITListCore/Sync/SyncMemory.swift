@@ -1,3 +1,6 @@
+// Compiled into Debug builds only (tests, the Debug app's pretend iCloud): none of this is in a released build. The
+// long simulation runs build for release and pass `-Xswiftc -DDEBUG` (the command is in `SyncCoreSimulationTests`).
+#if DEBUG
 import Foundation
 
 // A device's items and the engine's memory, held in memory: what the engine's tests and the pretend iCloud's
@@ -8,6 +11,8 @@ import Foundation
 /// the app's models have), and deleting anything else clears the references to it.
 public actor MemoryLocalStore: SyncLocalStore {
     private var items: [SyncKey: SyncRecord] = [:]
+    /// What a person deleted here (`delete`) that the brain has not taken note of yet.
+    private var deleted = Set<SyncKey>()
     /// How many times `apply` wrote something, for tests.
     public private(set) var applyCount = 0
 
@@ -53,6 +58,10 @@ public actor MemoryLocalStore: SyncLocalStore {
         return stale
     }
 
+    public func deletions() async throws -> Set<SyncKey> { deleted }
+
+    public func forget(deletions: Set<SyncKey>) async throws { deleted.subtract(deletions) }
+
     /// The sub-tasks a task's deletion takes with it, at any depth (none for anything else).
     private func descendants(of key: SyncKey) -> Set<SyncKey> {
         guard key.type == "TaskItem" else { return [] }
@@ -80,9 +89,22 @@ public actor MemoryLocalStore: SyncLocalStore {
         items[key] = whole(SyncSchema.filled(record))
     }
 
-    /// Deletes an item, as the app would: a task's sub-tasks with it, and references to it cleared. (A person's own
-    /// deletion cascades; the engine's writes through `apply` never do.)
-    public func delete(_ key: SyncKey) { remove(key) }
+    /// Deletes an item, as the app would: a task's sub-tasks with it, and references to it cleared, and every row
+    /// that went written down as deleted (`deletions`). (A person's own deletion cascades; the engine's writes
+    /// through `apply` never do, and are never written down.)
+    public func delete(_ key: SyncKey) {
+        guard items[key] != nil else { return }
+        deleted.insert(key)
+        deleted.formUnion(descendants(of: key))
+        remove(key)
+    }
+
+    /// The item is gone from the device **with no deletion written down**: a store that lost a row, a file put back
+    /// from a copy, a read that came back short. Never a deletion (`dev/SYNC-ENGINE.md` M14): iCloud's record comes back.
+    public func lose(_ key: SyncKey) { remove(key) }
+
+    /// Every item gone the same way: the store that reads empty.
+    public func loseEverything() { items = [:] }
 
     public func record(_ key: SyncKey) -> SyncRecord? { items[key] }
 
@@ -167,3 +189,4 @@ public actor MemoryLedger: SyncLedger {
 
     public func entry(_ key: SyncKey) -> LedgerEntry? { byKey[key] }
 }
+#endif

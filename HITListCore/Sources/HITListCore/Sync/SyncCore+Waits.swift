@@ -138,10 +138,9 @@ extension SyncCore {
     /// an empty field). Nil when there is nothing to write. (What a record waits for is its whole record, kept up to
     /// date by every settle, so it no longer has to be in `base` too: a reference a person gave here and a deletion
     /// then took off is waited for although iCloud has not heard of it yet.)
-    static func arrived(_ local: SyncRecord, waiting: [String: SyncValue], base: SyncRecord?,
+    static func arrived(_ local: SyncRecord, waiting: [String: SyncValue],
                         present: (SyncKey) -> Bool) -> SyncRecord? {
         guard let type = SyncSchema.type(local.key.type) else { return nil }
-        _ = base
         var out = local
         for field in type.fields {
             switch (field.kind, waiting[field.key]) {

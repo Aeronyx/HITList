@@ -278,7 +278,7 @@ final class SyncCoreTests: XCTestCase {
             let entry = await device.entry(taskKey("A"))
             let server = SyncRecord.marker(taskKey("A"), deletedAt: epoch.addingTimeInterval(there))
             let expected = RecordMerge.merge(MergeInput(base: entry?.base, local: nil, deletedHereAt: entry?.deletedHereAt,
-                                                        server: server, now: device.clock.now))
+                                                        server: server))
             await device.deliverFetch([cloud(server, "c2")])
             let pending = await device.pending()
             let differs = !RecordMerge.same(expected.merged, server)
@@ -595,6 +595,7 @@ final class SyncCoreTests: XCTestCase {
     func testSyncNowFetchesThenSends() async throws {
         let device = await synced([])
         await device.store.put(task("B", "Bread"))
+        await device.core.localChanged([taskKey("B")])
         await device.transport.setFetches([[.willFetch, .fetched(changed: [cloud(task("C", "Cheese"))], removed: []),
                                             .didFetch(error: nil)]])
         try await device.core.syncNow()
@@ -603,7 +604,7 @@ final class SyncCoreTests: XCTestCase {
         let c = await device.item(taskKey("C"))
         XCTAssertNotNil(c)
         let sent = await device.transport.sentRecords
-        XCTAssertEqual(sent.map(\.record.key), [taskKey("B")], "found by the compare after the fetch")
+        XCTAssertEqual(sent.map(\.record.key), [taskKey("B")], "what the save's hint found goes after the fetch")
         let status = await device.status()
         XCTAssertTrue(status.isSynced)
     }
@@ -664,6 +665,8 @@ actor InterferingStore: SyncLocalStore {
 
     func records() async throws -> [SyncRecord] { try await inner.records() }
     func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord] { try await inner.records(keys) }
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
 
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> {
         if armed {

@@ -1,8 +1,12 @@
 import Foundation
 
 // How one record is settled between this device and iCloud. Pure: the same four inputs always give the same answer,
-// on every device, so two devices that have seen the same things hold the same thing. The rules, M1 to M13, are
+// on every device, so two devices that have seen the same things hold the same thing. The rules, M1 to M14, are
 // spelled out in `dev/SYNC-ENGINE.md` ("How a record is settled"); each case below names its rule.
+//
+// **An item is deleted here only when a deletion of it was recorded** (`deletedHereAt`: the store saw a person, or
+// the app on their behalf, delete it). An item that is simply not here, with no deletion recorded, is missing, and
+// what iCloud holds comes back (M14). Nothing in this file reads absence as a deletion.
 
 /// What is known about one record at the moment of deciding.
 public struct MergeInput: Sendable {
@@ -11,19 +15,17 @@ public struct MergeInput: Sendable {
     public var base: SyncRecord?
     /// The item on this device now; nil when it isn't here.
     public var local: SyncRecord?
-    /// When this device noticed the item was deleted here (`LedgerEntry.deletedHereAt`); `now` stands in when the
-    /// item is missing and nobody has noticed yet.
+    /// When the item was deleted on this device (`LedgerEntry.deletedHereAt`); nil when no deletion of it was
+    /// recorded. Nothing stands in for it: an item that is not here without one is missing, not deleted.
     public var deletedHereAt: Date?
     /// The record as iCloud holds it now (a marker when deleted); nil when iCloud holds none.
     public var server: SyncRecord?
-    public var now: Date
 
-    public init(base: SyncRecord?, local: SyncRecord?, deletedHereAt: Date? = nil, server: SyncRecord?, now: Date) {
+    public init(base: SyncRecord?, local: SyncRecord?, deletedHereAt: Date? = nil, server: SyncRecord?) {
         self.base = base
         self.local = local
         self.deletedHereAt = deletedHereAt
         self.server = server
-        self.now = now
     }
 }
 
@@ -35,7 +37,7 @@ public struct MergeOutcome: Equatable, Sendable {
         case nothing = "M1", newHere = "M2", newThere = "M3", deletedThereUnknownHere = "M4",
              firstMeeting = "M5", firstMeetingDeletedThere = "M6", threeWay = "M7", deletedHere = "M8",
              deletedThere = "M9", deletedBoth = "M10", goneForGood = "M11", cameBackHere = "M12",
-             cameBackThere = "M13"
+             cameBackThere = "M13", missingHere = "M14"
     }
 
     /// What this device and iCloud should both end with: the item's record, a marker (the item deleted), or nil
@@ -83,7 +85,7 @@ public enum RecordMerge {
         return out
     }
 
-    /// Settles one record (rules M1 to M13). For a key whose type this build does not know the answer is
+    /// Settles one record (rules M1 to M14). For a key whose type this build does not know the answer is
     /// `.unknownType` with the device's record untouched: the caller must not act on it (not write, not send, not
     /// remove), because nothing of such a record is this build's to decide.
     public static func merge(_ input: MergeInput) -> MergeOutcome {
@@ -94,7 +96,6 @@ public enum RecordMerge {
         guard let type = SyncSchema.type(key.type) else {
             return MergeOutcome(merged: input.local, rule: .unknownType)
         }
-        let deletedHere: Date = input.deletedHereAt ?? input.now
 
         switch (base, local, server) {
         case (_, nil, nil):
@@ -107,9 +108,9 @@ public enum RecordMerge {
 
         case (nil, nil, let server?):
             // M3 and M4: iCloud's, new to this device (alive: it arrives; a marker: there is nothing to delete).
-            // Unless this device holds a deletion of its own still to send, kept as an entry with no base when the
-            // ledger was forgotten (section 7; an explicit `deletedHereAt`, never `now`): against a live record it
-            // is settled as M8 (iCloud's stands only if changed after the deletion, else the marker goes), against
+            // Unless this device holds a deletion of its own still to send, kept as an entry with no base (the
+            // ledger was forgotten, section 7, or the item was deleted here before they ever agreed): against a
+            // live record it is settled as M8 (iCloud's stands only if changed after the deletion, else the marker goes), against
             // a marker as M10 (the later of the two times).
             if let at = input.deletedHereAt {
                 if server.isDeleted {
@@ -141,24 +142,27 @@ public enum RecordMerge {
                 // M10: deleted there, not here either. Deleted on both sides apart: the marker carries the later of
                 // the two deletions, whichever device reached iCloud first (round 28, brief 138: with iCloud's time
                 // alone, the order of arrival decided the marker's time, and a deletion here after an edit elsewhere
-                // was forgotten). With the base a marker too, only an explicit `deletedHereAt` is a deletion here:
-                // a later marker this device still has to send over iCloud's earlier one, kept when that earlier
-                // marker is delivered again (T2; session 139). `now` never stands in for it, or two devices would
-                // send each other fresher markers at every sync.
-                let stillToGo: Date? = base.isDeleted ? input.deletedHereAt : deletedHere
-                if let at = stillToGo, isLater(.date(at), than: server[SyncSchema.deletedAt]) {
+                // was forgotten). Only a recorded deletion counts as one here: without it this device has nothing to
+                // add to iCloud's marker.
+                if let at = input.deletedHereAt, isLater(.date(at), than: server[SyncSchema.deletedAt]) {
                     return MergeOutcome(merged: .marker(key, deletedAt: at), rule: .deletedBoth)
                 }
                 return MergeOutcome(merged: server, rule: .deletedBoth)
             }
             if base.isDeleted {
                 // M13: deleted as far as this device knew, made again on another: it arrives. Unless this device
-                // still has a later deletion of its own to send (an explicit `deletedHereAt`, never `now`): then the
-                // revival is ordered against that time as in M8 (it arrives only if changed after it).
+                // still has a later deletion of its own to send: then the revival is ordered against that time as
+                // in M8 (it arrives only if changed after it).
                 if let at = input.deletedHereAt, (server.updatedAt ?? .distantPast) <= at {
                     return MergeOutcome(merged: .marker(key, deletedAt: at), rule: .cameBackThere)
                 }
                 return MergeOutcome(merged: server, rule: .cameBackThere)
+            }
+            guard let deletedHere = input.deletedHereAt else {
+                // M14: iCloud holds it, this device agreed on it, and it is not here, with no deletion recorded.
+                // That is not a deletion (a store that lost a row, a file put back, a crash in the instant after a
+                // delete): iCloud's record comes back here. A device never deletes for everyone what nobody deleted.
+                return MergeOutcome(merged: server, rule: .missingHere)
             }
             // M8: deleted here while iCloud holds it. Untouched there since: the deletion stands. Changed there
             // after the deletion: the change wins and the item comes back here.

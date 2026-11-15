@@ -355,7 +355,7 @@ struct SyncEngineMarks: Hashable {
         switch hold {
         case .noAccount: return .notSignedIn
         case .duplicates(let keys): return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineHold(hold, waiting: waiting, duplicates: keys.count)))
-        case .massDeletion, .zonePurged, .needsUpdate, .storageFull, .failed:
+        case .zonePurged, .needsUpdate, .storageFull, .failed:
             return .engine(SyncEngineMarks(look: .needsYou, words: SyncWords.engineHold(hold, waiting: waiting)))
         }
     }

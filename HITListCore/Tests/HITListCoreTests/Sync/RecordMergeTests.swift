@@ -33,10 +33,9 @@ enum MergeFixture {
 
     static func marker(at t: Int64, key: SyncKey = taskKey) -> SyncRecord { .marker(key, deletedAt: at(t)) }
 
-    static func merge(base: SyncRecord?, local: SyncRecord?, deletedHereAt: Int64? = nil, server: SyncRecord?,
-                      now: Int64 = 10_000) -> MergeOutcome {
+    static func merge(base: SyncRecord?, local: SyncRecord?, deletedHereAt: Int64? = nil, server: SyncRecord?) -> MergeOutcome {
         RecordMerge.merge(MergeInput(base: base?.comparable, local: local, deletedHereAt: deletedHereAt.map(at),
-                                     server: server, now: at(now)))
+                                     server: server))
     }
 }
 
@@ -51,7 +50,7 @@ final class RecordMergeTests: XCTestCase {
     // MARK: M1 to M4: one side or none
 
     func testM1NothingAnywhere() {
-        let outcome = RecordMerge.merge(MergeInput(base: nil, local: nil, server: nil, now: F.at(0)))
+        let outcome = RecordMerge.merge(MergeInput(base: nil, local: nil, server: nil))
         XCTAssertNil(outcome.merged)
         XCTAssertNil(outcome.device)
         XCTAssertEqual(outcome.rule, .nothing)
@@ -82,9 +81,9 @@ final class RecordMergeTests: XCTestCase {
             XCTAssertEqual(outcome.rule, .deletedHere, "the explicit deletion decides, either way")
             XCTAssertEqual(outcome.merged, comesBack ? server : F.marker(at: 50), "changed there at \(t)")
         }
-        // `now` never stands in: without an explicit time it is plain M3.
+        // Without a deletion written down it is plain M3.
         let server = F.task(updated: 10)
-        let plain = F.merge(base: nil, local: nil, server: server, now: 90)
+        let plain = F.merge(base: nil, local: nil, server: server)
         XCTAssertEqual(plain.rule, .newThere)
         XCTAssertEqual(plain.merged, server)
     }
@@ -96,9 +95,9 @@ final class RecordMergeTests: XCTestCase {
         let earlier = F.merge(base: nil, local: nil, deletedHereAt: 30, server: F.marker(at: 40))
         XCTAssertEqual(earlier.rule, .deletedBoth)
         XCTAssertEqual(earlier.merged, F.marker(at: 40))
-        let plain = F.merge(base: nil, local: nil, server: F.marker(at: 40), now: 90)
+        let plain = F.merge(base: nil, local: nil, server: F.marker(at: 40))
         XCTAssertEqual(plain.rule, .deletedThereUnknownHere)
-        XCTAssertEqual(plain.merged, F.marker(at: 40), "`now` never stands in")
+        XCTAssertEqual(plain.merged, F.marker(at: 40), "nothing stands in for a deletion that was not written down")
     }
 
     func testM4MarkerThereNothingHereStaysAMarker() {
@@ -242,15 +241,21 @@ final class RecordMergeTests: XCTestCase {
         }
     }
 
-    func testM8NobodyNoticedYetTheDeletionIsNow() {
-        let base = F.task(updated: 10)
-        let outcome = F.merge(base: base, local: nil, deletedHereAt: nil, server: base, now: 77)
-        XCTAssertEqual(outcome.merged, F.marker(at: 77))
+    // MARK: M14: not here, and nobody deleted it
 
-        let server = F.task(["title": .string("Edited")], updated: 76)
-        XCTAssertEqual(F.merge(base: base, local: nil, server: server, now: 77).merged, F.marker(at: 77))
-        let after = F.task(["title": .string("Edited")], updated: 78)
-        XCTAssertEqual(F.merge(base: base, local: nil, server: after, now: 77).merged, after)
+    /// iCloud holds the item, this device agreed on it, and it is not on the device, with no deletion written down:
+    /// it is missing, not deleted. iCloud's record comes back, whatever its dates, and nothing goes to iCloud.
+    func testM14NotHereWithNoDeletionWrittenDownIsMissingAndComesBack() {
+        let base = F.task(updated: 10)
+        let untouched = F.merge(base: base, local: nil, deletedHereAt: nil, server: base)
+        XCTAssertEqual(untouched.rule, .missingHere)
+        XCTAssertEqual(untouched.merged, base)
+        XCTAssertEqual(untouched.device, base, "it is written back to the device")
+
+        let edited = F.task(["title": .string("Edited")], updated: 76)
+        let outcome = F.merge(base: base, local: nil, server: edited)
+        XCTAssertEqual(outcome.rule, .missingHere)
+        XCTAssertEqual(outcome.merged, edited, "as iCloud holds it now")
     }
 
     /// A device whose clock runs behind deletes an item another device stamped later than its "now": the marker
@@ -325,8 +330,8 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(laterThere.merged, F.marker(at: 40))
         let tie = F.merge(base: base, local: nil, deletedHereAt: 40, server: F.marker(at: 40))
         XCTAssertEqual(tie.merged, F.marker(at: 40))
-        let unnoticed = F.merge(base: base, local: nil, server: F.marker(at: 40), now: 90)
-        XCTAssertEqual(unnoticed.merged, F.marker(at: 90), "nobody noticed: now, as M8")
+        let missing = F.merge(base: base, local: nil, server: F.marker(at: 40))
+        XCTAssertEqual(missing.merged, F.marker(at: 40), "not deleted here: iCloud's marker stands as it is")
     }
 
     func testM10AMarkerStillToGoSurvivesICloudsEarlierMarkerDeliveredAgain() {
@@ -343,9 +348,9 @@ final class RecordMergeTests: XCTestCase {
         XCTAssertEqual(older.merged, F.marker(at: 40), "an earlier time here is no news")
         let newerThere = F.merge(base: F.marker(at: 40), local: nil, deletedHereAt: 60, server: F.marker(at: 70))
         XCTAssertEqual(newerThere.merged, F.marker(at: 70))
-        // With a marker base, `now` never stands in for a deletion here: two devices would send fresher markers
+        // Nothing stands in for a deletion here that was not written down: two devices would send fresher markers
         // to each other at every sync.
-        let unnoticed = F.merge(base: F.marker(at: 40), local: nil, server: F.marker(at: 40), now: 90)
+        let unnoticed = F.merge(base: F.marker(at: 40), local: nil, server: F.marker(at: 40))
         XCTAssertEqual(unnoticed.merged, F.marker(at: 40))
     }
 
@@ -434,9 +439,9 @@ final class RecordMergeTests: XCTestCase {
             XCTAssertEqual(outcome.rule, .cameBackThere)
             XCTAssertEqual(outcome.merged, comesBack ? server : F.marker(at: 6), "revived at \(t), deleted here at 6")
         }
-        // Without a deletion of its own still to go, `now` never stands in: the revival arrives.
+        // Without a deletion of its own still to go, the revival arrives.
         let server = F.task(["title": .string("Back")], updated: 3)
-        let outcome = F.merge(base: F.marker(at: 1), local: nil, server: server, now: 90)
+        let outcome = F.merge(base: F.marker(at: 1), local: nil, server: server)
         XCTAssertEqual(outcome.merged, server)
     }
 
@@ -482,7 +487,9 @@ final class RecordMergeTests: XCTestCase {
                                   deletedHereAt: deletedHereAt, server: record(s, 25))
             XCTAssertEqual(outcome.rule, rule, "B \(b), here \(here), there \(s)")
         }
-        XCTAssertEqual(Set(expected.map(\.3)).count, MergeOutcome.Rule.allCases.count - 1, "every rule but M0 is used")
+        XCTAssertEqual(Set(expected.map(\.3)).count, MergeOutcome.Rule.allCases.count - 2, "every rule but M0 and M14 is used")
+        // M14: the one case with no deletion written down for an item iCloud was agreed to hold.
+        XCTAssertEqual(F.merge(base: record(.alive, 10), local: nil, server: record(.alive, 25)).rule, .missingHere)
     }
 
     // MARK: What the merge reads: required fields, data, markers, unknown types and keys
@@ -546,14 +553,14 @@ final class RecordMergeTests: XCTestCase {
     func testATypeThisBuildDoesNotKnowIsLeftAlone() {
         let foreign = SyncRecord(type: "Attachment", name: "A1", fields: ["blob": .string("x")])
         XCTAssertEqual(RecordMerge.normal(foreign), foreign)
-        let outcome = RecordMerge.merge(MergeInput(base: nil, local: nil, server: foreign, now: F.at(0)))
+        let outcome = RecordMerge.merge(MergeInput(base: nil, local: nil, server: foreign))
         XCTAssertEqual(outcome.rule, .unknownType, "M0: the caller does nothing")
         XCTAssertEqual(MergeOutcome.Rule.unknownType.rawValue, "M0")
         XCTAssertNil(outcome.merged, "the device's record, untouched: it holds none")
-        let withBase = RecordMerge.merge(MergeInput(base: foreign, local: nil, server: foreign, now: F.at(0)))
+        let withBase = RecordMerge.merge(MergeInput(base: foreign, local: nil, server: foreign))
         XCTAssertEqual(withBase.rule, .unknownType)
         XCTAssertNil(withBase.device)
-        let held = RecordMerge.merge(MergeInput(base: nil, local: foreign, server: nil, now: F.at(0)))
+        let held = RecordMerge.merge(MergeInput(base: nil, local: foreign, server: nil))
         XCTAssertEqual(held.merged, foreign)
         XCTAssertEqual(held.rule, .unknownType)
     }

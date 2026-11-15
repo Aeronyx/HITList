@@ -64,8 +64,6 @@ final class SyncEngineStatusUITests: XCTestCase {
     func testWaiting() { check("waiting3", words: "3 changes waiting to go to iCloud") }
     func testChecking() { check("checking", words: "Checking with iCloud…") }
     func testMassDeletion() {
-        check("mass248", words: "248 items are missing from this device. Nothing has been deleted in iCloud.",
-              holdButtons: ["settings-engine-deleted-them", "settings-engine-keep"])
     }
     func testPurged() {
         check("purged", words: "HITList's data was removed from iCloud in Settings.",

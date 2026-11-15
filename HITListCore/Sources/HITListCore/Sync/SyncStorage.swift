@@ -51,6 +51,17 @@ public protocol SyncLocalStore: Sendable {
     /// brain names each row it means to delete, having settled each: `dev/SYNC-ENGINE.md` section 8). Returns the
     /// keys whose write did not go ahead: nothing was written for them.
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey>
+
+    /// The items deleted on this device, by a person or by the app on their behalf, that the brain has not taken
+    /// note of yet (`forget(deletions:)`). **This is the only way the brain learns of a deletion here**: an item that
+    /// is merely not on the device is never a deletion (`dev/SYNC-ENGINE.md` section 4), so a store that reads empty,
+    /// loses a row or is put back from a copy can never delete anything in iCloud. The store writes a deletion down
+    /// as it is saved (a task's sub-tasks that go with it too), and keeps it until the brain has; the engine's own
+    /// deletions (`apply`) are never in it. A key in it whose item is here again is simply ignored.
+    func deletions() async throws -> Set<SyncKey>
+
+    /// The brain has written these down (`LedgerEntry.deletedHereAt`): they need not be told again.
+    func forget(deletions: Set<SyncKey>) async throws
 }
 
 // MARK: The engine's memory
@@ -64,9 +75,10 @@ public struct LedgerEntry: Hashable, Sendable, Codable {
     public var base: SyncRecord?
     /// iCloud's token for the version `base` is (`CloudRecord.system`). Nil with a nil `base`.
     public var system: Data?
-    /// The time of the marker this device still has to send: when it noticed the item was deleted here while
-    /// `base` says iCloud holds it, or (M10) its own deletion when that is later than iCloud's marker in `base`.
-    /// Nil when there is no marker to send, and cleared when the item is here again.
+    /// The time of the marker this device still has to send: when the item was deleted here
+    /// (`SyncLocalStore.deletions`) while `base` says iCloud holds it, or before the two ever agreed (no `base`: kept
+    /// until a fetch shows whether iCloud holds the item). Nil when there is no marker to send, and cleared when
+    /// the item is here again. Never set because an item is merely absent.
     public var deletedHereAt: Date?
 
     public init(key: SyncKey, base: SyncRecord? = nil, system: Data? = nil, deletedHereAt: Date? = nil) {

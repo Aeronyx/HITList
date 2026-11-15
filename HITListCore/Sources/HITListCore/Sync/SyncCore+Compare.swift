@@ -1,7 +1,12 @@
 import Foundation
 
-// Finding what changed on the device (`dev/SYNC-ENGINE.md` section 4) and what to send for it. Nothing is journalled:
-// the device's items are compared with the ledger's bases, whatever wrote them and whether or not `updatedAt` moved.
+// Finding what changed on the device (`dev/SYNC-ENGINE.md` section 4) and what to send for it.
+//
+// A change is found by comparing: an item whose record differs from the ledger's base is waiting to go, whatever
+// wrote it and whether or not `updatedAt` moved. **A deletion is never found by comparing.** It is known only when
+// the store wrote it down as it happened (`SyncLocalStore.deletions`), and an item that is merely not here, with no
+// deletion written down, is missing: forgotten by the ledger and fetched again. So a store that reads empty, loses
+// rows or is put back from an older copy cannot delete anything in iCloud, and no guard has to guess.
 
 extension SyncCore {
     /// What the compare found for one key.
@@ -12,22 +17,90 @@ extension SyncCore {
         var entry: LedgerEntry?
         /// The entry holds nothing worth keeping and goes.
         var drop = false
+        /// iCloud holds the item, this device agreed on it, and it is not here with no deletion written down: not a
+        /// deletion. The entry goes and every record is asked for again, so iCloud's comes back (M14).
+        var missing = false
     }
 
-    /// Compares `keys` (nil: everything) and makes the transport's list match. Writes the ledger first (a deletion
-    /// noticed here), then the list: a crash in between leaves a list the next compare puts right. While held,
-    /// nothing is compared (a full iCloud excepted: then the count is kept, and nothing is added; and a mass
-    /// deletion, which a whole compare outside an event looks at again, to lift it when the items are back).
-    ///
-    /// This is the one place a deletion here is noticed, so it is the one place guarded against a store that reads
-    /// wrong: a whole compare that finds the store empty while iCloud holds items, or more items gone than `limits`
-    /// allows at once, notices nothing and holds (`massDeletion`). A compare of a few keys that finds many gone
-    /// decides on everything instead. `confirmedAt`: the person confirmed, the deletions carry that moment.
-    func compare(_ keys: Set<SyncKey>?, confirmedAt: Date? = nil) async {
-        guard loaded else { return }
-        if let hold, hold != .storageFull {
-            guard case .massDeletion = hold, keys == nil, !inEvent else { return }
+    /// Takes note of what the store says was deleted here (`SyncLocalStore.deletions`): the one way the brain learns
+    /// of a deletion on this device. Each is written to the ledger (`deletedHereAt`) before the store is told to
+    /// forget it, so a crash in between tells it again, and one noted twice keeps its first time. An item deleted
+    /// before this device and iCloud ever agreed on it is kept too, with no base, until a fetch shows whether iCloud
+    /// holds it (a save accepted whose answer was lost, a merge without a memory). Runs while held: a person goes on
+    /// deleting things whatever iCloud is doing. False when the store or the ledger failed (the brain is then held).
+    func noteDeletions() async -> Bool {
+        let told: Set<SyncKey>
+        let here: Set<SyncKey>
+        do {
+            told = try await store.deletions()
+            guard !told.isEmpty else { return true }
+            here = Set(try await store.records(told).map(\.key))
+        } catch {
+            await storeFailed(error)
+            return false
         }
+        let now = clock()
+        var write = LedgerWrite()
+        for key in told.sorted() where !here.contains(key) && SyncSchema.type(key.type) != nil {
+            if var entry = entries[key] {
+                // A marker iCloud already holds, or a deletion already noted: nothing to add.
+                guard entry.deletedHereAt == nil, entry.base?.isDeleted != true else { continue }
+                // Never before the version it deletes: a device whose clock runs behind still deletes what it held
+                // (a marker stamped earlier would lose to that version on a device merging afresh).
+                entry.deletedHereAt = max(now, entry.base?.updatedAt ?? now)
+                write.upsert.append(entry)
+            } else {
+                write.upsert.append(LedgerEntry(key: key, base: nil, system: nil, deletedHereAt: now))
+            }
+        }
+        do {
+            try await commit(write)
+            try await store.forget(deletions: told)
+        } catch {
+            await fail("A deletion made here could not be written down: \(error)")
+            return false
+        }
+        for entry in write.upsert where entry.base != nil { log("\(entry.key): deleted here; its marker is waiting to go") }
+        let gone = Set(write.upsert.map(\.key))
+        noted.formUnion(gone)
+        // The store took the reference off every record that pointed at what went (section 8): those records are
+        // looked at with it, so each keeps the reference as one it waits for before anything of it is sent. (A save's
+        // hint usually names them too; this does not rest on it.)
+        if !gone.isEmpty {
+            for (key, entry) in entries {
+                guard let base = entry.base, !base.isDeleted, !gone.contains(key) else { continue }
+                if Self.references(base).contains(where: gone.contains) { noted.insert(key) }
+            }
+        }
+        return true
+    }
+
+    /// Outside an event and when not held: has the transport forget its bookmark if records were let go or found
+    /// missing (`refetch`), so the next fetch brings every record again. (A hold that lifts does the same, `lift`.)
+    func refetchIfOwed() async {
+        guard refetch, hold == nil, !inEvent, transportStarted else { return }
+        await transport.reset()
+        var write = LedgerWrite()
+        write.facts.updateValue(nil, forKey: Self.refetchFact)
+        write.facts.updateValue(nil, forKey: Self.unsettledFact)
+        try? await commit(write)
+        unsettled = [:]
+        log("Everything will be fetched again")
+        // The transport forgot its list with its bookmark: put back what is waiting.
+        await compare(nil)
+    }
+
+    /// Compares `keys` (nil: everything) and makes the transport's list match. Deletions the store wrote down are
+    /// noted first (while held too); then, unless held (a full iCloud excepted: the count is kept and nothing is
+    /// added), each item is compared with its base. The ledger is written first, then the list: a crash in between
+    /// leaves a list the next compare puts right.
+    func compare(_ asked: Set<SyncKey>?) async {
+        guard loaded else { return }
+        guard await noteDeletions() else { return }
+        if let hold, hold != .storageFull { return }
+        // The deletions just noted are looked at too, whatever was asked for.
+        let keys = asked.map { $0.union(noted) }
+        noted = []
         var here: [SyncKey: SyncRecord]
         var universe: Set<SyncKey>
         let present: Set<SyncKey>
@@ -66,15 +139,13 @@ extension SyncCore {
         var desired: [SyncKey: PendingChange] = [:]
         var write = LedgerWrite()
         var arrivals: [LocalWrite] = []
-        var gone = 0
-        /// Of those, the ones the app vouched for (`vouchForDeletions`).
-        var vouchedGone = 0
+        var missing: [SyncKey] = []
         // In key order: nothing a `Set` happens to iterate first decides what is written or logged (replays).
         for key in universe.sorted() where key != Self.metaKey {
             var local = here[key]
             // A waited-for item that is here now: its reference goes on the device (written below, before the ledger).
             if let device = local, waits[key] != nil,
-               let arrived = Self.arrived(device, waiting: waitsFor(key), base: entries[key]?.base, present: isHere) {
+               let arrived = Self.arrived(device, waiting: waitsFor(key), present: isHere) {
                 arrivals.append(LocalWrite(key: key, expected: device, record: arrived))
                 local = arrived
                 here[key] = arrived
@@ -85,53 +156,13 @@ extension SyncCore {
                 if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }
             let whole = Self.whole(local, waiting: wait)
-            let finding = self.finding(key, local: whole, now: confirmedAt ?? now)
+            let finding = self.finding(key, local: whole, now: now)
             if let change = finding.change { desired[key] = change }
-            if let entry = finding.entry {
-                write.upsert.append(entry)
-                if entry.deletedHereAt != nil, entries[key]?.deletedHereAt == nil {
-                    gone += 1
-                    if vouched.contains(key) { vouchedGone += 1 }
-                }
-            }
-            if finding.drop { write.remove.append(key) }
+            if let entry = finding.entry { write.upsert.append(entry) }
+            if finding.drop || finding.missing { write.remove.append(key) }
+            if finding.missing { missing.append(key) }
         }
         if universe.contains(Self.metaKey), let change = metaFinding().change { desired[Self.metaKey] = change }
-
-        // Deletions the app vouched for (`vouchForDeletions`) count for nothing in the guard, unless a hold already
-        // stands (a vouch never lifts one).
-        let unvouched = hold == nil ? gone - vouchedGone : gone
-        if confirmedAt == nil {
-            if keys != nil, unvouched >= limits.massDeletionCount {
-                // Many gone at once in a save's hint: measured against everything before anything is decided.
-                await compare(nil)
-                return
-            }
-            if keys == nil {
-                // The supervisor's rule of 2026-11-15 (review finding 2). (a) The store is not the one the ledger
-                // describes: no item here has a living base while the ledger holds living bases (one stray row, a
-                // seeded filter or the profile, no longer defeats "empty"). (b) Many gone at once: at least the count
-                // AND more than the share of the living bases.
-                // Living: what iCloud holds alive that this device has not already found deleted here (a deletion
-                // noticed before, confirmed or under the numbers, is decided: counting it again would ask again after
-                // every "I deleted them", in a loop, until iCloud took the markers; brief 145).
-                let living = entries.values.filter {
-                    $0.key != Self.metaKey && $0.base?.isDeleted == false && $0.deletedHereAt == nil
-                }.count - (gone - unvouched)
-                let known = here.keys.contains { entries[$0]?.base?.isDeleted == false }
-                let empty = living > 0 && !known
-                let tooMany = unvouched >= limits.massDeletionCount
-                    && Double(unvouched) > limits.massDeletionShare * Double(living)
-                if empty || tooMany {
-                    await holdMassDeletion(empty ? living : unvouched, of: living, at: now)
-                    return
-                }
-                if case .massDeletion(let count)? = hold {
-                    log("The \(count) missing items are back (or few enough now): the hold lifts by itself")
-                    await lift(resetTransport: true)
-                }
-            }
-        }
 
         // The device first (the references that arrived), then the ledger. One the person overtook keeps waiting:
         // its wait is left as it was, and the next compare writes it.
@@ -156,11 +187,10 @@ extension SyncCore {
             await fail("The engine's memory could not be written: \(error)")
             return
         }
-        if !vouched.isEmpty {
-            // A vouch ends when its keys are noticed gone, and lapses for keys a whole compare finds still here (or
-            // that were never anything to notice). A compare of a few keys ends it for those keys.
-            let looked = keys == nil ? vouched : vouched.intersection(universe)
-            await setVouched(vouched.subtracting(looked))
+        if !missing.isEmpty {
+            // Not deleted by anyone: what iCloud holds of them comes back with the next fetch of everything.
+            log("\(missing.count) item\(missing.count == 1 ? "" : "s") iCloud holds \(missing.count == 1 ? "is" : "are") not on this device and nobody deleted \(missing.count == 1 ? "it" : "them") here (the first: \(missing[0])): fetched again, nothing is deleted in iCloud")
+            await markRefetch()
         }
         if keys == nil {
             // Everything was looked at: what waits is exactly what this compare found.
@@ -168,11 +198,6 @@ extension SyncCore {
         } else {
             for key in universe { waiting.remove(key) }
             waiting.formUnion(desired.keys)
-        }
-        if !write.upsert.isEmpty {
-            for entry in write.upsert where entry.deletedHereAt != nil {
-                log("\(entry.key): deleted here; its marker is waiting to go")
-            }
         }
         await matchPending(desired, within: keys == nil ? nil : universe, depth: Self.depths(here))
     }
@@ -264,16 +289,12 @@ extension SyncCore {
                     // A marker both sides know: removed for good once past its lifetime.
                     finding.change = .delete(key)
                 }
-            } else {
-                // iCloud holds it alive and it is gone here: deleted here, its marker waits to go.
+            } else if entry.deletedHereAt != nil {
+                // iCloud holds it alive and it was deleted here (`noteDeletions`): its marker waits to go.
                 finding.change = .save(key)
-                if entry.deletedHereAt == nil {
-                    var noticed = entry
-                    // Never before the version it deletes: a device whose clock runs behind still deletes what it
-                    // held (a marker stamped earlier would lose to that version on a device merging afresh).
-                    noticed.deletedHereAt = max(now, base.updatedAt ?? now)
-                    finding.entry = noticed
-                }
+            } else {
+                // iCloud holds it alive and it is not here, and no deletion of it was written down: missing.
+                finding.missing = true
             }
         }
         if let refusal = refused[key] {
@@ -342,8 +363,7 @@ extension SyncCore {
             sentAs[key] = .some(nil)
             return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)
         }
-        // A deletion is only ever noticed by the compare, which guards against a store that reads wrong: one it has
-        // not noticed is not sent (the transport drops the change; the compare adds the marker when it notices).
+        // Only a deletion written down is sent (`noteDeletions`): an item that is merely not here is not one.
         guard let at = entry.deletedHereAt else { return nil }
         sentAs[key] = .some(nil)
         return OutgoingRecord(record: .marker(key, deletedAt: at), system: entry.system)

@@ -116,8 +116,6 @@ final class SyncEngineStatusTests: XCTestCase {
 
     func testHoldsThePersonMustActOnAreRedAndHollow() {
         let cases: [(SyncHold, Int, String)] = [
-            (.massDeletion(248), 0, "248 items are missing from this device. Nothing has been deleted in iCloud."),
-            (.massDeletion(1), 0, "1 item is missing from this device. Nothing has been deleted in iCloud."),
             (.zonePurged, 0, "HITList's data was removed from iCloud in Settings."),
             (.needsUpdate, 0, "Update HITList to sync: iCloud holds data from a newer version."),
             (.storageFull, 12, "iCloud is full: 12 changes are waiting."),
@@ -201,7 +199,6 @@ final class SyncEngineStatusTests: XCTestCase {
             "synced": "Synced just now",
             "waiting3": "3 changes waiting to go to iCloud",
             "checking": "Checking with iCloud…",
-            "mass248": "248 items are missing from this device. Nothing has been deleted in iCloud.",
             "purged": "HITList's data was removed from iCloud in Settings.",
             "update": "Update HITList to sync: iCloud holds data from a newer version.",
             "full12": "iCloud is full: 12 changes are waiting.",
@@ -221,8 +218,8 @@ final class SyncEngineStatusTests: XCTestCase {
     // MARK: Settings' words
 
     func testSettingsRowSubtitleWarnsOnlyForHoldsThatNeedThePerson() {
-        let red = SettingsPageRow.subtitle(for: .iCloud, sync: marks(held(.massDeletion(3))), stuck: false)
-        XCTAssertEqual(red.text, "3 items are missing from this device. Nothing has been deleted in iCloud.")
+        let red = SettingsPageRow.subtitle(for: .iCloud, sync: marks(held(.zonePurged)), stuck: false)
+        XCTAssertEqual(red.text, "HITList's data was removed from iCloud in Settings.")
         XCTAssertTrue(red.isWarning)
         let waiting = SettingsPageRow.subtitle(for: .iCloud, sync: marks(idle(waiting: 3)), stuck: false)
         XCTAssertEqual(waiting.text, SettingsPage.iCloud.summary)
@@ -230,12 +227,9 @@ final class SyncEngineStatusTests: XCTestCase {
     }
 
     func testEveryHoldButtonSaysWhatItDoes() {
-        XCTAssertEqual(SyncEngineWords.deletedThemSubtitle, "iCloud deletes them too, on every device")
-        XCTAssertFalse(SyncEngineWords.keepSubtitle.isEmpty)
         XCTAssertTrue(SyncEngineWords.removeSubtitle.contains("backup"))
         XCTAssertFalse(SyncEngineWords.sendAgainSubtitle.isEmpty)
-        XCTAssertEqual(SyncEngineWords.confirmDeletionsQuestion(.massDeletion(248)), "Delete 248 items from iCloud?")
-        for hold: SyncHold in [.massDeletion(2), .zonePurged, .needsUpdate, .storageFull, .failed("x"), .duplicates([])] {
+        for hold: SyncHold in [.zonePurged, .needsUpdate, .storageFull, .failed("x"), .duplicates([])] {
             XCTAssertFalse(SyncEngineWords.holdNote(hold).isEmpty, "\(hold)")
             XCTAssertFalse(SyncEngineWords.holdTitle(hold).isEmpty)
         }
@@ -284,8 +278,8 @@ final class SyncEngineStatusTests: XCTestCase {
         XCTAssertEqual(monitor.state, .synced(fetched))
         XCTAssertEqual(monitor.lastSyncedAt, fetched)
 
-        board.show(SyncStatus(state: .held(.massDeletion(7)), waiting: 0, firstFetchDone: true))
-        XCTAssertEqual(monitor.statusWords(), "7 items are missing from this device. Nothing has been deleted in iCloud.")
+        board.show(SyncStatus(state: .held(.storageFull), waiting: 7, firstFetchDone: true))
+        XCTAssertEqual(monitor.statusWords(), "iCloud is full: 7 changes are waiting.")
 
         board.show(nil, engine: .mirror)
         XCTAssertFalse(monitor.isOnEngine)

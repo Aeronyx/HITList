@@ -115,7 +115,7 @@ final class SyncCoreHoldTests: XCTestCase {
 
     func testADeletionNotSentBeforeTheStateWasLostStaysDeleted() async throws {
         let probe = RecordMerge.merge(MergeInput(base: nil, local: nil, deletedHereAt: epoch.addingTimeInterval(50),
-                                                 server: task("B", "Bread"), now: epoch.addingTimeInterval(60)))
+                                                 server: task("B", "Bread")))
         guard probe.merged?.isDeleted == true else {
             throw XCTSkip("waits for 138's M3 with an explicit deletedHereAt (sync-proof 81d9291)")
         }
@@ -613,5 +613,7 @@ actor DuplicatingStore: SyncLocalStore {
         return try await inner.records(keys)
     }
 
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> { try await inner.apply(writes) }
 }

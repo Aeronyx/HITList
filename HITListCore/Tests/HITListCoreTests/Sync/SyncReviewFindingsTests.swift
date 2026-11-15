@@ -76,12 +76,14 @@ final class SyncReviewFindingsTests: XCTestCase {
         XCTAssertNotNil(onB, "B moved C after A's deletion: a change after a deletion wins (M8/M9)")
     }
 
-    // MARK: Finding 2: the mass-deletion guard walked round by one item
+    // MARK: Finding 2: a store that reads empty but for one new item
 
     /// A device that synced 30 items relaunches on a store that reads empty by mistake (the app's in-memory fallback)
-    /// in which the person has typed one task. The guard tests "nothing here", so one item walks round it; 31 gone is
-    /// under its floor of 50, so every item is deleted in iCloud and on every device.
-    func testFinding2_aStoreThatReadsEmptyButForOneNewItemDeletesEverything() async throws {
+    /// in which the person has typed one task. The first engine read every absent item as deleted here and guarded
+    /// that with numbers, which one new item walked round. Since 2026-11-15 nothing is read from absence: no
+    /// deletion was written down, so nothing is deleted in iCloud, nobody is asked, the 31 items come back and the
+    /// new task goes up.
+    func testFinding2_aStoreThatReadsEmptyButForOneNewItemDeletesNothing() async throws {
         let cloud = FakeCloud()
         let clock = SimClock()
         let ledger = MemoryLedger()
@@ -97,12 +99,14 @@ final class SyncReviewFindingsTests: XCTestCase {
         let fallback = MemoryLocalStore([Self.task("N", "Typed into the empty-looking app", at: clock)])
         let again = await Phone("A", cloud, clock, store: fallback, ledger: ledger)
         let hold = await again.core.status.hold
-        try? await again.sync()
+        try await again.sync()
+        try await again.sync()
         let aliveAfter = await Self.alive(cloud)
+        let here = await fallback.count
 
-        // Fixed by brief 145 (the guard's two conditions, the count 10): the wrapper is off.
-        if case .massDeletion? = hold {} else { XCTFail("held for a mass deletion; got \(String(describing: hold))") }
-        XCTAssertGreaterThanOrEqual(aliveAfter, 31, "nothing deleted in iCloud before the person confirms")
+        XCTAssertNil(hold, "nobody is asked anything: nothing was deleted here")
+        XCTAssertEqual(aliveAfter, 32, "nothing deleted in iCloud, and the new task went up")
+        XCTAssertEqual(here, 32, "everything iCloud holds is back on the device")
     }
 
     // MARK: Finding 10: on CloudKit a transport reset makes the brain forget its memory
@@ -186,11 +190,12 @@ final class SyncReviewFindingsTests: XCTestCase {
         }
     }
 
-    // MARK: Finding 12: undoing an import holds sync as a mass deletion
+    // MARK: Finding 12: undoing an import
 
-    /// The person imports 100 tasks (Todoist), they sync, and the person taps "Undo last import". The guard reads
-    /// 100 gone of 110 as a store that reads wrong and holds everything until the person confirms.
-    func testFinding12_undoingAnImportIsHeldAsAMassDeletion() async throws {
+    /// The person imports 100 tasks (Todoist), they sync, and the person taps "Undo last import". The first engine
+    /// read 100 gone of 110 as a store that reads wrong and held everything until the person confirmed (and then
+    /// needed the app to vouch for them). Since 2026-11-15 these are simply 100 deletions the store wrote down.
+    func testFinding12_undoingAnImportIsOneHundredOrdinaryDeletions() async throws {
         let cloud = FakeCloud()
         let clock = SimClock()
         var mine = [Self.project("H", at: clock)]
@@ -207,14 +212,15 @@ final class SyncReviewFindingsTests: XCTestCase {
         try await a.sync()
 
         clock.advance(milliseconds: 60_000)
-        // Fixed by brief 145 (`SyncCore.vouchForDeletions`, the supervisor's addition): the app vouches for the
-        // deletion the person asked for, then deletes. The wrapper is off.
-        await a.core.vouchForDeletions(imported)
         for key in imported { await a.store.delete(key) }
         await a.core.localChanged(imported)
-        let hold = await a.core.status.hold
+        let status = await a.core.status
+        try await a.sync()
+        let alive = await Self.alive(cloud)
 
-        XCTAssertNil(hold, "an import undone by the person is not a mass deletion to confirm")
+        XCTAssertNil(status.hold, "an import undone by the person is not a question")
+        XCTAssertEqual(status.waiting, 100, "one marker each")
+        XCTAssertEqual(alive, 11, "the Group and the person's ten tasks")
     }
 
     // MARK: The parts

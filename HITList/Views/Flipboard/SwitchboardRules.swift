@@ -92,14 +92,6 @@ extension Flipboard {
     /// stay as loose switches. A delete syncs to every device, as the person means it; never use one as a reset.
     @MainActor
     static func deleteSwitchboard(_ board: Switchboard, deletingSwitches: Bool, in context: ModelContext, now: Date = Date()) {
-        if deletingSwitches {
-            // The person asked for the switches to go with the board: the app vouches for them to HITList's own sync
-            // engine, so a big board is not held as a mass deletion (round 28; nothing happens on the mirror).
-            var vouched = Set((board.switches ?? []).flatMap { [$0] + ($0.subtasks ?? []) }
-                .map { SyncSchema.key(SyncSchema.taskItem, id: $0.id) })
-            vouched.insert(SyncSchema.key(SyncSchema.switchboard, id: board.id))
-            SyncEngine.vouchForDeletions(vouched)
-        }
         for task in board.switches ?? [] {
             // Only a switch goes with its board; a task that left the Flipboard another way (an older build took its
             // label off) just leaves the board.

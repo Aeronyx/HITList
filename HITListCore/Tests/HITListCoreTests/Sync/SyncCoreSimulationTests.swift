@@ -10,16 +10,17 @@ import XCTest
 //
 //   cd HITListCore && HITLIST_SIM_SEEDS=1000 HITLIST_SIM_STEPS=300 [HITLIST_SIM_FAULTS=everyday] [HITLIST_SIM_FIRST=1] \
 //     DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
-//     swift test -c release -Xswiftc -enable-testing --filter SyncCoreSimulationTests/testManySeeds
+//     swift test -c release -Xswiftc -enable-testing -Xswiftc -DDEBUG --filter SyncCoreSimulationTests/testManySeeds
 //
-// `HITLIST_SIM_FAULTS` is one of `SyncCoreSimulationTests.faultSets` (everyday, ledger, zone, memory, account, quota,
-// refusal, purge, all). It prints, for the report: seeds run, steps, records made, saves accepted, conflicts settled,
+// (`-DDEBUG`: the rig is compiled into Debug builds only, so that none of it ships.)
+// `HITLIST_SIM_FAULTS` is one of `SyncCoreSimulationTests.faultSets` (everyday, conflict, ledger, zone, memory, account,
+// quota, refusal, rows, all). It prints, for the report: seeds run, steps, records made, saves accepted, conflicts settled,
 // crashes ridden out, and every finding with its seed.
 //
 // One seed traced:
 //
 //   HITLIST_SIM_TRACE=<seed> HITLIST_SIM_KEYS=<record-name prefixes or words> [HITLIST_SIM_FAULTS=…] [HITLIST_SIM_STEPS=…] \
-//     swift test -c release -Xswiftc -enable-testing --filter SyncCoreSimulationTests/testTrace
+//     swift test -c release -Xswiftc -enable-testing -Xswiftc -DDEBUG --filter SyncCoreSimulationTests/testTrace
 //
 // prints the script's lines for those keys and every fault, the brain's log lines that name them, and the rig's notes.
 
@@ -58,8 +59,7 @@ final class SimHost: SyncHost, @unchecked Sendable {
 }
 
 /// `SyncCore` as the rig's `SimBrain`. One per launch of a device; the host is held here because the brain holds its
-/// host weakly. The person's answers to the brain's questions are the rig's: a device held for a mass deletion is
-/// answered "I deleted them" (in the rig every deletion is a person's own), and a purge is answered as `purgeAnswer`
+/// host weakly. The person's answer to the brain's one question is the rig's: a purge is answered as `purgeAnswer`
 /// says.
 struct SyncCoreSimBrain: SimBrain {
     let core: SyncCore
@@ -91,8 +91,11 @@ struct SyncCoreSimBrain: SimBrain {
         try await answerQuestions()
     }
 
+    /// The rig's "sync" is the app coming forward: everything is compared (what a write without a hint left is found
+    /// here, as in the app: `SyncEngine.cameForward`), then a fetch and a send.
     func syncNow() async throws {
         try await answerQuestions()
+        await core.localChanged(nil)
         try await core.syncNow()
         try await answerQuestions()
     }
@@ -100,7 +103,6 @@ struct SyncCoreSimBrain: SimBrain {
     /// What a person answers when the brain asks.
     private func answerQuestions() async throws {
         switch await core.status.hold {
-        case .massDeletion?: try await core.confirmDeletions()
         case .zonePurged?: try await core.answer(purgeAnswer(device))
         default: break
         }
@@ -170,13 +172,17 @@ final class SyncCoreSimulationTests: XCTestCase {
         case "quota": config.faults = SimFaultKind.everyday.union([.quotaFull]); config.faultPercent = 10
         case "refusal": config.faults = SimFaultKind.everyday.union([.refusal]); config.faultPercent = 10
         case "conflict": config.faults = SimFaultKind.everyday.union([.sendByItself]); config.faultPercent = 15
+        // A store that loses rows (nobody deleted them: they must come back and nothing may be deleted in iCloud).
+        // Without the transport losing its state in the same run: a reference to a lost row is remembered only in
+        // the ledger (section 8), and a ledger forgotten before the row is back forgets it (a written limit).
+        case "rows": config.faults = SimFaultKind.everyday.subtracting([.transportStateLost]).union([.rowsLost]); config.faultPercent = 12
         case "all": config.faults = Set(SimFaultKind.allCases); config.faultPercent = 10
         default: break
         }
         return config
     }
 
-    static let faultSets = ["everyday", "conflict", "ledger", "zone", "memory", "account", "quota", "refusal", "all"]
+    static let faultSets = ["everyday", "conflict", "ledger", "zone", "memory", "account", "quota", "refusal", "rows", "all"]
 
     /// One random run with the brain under test, its numbers added to `tally`.
     static func run(seed: UInt64, steps: Int, faults: String, devices: Int = 3, keys: [String] = [],
@@ -252,7 +258,7 @@ final class SyncCoreSimulationTests: XCTestCase {
     /// ("conflict", `sendByItself`) among them, at the supervisor's word.
     static let spread: [(faults: String, seeds: [UInt64])] = [
         ("everyday", [1, 2]), ("conflict", [1, 2]), ("ledger", [1]), ("zone", [1]), ("memory", [1]),
-        ("quota", [1]), ("refusal", [1]), ("account", [1, 2]),
+        ("quota", [1]), ("refusal", [1]), ("account", [1, 2]), ("rows", [1, 2, 3]),
     ]
 
     func testASpreadOfShortRunsAcrossTheFaultSets() async {
@@ -539,7 +545,7 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
-    // MARK: Beside the surface (the supervisor's three additions): a vouch, "download them again", refusals apart
+    // MARK: Only what was deleted is deleted (2026-11-15), and refusals apart
 
     /// One device that synced `count` tasks (T00…), its brain called directly (the rig's person does not answer).
     func oneDevice(_ count: Int) async -> (SyncSimulation, SyncCore) {
@@ -555,71 +561,48 @@ final class SyncCoreSimulationTests: XCTestCase {
         Set(range.map { SyncKey(type: "TaskItem", name: String(format: "T%02d", $0)) })
     }
 
-    func testVouchedDeletionsDoNotCountTowardTheGuard_undoingAnImport() async throws {
+    func testABulkDeletionByThePersonSimplyGoes_undoingAnImport() async throws {
         let (sim, core) = await oneDevice(40)
         let gone = keys(0..<30)
-        await core.vouchForDeletions(gone)
         for key in gone { await sim.device("A")?.store.delete(key) }
         await core.localChanged(gone)
         let status = await core.status
-        XCTAssertNil(status.hold, "30 of 40, vouched for: ordinary deletions")
+        XCTAssertNil(status.hold, "30 of 40 deleted by the person: nobody is asked")
+        XCTAssertEqual(status.waiting, 30)
         try await core.syncNow()
         let alive = await sim.cloud.records().filter { !$0.record.isDeleted && $0.key.type == "TaskItem" }.count
         XCTAssertEqual(alive, 10)
     }
 
-    func testAVouchCoversOnlyItsKeys_othersStillCount() async {
-        let (sim, core) = await oneDevice(30)
-        await core.vouchForDeletions(keys(0..<10))
-        for key in keys(0..<25) { await sim.device("A")?.store.delete(key) }
-        await core.localChanged(nil)
-        let hold = await core.status.hold
-        XCTAssertEqual(hold, .massDeletion(15), "15 unvouched of the 20 not vouched for")
-    }
-
-    func testAVouchLapsesWhenAWholeCompareFindsTheItemsStillHere() async {
+    func testAStoreThatLosesItemsDeletesNothing_theyComeBackFromIcloud() async throws {
         let (sim, core) = await oneDevice(12)
-        await core.vouchForDeletions(keys(0..<10))
-        await core.localChanged(nil)
-        let fact = try? await sim.device("A")?.ledger.fact(SyncCore.vouchedFact)
-        XCTAssertNil(fact ?? nil, "lapsed")
-        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
-        await core.localChanged(nil)
-        let hold = await core.status.hold
-        XCTAssertEqual(hold, .massDeletion(10))
-    }
-
-    func testAVouchNeverLiftsAHoldAlreadyStanding() async {
-        let (sim, core) = await oneDevice(12)
-        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
-        await core.localChanged(nil)
-        await core.vouchForDeletions(keys(0..<10))
-        await core.localChanged(nil)
-        let hold = await core.status.hold
-        XCTAssertEqual(hold, .massDeletion(10))
-    }
-
-    func testDownloadThemAgain_theMissingItemsComeBackFromIcloudAndNothingIsDeletedThere() async throws {
-        let (sim, core) = await oneDevice(12)
-        for key in keys(0..<10) { await sim.device("A")?.store.delete(key) }
+        for key in keys(0..<10) { await sim.device("A")?.store.lose(key) }
         await sim.device("A")?.store.put(Self.task("NEW", "made while the store read wrong"))
         await core.localChanged(nil)
-        let held = await core.status.hold
-        XCTAssertEqual(held, .massDeletion(10))
-        try await core.restoreFromICloud()
-        try await core.syncNow()
         let status = await core.status
-        XCTAssertNil(status.hold)
+        XCTAssertNil(status.hold, "nothing to ask: nobody deleted anything")
+        XCTAssertEqual(status.waiting, 1, "only the new task waits; no marker for an item that is merely not here")
+        try await core.syncNow()
+        try await core.syncNow()
         let here = try await sim.device("A")?.store.records().count
         XCTAssertEqual(here, 13, "the 10 back from iCloud, the 2 kept, the new one")
-        let alive = await sim.cloud.records().filter { !$0.record.isDeleted && $0.key.type == "TaskItem" }.count
-        XCTAssertEqual(alive, 13, "nothing deleted in iCloud; the new one went up")
-        do {
-            try await core.restoreFromICloud()
-            XCTFail("not asking any more")
-        } catch {
-            XCTAssertEqual(error as? SyncCoreError, .noQuestion)
-        }
+        let all = await sim.cloud.records().filter { $0.key.type == "TaskItem" }
+        XCTAssertEqual(all.filter { !$0.record.isDeleted }.count, 13, "nothing deleted in iCloud; the new one went up")
+        XCTAssertEqual(all.filter { $0.record.isDeleted }.count, 0, "and no marker was ever sent")
+    }
+
+    func testAStoreThatReadsEmptyDeletesNothing() async throws {
+        let (sim, core) = await oneDevice(12)
+        await sim.device("A")?.store.loseEverything()
+        await core.localChanged(nil)
+        let status = await core.status
+        XCTAssertNil(status.hold)
+        XCTAssertEqual(status.waiting, 0, "an empty store has nothing to send, least of all deletions")
+        try await core.syncNow()
+        let here = try await sim.device("A")?.store.records().count
+        XCTAssertEqual(here, 12, "everything is back")
+        let markers = await sim.cloud.records().filter { $0.record.isDeleted }.count
+        XCTAssertEqual(markers, 0)
     }
 
     func testARefusalIsApartFromErrors_andTheBoltStaysHollow() async {

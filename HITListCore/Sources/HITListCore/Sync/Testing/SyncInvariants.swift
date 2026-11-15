@@ -1,3 +1,6 @@
+// Compiled into Debug builds only (tests, the Debug app's pretend iCloud): none of this is in a released build. The
+// long simulation runs build for release and pass `-Xswiftc -DDEBUG` (the command is in `SyncCoreSimulationTests`).
+#if DEBUG
 import Foundation
 
 // What must always be true once every device has synced (`dev/SYNC-ENGINE.md`, section 9, I1 to I8), as functions over
@@ -852,3 +855,4 @@ public enum SyncInvariants {
         return parts.joined(separator: ", ") + (names.count > 4 ? " (and \(names.count - 4) more)" : "")
     }
 }
+#endif

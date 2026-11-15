@@ -1,3 +1,6 @@
+// Compiled into Debug builds only (tests, the Debug app's pretend iCloud): none of this is in a released build. The
+// long simulation runs build for release and pass `-Xswiftc -DDEBUG` (the command is in `SyncCoreSimulationTests`).
+#if DEBUG
 import Foundation
 
 // One device's road to `FakeCloud`: a `SyncTransport` that keeps the rules T1 to T14 (`dev/SYNC-ENGINE.md`, section 6)
@@ -739,3 +742,4 @@ public actor FakeTransport: SyncTransport {
         }
     }
 }
+#endif

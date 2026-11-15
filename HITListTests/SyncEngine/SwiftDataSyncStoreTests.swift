@@ -585,7 +585,9 @@ class SwiftDataSyncStoreTests: XCTestCase {
         ])
     }
 
-    func testAHintIsEverythingWhenASaveDeleted() throws {
+    /// With nobody watching `willSave`, a deleted row cannot be named: everything (and what the brain then finds gone
+    /// with no deletion taken down comes back from iCloud; it is never deleted there).
+    func testAHintIsEverythingWhenASaveDeletedAndNobodyTookTheRowsDown() throws {
         let task = TaskItem(title: "a")
         main.insert(task)
         try main.save()
@@ -594,6 +596,103 @@ class SwiftDataSyncStoreTests: XCTestCase {
         try main.save()
         XCTAssertEqual(hints.value, [.everything])
         XCTAssertNil(hints.value.first?.keys)
+    }
+
+    // MARK: - Deletions are taken down as they are saved (`SyncDeletionLog`)
+
+    /// The observer takes a deleted row's key down before the save commits it, and the save's hint names it.
+    func testADeletingSaveTakesTheRowDownAndNamesIt() async throws {
+        let task = TaskItem(title: "a")
+        let other = TaskItem(title: "b")
+        main.insert(task)
+        main.insert(other)
+        try main.save()
+        let log = SyncDeletionLog(ledger: nil)
+        let handed = Locked<[Set<SyncKey>?]>([])
+        let observer = SyncSaveHintObserver(container: container, deletions: log) { keys in handed.mutate { $0.append(keys) } }
+        defer { observer.stop() }
+        let gone = key(task)
+        main.delete(task)
+        other.title = "b, edited"
+        try main.save()
+        XCTAssertEqual(log.all(), [gone], "taken down")
+        XCTAssertEqual(handed.value, [[gone, key(other)]], "named with the rows the save changed, not everything")
+        log.forget([gone])
+        XCTAssertEqual(log.all(), [])
+    }
+
+    /// SwiftData takes a task's sub-tasks with it, at any depth: every row that goes is taken down, so each gets its
+    /// own marker in iCloud and none is read as merely missing.
+    func testATaskDeletedWithItsSubTasksTakesDownEveryRowThatGoes() async throws {
+        let parent = TaskItem(title: "Plan the trip")
+        let child = TaskItem(title: "Book the ferry")
+        let grandchild = TaskItem(title: "Print the ticket")
+        let bystander = TaskItem(title: "Unrelated")
+        for task in [parent, child, grandchild, bystander] { main.insert(task) }
+        child.parent = parent
+        grandchild.parent = child
+        try main.save()
+        let expected = Set([parent, child, grandchild].map(key))
+        let log = SyncDeletionLog(ledger: nil)
+        let handed = Locked<[Set<SyncKey>?]>([])
+        let observer = SyncSaveHintObserver(container: container, deletions: log) { keys in handed.mutate { $0.append(keys) } }
+        defer { observer.stop() }
+        main.delete(parent)
+        try main.save()
+        XCTAssertEqual(log.all(), expected)
+        XCTAssertEqual(handed.value, [expected])
+        let left = try await store.records().filter { $0.key.type == "TaskItem" }.map(\.key)
+        XCTAssertEqual(left, [key(bystander)], "the store did take all three")
+    }
+
+    /// The store hands the brain what was taken down, and forgets what the brain has written down.
+    func testTheStoreTellsTheBrainWhatWasDeletedOnce() async throws {
+        let task = TaskItem(title: "a")
+        main.insert(task)
+        try main.save()
+        let watched = SwiftDataSyncStore(container: container)
+        let observer = SyncSaveHintObserver(container: container, deletions: watched.deletionLog) { _ in }
+        defer { observer.stop() }
+        let gone = key(task)
+        main.delete(task)
+        try main.save()
+        let told = try await watched.deletions()
+        XCTAssertEqual(told, [gone])
+        try await watched.forget(deletions: told)
+        let again = try await watched.deletions()
+        XCTAssertEqual(again, [])
+    }
+
+    /// The engine's own deletion (a marker that arrived) is never a person's: nothing is taken down for it.
+    func testTheEnginesOwnDeletionIsNotTakenDown() async throws {
+        let task = TaskItem(title: "deleted on another device")
+        main.insert(task)
+        try main.save()
+        let watched = SwiftDataSyncStore(container: container)
+        let observer = SyncSaveHintObserver(container: container, deletions: watched.deletionLog) { _ in }
+        defer { observer.stop() }
+        let stale = try await watched.apply([LocalWrite(key: key(task), expected: try await record(key(task)), record: nil)])
+        XCTAssertEqual(stale, [])
+        let told = try await watched.deletions()
+        XCTAssertEqual(told, [], "nothing to send back: iCloud already holds the marker")
+    }
+
+    /// In the ledger's own file the notes outlive the process, and go with the ledger when it is reset.
+    func testDeletionsTakenDownAreKeptInTheLedgersFileAndGoWithIt() async throws {
+        let ledger = SyncLedgerStore.inMemory()
+        let first = SyncDeletionLog(ledger: ledger.container)
+        let a = SyncKey(type: "TaskItem", name: UUID().uuidString), b = SyncKey(type: "Project", name: UUID().uuidString)
+        first.record([a, b])
+        first.record([a])
+        // Another process on the same ledger (a relaunch) reads them.
+        let second = SyncDeletionLog(ledger: ledger.container)
+        XCTAssertEqual(second.all(), [a, b])
+        second.forget([a])
+        XCTAssertEqual(SyncDeletionLog(ledger: ledger.container).all(), [b])
+        try await ledger.reset()
+        XCTAssertEqual(SyncDeletionLog(ledger: ledger.container).all(), [], "a ledger forgotten forgets them too")
+        XCTAssertEqual(SyncDeletionLog.key(named: "deleted|TaskItem/ABC"), SyncKey(type: "TaskItem", name: "ABC"))
+        XCTAssertNil(SyncDeletionLog.key(named: "store"))
     }
 
     func testAnotherContainersSaveIsNothing() throws {
@@ -628,7 +727,7 @@ class SwiftDataSyncStoreTests: XCTestCase {
     /// nothing either.
     func testTheEnginesOwnSaveIsNoHintButOtherListenersStillHearIt() async throws {
         let handed = Locked<[Set<SyncKey>?]>([])
-        let observer = SyncSaveHintObserver(container: container) { keys in handed.mutate { $0.append(keys) } }
+        let observer = SyncSaveHintObserver(container: container, deletions: store.deletionLog) { keys in handed.mutate { $0.append(keys) } }
         defer { observer.stop() }
         let heard = Locked(0)
         let main = main!
@@ -652,7 +751,7 @@ class SwiftDataSyncStoreTests: XCTestCase {
     }
 
     /// The person's pending edits that go with the engine's save are still hinted: their rows' keys, without the rows
-    /// the engine wrote; a pending deletion of the person's makes the hint everything.
+    /// the engine wrote; a pending deletion of the person's is taken down and named like any other row.
     func testThePersonsPendingRowsInTheEnginesSaveAreStillHinted() async throws {
         main.autosaveEnabled = false
         let mine = TaskItem(title: "Mine")
@@ -663,7 +762,7 @@ class SwiftDataSyncStoreTests: XCTestCase {
         main.insert(doomed)
         try main.save()
         let handed = Locked<[Set<SyncKey>?]>([])
-        let observer = SyncSaveHintObserver(container: container) { keys in handed.mutate { $0.append(keys) } }
+        let observer = SyncSaveHintObserver(container: container, deletions: store.deletionLog) { keys in handed.mutate { $0.append(keys) } }
         defer { observer.stop() }
 
         mine.title = "Mine, edited"
@@ -676,13 +775,16 @@ class SwiftDataSyncStoreTests: XCTestCase {
         XCTAssertEqual(handed.value, [[key(mine), SyncKey(type: "TaskLabel", name: label.id.uuidString)]],
                        "the person's rows, not the engine's")
 
+        let doomedKey = key(doomed)
         main.delete(doomed)
         let now = try await record(key(theirs))
         var again = now
         again["title"] = .string("Theirs, again")
         _ = try await store.apply([LocalWrite(key: key(theirs), expected: now, record: again)])
         XCTAssertEqual(handed.value.count, 2)
-        XCTAssertEqual(handed.value.last, .some(nil), "a deletion of the person's went with it: everything")
+        XCTAssertEqual(handed.value.last, .some([doomedKey]), "the person's deletion went with the engine's save, named")
+        let told = try await store.deletions()
+        XCTAssertEqual(told, [doomedKey], "and taken down as a deletion of the person's")
     }
 
     func testASaveFromAContextOfItsOwnIsNoHint() async throws {

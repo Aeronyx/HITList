@@ -197,7 +197,7 @@ struct SyncWorld {
         let device = devices[i]
         let input = MergeInput(base: device.base, local: device.local,
                                deletedHereAt: device.deletedHereAt.map(MergeFixture.at),
-                               server: cloud, now: MergeFixture.at(now))
+                               server: cloud)
         let outcome = RecordMerge.merge(input)
         merges += 1
         check(input, outcome, device: i)
@@ -240,7 +240,7 @@ struct SyncWorld {
         let merged = RecordMerge.normal(outcome.merged)
         let local = RecordMerge.normal(input.local), server = RecordMerge.normal(input.server)
         let again = RecordMerge.merge(MergeInput(base: merged?.comparable, local: outcome.device,
-                                                 server: outcome.merged, now: input.now))
+                                                 server: outcome.merged))
         if RecordMerge.normal(again.merged) != merged {
             problems.append("dev\(i): merging \(outcome.rule.rawValue)'s result again gave \(String(describing: again.merged))")
         }
@@ -312,10 +312,9 @@ final class RecordMergePropertyTests: XCTestCase {
             let server = gen.arbitrarySide(type)
             let deletedHereAt = gen.rng.chance(0.5) ? MergeFixture.at(Int64(gen.rng.int(0...40))) : nil
             let first = RecordMerge.merge(MergeInput(base: base, local: local, deletedHereAt: deletedHereAt,
-                                                     server: server, now: MergeFixture.at(41)))
+                                                     server: server))
             let again = RecordMerge.merge(MergeInput(base: RecordMerge.normal(first.merged)?.comparable,
-                                                     local: first.device, server: first.merged,
-                                                     now: MergeFixture.at(42)))
+                                                     local: first.device, server: first.merged))
             if !RecordMerge.same(again.merged, first.merged) || !RecordMerge.same(again.device, first.device) {
                 failures += 1
                 XCTFail("case seed \(seed): \(first.rule.rawValue) then \(again.rule.rawValue): \(String(describing: first.merged)) became \(String(describing: again.merged))")
@@ -433,8 +432,7 @@ final class RecordMergePropertyTests: XCTestCase {
             var third: [(String, SyncRecord?)] = [("nothing", nil)]
             if let original { third.append(("the first version", original)) }
             for (what, local) in third {
-                let outcome = RecordMerge.merge(MergeInput(base: nil, local: local, server: world.cloud,
-                                                           now: MergeFixture.at(world.now + 1)))
+                let outcome = RecordMerge.merge(MergeInput(base: nil, local: local, server: world.cloud))
                 if !RecordMerge.same(outcome.device, held) || !RecordMerge.same(outcome.merged, world.cloud) {
                     problems.append("a third device holding \(what) ended with \(String(describing: outcome.merged))")
                 }

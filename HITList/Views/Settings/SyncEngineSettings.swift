@@ -91,8 +91,6 @@ struct SyncEngineRefusedRows: View {
 /// for something other than a sign-out (that one is today's signed-out state, on the Account row and the banner).
 struct SyncEngineHoldGroup: View {
     private var board: SyncEngineBoard { .shared }
-    @State private var confirmDeletions = false
-    @State private var confirmKeep = false
     @State private var confirmRemove = false
     @State private var isBusy = false
     @State private var message: String?
@@ -119,19 +117,6 @@ struct SyncEngineHoldGroup: View {
                 }
             }
             .disabled(isBusy)
-            .confirmationDialog(SyncEngineWords.confirmDeletionsQuestion(hold), isPresented: $confirmDeletions,
-                                titleVisibility: .visible) {
-                Button("Delete from iCloud", role: .destructive) { run { try await $0.confirmDeletions() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(SyncEngineWords.confirmDeletionsMessage)
-            }
-            .confirmationDialog("Keep them in iCloud?", isPresented: $confirmKeep, titleVisibility: .visible) {
-                Button("Download them again") { run { try await $0.restore() } }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text(SyncEngineWords.keepMessage)
-            }
             .confirmationDialog("Remove from this device too?", isPresented: $confirmRemove, titleVisibility: .visible) {
                 Button("Save a backup and remove", role: .destructive) { run { try await $0.answerPurge(.removeHere) } }
                 Button("Cancel", role: .cancel) {}
@@ -149,13 +134,6 @@ struct SyncEngineHoldGroup: View {
     @ViewBuilder
     private func buttons(for hold: SyncHold) -> some View {
         switch hold {
-        case .massDeletion:
-            HITMenuRow("I deleted them", subtitle: SyncEngineWords.deletedThemSubtitle, systemImage: "trash",
-                       role: .destructive, accessory: .none) { confirmDeletions = true }
-                .accessibilityIdentifier("settings-engine-deleted-them")
-            HITMenuRow("Keep them in iCloud", subtitle: SyncEngineWords.keepSubtitle, systemImage: "arrow.counterclockwise",
-                       iconTint: Theme.accent, accessory: .none) { confirmKeep = true }
-                .accessibilityIdentifier("settings-engine-keep")
         case .zonePurged:
             HITMenuRow("Remove from this device too", subtitle: SyncEngineWords.removeSubtitle, systemImage: "trash",
                        role: .destructive, accessory: .none) { confirmRemove = true }
@@ -267,14 +245,13 @@ enum SyncEngineWords {
     /// state), not tidying up.
     static func needsYou(_ hold: SyncHold) -> Bool {
         switch hold {
-        case .massDeletion, .zonePurged, .needsUpdate, .storageFull, .failed: true
+        case .zonePurged, .needsUpdate, .storageFull, .failed: true
         case .noAccount, .duplicates: false
         }
     }
 
     static func holdTitle(_ hold: SyncHold) -> String {
         switch hold {
-        case .massDeletion: "Items missing from this device"
         case .zonePurged: "Removed from iCloud"
         case .needsUpdate: "Update HITList"
         case .storageFull: "iCloud is full"
@@ -287,9 +264,6 @@ enum SyncEngineWords {
     /// What stands still and why, in the hold's group (the hold's own words are the status line's).
     static func holdNote(_ hold: SyncHold, waiting: Int = 0) -> String {
         switch hold {
-        case .massDeletion:
-            return "HITList stopped sending and receiving, so that a device that reads empty by mistake can't empty iCloud "
-                + "for every device. If they come back here, sync starts again by itself."
         case .zonePurged:
             return "Nothing has been deleted on this device. Nothing is sent or received until you choose."
         case .needsUpdate:
@@ -311,8 +285,6 @@ enum SyncEngineWords {
         }
     }
 
-    static let deletedThemSubtitle = "iCloud deletes them too, on every device"
-    static let keepSubtitle = "Puts back on this device what iCloud holds; nothing is deleted anywhere"
     static let removeSubtitle = "Saves a backup first, then what came from iCloud leaves this device"
     static let sendAgainSubtitle = "Everything on this device goes back to iCloud"
 
@@ -321,15 +293,6 @@ enum SyncEngineWords {
         return "Reads this device's items and HITList's sync records again"
     }
 
-    static func confirmDeletionsQuestion(_ hold: SyncHold) -> String {
-        guard case .massDeletion(let count) = hold else { return "Delete them from iCloud?" }
-        return count == 1 ? "Delete 1 item from iCloud?" : "Delete \(count) items from iCloud?"
-    }
-
-    static let confirmDeletionsMessage = "They are deleted on every device signed in to this iCloud account. "
-        + "Everything else stays as it is."
-    static let keepMessage = "HITList puts back on this device everything iCloud holds, and sync starts again. "
-        + "Nothing is deleted, here or in iCloud."
     static let removeMessage = "HITList saves a backup first (iCloud & data → Backups), then removes what came from "
         + "iCloud from this device. Items made here that iCloud never had are kept."
 
@@ -431,8 +394,7 @@ private extension String {
 @MainActor
 enum SyncEngineDemo {
     static let key = "syncEngineDemo"
-    static let names = ["synced", "waiting3", "checking", "mass248", "purged", "update", "full12", "failed", "refused2",
-                        "signedout"]
+    static let names = ["synced", "waiting3", "checking", "purged", "update", "full12", "failed", "refused2", "signedout"]
 
     static var requested: String? {
         guard let name = UserDefaults.standard.string(forKey: key), names.contains(name) else { return nil }
@@ -471,9 +433,6 @@ enum SyncEngineDemo {
             return SyncStatus(state: .idle, waiting: 3, firstFetchDone: true, lastFetchEnded: fetched, lastSendEnded: sent)
         case "checking":
             return SyncStatus(state: .fetching, waiting: 0, firstFetchDone: false)
-        case "mass248":
-            return SyncStatus(state: .held(.massDeletion(248)), waiting: 0, firstFetchDone: true, lastFetchEnded: fetched,
-                              lastSendEnded: sent)
         case "purged":
             return SyncStatus(state: .held(.zonePurged), waiting: 0, firstFetchDone: true, lastFetchEnded: fetched,
                               lastSendEnded: sent)
@@ -504,8 +463,6 @@ enum SyncEngineDemo {
             syncNow: { note("Sync now") },
             resume: { note("Try again") },
             answerPurge: { note("Purge answer \($0.rawValue)") },
-            confirmDeletions: { note("I deleted them") },
-            restore: { note("Keep them in iCloud") },
             move: { _ in
                 note("Move")
                 throw DemoError()

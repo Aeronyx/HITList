@@ -50,9 +50,6 @@ final class SyncEngine {
         var serial: Int
         /// Not a hint: `settle()`'s marker, run when every hint before it has been through the brain.
         var barrier: (@Sendable () -> Void)? = nil
-        /// Not a hint: items the person asked the app to delete in one go (`vouchForDeletions`), told to the brain
-        /// ahead of the hint of the save that deletes them, because it travels down the same stream before it.
-        var vouch: Set<SyncKey>? = nil
     }
 
     private static let osLog = Logger(subsystem: "com.trammells.hitlist", category: "sync")
@@ -76,7 +73,8 @@ final class SyncEngine {
         self.ledger = ledger
         self.storeURL = storeURL
         self.board = board
-        store = SwiftDataSyncStore(container: container, writer: .mainContext)
+        // Deletions are taken down in the ledger's own file as they are saved (`SyncDeletionLog`).
+        store = SwiftDataSyncStore(container: container, writer: .mainContext, deletions: SyncDeletionLog(ledger: ledger.container))
         let transport = makeTransport(ledger)
         self.transport = transport
         host = SyncEngineHost(clock: clock, backUp: backUp ?? { reason in try SyncEngineHost.backUpStore(container, reason: reason) })
@@ -127,6 +125,9 @@ final class SyncEngine {
         engine.echo = { line in print("SYNCENGINE \(line)"); fflush(stdout) }
         #endif
         shared = engine
+        // From now on, before anything else of the launch writes the store: a deletion nobody took down would come
+        // back from iCloud instead of going there.
+        engine.watchSaves()
         if let moved = ledger.movedAside { engine.say("The ledger could not be read and was set aside (\(moved.lastPathComponent)); merging afresh") }
         engine.say("Engine: \(pretend.map { "pretend iCloud ‘\($0)’" } ?? "\(SyncEngineSwitch.containerID), zone \(zone)"), store \(storeName)")
         board.launched(.own, actions: engine.actions)
@@ -139,53 +140,46 @@ final class SyncEngine {
             syncNow: { throw SyncCoreError.notStarted },
             resume: {},
             answerPurge: { _ in throw SyncCoreError.notStarted },
-            confirmDeletions: { throw SyncCoreError.notStarted },
-            restore: { throw SyncCoreError.notStarted },
             move: { engine in try await SyncEngine.move(to: engine, container: container) })
     }
 
     var actions: SyncEngineBoard.Actions {
         SyncEngineBoard.Actions(
-            syncNow: { [core] in try await core.syncNow() },
+            // The person's own "sync now" looks at everything first, then fetches and sends.
+            syncNow: { [core] in
+                await core.localChanged(nil)
+                try await core.syncNow()
+            },
             resume: { [core] in await core.resume() },
             answerPurge: { [core] choice in try await core.answer(choice) },
-            confirmDeletions: { [core] in try await core.confirmDeletions() },
-            restore: { [core] in try await core.restoreFromICloud() },
             move: { [container] engine in try await SyncEngine.move(to: engine, container: container) })
-    }
-
-    /// The app vouches for a deletion the person asked for in one go (Undo last import, a Switchboard deleted with its
-    /// switches): those items do not count toward the mass-deletion hold (`SyncCore.vouchForDeletions`; the review's
-    /// finding 12). Call it BEFORE the save that deletes them: it goes down the same stream as that save's hint, ahead
-    /// of it. Nothing happens on the mirror, where there is no engine.
-    static func vouchForDeletions(_ keys: Set<SyncKey>) {
-        shared?.vouch(keys)
-    }
-
-    /// `vouchForDeletions` on this engine (the app's is `shared`; tests have their own).
-    func vouch(_ keys: Set<SyncKey>) {
-        guard !keys.isEmpty else { return }
-        hints.yield(Hint(keys: nil, serial: 0, vouch: keys))
     }
 
     // MARK: - Life cycle
 
+    /// Watches the container's saves: each deletion is taken down before it is committed, and each save's hint goes
+    /// to the brain (`SyncSaveHintObserver`). Idempotent; the app calls it as soon as the engine exists.
+    func watchSaves() {
+        guard hintObserver == nil else { return }
+        let hints = self.hints, count = hintCount
+        hintObserver = SyncSaveHintObserver(container: container, deletions: store.deletionLog) { keys in
+            // On the saving thread, inside the save: only counted and passed on, never waited for.
+            hints.yield(Hint(keys: keys, serial: count.next()))
+        }
+    }
+
     /// Binds the ledger to the store file, merges rows that share an `id`, starts the brain and the first sync. Order:
-    /// the binding before anything reads the ledger (a ledger written for another file would read as "everything
-    /// deleted here"); the merge before the brain's first read (it refuses two rows with one key); the save hints before
-    /// the brain starts (a save between the two would otherwise wait for the next whole compare).
+    /// the saves watched first (a deletion must be taken down as it happens); the binding before anything reads the
+    /// ledger (one written for another store file is forgotten, and the deletions taken down with it); the merge before
+    /// the brain's first read (it refuses two rows with one key).
     func start() async {
         guard !isStarted else { return }
         isStarted = true
+        watchSaves()
         workers.append(Task { [weak self] in await self?.consume() })
         workers.append(Task { [weak self] in await self?.feedHints() })
         await bindLedger()
         mergeSharedIDs(trigger: "before the engine started")
-        let hints = self.hints, count = hintCount
-        hintObserver = SyncSaveHintObserver(container: container) { keys in
-            // On the saving thread, inside the save: only counted and passed on, never waited for.
-            hints.yield(Hint(keys: keys, serial: count.next()))
-        }
         await core.start()
         // The brain has read the ledger: rows of it that could not be read were forgotten alone (the review's finding
         // 6), and everything is fetched again because of it. Said once, for the sync log.
@@ -218,7 +212,8 @@ final class SyncEngine {
         }
     }
 
-    /// The app came forward: everything compared (whatever wrote the store while it was away), then a sync.
+    /// The app came forward: everything compared (a change whose hint was somehow missed is found here; an item
+    /// found gone with no deletion taken down comes back from iCloud, it is never deleted there), then a sync.
     func cameForward() {
         guard isStarted else { return }
         Task { [core] in
@@ -328,7 +323,6 @@ final class SyncEngine {
     private func feedHints() async {
         for await hint in hintStream {
             if let barrier = hint.barrier { barrier(); continue }
-            if let vouch = hint.vouch { await core.vouchForDeletions(vouch); continue }
             await core.localChanged(hint.keys)
             hintsDone = max(hintsDone, hint.serial)
             noteQuietIfSo(await core.status)

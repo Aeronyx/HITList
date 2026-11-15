@@ -412,6 +412,7 @@
 		B11AC0DEEDDF3FCEC2253ABC /* DelightSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */; };
 		B18B770FA63973D9E4796F99 /* CalendarChange.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1976FC7613C5C142FF9E962 /* CalendarChange.swift */; };
 		B1E563539EBD540721DDA15C /* CompletionMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC2B9A3C265599BBA1928813 /* CompletionMotion.swift */; };
+		B228B15E8D004DCBD878804B /* SyncDeletionLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3356EFC8FCBF8BF93D8B783 /* SyncDeletionLog.swift */; };
 		B38356BFAA87241E786AC857 /* HighlightTextStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEB79A4C3F4721726870E839 /* HighlightTextStyle.swift */; };
 		B3D16F7D17069A337217F788 /* CompanionCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56B50236E12799A3CA38ADFD /* CompanionCharacter.swift */; };
 		B45177102F56678B6535528C /* ReminderPickerCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33CC15F6A065400DDD7DE9FE /* ReminderPickerCard.swift */; };
@@ -1063,6 +1064,7 @@
 		C28D7116FE6E2C89E3CCFA39 /* LocalBackupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalBackupTests.swift; sourceTree = "<group>"; };
 		C30C52D93F8827A9A1FF9CC4 /* CompanionBehindTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionBehindTests.swift; sourceTree = "<group>"; };
 		C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPlan.swift; sourceTree = "<group>"; };
+		C3356EFC8FCBF8BF93D8B783 /* SyncDeletionLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncDeletionLog.swift; sourceTree = "<group>"; };
 		C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaTests.swift; sourceTree = "<group>"; };
 		C4233FD83EC4A73BC7DC5A34 /* ProfileMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileMenu.swift; sourceTree = "<group>"; };
 		C50BDDCE5CD3BBAE4215CFE6 /* BrowseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseView.swift; sourceTree = "<group>"; };
@@ -1358,6 +1360,7 @@
 				2DE0CA173B3797A60E325E30 /* CloudKitTransport.swift */,
 				47ACB41056989FD3EE57A52A /* CloudRecordCodec.swift */,
 				A63469CE09FF74292351C28B /* SwiftDataSyncStore.swift */,
+				C3356EFC8FCBF8BF93D8B783 /* SyncDeletionLog.swift */,
 				8E24B32A86CB3F187800E4D2 /* SyncEngine.swift */,
 				3D89BE8D1368F6CD847A8A33 /* SyncEngine+Move.swift */,
 				3F1BBAED4FC24AF34ABDFC0A /* SyncEngine+Pretend.swift */,
@@ -2836,6 +2839,7 @@
 				058B3B6E0DD68DAF9CBA67D7 /* SyncAppDelegate.swift in Sources */,
 				7C8559B92495C2085EF300E5 /* SyncAudit.swift in Sources */,
 				AE5AFD9CC9865C6CDDD9C335 /* SyncComparison.swift in Sources */,
+				B228B15E8D004DCBD878804B /* SyncDeletionLog.swift in Sources */,
 				0318ECAD2DC4C8D9788ACB0C /* SyncEngine+Move.swift in Sources */,
 				31CCC4788987B3F4479E432A /* SyncEngine+Pretend.swift in Sources */,
 				61E71A58D0DF7B7B41027134 /* SyncEngine.swift in Sources */,

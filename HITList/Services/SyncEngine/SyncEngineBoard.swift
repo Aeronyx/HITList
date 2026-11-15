@@ -28,12 +28,6 @@ final class SyncEngineBoard {
         var resume: @MainActor () async -> Void
         /// The answer to a purge in iCloud's settings (`SyncCore.answer`).
         var answerPurge: @MainActor (PurgeAnswer) async throws -> Void
-        /// "I deleted them" (`SyncCore.confirmDeletions`).
-        var confirmDeletions: @MainActor () async throws -> Void
-        /// "Keep them in iCloud", the safe way out of a mass-deletion hold: the engine forgets its memory and
-        /// everything iCloud holds comes back to this device; nothing is deleted anywhere
-        /// (`SyncCore.restoreFromICloud`).
-        var restore: @MainActor () async throws -> Void
         /// Move this device's store to the other engine (a backup first, then a relaunch); the words of what
         /// went wrong when it throws.
         var move: @MainActor (Engine) async throws -> Void

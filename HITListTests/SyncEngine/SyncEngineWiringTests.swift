@@ -48,11 +48,21 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertEqual(decide(), .own)
         XCTAssertEqual(decide(store: "HITList-other.store"), .mirror, "another store's preference is its own")
         XCTAssertEqual(decide(["-syncEngine", "mirror"]), .mirror)
-        XCTAssertEqual(decide(debug: false), .own, "a moved store stays moved in any build")
+        XCTAssertEqual(decide(debug: false), .mirror, "a released build runs the mirror whatever the preference says")
         SyncEngineSwitch.setPreference(.mirror, storeName: "HITList-s143.store", defaults: defaults)
         XCTAssertNil(defaults.object(forKey: SyncEngineSwitch.preferenceKey(storeName: "HITList-s143.store")),
                      "moving back leaves the store as one that never moved")
         XCTAssertEqual(decide(), .mirror)
+    }
+
+    /// The engine ships switched off: in a released build nothing can switch it on, not the preference a Debug build
+    /// on the same device left in the shared defaults, not an argument, not on any store.
+    func testAReleasedBuildNeverRunsTheEngine() {
+        for store in ["HITList.store", "HITList-s143.store"] {
+            SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults)
+            XCTAssertEqual(decide(["-syncEngine", "own", "-syncEnginePretend", "x"], store: store, debug: false), .mirror, store)
+        }
+        XCTAssertFalse(SyncEngineSwitch.isAvailable(isDebug: false))
     }
 
     func testNeverUnderHostedTests() {
@@ -135,7 +145,7 @@ final class SyncEngineWiringTests: XCTestCase {
         }
         XCTAssertEqual(backedUp, 1)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TaskItem>()), 1, "rows that shared an id merged")
-        XCTAssertEqual(SyncEngineSwitch.decide(storeName: "HITList-s143t.store", isTesting: false, isDebug: false,
+        XCTAssertEqual(SyncEngineSwitch.decide(storeName: "HITList-s143t.store", isTesting: false, isDebug: true,
                                                arguments: [], defaults: defaults), .own, "the next launch opens it on the engine")
     }
 
