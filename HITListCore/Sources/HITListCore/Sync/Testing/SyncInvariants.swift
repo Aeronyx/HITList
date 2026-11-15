@@ -567,6 +567,12 @@ public enum SyncInvariants {
     /// A field's expected value with the references to items people deleted taken out (the device clears them);
     /// `skip` when a reference points at an item whose fate the model does not decide (deleted, then changed again).
     private static func settle(_ value: SyncValue?, field: SyncField, intent: SimIntent) -> Settled {
+        // A reference to an item a refusal holds back on its device cannot show anywhere else (T9): not judged.
+        let heldBack = intent.heldBack
+        if case .reference(let target) = field.kind, case .reference(let name)? = value,
+           heldBack.contains(SyncKey(type: target, name: name)) { return .skip }
+        if case .references(let target) = field.kind, case .referenceList(let names)? = value,
+           names.contains(where: { heldBack.contains(SyncKey(type: target, name: $0)) }) { return .skip }
         switch (field.kind, value) {
         case (.reference(let target), .reference(let name)?):
             let key = SyncKey(type: target, name: name)
