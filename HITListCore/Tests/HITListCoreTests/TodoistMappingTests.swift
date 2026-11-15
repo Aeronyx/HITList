@@ -141,6 +141,14 @@ final class TodoistMappingTests: XCTestCase {
         XCTAssertEqual(plan.labelsToMake, ["Errands"], "home goes with Pay rent; Bills is there")
     }
 
+    func testASkippedParentsDatedSubtaskIsMatchedOnItsOwn() throws {
+        let plan = try plan(existing: TodoistExisting(openTasks: [.init(title: "Groceries", groupName: "Home")]))
+        XCTAssertEqual(plan.skipped.map(\.title), ["Groceries"])
+        XCTAssertEqual(plan.checklistLineCount, 0)
+        XCTAssertEqual(plan.subtasksAsTasks, 1)
+        XCTAssertTrue(plan.tasks.contains { $0.title == "Pick up dry cleaning" })
+    }
+
     func testSectionsOffKeepsTheSectionInTheNotes() throws {
         let plan = try plan(options: TodoistImportOptions(sectionsAsLabels: false))
         XCTAssertEqual(plan.tasks[2].labels, [])

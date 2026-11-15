@@ -170,7 +170,6 @@ public enum TodoistMapping {
                             let childTitle = splitLabels(child.content).title
                             if hasOwn(child) {
                                 queue.insert((child, task.title), at: 0)
-                                plan.subtasksAsTasks += 1
                                 continue
                             }
                             let line = (path + [childTitle]).joined(separator: checklistSeparator)
@@ -182,7 +181,6 @@ public enum TodoistMapping {
                         }
                     }
                     let checklistBefore = plan.checklistLineCount
-                    let tasksBefore = plan.subtasksAsTasks
                     let queueBefore = queue.count
                     walk(source.children, path: [])
                     // Children made tasks are queued in reverse; put them back in file order, right after this one.
@@ -225,10 +223,9 @@ public enum TodoistMapping {
                     let openKey = TodoistExisting.OpenTask(title: key(task.title), groupName: groupName.map(key))
                     if open.contains(openKey) {
                         plan.skipped.append(task)
-                        // Its sub-tasks were counted for a task that will not be made.
+                        // Its checklist lines were counted for a task that will not be made; its sub-tasks that are
+                        // tasks of their own are still queued, and are matched on their own.
                         plan.checklistLineCount = checklistBefore
-                        plan.subtasksAsTasks = tasksBefore
-                        if added > 0 { queue.removeFirst(added) }
                         continue
                     }
                     open.insert(openKey)
@@ -236,6 +233,7 @@ public enum TodoistMapping {
                         labelSpelling[key(name)] = name
                         plan.labelsToMake.append(name)
                     }
+                    if under != nil { plan.subtasksAsTasks += 1 }
                     plan.tasks.append(task)
                     made += 1
                 }
@@ -290,5 +288,5 @@ public enum TodoistMapping {
         return lines
     }
 
-    static func count(_ n: Int, _ noun: String) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
+    public static func count(_ n: Int, _ noun: String) -> String { "\(n) \(noun)\(n == 1 ? "" : "s")" }
 }
