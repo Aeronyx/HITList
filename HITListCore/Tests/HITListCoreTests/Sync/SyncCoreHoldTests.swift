@@ -349,6 +349,51 @@ final class SyncCoreHoldTests: XCTestCase {
         XCTAssertTrue(synced.isSynced)
     }
 
+    func testALedgerThatCannotBeReadStartsNothing() async {
+        let ledger = UnreadableLedger()
+        let transport = ScriptedTransport()
+        let core = SyncCore(store: MemoryLocalStore([task("A", "Milk")]), ledger: ledger, transport: transport, host: nil)
+        await core.start()
+        let status = await core.status
+        guard case .failed? = status.hold else { return XCTFail("\(status)") }
+        XCTAssertFalse(status.isSynced)
+        let starts = await transport.starts
+        XCTAssertEqual(starts, 0, "the transport would read its state from a ledger that cannot be read")
+        await core.localChanged(nil)
+        let pending = await transport.pending()
+        XCTAssertEqual(pending, [])
+
+        await ledger.heal()
+        await core.start()
+        let healed = await core.status
+        XCTAssertNil(healed.hold)
+        XCTAssertEqual(healed.state, .idle)
+    }
+
+    func testStopEndsTheTransportAndSaysOff() async {
+        let device = await synced([task("A", "Milk")])
+        await device.core.stop()
+        let status = await device.status()
+        XCTAssertEqual(status.state, .off)
+        XCTAssertFalse(status.isSynced)
+        do {
+            try await device.core.syncNow()
+            XCTFail("stopped")
+        } catch {
+            XCTAssertEqual(error as? SyncCoreError, .notStarted)
+        }
+        await device.core.start()
+        let again = await device.status()
+        XCTAssertTrue(again.isSynced)
+    }
+
+    func testTheHostHearsWhatASignOutRemoved() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.transport.deliver(.account(.signedOut(previous: "alice")))
+        XCTAssertEqual(device.host.written, [taskKey("A"), taskKey("B")])
+        XCTAssertEqual(device.host.statuses.last?.state, .held(.noAccount))
+    }
+
     // MARK: A merge without a memory (section 7, T13)
 
     func testTheLedgerThrownAwayWhileBothSidesHoldData() async throws {
@@ -383,6 +428,24 @@ final class SyncCoreHoldTests: XCTestCase {
         let afterApplies = await fresh.store.applyCount
         XCTAssertEqual(afterApplies, applies + 1, "one write for the batch")
     }
+}
+
+/// A ledger that cannot be read until healed.
+actor UnreadableLedger: SyncLedger {
+    struct Unreadable: Error {}
+    let inner = MemoryLedger()
+    private var broken = true
+    func heal() { broken = false }
+    func entries() async throws -> [LedgerEntry] {
+        if broken { throw Unreadable() }
+        return try await inner.entries()
+    }
+    func deferred() async throws -> [CloudRecord] { try await inner.deferred() }
+    func fact(_ name: String) async throws -> Data? { try await inner.fact(name) }
+    func write(_ write: LedgerWrite) async throws { try await inner.write(write) }
+    func reset() async throws { try await inner.reset() }
+    func loadTransportState() async -> Data? { await inner.loadTransportState() }
+    func saveTransportState(_ state: Data?) async { await inner.saveTransportState(state) }
 }
 
 /// A store whose reads throw `SyncStoreError.duplicates` while set to.

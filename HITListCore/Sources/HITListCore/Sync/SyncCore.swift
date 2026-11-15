@@ -329,7 +329,9 @@ public actor SyncCore: SyncTransportDelegate {
     private func currentStatus() -> SyncStatus {
         let state: SyncStatus.State
         switch phase {
-        case .off: state = .off
+        case .off:
+            // A start that failed says why; a brain stopped on purpose is simply off.
+            if case .failed? = hold { state = .held(hold!) } else { state = .off }
         case .starting: state = .starting
         case .running:
             if let hold { state = .held(hold) } else if fetching { state = .fetching } else if sending { state = .sending } else { state = .idle }
