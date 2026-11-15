@@ -72,9 +72,11 @@ public enum RecordMerge {
                                                        SyncSchema.updatedAt: .millis(deleted)])
         }
         var out = SyncSchema.filled(known)
-        for (field, value) in out.fields {
-            if case .referenceList(let names) = value { out.fields[field] = names.isEmpty ? nil : .references(names) }
+        let lists = out.fields.compactMap { field, value -> (String, [String])? in
+            if case .referenceList(let names) = value { return (field, names) }
+            return nil
         }
+        for (field, names) in lists { out.fields[field] = names.isEmpty ? nil : .references(names) }
         return out
     }
 
@@ -118,6 +120,12 @@ public enum RecordMerge {
             if server.isDeleted {
                 // M10: deleted there, not here either. Also when the base is a marker too (the table has no row for
                 // it: M13 is a live record there): nothing happened on either side, iCloud's marker stands.
+                // Deleted on both sides apart: the marker carries the later of the two deletions, whichever device
+                // reached iCloud first (round 28, brief 138: with iCloud's time alone, the order of arrival decided
+                // the marker's time, and a deletion here after an edit elsewhere was forgotten).
+                if !base.isDeleted, isLater(.date(deletedHere), than: server[SyncSchema.deletedAt]) {
+                    return MergeOutcome(merged: .marker(key, deletedAt: deletedHere), rule: .deletedBoth)
+                }
                 return MergeOutcome(merged: server, rule: .deletedBoth)
             }
             if base.isDeleted {

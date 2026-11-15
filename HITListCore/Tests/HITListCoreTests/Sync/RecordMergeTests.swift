@@ -270,11 +270,18 @@ final class RecordMergeTests: XCTestCase {
 
     // MARK: M10, M11
 
-    func testM10DeletedOnBothSidesKeepsICloudsMarker() {
+    func testM10DeletedOnBothSidesCarriesTheLaterDeletion() {
         let base = F.task(updated: 10)
-        let outcome = F.merge(base: base, local: nil, deletedHereAt: 60, server: F.marker(at: 40))
-        XCTAssertEqual(outcome.rule, .deletedBoth)
-        XCTAssertEqual(outcome.merged, F.marker(at: 40), "iCloud's time, not this device's")
+        let earlierThere = F.merge(base: base, local: nil, deletedHereAt: 60, server: F.marker(at: 40))
+        XCTAssertEqual(earlierThere.rule, .deletedBoth)
+        XCTAssertEqual(earlierThere.merged, F.marker(at: 60), "deleted here after: this device's time goes to iCloud")
+        let laterThere = F.merge(base: base, local: nil, deletedHereAt: 30, server: F.marker(at: 40))
+        XCTAssertEqual(laterThere.rule, .deletedBoth)
+        XCTAssertEqual(laterThere.merged, F.marker(at: 40))
+        let tie = F.merge(base: base, local: nil, deletedHereAt: 40, server: F.marker(at: 40))
+        XCTAssertEqual(tie.merged, F.marker(at: 40))
+        let unnoticed = F.merge(base: base, local: nil, server: F.marker(at: 40), now: 90)
+        XCTAssertEqual(unnoticed.merged, F.marker(at: 90), "nobody noticed: now, as M8")
     }
 
     func testM11GoneForGoodUnchangedHereGoes() {
