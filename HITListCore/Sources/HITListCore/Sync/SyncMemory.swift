@@ -28,7 +28,7 @@ public actor MemoryLocalStore: SyncLocalStore {
         var saves: [SyncRecord] = []
         var deletes: [SyncKey] = []
         for write in writes {
-            guard items[write.key]?.comparable == write.expected?.comparable else {
+            guard RecordMerge.same(items[write.key], write.expected) else {
                 stale.insert(write.key)
                 continue
             }
@@ -69,12 +69,15 @@ public actor MemoryLocalStore: SyncLocalStore {
 
     private func remove(_ key: SyncKey) {
         guard items.removeValue(forKey: key) != nil else { return }
-        for (other, record) in items {
-            if key.type == "TaskItem", record.key.type == "TaskItem", record.fields["parent"] == .reference(key.name) {
-                remove(other)
-                continue
-            }
-            items[other] = whole(record)
+        // Its sub-tasks first, each with its own (SwiftData's cascade goes all the way down); then what is left drops
+        // its references to whatever went. Walking a copy taken before the recursion would put back what the
+        // recursion removed (brief 138: a grandchild came back).
+        if key.type == "TaskItem" {
+            let children = items.values.filter { $0.key.type == "TaskItem" && $0.fields["parent"] == .reference(key.name) }
+            for child in children { remove(child.key) }
+        }
+        for other in Array(items.keys) {
+            if let record = items[other] { items[other] = whole(record) }
         }
     }
 
