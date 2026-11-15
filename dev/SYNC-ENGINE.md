@@ -107,7 +107,7 @@ records set aside (section 8) and a few facts (`LedgerFact`).
 
 A deletion here is noticed by the compare and nowhere else (not by `recordToSend`, not by a fetch: a fetch that
 meets an item gone here runs the compare on it first), so one guard covers every way a deletion can reach iCloud
-(`massDeletion`, section 10); a save's hint that finds more than 50 gone is decided on a whole compare.
+(`massDeletion`, section 10); a save's hint that finds many gone is decided on a whole compare.
 
 `SyncCore` compares every record (at start, on return to the app, after a whole fetch) or the keys a save touched
 (`localChanged`: the app passes them on `ModelContext.didSave`; a hint, never the truth). The transport's pending
@@ -252,6 +252,14 @@ the marker goes). Without that, an item deleted here a moment before the memory 
     field is empty.
   - What is waiting to go is sent with the items pointed at before those that point at them (`SyncSchema.types`
     order, a task after its parent), so iCloud rarely holds a record ahead of its target.
+- **A deletion that arrives never takes with it an item made or changed here after it** (found by the review,
+  finding 1: a sub-task added or edited under a task after another device deleted that task vanished with it, and
+  an older one's marker then deleted it everywhere). Before a task's deletion is written, every sub-task the device
+  holds under it is settled as if its own deletion had arrived at the same moment: unchanged here, or last changed
+  at or before that moment: it goes, named as a deletion of its own; made here, changed here after it, or moved
+  under the task here: it stays, written out from under the task first (its `parent` then waits, as above). And
+  the store is strict: it deletes exactly the rows the writes name, and a deletion whose cascade would take a row
+  no write names comes back stale and deletes nothing.
 - A type this build does not know is ignored and nothing is kept for it.
 - `Meta/meta` with a `formatVersion` above `SyncSchema.formatVersion`: the engine holds (`needsUpdate`).
 - After a fetch that wrote anything the app runs what the mirror's import used to trigger (the name deduplication,
@@ -292,7 +300,7 @@ person or the world can lift:
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `massDeletion` | A whole compare finds no item while iCloud holds some, or more than 50 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
+| `massDeletion` | A whole compare finds no item here that iCloud holds while iCloud holds some (the store is not the one the ledger describes), or at least 10 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent

@@ -44,8 +44,12 @@ public protocol SyncLocalStore: Sendable {
     func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord]
 
     /// Makes the writes in one transaction, in an order that keeps references whole (a record after the ones it
-    /// points at; deletions last), each only if its `expected` still holds (`RecordMerge.same`). A reference to an item that does not
-    /// exist here is written as none. Returns the keys whose `expected` did not hold: nothing was written for them.
+    /// points at; deletions last), each only if its `expected` still holds (`RecordMerge.same`). A reference to an
+    /// item that does not exist here is written as none. **A deletion removes exactly the rows the writes name**:
+    /// when deleting a row would take others with it (a task's sub-tasks, by the store's own cascade) and the writes
+    /// do not name every one of them as a deletion too, that write is stale and nothing is deleted for it (the
+    /// brain names each row it means to delete, having settled each: `dev/SYNC-ENGINE.md` section 8). Returns the
+    /// keys whose write did not go ahead: nothing was written for them.
     func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey>
 }
 
