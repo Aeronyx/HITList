@@ -81,6 +81,20 @@ extension SyncCore {
                 return
             }
         }
+        // Deletions kept across a forgotten memory that this whole fetch did not bring: iCloud does not hold the
+        // item, so there is nothing to delete there.
+        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil }.map(\.key)
+        if !kept.isEmpty {
+            do {
+                let here = try await localRecords(Set(kept))
+                var forget = LedgerWrite()
+                forget.remove = kept.filter { here[$0] == nil }.sorted()
+                try await commit(forget)
+            } catch {
+                await storeFailed(error)
+                return
+            }
+        }
         lastFetchEnded = clock()
         await compare(nil)
     }

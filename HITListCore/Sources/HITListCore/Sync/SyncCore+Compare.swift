@@ -216,13 +216,19 @@ extension SyncCore {
                     entry.deletedHereAt = nil
                     finding.entry = entry
                 }
-            } else if firstFetchDone {
-                // New here. Before the first whole fetch it may well be in iCloud already: not counted, not sent.
-                finding.change = .save(key)
+            } else {
+                if firstFetchDone {
+                    // New here. Before the first whole fetch it may well be in iCloud already: not counted, not sent.
+                    finding.change = .save(key)
+                }
+                // A deletion kept across a forgotten memory, undone: nothing left to remember.
+                if entry != nil { finding.drop = true }
             }
         } else if let entry {
             guard let base = entry.base else {
-                finding.drop = true
+                // A deletion kept across a forgotten memory waits for the next whole fetch to settle it; anything
+                // else with no base is nothing.
+                if entry.deletedHereAt == nil { finding.drop = true }
                 return finding
             }
             if base.isDeleted {

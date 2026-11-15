@@ -75,43 +75,110 @@ final class SyncCoreHoldTests: XCTestCase {
     }
 
     /// T12 as CKSyncEngine does it: a transport whose own state was lost (the ledger kept) announces a sign-in to the
-    /// account the ledger already belongs to. That is no change of account.
-    func testASignInToTheLedgersOwnAccountIsNoChange() async throws {
+    /// account the ledger already belongs to. Nothing of the person's leaves; the memory is forgotten (a fresh
+    /// bookmark never tells of a zone lost meanwhile), the transport reset, everything merged afresh.
+    func testTheTransportsStateLostWithTheZoneIntact() async throws {
         let device = await synced([task("A", "Milk"), task("B", "Bread")])
-        await device.store.edit(taskKey("A"), ["title": .string("Oat milk")])
+        device.clock.advance(100)
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk"), "updatedAt": .date(device.clock.now)])
         await device.core.localChanged([taskKey("A")])
-        // The transport's bookmark and list are gone; it announces alice again.
         await device.transport.forgetList()
         await device.transport.deliver(.account(.signedIn(current: "alice")))
-        XCTAssertEqual(device.host.backups, [], "nothing removed")
+        XCTAssertEqual(device.host.backups, [], "nothing of the person's leaves")
         let count = await device.store.count
         XCTAssertEqual(count, 2)
+        let resets = await device.transport.resets
+        XCTAssertEqual(resets, 1)
         let entries = try await device.ledger.entries()
-        XCTAssertEqual(entries.count, 3, "A, B and the meta: the ledger kept")
+        XCTAssertTrue(entries.allSatisfy { $0.base == nil }, "the memory forgotten")
+        let before = await device.pending()
+        XCTAssertEqual(before, [], "nothing goes before the whole fetch")
+        await device.deliverFetch([cloud(task("A", "Milk"), "c7"), cloud(task("B", "Bread"), "c8"), meta()])
         let pending = await device.pending()
-        XCTAssertEqual(pending, [.save(taskKey("A"))], "what was waiting is added again")
-        let status = await device.status()
-        XCTAssertNil(status.hold)
-        // The next fetch brings every record again: settled as already known, nothing more to send.
-        await device.deliverFetch([cloud(task("A", "Milk")), cloud(task("B", "Bread")), meta()])
-        let after = await device.pending()
-        XCTAssertEqual(after, [.save(taskKey("A"))])
+        XCTAssertEqual(pending, [.save(taskKey("A"))], "only what truly differs")
         let a = await device.item(taskKey("A"))
         XCTAssertEqual(a?["title"], .string("Oat milk"))
+        let record = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(record?.system, token("c7"))
+    }
+
+    func testTheTransportsStateLostWithTheZoneMadeAgainEmpty() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.transport.deliver(.account(.signedIn(current: "alice")))
+        await device.deliverFetch([])
+        let pending = await device.pending()
+        XCTAssertEqual(Set(pending), [.save(taskKey("A")), .save(taskKey("B")), .save(SyncCore.metaKey)],
+                       "everything here goes up again")
+        let count = await device.store.count
+        XCTAssertEqual(count, 2)
+    }
+
+    func testADeletionNotSentBeforeTheStateWasLostStaysDeleted() async throws {
+        let probe = RecordMerge.merge(MergeInput(base: nil, local: nil, deletedHereAt: epoch.addingTimeInterval(50),
+                                                 server: task("B", "Bread"), now: epoch.addingTimeInterval(60)))
+        guard probe.merged?.isDeleted == true else {
+            throw XCTSkip("waits for 138's M3 with an explicit deletedHereAt (sync-proof 81d9291)")
+        }
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        device.clock.advance(50)
+        let deletedAt = device.clock.now
+        await device.store.delete(taskKey("B"))
+        await device.core.localChanged([taskKey("B")])
+        await device.transport.deliver(.account(.signedIn(current: "alice")))
+        let kept = await device.entry(taskKey("B"))
+        XCTAssertNil(kept?.base)
+        XCTAssertEqual(kept?.deletedHereAt, deletedAt, "the unsent deletion carried across")
+        await device.deliverFetch([cloud(task("A", "Milk"), "c7"), cloud(task("B", "Bread"), "c8"), meta()])
+        let b = await device.item(taskKey("B"))
+        XCTAssertNil(b, "stays deleted here")
+        let record = await device.core.recordToSend(taskKey("B"))
+        XCTAssertEqual(record?.record, .marker(taskKey("B"), deletedAt: deletedAt), "and goes as deleted everywhere")
+        XCTAssertEqual(record?.system, token("c8"))
+    }
+
+    func testADeletionNotSentBeforeTheStateWasLostLosesToALaterChangeThere() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        device.clock.advance(50)
+        await device.store.delete(taskKey("B"))
+        await device.core.localChanged([taskKey("B")])
+        await device.transport.deliver(.account(.signedIn(current: "alice")))
+        await device.deliverFetch([cloud(task("A", "Milk"), "c7"), cloud(task("B", "Rye", updated: 80), "c8"), meta()])
+        let b = await device.item(taskKey("B"))
+        XCTAssertEqual(b?["title"], .string("Rye"), "changed in iCloud after the deletion: it comes back")
+        let pending = await device.pending()
+        XCTAssertEqual(pending, [])
+    }
+
+    func testAZoneDeletedKeepsTheDeletionsNotSentUntilAWholeFetch() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.store.delete(taskKey("B"))
+        await device.core.localChanged([taskKey("B")])
+        await device.transport.deliver(.zoneLost(.deleted))
+        let kept = await device.entry(taskKey("B"))
+        XCTAssertNotNil(kept?.deletedHereAt)
+        XCTAssertNil(kept?.base)
+        let pending = await device.pending()
+        XCTAssertEqual(Set(pending), [.save(taskKey("A")), .save(SyncCore.metaKey)], "B is not sent: it is deleted")
+        await device.deliverFetch([])
+        let gone = await device.entry(taskKey("B"))
+        XCTAssertNil(gone, "the zone did not hold it: nothing to delete there")
     }
 
     /// T12: the account event comes as the first event of the first fetch after `start`, never inside it; what the
     /// brain added to the list after `start` is kept.
     func testTheAccountEventAfterStartKeepsWhatWasAdded() async throws {
         let device = await synced([task("A", "Milk")])
-        await device.store.edit(taskKey("A"), ["title": .string("Oat milk")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk"), "updatedAt": at(100)])
         let transport = ScriptedTransport()
         let relaunched = device.relaunched(transport: transport)
         await relaunched.core.start()
         let added = await transport.pending()
         XCTAssertEqual(added, [.save(taskKey("A"))], "found by the start's compare")
+        // The transport lost its state: it announces the ledger's own account with its first fetch, which (from a
+        // fresh bookmark) brings everything. The edit, made after iCloud's version, still goes.
         await transport.setFetches([[.account(.signedIn(current: "alice")), .willFetch,
-                                     .fetched(changed: [], removed: []), .didFetch(error: nil)]])
+                                     .fetched(changed: [cloud(task("A", "Milk"), "c7"), meta()], removed: []),
+                                     .didFetch(error: nil)]])
         try await relaunched.core.syncNow()
         let sent = await transport.sentRecords
         XCTAssertEqual(sent.map(\.record.key), [taskKey("A")])
@@ -459,6 +526,8 @@ final class SyncCoreHoldTests: XCTestCase {
         } catch {
             XCTAssertEqual(error as? SyncCoreError, .notStarted)
         }
+        // A real transport announces no account at a start whose state it kept.
+        await device.transport.setStartEvents([])
         await device.core.start()
         let again = await device.status()
         XCTAssertTrue(again.isSynced)

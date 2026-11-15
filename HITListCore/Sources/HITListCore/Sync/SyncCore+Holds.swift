@@ -145,15 +145,16 @@ extension SyncCore {
             if let account, account != current {
                 // Another account came while the app was not running: as a switch.
                 await switchAccount(to: current)
-            } else if account == nil, !entries.isEmpty {
-                // A memory nobody's account owns: not trusted. Forgotten, every item kept, merged afresh (section 7).
-                do {
-                    try await ledger.reset()
-                    forgetCache(keepAccount: false)
-                } catch {
-                    await fail("The engine's memory could not be written: \(error)")
-                    return
-                }
+            } else if hasMemory, account == nil || account == current {
+                // A sign-in to the ledger's own account means the transport's state was lost (T12): a fresh bookmark
+                // never tells of a zone lost meanwhile, so the bases cannot be trusted. (A memory nobody's account
+                // owns, likewise.) Nothing of the person's leaves the device; the memory is forgotten but for the
+                // deletions not sent yet, the transport reset, and everything merged afresh (section 7). Only when
+                // there is a memory: a transport whose `reset()` announces the account again then finds none, and
+                // simply joins.
+                log("The transport's own memory was lost: the engine's is forgotten too and everything is merged afresh")
+                guard await forgetMemory(keepFirstFetch: false) else { return }
+                await transport.reset()
                 await joinAccount(current)
             } else {
                 await joinAccount(current)
@@ -247,17 +248,7 @@ extension SyncCore {
             // known empty, everything here is new and goes again (M2). A record another device sends meanwhile meets
             // this one as a conflict and merges (M5).
             log("HITList's zone is gone from iCloud (\(reason.rawValue)): everything here goes again")
-            var write = LedgerWrite()
-            write.remove = entries.keys.sorted()
-            write.deferRemove = waits.keys.sorted()
-            write.facts[LedgerFact.firstFetchDone] = Data([1])
-            do {
-                try await commit(write)
-            } catch {
-                await fail("The engine's memory could not be written: \(error)")
-                return
-            }
-            refused = [:]
+            guard await forgetMemory(keepFirstFetch: true) else { return }
             await compare(nil)
         }
     }
@@ -302,6 +293,39 @@ extension SyncCore {
         log("Answered the purge: \(choice.rawValue)")
         if choice == .removeHere { await removeHere(synced, why: "zone purged") }
         await compare(nil)
+    }
+
+    /// Whether the brain remembers anything of iCloud's.
+    var hasMemory: Bool {
+        firstFetchDone || !waits.isEmpty || entries.values.contains { $0.base != nil }
+    }
+
+    /// Forgets what the brain knows of iCloud's records (every base and token, what records wait for, and unless
+    /// `keepFirstFetch` the first fetch) in one write, keeping the deletions made here and not sent yet: each stays
+    /// as an entry with no base and its `deletedHereAt`, settled against iCloud's record when the next whole fetch
+    /// brings it (M3/M4 with an explicit deletion), and dropped if that fetch does not.
+    func forgetMemory(keepFirstFetch: Bool) async -> Bool {
+        var write = LedgerWrite()
+        for key in entries.keys.sorted() {
+            guard let entry = entries[key] else { continue }
+            if let at = entry.deletedHereAt {
+                write.upsert.append(LedgerEntry(key: key, base: nil, system: nil, deletedHereAt: at))
+            } else {
+                write.remove.append(key)
+            }
+        }
+        write.deferRemove = waits.keys.sorted()
+        if !keepFirstFetch { write.facts.updateValue(nil, forKey: LedgerFact.firstFetchDone) }
+        do {
+            try await commit(write)
+        } catch {
+            await fail("The engine's memory could not be written: \(error)")
+            return false
+        }
+        refused = [:]
+        sentAs = [:]
+        if !keepFirstFetch { waiting = [] }
+        return true
     }
 
     // MARK: Removing the person's items
