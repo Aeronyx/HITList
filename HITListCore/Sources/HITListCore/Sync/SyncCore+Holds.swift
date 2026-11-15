@@ -198,6 +198,7 @@ extension SyncCore {
             } catch {
                 holdNote = "The backup before removing HITList's items failed: \(error)"
                 log(holdNote ?? "")
+                publish()
                 throw error
             }
         }

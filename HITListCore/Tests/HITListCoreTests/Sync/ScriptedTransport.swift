@@ -34,7 +34,13 @@ actor ScriptedTransport: SyncTransport {
     func pending() async -> [PendingChange] { list }
 
     func add(_ changes: [PendingChange]) async {
+        var listed = Set(list.map(\.key))
         for change in changes {
+            guard listed.contains(change.key) else {
+                list.append(change)
+                listed.insert(change.key)
+                continue
+            }
             if let index = list.firstIndex(where: { $0.key == change.key }) {
                 if list[index] == change { continue }
                 list.remove(at: index)
