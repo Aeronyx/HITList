@@ -92,6 +92,8 @@ records set aside (section 8) and a few facts (`LedgerFact`).
 - an item here with no `base`, or whose record differs from `base` (`RecordMerge.same`): **waiting to go**;
 - a `base` that is alive with no item here: **deleted here**, `deletedHereAt` is set to now, its marker is waiting
   to go;
+- an item that is here again while `deletedHereAt` is set (an undo before the marker went): `deletedHereAt` is
+  cleared, and set afresh if the item is deleted again;
 - an item here whose `base` is a marker: **made again here** (an undo), waiting to go;
 - a marker `base` past its lifetime: waiting to be removed for good.
 
@@ -120,18 +122,27 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
 | M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D |
 | M9 | Here, B alive, a marker there | L same as B: the marker (it goes here). L changed after the deletion: L (it comes back there). Else the marker |
-| M10 | Deleted here, B alive, a marker there | S |
+| M10 | Deleted here (or B a marker and not here), a marker there | A marker at the later of D and S's deletion (so the time does not depend on who reached iCloud first; it is sent if it differs from S) |
 | M11 | B present, not there at all | L same as B, or not here: nothing. L changed: L, new again |
-| M12 | Here, B a marker | L: it was made again here, whatever its dates (an undo, an import). If alive there too: as M5 |
+| M12 | Here, B a marker | S the marker this device knew (the same time as B's): L, it was made again here, whatever its dates (an undo, an import). S a newer marker (deleted again elsewhere since): as M6. Alive there too: as M5 |
 | M13 | Not here, B a marker, alive there | S: it was made again elsewhere |
 
 Then: the device is written if it differs from the result (through `LocalWrite.expected`: if the person changed the
 item meanwhile, nothing is written and it is settled again); `base` becomes S; and if the result differs from S it
 is waiting to go.
 
-Known limits, on purpose: clocks are the devices' own (a device with a wrong clock can win or lose a tie it should
-not); two devices that both change the same field of the same item while apart keep one of the two values;
-`flipCount` is last-writer like any field (two devices flipping the same switch apart count once).
+A marker is read as its key and its time and nothing else, and a set of references as a set (sorted, no repeats,
+an empty one the same as none), whatever a transport hands over. A type this build does not know never reaches
+the merge: the brain leaves such records alone (section 8).
+
+Known limits, on purpose: clocks are the devices' own (a device with a wrong clock can win or lose a contest it
+should not); two devices that both change the same field of the same item while apart keep one of the two values;
+when their `updatedAt` are equal the one that reached iCloud first stands (every device still ends with the same
+record); `flipCount` is last-writer like any field (two devices flipping the same switch apart count once); an item
+deleted on a device before that device and iCloud ever agreed on it leaves no marker (another device's copy of it
+arrives as new: the seeded filters, the `flipboard` label and the profile have fixed keys, so this can be seen with
+them); an undo is ordered against a deletion elsewhere by the item's `updatedAt`, so the app moves `updatedAt` when
+it puts a deleted item back.
 
 ## 6. The transport's rules
 
