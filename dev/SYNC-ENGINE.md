@@ -129,7 +129,7 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M2 | Here, no B, not there | L (new: it goes to iCloud) |
 | M3 | Not here, no B, alive there | S (new: it arrives). Unless this device holds a deletion of its own still to send for it (`deletedHereAt` set, kept across a forgotten ledger, never "now"): then as M8 against that time |
 | M4 | Not here, no B, a marker there | S (nothing to delete). With a deletion of this device's own still to send: a marker at the later of the two times |
-| M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock |
+| M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock. Unless this device remembers what it last sent for the record and never had an answer (the save was accepted and the reply lost): then what it sent is the base and the two are settled as M7, so an edit here after that send and an edit elsewhere both survive (found by session 145's rig) |
 | M6 | Here, no B, a marker there | L if `L.updatedAt` is after the deletion (it comes back there), else the marker (it goes here) |
 | M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
 | M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D. The marker is never earlier than the version it deletes (the later of D and `S.updatedAt`): a device whose clock runs behind still deletes what it held |
@@ -176,7 +176,9 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
 - **T2 Fetch.** A fetch brings every record changed since the bookmark as iCloud holds it now (only the latest
   version), in no particular order (a record may come before one it points at), over one or more `fetched` events,
   and the keys of records removed for good. Without a bookmark: every record in the zone. It may bring again what
-  this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent.
+  this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent. A fetch
+  that ended without reaching iCloud is told with an error, never as one that ended well: with no bookmark the
+  brain takes a fetch that ended well for the whole of what iCloud holds (the review's finding 3).
 - **T3 Pending.** The list is ordered, holds a key once (a save and a delete of one key replace each other, the last
   added stays), and survives a relaunch. The record is asked for when its turn comes (`recordToSend`); nil drops
   the change. `pending`, `add`, `remove` and `reset` never wait for the delegate: the brain calls them from inside
@@ -197,8 +199,8 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
 - **T9 Refused for good** (`quotaExceeded`, `tooLarge`, `rejected`): the change leaves the list; the brain decides.
 - **T10 Batches.** A send may take several batches (250 records at most each on CloudKit), one `sent` event each.
   A batch is not all-or-nothing.
-- **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds the zone missing. By then the
-  transport has forgotten its bookmark and its list.
+- **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds a zone missing that this device
+  knew to exist (one it never knew is simply made). By then the transport has forgotten its bookmark and its list.
 - **T12 The account.** `account(change)` when the signed-in account is not the one the transport's state belongs to:
   the first event of the first sync after `start` if it changed while the app was not running (never inside
   `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
@@ -275,7 +277,9 @@ the marker goes). Without that, an item deleted here a moment before the memory 
    with the network dropping, conflicts, crashes between any two steps (the device's process thrown away and made
    again from its store and ledger), echoes and lost bookmarks. After everyone has synced:
    - **I1 Same everywhere**: every device holds the same items with the same fields, and iCloud holds exactly those.
-   - **I2 No lost edit**: a field one device changed and no other did has that value everywhere.
+   - **I2 No lost edit**: a field one device changed and no other did has that value everywhere. A set of
+     references is judged name by name (a label the store took off a task because the label was deleted is not
+     a person's removal).
    - **I3 Nothing comes back**: an item deleted on one device and not changed elsewhere afterwards is gone
      everywhere, on a device that merges without a memory too.
    - **I4 Twice is once**: any event delivered twice, any crash, changes nothing in the end.

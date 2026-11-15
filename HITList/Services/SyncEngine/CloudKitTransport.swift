@@ -56,6 +56,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private var heldDidFetch = false
     private var heldDidSend = false
     private var fetchTrouble: String?
+    /// Whether this fetch ended a fetch of the zone without error (or found the zone not made yet): the one sign a
+    /// scheduled fetch gives that it reached iCloud at all (`didFetchChanges` carries no error).
+    private var zoneFetchEnded = false
     private var sendTrouble: String?
     /// Saves refused before they reached iCloud (the record could not be made): told with the next `sent`.
     private var unsentFailures: [SyncKey: SendFailure] = [:]
@@ -154,6 +157,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         }
         manualFetches -= 1
         let failure = thrown.map { CloudKitTransportRules.words(for: $0) }
+        // A fetch asked for here that returned without throwing did reach iCloud: the proof of a whole fetch.
+        if failure == nil, fetchTrouble == nil { await wholeFetchSeen() }
         if heldDidFetch || (failure != nil && fetchOpen) {
             heldDidFetch = false
             fetchOpen = false
@@ -241,6 +246,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             let mapped = CloudKitTransportRules.accountChange(change.changeType, known: stored.account)
             // The engine has already forgotten its pending changes (and its bookmark) for the old account.
             stored.zoneReady = false
+            stored.fetchedWhole = false
             stored.account = CloudKitTransportRules.currentAccount(change.changeType)
             await save()
             if let mapped {
@@ -268,6 +274,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         case .willFetchChanges:
             fetchOpen = true
             fetchTrouble = nil
+            zoneFetchEnded = false
             await deliver(.willFetch)
 
         case .willFetchRecordZoneChanges:
@@ -278,8 +285,10 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             let failure = done.error.map(CloudFailure.init)
             switch CloudKitTransportRules.fetchOutcome(failure, zoneKnown: stored.zoneReady) {
             case .fine:
+                zoneFetchEnded = true
                 await zoneExists()
             case .absent:
+                zoneFetchEnded = true
                 log.write("the zone is not in iCloud yet")
             case .lost(let loss):
                 await zoneLost(loss, syncEngine: syncEngine, why: "fetch: \(failure.map(CloudKitTransportRules.words) ?? "")")
@@ -293,7 +302,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 heldDidFetch = true // `fetch()` tells it, with the error it gets, if any
             } else {
                 fetchOpen = false
-                await deliver(.didFetch(error: fetchTrouble))
+                await deliver(.didFetch(error: CloudKitTransportRules.scheduledFetchEnding(
+                    trouble: fetchTrouble, reachedZone: zoneFetchEnded, wholeFetchSeen: stored.fetchedWhole == true)))
+                if fetchTrouble == nil, zoneFetchEnded { await wholeFetchSeen() }
             }
 
         case .willSendChanges:
@@ -395,6 +406,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         var addNow: [CKSyncEngine.PendingRecordZoneChange] = []
         var lost: ZoneLoss?
         var shrank = false
+        // Before anything in this batch changes it: did this device know the zone to exist?
+        let zoneWasKnown = stored.zoneReady
 
         for record in sent.savedRecords where record.recordID.zoneID == zoneID {
             // Read before the asset's file goes: the record as iCloud now holds it is ours plus its new token.
@@ -416,7 +429,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             assets.release(id)
             guard let key = CloudRecordCodec.key(for: id) else { continue }
             let cloud = CloudFailure(failure.error)
-            let outcome = CloudKitTransportRules.saveOutcome(cloud, batchSize: batchSize, zoneRefusal: zoneRefusal)
+            let outcome = CloudKitTransportRules.saveOutcome(cloud, batchSize: batchSize, zoneRefusal: zoneRefusal,
+                                                             zoneKnown: zoneWasKnown)
             switch outcome {
             case .keep(let words, let byEngine):
                 sendTrouble = words
@@ -538,6 +552,13 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         await save()
     }
 
+    /// A fetch is known to have reached iCloud since this state began (`StoredState.fetchedWhole`).
+    private func wholeFetchSeen() async {
+        guard stored.fetchedWhole != true else { return }
+        stored.fetchedWhole = true
+        await save()
+    }
+
     /// T11: the list and the zone forgotten, then the brain told. The engine drops its bookmark for a zone it has
     /// fetched the deletion of; the brain calls `reset()` when it wants every record again.
     private func zoneLost(_ loss: ZoneLoss, syncEngine: CKSyncEngine, why: String) async {
@@ -546,6 +567,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         state.remove(pendingDatabaseChanges: [.saveZone(CKRecordZone(zoneID: zoneID))])
         resaveAtEnd = []
         stored.zoneReady = false
+        stored.fetchedWhole = false
         await save()
         log.write("zone lost (\(loss.rawValue)) from \(why)")
         await deliver(.zoneLost(loss))
@@ -618,6 +640,11 @@ struct StoredState: Codable {
     var engine: CKSyncEngine.State.Serialization?
     var zoneReady = false
     var account: String?
+    /// Whether a fetch is known to have reached iCloud since this state began (nil in a state saved before the
+    /// field existed: not known). Until one has, a scheduled fetch that ended without a sign of the zone is not told
+    /// to the brain as a fetch that ended well: the brain takes a fetch that ended well with no bookmark for the
+    /// whole of what iCloud holds (the review's finding 3).
+    var fetchedWhole: Bool?
 
     init(engine: CKSyncEngine.State.Serialization? = nil, zoneReady: Bool = false, account: String? = nil) {
         self.engine = engine
@@ -703,7 +730,12 @@ enum CloudKitTransportRules {
         case refused(SendFailure)
     }
 
-    static func saveOutcome(_ failure: CloudFailure, batchSize: Int, zoneRefusal: CloudFailure? = nil) -> SaveOutcome {
+    /// `zoneKnown`: whether this device knew the zone to exist before this batch came back. A zone it knew, missing:
+    /// the zone was deleted (T11), and the brain must hear it, or iCloud would end with only the records of the next
+    /// send while the ledger still says it holds the rest (the review's finding 4). A zone it never knew: not made
+    /// yet, made now.
+    static func saveOutcome(_ failure: CloudFailure, batchSize: Int, zoneRefusal: CloudFailure? = nil,
+                            zoneKnown: Bool = false) -> SaveOutcome {
         if retriedByEngine.contains(failure.code) { return .keep(words: words(failure), byEngine: true) }
         if retriedByTransport.contains(failure.code) { return .keep(words: words(failure), byEngine: false) }
         switch failure.code {
@@ -715,7 +747,7 @@ enum CloudKitTransportRules {
             if failure.encryptedDataReset { return .zoneLost(.encryptedDataReset) }
             // The zone was refused for good this send (iCloud full): no loop of making it again.
             if let zoneRefusal { return .refused(refusal(zoneRefusal)) }
-            return .remakeZone
+            return zoneKnown ? .zoneLost(.deleted) : .remakeZone
         case .userDeletedZone:
             return .zoneLost(.purged)
         case .limitExceeded:
@@ -766,6 +798,19 @@ enum CloudKitTransportRules {
         case lost(ZoneLoss)
         case trouble(String)
     }
+
+    /// How a fetch the engine scheduled itself is told to the brain when it ends (`didFetchChanges` carries no
+    /// error of its own). Trouble fetching the zone: its words. Otherwise it ended well if it showed a sign of the
+    /// zone (its fetch ended, or it is not made yet), or if a fetch has reached iCloud before under this state (then
+    /// one that did not get through changes nothing: the bookmark has not moved). With neither, nothing says this
+    /// fetch reached iCloud, and the brain must not take it for the whole of what iCloud holds.
+    static func scheduledFetchEnding(trouble: String?, reachedZone: Bool, wholeFetchSeen: Bool) -> String? {
+        if let trouble { return trouble }
+        if reachedZone || wholeFetchSeen { return nil }
+        return notReached
+    }
+
+    static let notReached = "the fetch ended before it reached iCloud"
 
     /// The end of a fetch of the zone (`didFetchRecordZoneChanges`).
     static func fetchOutcome(_ failure: CloudFailure?, zoneKnown: Bool) -> FetchOutcome {

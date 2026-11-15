@@ -74,6 +74,11 @@ final class CloudKitTransportTests: XCTestCase {
 
     func testAMissingZoneOnASaveIsMadeAgainWithoutTellingTheBrain() {
         XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5), .remakeZone)
+        // The review's finding 4: a zone this device knew, missing at a save, was deleted. The brain must hear it
+        // (it forgets its memory and sends everything again), or iCloud ends with only the next send's records.
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5, zoneKnown: true), .zoneLost(.deleted))
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5, zoneKnown: false), .remakeZone)
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound, reset: true), batchSize: 5, zoneKnown: true), .zoneLost(.encryptedDataReset))
     }
 
     func testAZoneRefusedForGoodRefusesItsSavesInsteadOfLooping() {
@@ -92,6 +97,16 @@ final class CloudKitTransportTests: XCTestCase {
     }
 
     func testT11AFetchOfTheZone() {
+        // The review's finding 3: a fetch the engine scheduled itself ends well for the brain only with a sign that
+        // it reached iCloud, until a fetch has reached iCloud once under this state.
+        XCTAssertNil(Rules.scheduledFetchEnding(trouble: nil, reachedZone: true, wholeFetchSeen: false))
+        XCTAssertEqual(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: false), Rules.notReached)
+        XCTAssertNil(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: true), "the bookmark has not moved: nothing is taken for whole")
+        XCTAssertEqual(Rules.scheduledFetchEnding(trouble: "no network", reachedZone: true, wholeFetchSeen: true), "no network")
+        // A state saved before the field existed reads as "not known".
+        let old = try? JSONDecoder().decode(StoredState.self, from: Data(#"{"version":1,"zoneReady":true,"account":"_me"}"#.utf8))
+        XCTAssertNotNil(old)
+        XCTAssertNil(old?.fetchedWhole)
         XCTAssertEqual(Rules.fetchOutcome(nil, zoneKnown: false), .fine)
         XCTAssertEqual(Rules.fetchOutcome(failure(.zoneNotFound), zoneKnown: false), .absent, "never made: nothing lost")
         XCTAssertEqual(Rules.fetchOutcome(failure(.zoneNotFound), zoneKnown: true), .lost(.deleted))
