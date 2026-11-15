@@ -150,7 +150,9 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   the change.
 - **T4 A save accepted.** Every field of the record's type (`SyncSchema`) is written: one present with its value, one
   absent emptied; `deletedAt` likewise. A key the type does not list is neither sent nor cleared. `saved` carries
-  the record as iCloud now holds it and its new token; the change leaves the list.
+  the record as iCloud now holds it and its new token. The change leaves the list **before** `sent` is delivered
+  (as an answered change does under T6, T7 and T9), so a change the brain adds back while it handles `sent` (the
+  person changed the item again while the save was on its way) stays on the list.
 - **T5 Passing trouble** (no network, iCloud busy or limiting, the account briefly unavailable): the change stays on
   the list and the transport tries again by itself. `didSend(error:)` / `didFetch(error:)` carry the words.
 - **T6 Conflict.** A save whose `system` is not the token of iCloud's current version (or that has none while iCloud
