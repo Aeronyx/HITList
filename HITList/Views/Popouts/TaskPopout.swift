@@ -221,6 +221,8 @@ struct TaskPopout: View {
                 popouts.shiftDay(task, by: 1, in: context)
             }
             .disabled(task.isCompleted)
+            // One event on the calendar, by choice (brief 136); only for a dated task.
+            AddToCalendarButton(task: task)
             Divider()
             Button("Delete", systemImage: "trash", role: .destructive) { confirmDelete = true }
             // When it was made (and done): the footer's old line, here since brief 36.
@@ -242,7 +244,7 @@ struct TaskPopout: View {
         .fixedSize()
         .accessibilityLabel("More")
         .accessibilityIdentifier("popoutMore")
-        .help("Duplicate, move or delete")
+        .help("Duplicate, move, add to calendar or delete")
     }
 
     /// The "…" menu's last lines: when the task was created, and completed if it is.
