@@ -12,9 +12,12 @@ enum LocalCacheReset {
     /// Only offered while iCloud has the data: without a signed-in account the local store is the only copy.
     /// Also offered when the store couldn't be opened at all (`isRunningInMemory`): moving it to Trash and
     /// downloading again is then the only way back from inside the app.
+    /// On HITList's own engine (brief 143) it is offered as on the mirror: the store moves aside the same way, the new
+    /// file has a new identity, so the engine's ledger (bound to the old file, `SyncLedgerStore.bind(toStore:)`) is
+    /// forgotten with it and the engine fetches everything again into the empty store.
     @MainActor
     static var isAvailable: Bool {
-        (ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isRunningInMemory)
+        (ModelContainerFactory.isCloudKitEnabled || ModelContainerFactory.isOwnEngineEnabled || ModelContainerFactory.isRunningInMemory)
             && CloudSyncMonitor.shared.accountStatus == .available
     }
 

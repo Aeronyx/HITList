@@ -96,6 +96,9 @@ enum WidgetRefresh {
         var heard = "sync off"
         if ModelContainerFactory.isCloudKitEnabled {
             heard = "import \(await monitor.nextImport(after: started, within: importWait))"
+        } else if let engine = SyncEngine.shared, engine.isStarted {
+            // Brief 143: on HITList's own engine, a fetch and a send within the refresh's time.
+            heard = "the sync engine \(await engine.syncWithin(importWait, reason: "the background refresh") ? "synced" : "did not finish")"
         }
         await settle(reason: "background refresh")
         schedule()

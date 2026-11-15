@@ -6,8 +6,13 @@ import AppKit
 #endif
 
 enum ModelContainerFactory {
-    /// Whether the running container is syncing through CloudKit.
+    /// Whether the running container is syncing through SwiftData's CloudKit mirror. False on HITList's own engine
+    /// (`SyncEngineSwitch`), which opens the same file without the mirror: everything that reads this belongs to the
+    /// mirror (its monitor, its import waits, its export finish line) and must not think the mirror runs.
     nonisolated(unsafe) static var isCloudKitEnabled = false
+    /// Whether this launch's store syncs on HITList's own engine (`SyncEngineSwitch.current == .own`) on a real file.
+    /// The in-memory fallback never runs the engine.
+    static var isOwnEngineEnabled: Bool { SyncEngineSwitch.current == .own && !isRunningInMemory }
     nonisolated(unsafe) static var startupError: String? = nil
     /// Whether this launch moved the old store aside (Settings → Reset local cache).
     nonisolated(unsafe) static var didResetStore = false
@@ -21,6 +26,7 @@ enum ModelContainerFactory {
     /// Why the container runs without CloudKit, in a few words for the sync status line.
     static var localOnlyReason: String {
         if isRunningInMemory { return "couldn't open this device's data, changes aren't kept" }
+        if SyncEngineSwitch.current == .own { return "syncs on HITList's own engine, not SwiftData's mirror" }
         if AppGroup.defaults.bool(forKey: "disableCloudKit") { return "iCloud sync turned off" }
         return startupError == nil ? "iCloud sync not started" : "iCloud unavailable at launch"
     }
@@ -65,7 +71,11 @@ enum ModelContainerFactory {
     static func make() -> ModelContainer {
         let url = storeURL()
         if let url, case .reset = resetStoreIfRequested(at: url) { didResetStore = true }
-        let opened = open(schema: HITListSchema.schema, url: url, useCloudKit: !AppGroup.defaults.bool(forKey: "disableCloudKit"))
+        // Which engine, before the container opens (brief 143). On the mirror (every released build) this is today's
+        // line exactly; on HITList's own engine the same file opens without the mirror (`cloudKitDatabase: .none`).
+        let engine = SyncEngineSwitch.decideForLaunch()
+        let mirror = engine == .mirror && !AppGroup.defaults.bool(forKey: "disableCloudKit")
+        let opened = open(schema: HITListSchema.schema, url: url, useCloudKit: mirror)
         isCloudKitEnabled = opened.outcome == .cloudKit
         isRunningInMemory = opened.outcome == .inMemory
         startupError = opened.error
