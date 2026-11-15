@@ -233,6 +233,42 @@ final class CalendarEventsUITests: XCTestCase {
         snapshot("10 Settings, calendar access refused")
     }
 
+    /// Brief 136 item 4 on the real EventKit (the simulator's own calendar): with events off, Add to Calendar asks for
+    /// write-only access with its own purpose string, then saves one event; asking again says it is already there.
+    func testAddToCalendarAsksForWriteOnlyAccess() {
+        app.resetAuthorizationStatus(for: .calendar)
+        app.launch()
+        tab("today")
+        let task = text("Buy groceries")
+        XCTAssertTrue(task.waitForExistence(timeout: 10))
+        task.press(forDuration: 1.0)
+        let item = app.buttons["Add to Calendar"].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.tap()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let alert = springboard.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "the system's prompt")
+        XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "puts the task you chose")).firstMatch.exists,
+                      "the write-only purpose string")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "17 The write-only prompt"
+        shot.lifetime = .keepAlways
+        add(shot)
+        let allow = alert.buttons.matching(NSPredicate(format: "NOT (label BEGINSWITH %@)", "Don")).firstMatch
+        allow.tap()
+        let toast = app.descendants(matching: .any)["calendarNotice"].firstMatch
+        XCTAssertTrue(toast.waitForExistence(timeout: 8))
+        XCTAssertTrue(toast.label.hasPrefix("Added to"), toast.label)
+        snapshot("18 Added with write-only access")
+        XCTAssertTrue(toast.waitForNonExistence(timeout: 8))
+        task.press(forDuration: 1.0)
+        XCTAssertTrue(item.waitForExistence(timeout: 3))
+        item.tap()
+        XCTAssertTrue(toast.waitForExistence(timeout: 5))
+        XCTAssertEqual(toast.label, "Already on your calendar", "remembered for the run")
+    }
+
     // MARK: Helpers
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
