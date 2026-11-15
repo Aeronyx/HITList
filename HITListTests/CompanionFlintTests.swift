@@ -71,7 +71,30 @@ final class CompanionFlintTests: XCTestCase {
             let hash: String = SHA256.hash(data: Data(joined.utf8)).map { String(format: "%02x", $0) }.joined()
             XCTAssertEqual(hash, digest, "\(name) is the drawing that was passed")
         }
+        // Brief 133 (round 27; George, on 0.9.9: "My friend overall likes Flint though so don't change his actual character
+        // too much yet, just his animations and non-Day sprites"): the daytime Flint is kept pixel for pixel. Every frame
+        // not on the list below, in name order, is 0.9.9's (master as brief 133 was cut from it).
+        let moved: Set<String> = Self.redrawnIn133
+        func everyFrame(_ frames: [CompanionCharacter.Frame]) -> String {
+            let joined = frames.sorted { $0.name < $1.name }.map { $0.name + "\n" + $0.rows.joined(separator: "\n") }
+            return SHA256.hash(data: Data(joined.joined(separator: "\n").utf8)).map { String(format: "%02x", $0) }.joined()
+        }
+        let kept = flint.frames.filter { !moved.contains($0.name) }
+        XCTAssertEqual(kept.count, 32, "32 frames of 0.9.9's Flint are kept whole")
+        XCTAssertEqual(Set(moved).subtracting(flint.frames.map(\.name)), [], "every frame named is one of his")
+        XCTAssertEqual(everyFrame(kept), "944a0cc7339d68210f37f9aa54fa3cffd57d5324076c9df6da96da5c936081fe",
+                       "his daytime frames are 0.9.9's pixel for pixel")
     }
+
+    /// Brief 133's frames: the blink and the closed eyes (every frame his eyes are shut in), the rain under his own wing,
+    /// asleep and asleep in the rain, and the snow shake's squint. Nothing else of his may change.
+    static let redrawnIn133: Set<String> = [
+        "half", "blink", "happy", "giggle", "screech", "yawn2",
+        "rain", "rainPeek", "rainBlink", "rainDuck", "drip1", "drip2", "drip3", "drip4", "drip5",
+        "sleep", "sleepBreathe", "sleepTwitch", "sleepWing", "sleepPeek", "sleepSnow", "sleepSnow2",
+        "sleepRain", "sleepDrip1", "sleepDrip2", "sleepDrip3", "sleepDrip4",
+        "offShakeL", "offShakeR",
+    ]
 
     /// A gryphon cub, as the others are drawn: the theme's greys, its light and its warm peach (no accent); his head facing
     /// you with two feathered ear tufts and two eyes, each a dark 2 x 2 pupil in a ring of light (not Button's big round
