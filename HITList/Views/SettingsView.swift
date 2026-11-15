@@ -238,6 +238,8 @@ struct SettingsPageRow: View {
         case .error, .offline: return (sync.summary(now: .now), true)
         // Records that differ and have stayed so (0.9.11): what differs, on the first screen.
         case .differs(_, stuck: true): return (sync.summary(now: .now), true)
+        // HITList's own engine holding until the person acts (round 28): its words, on the first screen.
+        case .engine(let marks) where marks.look == .needsYou: return (marks.words, true)
         default: return (page.summary, false)
         }
     }

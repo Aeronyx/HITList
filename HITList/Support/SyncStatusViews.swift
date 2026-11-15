@@ -1,5 +1,6 @@
 import SwiftUI
 import OSLog
+import CloudKit
 #if os(macOS)
 import AppKit
 #endif
@@ -20,7 +21,7 @@ struct SyncStatusLine: View {
         let state = monitor.state
         TimelineView(.periodic(from: .now, by: 30)) { context in
             Label {
-                Text(SyncHealth.current.line(now: context.date))
+                Text(Self.health.line(now: context.date))
                     .contentTransition(.opacity)
             } icon: {
                 Image(systemName: confirming && state.isSynced ? "checkmark.circle.fill" : state.symbol)
@@ -49,6 +50,32 @@ struct SyncStatusLine: View {
         new == .synced && old != .synced && old != .localOnly
     }
 
+    /// The health the line speaks: `SyncHealth.current` on the mirror. On HITList's own engine (round 28) the store opens
+    /// without the mirror, so "CloudKit is off" says nothing about iCloud there: the account is read as it is, and the
+    /// engine's own sign-out hold reads as signed out.
+    @MainActor
+    static var health: SyncHealth {
+        let monitor = CloudSyncMonitor.shared
+        guard monitor.isOnEngine else { return .current }
+        let sync = monitor.state
+        var account = monitor.accountStatus
+        #if DEBUG
+        // The demo's made-up status stands for the whole picture (`SyncEngineDemo`), a simulator without iCloud too.
+        if SyncEngineDemo.requested != nil { account = .available }
+        #endif
+        return SyncHealth(account: engineAccount(status: account, notice: monitor.accountNotice, sync: sync,
+                                                 everSignedIn: SyncBolt.everSignedIn()),
+                          sync: sync, waiting: false, lastSynced: monitor.lastSyncedAt)
+    }
+
+    /// The account on the engine: as iCloud answers, whatever the mirror's switch says (`AccountState.derive`).
+    static func engineAccount(status: CKAccountStatus?, notice: AccountWatch.Notice?, sync: SyncState,
+                              everSignedIn: Bool) -> AccountState {
+        if case .notSignedIn = sync { return everSignedIn ? .signedOut : .neverSignedIn }
+        return AccountState.derive(cloudKitEnabled: true, localOnlyReason: "", status: status, notice: notice,
+                                   everSignedIn: everSignedIn)
+    }
+
     /// The line's text: `SyncHealth.line`, shared with `AccountStatusRow.title`.
     static func text(account: AccountState, sync: SyncState, now: Date = .now) -> String {
         SyncHealth(account: account, sync: sync).line(now: now)
@@ -60,6 +87,7 @@ struct SyncStatusLine: View {
         case .syncing, .offline, .retrying, .differs(_, stuck: false): return Theme.secondaryText
         case .notSignedIn where !SyncBolt.everSignedIn(): return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly, .differs(_, stuck: true): return .orange
+        case .engine(let marks): return marks.look == .needsYou ? .orange : Theme.secondaryText
         }
     }
 }
@@ -195,6 +223,7 @@ struct SyncBolt: View {
         #if DEBUG
         .onAppear { BoltStrikeDemo.shared.startIfRequested() }
         .onAppear { SyncReplayPlayer.shared.startIfRequested() }
+        .onAppear { SyncEngineDemo.applyIfRequested(container: nil) }
         .onChange(of: BoltStrikeDemo.shared.change) { old, new in strikeIfDue(from: old, to: new) }
         #endif
     }
@@ -259,6 +288,14 @@ struct SyncBolt: View {
         case .differs(_, stuck: true):
             // Not struck through: sync itself works. A hollow bolt in the colour of trouble: something here needs settling.
             return Look(symbol: "bolt", color: HITColor.dueOverdue, opacity: 0.85)
+        case .engine(let marks):
+            // HITList's own engine (round 28): hollow while something is still to happen, in the colour of trouble only
+            // when the person must act; offline struck through in grey as today, whatever waits.
+            switch marks.look {
+            case .hollow: return Look(symbol: "bolt", color: Theme.bolt, opacity: 0.85)
+            case .needsYou: return Look(symbol: "bolt", color: HITColor.dueOverdue, opacity: 0.85)
+            case .offline: return Look(symbol: "bolt.slash.fill", color: Theme.secondaryText, opacity: 0.9)
+            }
         }
     }
 }
@@ -351,6 +388,7 @@ struct SyncIndicatorDot: View {
         case .syncing, .offline, .retrying, .differs(_, stuck: false): return Theme.secondaryText
         case .notSignedIn where !everSignedIn: return Theme.secondaryText
         case .notSignedIn, .restricted, .error, .localOnly, .differs(_, stuck: true): return HITColor.dueTomorrow
+        case .engine(let marks): return marks.look == .needsYou ? HITColor.dueTomorrow : Theme.secondaryText
         }
     }
 }

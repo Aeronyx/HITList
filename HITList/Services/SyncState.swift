@@ -1,6 +1,7 @@
 import Foundation
 import CloudKit
 import OSLog
+import HITListCore
 
 /// What the app tells the user about iCloud sync. `CloudSyncMonitor.state` derives it; Settings, the
 /// sidebar footer and the account banner all read it from there.
@@ -23,6 +24,10 @@ enum SyncState: Equatable {
     /// what differs ("1 label and 2 filters on this device aren't in iCloud"). `stuck` once it has lasted
     /// (`SyncRecordCheck.Rules.patience`): drawn as trouble, and Check iCloud… settles it; before that, as waiting.
     case differs(String, stuck: Bool)
+    /// Only on HITList's own engine (round 28: `SyncEngineBoard.engine == .own`), never on the mirror: the engine's
+    /// exact status as the marks draw it, look and words (`SyncEngineMarks.state`). Never steadied or gated: the engine
+    /// knows what is waiting, so there is nothing to second-guess.
+    case engine(SyncEngineMarks)
 
     /// The one-line status, e.g. "Synced 2 min ago".
     func summary(now: Date = .now) -> String {
@@ -36,6 +41,7 @@ enum SyncState: Equatable {
         case .localOnly(let reason): return "Local only: \(reason)"
         case .retrying: return Self.retryingWords
         case .differs(let words, _): return words
+        case .engine(let marks): return marks.words
         }
     }
 
@@ -50,6 +56,12 @@ enum SyncState: Equatable {
         case .notSignedIn, .restricted, .localOnly: return "xmark.icloud"
         case .error: return "exclamationmark.icloud"
         case .differs(_, let stuck): return stuck ? "exclamationmark.icloud" : "arrow.triangle.2.circlepath.icloud"
+        case .engine(let marks):
+            switch marks.look {
+            case .hollow: return "arrow.triangle.2.circlepath.icloud"
+            case .needsYou: return "exclamationmark.icloud"
+            case .offline: return "icloud.slash"
+            }
         }
     }
 
@@ -62,6 +74,7 @@ enum SyncState: Equatable {
         case .offline, .error, .notSignedIn, .restricted: true
         case .synced, .syncing, .retrying, .localOnly: false
         case .differs(_, let stuck): stuck
+        case .engine(let marks): marks.look != .hollow
         }
     }
 
@@ -267,6 +280,98 @@ extension SyncState {
         switch self {
         case .synced, .syncing: true
         case .offline, .error, .notSignedIn, .restricted, .localOnly, .retrying, .differs: false
+        // Changes waiting, the first fetch, tidying up: work, not trouble.
+        case .engine(let marks): marks.look == .hollow
         }
+    }
+}
+
+// MARK: - HITList's own engine (round 28)
+
+/// What the marks show while a launch runs on HITList's own engine: one look and the words for it, worked out from the
+/// engine's exact status (`SyncEngineBoard.status`) and the account and network the monitor still watches, by one pure
+/// function (`state`). `dev/SYNC-ENGINE.md` section 10: the bolt is filled exactly when the status says synced; hollow
+/// with the number when changes are waiting; red only for a hold the person must act on. No comparison of records, no
+/// gate, no steadying: none of the mirror's instruments run on the engine.
+struct SyncEngineMarks: Hashable {
+    enum Look: Hashable {
+        /// Hollow in the theme's tint: something is still to happen and nothing is wrong (changes waiting, the first
+        /// fetch, tidying up, items iCloud refused).
+        case hollow
+        /// Hollow in the colour of trouble: the engine holds until the person acts (`SyncWords.engineNeedsYou`).
+        case needsYou
+        /// Struck through in grey, as today's offline bolt: this device cannot reach iCloud now (the words say what
+        /// waits).
+        case offline
+    }
+
+    var look: Look
+    var words: String
+
+    /// A sync that stopped early (`SyncStatus.lastError`) reads as today's "will keep trying" this long before its own
+    /// words show in red: never red in the first minute; today's two minutes (`SyncSteadiness.Windows.errorWords`).
+    static let errorWordsAfter: TimeInterval = SyncSteadiness.Windows().errorWords
+
+    /// The marks for the engine's status. `status` nil: the engine has not said anything yet this launch. `account` is
+    /// iCloud's own answer (`CloudSyncMonitor.rawAccountStatus`), `isOnline` the network path, `errorSince` when the
+    /// monitor first saw the current `syncError`, `lastSyncedFallback` the moment to quote when the engine is synced
+    /// but has no time of its own yet. Pure, so every status can be tested.
+    static func state(status: SyncStatus?, account: CKAccountStatus?, isOnline: Bool, errorSince: Date?,
+                      lastSyncedFallback: Date, now: Date) -> SyncState {
+        // The account first, as on the mirror: without one nothing can sync, whatever the engine last said.
+        switch account {
+        case .noAccount: return .notSignedIn
+        case .restricted: return .restricted
+        default: break
+        }
+        guard let status else { return .engine(checking) }
+        if let hold = status.hold { return held(hold, waiting: status.waiting) }
+        // Offline before any error: what stopped early offline stopped for that reason.
+        if !isOnline {
+            let words = SyncWords.engineOffline(waiting: status.waiting, firstFetchDone: status.firstFetchDone)
+            return .engine(SyncEngineMarks(look: .offline, words: words))
+        }
+        if let error = syncError(status) {
+            let since = errorSince ?? now
+            if now.timeIntervalSince(since) >= errorWordsAfter { return .error(error, since) }
+            return .retrying(since: since)
+        }
+        switch status.state {
+        case .off, .starting: return .engine(checking)
+        default: break
+        }
+        if !status.firstFetchDone { return .engine(checking) }
+        if status.waiting > 0 { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineWaiting(status.waiting))) }
+        if !status.refused.isEmpty { return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineRefused(status.refused.count))) }
+        if status.isSynced { return .synced(lastSynced(status) ?? lastSyncedFallback) }
+        // Fetching or sending with nothing waiting: the bolt is filled exactly when the engine says synced.
+        return .engine(checking)
+    }
+
+    static let checking = SyncEngineMarks(look: .hollow, words: SyncWords.engineChecking)
+
+    /// A hold's marks: signed out as today; red for the ones the person must act on; tidying up hollow.
+    static func held(_ hold: SyncHold, waiting: Int) -> SyncState {
+        switch hold {
+        case .noAccount: return .notSignedIn
+        case .duplicates(let keys): return .engine(SyncEngineMarks(look: .hollow, words: SyncWords.engineHold(hold, waiting: waiting, duplicates: keys.count)))
+        case .massDeletion, .zonePurged, .needsUpdate, .storageFull, .failed:
+            return .engine(SyncEngineMarks(look: .needsYou, words: SyncWords.engineHold(hold, waiting: waiting)))
+        }
+    }
+
+    /// The latest moment the engine knows something reached or came from iCloud: its last fetch or accepted send.
+    static func lastSynced(_ status: SyncStatus?) -> Date? {
+        [status?.lastFetchEnded, status?.lastSendEnded].compactMap { $0 }.max()
+    }
+
+    /// The words of a sync that stopped early, or nil. `SyncStatus.lastError` also carries a refusal for good for as
+    /// long as `refused` is not empty (`SyncCore`: fetch error, send error, a hold's note, then the first refusal's
+    /// "type/name: words"); a refusal is not a sync that keeps trying, so it is told apart here, and only here, until
+    /// core gives it a field of its own (the supervisor's plan after wave 2: swap this function's inside then).
+    static func syncError(_ status: SyncStatus) -> String? {
+        guard let error = status.lastError else { return nil }
+        if let first = status.refused.first, error.hasPrefix("\(first):") { return nil }
+        return error
     }
 }

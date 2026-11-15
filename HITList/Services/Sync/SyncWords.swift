@@ -1,4 +1,5 @@
 import Foundation
+import HITListCore
 
 /// The words every sync line speaks (the bolt's label, Settings' status line, the Account row), from the same state as
 /// the bolt's look, so no words anywhere claim more than the bolt. Filled: "Synced 3 min ago", the last import or
@@ -40,4 +41,49 @@ enum SyncWords {
     static let differenceNote = "Check iCloud… below names them, and can send them to iCloud or remove them from this device."
     /// The same while HITList is still waiting on the mirror (a change on its way, records just sent again).
     static let differenceWaitingNote = "HITList is waiting for iCloud to catch up; nothing to do yet."
+
+    // MARK: HITList's own engine (round 28)
+
+    /// Before the engine's first whole fetch has finished (or while it starts, or fetches with nothing waiting).
+    static let engineChecking = "Checking with iCloud…"
+
+    /// "3 changes waiting to go to iCloud" / "1 change waiting to go to iCloud".
+    static func engineWaiting(_ count: Int) -> String {
+        "\(count == 1 ? "1 change" : "\(count) changes") waiting to go to iCloud"
+    }
+
+    /// Offline, struck through as today whatever waits (the supervisor, round 28: "struck = this device cannot reach
+    /// iCloud now"); the words carry the count, exact since the engine knows it.
+    static func engineOffline(waiting: Int, firstFetchDone: Bool) -> String {
+        if waiting > 0 {
+            return "Offline: \(waiting == 1 ? "1 change goes" : "\(waiting) changes go") to iCloud when you are back online"
+        }
+        return firstFetchDone ? "Offline: nothing is waiting to go to iCloud"
+                              : "Offline: HITList checks with iCloud when you are back online"
+    }
+
+    /// Items iCloud refused for good (too large, or rejected): Settings → iCloud names them.
+    static func engineRefused(_ count: Int) -> String {
+        "\(count == 1 ? "1 item" : "\(count) items") couldn't go to iCloud; Settings → iCloud names \(count == 1 ? "it" : "them")"
+    }
+
+    /// A hold's words for the status line, in a person's words: what happened and, for the red ones, that nothing was
+    /// lost. (`SyncHold.words` is the engine's own, for its log.) `duplicates`: how many rows share an id.
+    static func engineHold(_ hold: SyncHold, waiting: Int, duplicates: Int = 0) -> String {
+        switch hold {
+        case .noAccount: return SyncState.notSignedIn.summary()
+        case .massDeletion(let count):
+            let items = count == 1 ? "1 item is" : "\(count) items are"
+            return "\(items) missing from this device. Nothing has been deleted in iCloud."
+        case .zonePurged: return "HITList's data was removed from iCloud in Settings."
+        case .needsUpdate: return "Update HITList to sync: iCloud holds data from a newer version."
+        case .storageFull:
+            if waiting == 0 { return "iCloud is full." }
+            return "iCloud is full: \(waiting == 1 ? "1 change is" : "\(waiting) changes are") waiting."
+        case .failed(let words): return "Sync stopped: \(words)"
+        case .duplicates(let keys):
+            let count = max(duplicates, keys.count)
+            return "Tidying up \(count == 1 ? "1 item" : "\(count) items") saved twice on this device"
+        }
+    }
 }

@@ -410,6 +410,8 @@ extension CloudSyncMonitor: WidgetSyncFacts {
         case .synced, .syncing, .differs: .fine
         case .offline, .error, .retrying: .waiting
         case .localOnly, .notSignedIn, .restricted: .localOnly
+        // HITList's own engine (round 28, brief 144): changes waiting or the first fetch are fine; a hold or offline waits.
+        case .engine(let marks): marks.look == .hollow ? .fine : .waiting
         }
     }
 }

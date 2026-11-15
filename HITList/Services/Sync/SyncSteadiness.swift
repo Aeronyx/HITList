@@ -87,7 +87,7 @@ struct SyncSteadiness: Equatable {
             troubleSince = nil
         case .offline, .error, .notSignedIn, .restricted, .retrying, .differs:
             if troubleSince == nil { troubleSince = now }
-        case .syncing:
+        case .syncing, .engine:  // `.engine`: round 28, never fed here; for the compiler only.
             break
         }
         raw = state
@@ -157,6 +157,8 @@ struct SyncSteadiness: Equatable {
         case .differs:
             // Never derived (`SyncRecordCheck` adds it after the steadying): shown as it comes.
             return raw
+        case .engine:
+            return raw  // Round 28: HITList's own engine never feeds the steadiness; here only for the compiler.
         }
     }
 
@@ -218,6 +220,7 @@ struct SyncSteadiness: Equatable {
     enum Kind: Equatable {
         case synced, syncing, retrying, offline, error(String), notSignedIn, restricted, localOnly
         case differs(String, stuck: Bool)
+        case engine(SyncEngineMarks)
     }
 
     static func kind(_ state: SyncState) -> Kind {
@@ -231,6 +234,7 @@ struct SyncSteadiness: Equatable {
         case .restricted: .restricted
         case .localOnly: .localOnly
         case .differs(let words, let stuck): .differs(words, stuck: stuck)
+        case .engine(let marks): .engine(marks)
         }
     }
 }

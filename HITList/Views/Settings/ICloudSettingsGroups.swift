@@ -18,17 +18,23 @@ struct ICloudSyncGroup: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .hitRowPadding()
-            // Records that differ (0.9.11): the status line says what; this says where it is settled.
-            if CloudSyncMonitor.shared.recordDifference != nil {
-                SettingsNote(text: CloudSyncMonitor.shared.recordDifferenceIsStuck ? SyncWords.differenceNote
-                                                                                   : SyncWords.differenceWaitingNote)
-                    .accessibilityIdentifier("settings-sync-difference-note")
-            }
-            if let stall = CloudSyncMonitor.shared.stall {
-                SyncStuckRow(stall: stall)
-            }
-            if showsLastChange {
-                LastSyncChangeRow()
+            if CloudSyncMonitor.shared.isOnEngine {
+                // HITList's own engine (round 28): Sync now, what is waiting, the last fetch and send, refusals. The
+                // record-check note and the stuck row are the mirror's and do not show.
+                SyncEngineStatusRows()
+            } else {
+                // Records that differ (0.9.11): the status line says what; this says where it is settled.
+                if CloudSyncMonitor.shared.recordDifference != nil {
+                    SettingsNote(text: CloudSyncMonitor.shared.recordDifferenceIsStuck ? SyncWords.differenceNote
+                                                                                       : SyncWords.differenceWaitingNote)
+                        .accessibilityIdentifier("settings-sync-difference-note")
+                }
+                if let stall = CloudSyncMonitor.shared.stall {
+                    SyncStuckRow(stall: stall)
+                }
+                if showsLastChange {
+                    LastSyncChangeRow()
+                }
             }
             #if os(iOS)
             HITMenuRow("Sync log", systemImage: "list.bullet.rectangle") { pages(SettingsPage.syncLog) }
@@ -61,14 +67,18 @@ struct ICloudCheckGroup: View {
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.vertical, HITSpacing.m)
             }
-            HITMenuRow("Check iCloud…", subtitle: ICloudAuditRows.subtitle, systemImage: "checkmark.icloud",
-                       accessory: .none) { audit.run(container: context.container, reduceMotion: reduceMotion) }
-                .disabled(audit.isBusy)
-                .overlay(alignment: .trailing) {
-                    if audit.isBusy { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
-                }
-                .accessibilityIdentifier("settings-check-icloud")
-            ICloudAuditRows(audit: audit)
+            // Check iCloud… compares the mirror's records with iCloud's: the mirror's own audit, hidden on HITList's own
+            // engine this round (the engine knows what is waiting; its records are not the mirror's).
+            if !CloudSyncMonitor.shared.isOnEngine {
+                HITMenuRow("Check iCloud…", subtitle: ICloudAuditRows.subtitle, systemImage: "checkmark.icloud",
+                           accessory: .none) { audit.run(container: context.container, reduceMotion: reduceMotion) }
+                    .disabled(audit.isBusy)
+                    .overlay(alignment: .trailing) {
+                        if audit.isBusy { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
+                    }
+                    .accessibilityIdentifier("settings-check-icloud")
+                ICloudAuditRows(audit: audit)
+            }
         }
     }
 
@@ -77,8 +87,16 @@ struct ICloudCheckGroup: View {
         let monitor = CloudSyncMonitor.shared
         detailRow("Account", "\(AccountState.current.label) (iCloud says \(CloudSyncMonitor.describe(monitor.rawAccountStatus)))")
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
-        detailRow("Last import", timestamp(monitor.lastImportAt))
-        detailRow("Last export", timestamp(monitor.lastExportAt))
+        if monitor.isOnEngine {
+            let status = SyncEngineBoard.shared.status
+            detailRow("Engine", "HITList's own (the mirror is off)")
+            detailRow("Last fetch", timestamp(status?.lastFetchEnded))
+            detailRow("Last accepted send", timestamp(status?.lastSendEnded))
+            if let error = status?.lastError { detailBlock("Last error", error) }
+        } else {
+            detailRow("Last import", timestamp(monitor.lastImportAt))
+            detailRow("Last export", timestamp(monitor.lastExportAt))
+        }
         detailRow("Push", monitor.pushRegistration ?? "not registered yet")
         detailRow("CloudKit", "\(SyncEnvironment.current.cloudKit.rawValue), push \(SyncEnvironment.current.push ?? "unknown")")
         if let err = ModelContainerFactory.startupError {
@@ -198,10 +216,13 @@ struct SyncEnvironmentRow: View {
 struct ICloudDataPage: View {
     var body: some View {
         ICloudSyncGroup()
+        // HITList's own engine holding for the person: its own group, high on the page (nothing on the mirror).
+        if CloudSyncMonitor.shared.isOnEngine { SyncEngineHoldGroup() }
         BackupsGroup()
         ExportImportGroup()
         ICloudCheckGroup()
         ResetLocalCacheGroup(includesDeleteAll: true)
+        if SyncEngineSwitchGroup.isShown { SyncEngineSwitchGroup() }
     }
 }
 
