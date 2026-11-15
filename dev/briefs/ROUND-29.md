@@ -114,6 +114,10 @@ of a deletion (it needs a change to the models, so it waits for the release that
 - In the running app: two Debug Mac apps on side stores on a pretend iCloud. One sent its ten records; the other,
   empty, showed them; a task deleted with its sub-task in the first, through the editor's menu, left the second
   ("deleted here; its marker is waiting to go" twice, then "M9 deletedThere: deleted here" twice).
+- The whole suites on the final tree: core 1,046, Mac 2,197, iPhone 2,160, no failures; 18 UI tests on an iPhone 17
+  simulator (`SyncEngineStatusUITests`, `SettingsTidyUITests`, `EditorReminderPhraseUITests`); Release archives of
+  both platforms export and pass the packaging checks, and hold nothing of the rig (this morning's held it: the
+  iPhone binary is 470 KB smaller, the Mac's 1 MB).
 - Not run again: the engine against CloudKit (the transport did not change).
 
 ## Cleaning up
