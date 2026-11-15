@@ -28,6 +28,39 @@ final class NotificationActionTests: XCTestCase {
         return task
     }
 
+    // MARK: The system's handler runs on the main thread (two crash reports, 0.9.3 and 0.9.9, iOS 26.5.1)
+
+    /// UIKit's handler for a notification response must be called on the main thread; off it, iOS 26 aborts the app.
+    /// The delegate is called from a background thread here (the worst case) with an action that changes nothing.
+    func testAResponseIsAnsweredOnTheMainThreadWhicheverThreadItCameFrom() async {
+        let responder = NotificationResponder(container: container)
+        for category in [NotificationResponder.categoryIdentifier, NotificationResponder.summaryCategoryIdentifier] {
+            let onMain = await withCheckedContinuation { (done: CheckedContinuation<Bool, Never>) in
+                DispatchQueue.global().async {
+                    responder.respond(category: category, action: UNNotificationDismissActionIdentifier,
+                                      userInfo: [NotificationScheduler.taskIDKey: UUID().uuidString]) {
+                        done.resume(returning: Thread.isMainThread)
+                    }
+                }
+            }
+            XCTAssertTrue(onMain, "\(category): the handler was called off the main thread")
+        }
+    }
+
+    /// A tap on a reminder asks the shell to open its task, and the handler follows. (The hosting app's own shell may
+    /// take the router's request first, so the test listens for the notice posted beside it.)
+    func testATapOpensTheTaskAndThenAnswers() async {
+        let responder = NotificationResponder(container: container)
+        let id = UUID()
+        let asked = expectation(forNotification: .openTask, object: nil) { note in
+            note.userInfo?[NotificationScheduler.taskIDKey] as? UUID == id
+        }
+        let answered = expectation(description: "the system's handler is called")
+        responder.respond(category: NotificationResponder.categoryIdentifier, action: UNNotificationDefaultActionIdentifier,
+                          userInfo: [NotificationScheduler.taskIDKey: id.uuidString]) { answered.fulfill() }
+        await fulfillment(of: [asked, answered], timeout: 5, enforceOrder: true)
+    }
+
     func testSnoozeLandsExactlyOneHourLaterAndStaysTimed() throws {
         let now = Date(timeIntervalSinceReferenceDate: 815_000_000.25)
         let task = try task(due: now.addingTimeInterval(-90))

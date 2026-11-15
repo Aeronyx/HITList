@@ -45,20 +45,41 @@ final class NotificationResponder: NSObject, UNUserNotificationCenterDelegate {
             intentIdentifiers: [], options: [])
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter,
-                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+    // Both delegate methods are the completion-handler forms, on purpose. The `async` forms let the compiler call the
+    // system's handler from whatever thread the method ended on, and UIKit's handler for a response must run on the
+    // main thread: off it, iOS 26 aborts the app (`-[UIApplication _performBlockAfterCATransactionCommitSynchronizes:]`),
+    // which is what happened to every tapped reminder up to 0.9.11. So the handler is called here, by hand, on main.
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        Self.onMain { completionHandler([.banner, .sound]) }
     }
 
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
-        if response.notification.request.content.categoryIdentifier == Self.summaryCategoryIdentifier {
-            await openToday(action: response.actionIdentifier)
-            return
-        }
-        let userInfo = response.notification.request.content.userInfo
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let content = response.notification.request.content
+        respond(category: content.categoryIdentifier, action: response.actionIdentifier, userInfo: content.userInfo,
+                completion: completionHandler)
+    }
+
+    /// Acts on a response and then calls `completion`, always on the main thread, whichever thread the system (or a
+    /// test) called from. What the response says is read out here, so nothing of the system's crosses threads.
+    func respond(category: String, action: String, userInfo: [AnyHashable: Any], completion: @escaping () -> Void) {
         let taskID = (userInfo[NotificationScheduler.taskIDKey] as? String).flatMap(UUID.init(uuidString:))
-        await handle(action: response.actionIdentifier, taskID: taskID, remindedDue: Self.remindedDue(in: userInfo),
-                     remindedAt: Self.remindedAt(in: userInfo))
+        let remindedDue = Self.remindedDue(in: userInfo), remindedAt = Self.remindedAt(in: userInfo)
+        Task { @MainActor in
+            if category == Self.summaryCategoryIdentifier {
+                await self.openToday(action: action)
+            } else {
+                await self.handle(action: action, taskID: taskID, remindedDue: remindedDue, remindedAt: remindedAt)
+            }
+            completion()
+        }
+    }
+
+    /// Runs `work` on the main thread: now if this is it, otherwise as soon as it is free.
+    private static func onMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread { work() } else { DispatchQueue.main.async(execute: work) }
     }
 
     /// The due time a reminder was scheduled for (`NotificationScheduler.dueKey`); nil for one delivered

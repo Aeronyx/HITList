@@ -7,3 +7,4 @@ xcuserdata/
 *.ipa
 *.pkg
 .claude/worktrees/
+crashreports/
