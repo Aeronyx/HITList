@@ -1,6 +1,15 @@
 import SwiftUI
 import SwiftData
 
+/// What an editor that copies an item's fields when it opens writes back on Save: a field only if the person
+/// changed it from what the editor opened with. The item may change under an open editor (another device's edit
+/// arriving); a field nobody touched must not be written back over that with what the editor happened to show
+/// (round 28, the sync review's findings 5 and 20: it would win everywhere, with a newer `updatedAt`).
+enum OpenedField {
+    /// `draft` when it differs from `opened` (the person changed it), else nil (what the item holds now stands).
+    static func edited<T: Equatable>(_ draft: T, from opened: T) -> T? { draft == opened ? nil : draft }
+}
+
 struct ProjectEditorView: View {
     let project: Project?
     @Environment(\.modelContext) private var context
@@ -8,6 +17,9 @@ struct ProjectEditorView: View {
     @Query private var projects: [Project]
     @State private var name = ""
     @State private var colorHex = "#5E81F4"
+    /// The Group's name and colour as the editor opened with them (`OpenedField`).
+    @State private var openedName = ""
+    @State private var openedColorHex = ""
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces) }
 
@@ -17,7 +29,7 @@ struct ProjectEditorView: View {
                                autofocus: project == nil, onSubmit: save)
         }
         .onAppear {
-            if let p = project { name = p.name; colorHex = p.colorHex }
+            if let p = project { name = p.name; colorHex = p.colorHex; openedName = p.name; openedColorHex = p.colorHex }
             else { colorHex = HITColorDots.defaultPalette[projects.count % HITColorDots.defaultPalette.count].hex }
         }
         #if os(macOS)
@@ -29,8 +41,15 @@ struct ProjectEditorView: View {
 
     private func save() {
         guard !trimmedName.isEmpty else { return }
-        if let p = project { p.name = trimmedName; p.colorHex = colorHex; p.touch() }
-        else { context.insert(Project(name: trimmedName, colorHex: colorHex, sortOrder: projects.count)) }
+        if let p = project {
+            let newName = OpenedField.edited(trimmedName, from: openedName)
+            let newColor = OpenedField.edited(colorHex, from: openedColorHex)
+            if let newName { p.name = newName }
+            if let newColor { p.colorHex = newColor }
+            if newName != nil || newColor != nil { p.touch() }
+        } else {
+            context.insert(Project(name: trimmedName, colorHex: colorHex, sortOrder: projects.count))
+        }
         try? context.save()
         dismiss()
     }
@@ -42,6 +61,9 @@ struct LabelEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var colorHex = "#9A9A9A"
+    /// The label's name and colour as the editor opened with them (`OpenedField`).
+    @State private var openedName = ""
+    @State private var openedColorHex = ""
 
     /// Labels are single words: spaces become hyphens.
     private var trimmedName: String { name.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: " ", with: "-") }
@@ -54,7 +76,7 @@ struct LabelEditorView: View {
                 .textInputAutocapitalization(.never)
                 #endif
         }
-        .onAppear { if let l = label { name = l.name; colorHex = l.colorHex } }
+        .onAppear { if let l = label { name = l.name; colorHex = l.colorHex; openedName = l.name; openedColorHex = l.colorHex } }
         #if os(macOS)
         .frame(minWidth: 420, minHeight: 240)
         #else
@@ -64,8 +86,15 @@ struct LabelEditorView: View {
 
     private func save() {
         guard !trimmedName.isEmpty else { return }
-        if let l = label { l.name = trimmedName; l.colorHex = colorHex; l.touch() }
-        else { context.insert(TaskLabel(name: trimmedName, colorHex: colorHex)) }
+        if let l = label {
+            let newName = OpenedField.edited(trimmedName, from: openedName)
+            let newColor = OpenedField.edited(colorHex, from: openedColorHex)
+            if let newName { l.name = newName }
+            if let newColor { l.colorHex = newColor }
+            if newName != nil || newColor != nil { l.touch() }
+        } else {
+            context.insert(TaskLabel(name: trimmedName, colorHex: colorHex))
+        }
         try? context.save()
         dismiss()
     }

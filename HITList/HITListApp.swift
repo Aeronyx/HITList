@@ -48,6 +48,9 @@ struct HITListApp: App {
         Deduplicator.runAndLog(in: context, trigger: "launch")
         TaskActions.seedSampleDataIfRequested(in: context)
         TaskActions.seedDemoDataIfRequested(in: context) // screenshots and sessions: a believable week on a side store
+        // Brief 143: HITList's own sync engine, when this store is switched to it (never in a released build so far);
+        // on the mirror it only tells the board so, and makes nothing.
+        SyncEngine.launchIfSwitchedOn(container: container)
         // Imports arrive in bursts (one event per zone fetch); dedupe once the burst settles.
         let debounce = Debouncer(delay: .seconds(2))
         importObserver = NotificationCenter.default.addObserver(forName: .cloudKitImportSucceeded, object: nil, queue: .main) { _ in
@@ -78,6 +81,7 @@ struct HITListApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if !isTesting { CloudSyncMonitor.shared.sceneChanged(to: phase) }
                     guard phase == .active else { return }
+                    SyncEngine.shared?.cameForward() // brief 143: everything compared, then a sync (nil on the mirror)
                     let context = container.mainContext
                     Task { await NotificationScheduler.reschedule(context: context) }
                     if !isTesting { LocalBackup.runIfDue(context: context) }

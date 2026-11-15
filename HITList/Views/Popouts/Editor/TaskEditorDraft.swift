@@ -39,12 +39,25 @@ struct TaskEditorDraft: Equatable {
     /// Phrases kept as text by a click, a tap or Backspace, where they sit (as in the quick-add card, brief 41).
     private(set) var switchedOff: Set<QuickAddDisabledPhrase> = []
 
+    /// The title and the description as they were when the editor opened (or last saved). A field is saved only
+    /// if the person changed it from these: the task may change under an open editor (another device's edit
+    /// arriving), and a field nobody typed in must not be written back over that with what the editor happened to
+    /// be showing (round 28, the sync review's finding 5: a title-only Confirm put the old notes back on every
+    /// device).
+    private let openedTitle: String
+    private let openedNotes: String
+
     init(task: TaskItem) {
         title = task.title
         notes = task.notes
+        openedTitle = task.title
+        openedNotes = task.notes
         let length = task.title.utf8.count
         untouched = length > 0 ? [0..<length] : []
     }
+
+    /// Whether the person changed the title in this editing session.
+    private var titleWasEdited: Bool { title != openedTitle }
 
     /// The title as Confirm saves it: one line, capped; nil keeps the stored one (left blank, or unchanged).
     static func titleToSave(_ edited: String, current: String) -> String? {
@@ -56,6 +69,8 @@ struct TaskEditorDraft: Equatable {
 
     private func notesToSave(for task: TaskItem) -> String? {
         let notes = Self.trimmed(notes)
+        // Not typed in: whatever the task holds now stands.
+        guard notes != Self.trimmed(openedNotes) else { return nil }
         return notes == Self.trimmed(task.notes) ? nil : notes
     }
 
@@ -67,7 +82,7 @@ struct TaskEditorDraft: Equatable {
 
     /// Whether Confirm would save anything.
     func hasPendingChanges(for task: TaskItem) -> Bool {
-        Self.titleToSave(title, current: task.title) != nil || notesToSave(for: task) != nil
+        (titleWasEdited && Self.titleToSave(title, current: task.title) != nil) || notesToSave(for: task) != nil
             || !Self.trimmed(newSubtask).isEmpty || renameToSave(for: task) != nil
     }
 
@@ -103,7 +118,10 @@ struct TaskEditorDraft: Equatable {
                          confirming: Bool = true) throws -> Bool {
         var changed = false
         let phrases = self.phrases(parser ?? Self.parser(in: context), for: task, .final, waking: confirming)
-        if let title = Self.titleToSave(phrases.title, current: task.title) {
+        // The title is the person's if they changed its text, or retyped a word of it that is now read as a phrase
+        // (the text is then the same as it was opened with, and the title to save is not).
+        if titleWasEdited || phrases.title != openedTitle,
+           let title = Self.titleToSave(phrases.title, current: task.title) {
             task.title = title
             changed = true
         }

@@ -91,6 +91,36 @@ final class SyncLedgerStoreTests: XCTestCase {
 
     /// `write` is one transaction: a write that fails half way (its entries made, its deferred records and facts not
     /// yet) leaves nothing of itself, and what was there before is untouched.
+    /// The sync review's finding 6: a row this build cannot read (a newer build's, after a tester went back; a
+    /// damaged one) is forgotten and the rest is read, instead of the engine stopping at every launch for good.
+    func testARowThatCannotBeReadIsForgottenAndTheRestIsRead() async throws {
+        let ledger = SyncLedgerStore.inMemory()
+        var write = LedgerWrite()
+        write.upsert = [entry(1), entry(2)]
+        write.deferUpsert = [cloud(7), cloud(8)]
+        try await ledger.write(write)
+        try await ledger.spoilForTests(entry: key(1), deferred: key(7))
+
+        let entries = try await ledger.entries()
+        XCTAssertEqual(entries, [entry(2)], "the unreadable entry is gone, the other is read")
+        let deferred = try await ledger.deferred()
+        XCTAssertEqual(deferred, [cloud(8)])
+        let unreadable = await ledger.unreadable
+        XCTAssertEqual(unreadable.count, 2, "said, for the sync log")
+        // The forgotten entry's record must come again from iCloud (an item not here is settled only when its
+        // record arrives): the brain's own fact asks for everything again at its next start.
+        let refetch = try await ledger.fact(SyncLedgerStore.refetchFact)
+        XCTAssertEqual(refetch, Data([1]))
+        // Forgotten for good: the next read is clean, and the key can be written again.
+        let again = try await ledger.entries()
+        XCTAssertEqual(again, [entry(2)])
+        var back = LedgerWrite()
+        back.upsert = [entry(1)]
+        try await ledger.write(back)
+        let whole = try await ledger.entries()
+        XCTAssertEqual(whole, [entry(1), entry(2)])
+    }
+
     func testAWriteThatFailsHalfWayLeavesNothing() async throws {
         let ledger = SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
         var first = LedgerWrite()

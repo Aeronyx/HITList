@@ -186,6 +186,7 @@ final class ShareInbox {
             let task = try TaskActions.create(from: plan.result, defaultProject: nil, defaultLabel: nil, in: context)
             if !plan.notes.isEmpty {
                 task.notes = plan.notes
+                task.touch() // brief 143: the notes carry their own moment
                 try context.save()
             }
             finish(entry, task: task, request: request, plan: plan, now: now, recovered: false)
@@ -203,6 +204,7 @@ final class ShareInbox {
         if let task = madeTask(for: entry) {
             if task.notes.isEmpty, !plan.notes.isEmpty {
                 task.notes = plan.notes
+                task.touch() // brief 143: the notes carry their own moment
                 try? container.mainContext.save()
             }
             finish(entry, task: task, request: request, plan: plan, now: now, recovered: true)

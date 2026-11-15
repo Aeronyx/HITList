@@ -23,8 +23,11 @@ The engine replaces the mirror with parts HITList owns:
 - **Apple still does what Apple does best**: `CKSyncEngine` schedules sends and fetches, retries after the network
   or iCloud's limits, and wakes the app on a push. It is the transport, behind a protocol.
 
-Nothing a person has is at risk from the engine's own memory: it can be deleted at any time and the engine merges
-everything afresh (section 7). The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
+Nothing a person has is at risk from the engine's own memory: it can be lost at any time and the engine merges
+everything afresh (section 7). One thing only lives nowhere else: a deletion made on this device that has not yet
+gone to iCloud. A memory lost in that moment brings the item back (it is never lost the other way), so the app
+does not throw the memory away lightly: a row of it that cannot be read is forgotten alone, and the brain carries
+unsent deletions across every forgetting it does itself. The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
 engine: it stays as it was at the moment a device moved over.
 
 ## 2. The parts
@@ -107,7 +110,7 @@ records set aside (section 8) and a few facts (`LedgerFact`).
 
 A deletion here is noticed by the compare and nowhere else (not by `recordToSend`, not by a fetch: a fetch that
 meets an item gone here runs the compare on it first), so one guard covers every way a deletion can reach iCloud
-(`massDeletion`, section 10); a save's hint that finds more than 50 gone is decided on a whole compare.
+(`massDeletion`, section 10); a save's hint that finds many gone is decided on a whole compare.
 
 `SyncCore` compares every record (at start, on return to the app, after a whole fetch) or the keys a save touched
 (`localChanged`: the app passes them on `ModelContext.didSave`; a hint, never the truth). The transport's pending
@@ -129,7 +132,7 @@ The result is what both sides should end with: the item, a marker, or nothing.
 | M2 | Here, no B, not there | L (new: it goes to iCloud) |
 | M3 | Not here, no B, alive there | S (new: it arrives). Unless this device holds a deletion of its own still to send for it (`deletedHereAt` set, kept across a forgotten ledger, never "now"): then as M8 against that time |
 | M4 | Not here, no B, a marker there | S (nothing to delete). With a deletion of this device's own still to send: a marker at the later of the two times |
-| M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock |
+| M5 | Here and alive there, no B | Same: S. Else the record changed last, whole (`updatedAt`; a tie goes to S); a field with a clock of its own goes by its clock. Unless this device remembers what it last sent for the record and never had an answer (the save was accepted and the reply lost): then what it sent is the base and the two are settled as M7, so an edit here after that send and an edit elsewhere both survive (found by session 145's rig) |
 | M6 | Here, no B, a marker there | L if `L.updatedAt` is after the deletion (it comes back there), else the marker (it goes here) |
 | M7 | Here and alive there, B alive | Field by field: changed on one side only since B: that side's. Changed on both: `lastWriter` → the record changed last (tie: S); `clock(c)` → the later clock (tie: S); `union` → S plus what L added less what L removed. `updatedAt` and clocks: the later |
 | M8 | Deleted here, B alive, alive there | S same as B: a marker at D. S changed after D: S (it comes back here). S changed before D: a marker at D. The marker is never earlier than the version it deletes (the later of D and `S.updatedAt`): a device whose clock runs behind still deletes what it held |
@@ -176,7 +179,9 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
 - **T2 Fetch.** A fetch brings every record changed since the bookmark as iCloud holds it now (only the latest
   version), in no particular order (a record may come before one it points at), over one or more `fetched` events,
   and the keys of records removed for good. Without a bookmark: every record in the zone. It may bring again what
-  this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent.
+  this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent. A fetch
+  that ended without reaching iCloud is told with an error, never as one that ended well: with no bookmark the
+  brain takes a fetch that ended well for the whole of what iCloud holds (the review's finding 3).
 - **T3 Pending.** The list is ordered, holds a key once (a save and a delete of one key replace each other, the last
   added stays), and survives a relaunch. The record is asked for when its turn comes (`recordToSend`); nil drops
   the change. `pending`, `add`, `remove` and `reset` never wait for the delegate: the brain calls them from inside
@@ -197,9 +202,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
 - **T9 Refused for good** (`quotaExceeded`, `tooLarge`, `rejected`): the change leaves the list; the brain decides.
 - **T10 Batches.** A send may take several batches (250 records at most each on CloudKit), one `sent` event each.
   A batch is not all-or-nothing.
-- **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds the zone missing. By then the
-  transport has forgotten its bookmark and its list.
-- **T12 The account.** `account(change)` when the signed-in account is not the one the transport's state belongs to:
+- **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds a zone missing that this device
+  knew to exist (one it never knew is simply made). By then the transport has forgotten its bookmark and its list.
+- **T12 The account.** The transport writes an account change down as owed before it tells the brain and crosses
+  it off when the brain has handled it, so a kill in between tells it again at the next launch (Apple's engine
+  announces a change once). `account(change)` when the signed-in account is not the one the transport's state belongs to:
   the first event of the first sync after `start` if it changed while the app was not running (never inside
   `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
   account nothing is fetched or sent. A transport that lost its own state announces `signedIn` for the account that
@@ -208,8 +215,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   forgets its own with it (section 7): a bookmark that starts afresh never tells of a zone lost in the meantime, so
   a ledger kept would hold bases for records iCloud no longer has, and nothing would send them again (found by
   session 140's rig).
-- **T13 Reset.** `reset()` forgets the bookmark and the list; the next fetch brings every record. A fetch in flight
-  when it is called ends there.
+- **T13 Reset.** `reset()` forgets the bookmark and the list and nothing else; the next fetch brings every record. The
+  account and what the device knew of the zone are kept, and no account event follows from it: a reset is how the
+  brain asks for every record again with its memory intact, and must not look like a transport that lost its
+  state (T12), which costs the brain its ledger (the review's finding 10). A fetch in flight when it is called
+  ends there.
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
 
@@ -252,6 +262,14 @@ the marker goes). Without that, an item deleted here a moment before the memory 
     field is empty.
   - What is waiting to go is sent with the items pointed at before those that point at them (`SyncSchema.types`
     order, a task after its parent), so iCloud rarely holds a record ahead of its target.
+- **A deletion that arrives never takes with it an item made or changed here after it** (found by the review,
+  finding 1: a sub-task added or edited under a task after another device deleted that task vanished with it, and
+  an older one's marker then deleted it everywhere). Before a task's deletion is written, every sub-task the device
+  holds under it is settled as if its own deletion had arrived at the same moment: unchanged here, or last changed
+  at or before that moment: it goes, named as a deletion of its own; made here, changed here after it, or moved
+  under the task here: it stays, written out from under the task first (its `parent` then waits, as above). And
+  the store is strict: it deletes exactly the rows the writes name, and a deletion whose cascade would take a row
+  no write names comes back stale and deletes nothing.
 - A type this build does not know is ignored and nothing is kept for it.
 - `Meta/meta` with a `formatVersion` above `SyncSchema.formatVersion`: the engine holds (`needsUpdate`).
 - After a fetch that wrote anything the app runs what the mirror's import used to trigger (the name deduplication,
@@ -267,7 +285,9 @@ the marker goes). Without that, an item deleted here a moment before the memory 
    with the network dropping, conflicts, crashes between any two steps (the device's process thrown away and made
    again from its store and ledger), echoes and lost bookmarks. After everyone has synced:
    - **I1 Same everywhere**: every device holds the same items with the same fields, and iCloud holds exactly those.
-   - **I2 No lost edit**: a field one device changed and no other did has that value everywhere.
+   - **I2 No lost edit**: a field one device changed and no other did has that value everywhere. A set of
+     references is judged name by name (a label the store took off a task because the label was deleted is not
+     a person's removal).
    - **I3 Nothing comes back**: an item deleted on one device and not changed elsewhere afterwards is gone
      everywhere, on a device that merges without a memory too.
    - **I4 Twice is once**: any event delivered twice, any crash, changes nothing in the end.
@@ -292,7 +312,7 @@ person or the world can lift:
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `massDeletion` | A whole compare finds no item while iCloud holds some, or more than 50 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
+| `massDeletion` | A whole compare finds no item here that iCloud holds while iCloud holds some (the store is not the one the ledger describes), or at least 10 gone that are also more than half of what iCloud holds alive (`SyncCore.Limits`) | Nothing is noticed, sent or fetched: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. The person confirms ("I deleted them": the markers carry the moment the items were first found gone), or a whole compare finds them back and the hold lifts by itself. Survives a relaunch (found by session 139) |
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent

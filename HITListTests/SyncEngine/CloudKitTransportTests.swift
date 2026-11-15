@@ -74,6 +74,11 @@ final class CloudKitTransportTests: XCTestCase {
 
     func testAMissingZoneOnASaveIsMadeAgainWithoutTellingTheBrain() {
         XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5), .remakeZone)
+        // The review's finding 4: a zone this device knew, missing at a save, was deleted. The brain must hear it
+        // (it forgets its memory and sends everything again), or iCloud ends with only the next send's records.
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5, zoneKnown: true), .zoneLost(.deleted))
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 5, zoneKnown: false), .remakeZone)
+        XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound, reset: true), batchSize: 5, zoneKnown: true), .zoneLost(.encryptedDataReset))
     }
 
     func testAZoneRefusedForGoodRefusesItsSavesInsteadOfLooping() {
@@ -92,6 +97,23 @@ final class CloudKitTransportTests: XCTestCase {
     }
 
     func testT11AFetchOfTheZone() {
+        // The review's finding 3: a fetch the engine scheduled itself ends well for the brain only with a sign that
+        // it reached iCloud, until a fetch has reached iCloud once under this state.
+        XCTAssertNil(Rules.scheduledFetchEnding(trouble: nil, reachedZone: true, wholeFetchSeen: false))
+        XCTAssertEqual(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: false), Rules.notReached)
+        XCTAssertNil(Rules.scheduledFetchEnding(trouble: nil, reachedZone: false, wholeFetchSeen: true), "the bookmark has not moved: nothing is taken for whole")
+        XCTAssertEqual(Rules.scheduledFetchEnding(trouble: "no network", reachedZone: true, wholeFetchSeen: true), "no network")
+        // The review's finding 17: a fetch the app asked for proves a whole fetch only if the engine ended one
+        // during the call, without trouble, for an account.
+        XCTAssertTrue(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: true, account: "_me"))
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: false, account: "_me"), "returned at once")
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: nil, engineEndedAFetch: true, account: nil), "nobody signed in")
+        XCTAssertFalse(Rules.provesWholeFetch(threw: true, trouble: nil, engineEndedAFetch: true, account: "_me"))
+        XCTAssertFalse(Rules.provesWholeFetch(threw: false, trouble: "busy", engineEndedAFetch: true, account: "_me"))
+        // A state saved before the field existed reads as "not known".
+        let old = try? JSONDecoder().decode(StoredState.self, from: Data(#"{"version":1,"zoneReady":true,"account":"_me"}"#.utf8))
+        XCTAssertNotNil(old)
+        XCTAssertNil(old?.fetchedWhole)
         XCTAssertEqual(Rules.fetchOutcome(nil, zoneKnown: false), .fine)
         XCTAssertEqual(Rules.fetchOutcome(failure(.zoneNotFound), zoneKnown: false), .absent, "never made: nothing lost")
         XCTAssertEqual(Rules.fetchOutcome(failure(.zoneNotFound), zoneKnown: true), .lost(.deleted))
@@ -161,6 +183,26 @@ final class CloudKitTransportTests: XCTestCase {
 
     func testTheStoredStateRoundTripsAndUnreadableStateStartsAfresh() throws {
         let log = SyncTransportLog { _ in }
+        // The review's finding 10: a reset keeps the account (so the new engine's sign-in for the same account is
+        // not told to the brain as a lost memory) and what was known of the zone; the proof of a whole fetch goes.
+        var before = StoredState(engine: nil, zoneReady: true, account: "_me")
+        before.fetchedWhole = true
+        let after = before.afterReset()
+        XCTAssertEqual(after.account, "_me")
+        XCTAssertTrue(after.zoneReady)
+        XCTAssertNil(after.fetchedWhole)
+        XCTAssertNil(after.engine)
+        XCTAssertNil(Rules.accountChange(.signIn(currentUser: CKRecord.ID(recordName: "_me")), known: after.account),
+                     "the same account after a reset: not told again")
+        // The review's finding 8: an account change is kept as owed until the brain has handled it, through a
+        // relaunch and a reset.
+        for change in [AccountChange.signedIn(current: "_me"), .signedOut(previous: "_me"), .switched(previous: "_me", current: "_you")] {
+            var owing = StoredState(engine: nil, zoneReady: false, account: "_me")
+            owing.owedAccount = StoredAccountChange(change)
+            let read = StoredState.decode(owing.encoded(log: SyncTransportLog { _ in }), log: SyncTransportLog { _ in })
+            XCTAssertEqual(read.owedAccount?.change, change)
+            XCTAssertEqual(owing.afterReset().owedAccount?.change, change, "a reset does not lose it")
+        }
         let state = StoredState(engine: nil, zoneReady: true, account: "_me")
         let back = StoredState.decode(state.encoded(log: log), log: log)
         XCTAssertEqual(back.zoneReady, true)

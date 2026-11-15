@@ -17,6 +17,10 @@ struct FilterEditorView: View {
     @State private var query = ""
     @State private var colorHex = "#B07CF5"
     @State private var showingHelp = false
+    /// The filter's fields as the editor opened with them (`OpenedField`).
+    @State private var openedName = ""
+    @State private var openedQuery = ""
+    @State private var openedColorHex = ""
 
     private var status: FilterDraftStatus { FilterDraftStatus.evaluate(query, tasks: allTasks) }
     private var saveBlocker: String? { FilterDraftStatus.saveBlocker(name: name, status: status) }
@@ -62,7 +66,10 @@ struct FilterEditorView: View {
             }
         }
         .onAppear {
-            if let f = filter { name = f.name; query = f.query; colorHex = f.colorHex } else if let initialQuery { query = initialQuery }
+            if let f = filter {
+                name = f.name; query = f.query; colorHex = f.colorHex
+                openedName = f.name; openedQuery = f.query; openedColorHex = f.colorHex
+            } else if let initialQuery { query = initialQuery }
         }
         #if os(macOS)
         .frame(minWidth: 540, minHeight: 640)
@@ -128,7 +135,13 @@ struct FilterEditorView: View {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if let f = filter {
-            f.name = trimmedName; f.query = trimmedQuery; f.colorHex = colorHex; f.touch()
+            let newName = OpenedField.edited(trimmedName, from: openedName)
+            let newQuery = OpenedField.edited(trimmedQuery, from: openedQuery)
+            let newColor = OpenedField.edited(colorHex, from: openedColorHex)
+            if let newName { f.name = newName }
+            if let newQuery { f.query = newQuery }
+            if let newColor { f.colorHex = newColor }
+            if newName != nil || newQuery != nil || newColor != nil { f.touch() }
         } else {
             context.insert(SavedFilter(name: trimmedName, query: trimmedQuery, colorHex: colorHex, sortOrder: filters.count))
         }
