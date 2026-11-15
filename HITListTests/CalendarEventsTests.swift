@@ -251,6 +251,9 @@ final class FakeCalendarSource: CalendarEventSource, @unchecked Sendable {
         return AddedCalendarEvent(eventID: id, calendarTitle: accessNow == .writeOnly ? "" : (target?.title ?? "Calendar"))
     }
 
+    var defaultID: String? = nil
+    func defaultCalendarID() -> String? { accessNow.canRead ? defaultID : nil }
+
     func remove(eventID: String) throws {
         removed.append(eventID)
         written.removeAll { $0.id == eventID }

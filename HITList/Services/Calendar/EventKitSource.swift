@@ -96,6 +96,11 @@ final class EventKitSource: CalendarEventSource, @unchecked Sendable {
         }
     }
 
+    func defaultCalendarID() -> String? {
+        guard access().canRead else { return nil }
+        return queue.sync { store.defaultCalendarForNewEvents?.calendarIdentifier }
+    }
+
     func remove(eventID: String) throws {
         try queue.sync {
             guard let event = added[eventID] ?? store.event(withIdentifier: eventID) else { return }

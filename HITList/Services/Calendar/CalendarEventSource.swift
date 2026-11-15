@@ -72,4 +72,6 @@ protocol CalendarEventSource: AnyObject, Sendable {
     func add(_ draft: CalendarDay.EventDraft, calendarID: String?) throws -> AddedCalendarEvent
     /// Removes an event this source added (Undo); nothing else is ever removed.
     func remove(eventID: String) throws
+    /// The device's default calendar for new events, while HITList may read the calendars; nil otherwise.
+    func defaultCalendarID() -> String?
 }

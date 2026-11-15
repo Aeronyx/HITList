@@ -92,6 +92,13 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertNil(events.addTargetCalendar, "a calendar that can't change is never the target")
         events.setAddTarget(nil)
         XCTAssertNil(defaults.string(forKey: Preferences.calendarAddTarget))
+        XCTAssertEqual(CalendarSettingsPage.addTargetValue(picked: nil, default: nil), "Default calendar")
+        source.defaultID = "work"
+        await events.reload()
+        XCTAssertEqual(events.defaultCalendar?.title, "Work", "the device's default calendar, by name")
+        XCTAssertEqual(CalendarSettingsPage.addTargetValue(picked: nil, default: events.defaultCalendar), "Work (default)")
+        XCTAssertEqual(CalendarSettingsPage.defaultChoice(events.defaultCalendar), "Default (Work)")
+        XCTAssertEqual(CalendarSettingsPage.addTargetValue(picked: events.writableCalendars.first, default: events.defaultCalendar), "Work")
         XCTAssertFalse(events.hasGoogleAccount)
     }
 

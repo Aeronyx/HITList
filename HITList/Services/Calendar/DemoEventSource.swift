@@ -121,6 +121,8 @@ final class DemoEventSource: CalendarEventSource, @unchecked Sendable {
     /// The device's default calendar for new events, as the demo has it.
     static let defaultCalendar = work
 
+    func defaultCalendarID() -> String? { access().canRead ? Self.defaultCalendar.id : nil }
+
     /// The demo's events. Today's timed ones sit around `now`'s hour (kept between 10:00 and 17:00 so the day reads
     /// as a working day): two before it, three after.
     static func events(now: Date, calendar: Calendar) -> [CalendarEvent] {
