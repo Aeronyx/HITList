@@ -382,6 +382,7 @@
 		AF5249E9EC87715562BD7933 /* ShareSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F94AFCA62D54C73A64FF93 /* ShareSheetTests.swift */; };
 		AF91F77726263D4D03F3DCD7 /* SharedTasksDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */; };
 		B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */; };
+		B09C1EA7E774D09EF6682495 /* TodoistImportUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */; };
 		B0BC21382CAD45DC29FC675F /* WidgetRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 669670811BCE08D934276B4E /* WidgetRenderTests.swift */; };
 		B0D421FD02DC86F67BD55973 /* ScreenIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F67BFA78B2D6749106DD883 /* ScreenIntents.swift */; };
 		B11AC0DEEDDF3FCEC2253ABC /* DelightSettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9FCFD677AA9A010827BB792 /* DelightSettingsSection.swift */; };
@@ -665,6 +666,7 @@
 		184C37C143DA7F89F0707031 /* SettingsRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRouter.swift; sourceTree = "<group>"; };
 		18F4F1697CE016BD20D66BDA /* CompanionsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionsUITests.swift; sourceTree = "<group>"; };
 		1960A13263E02500E37004C0 /* DuoNextDays.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DuoNextDays.swift; sourceTree = "<group>"; };
+		1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoistImportUITests.swift; sourceTree = "<group>"; };
 		1AA5F213CC33209FD54FF5CB /* SyncLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncLogView.swift; sourceTree = "<group>"; };
 		1B25094CD0CFE92ECAF30B4A /* HighlightTextView+iOS.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HighlightTextView+iOS.swift"; sourceTree = "<group>"; };
 		1CAAC5533A1A8433446C4478 /* RepeatMenuCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatMenuCard.swift; sourceTree = "<group>"; };
@@ -1577,6 +1579,7 @@
 				DCB76AF4D5676AE6F706E206 /* ShareExtensionUITests.swift */,
 				8A9B7362FAFC8FF6FF427357 /* SweepPolishUITests.swift */,
 				497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */,
+				1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */,
 				4E15C0CED187F50576BBD250 /* WeatherUITests.swift */,
 				B66D4679C9375FA020237031 /* WidgetsUITests.swift */,
 			);
@@ -2417,6 +2420,7 @@
 				84FF1E12F4EAB33D5B5CCB6E /* ShareExtensionUITests.swift in Sources */,
 				BAB2DFFF8F69A96BC781ED9D /* SweepPolishUITests.swift in Sources */,
 				56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */,
+				B09C1EA7E774D09EF6682495 /* TodoistImportUITests.swift in Sources */,
 				ACEC42234258B3C2205FDDB8 /* WeatherUITests.swift in Sources */,
 				04D6BE7E882A7F3C9A23DCB1 /* WidgetsUITests.swift in Sources */,
 			);

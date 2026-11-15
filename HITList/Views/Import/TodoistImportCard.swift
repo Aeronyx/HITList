@@ -150,7 +150,7 @@ struct TodoistImportCard: View {
             .hitRowPadding()
             buttons
         }
-        .accessibilityIdentifier("todoist-preview")
+        // No identifier on the card itself: SwiftUI hands it down to every row, over the rows' own.
     }
 
     @ViewBuilder private var buttons: some View {
