@@ -244,7 +244,9 @@ extension SyncCore {
                 finding.change = .save(key)
                 if entry.deletedHereAt == nil {
                     var noticed = entry
-                    noticed.deletedHereAt = now
+                    // Never before the version it deletes: a device whose clock runs behind still deletes what it
+                    // held (a marker stamped earlier would lose to that version on a device merging afresh).
+                    noticed.deletedHereAt = max(now, base.updatedAt ?? now)
                     finding.entry = noticed
                 }
             }

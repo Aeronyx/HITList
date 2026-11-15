@@ -119,6 +119,43 @@ final class SyncCoreReviewTests: XCTestCase {
         XCTAssertEqual(status.state, .held(.zonePurged), "still asking")
     }
 
+    /// A device whose clock runs behind still deletes what it held: the deletion is never stamped before the
+    /// version it deletes.
+    func testADeletionIsNeverStampedBeforeTheVersionItDeletes() async throws {
+        let device = await synced([task("A", "Milk", updated: 600), task("B", "Bread")])
+        // This device's clock reads epoch: ten minutes behind the version it holds.
+        await device.store.delete(taskKey("A"))
+        await device.core.localChanged([taskKey("A")])
+        let entry = await device.entry(taskKey("A"))
+        XCTAssertEqual(entry?.deletedHereAt, epoch.addingTimeInterval(600))
+        let record = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(record?.record, .marker(taskKey("A"), deletedAt: epoch.addingTimeInterval(600)))
+    }
+
+    /// A fetch that meets an item gone before any compare noticed it: the deletion's time is on disk before the
+    /// merge reads it, so the marker is the same however many times it is asked for, across a relaunch too.
+    func testADeletionMetByAFetchIsOnDiskBeforeItIsSettledOrSent() async throws {
+        let device = await synced([task("A", "Milk"), task("B", "Bread"), task("C", "Cheese")])
+        device.clock.advance(1_000)
+        await device.store.delete(taskKey("A"))   // no compare yet
+        await device.deliverFetch([cloud(task("A", "Milk", updated: 10), "c2")])
+        let entry = await device.entry(taskKey("A"))
+        XCTAssertEqual(entry?.deletedHereAt, epoch.addingTimeInterval(1_000), "written before the merge")
+        XCTAssertEqual(entry?.system, token("c2"))
+        let pending = await device.pending()
+        XCTAssertEqual(pending, [.save(taskKey("A"))])
+        let first = await device.core.recordToSend(taskKey("A"))
+        device.clock.advance(60)
+        let second = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(first?.record, second?.record)
+        let relaunched = device.relaunched(transport: ScriptedTransport())
+        await relaunched.transport.setStartEvents([])
+        await relaunched.core.start()
+        let third = await relaunched.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(third?.record, first?.record)
+        XCTAssertEqual(first?.record, .marker(taskKey("A"), deletedAt: epoch.addingTimeInterval(1_000)))
+    }
+
     func testANewerFormatIsWorkedOutAgainFromTheMetaAtStart() async throws {
         let device = await synced([task("A", "Milk")])
         // The newer meta reached the ledger, and the hold's fact did not (a crash in between).
