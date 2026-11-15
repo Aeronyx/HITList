@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.11
+## 0.9.11 — build 28, 2026-11-15
 
 0.9.10 was prepared on 2026-11-13 and never uploaded: Apple had a new Program License Agreement waiting for George to
 accept, and the export stopped there. He read its notes instead and wrote back the next evening: "the bolt should not
