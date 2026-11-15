@@ -246,6 +246,7 @@ person or the world can lift:
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
+| `massDeletion` | A compare finds nothing on the device at all, or more than 50 items gone that are also more than half of what iCloud holds | Nothing is sent and nothing is marked deleted: a store that reads empty by mistake (the app falls back to an empty store when its file will not open) must never empty every device. It lifts by itself when the items are there again, or when the person says they did delete them (found by session 139) |
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
