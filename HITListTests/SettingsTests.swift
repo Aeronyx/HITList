@@ -407,7 +407,7 @@ final class SettingsTidyTests: XCTestCase {
         XCTAssertEqual(BoltStyle.key, "delight.boltStyle")
         XCTAssertEqual(HingeCreak.key, "delight.squeakyHinge")
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
-                       ["account", "appearance", "general", "reminders", "completing", "iCloud", "data", "claude", "about"])
+                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude", "about"])
     }
 
     func testRowsSayWhatIsWrongOnlyWhenSomethingIs() {

@@ -56,6 +56,7 @@ struct CalendarSettingsPage: View {
                         }
                     }
                 }
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("settings-calendar-account-\(account.name)")
             }
         }
@@ -191,7 +192,7 @@ enum CalendarSettingsDevice: Equatable {
         case .iPhone, .iPad:
             "Settings → Apps → Calendar → Calendar Accounts → Add Account → Google"
         case .mac:
-            "System Settings → Internet Accounts → Add Account → Google, with Calendars switched on"
+            "System Settings → Internet Accounts → Add Account… → Google, with Calendars switched on"
         }
     }
 }

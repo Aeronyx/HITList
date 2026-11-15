@@ -63,7 +63,7 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertTrue(phone.contains("never signs in to Google"))
         XCTAssertEqual(CalendarSettingsPage.googleWords(connected: nil, device: .iPhone), phone, "unknown reads as not there")
         let mac = CalendarSettingsPage.googleWords(connected: false, device: .mac)
-        XCTAssertTrue(mac.contains("System Settings → Internet Accounts → Add Account → Google, with Calendars switched on"), mac)
+        XCTAssertTrue(mac.contains("System Settings → Internet Accounts → Add Account… → Google, with Calendars switched on"), mac)
         XCTAssertTrue(CalendarSettingsPage.googleWords(connected: false, device: .iPad).contains("iPad"))
         XCTAssertEqual(CalendarSettingsPage.googleWords(connected: true, device: .mac),
                        "Google Calendar is connected through this Mac's accounts.")

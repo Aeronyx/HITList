@@ -22,13 +22,13 @@ final class MacSettingsTests: XCTestCase {
 
     func testSectionsAreStableInIdsAndOrder() {
         XCTAssertEqual(Set(MacSettingsSection.allCases.map(\.rawValue)),
-                       ["account", "general", "iCloud", "reminders", "completing", "appearance", "data", "claude", "about"],
+                       ["account", "general", "calendar", "iCloud", "reminders", "completing", "appearance", "data", "claude", "about"],
                        "stored in preferences: never rename one")
         // Brief 86: the iPhone's homes in the iPhone's order, Appearance second, iCloud & data as two sections.
         XCTAssertEqual(MacSettingsSection.allCases.map(\.rawValue),
-                       ["account", "appearance", "general", "reminders", "completing", "iCloud", "data", "claude", "about"])
+                       ["account", "appearance", "general", "calendar", "reminders", "completing", "iCloud", "data", "claude", "about"])
         XCTAssertEqual(MacSettingsSection.allCases.map(\.title),
-                       ["Account", "Appearance", "General", "Reminders", "Extras", "iCloud", "Data", "Claude", "About"])
+                       ["Account", "Appearance", "General", "Calendar", "Reminders", "Extras", "iCloud", "Data", "Claude", "About"])
         for section in MacSettingsSection.allCases {
             XCTAssertFalse(section.caption.isEmpty, "\(section) has a caption")
             // One short line: under the page's title, and each section row's tooltip (brief 70 gave the Settings
@@ -59,7 +59,7 @@ final class MacSettingsTests: XCTestCase {
     }
 
     func testArrowKeysMoveBetweenSectionsAndStopAtTheEnds() {
-        XCTAssertEqual(MacSettingsSectionList.moved(.general, by: 1), .reminders)
+        XCTAssertEqual(MacSettingsSectionList.moved(.general, by: 1), .calendar)
         XCTAssertEqual(MacSettingsSectionList.moved(.data, by: -1), .iCloud)
         XCTAssertEqual(MacSettingsSectionList.moved(.account, by: 1), .appearance)
         XCTAssertEqual(MacSettingsSectionList.moved(.general, by: -1), .appearance)

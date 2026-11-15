@@ -24,7 +24,8 @@ final class TipsTests: XCTestCase {
 
     func testFiveTipsEachWithItsOwnStableID() {
         XCTAssertEqual(HITTipKind.allCases.map(\.rawValue),
-                       ["quickAddSyntax", "keepAsText", "browse", "flipboard", "boardAddTask", "reviewSwipe", "switchesStay"],
+                       ["quickAddSyntax", "keepAsText", "browse", "flipboard", "boardAddTask", "reviewSwipe", "switchesStay",
+                        "calendarInToday"],
                        "stored in TipKit's datastore: never rename")
         XCTAssertEqual(Set(HITTipKind.allCases.map { HITTip($0, generation: 0).id }).count, HITTipKind.allCases.count)
     }

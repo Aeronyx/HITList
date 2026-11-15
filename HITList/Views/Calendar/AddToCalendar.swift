@@ -130,7 +130,8 @@ final class CalendarNoticeWindow {
         if compact {
             origin = CGPoint(x: insets.leading - room, y: bounds.height - safe.bottom - insets.bottom - CompletionToast.height - room)
         } else {
-            let lift = HITSpacing.l + CompletionToast.height + HITSpacing.s
+            // Above the iPad's floating "+" at that corner, and a gap.
+            let lift = HITSpacing.l + FloatingAddButton.size.height + HITSpacing.m
             origin = CGPoint(x: bounds.width - safe.right - HITSpacing.l - size.width + room,
                              y: bounds.height - safe.bottom - lift - CompletionToast.height - room)
         }
