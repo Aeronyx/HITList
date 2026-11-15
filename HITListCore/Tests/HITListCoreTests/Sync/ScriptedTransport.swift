@@ -54,6 +54,7 @@ actor ScriptedTransport: SyncTransport {
     }
 
     func fetch() async throws {
+        if delivering > 0 { XCTFail("T1: fetch() called while an event was being handled") }
         calls.append("fetch")
         if let fetchThrows { throw fetchThrows }
         let events = fetches.isEmpty ? [.willFetch, .didFetch(error: nil)] : fetches.removeFirst()
@@ -61,6 +62,7 @@ actor ScriptedTransport: SyncTransport {
     }
 
     func send() async throws {
+        if delivering > 0 { XCTFail("T1: send() called while an event was being handled") }
         calls.append("send")
         guard let delegate else { return }
         var records: [OutgoingRecord] = []
@@ -95,8 +97,15 @@ actor ScriptedTransport: SyncTransport {
             let answered = Set(saved.map { PendingChange.save($0.key) } + removed.map { .delete($0) })
             list.removeAll { answered.contains($0) || failed[$0.key] != nil }
         }
+        // T1: one event at a time.
+        if delivering > 0 { XCTFail("T1: an event delivered while another was being handled") }
+        delivering += 1
         await delegate?.handle(event)
+        delivering -= 1
     }
+
+    /// Events being handled right now (T1: never more than one; `fetch`/`send` never from inside one).
+    private var delivering = 0
 
     func setFetches(_ fetches: [[TransportEvent]]) { self.fetches = fetches }
     func setAnswer(_ answer: (@Sendable ([OutgoingRecord], [SyncKey]) -> [TransportEvent])?) { self.answer = answer }
