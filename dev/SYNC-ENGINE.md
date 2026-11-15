@@ -23,8 +23,11 @@ The engine replaces the mirror with parts HITList owns:
 - **Apple still does what Apple does best**: `CKSyncEngine` schedules sends and fetches, retries after the network
   or iCloud's limits, and wakes the app on a push. It is the transport, behind a protocol.
 
-Nothing a person has is at risk from the engine's own memory: it can be deleted at any time and the engine merges
-everything afresh (section 7). The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
+Nothing a person has is at risk from the engine's own memory: it can be lost at any time and the engine merges
+everything afresh (section 7). One thing only lives nowhere else: a deletion made on this device that has not yet
+gone to iCloud. A memory lost in that moment brings the item back (it is never lost the other way), so the app
+does not throw the memory away lightly: a row of it that cannot be read is forgotten alone, and the brain carries
+unsent deletions across every forgetting it does itself. The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
 engine: it stays as it was at the moment a device moved over.
 
 ## 2. The parts
@@ -201,7 +204,9 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   A batch is not all-or-nothing.
 - **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds a zone missing that this device
   knew to exist (one it never knew is simply made). By then the transport has forgotten its bookmark and its list.
-- **T12 The account.** `account(change)` when the signed-in account is not the one the transport's state belongs to:
+- **T12 The account.** The transport writes an account change down as owed before it tells the brain and crosses
+  it off when the brain has handled it, so a kill in between tells it again at the next launch (Apple's engine
+  announces a change once). `account(change)` when the signed-in account is not the one the transport's state belongs to:
   the first event of the first sync after `start` if it changed while the app was not running (never inside
   `start` itself), or when it happens. The transport has forgotten its bookmark and its list by then. With no
   account nothing is fetched or sent. A transport that lost its own state announces `signedIn` for the account that

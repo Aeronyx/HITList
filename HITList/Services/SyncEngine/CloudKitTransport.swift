@@ -148,6 +148,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     func fetch() async throws {
         guard let engine else { throw TransportError.notStarted }
+        await tellOwedAccount()
         manualFetches += 1
         var thrown: Error?
         do {
@@ -172,6 +173,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     func send() async throws {
         guard engine != nil else { throw TransportError.notStarted }
+        await tellOwedAccount()
         manualSends += 1
         var thrown: Error?
         // A send that found the zone missing makes it and adds the refused saves again at its end: once more, so
@@ -232,6 +234,14 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
         guard isCurrent(syncEngine) else { return }
+        // An account change still owed to the brain from before a kill goes first (T12), ahead of whatever this
+        // event brings; the engine's own bookkeeping (`stateUpdate`) and a fresh account change need not wait for it.
+        if stored.owedAccount != nil {
+            switch event {
+            case .stateUpdate, .accountChange: break
+            default: await tellOwedAccount()
+            }
+        }
         switch event {
         case .stateUpdate(let update):
             // T1: the brain has already kept what the events before this one brought (each `handle` returned), so
@@ -252,10 +262,15 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             stored.zoneReady = false
             stored.fetchedWhole = false
             stored.account = CloudKitTransportRules.currentAccount(change.changeType)
+            // The change is written down as owed to the brain before it is told, and crossed off only when the brain
+            // has handled it: the engine announces an account change once, so one saved as known here and lost
+            // before the brain heard it (a kill in between) would never be told (the review's finding 8: the brain
+            // stayed held "not signed in" for good).
+            if let mapped { stored.owedAccount = StoredAccountChange(mapped) }
             await save()
             if let mapped {
                 log.write("account: \(String(describing: mapped))")
-                await deliver(.account(mapped))
+                await tellOwedAccount()
             } else {
                 log.write("account: the same account as before (\(stored.account ?? "none")), not told again")
             }
@@ -581,11 +596,33 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     private func isCurrent(_ syncEngine: CKSyncEngine) -> Bool { syncEngine === engine && !stopped }
 
-    private func deliver(_ event: TransportEvent) async {
+    /// Whether the brain handled it (not after `stop()`).
+    @discardableResult
+    private func deliver(_ event: TransportEvent) async -> Bool {
         await acquireDelivery()
         defer { releaseDelivery() }
-        guard !stopped, let delegate else { return }
+        guard !stopped, let delegate else { return false }
         await delegate.handle(event)
+        return true
+    }
+
+    /// An account change the brain has not handled yet (`StoredState.owedAccount`): told now, before anything else,
+    /// and crossed off once handled. Called when the engine announces one, and before the first event, fetch or send
+    /// after a launch that found one still owed.
+    private func tellOwedAccount() async {
+        guard let owed = stored.owedAccount else { return }
+        guard let change = owed.change else {
+            stored.owedAccount = nil
+            await save()
+            return
+        }
+        if await deliver(.account(change)) {
+            // Only if it is still the one told: a newer change may have replaced it while the brain was handling this.
+            if stored.owedAccount == owed {
+                stored.owedAccount = nil
+                await save()
+            }
+        }
     }
 
     private func acquireDelivery() async {
@@ -639,6 +676,35 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 /// list), whether the zone is known to exist (so it is made only when needed), and the account the state belongs to
 /// (so an engine that announces the same account again, its state not yet saved, is not told as a change).
 /// JSON, versioned.
+/// An `AccountChange` as the transport's state keeps it (the contract's type is not `Codable`).
+struct StoredAccountChange: Codable, Equatable {
+    var kind: String
+    var previous: String?
+    var current: String?
+
+    init(_ change: AccountChange) {
+        switch change {
+        case .signedIn(let current):
+            kind = "signedIn"; self.current = current
+        case .signedOut(let previous):
+            kind = "signedOut"; self.previous = previous
+        case .switched(let previous, let current):
+            kind = "switched"; self.previous = previous; self.current = current
+        }
+    }
+
+    var change: AccountChange? {
+        switch kind {
+        case "signedIn": return current.map { .signedIn(current: $0) }
+        case "signedOut": return previous.map { .signedOut(previous: $0) }
+        case "switched":
+            guard let previous, let current else { return nil }
+            return .switched(previous: previous, current: current)
+        default: return nil
+        }
+    }
+}
+
 struct StoredState: Codable {
     var version = 1
     var engine: CKSyncEngine.State.Serialization?
@@ -649,6 +715,8 @@ struct StoredState: Codable {
     /// to the brain as a fetch that ended well: the brain takes a fetch that ended well with no bookmark for the
     /// whole of what iCloud holds (the review's finding 3).
     var fetchedWhole: Bool?
+    /// An account change the engine announced that the brain has not handled yet (nil: none owed).
+    var owedAccount: StoredAccountChange?
 
     init(engine: CKSyncEngine.State.Serialization? = nil, zoneReady: Bool = false, account: String? = nil) {
         self.engine = engine
@@ -659,7 +727,9 @@ struct StoredState: Codable {
     /// What `reset()` keeps (T13): the account this state belongs to and whether the zone was known to exist. The
     /// engine's own state (its bookmark and its list) and the proof of a whole fetch go.
     func afterReset() -> StoredState {
-        StoredState(engine: nil, zoneReady: zoneReady, account: account)
+        var kept = StoredState(engine: nil, zoneReady: zoneReady, account: account)
+        kept.owedAccount = owedAccount
+        return kept
     }
 
     static func decode(_ data: Data?, log: SyncTransportLog) -> StoredState {

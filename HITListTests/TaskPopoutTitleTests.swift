@@ -51,6 +51,42 @@ final class TaskPopoutTitleTests: XCTestCase {
         EditorFields(task: task).applying(draft.phrases(parser(), for: task))
     }
 
+    // MARK: A task that changes under an open editor (round 28, the sync review's finding 5)
+
+    /// The editor is open on the iPhone; another device's edit to the notes arrives; the person changes only the
+    /// title and confirms. The notes are the other device's, not the ones the editor opened with. And the other
+    /// way round: only the notes typed, the title that arrived stands.
+    func testAFieldNobodyTypedInIsNotWrittenBackOverAnEditThatArrived() throws {
+        let (task, context) = task("Call mom")
+        task.notes = "Ask about Sunday"
+        try context.save()
+
+        var draft = TaskEditorDraft(task: task)
+        task.notes = "Ask about Sunday. She prefers the afternoon."   // another device's edit lands
+        draft.title = "Call mum"
+        XCTAssertTrue(draft.hasPendingChanges(for: task))
+        XCTAssertTrue(try draft.commit(to: task, in: context, parser: parser()))
+        XCTAssertEqual(task.title, "Call mum")
+        XCTAssertEqual(task.notes, "Ask about Sunday. She prefers the afternoon.", "the notes nobody typed in stand")
+
+        var second = TaskEditorDraft(task: task)
+        task.title = "Call mum tonight"                               // another device's edit lands
+        second.notes = "Ask about Sunday. Bring the photos."
+        XCTAssertTrue(try second.commit(to: task, in: context, parser: parser()))
+        XCTAssertEqual(task.title, "Call mum tonight", "the title nobody typed in stands")
+        XCTAssertEqual(task.notes, "Ask about Sunday. Bring the photos.")
+
+        // Nothing typed at all while the task changed under the editor: nothing to save, nothing asked.
+        let third = TaskEditorDraft(task: task)
+        task.title = "Call mum tomorrow"
+        task.notes = "Changed elsewhere"
+        XCTAssertFalse(third.hasPendingChanges(for: task))
+        var idle = third
+        XCTAssertFalse(try idle.commit(to: task, in: context, parser: parser()))
+        XCTAssertEqual(task.title, "Call mum tomorrow")
+        XCTAssertEqual(task.notes, "Changed elsewhere")
+    }
+
     // MARK: The brief's case
 
     /// "Call mom tomorrow 5pm p1" typed into an existing task's title: three highlights, the rows show tomorrow

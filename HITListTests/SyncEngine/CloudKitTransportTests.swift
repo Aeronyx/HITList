@@ -187,6 +187,15 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertNil(after.engine)
         XCTAssertNil(Rules.accountChange(.signIn(currentUser: CKRecord.ID(recordName: "_me")), known: after.account),
                      "the same account after a reset: not told again")
+        // The review's finding 8: an account change is kept as owed until the brain has handled it, through a
+        // relaunch and a reset.
+        for change in [AccountChange.signedIn(current: "_me"), .signedOut(previous: "_me"), .switched(previous: "_me", current: "_you")] {
+            var owing = StoredState(engine: nil, zoneReady: false, account: "_me")
+            owing.owedAccount = StoredAccountChange(change)
+            let read = StoredState.decode(owing.encoded(log: SyncTransportLog { _ in }), log: SyncTransportLog { _ in })
+            XCTAssertEqual(read.owedAccount?.change, change)
+            XCTAssertEqual(owing.afterReset().owedAccount?.change, change, "a reset does not lose it")
+        }
         let state = StoredState(engine: nil, zoneReady: true, account: "_me")
         let back = StoredState.decode(state.encoded(log: log), log: log)
         XCTAssertEqual(back.zoneReady, true)

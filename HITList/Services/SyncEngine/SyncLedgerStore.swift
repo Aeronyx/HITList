@@ -137,22 +137,61 @@ actor SyncLedgerStore: SyncLedger {
 
     // MARK: - SyncLedger
 
+    /// A row this build cannot read (written by a newer build a tester then went back from, or damaged) is forgotten,
+    /// not an error: the engine then has no memory of that one record and settles it afresh, which is always safe
+    /// (`dev/SYNC-ENGINE.md` section 7). Throwing instead stopped the engine at every launch with no way out (the
+    /// review's finding 6). What was dropped is in `unreadable`, for the sync log.
     func entries() async throws -> [LedgerEntry] {
         let context = makeContext()
         let rows = try context.fetch(FetchDescriptor<LedgerEntryRow>(sortBy: [SortDescriptor(\.key)]))
         let decoder = JSONDecoder()
-        return try rows.map { row in
-            do { return try decoder.decode(LedgerEntry.self, from: row.payload) } catch { throw DecodeFailed(what: "entry \(row.key)") }
-        }.sorted { $0.key < $1.key }
+        var out: [LedgerEntry] = []
+        var dropped = false
+        for row in rows {
+            if let entry = try? decoder.decode(LedgerEntry.self, from: row.payload) {
+                out.append(entry)
+            } else {
+                unreadable.append("entry \(row.key)")
+                context.delete(row)
+                dropped = true
+            }
+        }
+        if dropped { try? context.save() }
+        return out.sorted { $0.key < $1.key }
     }
 
     func deferred() async throws -> [CloudRecord] {
         let context = makeContext()
         let rows = try context.fetch(FetchDescriptor<LedgerDeferredRow>(sortBy: [SortDescriptor(\.key)]))
         let decoder = JSONDecoder()
-        return try rows.map { row in
-            do { return try decoder.decode(CloudRecord.self, from: row.payload) } catch { throw DecodeFailed(what: "deferred record \(row.key)") }
-        }.sorted { $0.key < $1.key }
+        var out: [CloudRecord] = []
+        var dropped = false
+        for row in rows {
+            if let record = try? decoder.decode(CloudRecord.self, from: row.payload) {
+                out.append(record)
+            } else {
+                unreadable.append("waiting record \(row.key)")
+                context.delete(row)
+                dropped = true
+            }
+        }
+        if dropped { try? context.save() }
+        return out.sorted { $0.key < $1.key }
+    }
+
+    /// Rows that could not be read and were forgotten (`entries`, `deferred`), by key.
+    private(set) var unreadable: [String] = []
+
+    /// For tests: makes the stored rows of these keys unreadable, as a newer build's or a damaged one would be.
+    func spoilForTests(entry: SyncKey? = nil, deferred: SyncKey? = nil) throws {
+        let context = makeContext()
+        if let entry, let row = try entryRows([Self.name(entry)], in: context)[Self.name(entry)] {
+            row.payload = Data("not a ledger entry".utf8)
+        }
+        if let deferred, let row = try deferredRows([Self.name(deferred)], in: context)[Self.name(deferred)] {
+            row.payload = Data("not a record".utf8)
+        }
+        try context.save()
     }
 
     func fact(_ name: String) async throws -> Data? {
