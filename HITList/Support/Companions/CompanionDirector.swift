@@ -10,8 +10,9 @@ import AppKit
 
 /// Keeps every companion's life in one place (briefs 76, 79, 84 and 100): which is on screen, where and since when,
 /// how it is dressed, what it is doing, and the one timer that wakes for the next thing it does. Between acts a
-/// companion is a still picture and nothing runs; the timer sleeps until the next idle (a flicker or a little loop,
-/// 6 to 36 seconds after the last one ends, the first 2 to 6 seconds after it comes on screen), routine (every 3 to 8
+/// companion is a still picture and nothing runs; the timer sleeps until the next idle (a flicker or a little loop: in
+/// plain weather 4 to 12 seconds after the last one ends, the first 1.5 to 4 seconds after it comes on screen, brief
+/// 132; under a sky that holds 6 to 36 and 2 to 6), routine (every 3 to 8
 /// minutes of showing time) or the rare flourish, and only while a companion that may move is on screen and the app
 /// is in front. The drawing runs in each perch's `TimelineView` for the length of an act and stops. The rules are
 /// `CompanionSchedule`'s; the frames are `CompanionClock`'s.
@@ -52,9 +53,16 @@ final class CompanionDirector {
     @ObservationIgnored private var nextIdle: [String: Date] = [:]
     /// The idle each played last, and in which place and look (its index means nothing in another mode).
     @ObservationIgnored private var lastIdle: [String: (idle: CompanionSchedule.Idle, place: CompanionPlace, asleep: Bool)] = [:]
+    /// Brief 132: the idle it played before that one, in the same place and look (never one of the last two).
+    @ObservationIgnored private var priorIdle: [String: CompanionSchedule.Idle] = [:]
+    /// Brief 132: its last wait between idles in the default states, so the next one is never the same.
+    @ObservationIgnored private var lastWait: [String: TimeInterval] = [:]
     /// A demo's turns so far.
     @ObservationIgnored private var recent: [String: [Int]] = [:]
     @ObservationIgnored private var lastAnswer: [String: Date] = [:]
+    /// Brief 132: when a completed task last played anything (one in any 6 seconds), and the last sleepy peek for one.
+    @ObservationIgnored private(set) var lastCheer: Date?
+    @ObservationIgnored private var lastSleepyCheer: Date?
     /// Which way each companion faced when it last left the screen (Quill keeps its side).
     @ObservationIgnored private var turned: [String: Bool] = [:]
     @ObservationIgnored private var timer: Task<Void, Never>?
@@ -102,9 +110,9 @@ final class CompanionDirector {
         isLowPower = observeSystem && ProcessInfo.processInfo.isLowPowerModeEnabled
         // A demo (Debug only) keeps going in the background, so a window can be recorded without taking the front.
         #if os(iOS)
-        isAppActive = !observeSystem || launch.isDemo || UIApplication.shared.applicationState == .active
+        isAppActive = !observeSystem || launch.keepsGoing || UIApplication.shared.applicationState == .active
         #else
-        isAppActive = !observeSystem || launch.isDemo || NSApplication.shared.isActive
+        isAppActive = !observeSystem || launch.keepsGoing || NSApplication.shared.isActive
         #endif
         let keptLast = defaults?.object(forKey: Preferences.companionLastFlourish) as? Double
         lastFlourish = keptLast.map { Date(timeIntervalSinceReferenceDate: $0) }
@@ -168,6 +176,7 @@ final class CompanionDirector {
         stages[id] = nil
         activeSince[id] = nil
         nextIdle[id] = nil
+        lastWait[id] = nil
         startSpending(now: now)
         reschedule(now: now)
     }
@@ -208,6 +217,50 @@ final class CompanionDirector {
         }
     }
 
+    /// A task was completed somewhere in the app (brief 132): the companion on screen plays its cheer, one to two
+    /// seconds of frames it already has; asleep its sleepy peek at most once a minute; under a sky that holds its
+    /// answer over the weather's still, or nothing. At most one in any 6 seconds; dropped over a flourish or a routine
+    /// (a flicker or a little loop gives way); Reduce Motion, Reduce Effects and Low Power Mode play nothing. The next
+    /// idle's wait starts when it ends.
+    func cheer(now: Date = .now) {
+        var played = false
+        var sleepy = false
+        for id in stages.keys.sorted() {
+            guard let character = character(id), let stage = stages[id] else { continue }
+            let clock = clock(for: character)
+            var busy = false
+            if let act = stage.act, clock.isActing(at: now, stage: stage) {
+                switch act.kind {
+                case .flourish: busy = true
+                case .routine(let i):
+                    let routines = character.posture(stage.place).mode(stage.look).routines
+                    busy = !(routines.indices.contains(i) && routines[i].little)
+                default: break
+                }
+            }
+            let reply = CompanionSchedule.cheerReply(now: now, onScreen: isAppActive, look: stage.look, busy: busy,
+                                                     still: still[id] ?? true, calm: calm[id] ?? true,
+                                                     lowPower: isLowPower, lastCheer: lastCheer,
+                                                     lastSleepy: lastSleepyCheer,
+                                                     answerDraws: clock.canDraw(.answer, stage: stage))
+            let kind: CompanionAct.Kind
+            switch reply {
+            case .cheer: kind = .cheer
+            case .answer: kind = .answer
+            case .nothing: continue
+            }
+            start(id, kind, now: now)
+            played = true
+            if stage.look.asleep { sleepy = true }
+            // The next idle a whole wait after the cheer ends.
+            if let act = stages[id]?.act { scheduleIdle(id, after: clock.end(of: act, stage: stages[id] ?? stage)) }
+        }
+        guard played else { return }
+        lastCheer = now
+        if sleepy { lastSleepyCheer = now }
+        reschedule(now: now)
+    }
+
     // MARK: - The schedule
 
     private func character(_ id: String) -> CompanionCharacter? { cast.first { $0.id == id } }
@@ -230,7 +283,8 @@ final class CompanionDirector {
     }
 
     /// The next idle `after` (the end of the act that just started, or the moment it came on screen when `first`):
-    /// 6 to 36 s of stillness, the first 2 to 6 s.
+    /// in the default states 4 to 12 s of stillness over a floor of 4 to 7, the first 1.5 to 4 s (brief 132); under a
+    /// sky that holds 6 to 36 s, the first 2 to 6.
     private func scheduleIdle(_ id: String, after now: Date, first: Bool = false) {
         if launch.isDemo {
             let wait = first ? CompanionLaunchOptions.demoSettling
@@ -238,8 +292,22 @@ final class CompanionDirector {
             nextIdle[id] = now.addingTimeInterval(wait)
             return
         }
-        let gap = first ? CompanionSchedule.firstIdle(unit: unit()) : CompanionSchedule.idleGap(unit: unit())
-        nextIdle[id] = now.addingTimeInterval(gap)
+        nextIdle[id] = now.addingTimeInterval(idleWait(id, first: first))
+    }
+
+    /// Whether `id` is in a default state (brief 132): no sky holding, awake or asleep.
+    private func atEase(_ id: String) -> Bool { stages[id].map { $0.look.weather == .plain } ?? false }
+
+    /// The still time before its next idle, by its look.
+    private func idleWait(_ id: String, first: Bool = false) -> TimeInterval {
+        guard atEase(id) else {
+            lastWait[id] = nil
+            return first ? CompanionSchedule.firstIdle(unit: unit()) : CompanionSchedule.idleGap(unit: unit())
+        }
+        if first { return CompanionSchedule.paceFirst(unit: unit()) }
+        let wait = CompanionSchedule.paceGap(floor: unit(), unit: unit(), after: lastWait[id])
+        lastWait[id] = wait
+        return wait
     }
 
     /// The routines it may play now, as indices into its awake mode's routines: the everyday ones that can be drawn
@@ -412,6 +480,15 @@ final class CompanionDirector {
             return
         case .answer?:
             start(id, .answer, now: now)
+        case .cheer?:
+            // What a completed task plays, as `cheer` decides it (the demo keeps no clock between cheers).
+            lastCheer = nil
+            lastSleepyCheer = nil
+            cheer(now: now)
+            if let act = stages[id]?.act, act.start == now {
+                quietAfter(id, end: clock(for: character).end(of: act, stage: stages[id] ?? stage))
+                return
+            }
         case .gesture(let name)?:
             let i = mode.gestures.firstIndex { $0.name == name }
             if let i { start(id, .gesture(i), now: now) } else if name == "flourish" { playFlourish(id, now: now); return }
@@ -451,17 +528,26 @@ final class CompanionDirector {
             else { start(id, .answer, now: now) }
             scheduleIdle(id, after: now)
             return
-        case .gestures?, nil:
+        case .gestures?, .pace?, nil:
             // An idle (brief 100): a flicker or, awake, a little loop, never the same one twice running, by weight;
             // while a sky holds, about every other one is the sky's own (a drip, a bead of sweat). The next comes a
             // gap after this one ends.
             let kept = lastIdle[id]
-            let last = kept.flatMap { $0.place == stage.place && $0.asleep == stage.look.asleep ? $0.idle : nil }
-            guard let idle = CompanionSchedule.pickIdle(idleChoices(id), last: last, sky: unit(), kind: unit(),
-                                                        pick: unit()) else {
+            let same = kept.map { $0.place == stage.place && $0.asleep == stage.look.asleep } ?? false
+            let last = same ? kept?.idle : nil
+            let picked: CompanionSchedule.Idle?
+            if atEase(id) {
+                // Brief 132: at three times the old rate, never one of the last two when there are three to choose.
+                let recent = [same ? priorIdle[id] : nil, last].compactMap { $0 }
+                picked = CompanionSchedule.pickIdle(idleChoices(id), recent: recent, sky: unit(), kind: unit(), pick: unit())
+            } else {
+                picked = CompanionSchedule.pickIdle(idleChoices(id), last: last, sky: unit(), kind: unit(), pick: unit())
+            }
+            guard let idle = picked else {
                 scheduleIdle(id, after: now)
                 return
             }
+            priorIdle[id] = last
             lastIdle[id] = (idle, stage.place, stage.look.asleep)
             switch idle {
             case .flicker(let i): start(id, .gesture(i), now: now)
@@ -518,6 +604,7 @@ final class CompanionDirector {
                 name = (routine?.little == true ? "loop " : "routine ") + (routine?.name ?? "\(i)")
             case .answer: name = "reply"
             case .flourish: name = "flourish"
+            case .cheer: name = "cheer"
             }
             Self.log.info("Companion \(id, privacy: .public) plays \(name, privacy: .public)")
         }
@@ -574,8 +661,9 @@ final class CompanionDirector {
             if launch.play == .flourish { scheduleIdle(id, after: end) }
             return
         }
-        if let next = nextIdle[id], next < end.addingTimeInterval(CompanionSchedule.idleGap.lowerBound) {
-            nextIdle[id] = end.addingTimeInterval(CompanionSchedule.idleGap(unit: unit()))
+        let floor: TimeInterval = atEase(id) ? CompanionSchedule.paceFloors.lowerBound : CompanionSchedule.idleGap.lowerBound
+        if let next = nextIdle[id], next < end.addingTimeInterval(floor) {
+            nextIdle[id] = end.addingTimeInterval(idleWait(id))
         }
     }
 
@@ -697,7 +785,7 @@ final class CompanionDirector {
     }
 
     private func save() {
-        guard let defaults, !launch.isDemo else { return }
+        guard let defaults, !launch.keepsGoing else { return }
         defaults.set(budget, forKey: Preferences.companionFlourishBudget)
         defaults.set(routineBudget, forKey: Preferences.companionRoutineBudget)
         if let lastFlourish { defaults.set(lastFlourish.timeIntervalSinceReferenceDate, forKey: Preferences.companionLastFlourish) }
@@ -708,7 +796,7 @@ final class CompanionDirector {
     // MARK: - The system
 
     func setAppActive(_ active: Bool, now: Date = .now) {
-        guard active != isAppActive, !launch.isDemo else { return }
+        guard active != isAppActive, !launch.keepsGoing else { return }
         settleBudgets(now: now)
         isAppActive = active
         // Nobody is looking as the app goes or comes back: the moment to fall asleep, wake, or dress for the sky.
@@ -732,6 +820,7 @@ final class CompanionDirector {
             if changed {
                 recent[id] = []
                 lastIdle[id] = nil
+                priorIdle[id] = nil
             }
         }
         if active {

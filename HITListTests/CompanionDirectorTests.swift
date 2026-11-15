@@ -2,9 +2,10 @@ import XCTest
 import HITListCore
 @testable import HITList
 
-/// Briefs 79, 84 and 100: the director that keeps the companions, driven by a simulated clock. Never a dead minute (an
-/// idle every 6 to 36 seconds, awake or asleep, the first 2 to 6 seconds after it comes on screen, never the same one
-/// twice running, a little loop about one in three) and nothing between, a routine every 3 to 8 minutes of showing
+/// Briefs 79, 84, 100 and 132: the director that keeps the companions, driven by a simulated clock. Never a dead minute
+/// (in the default states, plain weather awake or asleep, an idle every 4 to 12 seconds over a floor drawn anew each
+/// time, the first 1.5 to 4 seconds after it comes on screen; under a sky that holds every 6 to 36 seconds, the first 2
+/// to 6, as before; never the same one twice running, a little loop about one in three) and nothing between, a routine every 3 to 8 minutes of showing
 /// time (kept across launches, never the same twice running, never a little loop, the sky's own about every other
 /// one), the rare flourish over a simulated month, its kept time across a relaunch, the tap's rules, night's edges where
 /// the person is (decided while nobody is looking), weather, a theme change, no timer unless something is due within
@@ -59,7 +60,7 @@ final class CompanionDirectorTests: XCTestCase {
         d.appear("stayer", place: .field, still: false, calm: false, now: time(12))
         XCTAssertTrue(d.isWaiting)
         let wait = d.nextMoment!.timeIntervalSince(time(12))
-        XCTAssertTrue((2...6).contains(wait), "the first idle comes 2 to 6 seconds in, not at once: \(wait)")
+        XCTAssertTrue((1.5...4).contains(wait), "the first idle comes 1.5 to 4 seconds in, not at once: \(wait)")
         d.setAppActive(false, now: time(12, 1))
         XCTAssertFalse(d.isWaiting, "the app isn't in front: nothing runs")
         d.setAppActive(true, now: time(12, 2))
@@ -80,10 +81,11 @@ final class CompanionDirectorTests: XCTestCase {
         d.appear("stayer", place: .field, still: false, calm: false, now: time(9))
         let acts = run(d, until: time(13))
         let gestures = acts.filter { if case .gesture = $0.kind { return true } else { return false } }
-        // Four hours: no fewer than one every 37 seconds, no more than one every 6.
-        XCTAssertGreaterThan(gestures.count, 4 * 3600 / 37)
-        XCTAssertLessThan(gestures.count, 4 * 3600 / 6)
+        // Four hours in plain weather (brief 132): no fewer than one every 13 seconds, no more than one every 4.
+        XCTAssertGreaterThan(gestures.count, 4 * 3600 / 13)
+        XCTAssertLessThan(gestures.count, 4 * 3600 / 4)
         let clock = CompanionClock(character: Cast.stayer)
+        var lastStill: TimeInterval?
         for (a, b) in zip(acts, acts.dropFirst()) {
             let stage = CompanionStage(since: time(9), place: .field, look: .day, act: a)
             let end = clock.end(of: a, stage: stage)
@@ -91,13 +93,43 @@ final class CompanionDirectorTests: XCTestCase {
             if case .gesture = a.kind { XCTAssertLessThan(end.timeIntervalSince(a.start), 1, "a gesture is under a second") }
             if case .gesture = a.kind, case .gesture = b.kind {
                 let still = b.start.timeIntervalSince(end)
-                XCTAssertTrue((6 - 0.01...36 + 0.01).contains(still), "6 to 36 seconds still between idles: \(still)")
+                XCTAssertTrue((4 - 0.01...12 + 0.01).contains(still), "4 to 12 seconds still between idles: \(still)")
+                if let lastStill { XCTAssertNotEqual(still, lastStill, accuracy: 0.49, "no two waits in a row equal") }
+                lastStill = still
                 XCTAssertNotEqual(a.kind, b.kind, "never the same idle twice running")
             }
             // Between acts it is a still picture: nothing to redraw.
             XCTAssertNil(clock.nextChange(after: end, stage: stage))
         }
         XCTAssertEqual(Set(gestures.map { "\($0.kind)" }).count, 3, "all three gestures come up")
+    }
+
+    /// Brief 132: the pace by look. Plain weather awake and asleep: every wait 4 to 12 s, the floor varying, the first
+    /// 1.5 to 4 s in. Under a sky that holds (rain, storm, snow, heat), today's: 6 to 36 s, the first 2 to 6.
+    func testThePaceInTheDefaultStatesAndUnderASky() {
+        for (sky, hour, fast) in [(CompanionSky.clear, 12, true), (.clouds, 23, true), (.unknown, 9, true), (.rain, 12, false),
+                                  (.storm, 23, false), (.snow, 12, false), (.heat, 14, false)] {
+            let at = "\(sky) \(hour):00"
+            let d = director(seed: 132, sky: sky, cast: [Cast.stayer])
+            let start = time(hour)
+            d.appear("stayer", place: .field, still: false, calm: false, now: start)
+            let look = d.stages["stayer"]!.look
+            let acts = run(d, until: start.addingTimeInterval(3600))
+            let clock = CompanionClock(character: Cast.stayer)
+            let first = acts.first!.start.timeIntervalSince(start)
+            XCTAssertTrue((fast ? 1.5...4 : 2...6).contains(first), "\(at): first \(first)")
+            var stills: [TimeInterval] = []
+            // Before each idle (a routine keeps its own clock and may come any time).
+            for (a, b) in zip(acts, acts.dropFirst()) where isIdle(b, Cast.stayer, place: .field, look: look) {
+                let stage = CompanionStage(since: start, place: .field, look: look, act: a)
+                stills.append(b.start.timeIntervalSince(clock.end(of: a, stage: stage)))
+            }
+            let range: ClosedRange<TimeInterval> = fast ? 4 - 0.01...12 + 0.01 : 6 - 0.01...36 + 0.01
+            for still in stills { XCTAssertTrue(range.contains(still), "\(at): \(still)") }
+            let median = stills.sorted()[stills.count / 2]
+            XCTAssertTrue(fast ? (6...10).contains(median) : median > 12, "\(at): median \(median)")
+            if fast { XCTAssertGreaterThan(stills.filter { $0 < 5.5 }.count, 5, "\(at): the floor comes down near 4 s") }
+        }
     }
 
     func testAnActIsPutAwayWhenItEndsSoTheStillPictureIsDrawn() {
@@ -254,16 +286,17 @@ final class CompanionDirectorTests: XCTestCase {
         XCTAssertEqual(d.stages["stayer"]?.look, CompanionLook(asleep: true, weather: .plain))
         XCTAssertNil(d.stages["stayer"]?.act)
         d.setAppActive(true, now: time(22, 30))
-        // Asleep: it breathes at the same pace (its stir every 6 to 36 seconds), never a flourish, budget untouched.
+        // Asleep: it breathes at the default pace (brief 132: its stir every 4 to 12 seconds), never a flourish,
+        // budget untouched.
         let budget = d.budget
         let night = run(d, until: time(6, 59, day: 1))
         XCTAssertFalse(night.contains { $0.kind == .flourish }, "no flourish while asleep")
-        XCTAssertEqual(night.first.map { $0.start.timeIntervalSince(time(22, 30)) } ?? 99, 4, accuracy: 2.01,
-                       "the first 2 to 6 seconds after coming back")
+        XCTAssertTrue((1.5...4).contains(night.first.map { $0.start.timeIntervalSince(time(22, 30)) } ?? 99),
+                      "the first 1.5 to 4 seconds after coming back")
         for (a, b) in zip(night, night.dropFirst()) {
-            XCTAssertTrue((6...37).contains(b.start.timeIntervalSince(a.start)), "a stir every few seconds")
+            XCTAssertTrue((4...13).contains(b.start.timeIntervalSince(a.start)), "a stir every few seconds")
         }
-        XCTAssertGreaterThan(night.count, 8 * 3600 / 37)
+        XCTAssertGreaterThan(night.count, 8 * 3600 / 13)
         d.setAppActive(false, now: time(6, 59, day: 1))
         XCTAssertEqual(d.budget, budget, accuracy: 0.001)
         // Back at seven: awake.
@@ -721,7 +754,7 @@ final class CompanionDirectorTests: XCTestCase {
         case .routine(let i):
             let routines = character.posture(place).mode(look).routines
             return routines.indices.contains(i) && routines[i].little
-        case .answer, .flourish: return false
+        case .answer, .flourish, .cheer: return false
         }
     }
 
@@ -764,6 +797,11 @@ final class CompanionDirectorTests: XCTestCase {
                             XCTAssertLessThanOrEqual(stretches.first ?? 99, 6.01, "\(at): the first act within 6 s")
                             let longest = stretches.max() ?? 0
                             XCTAssertLessThanOrEqual(longest, 36.01, "\(at): still for \(longest) s")
+                            if look.weather == .plain, CompanionCharacter.all.contains(where: { $0.id == character.id }) {
+                                // Brief 132: the app's creatures in their default states, never still for over 12 s.
+                                XCTAssertLessThanOrEqual(stretches.first ?? 99, 4.01, "\(at): the first act within 4 s")
+                                XCTAssertLessThanOrEqual(longest, 12.01, "\(at): still for \(longest) s")
+                            }
                             let idles = acts.filter { isIdle($0, character, place: place, look: look) }
                             XCTAssertGreaterThanOrEqual(idles.count, 600 / 37, "\(at): \(idles.count) idles in ten minutes")
                             if place == .plus, !deep { worst.append("\(at): \(idles.count) idles, longest still \(Int(longest)) s") }
@@ -781,7 +819,7 @@ final class CompanionDirectorTests: XCTestCase {
         return acts.first.map { ($0, $0.start.timeIntervalSince(since)) }
     }
 
-    /// The first idle comes 2 to 6 seconds after each way of coming on screen: the launch, back to the app (even with
+    /// The first idle comes 1.5 to 4 seconds (brief 132, plain weather) after each way of coming on screen: the launch, back to the app (even with
     /// the next idle owed half a minute away), its tab or a sheet closing (the perch leaves and comes back), awake or
     /// asleep, and with Reduce Effects.
     func testTheFirstIdleWithinSixSecondsOfEachWayOfComingOnScreen() {
@@ -791,7 +829,7 @@ final class CompanionDirectorTests: XCTestCase {
             let launch = time(hour)
             d.appear("idler", place: .plus, still: false, calm: calm, now: launch)
             guard let first = firstAct(d, "idler", since: launch) else { return XCTFail("\(at): nothing at launch") }
-            XCTAssertTrue((2...6).contains(first.wait), "\(at): launch, \(first.wait) s")
+            XCTAssertTrue((1.5...4).contains(first.wait), "\(at): launch, \(first.wait) s")
             // Play on a while, then leave right after an idle (the next one owed up to 36 s away) and come back.
             run(d, "idler", until: time(hour, 3))
             let away = time(hour, 3)
@@ -799,7 +837,7 @@ final class CompanionDirectorTests: XCTestCase {
             let back = away.addingTimeInterval(45)
             d.setAppActive(true, now: back)
             guard let again = firstAct(d, "idler", since: back) else { return XCTFail("\(at): nothing coming back") }
-            XCTAssertTrue((2...6).contains(again.wait), "\(at): back to the app, \(again.wait) s")
+            XCTAssertTrue((1.5...4).contains(again.wait), "\(at): back to the app, \(again.wait) s")
             XCTAssertTrue(isIdle(again.act, Cast.idler, place: .plus, look: d.stages["idler"]!.look), "\(at): an idle")
             // Its tab, or a sheet closing: the perch goes and comes back.
             let gone = time(hour, 5)
@@ -808,7 +846,7 @@ final class CompanionDirectorTests: XCTestCase {
             let returned = gone.addingTimeInterval(20)
             d.appear("idler", place: .plus, still: false, calm: calm, now: returned)
             guard let third = firstAct(d, "idler", since: returned) else { return XCTFail("\(at): nothing on its tab") }
-            XCTAssertTrue((2...6).contains(third.wait), "\(at): its tab, \(third.wait) s")
+            XCTAssertTrue((1.5...4).contains(third.wait), "\(at): its tab, \(third.wait) s")
         }
     }
 
@@ -962,6 +1000,8 @@ final class CompanionDirectorTests: XCTestCase {
                     counts["routine", default: 0] += 1
                 case .answer:
                     counts["reply", default: 0] += 1
+                case .cheer:
+                    counts["cheer", default: 0] += 1
                 case .flourish:
                     counts["flourish", default: 0] += 1
                     hourRoutines.append("★ flourish \(short.string(from: act.start))")
