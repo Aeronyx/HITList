@@ -91,7 +91,8 @@ targets:
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         ITSAppUsesNonExemptEncryption: false
         UIUserInterfaceStyle: Dark
-        NSHumanReadableCopyright: ""
+        # The Mac's About panel prints it under the version (brief 135: the app's name in full, once, as About says it).
+        NSHumanReadableCopyright: "HITList: short for Human-In-The-List."
         # Shows Documents (the daily JSON backups, see LocalBackup.swift) in the iOS Files app.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true

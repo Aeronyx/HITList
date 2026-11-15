@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Settings → About on the Mac: the version and build date, the Changelog on GitHub, the privacy policy, Show tips
+/// Settings → About on the Mac: the app's name in full (`AppLongName`), the version and build date, the Changelog on GitHub, the privacy policy, Show tips
 /// again, then Send Beta Feedback… with Copy diagnostics beside it, and What's New inline (this version's list; the
 /// Changelog row has every version's) instead of a page. No header: the page's title says About.
 struct MacAboutSection: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
+        AppLongName()
         HITGroup {
             HITMenuRow("Version", systemImage: "info.circle", value: AppInfo.versionLabel)
                 .accessibilityIdentifier("settings-version")

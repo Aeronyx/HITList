@@ -778,8 +778,8 @@ final class SettingsTidyTests: XCTestCase {
     /// misplaced in Theme menu on iOS" (0.9.9 laid him 7 pt past the edge over the continuous corner's empty air, his
     /// hindquarters hanging beside the box: he hovered). Now asleep on the corner and sliding off it, in his swatch frame
     /// (`drape`'s asleep head, pixel for pixel, raised to the top rows): his head on the flat of the top edge, his belly
-    /// along the curve and a leg and his tail down the right side, nowhere more than a point off the box nor more than
-    /// two points into its face; the selection ring gives way round him; clear of Moss's box and of the names.
+    /// along the curve and a leg and his tail down the right side, nowhere more than a point off the box nor far into its
+    /// face; the selection ring gives way round him; clear of Moss's box and of the names.
     func testQuillSleepsSlidingOffTheTopRightCorner() throws {
         let quill = try XCTUnwrap(CompanionCharacter.named("quill"))
         let seat = ThemeCompanion.seat(for: quill)
@@ -813,10 +813,11 @@ final class SettingsTidyTests: XCTestCase {
             print("QUILL-CORNER \(side): x \(layout.origin.x), gaps \(gaps.sorted().map { ($0 * 100).rounded() / 100 })")
             XCTAssertGreaterThanOrEqual(gaps.count, 8, "\(side): along the curve and down the side")
             XCTAssertLessThanOrEqual(gaps.max() ?? 99, ThemeCompanion.cornerGap + ThemeCompanion.cornerSlack, "\(side): touching the box")
-            // In front of the corner at most two points (the Mac's wider curve; a third of a point on the iPhone): no
-            // pixel's middle that deep inside the face.
-            let deep = RoundedRectangle(cornerRadius: ThemeSwatch.Metrics(side: side).radius - 2, style: .continuous)
-                .path(in: CGRect(x: 2, y: 2, width: side - 4, height: side - 4))
+            // In front of the corner a little: a point on the iPhone, three on the Mac's wider curve (his leg hangs over its
+            // face): no pixel's middle that deep inside the face.
+            let depth: CGFloat = side == ThemeSwatch.size ? 1 : 3
+            let deep = RoundedRectangle(cornerRadius: ThemeSwatch.Metrics(side: side).radius - depth, style: .continuous)
+                .path(in: CGRect(x: depth, y: depth, width: side - 2 * depth, height: side - 2 * depth))
             XCTAssertFalse(pixels.contains { deep.contains(CGPoint(x: $0.midX, y: $0.midY)) }, "\(side): not sunk into the box")
             // Something hangs down the right side, against it.
             let hanging = pixels.filter { $0.minY >= ThemeSwatch.Metrics(side: side).radius / 2 }
@@ -925,6 +926,23 @@ final class SettingsTidyTests: XCTestCase {
                 XCTAssertLessThanOrEqual(max(left, right), HITSpacing.s / 2, "\(label): past its ring into the gap")
             }
         }
+    }
+
+    /// Round 27 (George: "Make it clear once somewhere in the intro/title menus that the app is actually named
+    /// 'Human-In-The-List' just for fun"): About says it at its head, on iPhone, iPad and the Mac, the capitals that make
+    /// "HITList" in the accent and nothing else; the Mac's About panel says it in its copyright line.
+    func testAboutSaysTheNameInFullOnce() {
+        let line = AppLongName.lineText(accent: .red)
+        XCTAssertEqual(String(line.characters), "short for Human-In-The-List")
+        XCTAssertEqual(AppLongName.line, "short for Human-In-The-List")
+        let accented = line.runs.filter { $0.foregroundColor == .red }.map { String(line[$0.range].characters) }
+        XCTAssertEqual(accented, ["H", "I", "T", "L"], "the letters HITList is made of")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSHumanReadableCopyright") as? String,
+                       "HITList: short for Human-In-The-List.", "the Mac's About panel")
+        render(VStack { AboutSettingsGroup() }, "About")
+        #if os(macOS)
+        render(VStack { MacAboutSection() }, "the Mac's About")
+        #endif
     }
 
     func testTheGridKeepsWholePointsAndEvenMargins() {
