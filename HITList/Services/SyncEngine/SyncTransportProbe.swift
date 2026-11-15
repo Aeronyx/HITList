@@ -468,6 +468,7 @@ private final class ProbeRun: @unchecked Sendable {
 
         await conflict()
         await marker()
+        await markerOfEveryType()
         await unknownItem()
         await newerBuild()
         await batches()
@@ -739,6 +740,27 @@ private final class ProbeRun: @unchecked Sendable {
             try expect(fetched.record == marker, "B fetched \(Self.difference(fetched.record, marker))")
             let others = await Set(deviceB.fetched.keys).subtracting([projectKey])
             note("B's fetch after the marker also brought \(others.count) other record(s): \(others.sorted())")
+        }
+    }
+
+    /// A marker of every type (Meta too), on records of their own: `deletedAt` exists only on a marker, so this is
+    /// how Development learns it on every type. Every save writes `deletedAt` (emptied when alive, T4), so a type
+    /// whose `deletedAt` Production lacks could have every save refused.
+    private func markerOfEveryType() async {
+        await step("a marker of every type (deletedAt on every record type)") {
+            var types = SyncSchema.types.map(\.name)
+            types.append(SyncSchema.metaType)
+            let markers = types.map { SyncRecord.marker(SyncKey(type: $0, name: "marker-\(UUID().uuidString)"), deletedAt: Date()) }
+            await deviceA.clear()
+            await deviceA.stage(markers.map { OutgoingRecord(record: $0, system: nil) })
+            await a.add(markers.map { .save($0.key) })
+            try await a.send()
+            let saved = await deviceA.saved
+            let refused = await deviceA.failed
+            try expect(refused.isEmpty, "refused: \(refused.keys.sorted())")
+            for marker in markers {
+                try expect(saved[marker.key]?.record == marker, "\(marker.key) saved as \(saved[marker.key].map { Self.difference($0.record, marker) } ?? "nothing")")
+            }
         }
     }
 
