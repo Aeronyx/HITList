@@ -138,7 +138,8 @@ struct FlipSwitchTile: View {
     }
 
     /// The line under the title (brief 72): the interval ("every 3 days"), with the switch's time after it ("every 3
-    /// days · 21:00"); on a Switchboard, whose header names the cadence, its time alone, or the cadence if it has none.
+    /// days · 21:00"). `onBoard`, a switch that resets with its Switchboard, whose header names the cadence: its time
+    /// alone, or the cadence if it has none. A switch on its own days on a board reads as a loose one.
     static func detailLine(rule: RecurrenceRule, onBoard: Bool, time: PickerTime?, calendar: Calendar = .current,
                            locale: Locale = .current) -> String {
         let interval = rule.displayText.lowercased()

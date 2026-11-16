@@ -765,6 +765,11 @@ final class FlipboardListingAppTests: XCTestCase {
         XCTAssertFalse(red.filterSwitchOptedIn)
         board.overdueBecomesTask = true
         XCTAssertTrue(red.filterSwitchOptedIn, "the board's toggle opts its switches in")
+        // Round 30: on every 3 days it keeps its own days on the daily board, and is listed as the red loose switch
+        // it is; on the board's own cadence it keeps the board's clock.
+        XCTAssertNil(red.filterSwitchboard, "every 3 days is not the board's Daily: its own days")
+        XCTAssertTrue(TaskOrdering.isInToday(red, now: Date()), "overdue on its own days, and opted in by its board")
+        red.recurrenceRule = .daily
         XCTAssertEqual(red.filterSwitchboard, SwitchboardSchedule(cadence: .daily, resetMinutes: 240,
                                                                   resetWeekday: Preferences.weekStartWeekday()))
         XCTAssertTrue(TaskOrdering.isInToday(red, now: Date()), "never flipped since it joined: due")

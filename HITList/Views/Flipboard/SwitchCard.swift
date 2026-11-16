@@ -97,7 +97,7 @@ struct SwitchCard: View {
         self.onDiscard = onDiscard
         self.onKeepEditing = onKeepEditing
         _draft = State(initialValue: editing.map { SwitchDraft($0) } ?? duplicating.map { SwitchDraft(duplicating: $0) }
-                       ?? SwitchDraft(boardID: board?.id))
+                       ?? SwitchDraft(on: board))
     }
 
     private var boards: [Switchboard] { Flipboard.ordered(allBoards) }
@@ -132,7 +132,7 @@ struct SwitchCard: View {
     /// Back from the Switchboard card: with the board just made chosen (and the name given the keyboard again).
     private func leaveBoardPage(chosen board: Switchboard?) {
         withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-            if let board { draft.boardID = board.id }
+            if let board { draft.setBoard(board) }
             makingBoard = false
         }
         boardHasContent = false
@@ -146,14 +146,10 @@ struct SwitchCard: View {
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: HITSpacing.m) {
                 nameField(read)
-                if let chosenBoard {
-                    boardRow(chosenBoard)
-                } else {
-                    IntervalChoiceStrip(selected: read.choice) { choice in
-                        draft.choose(choice.interval, parser)
-                    }
-                    intervalRow(read, parser: parser)
+                IntervalChoiceStrip(selected: read.choice) { choice in
+                    draft.choose(choice.interval, parser)
                 }
+                intervalRow(read, parser: parser, board: chosenBoard)
                 timeAndBoardRow(read, parser: parser)
                 overdueRow
                 if let errorMessage {
@@ -249,9 +245,12 @@ struct SwitchCard: View {
         Binding(get: { nameFocused && !keyboardSteppedAside }, set: { nameFocused = $0 })
     }
 
-    /// "Every ‹3› days ⌄": the interval's number and unit.
-    private func intervalRow(_ read: SwitchDraft.Reading, parser: QuickAddParser) -> some View {
+    /// "Every ‹3› days ⌄": the interval's number and unit. On a Switchboard, when the interval is the board's
+    /// cadence, the row goes on "with Before Bed": this switch keeps the board's clock. Any other interval keeps its
+    /// own days and the row says nothing more (round 30: a board's reset is a default, not a lock).
+    private func intervalRow(_ read: SwitchDraft.Reading, parser: QuickAddParser, board: Switchboard?) -> some View {
         let interval = read.interval ?? FlipInterval(count: 1, unit: .weeks)
+        let resetsWith = board.flatMap { SwitchDraft.resets(read, with: $0) ? $0 : nil }
         return HStack(spacing: HITSpacing.s) {
             Text("Every")
                 .font(SwitchCardType.label)
@@ -262,27 +261,19 @@ struct SwitchCard: View {
             }
             .accessibilityIdentifier("switchIntervalDial")
             unitMenu(interval, parser: parser)
+            if let resetsWith {
+                Text(SwitchDraft.resetLine(resetsWith))
+                    .font(SwitchCardType.label)
+                    .foregroundStyle(Theme.secondaryText)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .transition(.opacity)
+                    .accessibilityLabel("Resets with \(resetsWith.name)")
+                    .accessibilityIdentifier("switchBoardLine")
+            }
             Spacer(minLength: 0)
         }
-    }
-
-    /// On a Switchboard, in place of the quick choices and the dial: "Daily, with Before Bed" (the board's cadence is
-    /// the interval).
-    private func boardRow(_ board: Switchboard) -> some View {
-        HStack(spacing: HITSpacing.s) {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.secondaryText)
-            Text(SwitchDraft.boardLine(board))
-                .font(SwitchCardType.label)
-                .foregroundStyle(HITColor.text)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer(minLength: 0)
-        }
-        .frame(minHeight: FlipDial.size.height)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("switchBoardLine")
+        .animation(HITMotion.quick(reduceMotion: reduceMotion), value: resetsWith?.id)
     }
 
     /// The switch's time and its Switchboard: two chips of one size side by side (brief 96), the time typed into its
@@ -331,7 +322,7 @@ struct SwitchCard: View {
     @ViewBuilder
     private func boardChoice(_ title: String, id: UUID?) -> some View {
         Button {
-            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { draft.boardID = id }
+            withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { draft.setBoard(allBoards.first { $0.id == id }) }
         } label: {
             if draft.boardID == id { Label(title, systemImage: "checkmark") } else { Text(title) }
         }
@@ -440,7 +431,7 @@ struct SwitchCard: View {
                 // duplicate's closes once it is added. The next goes where this one went (brief 126: the card under a
                 // Switchboard's row reset to No Switchboard, and its next switch landed loose).
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) {
-                    draft = SwitchDraft(boardID: task.switchboard?.id)
+                    draft = SwitchDraft(on: task.switchboard)
                     added = "Added ‘\(task.title)’"
                 }
                 addedGeneration += 1

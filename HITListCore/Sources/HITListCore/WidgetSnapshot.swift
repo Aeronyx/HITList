@@ -104,7 +104,8 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         public var switchOptedIn: Bool
         /// The Switchboard a switch is on; nil for a loose switch and every other task.
         public var switchboardID: UUID?
-        /// That board's clock, so the task can be judged on its own.
+        /// That board's clock when the switch resets with it (nil for one that keeps its own days on the board), so the
+        /// task can be judged on its own.
         public var clock: Clock?
 
         public init(id: UUID, title: String, priority: Int, due: Date?, hasTime: Bool, groupName: String?,

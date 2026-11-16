@@ -42,6 +42,25 @@ public struct SwitchboardSchedule: Hashable, Sendable {
     /// The cadence a stored string names; an unknown one (written by a later build) reads as daily.
     public static func cadence(stored: String) -> Cadence { Cadence(rawValue: stored) ?? .daily }
 
+    // MARK: - Which switches keep this clock
+
+    /// The repeat of a switch that resets with a board of this cadence: every day, or every week. A build from
+    /// before Switchboards reads such a switch as a loose one on this interval, so it flips there much as it does here.
+    public static func rule(for cadence: Cadence) -> RecurrenceRule { cadence == .daily ? .daily : .weekly }
+
+    /// Whether a switch with this repeat resets with a board of this cadence. George, 2026-11-16: "it's okay to have
+    /// default reset times for a Switchboard but they shouldn't be locked to that reset time", so that one board can
+    /// hold a switch "that resets once a week and one that resets every other day". The board's cadence is the repeat
+    /// a switch made on it starts with; a switch whose repeat is exactly that (plain every day on a daily board,
+    /// plain every week on a weekly one, whatever its time of day) keeps the board's clock, and every other repeat
+    /// keeps its own days as a loose switch does and only sits on the board.
+    ///
+    /// Nothing is stored for this: it is read from the repeat, so a switch that was on a board before this rule
+    /// (every one carried its board's cadence) resets with its board as it always did, and no build needs a new field.
+    public static func resets(_ rule: RecurrenceRule?, cadence: Cadence) -> Bool {
+        rule?.withoutTime == Self.rule(for: cadence)
+    }
+
     // MARK: - Periods
 
     /// The moment the period standing for `day` begins: that day at the reset time, wall clock. On a day the clock

@@ -274,25 +274,110 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertEqual(SwitchDraft.timePhrase(PickerTime(hour: 21, minute: 0), locale: Locale(identifier: "en_GB")), "21:00")
     }
 
-    func testATimeTheOptInOrABoardAloneIsNothingToLose() {
+    func testATimeTheOptInOrABoardAloneIsNothingToLose() throws {
         var draft = SwitchDraft()
         draft.setTime(PickerTime(hour: 9, minute: 0), parser)
         draft.overdueBecomesTask = true
-        draft.boardID = UUID()
+        draft.setBoard(try Flipboard.createSwitchboard(name: "Before Bed", in: context))
         XCTAssertFalse(draft.hasContent(parser), "only a name is, on a new switch")
     }
 
     func testAddWithATimeTheOptInAndABoard() throws {
         let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
-        var draft = SwitchDraft(text: "Take meds 9pm", boardID: bed.id)
+        var draft = SwitchDraft(on: bed)
+        draft.text = "Take meds 9pm"
         draft.overdueBecomesTask = true
         let task = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
         XCTAssertEqual(task.title, "Take meds")
         XCTAssertEqual(task.switchboard?.id, bed.id)
         XCTAssertTrue(task.overdueBecomesTask)
         XCTAssertEqual(Flipboard.time(of: task), PickerTime(hour: 21, minute: 0))
-        XCTAssertEqual(task.recurrenceRule, .daily, "the board's cadence")
-        XCTAssertEqual(SwitchDraft.boardLine(bed), "Daily, with Before Bed")
+        XCTAssertEqual(task.recurrenceRule, .daily, "the board's cadence, a new switch's default there")
+        XCTAssertEqual(task.resetBoard?.id, bed.id, "so it resets with the board")
+        XCTAssertEqual(SwitchDraft.resetLine(bed), "with Before Bed")
+    }
+
+    // MARK: A board's reset is a default, not a lock (George, 2026-11-16)
+
+    /// A new switch takes the cadence of the board it is put on, until someone gives it an interval; then choosing a
+    /// board changes nothing but the board.
+    func testANewSwitchTakesItsBoardsCadenceUntilAnIntervalIsChosen() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let clean = try Flipboard.createSwitchboard(name: "Deep Clean", cadence: .weekly, in: context)
+        XCTAssertEqual(SwitchDraft(on: nil).reading(parser).rule, FlipInterval.default.rule, "loose: the usual interval")
+        var draft = SwitchDraft(on: bed)
+        XCTAssertEqual(draft.reading(parser).rule, .daily)
+        XCTAssertTrue(SwitchDraft.resets(draft.reading(parser), with: bed))
+        draft.setBoard(clean)
+        XCTAssertEqual(draft.reading(parser).rule, .weekly, "the other board's default")
+        draft.setBoard(nil)
+        XCTAssertEqual(draft.reading(parser).rule, FlipInterval.default.rule, "and the usual one off a board")
+
+        draft.choose(FlipInterval(count: 2, unit: .days), parser)
+        draft.setBoard(bed)
+        XCTAssertEqual(draft.reading(parser).rule, days(2), "an interval someone chose is theirs on any board")
+        XCTAssertFalse(SwitchDraft.resets(draft.reading(parser), with: bed), "it keeps its own days there")
+        draft.text = "Shave"
+        let shave = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertEqual(shave.switchboard?.id, bed.id)
+        XCTAssertEqual(shave.recurrenceRule, days(2))
+        XCTAssertNil(shave.resetBoard, "on the board, on its own days")
+    }
+
+    /// A typed repeat is an interval someone chose, too.
+    func testATypedRepeatOnABoardKeepsItsOwnDays() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        var draft = SwitchDraft(on: bed)
+        draft.text = "Change the sheets every 2 weeks"
+        let sheets = try XCTUnwrap(try draft.save(editing: nil, parser: parser, in: context))
+        XCTAssertEqual(sheets.switchboard?.id, bed.id)
+        XCTAssertEqual(sheets.recurrenceRule, FlipInterval(count: 2, unit: .weeks).rule)
+        XCTAssertNil(sheets.resetBoard)
+    }
+
+    /// The card's Switchboard chip on an existing switch: it goes onto the board as it is, to the day.
+    func testAnExistingSwitchPutOnABoardFromItsCardKeepsItsTiming() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let shave = try Flipboard.createSwitch(title: "Shave", rule: days(2), in: context)
+        Flipboard.flip(shave, in: context)
+        let due = shave.dueDate
+        var draft = SwitchDraft(shave)
+        draft.setBoard(bed)
+        XCTAssertEqual(draft.reading(parser).rule, days(2), "its interval stays")
+        XCTAssertTrue(draft.hasContent(parser))
+        _ = try draft.save(editing: shave, parser: parser, in: context)
+        XCTAssertEqual(shave.switchboard?.id, bed.id)
+        XCTAssertEqual(shave.recurrenceRule, days(2))
+        XCTAssertEqual(shave.dueDate, due, "due when it was")
+        XCTAssertNil(shave.resetBoard)
+    }
+
+    /// The dial on a board: off the board's cadence the switch keeps its own days, back on it it resets with the
+    /// board again; green stays green both ways.
+    func testTheDialOnABoardSaysWhichClockTheSwitchKeeps() throws {
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: context)
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: bed, in: context)
+        Flipboard.flip(floss, in: context)
+        XCTAssertEqual(floss.resetBoard?.id, bed.id)
+
+        var draft = SwitchDraft(floss)
+        XCTAssertFalse(draft.hasContent(parser))
+        draft.choose(FlipInterval(count: 3, unit: .days), parser)
+        XCTAssertTrue(draft.hasContent(parser), "on a board the interval is the switch's own now")
+        _ = try draft.save(editing: floss, parser: parser, in: context)
+        XCTAssertEqual(floss.switchboard?.id, bed.id, "still on the board")
+        XCTAssertEqual(floss.recurrenceRule, days(3))
+        XCTAssertNil(floss.resetBoard)
+        XCTAssertEqual(Flipboard.side(of: floss), .green, "done stays done")
+
+        draft = SwitchDraft(floss)
+        draft.choose(FlipInterval(count: 1, unit: .days), parser)
+        _ = try draft.save(editing: floss, parser: parser, in: context)
+        XCTAssertEqual(floss.recurrenceRule, .daily)
+        XCTAssertEqual(floss.resetBoard?.id, bed.id, "the board's cadence: with the board again")
+        XCTAssertEqual(Flipboard.side(of: floss), .green)
+        XCTAssertEqual(floss.dueDate, bed.schedule().dueAfterFlip(due: nil, hasTime: false, now: Date()),
+                       "due on the board's next day")
     }
 
     func testAddALooseTimedSwitchFromTheTimeField() throws {
@@ -314,9 +399,9 @@ final class FlipboardAddTests: XCTestCase {
         XCTAssertTrue(draft.overdueBecomesTask)
         XCTAssertFalse(draft.hasContent(parser), "nothing changed yet")
         draft.choose(FlipInterval(count: 3, unit: .days), parser)
-        XCTAssertFalse(draft.hasContent(parser), "on a board the dial isn't the interval")
+        XCTAssertTrue(draft.hasContent(parser), "on a board the dial is the switch's interval, as anywhere")
 
-        draft.boardID = nil
+        draft.setBoard(nil)
         draft.overdueBecomesTask = false
         draft.setTime(PickerTime(hour: 22, minute: 0), parser)
         XCTAssertTrue(draft.hasContent(parser))

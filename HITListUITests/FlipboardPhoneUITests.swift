@@ -55,7 +55,7 @@ final class FlipboardPhoneUITests: XCTestCase {
         let bed = app.buttons["Before Bed"].firstMatch
         XCTAssertTrue(bed.waitForExistence(timeout: 3), "Before Bed in the picker")
         bed.tap()
-        XCTAssertTrue(element("switchBoardLine").waitForExistence(timeout: 3), "Daily, with Before Bed")
+        XCTAssertTrue(element("switchBoardLine").waitForExistence(timeout: 3), "a new switch takes the board's Daily: with Before Bed")
         settle()
         snapshot("3 The card with a time and a Switchboard")
     }
@@ -163,6 +163,59 @@ final class FlipboardPhoneUITests: XCTestCase {
                    withVelocity: .default, thenHoldForDuration: 1.2)
         XCTAssertTrue(lights("2 of 4 on").waitForExistence(timeout: 5), "dropped on the folded header: off Before Bed")
         snapshot("4 Dropped on the folded Ungrouped header")
+    }
+
+    /// George, 2026-11-16: "when you group switches that already exist … they maintain their old timing", so one group
+    /// can hold "one that resets once a week and one that resets every other day". The demo week's loose switch on
+    /// every 3 days, dragged onto Before Bed (daily, 04:00): it reads "every 3 days" there as it did, beside the
+    /// board's own daily switches; its card on the board has the interval's dial (it was hidden on a board before),
+    /// and only the board's own cadence, Daily, makes it reset "with Before Bed".
+    func testASwitchGroupedOntoABoardKeepsItsOwnTiming() throws {
+        app.launchArguments += ["-seedDemoData"]
+        app.launch()
+        openFlipboard()
+        let water = switchTile("Water the plants")
+        XCTAssertTrue(water.waitForExistence(timeout: 10))
+        let bed = boardHeader("Before Bed")
+        XCTAssertTrue(bed.waitForExistence(timeout: 5))
+        XCTAssertTrue(detail("every 3 days", on: "Water the plants").exists, "loose: every 3 days")
+
+        drag(water, onto: bed)
+        XCTAssertTrue(lights("2 of 5 on").waitForExistence(timeout: 5), "on Before Bed now")
+        XCTAssertTrue(detail("every 3 days", on: "Water the plants").waitForExistence(timeout: 3),
+                      "and still every 3 days, not the board's every day")
+        settle()
+        snapshot("1 Grouped on Before Bed, still every 3 days")
+
+        // Its card: the dial with its 3 days, and nothing that says it resets with the board.
+        let moved = tile("Water the plants")
+        if !switchTile("Water the plants").isHittable { scroll(by: 0.1) }
+        switchTile("Water the plants").press(forDuration: 1.0)
+        let edit = app.buttons["Edit switch…"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 3), "the menu")
+        edit.tap()
+        XCTAssertTrue(element("switchName").waitForExistence(timeout: 5), "the card")
+        let dial = element("switchIntervalDial")
+        XCTAssertTrue(dial.waitForExistence(timeout: 3), "the interval's dial, on a board too")
+        XCTAssertEqual(dial.value as? String, "3")
+        XCTAssertFalse(element("switchBoardLine").exists, "on its own days: no ‘with Before Bed’")
+        settle()
+        snapshot("2 Its card on the board: every 3 days")
+
+        // Daily is the board's own cadence: chosen, the switch resets with the board, and the card says so.
+        app.buttons["Daily"].firstMatch.tap()
+        let with = element("switchBoardLine")
+        XCTAssertTrue(with.waitForExistence(timeout: 3), "with Before Bed")
+        XCTAssertEqual(with.label, "Resets with Before Bed")
+        settle()
+        snapshot("3 Daily on a daily board: with Before Bed")
+        // And back: any other interval is its own again.
+        app.buttons["3 days"].firstMatch.tap()
+        XCTAssertTrue(with.waitForNonExistence(timeout: 3))
+        app.buttons["switchClose"].tap()
+        XCTAssertTrue(element("switchName").waitForNonExistence(timeout: 5))
+        XCTAssertTrue(moved.exists)
+        XCTAssertTrue(detail("every 3 days", on: "Water the plants").exists, "nothing was saved")
     }
 
     /// A loose switch held until it lifts and moved onto a board's panel (its header, at the panel's top). The board is
@@ -308,6 +361,11 @@ final class FlipboardPhoneUITests: XCTestCase {
     private func tile(_ title: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: "flipSwitchTile")
             .containing(NSPredicate(format: "label == %@", title)).firstMatch
+    }
+
+    /// The line under a switch's title on its tile ("every 3 days", "9:00 PM").
+    private func detail(_ text: String, on title: String) -> XCUIElement {
+        tile(title).staticTexts.matching(NSPredicate(format: "label == %@", text)).firstMatch
     }
 
     /// The time: the compact time control, whose tap opens a field in its place.

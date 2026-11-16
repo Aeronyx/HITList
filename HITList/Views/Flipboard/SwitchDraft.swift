@@ -11,7 +11,11 @@ import HITListCore
 /// 21:00, the phrases highlighted; "tomorrow" or "p1" stay words of the name (a switch's date is its interval's
 /// business). A typed phrase and the controls never disagree: with a phrase in the name, a chip, the dial or the
 /// time field rewrites the phrase where it sits ("every 3 days" becomes "every week", "9pm" becomes "7:30am");
-/// without one, they set the value and leave the name alone. On a Switchboard the board's cadence is the interval.
+/// without one, they set the value and leave the name alone.
+///
+/// On a Switchboard a switch has an interval like any other (round 30; before, the board's cadence was the interval
+/// and the dial was hidden). A new switch on a board starts on the board's cadence, which resets with the board;
+/// any other interval keeps its own days (`SwitchboardSchedule.resets`).
 struct SwitchDraft: Equatable {
     /// The name as typed. Switched-off phrases move with their words as it changes (or are forgotten when their
     /// words are typed over), as in quick add's draft.
@@ -32,8 +36,11 @@ struct SwitchDraft: Equatable {
     private(set) var time: PickerTime?
     /// "Overdue becomes task" on the switch itself (its Switchboard's toggle opts it in too).
     var overdueBecomesTask = false
-    /// The Switchboard the switch is on; nil for a loose switch on the main board.
-    var boardID: UUID?
+    /// The Switchboard the switch is on; nil for a loose switch on the main board. Set through `setBoard`.
+    private(set) var boardID: UUID?
+    /// The interval is the person's (a chip, the dial, an existing switch's): choosing a board leaves it alone.
+    /// False for a new switch nobody has given an interval yet, which takes each board's cadence as it is chosen.
+    private(set) var intervalChosen = false
 
     struct Original: Equatable {
         let title: String
@@ -51,12 +58,18 @@ struct SwitchDraft: Equatable {
         self.boardID = boardID
     }
 
+    /// A new switch on `board` (or on none): it starts on the board's cadence, the board's default.
+    init(on board: Switchboard?) {
+        self.init(interval: board.map { FlipInterval($0.cadenceValue) } ?? .default, boardID: board?.id)
+    }
+
     /// An existing switch, filled in: its name, its interval (or a repeat the dial can't show, kept), its flips, its
     /// time, its opt-in and its board.
     init(_ task: TaskItem) {
         let rule = (task.recurrenceRule ?? Flipboard.defaultRule).withoutTime
         self.init(text: task.title, interval: FlipInterval(rule) ?? .default, flips: task.flipTarget, boardID: task.switchboard?.id)
         keptRule = FlipInterval(rule) == nil ? rule : nil
+        intervalChosen = true
         time = Flipboard.time(of: task)
         overdueBecomesTask = task.overdueBecomesTask
         original = Original(title: task.title, rule: rule, flips: Flipboard.clampedTarget(task.flipTarget), time: time,
@@ -122,9 +135,7 @@ struct SwitchDraft: Equatable {
     func hasContent(_ parser: QuickAddParser) -> Bool {
         guard let original else { return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let read = reading(parser)
-        // On a board the cadence is the interval: the dial isn't shown, so its value is nothing to lose.
-        let ruleChanged = boardID == nil && read.rule != original.rule
-        return read.title != original.title || ruleChanged || flips != original.flips || read.time != original.time
+        return read.title != original.title || read.rule != original.rule || flips != original.flips || read.time != original.time
             || overdueBecomesTask != original.overdueBecomesTask || boardID != original.boardID
     }
 
@@ -137,6 +148,7 @@ struct SwitchDraft: Equatable {
     mutating func choose(_ chosen: FlipInterval, _ parser: QuickAddParser) {
         keptRule = nil
         interval = chosen
+        intervalChosen = true
         guard let phrase = reading(parser).phrase else { return }
         text.replaceSubrange(phrase.range, with: chosen.phrase)
     }
@@ -187,10 +199,22 @@ struct SwitchDraft: Equatable {
 
     // MARK: The board (brief 72)
 
-    /// "Daily, with Before Bed": what the card shows in place of the interval dial for a switch on a board.
-    static func boardLine(_ board: Switchboard) -> String {
-        "\(board.cadenceValue == .daily ? "Daily" : "Weekly"), with \(board.name)"
+    /// The Switchboard chip's choice. An existing switch keeps its interval wherever it goes (George, 2026-11-16:
+    /// grouped switches "maintain their old timing"); a new one nobody has given an interval takes the board's
+    /// cadence, the board's default, or the usual interval again off a board.
+    mutating func setBoard(_ board: Switchboard?) {
+        boardID = board?.id
+        guard !intervalChosen else { return }
+        interval = board.map { FlipInterval($0.cadenceValue) } ?? .default
     }
+
+    /// Whether the switch as the card reads it resets with `board`: its interval is the board's cadence.
+    static func resets(_ read: Reading, with board: Switchboard) -> Bool { board.resets(read.rule) }
+
+    /// "with Before Bed": what the card says after the interval of a switch that keeps its board's clock, so the row
+    /// reads "Every 1 day with Before Bed" (the board's header says when it resets). A switch on its own days gets
+    /// no such words: its interval says it all.
+    static func resetLine(_ board: Switchboard) -> String { "with \(board.name)" }
 
     // MARK: Highlights
 
@@ -209,8 +233,8 @@ struct SwitchDraft: Equatable {
     // MARK: Saving
 
     /// Add: a new switch, red until its first flip. Save (`editing`): the switch renamed, moved to its board (or off
-    /// it), its time, repeat, flips and opt-in set through the board's own rules (`Flipboard.move`, `setTime`,
-    /// `setRule`, `setTarget`). Nil when there is no name.
+    /// it, keeping its repeat), its time, repeat, flips and opt-in set through the board's own rules
+    /// (`Flipboard.move`, `setTime`, `setRule`, `setTarget`). Nil when there is no name.
     @MainActor
     @discardableResult
     func save(editing task: TaskItem?, parser: QuickAddParser, in context: ModelContext) throws -> TaskItem? {
@@ -230,7 +254,7 @@ struct SwitchDraft: Equatable {
         }
         if task.switchboard?.id != board?.id { Flipboard.move(task, to: board, in: context) }
         if Flipboard.time(of: task) != read.time { Flipboard.setTime(read.time, for: task, in: context) }
-        if board == nil, task.recurrenceRule != read.rule { Flipboard.setRule(read.rule, for: task, in: context) }
+        if task.recurrenceRule?.withoutTime != read.rule { Flipboard.setRule(read.rule, for: task, in: context) }
         if task.flipTarget != flips { Flipboard.setTarget(flips, for: task, in: context) }
         Flipboard.setOverdueBecomesTask(overdueBecomesTask, for: task, in: context)
         return task

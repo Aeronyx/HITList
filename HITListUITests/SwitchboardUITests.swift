@@ -128,7 +128,7 @@ final class SwitchboardUITests: XCTestCase {
         let switchName = app.descendants(matching: .any)["switchName"].firstMatch
         XCTAssertTrue(switchName.waitForExistence(timeout: 5), "the switch card")
         XCTAssertTrue(app.descendants(matching: .any)["switchBoardLine"].waitForExistence(timeout: 3),
-                      "Daily, with Before Bed in place of the dial")
+                      "a new switch starts on the board's cadence: every 1 day, with Before Bed")
         app.typeText("Take meds 9pm")
         let optIn = app.descendants(matching: .any)["switchOverdueToggle"].firstMatch
         optIn.tap()

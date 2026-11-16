@@ -5,7 +5,8 @@ import HITListCore
 /// The Flipboard's rules. A switch is not a new model: it is an open recurring task that carries the `flipboard`
 /// label, with or without a time of day (brief 72). Green side = done for now; red side = due today or
 /// overdue; flipping it back completes the task, which rolls the due date forward by its recurrence. A switch
-/// on a Switchboard follows the board's clock (`SwitchboardSchedule`): its day starts at the board's reset time.
+/// on a Switchboard whose repeat is the board's cadence follows the board's clock (`SwitchboardSchedule`): its day
+/// starts at the board's reset time. Any other switch on a board keeps its own days (`TaskItem.resetBoard`).
 enum Flipboard {
     static let labelName = FlipboardSwitch.labelName
     /// Every device creates the label with this id, so copies made before a CloudKit import collapse.
@@ -41,9 +42,10 @@ enum Flipboard {
 
     // MARK: The clock (brief 72)
 
-    /// How a switch keeps time: a loose switch by its interval (`rule`), its day ending at midnight; one on a
-    /// Switchboard by the board's clock (`board`), its day starting at the board's reset. `hasTime`: the switch has a
-    /// time of day ("Take meds 21:00"), which its due date carries.
+    /// How a switch keeps time: by its interval (`rule`), its day ending at midnight (a loose switch, and one that
+    /// keeps its own days on a Switchboard); or by its Switchboard's clock (`board`, set only for a switch that resets
+    /// with its board), its day starting at the board's reset. `hasTime`: the switch has a time of day ("Take meds
+    /// 21:00"), which its due date carries.
     struct Clock: Equatable {
         var rule: RecurrenceRule
         var board: SwitchboardSchedule? = nil
@@ -100,10 +102,11 @@ enum Flipboard {
         return calendar.startOfDay(for: due) > calendar.startOfDay(for: createdAt)
     }
 
-    /// A charger has also started once its first flip is counted, though its due date hasn't moved. A switch on a
-    /// Switchboard is always under way: its board day says whether it is done (brief 72), never "Flip to start".
+    /// A charger has also started once its first flip is counted, though its due date hasn't moved. A switch that
+    /// resets with its Switchboard is always under way: its board day says whether it is done (brief 72), never
+    /// "Flip to start".
     static func hasStarted(_ task: TaskItem, now: Date = Date()) -> Bool {
-        task.switchboard != nil || hasStarted(due: task.dueDate, createdAt: task.createdAt) || effectiveCount(task, now: now) > 0
+        task.resetBoard != nil || hasStarted(due: task.dueDate, createdAt: task.createdAt) || effectiveCount(task, now: now) > 0
     }
 
     /// The line under the light bar: "Flip to start", "2 of 3 days", "Due today" or "3 days overdue".
@@ -823,8 +826,9 @@ enum Flipboard {
     /// A new switch, due today: it starts red ("Flip to start") until the chore is first done and flipped.
     /// George's call, 2026-10-31: a green switch reads as "already done".
     /// `flipTarget` above 1 makes it a charger. Brief 72: `time` gives it a time of day (due today at that time);
-    /// `board` puts it on a Switchboard, following the board's cadence and due in this board day (at its time);
-    /// `overdueBecomesTask` opts it in to Today once it is due.
+    /// `board` puts it on a Switchboard: with the board's cadence as its `rule` it resets with the board and is due in
+    /// this board day (at its time), with any other it keeps its own days there; `overdueBecomesTask` opts it in to
+    /// Today once it is due.
     @MainActor
     @discardableResult
     static func createSwitch(title: String, rule: RecurrenceRule, flipTarget: Int = 1, time: PickerTime? = nil,
@@ -832,12 +836,10 @@ enum Flipboard {
                              now: Date = Date()) throws -> TaskItem {
         let cal = Calendar.current
         var day = cal.startOfDay(for: now)
-        var rule = rule
-        if let board {
-            rule = cadenceRule(board.cadenceValue)
-            day = board.schedule().periodDay(containing: now, calendar: cal)
-        }
-        let due = time.map { onBoardDay(day, at: $0, board: board, calendar: cal) } ?? day
+        // The board whose clock it keeps: none for a repeat that isn't the board's cadence.
+        let clock = board.flatMap { $0.resets(rule) ? $0 : nil }
+        if let clock { day = clock.schedule().periodDay(containing: now, calendar: cal) }
+        let due = time.map { onBoardDay(day, at: $0, board: clock, calendar: cal) } ?? day
         let parsed = QuickAddResult(title: title, dueDate: due, hasDueTime: time != nil,
                                     recurrence: rule.timed(to: due, hasTime: time != nil, calendar: cal))
         let task = try TaskActions.create(from: parsed, defaultProject: nil, defaultLabel: try label(in: context), in: context)
@@ -859,18 +861,31 @@ enum Flipboard {
         return calendar.date(byAdding: .day, value: 1, to: moment) ?? moment
     }
 
-    /// The rule a Switchboard's switches carry: every day, or every week. A build from before Switchboards reads a
-    /// board's switch as a loose switch on this interval, so it flips there the way it does here.
+    /// The rule of a switch that resets with a board of this cadence: every day, or every week
+    /// (`SwitchboardSchedule.rule`).
     static func cadenceRule(_ cadence: SwitchboardSchedule.Cadence) -> RecurrenceRule {
-        cadence == .daily ? .daily : .weekly
+        SwitchboardSchedule.rule(for: cadence)
     }
 
     /// Changes a switch's interval, keeping when the current interval began: shortening "every 3 days"
     /// to "every 2 days" pulls the due date one day closer. A switch not yet started stays red.
     /// A red charger keeps its due date (and its count): moving it could turn the switch green without
     /// the flips.
+    ///
+    /// On a Switchboard the interval also says which clock the switch keeps: given the board's cadence it joins the
+    /// board's clock on the side it had; taken off that cadence it leaves the clock (as moving off the board does)
+    /// and then changes interval as any switch on its own days.
     @MainActor
     static func setRule(_ rule: RecurrenceRule, for task: TaskItem, in context: ModelContext, now: Date = Date()) {
+        let keptAClock = task.resetBoard != nil
+        if let board = task.switchboard, board.resets(rule) {
+            guard !keptAClock else { return } // already the board's cadence, on the board's clock
+            land(task, side: Clock(task).side(task.dueDate, now: now), on: board, now: now)
+            task.touch()
+            try? context.save()
+            return
+        }
+        if keptAClock { takeOffClock(task, side: Clock(task).side(task.dueDate, now: now), now: now) }
         let redCharger = clampedTarget(task.flipTarget) > 1 && side(due: task.dueDate, now: now) == .red
         if !redCharger, hasStarted(due: task.dueDate, createdAt: task.createdAt), let due = task.dueDate,
            let old = task.recurrenceRule {
@@ -960,6 +975,12 @@ struct FlipInterval: Hashable {
         Choice(title: "2 weeks", interval: FlipInterval(count: 2, unit: .weeks)),
         Choice(title: "Monthly", interval: FlipInterval(count: 1, unit: .months)),
     ]
+
+    /// A Switchboard's cadence as an interval: every day, or every week. What a switch made on the board starts with,
+    /// and the interval that resets with the board.
+    init(_ cadence: SwitchboardSchedule.Cadence) {
+        self.init(count: 1, unit: cadence == .daily ? .days : .weeks)
+    }
 
     /// The quick choice that is `rule`, if one is.
     static func choice(for rule: RecurrenceRule) -> Choice? {

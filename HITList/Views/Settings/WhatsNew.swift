@@ -20,6 +20,10 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.13", items: [
+            "Flipboard: a switch keeps its own timing when you put it on a Switchboard. Group one that resets once a week with one that resets every other day, and each stays on its own days.",
+            "A Switchboard's reset is a default now, not a lock. A new switch on a board starts on the board's Daily or Weekly and resets with it; choose any other interval in the switch's card and it keeps its own days.",
+        ]),
         Entry(version: "0.9.12", items: [
             "Tapping a reminder on the Lock Screen or in Notification Centre no longer crashes HITList.",
             "Quill sleeps on the corner of his theme's box as himself again, and on the Mac every companion is drawn to fit its larger box. See them in Settings → Appearance → Themes.",

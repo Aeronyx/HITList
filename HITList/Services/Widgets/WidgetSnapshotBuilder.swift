@@ -44,7 +44,7 @@ enum WidgetSnapshotBuilder {
             groupName: task.project?.name, groupColorHex: task.project?.colorHex, labelNames: task.filterLabelNames,
             isRecurring: task.filterIsRecurring, createdAt: task.createdAt, isShared: false,
             switchOptedIn: task.filterSwitchOptedIn, switchboardID: task.switchboard?.id,
-            clock: task.switchboard.map { WidgetSnapshot.Clock($0.schedule(weekStart: weekStart)) })
+            clock: task.resetBoard.map { WidgetSnapshot.Clock($0.schedule(weekStart: weekStart)) })
     }
 
     /// A shared task (brief 62) in its forced Group, Shared Tasks (brief 64). It is never a switch.

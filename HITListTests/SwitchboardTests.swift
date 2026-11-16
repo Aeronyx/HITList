@@ -215,12 +215,11 @@ final class SwitchboardActionsTests: XCTestCase {
         _ = b
     }
 
-    func testASwitchCreatedOnABoardFollowsItsCadenceAndIsDueThisBoardDay() throws {
+    func testASwitchCreatedOnABoardOnItsCadenceIsDueThisBoardDay() throws {
         let bed = try board()
-        let floss = try Flipboard.createSwitch(title: "Floss", rule: RecurrenceRule(frequency: .daily, interval: 3),
-                                               board: bed, in: context)
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: bed, in: context)
         XCTAssertEqual(floss.switchboard?.id, bed.id)
-        XCTAssertEqual(floss.recurrenceRule, .daily, "a board's switch follows its cadence")
+        XCTAssertEqual(floss.resetBoard?.id, bed.id, "the board's cadence: it resets with the board")
         XCTAssertTrue(Flipboard.isMember(floss))
         XCTAssertEqual(floss.dueDate, bed.schedule().periodDay(containing: Date()))
         XCTAssertEqual(Flipboard.side(of: floss), .red, "not done yet this board day")
@@ -247,33 +246,126 @@ final class SwitchboardActionsTests: XCTestCase {
         XCTAssertNil(meds.recurrenceRule?.time)
     }
 
-    func testMovingASwitchOntoABoardAndOffKeepsItsSide() throws {
+    // MARK: A board's reset is a default, not a lock (George, 2026-11-16)
+
+    /// George: "when you group switches that already exist … they maintain their old timing. That way we can group
+    /// switches together, one that resets once a week and one that resets every other day."
+    func testGroupingSwitchesKeepsEachOnesTiming() throws {
         let bed = try board()
-        let green = try Flipboard.createSwitch(title: "Shave", rule: RecurrenceRule(frequency: .weekly, interval: 2), in: context)
-        Flipboard.flip(green, in: context)
+        let weekly = try Flipboard.createSwitch(title: "Water the plants", rule: .weekly, in: context)
+        Flipboard.flip(weekly, in: context)
+        let everyOther = try Flipboard.createSwitch(title: "Shave", rule: RecurrenceRule(frequency: .daily, interval: 2), in: context)
+        Flipboard.flip(everyOther, in: context)
         let red = try Flipboard.createSwitch(title: "Floss", rule: RecurrenceRule(frequency: .daily, interval: 3), in: context)
+        let before = [weekly, everyOther, red].map { ($0.dueDate, $0.recurrence, $0.hasDueTime) }
+
+        for task in [weekly, everyOther, red] { Flipboard.move(task, to: bed, in: context) }
+        XCTAssertEqual(Set(bed.switches?.map(\.title) ?? []), ["Water the plants", "Shave", "Floss"])
+        for (task, was) in zip([weekly, everyOther, red], before) {
+            XCTAssertEqual(task.dueDate, was.0, "\(task.title) is due when it was")
+            XCTAssertEqual(task.recurrence, was.1, "\(task.title) repeats as it did")
+            XCTAssertEqual(task.hasDueTime, was.2)
+            XCTAssertNil(task.resetBoard, "\(task.title) sits on the board on its own days")
+            XCTAssertNil(task.filterSwitchboard, "so every list, widget and reminder judges it as a loose switch")
+        }
+        XCTAssertEqual(Flipboard.side(of: weekly), .green)
+        XCTAssertEqual(Flipboard.side(of: red), .red)
+
+        // They flip as they did loose: the interval from the flip day, not the board's next day.
+        let cal = Calendar.current, today = cal.startOfDay(for: Date())
+        Flipboard.flip(red, in: context)
+        XCTAssertEqual(red.dueDate, cal.date(byAdding: .day, value: 3, to: today))
+        XCTAssertEqual(Flipboard.caption(clock: Flipboard.Clock(everyOther), due: everyOther.dueDate, started: true, count: 1,
+                                         target: 1, now: Date()), "0 of 2 days", "and count their own days")
+
+        // And leave as they came.
+        Flipboard.move(weekly, to: nil, in: context)
+        XCTAssertNil(weekly.switchboard)
+        XCTAssertEqual(weekly.dueDate, before[0].0)
+        XCTAssertEqual(weekly.recurrence, before[0].1)
+    }
+
+    /// A switch whose repeat is the board's cadence joins the board's clock, done staying done and due staying due,
+    /// and goes on as a loose switch on that cadence when it leaves.
+    func testASwitchOnTheBoardsCadenceJoinsItsClockAndLeavesItKeepingItsSide() throws {
+        let bed = try board()
+        let green = try Flipboard.createSwitch(title: "Vitamins", rule: .daily, in: context)
+        Flipboard.flip(green, in: context)
+        let red = try Flipboard.createSwitch(title: "Floss", rule: .daily, in: context)
         Flipboard.move(green, to: bed, in: context)
         Flipboard.move(red, to: bed, in: context)
+        XCTAssertEqual(green.resetBoard?.id, bed.id)
         XCTAssertEqual(Flipboard.side(of: green), .green, "done stays done: due on the next board day")
+        XCTAssertEqual(green.dueDate, bed.schedule().dueAfterFlip(due: nil, hasTime: false, now: Date()))
         XCTAssertEqual(Flipboard.side(of: red), .red)
         XCTAssertEqual(green.recurrenceRule, .daily)
-        XCTAssertEqual(Set(bed.switches?.map(\.title) ?? []), ["Shave", "Floss"])
 
         Flipboard.move(green, to: nil, in: context)
         Flipboard.move(red, to: nil, in: context)
         XCTAssertNil(green.switchboard)
         XCTAssertEqual(green.recurrenceRule, .daily, "a loose switch keeps the cadence as its interval")
+        XCTAssertEqual(Flipboard.side(of: green), .green)
         XCTAssertEqual(Flipboard.side(of: red), .red)
         XCTAssertTrue(bed.switches?.isEmpty ?? true)
+    }
+
+    func testASwitchCreatedOnABoardOnAnotherIntervalKeepsItsOwnDays() throws {
+        let bed = try board()
+        let sheets = try Flipboard.createSwitch(title: "Change the sheets", rule: RecurrenceRule(frequency: .weekly, interval: 2),
+                                                board: bed, in: context)
+        XCTAssertEqual(sheets.switchboard?.id, bed.id)
+        XCTAssertEqual(sheets.recurrenceRule, RecurrenceRule(frequency: .weekly, interval: 2))
+        XCTAssertNil(sheets.resetBoard)
+        XCTAssertEqual(sheets.dueDate, Calendar.current.startOfDay(for: Date()), "due today, as a new loose switch is")
+        XCTAssertFalse(Flipboard.hasStarted(sheets), "red until its first flip, as a new loose switch is")
     }
 
     func testMovingASwitchBetweenBoards() throws {
         let bed = try board(), clean = try board("Deep Clean", cadence: .weekly)
         let vacuum = try Flipboard.createSwitch(title: "Vacuum", rule: .daily, board: bed, in: context)
+        Flipboard.flip(vacuum, in: context)
         Flipboard.move(vacuum, to: clean, in: context)
         XCTAssertEqual(vacuum.switchboard?.id, clean.id)
-        XCTAssertEqual(vacuum.recurrenceRule, .weekly)
+        XCTAssertEqual(vacuum.recurrenceRule, .daily, "still every day: not the weekly board's cadence")
+        XCTAssertNil(vacuum.resetBoard, "so on its own days there")
+        XCTAssertEqual(Flipboard.side(of: vacuum), .green, "done stays done")
         XCTAssertTrue(bed.switches?.isEmpty ?? true)
+
+        let mop = try Flipboard.createSwitch(title: "Mop", rule: .weekly, in: context)
+        Flipboard.move(mop, to: clean, in: context)
+        XCTAssertEqual(mop.resetBoard?.id, clean.id, "every week on a weekly board: with the board")
+        Flipboard.move(vacuum, to: bed, in: context)
+        XCTAssertEqual(vacuum.resetBoard?.id, bed.id, "and back on the daily board, with that one")
+        XCTAssertEqual(Flipboard.side(of: vacuum), .green)
+    }
+
+    /// The card's Save on a board's clock moves the switches that reset with it and leaves the others alone; one
+    /// whose repeat is the board's new cadence resets with it from then on.
+    func testChangingABoardsClockLeavesSwitchesOnTheirOwnDaysAlone() throws {
+        let bed = try board()
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, board: bed, in: context)
+        let shave = try Flipboard.createSwitch(title: "Shave", rule: RecurrenceRule(frequency: .daily, interval: 2), in: context)
+        Flipboard.flip(shave, in: context)
+        Flipboard.move(shave, to: bed, in: context)
+        let plants = try Flipboard.createSwitch(title: "Water the plants", rule: .weekly, in: context)
+        Flipboard.flip(plants, in: context)
+        Flipboard.move(plants, to: bed, in: context)
+        let shaveDue = shave.dueDate
+
+        Flipboard.update(bed, name: bed.name, cadence: .daily, resetMinutes: 6 * 60, resetWeekday: 0,
+                         overdueBecomesTask: false, in: context)
+        XCTAssertEqual(shave.dueDate, shaveDue, "a new reset time is nothing to a switch on its own days")
+        XCTAssertEqual(floss.resetBoard?.id, bed.id)
+
+        Flipboard.update(bed, name: bed.name, cadence: .weekly, resetMinutes: 6 * 60, resetWeekday: 0,
+                         overdueBecomesTask: false, in: context)
+        XCTAssertEqual(floss.recurrenceRule, .weekly, "the one that reset with the board follows its cadence")
+        XCTAssertEqual(floss.resetBoard?.id, bed.id)
+        XCTAssertEqual(shave.dueDate, shaveDue)
+        XCTAssertEqual(shave.recurrenceRule, RecurrenceRule(frequency: .daily, interval: 2))
+        XCTAssertNil(shave.resetBoard)
+        XCTAssertEqual(plants.resetBoard?.id, bed.id, "every week on a board that is now weekly: with the board")
+        XCTAssertEqual(Flipboard.side(of: plants), .green, "done stays done")
     }
 
     func testChangingABoardsCadenceRelandsItsSwitches() throws {

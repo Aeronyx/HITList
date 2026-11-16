@@ -5,7 +5,7 @@ import HITListCore
 
 /// Brief 96, item 3: a switch dragged onto a Switchboard, or off one onto the loose switches. What a drop target
 /// takes, what travels with the drag, that a drop moves the switch exactly as the card's Switchboard chip would
-/// (`Flipboard.move`: done stays done, due stays due, the board's cadence), and VoiceOver's "Move to…" actions.
+/// (`Flipboard.move`: done stays done, due stays due, its own repeat kept), and VoiceOver's "Move to…" actions.
 @MainActor
 final class SwitchDragTests: XCTestCase {
     private var container: ModelContainer!
@@ -35,7 +35,8 @@ final class SwitchDragTests: XCTestCase {
         Flipboard.flip(floss, in: context)
         XCTAssertTrue(SwitchDrop.move(floss.id, onto: .board(bed.id), in: context))
         XCTAssertEqual(floss.switchboard?.id, bed.id)
-        XCTAssertEqual(floss.recurrenceRule, .daily, "the board's cadence")
+        XCTAssertEqual(floss.recurrenceRule, RecurrenceRule(frequency: .daily, interval: 3), "its own interval still")
+        XCTAssertNil(floss.resetBoard, "on the board, on its own days")
         XCTAssertEqual(Flipboard.side(of: floss), .green, "done stays done")
         XCTAssertFalse(SwitchDrop.move(floss.id, onto: .board(bed.id), in: context), "already there: nothing moves")
 

@@ -20,8 +20,9 @@ public protocol FilterableTask {
     /// "Overdue becomes task" (brief 72): a Flipboard switch that is listed as today's task once it is due, by its
     /// own toggle or its Switchboard's (`FlipboardSwitch.listing`). Default false: a switch is never a task.
     var filterSwitchOptedIn: Bool { get }
-    /// The clock of the Switchboard a switch is on (`SwitchboardSchedule`); nil for a loose switch, and for every
-    /// task that isn't a switch (the default).
+    /// The clock of the Switchboard a switch resets with (`SwitchboardSchedule`): the board it is on, when its repeat is
+    /// the board's own cadence (`SwitchboardSchedule.resets`). Nil for a loose switch, for a switch that sits on a
+    /// board and keeps its own days, and for every task that isn't a switch (the default).
     var filterSwitchboard: SwitchboardSchedule? { get }
 }
 

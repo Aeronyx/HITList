@@ -248,7 +248,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(WhatsNew.isBehind(version: AppInfo.version, build: AppInfo.build),
                        "add a What's New entry for \(AppInfo.versionLabel)")
         XCTAssertFalse(current.items.isEmpty)
-        XCTAssertEqual(current.label, "0.9.12", "this round's list")
+        XCTAssertEqual(current.label, "0.9.13", "this round's list")
         XCTAssertTrue(WhatsNew.isNewer("0.10.0", than: "0.9.1"))
         XCTAssertFalse(WhatsNew.isNewer("0.2.0", than: "0.2.0"))
     }
@@ -373,10 +373,14 @@ final class SettingsTidyTests: XCTestCase {
             "About": ["Show tips again", "What's New", "Privacy policy", "Send Beta Feedback", "Copy diagnostics"],
         ]
         let pageNames = Set(SettingsPage.allCases.map(\.title) + MacSettingsSection.allCases.map(\.title) + ["Appearance"])
-        let current = try XCTUnwrap(WhatsNew.current)
+        // The newest notes that name a path at all: a version whose changes are nowhere in Settings (0.9.13, the
+        // Flipboard's switches) names none, and the version before it is the one checked.
+        let path = /Settings → ([A-Za-z&' ]+?) → ([A-Za-z' ]+?)(?=[.,;:)]|$| turns| lets| shows)/
+        let newest = try XCTUnwrap(WhatsNew.entries.first { $0.items.contains { !$0.matches(of: path).isEmpty } },
+                                   "some version's notes name a path")
         var checked = 0
-        for item in current.items {
-            for match in item.matches(of: /Settings → ([A-Za-z&' ]+?) → ([A-Za-z' ]+?)(?=[.,;:)]|$| turns| lets| shows)/) {
+        for item in newest.items {
+            for match in item.matches(of: path) {
                 let page = String(match.1)
                 let row = String(match.2)
                 XCTAssertTrue(pageNames.contains(page), "\"\(page)\" is a page (\(item))")
@@ -384,7 +388,7 @@ final class SettingsTidyTests: XCTestCase {
                 checked += 1
             }
         }
-        XCTAssertGreaterThan(checked, 0, "this version's notes name at least one path")
+        XCTAssertGreaterThan(checked, 0, "the newest notes that name a path name at least one")
     }
 
     /// Rule 2: no option is removed and no stored key renamed. Every key a Settings row writes, as it shipped.

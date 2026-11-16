@@ -7,6 +7,12 @@ import HITListCore
 /// `SwitchboardSchedule`; these are the store's actions. A switch belongs to at most one board; one with none is a
 /// loose switch on the main board. Nothing is ever migrated onto a board and no default board is made, so two
 /// devices can't each make one.
+///
+/// **A board's clock is a default, not a lock** (George, 2026-11-16: "group switches together, one that resets once
+/// a week and one that resets every other day"). A switch keeps its own repeat on a board. One whose repeat is the
+/// board's cadence (every day on a daily board, every week on a weekly one: what a switch made on the board starts
+/// with) resets with the board; any other keeps its own days exactly as a loose switch does, and only sits on the
+/// board (`TaskItem.resetBoard`, `SwitchboardSchedule.resets`). Nothing is stored for the difference.
 extension Flipboard {
     enum SwitchboardError: LocalizedError {
         case emptyName
@@ -53,15 +59,16 @@ extension Flipboard {
         return board
     }
 
-    /// The Switchboard card's Save. A change to the board's clock (cadence, reset time or day) re-lands its switches
-    /// on the new clock as they were: done stays done (due on the new clock's next period), due stays due (this
-    /// period); a cadence change gives them the cadence's rule.
+    /// The Switchboard card's Save. A change to the board's clock (cadence, reset time or day) re-lands the switches
+    /// that reset with it on the new clock as they were: done stays done (due on the new clock's next period), due
+    /// stays due (this period); a cadence change gives them the cadence's rule. A switch on its own days is left
+    /// alone, unless its repeat is the board's new cadence: then it resets with the board from here on.
     @MainActor
     static func update(_ board: Switchboard, name: String, cadence: SwitchboardSchedule.Cadence, resetMinutes: Int,
                        resetWeekday: Int, overdueBecomesTask: Bool, in context: ModelContext, now: Date = Date()) {
         let trimmed = TaskLimits.clampedTitle(name)
         let before = board.schedule()
-        let sides = switches(on: board).map { ($0, Clock($0).side($0.dueDate, now: now)) }
+        let sides = switches(on: board).map { (task: $0, kept: $0.resetBoard != nil, side: Clock($0).side($0.dueDate, now: now)) }
         if !trimmed.isEmpty { board.name = trimmed }
         board.cadenceValue = cadence
         board.resetMinutes = SwitchboardSchedule(cadence: cadence, resetMinutes: resetMinutes).resetMinutes
@@ -69,7 +76,9 @@ extension Flipboard {
         board.overdueBecomesTask = overdueBecomesTask
         board.touch()
         if board.schedule() != before {
-            for (task, side) in sides { land(task, side: side, on: board, now: now) }
+            for (task, kept, side) in sides where kept || board.resets(task.recurrenceRule) {
+                land(task, side: side, on: board, now: now)
+            }
         }
         try? context.save()
     }
@@ -108,32 +117,40 @@ extension Flipboard {
     // MARK: A switch's board, time and opt-in
 
     /// Moves a switch onto a board, to another, or off (nil) to the main board, keeping its side: done stays done,
-    /// due stays due. On a board it takes the board's cadence as its rule; leaving one, it keeps that rule as its
-    /// interval (the card can change it).
+    /// due stays due. **It keeps its repeat** (George, 2026-11-16: grouped switches "maintain their old timing"). So
+    /// a switch whose repeat is the board's cadence joins the board's clock; any other keeps its own days and nothing
+    /// about it changes but where it is shown. Leaving a board whose clock it kept, it goes on as a loose switch on
+    /// that cadence.
     @MainActor
     static func move(_ task: TaskItem, to board: Switchboard?, in context: ModelContext, now: Date = Date(), save: Bool = true) {
         guard task.switchboard?.id != board?.id else { return }
         let side = Clock(task).side(task.dueDate, now: now)
+        let keptAClock = task.resetBoard != nil
         task.switchboard = board
-        if let board {
+        if let board, board.resets(task.recurrenceRule) {
             land(task, side: side, on: board, now: now)
-        } else {
-            let cal = Calendar.current
-            let timed = task.hasDueTime && task.dueDate != nil
-            if side == .red {
-                task.dueDate = keepingTime(of: timed ? task.dueDate : nil, on: now, calendar: cal)
-            } else if let due = task.dueDate, cal.startOfDay(for: due) <= cal.startOfDay(for: now) {
-                // Done for a board day that ends after midnight: done until tomorrow.
-                task.dueDate = keepingTime(of: timed ? due : nil, on: cal.date(byAdding: .day, value: 1, to: now)!, calendar: cal)
-            }
+        } else if keptAClock {
+            takeOffClock(task, side: side, now: now)
         }
         task.touch()
         if save { try? context.save() }
     }
 
+    /// A switch that kept a board's clock goes on by its own days, on the side it had: red, due today (at its time);
+    /// green, done until tomorrow at least (a board day can end after midnight).
+    static func takeOffClock(_ task: TaskItem, side: Side, now: Date) {
+        let cal = Calendar.current
+        let timed = task.hasDueTime && task.dueDate != nil
+        if side == .red {
+            task.dueDate = keepingTime(of: timed ? task.dueDate : nil, on: now, calendar: cal)
+        } else if let due = task.dueDate, cal.startOfDay(for: due) <= cal.startOfDay(for: now) {
+            task.dueDate = keepingTime(of: timed ? due : nil, on: cal.date(byAdding: .day, value: 1, to: now)!, calendar: cal)
+        }
+    }
+
     /// Puts a switch's due date on `board`'s clock with the side it had: green, on the board's next period; red, in
     /// this one (at its time, if it has one). Its rule becomes the board's cadence (timed to its time).
-    private static func land(_ task: TaskItem, side: Side, on board: Switchboard, now: Date) {
+    static func land(_ task: TaskItem, side: Side, on board: Switchboard, now: Date) {
         let schedule = board.schedule()
         let cal = Calendar.current
         let timed = task.hasDueTime && task.dueDate != nil
@@ -158,14 +175,14 @@ extension Flipboard {
     }
 
     /// Gives a switch a time of day ("Take meds 21:00"), changes it, or (nil) takes it away, keeping its side: the
-    /// time moves within the day (a board's: the board day) the switch is due in.
+    /// time moves within the day (for one that resets with its board: the board day) the switch is due in.
     @MainActor
     static func setTime(_ time: PickerTime?, for task: TaskItem, in context: ModelContext, now: Date = Date()) {
         let cal = Calendar.current
         guard time != self.time(of: task, calendar: cal) else { return }
         let clock = Clock(task)
         let due = task.dueDate ?? cal.startOfDay(for: now)
-        let board = task.switchboard
+        let board = task.resetBoard
         // The (board) day the switch is due in now.
         let day: Date = board.map { $0.schedule().boardDay(ofDue: due, hasTime: clock.hasTime, calendar: cal) }
             ?? cal.startOfDay(for: due)

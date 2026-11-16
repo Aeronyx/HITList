@@ -170,8 +170,20 @@ extension TaskItem: FilterableTask {
     var filterIsSubtask: Bool { parent != nil }
     /// Brief 72: "Overdue becomes task", by the switch's own toggle or its Switchboard's.
     var filterSwitchOptedIn: Bool { overdueBecomesTask || (switchboard?.overdueBecomesTask ?? false) }
-    /// Brief 72: the clock of the Switchboard the switch is on.
-    var filterSwitchboard: SwitchboardSchedule? { switchboard?.schedule() }
+    /// The clock of the Switchboard the switch resets with (brief 72; round 30: only a switch whose repeat is the
+    /// board's own cadence keeps the board's clock, `resetBoard`).
+    var filterSwitchboard: SwitchboardSchedule? { resetBoard?.schedule() }
+}
+
+extension TaskItem {
+    /// The Switchboard whose clock this switch keeps: the board it is on, when its repeat is the board's own cadence
+    /// (`SwitchboardSchedule.resets`). Nil for a loose switch and for one that sits on a board and keeps its own days
+    /// (George, 2026-11-16: a board's reset is a default, not a lock). Every rule that asks "which clock" asks this,
+    /// never `switchboard`, which only says where the switch is shown.
+    var resetBoard: Switchboard? {
+        guard let board = switchboard, board.resets(recurrenceRule) else { return nil }
+        return board
+    }
 }
 
 extension Switchboard {
@@ -180,6 +192,9 @@ extension Switchboard {
         get { SwitchboardSchedule.cadence(stored: cadence) }
         set { cadence = newValue.rawValue }
     }
+
+    /// Whether a switch with this repeat resets with the board (`SwitchboardSchedule.resets`).
+    func resets(_ rule: RecurrenceRule?) -> Bool { SwitchboardSchedule.resets(rule, cadence: cadenceValue) }
 
     /// The weekday a weekly board resets on, as a Calendar weekday (0, "the week start", reads Settings).
     func resetWeekdayValue(weekStart: Int = Preferences.weekStartWeekday()) -> Int {

@@ -255,4 +255,23 @@ final class SwitchboardScheduleTests: XCTestCase {
         XCTAssertEqual(sundays.side(due: due, hasTime: false, now: ny(2026, 3, 8, 3, 30), calendar: newYork), .green)
         XCTAssertEqual(sundays.side(due: due, hasTime: false, now: ny(2026, 3, 8, 4), calendar: newYork), .red)
     }
+
+    // MARK: Which switches keep the board's clock (George, 2026-11-16: a board's reset is a default, not a lock)
+
+    func testOnlyASwitchOnTheBoardsOwnCadenceResetsWithIt() {
+        typealias S = SwitchboardSchedule
+        XCTAssertEqual(S.rule(for: .daily), .daily)
+        XCTAssertEqual(S.rule(for: .weekly), .weekly)
+        XCTAssertTrue(S.resets(.daily, cadence: .daily))
+        XCTAssertTrue(S.resets(.weekly, cadence: .weekly))
+        XCTAssertTrue(S.resets(RecurrenceRule.daily.withTime(hour: 21, minute: 0), cadence: .daily), "whatever its time of day")
+        XCTAssertFalse(S.resets(.weekly, cadence: .daily), "once a week on a daily board: its own days")
+        XCTAssertFalse(S.resets(RecurrenceRule(frequency: .daily, interval: 2), cadence: .daily), "every other day")
+        XCTAssertFalse(S.resets(.daily, cadence: .weekly))
+        XCTAssertFalse(S.resets(RecurrenceRule(frequency: .daily, interval: 7), cadence: .weekly),
+                       "every 7 days is not the board's week: seven days from each flip")
+        XCTAssertFalse(S.resets(RecurrenceRule(frequency: .weekly, weekdays: [2, 4]), cadence: .weekly), "chosen weekdays")
+        XCTAssertFalse(S.resets(.monthly, cadence: .daily))
+        XCTAssertFalse(S.resets(nil, cadence: .daily), "no repeat it can read")
+    }
 }
