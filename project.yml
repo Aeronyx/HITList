@@ -62,8 +62,10 @@ targets:
     entitlements:
       path: HITList/HITList.entitlements
       properties:
-        # The second container holds Shared Tasks (brief 51), apart from the task store's. Keep the task store's first.
-        com.apple.developer.icloud-container-identifiers: [iCloud.com.trammells.hitlist, iCloud.com.trammells.hitlist.shared]
+        # The second container holds Shared Tasks (brief 51), apart from the task store's. The third is HITList's own
+        # sync engine's (round 30, dev/SYNC-ENGINE.md section 3): no build on the mirror ever reads it. Keep the task
+        # store's first.
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.trammells.hitlist, iCloud.com.trammells.hitlist.shared, iCloud.com.trammells.hitlist.sync]
         com.apple.developer.icloud-services: [CloudKit]
         aps-environment: development
         com.apple.developer.icloud-container-environment: Development

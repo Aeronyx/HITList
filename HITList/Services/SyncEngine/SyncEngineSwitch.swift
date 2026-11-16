@@ -19,10 +19,17 @@ import HITListCore
 enum SyncEngineSwitch {
     typealias Engine = SyncEngineBoard.Engine
 
-    /// The container the engine's zone lives in: today the tasks' own container, under the `HL` record types and with
-    /// the mirror off on the stores that use the engine. A container of its own (`iCloud.com.trammells.hitlist.sync`)
-    /// waits for George (`dev/SYNC-ENGINE.md` section 12, decision 0).
-    static let containerID = HITListSchema.cloudKitContainerID
+    /// The container the engine's zone lives in: **one of its own**, a third beside the tasks' (the mirror's) and Shared
+    /// Tasks'. George, 2026-11-16: "continue freely on the separate container for the iCloud engine if you think that's
+    /// the best approach for a professional and robust (yet not overengineered) iCloud sync setup."
+    ///
+    /// Why it is: SwiftData's mirror imports every zone of its own container's private database
+    /// (`dev/SYNC-ENGINE.md` section 3), and builds on the mirror stay in people's hands for as long as they do not
+    /// update. In a container no mirror was ever pointed at, nothing an old build does can reach the engine's records,
+    /// the mirror's zone stays exactly as it was at the move (the way back), and the two schemas are deployed apart.
+    /// It costs one identifier in the entitlements and no code. The records keep their `HL` types there all the same
+    /// (`CloudRecordCodec`): a second lock that costs a prefix.
+    static let containerID = "iCloud.com.trammells.hitlist.sync"
 
     /// The launch argument a Debug build takes on a side store.
     static let argument = "-syncEngine"

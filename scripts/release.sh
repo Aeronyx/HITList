@@ -31,9 +31,11 @@
 # field the models have: the diff alone is blind to a field missing from both environments, which is how
 # three TaskItem fields went undeployed for a week and stopped a tester's sync (2026-11-06).
 # In the task store's container only the record types this release syncs through are compared (the mirror's:
-# CD_*, CDMR, Users). HITList's own sync engine (round 28, dev/SYNC-ENGINE.md) is tested against Development and
-# leaves record types there that no released build uses yet; they are listed and left out, until SYNC_ENGINE_LIVE
-# below is 1 (the release that switches the engine on), from when the engine's HL* types must be in Production too.
+# CD_*, CDMR, Users). HITList's own sync engine (dev/SYNC-ENGINE.md) was first tested in that container (round 28)
+# and left HL* record types in its Development that no build uses; they are listed and left out. Since round 30 the
+# engine has a container of its own (SYNC_CONTAINER_ID), which no released build opens yet: it is compared from the
+# release in which SYNC_ENGINE_LIVE below is 1 (the one that switches the engine on), when its HL* types must be in
+# its Production.
 set -euo pipefail
 
 # 1 from the release whose builds use HITList's own sync engine by default; 0 while it ships switched off.
@@ -46,6 +48,7 @@ export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Develope
 TEAM_ID=UC8N98H3RT
 CONTAINER_ID=iCloud.com.trammells.hitlist
 SHARED_CONTAINER_ID=iCloud.com.trammells.hitlist.shared
+SYNC_CONTAINER_ID=iCloud.com.trammells.hitlist.sync
 KEY_ID="${ASC_KEY_ID:-<key-id>}"
 ISSUER_ID="${ASC_ISSUER_ID:-<issuer-id>}"
 
@@ -111,25 +114,25 @@ schema_others() { awk -v keep="$2" '/^[[:space:]]*RECORD TYPE / { if ($3 !~ keep
 if (( SCHEMA_CHECK && UPLOAD )); then
   step "CloudKit schema drift check"
   TMP=$(mktemp -d)
-  # Every container the app syncs with: the task store's, and Shared Tasks' own (brief 51, 0.7.0).
-  for CID in "$CONTAINER_ID" "$SHARED_CONTAINER_ID"; do
+  # Every container this release syncs with: the task store's, Shared Tasks' own (brief 51, 0.7.0), and the sync
+  # engine's own once it is live.
+  CONTAINERS=("$CONTAINER_ID" "$SHARED_CONTAINER_ID")
+  (( SYNC_ENGINE_LIVE )) && CONTAINERS+=("$SYNC_CONTAINER_ID")
+  for CID in "${CONTAINERS[@]}"; do
     if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
          --environment development --output-file "$TMP/$CID-dev.ckdb" >/dev/null 2>&1 &&
        xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
          --environment production --output-file "$TMP/$CID-prod.ckdb" >/dev/null 2>&1; then
-      # What this release syncs through: everything in Shared Tasks' container; in the task store's, the mirror's
-      # record types, and the engine's once it is live.
+      # What this release syncs through: everything in Shared Tasks' container and in the engine's; in the task
+      # store's, the mirror's record types.
       KEEP='.'
-      if [[ "$CID" == "$CONTAINER_ID" ]]; then
-        KEEP='^(CD_|CDMR$|Users$)'
-        (( SYNC_ENGINE_LIVE )) && KEEP='^(CD_|CDMR$|Users$|HL)'
-      fi
+      [[ "$CID" == "$CONTAINER_ID" ]] && KEEP='^(CD_|CDMR$|Users$)'
       schema_only "$TMP/$CID-dev.ckdb" "$KEEP" > "$TMP/$CID-dev-used.ckdb"
       schema_only "$TMP/$CID-prod.ckdb" "$KEEP" > "$TMP/$CID-prod-used.ckdb"
       OTHERS=$(schema_others "$TMP/$CID-dev.ckdb" "$KEEP")
       if [[ -n "${OTHERS// /}" ]]; then
         print -P "%F{yellow}$CID: Development also holds record types this release does not sync through, left out of the comparison: $OTHERS%f"
-        print -P "%F{yellow}They come from test runs of the sync engine. Do not press Deploy Schema Changes for this container while they are there: it deploys everything. Reset Development first (CloudKit Console → $CID → Development → Reset Environment…).%f"
+        print -P "%F{yellow}They come from round 28's test runs of the sync engine, which has its own container now. Do not press Deploy Schema Changes for this container while they are there: it deploys everything. Reset Development first (CloudKit Console → $CID → Development → Reset Environment…).%f"
       fi
       if ! diff -qB "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" >/dev/null; then
         diff -B "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" || true

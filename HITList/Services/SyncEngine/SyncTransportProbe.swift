@@ -44,7 +44,7 @@ enum SyncTransportProbe {
             return
         }
         Task.detached(priority: .userInitiated) {
-            let result = await ProbeRun(containerID: HITListSchema.cloudKitContainerID).run()
+            let result = await ProbeRun(containerID: SyncEngineSwitch.containerID).run()
             emit("PROBE done \(result.ok) ok, \(result.failed) failed")
             await MainActor.run { quit() }
         }
@@ -533,9 +533,19 @@ private final class ProbeRun: @unchecked Sendable {
 
     /// An automatic transport (as the app will run it) hears another device's change by itself: a push, then the
     /// engine's own fetch. Told as a note, not a step: whether a push reaches this Debug process at all is up to
-    /// Apple's push service in Development, which the probe cannot command (the mirror's own import shows whether
-    /// one came).
+    /// Apple's push service in Development, which the probe cannot command.
+    ///
+    /// **Nothing is expected to be heard here** (round 30): both transports run in this one process on this one Mac,
+    /// and iCloud does not notify the device a change came from. In every run of rounds 28 to 30 the note read
+    /// "heard nothing", with the process registered for pushes or not. A push waking the engine can only be shown
+    /// with a second device (a Debug build on George's phone beside this Mac), which is why it is still listed as
+    /// not proven (`dev/SYNC-ENGINE.md` section 13).
     private func push() async {
+        // On a Mac nothing registers this process for pushes when the mirror is off (round 30: the engine does it at
+        // its start, `SyncEngine.registerForPushes`; the probe runs without the engine).
+        #if os(macOS)
+        await MainActor.run { NSApplication.shared.registerForRemoteNotifications() }
+        #endif
         do {
             let deviceC = ProbeDevice("C")
             let c = transport("C", state: ProbeState(), automatic: true)
@@ -554,7 +564,8 @@ private final class ProbeRun: @unchecked Sendable {
             let after = Date().timeIntervalSince(sentAt)
             let events = await deviceC.eventNames
             await c.stop()
-            let how = heard ? "fetched B's change by itself after \(String(format: "%.1f", after)) s" : "heard nothing in 60 s"
+            let how = heard ? "fetched B's change by itself after \(String(format: "%.1f", after)) s"
+                : "heard nothing in 60 s (expected: one device, and iCloud does not notify the device a change came from)"
             note("push: an automatic transport \(how); its events \(events)")
         } catch {
             note("push: not tried: \(error)")
@@ -566,6 +577,11 @@ private final class ProbeRun: @unchecked Sendable {
     /// waits for the mirror's next import, then reads every record straight from iCloud: none may carry a `CD_` key
     /// or be gone. Run only when the mirror is on (no `-disableCloudKit YES`); it fails until the engine's records are
     /// out of the mirror's reach.
+    ///
+    /// Since round 30 the engine has a container of its own, which the mirror never looks at: the engine's save pushes
+    /// nothing to it, so no import comes, and the step waits its minute and then checks that the engine's records and
+    /// the side store are as they were. (In the mirror's own container an import had to come for the check to mean
+    /// anything.)
     private func mirrorLeavesTheZoneAlone() async {
         await step("the mirror leaves the engine's zone alone") {
             let imports = ImportCounter()
@@ -592,7 +608,9 @@ private final class ProbeRun: @unchecked Sendable {
             if let before = countsBefore, let after = countsAfter, before != after {
                 problems.append("the side store changed: \(Self.describe(before)) → \(Self.describe(after))")
             }
-            try expect(imported, "no import of the mirror's came to check against")
+            if containerID == HITListSchema.cloudKitContainerID {
+                try expect(imported, "no import of the mirror's came to check against")
+            }
             try expect(problems.isEmpty, problems.joined(separator: "; "))
         }
     }

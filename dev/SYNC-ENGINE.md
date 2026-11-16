@@ -14,9 +14,9 @@ round it (a comparison of every record, a gate, a second gate) to guess what it 
 
 The engine replaces the mirror with parts HITList owns:
 
-- **The records are ours**: one zone, `HITList`, in the private database of `iCloud.com.trammells.hitlist`; one
-  record per item, named by the item's `id`; fields under the models' own names. The same item on two devices is
-  the same record, always.
+- **The records are ours**: one zone, `HITList`, in the private database of a container of the engine's own,
+  `iCloud.com.trammells.hitlist.sync` (round 30; section 3 says why); one record per item, named by the item's
+  `id`; fields under the models' own names. The same item on two devices is the same record, always.
 - **The list of what is waiting is ours**: so "everything is in iCloud" is a fact the app holds, and the bolt says it.
 - **The rules for two devices changing one thing are ours**, written down (section 5) and tested on a pretend iCloud
   with several devices, thousands of random edits and every failure injected (section 9).
@@ -27,8 +27,9 @@ Nothing a person has is at risk from the engine's own memory: it can be lost at 
 everything afresh (section 7). One thing only lives nowhere else: a deletion made on this device that has not yet
 gone to iCloud. A memory lost in that moment brings the item back (it is never lost the other way), so the app
 does not throw the memory away lightly: a row of it that cannot be read is forgotten alone, and the brain carries
-unsent deletions across every forgetting it does itself. The mirror's zone (`com.apple.coredata.cloudkit.zone`) is never touched by the
-engine: it stays as it was at the moment a device moved over.
+unsent deletions across every forgetting it does itself. The mirror's zone (`com.apple.coredata.cloudkit.zone`, in
+the tasks' container) is never touched by the engine, which never opens that container: it stays as it was at the
+moment a device moved over.
 
 **The engine deletes in iCloud only what was deleted** (round 29, the review). A deletion is known when the store
 wrote it down as it was saved, and in no other way; an item that is merely not on a device is missing and comes
@@ -68,16 +69,29 @@ delete anything for anyone, and the engine never has to ask a person whether the
 
 ## 3. What iCloud holds
 
+- **Container** `iCloud.com.trammells.hitlist.sync` (`SyncEngineSwitch.containerID`), the engine's own, a third
+  beside the tasks' (`iCloud.com.trammells.hitlist`, the mirror's) and Shared Tasks'. George, 2026-11-16: "continue
+  freely on the separate container for the iCloud engine if you think that's the best approach for a professional
+  and robust (yet not overengineered) iCloud sync setup." It was registered that day (automatic signing did it at
+  the first build that listed it; a container cannot be removed afterwards). Both apps' entitlements list it, the
+  tasks' first.
 - **Zone** `HITList` (`SyncSchema.zoneName`). The transport makes it when it first has something to send and it is
   missing. Fetches are scoped to it.
 - **Kept out of the mirror's reach** (found by session 142 on CloudKit Development): the mirror does not keep to its
   own zone. It imports every zone of its container's private database and makes an item out of any record whose
   type is a model's name: it turned the engine's `Project` record into an empty Group, wrote `CD_` fields back
-  onto it, and deleted the engine's profile record as a duplicate. So (a) in CloudKit a record's type is never a
-  model's name: it is `HL` + the type (`HLTaskItem`, `HLProject`, `HLProfile`, `HLMeta`), a name the mirror
-  cannot map; and (b) the engine is meant to live in **a container of its own**, where no mirror ever looks,
-  which is George's to approve (section 12): any older build still on the mirror, in anyone's hands, reads the
-  mirror's container for as long as it runs.
+  onto it, and deleted the engine's profile record as a duplicate. Two locks follow. (a) **The container of its
+  own**: no build on the mirror, in anyone's hands for however long, ever looks there, so nothing an old build does
+  can reach the engine's records; an engine's save pushes nothing to a mirror; the mirror's zone stays exactly as it
+  was at the move (the way back); and each container's schema is deployed on its own. It costs an identifier in the
+  entitlements and no code. (b) In CloudKit a record's type is never a model's name: it is `HL` + the type
+  (`HLTaskItem`, `HLProject`, `HLProfile`, `HLMeta`), a name the mirror cannot map. With (a) in place (b) is not
+  needed; it stays because it costs a prefix and would hold if a mirror were ever pointed at this container by
+  mistake.
+- **A new container takes a few minutes to be known to a device.** In the first minutes after it was registered a
+  send answered "Not Authenticated: could not determine iCloud account status" and then "Bad Container: couldn't
+  get container configuration from the server", while `cktool` already exported its schema; the third run, about
+  five minutes on, passed. Nothing to fix: it happens once per container, before any tester exists.
 - **One record per item**, type = the model's name (`TaskItem`, `Project`, `TaskLabel`, `SavedFilter`,
   `Switchboard`, `Profile`), keyed by the item's `id` as `UUID.uuidString` prints it (`SyncKey`). `Profile` is one
   per account: its key's name is `profile` whatever `id` a device's row has. In CloudKit the record's name is
@@ -327,7 +341,12 @@ ledger file lost whole, or one that belonged to another store file, takes these 
 4. End to end on CloudKit **Development**: two Debug Mac apps on two side stores, as two devices (run in round
    28: one sent its items, the other, launched empty, showed them all; a task made on the second reached the
    first when it came forward), and the transport's probe (18 steps: every type there and back, a conflict,
-   markers, removal for good, a newer build's key, 300 records in two batches, a restart from saved state).
+   markers, removal for good, a newer build's key, 300 records in two batches, a restart from saved state). Both
+   run again in round 30 in the engine's own container, after the review (section 13). The commands:
+   `HITLIST_STORE_SUFFIX=<name> …/Debug/HITList.app/Contents/MacOS/HITList -syncTransportProbe YES -disableCloudKit
+   YES -ApplePersistenceIgnoreState YES` (and once without `-disableCloudKit YES` for the mirror's step), and
+   `open -g -n --env HITLIST_STORE_SUFFIX=<a> --stdout <file> …/Debug/HITList.app --args
+   -ApplePersistenceIgnoreState YES -syncEngine own -syncEngineZone <zone> [-seedSampleData]`, twice.
 5. The move from the mirror rehearsed on copies of a real store before any real device moves.
 
 ## 10. Holds and the bolt
@@ -369,21 +388,21 @@ guessing; Check iCloud… stays as the person's own audit.
   (`cloudKitDatabase: .none`, the store itself is untouched), and the engine starts with an empty ledger
   (section 7). The first device sends everything; each later one finds its items already there.
 - Devices still on the mirror and devices on the engine do not see each other's changes until they have all moved:
-  they move together, George's first. (That is only true because the engine's records are out of the mirror's
-  reach, section 3: in the mirror's own container, under model names, a mirror would import them as empty items.)
+  they move together, George's first. (They sync through two containers, section 3: a mirror never sees an
+  engine's record at all.)
 - Going back: the mirror's zone still holds everything as of the move.
-- iCloud's Production schema gains the new record types before any released build runs the engine (additive;
-  George's click, as for every schema change).
+- The engine's container's Production schema gains the `HL` record types before any released build runs the engine
+  (George's click: CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development → Deploy Schema Changes…;
+  additive from then on). `scripts/release.sh` compares that container's two environments from the release in
+  which its `SYNC_ENGINE_LIVE` is 1. The tasks' container needs nothing for the engine, ever.
 
 ## 12. Decisions that are George's (each can be changed before Production holds a record)
 
-0. **A container of its own for the engine** (`iCloud.com.trammells.hitlist.sync`, a third beside the tasks' and
-   Shared Tasks'). The mirror reads every zone of its own container (section 3), and builds on the mirror will be
-   in friends' hands for as long as they do not update. A separate container is the one arrangement in which
-   nothing an old build does can touch the engine's records. It is registered once (automatic signing does it, as
-   it did for Shared Tasks' container) and cannot be removed afterwards, which is why it waits for his word. Until
-   then everything runs in the tasks' container on Development only, under the `HL` record types, with the mirror
-   off on the stores that use the engine.
+0. **A container of its own for the engine: decided and done, 2026-11-16** (`iCloud.com.trammells.hitlist.sync`;
+   his words and the reasons are in section 3). What round 28 left in the tasks' container's Development
+   environment (zones `HITList`, `HITList-e2e1`, the `HL` record types) is used by nothing now and goes when he
+   resets that environment; **until he has, nobody presses Deploy Schema Changes for the tasks' container** (a
+   deploy carries everything, and those types would be in its Production for good).
 1. **Plain or encrypted fields.** As built, fields are stored as the mirror stores them today (protected by the
    account, readable in the CloudKit dashboard for support). `SyncSchema` can mark fields end-to-end encrypted
    instead (titles, notes, names); the cost is a dashboard that shows nothing and one more way for a recovery to
@@ -392,7 +411,7 @@ guessing; Check iCloud… stays as the person's own audit.
 3. **A purge in iCloud's settings asks** instead of deleting the device's copy (Apple's guidance is to delete).
 4. **When devices move**: his first, then friends.
 
-## 13. Open, as round 29 left it
+## 13. Open, as round 30 left it
 
 Found and not yet fixed or not yet traced; none of it can matter while the engine is switched off (and a released
 build cannot switch it on, section 11).
@@ -429,9 +448,23 @@ build cannot switch it on, section 11).
   had lost cannot be told from the store's own clearing of it, so iCloud's reference comes back. And a reference
   to a row the store lost is remembered only in the ledger: a ledger forgotten before the row is back forgets it
   (why `rows` runs without the transport losing its state).
-- **Not proven at all**: a push waking the engine (none reached a Debug build on this Mac in any run); the engine
-  on a phone; the move from the mirror on real data; the way back to the mirror; one contract suite run against
-  both the pretend iCloud and CloudKit (four of the first review's findings were a rule the two read differently);
-  the engine against CloudKit since the review (the transport did not change; the two-device run of round 28 was
-  not repeated on the service, only on the pretend iCloud in the app: a task deleted with its sub-task on one Debug
-  Mac app left the other).
+- **Not proven at all**: **a push waking the engine.** None reached a Debug build on this Mac in any run of rounds
+  28 to 30, and round 30 found two reasons, one fixed and one that no run on this Mac can get round. Fixed: on a Mac
+  the app never asked for pushes itself (Core Data's mirror registers once its setup succeeds; with the mirror off
+  nobody did), so the engine registers at its start (`SyncEngine.registerForPushes`; the iPhone and iPad register
+  at every launch already; whether `CKSyncEngine` needs the app to register the SDK does not say). Not got round:
+  two Debug apps on one Mac are one device, and iCloud does not notify the device a change came from, so the
+  second app hears of the first one's change only when it comes forward (which it does: the engine syncs then,
+  and at launch). It takes a second device: a Debug build on George's phone beside this Mac. Until that run, the
+  engine is known to sync at launch, on coming forward and on its own schedule, and not known to wake for a push.
+  Also not proven: the engine on a phone; the move from the mirror on real data; the way back to the mirror; one
+  contract suite run against both the pretend iCloud and CloudKit (four of the first review's findings were a rule
+  the two read differently); a deletion through the app on the real service (through the app it has run on the
+  pretend iCloud, round 29; on the service the transport's probe carries markers and removals for good).
+- **Proven on the service in round 30**, in the engine's own container on Development: the transport's probe, 18 of
+  18 steps (every type there and back, the echo, a conflict, markers of every type, removal for good, a newer
+  build's key, 300 records in batches of 250 and 50, a restart from saved state; and in a launch with the mirror on,
+  the engine's records and the side store untouched a minute after the engine's save); and two Debug Mac apps on side stores (zone
+  `HITList-r30`): one sent its 10 records, the other, launched empty, showed them, and a task completed on the first
+  reached the second when it came forward (two records settled by M7). This is the first run of the reviewed engine
+  against CloudKit.

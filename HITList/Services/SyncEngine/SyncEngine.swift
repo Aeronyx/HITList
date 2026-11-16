@@ -2,6 +2,9 @@ import Foundation
 import OSLog
 import SwiftData
 import HITListCore
+#if os(macOS)
+import AppKit
+#endif
 
 /// HITList's own sync engine in the app (round 28, brief 143; `dev/SYNC-ENGINE.md`): the parts wave 1 built, put
 /// together and run from launch to quit, behind `SyncEngineSwitch`. On the mirror (every released build) nothing here
@@ -175,6 +178,7 @@ final class SyncEngine {
     func start() async {
         guard !isStarted else { return }
         isStarted = true
+        registerForPushes()
         watchSaves()
         workers.append(Task { [weak self] in await self?.consume() })
         workers.append(Task { [weak self] in await self?.feedHints() })
@@ -188,6 +192,17 @@ final class SyncEngine {
             say("\(unreadable.count) row(s) of the sync memory could not be read and were forgotten; everything is fetched again")
         }
         await syncNow(reason: "launch")
+    }
+
+    /// On the Mac the app never asked for pushes itself: Core Data's mirror registers once its setup succeeds
+    /// (`SyncAppDelegate`), and the engine runs with the mirror off, so on a Mac nobody did, which is why no push
+    /// reached a Mac on the engine in rounds 28 and 29. The iPhone and iPad register at every launch already.
+    /// Registering is idempotent and shows no prompt (silent pushes need no permission). Not under hosted tests.
+    private func registerForPushes() {
+        #if os(macOS)
+        guard !SyncAppDelegateSupport.isTesting else { return }
+        NSApplication.shared.registerForRemoteNotifications()
+        #endif
     }
 
     /// Binds the ledger to the store file's identity. A ledger reset by the binding takes the transport's state with
@@ -284,6 +299,9 @@ final class SyncEngine {
             try await core.syncNow()
         } catch SyncCoreError.held(let hold) {
             say("Not synced (\(reason)): \(hold.words)")
+        } catch SyncCoreError.notStarted {
+            // Asked while the engine was still starting (the app came forward in that moment; seen on CloudKit in round
+            // 30, where it read as an error): the start ends with a sync of its own, so nothing is owed and nothing said.
         } catch {
             say("Sync after \(reason) stopped: \(error.localizedDescription)")
         }

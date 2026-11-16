@@ -65,6 +65,32 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertFalse(SyncEngineSwitch.isAvailable(isDebug: false))
     }
 
+    /// The engine's records live in a container of their own (round 30): never the one SwiftData's mirror reads (it
+    /// imports every zone of its container, `dev/SYNC-ENGINE.md` section 3), nor Shared Tasks'. And this build is
+    /// entitled to it: a container missing from the entitlements fails at the first call, on a device.
+    func testTheEngineHasAContainerOfItsOwn() async throws {
+        XCTAssertEqual(SyncEngineSwitch.containerID, "iCloud.com.trammells.hitlist.sync")
+        XCTAssertNotEqual(SyncEngineSwitch.containerID, HITListSchema.cloudKitContainerID, "not the mirror's")
+        XCTAssertNotEqual(SyncEngineSwitch.containerID, SharedTasksSchema.containerID)
+        #if os(macOS)
+        // Off the main thread: reading a signature may wait on the disk.
+        let containers = await Task.detached { () -> [String]? in
+            var code: SecCode?
+            guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+            var staticCode: SecStaticCode?
+            guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+            var info: CFDictionary?
+            guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSRequirementInformation), &info) == errSecSuccess
+            else { return nil }
+            let entitlements = (info as? [String: Any])?[kSecCodeInfoEntitlementsDict as String] as? [String: Any]
+            return entitlements?["com.apple.developer.icloud-container-identifiers"] as? [String]
+        }.value
+        let listed = try XCTUnwrap(containers, "the hosting app's signature lists its iCloud containers")
+        XCTAssertTrue(listed.contains(SyncEngineSwitch.containerID), "\(listed)")
+        XCTAssertEqual(listed.first, HITListSchema.cloudKitContainerID, "the task store's stays first")
+        #endif
+    }
+
     func testNeverUnderHostedTests() {
         SyncEngineSwitch.setPreference(.own, storeName: "HITList-s143.store", defaults: defaults)
         XCTAssertEqual(decide(["-syncEngine", "own"], testing: true), .mirror)
