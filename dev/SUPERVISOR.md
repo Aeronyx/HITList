@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.12: core 1046 (the sync engine's brain, rules and simulation are most of the growth), Mac 2197, iOS 2160, and 159 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.13: core 1047 (the sync engine's brain, rules and simulation are most of the growth), Mac 2205, iOS 2168, and 160 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -128,7 +128,16 @@ How George works with you:
   it on). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
   it (`SyncDeletionLog`, taken at `willSave`), and an item that is merely not on a device comes back from iCloud.
   Never add a rule, a repair or a "tidy up" that deletes in iCloud what no person deleted, and never a batch delete
-  (`context.delete(model:)`) of a synced model: it bypasses the note.
+  (`context.delete(model:)`) of a synced model: it bypasses the note. **The engine's records live in a container of
+  their own**, `iCloud.com.trammells.hitlist.sync` (round 30, registered 2026-11-16, permanent): never point the
+  mirror or any other reader at it, never write an engine record into the tasks' container again, and keep the
+  tasks' container first in the entitlements.
+- **Which clock a Flipboard switch keeps is one question with one answer**: `TaskItem.resetBoard` (core:
+  `SwitchboardSchedule.resets`, through `filterSwitchboard`). A switch on a Switchboard keeps the board's clock only
+  when its repeat is the board's cadence; any other keeps its own days (George, 2026-11-16: a board's reset is "a
+  default", switches "shouldn't be locked to that reset time"). Never judge a switch's side, day or caption from
+  `task.switchboard`, which only says where it is shown, and never rewrite a switch's repeat or due date because it
+  was grouped.
 - Crash reports and tester feedback hold names and addresses: `crashreports/` is ignored by git; never commit one,
   and never put a tester's name or address in a brief, a note or a commit.
 - Delegated sessions never push, open PRs, merge, switch branches, run `scripts/release.sh`, use `sudo`,
@@ -353,6 +362,30 @@ from reminders (it opens a side store). Say so in the notes instead of implying 
 **Code that only tests use belongs behind `#if DEBUG`** when it lives in the shipping library (the rig, the
 in-memory store): 3,000 lines were being compiled into every release. The long simulation runs add `-Xswiftc
 -DDEBUG`.
+
+Lessons from round 30 (no sessions: the supervisor alone; grouped switches keep their timing, and the engine's own
+container):
+**Ask first whether a new behaviour needs a new stored fact.** "A board's reset is a default, not a lock" reads
+like a flag on each switch: schema V7, a field in both CloudKit environments and the engine's schema, and a deploy
+that is forbidden until Development is reset. Every switch on a board already carried its board's cadence as its
+repeat, so the repeat itself says which clock a switch keeps, old data means what it meant, and the release needs
+no schema change. Name the one case a derived rule cannot express (here: a rolling week on a weekly board) and
+what would lift it, in the notes and to George.
+**Route one question through one function before changing its answer.** The Flipboard asked "which clock" in ten
+places by way of `filterSwitchboard`; changing that one property moved every list, widget, reminder and caption
+at once, and the tests of the old behaviour said where the remaining three direct reads were.
+**A new iCloud container is not usable in its first minutes.** A send answered "Not Authenticated", then "Bad
+Container: couldn't get container configuration", while `cktool export-schema` already answered; five minutes
+later everything passed. Check with `cktool` that it exists and wait, before suspecting the code.
+**A step that tests a danger should be re-read when the danger is designed out.** The probe waited for the mirror
+to import after the engine's save and failed when no import came; across containers none can come, which was the
+purpose of the change. A failing check may be the proof.
+**Why no push ever reached a Debug Mac app on the engine**: on a Mac only Core Data's mirror registered for pushes,
+and the engine turns the mirror off (it registers itself now); and two apps on one Mac are one device, which iCloud
+does not notify of its own change. Do not spend another run on it here: it needs a Debug build on a second device.
+**Driving a menu in my own Mac app**: a click that opens a menu leaves the window looking inactive in a
+single-window capture (the menu is another window); arrow keys sent before the menu is open move the list's
+selection instead. Open it, capture once to see the inactive title bar, then send the keys.
 **77 worktrees held 113 GB.** Every branch was merged and every tree clean. Agent worktrees are removed when their
 branch is merged; the older sessions' need George's word (he has now been asked with the number in front of him).
 
@@ -433,8 +466,12 @@ files" is obeyed; one that does not produces merge conflicts.
   `SyncRecovery`, `SyncStoreGuard`; `SyncAudit` (`compare` for the bolt, `run` for Check iCloud…), `ICloudZoneReader`,
   `SyncComparison`, `StoreInventory`), `CloudSyncMonitor.swift`, `ModelContainerFactory.swift`, `Deduplicator.swift`.
   `ROUND-26.md` says what was taken out and why, `ROUND-27.md` what came back and how.
-- HITList's own sync engine (rounds 28 and 29, switched off; design `dev/SYNC-ENGINE.md`, what the review of
-  round 29 changed and why in `dev/briefs/ROUND-29.md`): core
+- Flipboard's rules: `Views/Flipboard/FlipboardRules.swift` (a switch: sides, flips, charging, captions),
+  `SwitchboardRules.swift` (boards; `move`, `land`, `takeOffClock`, `update`), `SwitchDraft.swift` and
+  `SwitchboardDraft.swift` (the cards as values), core `FlipboardSwitch` and `SwitchboardSchedule` (the board's
+  clock, and `resets`: which switches keep it). `dev/briefs/ROUND-30.md` says how a board's reset became a default.
+- HITList's own sync engine (rounds 28 to 30, switched off; its own container since round 30; design
+  `dev/SYNC-ENGINE.md`, what the review of round 29 changed and why in `dev/briefs/ROUND-29.md`): core
   `HITListCore/Sources/HITListCore/Sync/` (the contract: `SyncRecord`, `SyncSchema`, `SyncTransport`, `SyncStorage`,
   `SyncMemory`; `RecordMerge` = how one record is settled; `SyncCore*.swift` = the brain; `SyncStatus`, `SyncHost`;
   `Testing/` = `FakeCloud`, `FakeTransport`, `SyncSimulation`, `SyncInvariants`, compiled into Debug builds only,
@@ -496,7 +533,11 @@ files" is obeyed; one that does not produces merge conflicts.
   **Two containers since 0.7.1:** `iCloud.com.trammells.hitlist` (tasks) and `iCloud.com.trammells.hitlist.shared`
   (Shared Tasks, its record types reach Development through `-sharedTasksSchemaPush YES` runs). Each is deployed on its
   own in the console: pick the container in the menu at the top first. `release.sh` checks both; 0.7.0's release
-  stopped because only the first had been deployed. Check either yourself, read-only:
+  stopped because only the first had been deployed. **A third since round 30:** `iCloud.com.trammells.hitlist.sync`,
+  the sync engine's own, which no released build opens: nothing is deployed for it and `release.sh` leaves it out
+  until its `SYNC_ENGINE_LIVE` is 1 (the release that switches the engine on; its `HL` types are deployed then).
+  The tasks' container's Development still holds round 28's `HL` types: **no Deploy Schema Changes there until
+  George has reset it.** Check any of them yourself, read-only:
   `xcrun cktool export-schema --team-id UC8N98H3RT --container-id <container> --environment production --output-file x.ckdb`.
 - TestFlight: George's own devices get builds at once, and so do the friends since 2026-11-10: they are internal
   testers (App Store Connect users on George's team, limited to HITList), with no Beta App Review. They may also still be
@@ -773,7 +814,41 @@ before the device and iCloud ever agreed on it is deleted in iCloud too; the app
 forward (a few thousand rows read off the main thread), not after every fetch. He has been asked about the 72
 merged session worktrees (about 105 GB) and, again, about a container of its own for the engine.
 
-## 8. Where things stand (2026-11-15, round 29 on master)
+Round 30 (2026-11-16). George's words: "Please continue freely on the separate container for the iCloud engine if
+you think that's the best approach for a professional and robust (yet not overengineered) iCloud sync setup", and
+on the Flipboard: "when you group switches that already exist … they maintain their old timing … it's okay to have
+default reset times for a Switchboard but they shouldn't be locked to that reset time." **The container is decided
+and registered** (`iCloud.com.trammells.hitlist.sync`; do not re-ask). My choices in the rest, which he can
+reverse: which clock a grouped switch keeps is read from its repeat, with nothing new stored (the board's own
+cadence resets with the board, every other repeat keeps its own days), so every week on a Weekly board means the
+board's week and a rolling week there is "7 days"; a new switch on a board starts on the board's cadence; the card
+on a board shows the interval's choices and dial, and says "with Before Bed" only when the switch resets with the
+board; a switch on its own days on a board reads and behaves exactly as a loose one (midnight, "Flip to start",
+flipped early with the question); changing a board's clock moves only the switches that reset with it; the
+engine's records keep their `HL` types in the new container; the Mac registers for pushes when the engine starts.
+He did not answer about the 72 merged session worktrees: they are still there, and still his to say.
+
+## 8. Where things stand (2026-11-16, round 30 on master)
+
+**2026-11-16: round 30 on master for 0.9.13 (Fable 5.2 supervisor, no sessions), the day after George released
+0.9.12** (`dev/briefs/ROUND-30.md` has his message, both decisions and the proof). **Flipboard: a switch keeps its
+own timing on a Switchboard.** A board's reset is a default: a switch whose repeat is the board's cadence resets with
+the board, any other keeps its own days as a loose switch does; grouping a switch changes nothing but where it is
+shown; the card has the interval on a board; a new switch on a board starts on the board's cadence. Read from the
+switch's repeat (`TaskItem.resetBoard`), nothing new stored, no schema change. **The sync engine has its own iCloud
+container**, `iCloud.com.trammells.hitlist.sync`, registered that day on his word, in both apps' entitlements, and
+is still switched off (a released build cannot run it): the transport's probe passed 18 of 18 there on CloudKit
+Development and two Debug Mac apps synced through it, the first run of the reviewed engine against the service.
+Suites on the final tree: core 1047, Mac 2205, iOS 2168, no failures; the Flipboard's UI classes on an iPhone 17
+simulator; Release archives of both platforms export, signed with the three containers, and pass the packaging
+checks. George releases with `scripts/release.sh --version 0.9.13 --quick`. Nothing to deploy. **Nobody presses
+Deploy Schema Changes for the tasks' container (`iCloud.com.trammells.hitlist`) until its Development side is
+reset** (round 28's test record types are still there; Reset Environment there is safe at any time). Open: a push
+waking the engine (needs a Debug build on a second device, his phone); the rest of section 13 of the design; plain
+or encrypted fields (his); the 72 merged session worktrees (about 105 GB; he has not answered). The next brief
+number is 147.
+
+### Round 29 (kept for the record; 0.9.12, released 2026-11-15 in the evening)
 
 **2026-11-15, afternoon: round 29 on master for 0.9.12 (Fable 5.2 supervisor, no sessions), which George had not
 released** (`dev/briefs/ROUND-29.md` has his message, the crash, the review and its proof). A tapped reminder no

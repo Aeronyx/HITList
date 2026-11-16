@@ -5,6 +5,45 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.13
+
+0.9.12 was released on the evening of 2026-11-15. George the next day: "currently, when you group Switches on Flipboard, they all
+reset at the same time. Could you make it so that when you group switches that already exist that they maintain
+their old timing? That way we can group switches together one that resets once a week and one that resets every
+other day under the same group etc. Essentially, it's okay to have default reset times for a Switchboard but they
+shouldn't be locked to that reset time." And on the sync engine: "Please continue freely on the separate container
+for the iCloud engine if you think that's the best approach for a professional and robust (yet not overengineered)
+iCloud sync setup."
+
+Flipboard:
+
+- **A switch keeps its own timing on a Switchboard.** Drag a switch onto a Switchboard, or choose the board in its
+  card, and nothing about it changes but where it is shown: its interval, the day it is next due and its time stay.
+  Before, every switch on a board took the board's Daily or Weekly and they all reset together.
+- **A Switchboard's reset is a default, not a lock.** A switch made on a board starts on the board's cadence (every
+  day on a Daily board, every week on a Weekly one) and resets with the board at its reset time, as before. Its
+  card has the quick choices and the interval's dial on a board now: give it any other interval and it keeps its
+  own days, exactly as a loose switch does ("every 2 days" is two days from each flip). Set it back to the board's
+  cadence and the row reads "Every 1 day with Before Bed": it resets with the board again.
+- Switches that were already on a board reset with it as they always did. Changing a board's cadence or reset time
+  moves the switches that reset with it and leaves the others alone.
+- One limit, by design: every week on a Weekly board, and every day on a Daily board, mean the board's own week and
+  day. For seven days from each flip on a weekly board, set "7 days".
+- Nothing new is stored or synced: which clock a switch keeps is read from its own repeat. A device still on an
+  older build shows every switch on a board on the board's clock, as it did.
+
+Under the hood (HITList's own sync engine is still switched off, and a released build cannot run it):
+
+- **The engine has an iCloud container of its own**, `iCloud.com.trammells.hitlist.sync`, beside the tasks' and
+  Shared Tasks'. The sync HITList uses today reads everything in its own container, and older builds stay in
+  people's hands; in a container of its own, nothing an older build does can ever reach the engine's records, and
+  today's data stays exactly as it is if a device ever has to go back. This version only lists the container; it
+  opens nothing in it.
+- The reviewed engine ran against iCloud's test side for the first time, in the new container: every step of its
+  probe passed, and two Debug Mac apps synced through it.
+- On a Mac the engine now asks for pushes itself (until now only today's sync did, which the engine switches off).
+  A push waking the engine is still not proven: it takes a second device.
+
 ## 0.9.12 — build 29, 2026-11-15
 
 0.9.11 was released on 2026-11-15, and George wrote back within minutes: "Why did all the creatures in the Theme menu

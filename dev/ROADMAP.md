@@ -5,7 +5,26 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.12 (rounds 28 and 29, 2026-11-15: the night 0.9.11 was released, and the afternoon after)
+## Now: 0.9.13 (round 30, 2026-11-16, the day after 0.9.12 was released)
+
+George, on releasing 0.9.12 (`dev/briefs/ROUND-30.md`): grouped switches should "maintain their old timing … it's
+okay to have default reset times for a Switchboard but they shouldn't be locked to that reset time"; and "continue
+freely on the separate container for the iCloud engine if you think that's the best approach".
+
+| Brief | What | Status |
+|---|---|---|
+| supervisor | Flipboard: a switch keeps its own repeat on a Switchboard; one on the board's cadence resets with the board, any other keeps its own days; the card's interval on a board; a new switch on a board starts on its cadence. Nothing new stored | merged, awaiting release |
+| supervisor | The engine's own iCloud container, `iCloud.com.trammells.hitlist.sync`: registered, entitled, the probe (18 of 18) and two Debug Mac apps run through it on CloudKit Development; the release script knows it; the Mac registers for pushes when the engine starts | merged, switched off |
+
+Next for the engine (`dev/SYNC-ENGINE.md` sections 12 and 13): **a push waking the engine, proven with a second
+device** (a Debug build on George's phone beside the Mac; two apps on one Mac cannot show it); plain or encrypted
+fields (his to decide); the move from the mirror rehearsed on a copy of real data; one contract suite run against
+both the pretend iCloud and CloudKit Development, so a rule the two read differently is found by a test and not by
+a reviewer; the simplifications the review named and did not do. Then his devices first, then the friends, in a
+release that sets `SyncEngineSwitch.isAvailable` and `release.sh`'s `SYNC_ENGINE_LIVE`, after the engine's
+container's schema is deployed to Production.
+
+## Before: 0.9.12 (rounds 28 and 29, 2026-11-15: the night 0.9.11 was released, and the afternoon after; released that evening)
 
 George, minutes after releasing 0.9.11 (`dev/briefs/ROUND-28.md`): the creatures in the Theme menu had "got so
 small" and Quill looked "like he's melting"; and "If we need to make our own engine for proper cloud sync, let's get
@@ -28,13 +47,6 @@ SwiftData's mirror exactly as in 0.9.11. The design is `dev/SYNC-ENGINE.md`.
 | 146 `sync-review` | An independent review: twenty findings, twelve of them ways to lose data, each proven where it could be | merged; open ones listed in the record |
 | supervisor (round 29) | A tapped reminder crashed the app on iOS 26 (two reports from a friend): the system is answered on the main thread | merged, awaiting release |
 | supervisor (round 29) | The engine reviewed "as a lead Apple developer with a focus on efficient simplicity" (`dev/briefs/ROUND-29.md`): it deletes only what was deleted, so the mass-deletion hold, its numbers and the vouch are gone; a released build cannot switch it on; no whole-store reads per save or per fetch; a lost answer no longer undoes the person's next change | merged, switched off |
-
-Next, on George's word (`dev/SYNC-ENGINE.md` section 12): **a container of its own for the engine** (the mirror
-reads every zone of its container, so the engine's records must live where no older build looks; registering one
-is permanent and waits for him); plain or encrypted fields; then the move rehearsed on a copy of real data, his
-devices first, then the friends. Before any of that: what is still open (`dev/SYNC-ENGINE.md` section 13, as
-round 29 left it), a push waking the engine proven on a device, and one contract suite run against both the pretend
-iCloud and CloudKit Development, so a rule the two read differently is found by a test and not by a reviewer.
 
 ## Before: 0.9.11 (round 27, 2026-11-14, the evening after 0.9.10's release stopped at Apple's agreement; released 2026-11-15)
 

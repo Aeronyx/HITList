@@ -787,6 +787,21 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 30 (2026-11-16; the supervisor alone, no briefs): what a session must know now
+
+`dev/briefs/ROUND-30.md` has the round. Two things that are no longer as older blocks here say:
+
+- **A switch on a Switchboard keeps its own repeat.** It resets with the board only when its repeat is the board's
+  cadence (every day on a Daily board, every week on a Weekly one); any other repeat keeps its own days as a loose
+  switch does. Ask `TaskItem.resetBoard` (or `filterSwitchboard`, core's `SwitchboardSchedule.resets`) for the
+  clock a switch keeps; `task.switchboard` only says where it is shown. `Flipboard.move` never rewrites a repeat
+  or, unless the switch joins or leaves a board's clock, a due date. A new switch on a board starts on the board's
+  cadence (`SwitchDraft(on:)`). The card shows the interval on a board; "Daily, with Before Bed" is gone.
+- **The sync engine has a container of its own**, `iCloud.com.trammells.hitlist.sync`
+  (`SyncEngineSwitch.containerID`): the probe and every engine run on CloudKit Development go there, never into the
+  tasks' container. A push cannot be shown between two apps on one Mac (one device; iCloud does not notify the
+  device a change came from).
+
 ## Round 29 (2026-11-15, afternoon; the supervisor alone, no briefs): what a session must know about the engine now
 
 `dev/briefs/ROUND-29.md` has the round. Two things in the Round 28 blocks above and the record below are no longer
