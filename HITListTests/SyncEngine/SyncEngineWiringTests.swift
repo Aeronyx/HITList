@@ -73,6 +73,8 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertNotEqual(SyncEngineSwitch.containerID, HITListSchema.cloudKitContainerID, "not the mirror's")
         XCTAssertNotEqual(SyncEngineSwitch.containerID, SharedTasksSchema.containerID)
         #if os(macOS)
+        // CI builds unsigned (scripts/test.sh --unsigned): there is no signature to read there.
+        try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] == "1", "unsigned builds carry no entitlements")
         // Off the main thread: reading a signature may wait on the disk.
         let containers = await Task.detached { () -> [String]? in
             var code: SecCode?
