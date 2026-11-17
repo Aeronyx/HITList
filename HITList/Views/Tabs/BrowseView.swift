@@ -25,6 +25,8 @@ struct BrowseView: View {
     @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
 
     @State private var search = ""
+    /// The Groups' and labels' counts, kept between saves rather than worked out in the body (review 154, finding 1).
+    @State private var counts = SidebarCountsModel()
     @State private var now = Date()
     @State private var editingFilter: SavedFilter?
     @State private var creatingFilter = false
@@ -98,6 +100,7 @@ struct BrowseView: View {
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
+        .task { counts.start(context, labels: true) }
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
@@ -130,11 +133,8 @@ struct BrowseView: View {
 
     // MARK: - Sections
 
-    private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted && !$0.isSubtask } }
-
     private var sections: some View {
-        let open = openTasks
-        return List {
+        List {
             // The saved filters, right under the field (brief 61), as the header of a section with no rows: inside
             // the list, since a second scroll view above it took the large title's room from the list (a 170 pt
             // gap), and a header, since a row's rounded mask cut into the first chip.
@@ -149,12 +149,12 @@ struct BrowseView: View {
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,
-                              count: open.filter(\.isInInbox).count + SharedRows.shared.inboxCount(), subtitle: "Default Group")
+                              count: counts.inbox + SharedRows.shared.inboxCount(), subtitle: "Default Group")
                 }
                 ForEach(projects) { project in
                     link(.project(project.id)) {
                         BrowseRow(title: project.name, symbol: "circle.fill", tint: Color(hex: project.colorHex),
-                                  count: SidebarCounts.group(open, id: project.id), smallIcon: true)
+                                  count: counts.group(project.id), smallIcon: true)
                     }
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
@@ -184,7 +184,7 @@ struct BrowseView: View {
                 ForEach(labels) { label in
                     link(.label(label.id)) {
                         BrowseRow(title: label.name, symbol: "tag.fill", tint: Color(hex: label.colorHex),
-                                  count: SidebarCounts.label(open, label))
+                                  count: counts.label(label.id))
                     }
                     .contextMenu {
                         Button("Edit Label…") { editingLabel = label }
