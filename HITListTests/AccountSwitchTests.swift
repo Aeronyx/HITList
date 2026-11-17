@@ -122,6 +122,62 @@ final class AccountSwitchTests: XCTestCase {
         XCTAssertFalse(text.contains("acct1:") || text.contains("_alice") || text.contains("_bob"), "never an id")
     }
 
+    /// Brief 160 (147 F6): on HITList's own engine the engine's backup sets the previous account's backups aside, in
+    /// the brain's order; the monitor's switch does the rest and leaves the backups alone, so the two never race.
+    func testOnTheEngineTheSwitchLeavesTheBackupsToTheEngine() async {
+        let calls = Calls()
+        let report = await AccountSwitch.handleSwitch(from: alice, to: bob, ownsDeviceState: true, setsAsideBackups: false,
+                                                      cleanup: cleanup(calls), log: { calls.lines.append(($0, $1, $2)) },
+                                                      center: NotificationCenter())
+        XCTAssertTrue(calls.backups.isEmpty, "the engine's backup sets them aside")
+        XCTAssertEqual(calls.reminders, 1)
+        XCTAssertEqual(calls.draft, 1)
+        XCTAssertEqual(calls.caches, 1)
+        XCTAssertEqual(report.backups, LocalBackup.SetAside())
+        XCTAssertEqual(calls.lines.first?.2["backups"], "set aside with the backup before the switch")
+    }
+
+    /// The engine's host: at a switch, its backup first, then the previous account's backups set aside (keyed by
+    /// the hashed account ids), and nothing set aside when the backup failed or for a sign-out.
+    func testTheEnginesBackupAtASwitchSetsThePreviousAccountsBackupsAside() async throws {
+        final class Order: @unchecked Sendable { var lines: [String] = []; var failing = false }
+        struct Broke: Error {}
+        let order = Order()
+        let host = SyncEngineHost(backUp: { reason in
+            order.lines.append("backup \(reason.rawValue)")
+            if order.failing { throw Broke() }
+        }, setAside: { previous, current in order.lines.append("aside \(previous) \(current)") })
+        try await host.willRemoveLocalData(reason: .accountSwitched, switchingFrom: "_alice", to: "_bob")
+        XCTAssertEqual(order.lines, ["backup accountSwitched", "aside _alice _bob"])
+        order.lines = []
+        try await host.willRemoveLocalData(reason: .signedOut, switchingFrom: "_alice", to: nil)
+        XCTAssertEqual(order.lines, ["backup signedOut"])
+        order.lines = []
+        order.failing = true
+        do {
+            try await host.willRemoveLocalData(reason: .accountSwitched, switchingFrom: "_alice", to: "_bob")
+            XCTFail("the backup failed")
+        } catch {}
+        XCTAssertEqual(order.lines, ["backup accountSwitched"], "nothing set aside when the backup failed")
+        host.finish()
+    }
+
+    /// The live setting aside keys the folders by the hashed ids, and only for the real store.
+    func testTheEnginesSettingAsideUsesTheHashedAccounts() throws {
+        let dir = try tempDir(), root = try tempDir()
+        try Data("{}".utf8).write(to: dir.appending(path: "HITList-2026-11-16.json"))
+        defaults.set(Date(), forKey: LocalBackup.lastBackupKey)
+        SyncEngineHost.setAsideBackups(previous: "_alice", current: "_bob", ownsBackups: true, directory: dir, root: root,
+                                       defaults: defaults)
+        let aside = LocalBackup.backups(in: LocalBackup.setAsideFolder(for: alice, in: root))
+        XCTAssertEqual(aside.map(\.lastPathComponent), ["HITList-2026-11-16.json"])
+        XCTAssertNil(defaults.object(forKey: LocalBackup.lastBackupKey), "the day's backup is not marked done")
+        try Data("{}".utf8).write(to: dir.appending(path: "HITList-2026-11-17.json"))
+        SyncEngineHost.setAsideBackups(previous: "_bob", current: "_alice", ownsBackups: false, directory: dir, root: root,
+                                       defaults: defaults)
+        XCTAssertEqual(LocalBackup.backups(in: dir).count, 1, "a side store's run leaves the real backups alone")
+    }
+
     func testASideStoreClearsOnlyItsOwnDraft() async {
         let calls = Calls()
         let report = await AccountSwitch.handleSwitch(from: alice, to: bob, ownsDeviceState: false, cleanup: cleanup(calls, hadDraft: false),

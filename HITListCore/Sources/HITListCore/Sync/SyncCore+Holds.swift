@@ -155,11 +155,29 @@ extension SyncCore {
     /// the items that iCloud held removed. A crash before the removal leaves items with no memory of them, which
     /// merge afresh at the next sign-in; the other order would leave a memory of items that are gone, which the next
     /// compare would read as deletions to send. False when the backup failed: nothing was removed.
-    func leaveAccount(reason: SyncRemovalReason) async -> Bool {
+    ///
+    /// At a switch to another account (`joining`) from one the device is signed in to, every item leaves, those
+    /// iCloud never held too, after the same backup: they are the previous account's, and would otherwise go to the
+    /// next account's iCloud (brief 160, review 147 F11). A sign-out removes only what iCloud held, as the mirror did
+    /// (George decides separately whether a sign-out should keep everything), and what it left stays on the device
+    /// at a later sign-in, to whichever account. At every switch the host's backup names both accounts, so that it
+    /// sets the previous account's backups aside itself, in this order (147 F6).
+    func leaveAccount(reason: SyncRemovalReason, joining current: String? = nil) async -> Bool {
+        // Signed in to the account it leaves (or a switch from one tried again after its backup failed), not one it
+        // was already signed out of.
+        let signedIn = hold != .noAccount || switchTo != nil
         await enterHold(.noAccount)
-        let synced = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
-        if !synced.isEmpty {
-            guard await backup(reason) else { return false }
+        var leaving = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
+        if current != nil, signedIn {
+            do {
+                leaving.formUnion(try await store.records().map(\.key))
+            } catch {
+                await storeFailed(error)
+                return false
+            }
+        }
+        if !leaving.isEmpty || current != nil {
+            guard await backup(reason, from: account, to: current) else { return false }
         }
         // A deletion made here and not sent yet is the person's, as every one is (section 7): across a sign-out it is
         // kept, with the account it belongs to, and goes at the next sign-in to that account (a sign-in to another
@@ -170,7 +188,9 @@ extension SyncCore {
         do {
             try await ledger.reset()
             forgetCache(keepAccount: false)
-            if let owner, !unsent.isEmpty {
+            // At a sign-out the account it was is kept too (brief 160): a sign-in to another account later is then
+            // a switch, whose backup sets the previous account's backups aside (`SyncHost`); to the same one, a join.
+            if let owner, reason == .signedOut {
                 var write = LedgerWrite()
                 write.facts[LedgerFact.account] = Data(owner.utf8)
                 write.upsert = unsent.map { LedgerEntry(key: $0.key, base: nil, system: nil, deletedHereAt: $0.deletedHereAt) }
@@ -181,7 +201,7 @@ extension SyncCore {
             return false
         }
         await enterHold(.noAccount)
-        await removeHere(synced, why: reason.rawValue)
+        await removeHere(leaving, why: reason.rawValue)
         return true
     }
 
@@ -189,7 +209,7 @@ extension SyncCore {
     /// fails, the brain stays held with the account it is to join remembered (`switchFact`), and `resume()` or the
     /// next start tries again: the transport has moved on and will not say it twice.
     func switchAccount(to current: String) async {
-        if await leaveAccount(reason: .accountSwitched) {
+        if await leaveAccount(reason: .accountSwitched, joining: current) {
             await joinAccount(current)
         } else {
             var write = LedgerWrite()
@@ -340,14 +360,14 @@ extension SyncCore {
     // MARK: Removing the person's items
 
     /// The host's backup. False (and the reason kept for the status) when there is no host or it throws.
-    func backup(_ reason: SyncRemovalReason) async -> Bool {
+    func backup(_ reason: SyncRemovalReason, from previous: String? = nil, to current: String? = nil) async -> Bool {
         guard let host else {
             holdNote = "Nothing was removed from this device: no backup could be written."
             log(holdNote ?? "")
             return false
         }
         do {
-            try await host.willRemoveLocalData(reason: reason)
+            try await host.willRemoveLocalData(reason: reason, switchingFrom: previous, to: current)
             return true
         } catch {
             // Plain words for the person; the error in the log only (brief 160).

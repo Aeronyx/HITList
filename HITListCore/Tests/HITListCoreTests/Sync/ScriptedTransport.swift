@@ -145,10 +145,20 @@ final class TestHost: SyncHost, @unchecked Sendable {
 
     struct BackupFailed: Error {}
 
+    private var _switches: [String] = []
+
     func willRemoveLocalData(reason: SyncRemovalReason) async throws {
         lock.withLock { _backups.append(reason) }
         if let backupError { throw backupError }
     }
+
+    /// Brief 160: an account switch's backup names both accounts (the host sets the previous one's backups aside).
+    func willRemoveLocalData(reason: SyncRemovalReason, switchingFrom previous: String?, to current: String?) async throws {
+        lock.withLock { _switches.append("\(reason.rawValue) \(previous ?? "-") → \(current ?? "-")") }
+        try await willRemoveLocalData(reason: reason)
+    }
+
+    var switches: [String] { lock.withLock { _switches } }
     func didWrite(_ keys: Set<SyncKey>) { lock.withLock { _written.append(keys) } }
     func didAccept(_ keys: Set<SyncKey>) { lock.withLock { _accepted.append(keys) } }
     func statusDidChange(_ status: SyncStatus) { lock.withLock { _statuses.append(status) } }

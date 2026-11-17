@@ -510,12 +510,18 @@ public actor SyncSimulation {
     /// The model's side of a sign-in or sign-out (section 10): the items on the device that its ledger holds no living
     /// base for are the ones iCloud never held; they stay on the device and go with it to the next account.
     private func recordAccount(_ name: String, to account: String?) async {
-        guard let device = slots[name], await cloud.account(of: name) != account else { return }
+        let from = await cloud.account(of: name)
+        guard let device = slots[name], from != account else { return }
         let records = (try? await device.store.records()) ?? []
         let entries = (try? await device.ledger.entries()) ?? []
         let living = Set(entries.filter { $0.base?.isDeleted == false }.map(\.key))
+        // A switch from an account the device is signed in to, and its brain knows it is (its ledger names the
+        // account: a brain that never joined one reads the next as a first sign-in): they leave with the rest (brief
+        // 160, 147 F11).
+        let known = (try? await device.ledger.fact(LedgerFact.account)).flatMap { $0 }.map { String(decoding: $0, as: UTF8.self) }
         intent.recordAccount(step: step, device: name, to: account,
-                             travelling: records.map(\.key).filter { !living.contains($0) })
+                             travelling: records.map(\.key).filter { !living.contains($0) },
+                             leaving: from != nil && account != nil && known != nil && known != account)
     }
 
     private func apply(_ fault: SimCloudFault) async {

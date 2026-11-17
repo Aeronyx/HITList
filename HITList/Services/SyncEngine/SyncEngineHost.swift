@@ -31,17 +31,24 @@ final class SyncEngineHost: SyncHost, @unchecked Sendable {
     let events: AsyncStream<Event>
     private let feed: AsyncStream<Event>.Continuation
     private let backUp: @MainActor (SyncRemovalReason) throws -> Void
+    private let setAside: @MainActor (_ previous: String, _ current: String) -> Void
     private let clock: @Sendable () -> Date
 
     /// - Parameter backUp: writes the backup before anything of the person's leaves the device (`SyncEngine` passes
     ///   `SyncEngineHost.backUpStore`); throwing stops the removal.
+    /// - Parameter setAside: at an account switch, after that backup, sets the previous account's backups aside
+    ///   (`setAsideBackups`), by the transport's account ids.
     init(clock: @escaping @Sendable () -> Date = { Date() },
-         backUp: @escaping @MainActor (SyncRemovalReason) throws -> Void) {
+         backUp: @escaping @MainActor (SyncRemovalReason) throws -> Void,
+         setAside: @escaping @MainActor (_ previous: String, _ current: String) -> Void = { previous, current in
+             SyncEngineHost.setAsideBackups(previous: previous, current: current)
+         }) {
         var continuation: AsyncStream<Event>.Continuation!
         // Unbounded: nothing the brain says may be dropped (a lost `wrote` would leave a reminder or a widget stale).
         events = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         feed = continuation
         self.backUp = backUp
+        self.setAside = setAside
         self.clock = clock
     }
 
@@ -54,6 +61,18 @@ final class SyncEngineHost: SyncHost, @unchecked Sendable {
 
     func willRemoveLocalData(reason: SyncRemovalReason) async throws {
         try await MainActor.run { try backUp(reason) }
+    }
+
+    /// The one order of an account switch on the engine (brief 160, review 147 F6): this backup (the previous
+    /// account's data, as today's backup), then the previous account's backups set aside with it, and only then does
+    /// the brain remove anything and join the next account. `CloudSyncMonitor`'s own switch (`AccountSwitch
+    /// .handleSwitch`) then leaves the backups alone (`setsAsideBackups: false`), so the two never race over them.
+    /// Setting aside also forgets the day's backup date, so the day's backup is not marked done by this one.
+    func willRemoveLocalData(reason: SyncRemovalReason, switchingFrom previous: String?, to current: String?) async throws {
+        try await MainActor.run {
+            try backUp(reason)
+            if reason == .accountSwitched, let previous, let current { setAside(previous, current) }
+        }
     }
 
     func didWrite(_ keys: Set<SyncKey>) {
@@ -91,6 +110,22 @@ final class SyncEngineHost: SyncHost, @unchecked Sendable {
             log.error("sync engine: backup before removing local data failed: \(error.localizedDescription, privacy: .public)")
             throw BackupFailed(words: error.localizedDescription)
         }
+    }
+
+    /// The previous account's backups out of the visible folder, the next account's back (`LocalBackup.setAside`),
+    /// with folders keyed by the hashed account ids (`AccountIdentity`). The ids are the engine's container's user
+    /// record names, which differ from the tasks' container's: a folder set aside under the mirror is not brought
+    /// back by the engine (it stays where it is; nothing is deleted). Only for the real store (`ownsBackups`): a
+    /// Debug run on a side store writes its backup into a folder of its own and never touches the real ones.
+    @MainActor
+    static func setAsideBackups(previous: String, current: String, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen,
+                                directory: URL = LocalBackup.directory, root: URL = LocalBackup.setAsideRoot,
+                                defaults: UserDefaults = AppGroup.defaults) {
+        guard ownsBackups else { return }
+        let result = LocalBackup.setAside(previousAccount: AccountIdentity.key(recordName: previous),
+                                          currentAccount: AccountIdentity.key(recordName: current),
+                                          directory: directory, root: root, defaults: defaults)
+        log.notice("sync engine: account switch: \(result.movedAside) backup(s) set aside, \(result.restored) restored")
     }
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")

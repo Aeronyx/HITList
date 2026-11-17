@@ -60,6 +60,8 @@ enum AccountSwitch {
         /// False when this launch doesn't own the device's reminders and backups (a Debug build's side store).
         var ownsDeviceState = true
         var backups = LocalBackup.SetAside()
+        /// The engine's backup set the backups aside (`setsAsideBackups: false`).
+        var backupsByEngine = false
     }
 
     typealias Log = @MainActor (_ message: String, _ level: SyncLogEntry.Level, _ fields: [String: String]) -> Void
@@ -67,17 +69,21 @@ enum AccountSwitch {
 
     /// The account changed from `previous` to `current` (both `AccountIdentity` keys). `ownsDeviceState`:
     /// this launch opened the real store, so the reminders, badge and backups are its to clear.
+    /// `setsAsideBackups`: false on HITList's own engine, whose backup before the switch sets the previous account's
+    /// backups aside in the brain's order (`SyncEngineHost`, brief 160): two owners of those files raced (147 F6).
     @discardableResult
     static func handleSwitch(from previous: String, to current: String,
                              ownsDeviceState: Bool = ModelContainerFactory.isMainStoreOpen,
+                             setsAsideBackups: Bool = true,
                              cleanup: Cleanup = .live, log: Log = syncLog,
                              center: NotificationCenter = .default) async -> Report {
         var report = Report(ownsDeviceState: ownsDeviceState)
+        report.backupsByEngine = !setsAsideBackups
         report.draftCleared = cleanup.clearDraft()
         cleanup.forgetCaches()
         if ownsDeviceState {
             await cleanup.clearReminders()
-            report.backups = cleanup.setAsideBackups(previous, current)
+            if setsAsideBackups { report.backups = cleanup.setAsideBackups(previous, current) }
         }
         log(message(for: report), .notice, fields(for: report))
         center.post(name: .accountDidSwitch, object: nil)
@@ -103,7 +109,9 @@ enum AccountSwitch {
         var fields = ["draft": report.draftCleared ? "cleared" : "none"]
         if report.ownsDeviceState {
             fields["reminders"] = "cleared"
-            fields["backups"] = "\(report.backups.movedAside) set aside, \(report.backups.restored) restored"
+            fields["backups"] = report.backupsByEngine
+                ? "set aside with the backup before the switch"
+                : "\(report.backups.movedAside) set aside, \(report.backups.restored) restored"
         } else {
             fields["reminders"] = "left alone: this run uses \(ModelContainerFactory.openedStoreDescription)"
         }

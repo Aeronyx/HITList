@@ -754,7 +754,10 @@ final class CloudSyncMonitor {
         accountKey = identity.account
         guard identity.isSwitch, let previous = identity.previous else { return }
         setNotice(.switched)
-        Task { await AccountSwitch.handleSwitch(from: previous, to: identity.account) }
+        // On HITList's own engine the engine's backup before the switch sets the backups aside, in its order (brief
+        // 160): this one does the rest.
+        let onEngine = isOnEngine
+        Task { await AccountSwitch.handleSwitch(from: previous, to: identity.account, setsAsideBackups: !onEngine) }
     }
 
     // MARK: - Network
