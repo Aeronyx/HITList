@@ -787,6 +787,52 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 32 (2026-11-16, night; briefs 147–155, Opus 5.5 agents started by the supervisor with the Agent tool)
+
+George, 2026-11-16: "Please work freely and complete the sync engine. The app is largely feature complete, or as far
+as I wanted it to get for an initial release; let's shift into review and hardening mode so we can prepare for a real
+launch, but I also won't feel comfortable launching until we have at least a few days of experience with the new sync
+system to confirm its legitimacy … Don't be afraid to make feature changes as well if you notice/think of glaring
+issues or objective upgrades during your review … using Opus 5.5 subagents as often as possible". Decided by him the
+same day: the engine's fields stay plain (no encryption); the tasks' container's Development side has been reset.
+And: "always tell me if any of my friend's data is gonna be wiped if ever so they can export it beforehand": anything
+you find that could delete, hide or fail to carry over a tester's data goes at the top of your report.
+
+The round has two halves: **the engine ready for George to switch on for his own devices in the next release**
+(`dev/SYNC-ENGINE.md` section 14, stages 2 to 5; the supervisor builds the switch, the move's screen and the audit
+himself), and **a review of the whole app before a real launch**.
+
+**You are an agent, not a session.** Nobody answers a question: decide, and say what you decided. Your final message
+is your report to the supervisor and the only thing of yours that is certainly read; it names every file you wrote.
+The older blocks below that speak of sessions, simulators per session and final messages to George apply as far as
+they make sense; where they differ from this block, this block is right.
+
+- **Read first**: this block; the two sections at the top of this file; the Round 31, 30 and 29 blocks; your brief;
+  then what your brief names. `dev/SUPERVISOR.md` section 3 holds the rules that must never break.
+- **Notes folder** (outside git; write your findings and anything long there):
+  `~/Library/Application Support/Claude/side-session-notes/local_8995b93d-4779-400a-855f-77db7b4e0b1d/round-32/<your brief's file name without .md>/`.
+- **Reviewers (briefs marked read-only)** change no file in the repository, build nothing and run nothing in
+  `~/Desktop/HITList` (the supervisor is editing and building there: `HITList/Services/SyncEngine/
+  SyncEngine*.swift`, `HITList/Views/Settings/`, `scripts/release.sh` may be mid-edit; `git show HEAD:<path>` is the
+  committed text). Reading Apple's documentation on the web is welcome; nothing of the project's or of George's goes
+  into a request.
+- **Code agents (briefs marked code)** work in the worktree they were started in, on its branch, touch only the files
+  their brief lists, commit per item (`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), and never push,
+  merge, switch branches, run `scripts/release.sh`, `sudo` or `rm -rf`. One derived-data folder
+  (`-derivedDataPath build.noindex/<brief number>` inside your worktree): the disk has about 40 GB free and nine
+  agents share it. A simulator of your own if you need one (`HITList-<brief number>`), deleted at the end. Never
+  `/Applications/HITList.app`, never the real store, never George's phone, never a system dialog.
+- **A finding** is numbered and has: a severity (**A** can lose, hide or corrupt a person's data, stop sync, or
+  crash; **B** behaviour or words a person will meet and be wronged or confused by; **C** polish); where
+  (`path:line`); what happens, as one concrete sequence of steps a person or a device takes; the smallest fix you
+  would make; and how sure you are (**certain**: you traced it in the code or ran it; **likely**; **to check**) with
+  what you did to be sure. Something you could not make concrete is not a finding: leave it out, or list it in one
+  line under "Not traced". No padding, no praise, no restating what the code does well. George values "efficient
+  simplicity": where removing something fixes a finding, propose the removal.
+- **Your report** (the final message): the findings in order of severity, each in two or three lines with its number
+  and place (the full text is in your file); what you did not get to; for code agents also the branch, each commit,
+  test counts before and after, and exactly how you proved it.
+
 ## Round 31 (2026-11-16, evening; the supervisor alone, no briefs): the engine's road
 
 `dev/SYNC-ENGINE.md` section 14 is the plan every engine brief from now on belongs to; say which stage and item a
