@@ -38,8 +38,22 @@ final class ClaudeAccessTests: XCTestCase {
     func testAllButPrivateHidesOnlyPrivateTasks() {
         let rule = allBut
         XCTAssertEqual(rule.ruleLabel, "private")
-        XCTAssertEqual(visibleNames(rule, all), ["plain", "shared", "shared child"],
-                       "@private hides case-insensitively; a subtask follows its parent, never its own labels")
+        XCTAssertEqual(visibleNames(rule, all), ["plain", "shared"],
+                       "@private hides case-insensitively; a subtask hides with its parent, and by its own @private too")
+    }
+
+    /// Round 32 (brief 157, the privacy review's finding 2): "All tasks but @private" never shows a task the person
+    /// marked private, wherever it sits: a sub-task labelled @private under a visible task stays hidden. The other way
+    /// round is unchanged: a sub-task's own labels never make it visible when its parent is hidden, and in "Only tasks
+    /// with @claude" a sub-task still follows its parent alone.
+    func testAPrivateSubtaskStaysHiddenUnderAVisibleParent() {
+        let visibleParent = Node("errands")
+        let privateChild = Node("pharmacy", ["Private"], parent: visibleParent)
+        let plainChild = Node("bank", ["home"], parent: visibleParent)
+        XCTAssertEqual(visibleNames(allBut, [visibleParent, privateChild, plainChild]), ["errands", "bank"])
+        let claudeChild = Node("ask", ["claude"], parent: visibleParent)
+        XCTAssertEqual(visibleNames(ClaudeAccessRule(mode: .onlyShared), [visibleParent, claudeChild]), [],
+                       "in @claude mode a sub-task follows its parent")
     }
 
     func testOnlySharedShowsOnlyClaudeTasks() {
@@ -64,7 +78,8 @@ final class ClaudeAccessTests: XCTestCase {
         let byName = Dictionary(uniqueKeysWithValues: rule.visible(all, labelNames: \.labels, parent: \.parent).map { ($0.name, $0) })
         XCTAssertNil(byName["secret"])
         XCTAssertNil(byName["secret child"])
-        XCTAssertNotNil(byName["shared child"])
+        XCTAssertNil(byName["shared child"], "a sub-task labelled @private, under a visible parent (brief 157)")
+        XCTAssertNotNil(byName["shared"])
     }
 
     func testContainersAreNamedOnlyWithAVisibleTaskOrNone() {
