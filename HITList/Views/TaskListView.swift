@@ -7,9 +7,46 @@ struct TaskListView: View {
     /// Here, not in the list, so the list's query can follow it (review 154, finding 2(a)); kept from list to list, as
     /// it always was.
     @State private var showCompleted = false
+    /// The day Today's query reaches from (`tasks(for:showCompleted:today:)`): a new day, zone or clock builds it again.
+    @State private var day = Date()
 
     var body: some View {
-        TaskListContent(selection: selection, showCompleted: $showCompleted)
+        TaskListContent(selection: selection, showCompleted: $showCompleted, day: day)
+            .onReceive(CalendarChange.moments) { day = $0 }
+    }
+
+    private static let topLevel = #Predicate<TaskItem> { task in task.parent == nil }
+    private static let openTopLevel = #Predicate<TaskItem> { task in !task.isCompleted && task.parent == nil }
+
+    /// Due before `bound`, or repeating (where the switches are).
+    private static func todaysTasks(before bound: Date) -> Predicate<TaskItem> {
+        let soon = dueBefore(bound)
+        return #Predicate<TaskItem> { task in task.parent == nil && (task.recurrence != nil || soon.evaluate(task)) }
+    }
+
+    private static func openTodaysTasks(before bound: Date) -> Predicate<TaskItem> {
+        let soon = dueBefore(bound)
+        return #Predicate<TaskItem> { task in
+            !task.isCompleted && task.parent == nil && (task.recurrence != nil || soon.evaluate(task))
+        }
+    }
+
+    /// Dated before `bound` (its own predicate, so the longer ones stay quick to compile).
+    private static func dueBefore(_ bound: Date) -> Predicate<TaskItem> {
+        let never = Date.distantFuture
+        return #Predicate<TaskItem> { task in (task.dueDate ?? never) < bound }
+    }
+
+    /// In no Group (its own predicate: inside a longer one it took the compiler too long).
+    private static let ungrouped = #Predicate<TaskItem> { task in task.project == nil }
+
+    /// Dated, or repeating, or in no Group: what is left out is an undated task in a Group that doesn't repeat (a note).
+    private static let inboxTasks = #Predicate<TaskItem> { task in
+        task.parent == nil && (task.dueDate != nil || task.recurrence != nil || ungrouped.evaluate(task))
+    }
+
+    private static let openInboxTasks = #Predicate<TaskItem> { task in
+        !task.isCompleted && task.parent == nil && (task.dueDate != nil || task.recurrence != nil || ungrouped.evaluate(task))
     }
 
     /// The tasks a list can show, fetched rather than filtered from every task (review 154, finding 2(a)), in the order
@@ -17,18 +54,27 @@ struct TaskListView: View {
     /// what a list shows is decided as before: sub-tasks are never rows of their own (`TaskOrdering`, `FilterQuery`), and
     /// completed tasks are rows only in Completed, with Show completed on, or in a saved filter whose query names
     /// completion (`FilterQuery.mentionsCompleted`), which therefore fetches them too.
-    static func tasks(for selection: SidebarItem, showCompleted: Bool) -> FetchDescriptor<TaskItem> {
-        var descriptor: FetchDescriptor<TaskItem>
+    /// Today and the Inbox fetch no more than their rules can take (`TaskOrdering.isInToday`, `isInInbox`): a task
+    /// that isn't a switch is in Today only when due by the end of `today` (the bound leaves a day to spare, for a list
+    /// whose moment moves before its query is built again), in the Inbox only when it has a date or no Group; a switch
+    /// repeats, and an opted-in one is today's whatever its date, so every repeating task is fetched.
+    static func tasks(for selection: SidebarItem, showCompleted: Bool, today: Date = Date(),
+                      calendar: Calendar = .current) -> FetchDescriptor<TaskItem> {
+        let predicate: Predicate<TaskItem>
         switch selection {
+        case .today:
+            let bound = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: today)) ?? .distantFuture
+            predicate = showCompleted ? todaysTasks(before: bound) : openTodaysTasks(before: bound)
+        case .inbox:
+            predicate = showCompleted ? inboxTasks : openInboxTasks
         case .completed:
-            descriptor = FetchDescriptor(predicate: #Predicate { $0.isCompleted && $0.parent == nil })
+            predicate = #Predicate<TaskItem> { task in task.isCompleted && task.parent == nil }
         case .filter:
-            descriptor = FetchDescriptor(predicate: #Predicate { $0.parent == nil })
+            predicate = topLevel
         default:
-            descriptor = showCompleted
-                ? FetchDescriptor(predicate: #Predicate { $0.parent == nil })
-                : FetchDescriptor(predicate: #Predicate { !$0.isCompleted && $0.parent == nil })
+            predicate = showCompleted ? topLevel : openTopLevel
         }
+        var descriptor = FetchDescriptor<TaskItem>(predicate: predicate)
         descriptor.sortBy = [SortDescriptor(\.createdAt)]
         // Every rule asks whether a task is a switch, which reads its labels: in the fetch, not one fault per task.
         descriptor.relationshipKeyPathsForPrefetching = [\.labels]
@@ -105,10 +151,10 @@ private struct TaskListContent: View {
     private let isCompact = false
     #endif
 
-    init(selection: SidebarItem, showCompleted: Binding<Bool>) {
+    init(selection: SidebarItem, showCompleted: Binding<Bool>, day: Date) {
         self.selection = selection
         _showCompleted = showCompleted
-        _allTasks = Query(TaskListView.tasks(for: selection, showCompleted: showCompleted.wrappedValue))
+        _allTasks = Query(TaskListView.tasks(for: selection, showCompleted: showCompleted.wrappedValue, today: day))
     }
 
     private var currentProject: Project? {

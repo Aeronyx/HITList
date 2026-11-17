@@ -63,14 +63,19 @@ final class ListSamenessTests: XCTestCase {
         let every = try everyTask()
         for (selection, query) in try lists() {
             for showCompleted in [false, true] {
-                let own = try context.fetch(TaskListView.tasks(for: selection, showCompleted: showCompleted))
-                XCTAssertLessThanOrEqual(own.count, every.count)
                 for now in moments {
+                    // Today's query reaches from the day it was built on: built at `now`, and a day before it (a list
+                    // whose moment moved past midnight before its query was built again).
+                    for built in [now, now.addingTimeInterval(-86_400)] {
+                    let own = try context.fetch(TaskListView.tasks(for: selection, showCompleted: showCompleted,
+                                                                   today: built))
+                    XCTAssertLessThanOrEqual(own.count, every.count)
                     let before = try? matched(selection, query: query, showCompleted: showCompleted, tasks: every, now: now)
                     let after = try? matched(selection, query: query, showCompleted: showCompleted, tasks: own, now: now)
                     XCTAssertNotNil(before, "\(selection) \(query ?? "")", file: file, line: line)
                     XCTAssertEqual(before, after, "\(selection) \(query ?? "") completed \(showCompleted) at \(now)",
                                    file: file, line: line)
+                    }
                 }
             }
         }

@@ -50,8 +50,10 @@ enum WidgetSnapshotBuilder {
         let horizon = calendar.date(byAdding: .day, value: datedHorizonDays, to: calendar.startOfDay(for: now))
             ?? now.addingTimeInterval(Double(datedHorizonDays) * 86_400)
         let never = Date.distantFuture
+        // Two predicates, so neither takes the compiler long.
+        let soon = #Predicate<TaskItem> { task in (task.dueDate ?? never) < horizon }
         var descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-            !task.isCompleted && task.parent == nil && (task.recurrence != nil || (task.dueDate ?? never) < horizon)
+            !task.isCompleted && task.parent == nil && (task.recurrence != nil || soon.evaluate(task))
         })
         descriptor.relationshipKeyPathsForPrefetching = [\.labels]
         return descriptor
