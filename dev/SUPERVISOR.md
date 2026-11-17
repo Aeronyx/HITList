@@ -398,6 +398,32 @@ does not notify of its own change. Do not spend another run on it here: it needs
 single-window capture (the menu is another window); arrow keys sent before the menu is open move the list's
 selection instead. Open it, capture once to see the inactive title bar, then send the keys.
 
+Lessons from round 32 (fourteen agents with the Agent tool; the engine made ready, the whole app reviewed):
+**A rehearsal with the real second device found what three reviews, a simulation of thousands of histories and an
+18-step probe had not.** The fault (Apple's engine not catching up after a relaunch) lived in the one mode nothing
+had run: the app ran the engine scheduling itself, every proof ran it by hand. Before anything goes live, list
+what differs between the rig and the product (a mode, a build setting, an environment, the number of devices) and
+run the product's side of each.
+**An audit that shares nothing with the thing it audits is worth a day.** Check iCloud… on the engine reads the zone
+by a second road; it named the six missing records while the bolt was filled. Build the independent check before
+the rehearsal, not after.
+**The same symptom can have two causes.** Two stores on one Mac did not fetch each other's changes because iCloud's
+change feed does not come back to the device a change was made on; the phone did not for another reason
+altogether. When a known limit explains a symptom, still run the case the limit does not cover.
+**Ask CloudKit directly when the engine's answer is in doubt** (`-rehearsalRawChanges`, `HITLIST_SYNC_TRACE=1`): one
+raw request beside the engine settled in a minute what an hour of reasoning had not.
+**Agents as reviewers and fixers**: six read-only reviews in parallel (each with a severity scale, "a finding is a
+sequence of steps", and "no padding") gave some sixty findings in fifteen minutes to an hour; five fixers followed,
+each with a list of files that were its own and a list that were not, and every merge was clean. The harness
+refuses an agent's report file: the report is its final message, and the supervisor saves it. Cut worktree agents
+from a commit that holds their brief, and tell them to fast-forward if they find they were cut earlier. An
+interrupted tool call means stop: say where things stand and wait for George, whatever notices arrive meanwhile.
+**A reset of a CloudKit Development side takes the push subscription with it**, and Apple's engine does not save
+its own again while it is not scheduling itself: the engine keeps its own now.
+**A test that passes on the Mac can crash on the iPhone suite**: a detached task that outlives its test reached a
+context whose container was gone. Anything a save triggers later must not run under the hosted tests, or must
+not touch the store.
+
 Lessons from round 31 (no sessions; the engine on George's iPhone, a push proven, the road written):
 **George's phone can run a Debug build, on his word, and nothing of his is at risk from it**: a Development build
 opens only its own side store and settings suite, and stands down from reminders, Spotlight and backups (read
@@ -885,7 +911,37 @@ first launch (the screens review would move it); the repository is public and ho
 Feedback and in `dev/` (his to keep or change); the 72 merged session worktrees (still unanswered, not asked
 again).
 
-## 8. Where things stand (2026-11-16, evening: round 31 on master, nothing to release)
+## 8. Where things stand (2026-11-17, early: round 32 on master, 0.9.14 prepared for George to release)
+
+**2026-11-17, early: round 32 on master for 0.9.14 (Fable 5.2 supervisor; fourteen Opus 5.5 agents with the Agent
+tool, briefs 147 to 160; no sessions)** (`dev/briefs/ROUND-32.md`). George that night: "Please work freely and
+complete the sync engine … let's shift into review and hardening mode so we can prepare for a real launch, but I
+also won't feel comfortable launching until we have at least a few days of experience with the new sync system".
+
+**The engine is ready for his own devices** (`dev/SYNC-ENGINE.md` section 14, stage 5). 0.9.14 lets a store be
+moved to it from a hidden group (seven taps on Settings → iCloud's environment row); nothing moves by itself and
+no friend's data is touched. What he does, in order: deploy the engine's schema (CloudKit Console →
+`iCloud.com.trammells.hitlist.sync` → Development → Deploy Schema Changes…; its Development side holds exactly
+`dev/cloudkit/sync-engine.ckdb`, so **nobody runs the transport's probe before he has**), run
+`scripts/release.sh --version 0.9.14 --quick` (it refuses while Production lacks the schema), then move the Mac and
+at once the iPhone. Then a week, with Check iCloud… on both now and then.
+
+**What the round found with his phone beside the Mac**: Apple's `CKSyncEngine`, scheduling itself, did not ask
+iCloud what changed after a relaunch. It runs with its scheduling off now and the app asks for each sync (section
+6a). The move and the way back were rehearsed with both devices, and with a copy of his own tasks.
+
+**Six reviews of the whole app and their fixes** are in 0.9.14 (the record lists each, and what was left on
+purpose). Changes in behaviour he was told of: notifications asked for at the first reminder; no two Groups, labels
+or filters of one name; a label on tasks asks before it goes; a move to Shared Tasks asks; Import JSON asks.
+
+**Open with him**: the newest daily backup was dated 13 November on his phone and 14 November on his Mac when the
+round looked (are backups failing, or were the apps not opened?); whether a sign-out should keep the tasks on the
+device (recommended, before everyone moves); the location question at a first launch; the repository is public
+and holds his address; his phone carried a Debug build at the round's end (TestFlight → HITList → Install); a
+push from the phone to the Mac was not seen that night; the worktrees (72 earlier ones and this round's fourteen;
+about 30 GB free). The next brief number is 161.
+
+### Round 31 (kept for the record; nothing released)
 
 **2026-11-16, evening: round 31 (Fable 5.2 supervisor, no sessions), after George released 0.9.13**
 (`dev/briefs/ROUND-31.md`). At his word ("Please do plan the engine's next steps. You may indeed use my iPhone for a
