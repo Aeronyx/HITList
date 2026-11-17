@@ -14,12 +14,22 @@ struct SearchScreen: View {
     @State private var now = Date()
     /// "Save as filter…": the query typed, for the filter editor to name.
     @State private var savingQuery: QueryToSave?
+    /// What the results are for: the field's text once it has rested `feedDelay` (review 154, finding 6: every keystroke
+    /// searched every task); nil until the first text has rested, when nothing is drawn yet.
+    @State private var fed: String?
+
+    /// How long the field rests before the results follow it. The field itself never waits: only this screen reads the
+    /// rested text, and only `SearchFeed` reads every keystroke.
+    static let feedDelay: Duration = .milliseconds(150)
 
     var body: some View {
-        let model = SearchResultsModel(text: search?.text ?? "", tasks: allTasks, now: now)
+        let model = SearchResultsModel(text: fed ?? "", tasks: fed == nil ? [] : allTasks, now: now)
         VStack(spacing: 0) {
             if let query = model.query { saveRow(query) }
-            if model.tasks.isEmpty {
+            if fed == nil {
+                // The first keystroke has not rested yet: the screen stays empty rather than saying nothing matches.
+                Color.clear.frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if model.tasks.isEmpty {
                 ContentUnavailableView {
                     Label("No matching tasks", systemImage: "magnifyingglass")
                 } description: {
@@ -69,6 +79,7 @@ struct SearchScreen: View {
         .listClock(ListClock.next(after: now, tasks: model.tasks), now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .onAppear { now = Date() }
+        .background(SearchFeed(search: search, fed: $fed))
     }
 
     /// Above the rows while the field holds a query: "Save as filter…", which opens the filter editor on it to name
@@ -100,5 +111,27 @@ struct SearchScreen: View {
     struct QueryToSave: Identifiable {
         let query: String
         var id: String { query }
+    }
+}
+
+/// Reads every keystroke of the sidebar's field, so `SearchScreen`'s body doesn't: the screen's text follows once the
+/// field has rested `SearchScreen.feedDelay`, and at once when it is emptied.
+private struct SearchFeed: View {
+    let search: SidebarSearch?
+    @Binding var fed: String?
+
+    var body: some View {
+        let text = search?.text ?? ""
+        Color.clear
+            .task(id: text) {
+                if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    fed = text
+                    return
+                }
+                try? await Task.sleep(for: SearchScreen.feedDelay)
+                guard !Task.isCancelled else { return }
+                fed = text
+            }
+            .accessibilityHidden(true)
     }
 }
