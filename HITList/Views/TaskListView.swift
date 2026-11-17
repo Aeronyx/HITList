@@ -39,8 +39,6 @@ struct TaskListView: View {
     private let isCompact = false
     #endif
 
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
     private var currentProject: Project? {
         if case .project(let id) = selection { return projects.first { $0.id == id } }
         return nil
@@ -458,7 +456,9 @@ struct TaskListView: View {
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sharingSheet(isPresented: $showSharing)
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a row changes by itself.
+        .listClock(ListClock.next(after: now, tasks: allTasks, shared: showsSharedRows ? sharedRows.rows : [],
+                                  events: todayEvents), now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day regroups Today and Overdue at once
         .onAppear {
             CompletionFeedback.shared.prepare()

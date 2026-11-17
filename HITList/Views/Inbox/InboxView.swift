@@ -34,8 +34,6 @@ struct InboxView: View {
     private let isCompact = false
     #endif
 
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
     private func matchedTasks() -> [TaskItem] {
         TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
     }
@@ -114,7 +112,8 @@ struct InboxView: View {
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a row changes by itself.
+        .listClock(ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows), now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .onAppear {
             CompletionFeedback.shared.prepare()

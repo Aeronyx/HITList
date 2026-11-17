@@ -65,7 +65,6 @@ struct UpcomingView: View {
     /// The strip's pages: a month back, a year ahead.
     private static let weeks = -4...52
     private let strip = WeekStrip(weekStart: Preferences.weekStartWeekday())
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var calendar: Calendar { strip.calendar }
     private var today: Date { calendar.startOfDay(for: now) }
@@ -135,7 +134,9 @@ struct UpcomingView: View {
         } menu: {
             Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a row or today's event changes.
+        .listClock(ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows, events: events(on: today)),
+                   now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day moves the days (and the Mac board) at once
         .onAppear {
             CompletionFeedback.shared.prepare()

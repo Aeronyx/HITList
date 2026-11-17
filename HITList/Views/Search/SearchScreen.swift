@@ -15,8 +15,6 @@ struct SearchScreen: View {
     /// "Save as filter…": the query typed, for the filter editor to name.
     @State private var savingQuery: QueryToSave?
 
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-
     var body: some View {
         let model = SearchResultsModel(text: search?.text ?? "", tasks: allTasks, now: now)
         VStack(spacing: 0) {
@@ -67,7 +65,8 @@ struct SearchScreen: View {
             }
         } menu: {}
         .sheet(item: $savingQuery) { FilterEditorView(filter: nil, initialQuery: $0.query).slateSheet() }
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a result changes by itself.
+        .listClock(ListClock.next(after: now, tasks: model.tasks), now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .onAppear { now = Date() }
     }

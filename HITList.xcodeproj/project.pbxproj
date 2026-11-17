@@ -195,6 +195,7 @@
 		51D69F99120334C97E105B10 /* ICloudZoneReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06CB003DB7DC68B351D1D891 /* ICloudZoneReader.swift */; };
 		528E6EB0F1B291ED38FA4C73 /* Inter_18pt-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */; };
 		529B38250A5BE6884DB35AC8 /* SyncWatchdogTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D91D91E35135C558F52CBF /* SyncWatchdogTests.swift */; };
+		5331D89C69F30508A0AB1A4A /* ListClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 405C46EBF0785C1F7A5CE160 /* ListClock.swift */; };
 		5337069D6AEDE324310DF7B7 /* HingeCreakTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD26146BF575D41B26881463 /* HingeCreakTests.swift */; };
 		538D796070A75FD434C28755 /* ThemeCompanion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC452219575A9DABB5E96FF /* ThemeCompanion.swift */; };
 		539A93532A78AA32DB03790F /* swish.caf in Resources */ = {isa = PBXBuildFile; fileRef = 4EC7B932C6B8D510FA4827B9 /* swish.caf */; };
@@ -789,6 +790,7 @@
 		3F67BFA78B2D6749106DD883 /* ScreenIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenIntents.swift; sourceTree = "<group>"; };
 		3FA5FE89666E08171E6365A7 /* PickerPresenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickerPresenter.swift; sourceTree = "<group>"; };
 		40225722CD5F8F99907BAEAD /* AccessibilityDump.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccessibilityDump.swift; sourceTree = "<group>"; };
+		405C46EBF0785C1F7A5CE160 /* ListClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListClock.swift; sourceTree = "<group>"; };
 		406FA3D585ED8606EA5595AF /* TaskRescheduling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskRescheduling.swift; sourceTree = "<group>"; };
 		4071935D72DD8DB970D6A00B /* SwitchboardDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchboardDraft.swift; sourceTree = "<group>"; };
 		40F12A1583CCBDCFBE2646D5 /* WhatsNew.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNew.swift; sourceTree = "<group>"; };
@@ -1398,6 +1400,7 @@
 				899E17FD4EC8DCCC11FD290D /* ContentView.swift */,
 				E44155658C8F3884AA9502C5 /* FilterEditorView.swift */,
 				67740874FB15E62462511914 /* ListChrome.swift */,
+				405C46EBF0785C1F7A5CE160 /* ListClock.swift */,
 				CB8ABD5B832600BB422B2240 /* ProjectEditorView.swift */,
 				48F188E277BC60A2CD068AAD /* SettingsView.swift */,
 				EBB2F46DDC9CFB99D9426B4B /* SidebarCountsModel.swift */,
@@ -2756,6 +2759,7 @@
 				A1CF7113727FBB45D11FF30E /* LaunchScreenProbe.swift in Sources */,
 				568C83634B96CF001EECAC60 /* LaunchTiming.swift in Sources */,
 				D0EF53976903B23E0A90B324 /* ListChrome.swift in Sources */,
+				5331D89C69F30508A0AB1A4A /* ListClock.swift in Sources */,
 				EDB69EF47AB57C00089EEBC0 /* LocalBackup.swift in Sources */,
 				27DBEFA6994F820D77015727 /* LocalCacheReset.swift in Sources */,
 				25867322B5DBFEA293437AF1 /* MacAboutSection.swift in Sources */,
