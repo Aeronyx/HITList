@@ -48,9 +48,14 @@ enum NotificationScheduler {
 
     @MainActor
     private static func askAtFirstReminderIfNeeded(context: ModelContext, defaults: UserDefaults = AppGroup.defaults) async {
+        // Never under the hosted tests: a system prompt has no place in a test run, and a test's container may be
+        // gone by the time a detached reschedule reaches here (a fetch on its context then traps in SwiftData; seen
+        // in round 32 on the iPhone suite).
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         let everChosen = defaults.object(forKey: enabledKey) != nil
         let alreadyAsked = defaults.bool(forKey: askedAtFirstReminderKey)
         guard !everChosen, !alreadyAsked else { return }
+        guard await authorizationStatus() == .notDetermined else { return }
         var own = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
             task.isCompleted == false && (task.reminderOffsetMinutes != nil || task.reminderDate != nil)
         })
