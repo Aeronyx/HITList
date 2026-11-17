@@ -75,6 +75,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// Whether a whole fetch had been seen under this state when the fetch now running began: only then are records
     /// still owed told as the fetch's words (`CloudKitTransportRules.fetchEnding`).
     private var wholeFetchSeenBeforeThisFetch = false
+    /// iCloud answered this fetch that its change token has expired (16e): the bookmark is forgotten and everything
+    /// fetched again, once per fetch.
+    private var tokenExpired = false
 
     // T1: one event at a time to the brain, whichever road it comes by (an engine event, or a `didFetch`/`didSend`
     // held for a manual fetch or send until its error is known).
@@ -163,11 +166,22 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         manualFetches += 1
         let endedBefore = fetchesEnded
         var thrown: Error?
-        do {
-            try await engine.fetchChanges(CKSyncEngine.FetchChangesOptions(scope: .zoneIDs([zoneID])))
-        } catch {
-            thrown = error
+        // An expired change token (16e): the bookmark is forgotten and the fetch run once more, from nothing. Never
+        // more than twice: a second expiry is told as trouble, and the next fetch tries again.
+        for round in 0..<2 {
+            guard let engine = self.engine else { break }
+            tokenExpired = false
+            thrown = nil
+            do {
+                try await engine.fetchChanges(CKSyncEngine.FetchChangesOptions(scope: .zoneIDs([zoneID])))
+            } catch {
+                thrown = error
+                if CloudKitTransportRules.isTokenExpired(error) { tokenExpired = true }
+            }
+            guard CloudKitTransportRules.refetchesAfterExpiredToken(expired: tokenExpired, round: round) else { break }
+            await forgetExpiredToken()
         }
+        tokenExpired = false
         manualFetches -= 1
         let failure = thrown.map { CloudKitTransportRules.words(for: $0) }
         // A fetch asked for here that the engine ran to its end without throwing, for an account, did reach iCloud:
@@ -233,6 +247,21 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         // look like that (the review's finding 10: every lifted hold would have cost the brain its ledger, and unsent
         // edits a field-by-field merge). What the device knew of the zone stays too, so a zone deleted meanwhile is
         // still found lost at the next fetch instead of read as "not made yet".
+        await replaceEngine(keepingPending: false)
+    }
+
+    /// The answer to an expired change token (16e; T13 and less): the bookmark forgotten, and a new engine fetches
+    /// every record from nothing. Kept: the account (no account event follows, so the brain keeps its ledger, T12),
+    /// what was known of the zone, the records still owed, and the pending list (put on the new engine as it was:
+    /// the brain is not asked to compare again for a token iCloud let expire).
+    func forgetExpiredToken() async {
+        log.write("the change token has expired: the bookmark is forgotten, everything is fetched again")
+        await replaceEngine(keepingPending: true)
+    }
+
+    private func replaceEngine(keepingPending: Bool) async {
+        let records = keepingPending ? engine?.state.pendingRecordZoneChanges ?? [] : []
+        let zones = keepingPending ? engine?.state.pendingDatabaseChanges ?? [] : []
         stored = stored.afterReset()
         await save()
         // Before `start()` there is no engine to replace: the state is forgotten, and `start()` makes the engine
@@ -243,17 +272,23 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             return
         }
         let old = engine
-        engine = makeEngine(nil)
+        let fresh = makeEngine(nil)
+        engine = fresh
+        if !zones.isEmpty { fresh.state.add(pendingDatabaseChanges: zones) }
+        if !records.isEmpty {
+            fresh.state.add(pendingRecordZoneChanges: records)
+            stateBehind = true
+        }
         batchLimit = CloudKitTransportRules.maximumBatch
         resaveAtEnd = []
         unsentFailures = [:]
         zoneRefusal = nil
         if let old {
-            // Not awaited: `reset()` may be called while the old engine waits for an event to be handled, and its
-            // events are ignored from now on anyway (`isCurrent`).
+            // Not awaited: this may run while the old engine waits for an event to be handled, and its events are
+            // ignored from now on anyway (`isCurrent`).
             Task { await old.cancelOperations() }
         }
-        log.write("reset: a new engine with no state")
+        log.write("a new engine with no bookmark\(keepingPending ? ", \(records.count) pending change(s) kept" : "")")
     }
 
     // MARK: - CKSyncEngineDelegate
@@ -346,6 +381,11 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             case .trouble(let words):
                 fetchTrouble = words
                 log.write("fetching the zone: \(words)")
+            case .tokenExpired:
+                // Trouble for this fetch (it did not bring what changed); answered when it ends.
+                tokenExpired = true
+                fetchTrouble = failure.map(CloudKitTransportRules.words) ?? "changeTokenExpired"
+                log.write("fetching the zone: the change token has expired")
             }
 
         case .didFetchChanges(let done):
@@ -362,6 +402,14 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(ending, owed: stored.owedRecords,
                                                                                   wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
                 if fetchTrouble == nil, zoneFetchEnded { await wholeFetchSeen() }
+                if CloudKitTransportRules.refetchesAfterExpiredToken(expired: tokenExpired, round: 0) {
+                    // A fetch the engine ran by itself: the bookmark forgotten here, and the whole fetch asked for
+                    // once the engine is past this event (never from inside it, T1). That fetch is a manual one: an
+                    // expiry again is told as trouble, not answered in a loop.
+                    tokenExpired = false
+                    await forgetExpiredToken()
+                    Task { [weak self] in try? await self?.fetch() }
+                }
             }
 
         case .willSendChanges:
@@ -1040,6 +1088,8 @@ enum CloudKitTransportRules {
         case absent
         case lost(ZoneLoss)
         case trouble(String)
+        /// iCloud's change token for the zone has expired (16e): forget the bookmark and fetch everything.
+        case tokenExpired
     }
 
     /// How a fetch the engine scheduled itself is told to the brain when it ends (`didFetchChanges` carries no
@@ -1090,9 +1140,23 @@ enum CloudKitTransportRules {
             // A zone this device knew, gone without a reason given: deleted (the dashboard, a test). One it never
             // knew: not made yet, nothing lost.
             return zoneKnown ? .lost(.deleted) : .absent
+        case .changeTokenExpired:
+            return .tokenExpired
         default:
             return .trouble(words(failure))
         }
+    }
+
+    /// Whether an error thrown by `fetchChanges` is an expired change token (the database's, or the zone's).
+    static func isTokenExpired(_ error: Error) -> Bool {
+        (error as? CKError)?.code == .changeTokenExpired
+    }
+
+    /// Whether to forget the bookmark and fetch again: an expired token, in the first round of a fetch only. The
+    /// whole fetch that follows starts with no token, so it cannot expire; if iCloud says so anyway it is told as
+    /// trouble and the next fetch (a push, the app coming forward) tries once more. Never a loop.
+    static func refetchesAfterExpiredToken(expired: Bool, round: Int) -> Bool {
+        expired && round == 0
     }
 
     static func zoneLoss(_ reason: CKDatabase.DatabaseChange.Deletion.Reason) -> ZoneLoss {
