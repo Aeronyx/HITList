@@ -51,21 +51,85 @@ enum LocalBackup {
         return url
     }
 
-    /// Called on scene activation: backs up when the last backup is at least 24 h old.
+    /// The words of the last backup that failed, until one succeeds (Settings → Backups says them).
+    static let lastFailureKey = "backup.lastFailure"
+
+    /// A backup's path for a log: from `/Library/` on, never the home folder (it holds the Mac user's short name); where
+    /// there is no `/Library/` (the iPhone's Documents), the folder and the file.
+    static func shownPath(_ url: URL) -> String {
+        let path = url.path
+        if let range = path.range(of: "/Library/") { return String(path[range.lowerBound...]) }
+        return url.pathComponents.suffix(2).joined(separator: "/")
+    }
+
+    /// The sync log, where a failed daily backup is an error line.
+    @MainActor
+    static let syncLog: ProfileStore.Log = { CloudSyncMonitor.shared.write(.note, $0, level: $1, fields: $2) }
+
+    /// The daily backup in flight, so two activations close together make one.
+    @MainActor private static var dailyInFlight: Task<Void, Never>?
+
+    /// Called on scene activation: backs up when the last backup is at least 24 h old. The snapshot is built, encoded and
+    /// written off the main thread, on a context of its own (round 32, review 152 finding 5); the returned task ends
+    /// when it is written. A failure goes to the sync log as an error and stays in `lastFailureKey` until a backup
+    /// succeeds (151 C14). `write` writes the file (tests replace it).
     /// `ownsBackups`: this launch opened the real store (`ModelContainerFactory.isMainStoreOpen`). A Debug
     /// build on the Mac opens HITList-Development.store but shares this folder and `lastBackupKey` with the
     /// TestFlight app, so it backs nothing up: its data would replace the day's real backup, and marking the
     /// day done would leave the real data unsaved for 24 hours.
     @MainActor
+    @discardableResult
     static func runIfDue(context: ModelContext, defaults: UserDefaults = AppGroup.defaults,
-                         directory: URL = directory, now: Date = .now, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen) {
+                         directory: URL = directory, now: Date = .now, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen,
+                         syncLog: @escaping ProfileStore.Log = LocalBackup.syncLog,
+                         write: @escaping (Data, URL, Date) throws -> URL = { try LocalBackup.write($0, in: $1, now: $2) }) -> Task<Void, Never>? {
         guard ownsBackups else {
             log.info("Local backup skipped: this run uses \(ModelContainerFactory.openedStoreDescription, privacy: .public); backups are HITList.store's")
-            return
+            return nil
         }
-        guard isDue(lastBackup: defaults.object(forKey: lastBackupKey) as? Date, now: now) else { return }
-        do { try run(context: context, defaults: defaults, directory: directory, now: now, ownsBackups: ownsBackups) }
-        catch { log.error("Local backup failed: \(error.localizedDescription, privacy: .public)") }
+        guard dailyInFlight == nil, isDue(lastBackup: defaults.object(forKey: lastBackupKey) as? Date, now: now) else { return nil }
+        let container = context.container
+        let device = SnapshotBuilder.deviceName()
+        let work = Task.detached(priority: .utility) { () -> Result<(URL, Int)?, Error> in
+            Result { try backUp(ModelContext(container), deviceName: device, directory: directory, now: now, write: write) }
+        }
+        let task = Task { @MainActor in
+            defer { dailyInFlight = nil }
+            switch await work.value {
+            case .success(let written?):
+                recordSuccess(url: written.0, tasks: written.1, now: now, defaults: defaults)
+            case .success(nil):
+                break
+            case .failure(let error):
+                recordFailure(error, defaults: defaults, syncLog: syncLog)
+            }
+        }
+        dailyInFlight = task
+        return task
+    }
+
+    /// Builds, encodes and writes a backup of what `context` holds; nil when there is nothing to back up. Runs on any
+    /// thread with a context of its own.
+    nonisolated private static func backUp(_ context: ModelContext, deviceName: String, directory: URL, now: Date,
+                                           write: (Data, URL, Date) throws -> URL) throws -> (URL, Int)? {
+        let snapshot = try SnapshotBuilder.build(from: context, deviceName: deviceName)
+        guard !(snapshot.tasks.isEmpty && snapshot.projects.isEmpty && snapshot.labels.isEmpty) else { return nil }
+        return (try write(try snapshot.jsonData(), directory, now), snapshot.tasks.count)
+    }
+
+    @MainActor
+    private static func recordSuccess(url: URL, tasks: Int, now: Date, defaults: UserDefaults) {
+        defaults.set(now, forKey: lastBackupKey)
+        defaults.removeObject(forKey: lastFailureKey)
+        log.notice("Local backup written: \(shownPath(url), privacy: .public) (\(tasks) tasks)")
+    }
+
+    @MainActor
+    private static func recordFailure(_ error: Error, defaults: UserDefaults, syncLog: ProfileStore.Log) {
+        let words = error.localizedDescription
+        defaults.set(words, forKey: lastFailureKey)
+        log.error("Local backup failed: \(words, privacy: .public)")
+        syncLog("The daily backup failed: \(words)", .error, SyncLogFormat.errorFields(error))
     }
 
     /// Writes a backup now. Returns nil without writing when the store has no tasks, projects or labels:
@@ -76,15 +140,13 @@ enum LocalBackup {
     static func run(context: ModelContext, defaults: UserDefaults = AppGroup.defaults,
                     directory: URL = directory, now: Date = .now, ownsBackups: Bool = ModelContainerFactory.isMainStoreOpen) throws -> URL? {
         guard ownsBackups else { throw BackupError.notTheRealStore(ModelContainerFactory.openedStoreDescription) }
-        let snapshot = try SnapshotBuilder.build(from: context)
-        guard !(snapshot.tasks.isEmpty && snapshot.projects.isEmpty && snapshot.labels.isEmpty) else {
+        guard let written = try backUp(context, deviceName: SnapshotBuilder.deviceName(), directory: directory, now: now,
+                                       write: { try write($0, in: $1, now: $2) }) else {
             log.info("Local backup skipped: nothing to back up")
             return nil
         }
-        let url = try write(try snapshot.jsonData(), in: directory, now: now)
-        defaults.set(now, forKey: lastBackupKey)
-        log.notice("Local backup written: \(url.path, privacy: .public) (\(snapshot.tasks.count) tasks)")
-        return url
+        recordSuccess(url: written.0, tasks: written.1, now: now, defaults: defaults)
+        return written.0
     }
 
     // MARK: - Account switch (brief 42)

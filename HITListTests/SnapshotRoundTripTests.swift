@@ -122,6 +122,57 @@ final class SnapshotRoundTripTests: XCTestCase {
         XCTAssertEqual(try target.mainContext.fetchCount(FetchDescriptor<TaskItem>()), 4)
     }
 
+    /// Round 32 (review 151 B8): what the file holds that is not on this device (perhaps deleted since) is counted,
+    /// the question says so, and the person may bring it back or only update what is here.
+    func testWhatIsNotOnThisDeviceIsCountedAndCanBeLeftOut() throws {
+        try populate(source.mainContext)
+        let snapshot = try roundTrip(SnapshotBuilder.build(from: source.mainContext))
+        try SnapshotBuilder.restore(snapshot, into: target.mainContext)
+        XCTAssertEqual(try SnapshotBuilder.missing(from: snapshot, in: target.mainContext), SnapshotBuilder.Missing())
+
+        let context = target.mainContext
+        let gym = try XCTUnwrap(try context.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Gym" })
+        let looseEnd = try XCTUnwrap(try context.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Loose end" })
+        let phone = try XCTUnwrap(try context.fetch(FetchDescriptor<TaskLabel>()).first { $0.name == "phone" })
+        let standup = try XCTUnwrap(try context.fetch(FetchDescriptor<TaskItem>()).first { $0.title == "Standup" })
+        standup.title = "Standup (renamed)"
+        [gym, looseEnd].forEach(context.delete)
+        context.delete(phone)
+        try context.save()
+
+        let missing = try SnapshotBuilder.missing(from: snapshot, in: context)
+        XCTAssertEqual(missing, SnapshotBuilder.Missing(tasks: 2, groups: 0, labels: 1, filters: 0, boards: 0))
+        XCTAssertEqual(missing.question(from: "George's Mac"),
+                       "The backup from George's Mac holds 2 tasks and 1 label that are not on this device, perhaps deleted since. Bring them back?")
+
+        let summary = try SnapshotBuilder.restore(snapshot, into: context, addMissing: false, overwriteNewer: true)
+        XCTAssertEqual(summary.inserted, 0)
+        XCTAssertEqual(Set(try context.fetch(FetchDescriptor<TaskItem>()).map(\.title)), ["Standup", "Taxes"], "only what is here is updated")
+        XCTAssertNil(try context.fetch(FetchDescriptor<TaskLabel>()).first { $0.name == "phone" })
+
+        try SnapshotBuilder.restore(snapshot, into: context)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 4, "Bring them back")
+    }
+
+    func testOneThingAndManyAreSaidPlainly() {
+        XCTAssertEqual(SnapshotBuilder.Missing(tasks: 1).question(from: "iPhone"),
+                       "The backup from iPhone holds 1 task that is not on this device, perhaps deleted since. Bring it back?")
+        XCTAssertEqual(SnapshotBuilder.Missing(tasks: 3, groups: 1, filters: 2).question(from: "iPhone"),
+                       "The backup from iPhone holds 3 tasks, 1 Group and 2 filters that are not on this device, perhaps deleted since. Bring them back?")
+    }
+
+    /// Round 32 (review 151 A4): a description is cut to `TaskLimits.notesCharacters` on the way in.
+    func testADescriptionIsCutToTheLimit() throws {
+        let context = source.mainContext
+        let task = TaskItem(title: "Long")
+        task.notes = String(repeating: "n", count: TaskLimits.notesCharacters + 10)
+        context.insert(task)
+        try context.save()
+        let snapshot = try roundTrip(SnapshotBuilder.build(from: context))
+        try SnapshotBuilder.restore(snapshot, into: target.mainContext)
+        XCTAssertEqual(try target.mainContext.fetch(FetchDescriptor<TaskItem>()).first?.notes.count, TaskLimits.notesCharacters)
+    }
+
     func testOlderBackupDoesNotClobberNewerEdits() throws {
         try populate(source.mainContext)
         let snapshot = try roundTrip(SnapshotBuilder.build(from: source.mainContext))
