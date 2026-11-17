@@ -37,6 +37,19 @@ final class SyncEngine {
     /// not sync with iCloud (a pretend iCloud, a test's transport).
     var auditZone: String?
 
+    // The pump (round 32): see `pumpAfter`.
+    let drivesSync: Bool
+    private let delays: [Duration]
+    /// How long after a change, and then after each try that left something waiting or in trouble, the next sync is
+    /// asked for: at once for a new change, then backing off to ten minutes. A new change starts from the top.
+    static let retryDelays: [Duration] = [.seconds(1), .seconds(5), .seconds(30), .seconds(120), .seconds(600)]
+    private var retryStep = 0
+    private var lastWaiting = 0
+    private var pendingSync: Task<Void, Never>?
+    private var pendingDeadline: ContinuousClock.Instant?
+    /// Syncs the pump asked for, for the tests.
+    private(set) var pumpedSyncs = 0
+
     private var hintObserver: SyncSaveHintObserver?
     /// Save hints, in the order the saves posted them, read by one task (`feedHints`): the brain hears them in order.
     private let hints: AsyncStream<Hint>.Continuation
@@ -73,10 +86,16 @@ final class SyncEngine {
     /// - Parameters:
     ///   - storeURL: the store file, for the ledger's binding (`SyncLedgerStore.bind(toStore:)`); nil binds nothing.
     ///   - makeTransport: the road to iCloud, given the ledger (the transport keeps its state in it).
+    /// - Parameter drivesSync: this engine asks for a sync itself after a change and after trouble (`pumpAfter`): the
+    ///   app's engine on CloudKit. Off for tests and the pretend iCloud, which ask for each sync themselves.
     init(container: ModelContainer, ledger: SyncLedgerStore, storeURL: URL?, board: SyncEngineBoard = .shared,
          clock: @escaping @Sendable () -> Date = { Date() },
          backUp: (@MainActor (SyncRemovalReason) throws -> Void)? = nil,
+         drivesSync: Bool = false,
+         retryDelays: [Duration] = SyncEngine.retryDelays,
          makeTransport: (SyncLedgerStore) -> any SyncTransport) {
+        self.drivesSync = drivesSync
+        self.delays = retryDelays
         self.container = container
         self.ledger = ledger
         self.storeURL = storeURL
@@ -138,7 +157,7 @@ final class SyncEngine {
         let arguments = ProcessInfo.processInfo.arguments
         let zone = SyncEngineSwitch.zoneName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild, arguments: arguments)
         let pretend = SyncEngineSwitch.pretendName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild, arguments: arguments)
-        let engine = SyncEngine(container: container, ledger: ledger, storeURL: url, board: board) { ledger in
+        let engine = SyncEngine(container: container, ledger: ledger, storeURL: url, board: board, drivesSync: pretend == nil) { ledger in
             #if DEBUG
             if let pretend {
                 return PretendCloudTransport(name: pretend, device: storeName, state: ledger)
@@ -156,8 +175,16 @@ final class SyncEngine {
                     #endif
                 }
             }
+            // **Apple's engine with its own scheduling off** (round 32, found with George's iPhone beside this Mac).
+            // With `automaticallySync` on, a fetch asked for after a relaunch started and ended without asking
+            // iCloud anything: the engine fetches only when a push told it to, so what another device changed
+            // while this app was not running stayed in iCloud until some later push (seen: six changes of the
+            // phone's missing on the Mac, the bolt filled; CloudKit asked directly named the zone as changed). With
+            // it off, the same fetch asks the database what changed and brings it, which is also the only mode the
+            // transport's probe has ever proven. So the engine is driven from here: a sync at launch, on coming
+            // forward, on a push, and after a change (`pumpAfter`), with retries of our own.
             return CloudKitTransport(containerID: SyncEngineSwitch.containerID, zoneName: zone, state: ledger,
-                                     automaticallySync: true, log: lines)
+                                     automaticallySync: false, log: lines)
         }
         #if DEBUG
         // A Debug run on a side store (the pretend run, the supervisor's run on CloudKit Development) is watched from a
@@ -283,6 +310,7 @@ final class SyncEngine {
     /// found gone with no deletion taken down comes back from iCloud, it is never deleted there), then a sync.
     func cameForward() {
         guard isStarted else { return }
+        retryStep = 0 // the person is back: trouble is tried again from the top
         Task { [core] in
             await core.localChanged(nil)
             await self.syncNow(reason: "the app came forward")
@@ -340,6 +368,7 @@ final class SyncEngine {
         guard isStarted else { return }
         hintObserver?.stop()
         hintObserver = nil
+        cancelPendingSync()
         await core.stop()
         hints.finish()
         host.finish()
@@ -369,6 +398,7 @@ final class SyncEngine {
                 board.publish(status)
                 widgetFacts.update(status)
                 noteQuietIfSo(status)
+                pumpAfter(status)
                 if case .held(.duplicates(let keys)) = status.state { mergeForHold(keys) }
             case .wrote(let keys):
                 // What the mirror's import used to trigger (the name merge, reminders, widgets, Spotlight, the popout
@@ -397,6 +427,57 @@ final class SyncEngine {
             hintsDone = max(hintsDone, hint.serial)
             noteQuietIfSo(await core.status)
         }
+    }
+
+    // MARK: - The pump
+
+    /// Asks for the next sync when something is waiting to go or the last sync ended in trouble. Apple's engine runs
+    /// with its own scheduling off (`launchIfSwitchedOn` says why), so nothing is sent unless a sync is asked for:
+    /// this is what asks. One sleep to a known deadline, armed by what the brain just said: a new change is sent a
+    /// second later; a try that leaves something waiting, or ends in trouble, is followed by the next after a longer
+    /// wait each time, up to ten minutes; nothing waiting and no trouble arms nothing. A hold arms nothing either:
+    /// the person lifts it, or the app coming forward tries again.
+    private func pumpAfter(_ status: SyncStatus) {
+        defer { lastWaiting = status.waiting }
+        guard drivesSync, isStarted else { return }
+        if status.hold != nil {
+            cancelPendingSync()
+            retryStep = 0
+            return
+        }
+        guard status.state == .idle else { return } // a sync is running: its end says the status again
+        guard status.waiting > 0 || status.lastError != nil else {
+            cancelPendingSync()
+            retryStep = 0
+            return
+        }
+        if status.waiting > lastWaiting { retryStep = 0 } // something new to send: from the top
+        syncSoon(after: delays[min(retryStep, delays.count - 1)])
+    }
+
+    /// One attempt, `delay` from now. An attempt already waiting stays if it comes sooner.
+    private func syncSoon(after delay: Duration) {
+        let deadline = ContinuousClock.now + delay
+        if let pendingDeadline, pendingSync != nil, pendingDeadline <= deadline { return }
+        pendingSync?.cancel()
+        pendingDeadline = deadline
+        pendingSync = Task { [weak self] in
+            try? await Task.sleep(until: deadline, clock: .continuous)
+            guard !Task.isCancelled, let self else { return }
+            self.pendingSync = nil
+            self.pendingDeadline = nil
+            self.retryStep += 1
+            self.pumpedSyncs += 1
+            await self.syncNow(reason: "a change waiting")
+            // Said again here: a try that changed nothing publishes no new status, and must still be followed.
+            if self.isStarted { self.pumpAfter(await self.core.status) }
+        }
+    }
+
+    private func cancelPendingSync() {
+        pendingSync?.cancel()
+        pendingSync = nil
+        pendingDeadline = nil
     }
 
     /// Every save of this process is in the brain's hands and nothing waits: every save until now is in iCloud.

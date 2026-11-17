@@ -299,7 +299,35 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     // MARK: - CKSyncEngineDelegate
 
+    /// `HITLIST_SYNC_TRACE=1`: every event the engine hands over, by name, in the log (the supervisor's runs).
+    private static let traces = ProcessInfo.processInfo.environment["HITLIST_SYNC_TRACE"] == "1"
+
+    private func trace(_ event: CKSyncEngine.Event, current: Bool) {
+        let what: String
+        switch event {
+        case .stateUpdate: what = "stateUpdate"
+        case .accountChange(let change): what = "accountChange \(change.changeType)"
+        case .fetchedDatabaseChanges(let changes):
+            what = "fetchedDatabaseChanges modified \(changes.modifications.map(\.zoneID.zoneName)) deleted \(changes.deletions.map(\.zoneID.zoneName))"
+        case .fetchedRecordZoneChanges(let changes):
+            what = "fetchedRecordZoneChanges \(changes.modifications.count) changed \(changes.deletions.count) removed"
+        case .sentDatabaseChanges: what = "sentDatabaseChanges"
+        case .sentRecordZoneChanges(let sent): what = "sentRecordZoneChanges \(sent.savedRecords.count) saved \(sent.failedRecordSaves.count) failed"
+        case .willFetchChanges(let will): what = "willFetchChanges \(will.context.reason) \(will.context.options.scope)"
+        case .willFetchRecordZoneChanges(let will): what = "willFetchRecordZoneChanges \(will.zoneID.zoneName)"
+        case .didFetchRecordZoneChanges(let done): what = "didFetchRecordZoneChanges \(done.zoneID.zoneName) \(done.error.map { "error \($0.code.rawValue)" } ?? "ok")"
+        case .didFetchChanges(let done): what = "didFetchChanges \(done.context.reason)"
+        case .willSendChanges: what = "willSendChanges"
+        case .didSendChanges: what = "didSendChanges"
+        @unknown default: what = "unknown"
+        }
+        log.write("event\(current ? "" : " (not the current engine, ignored)"): \(what); unfetched zones \(syncEngine_unfetched)")
+    }
+
+    private var syncEngine_unfetched: [String] { engine?.state.zoneIDsWithUnfetchedServerChanges.map(\.zoneName) ?? [] }
+
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
+        if Self.traces { trace(event, current: isCurrent(syncEngine)) }
         guard isCurrent(syncEngine) else { return }
         // An account change still owed to the brain from before a kill goes first (T12), ahead of whatever this
         // event brings; the engine's own bookkeeping (`stateUpdate`) and a fresh account change need not wait for it.
@@ -464,7 +492,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     func nextFetchChangesOptions(_ context: CKSyncEngine.FetchChangesContext,
                                  syncEngine: CKSyncEngine) async -> CKSyncEngine.FetchChangesOptions {
-        // Only this zone, whatever asked for the fetch (a push, the schedule): the mirror's zone is none of ours.
+        // Only this zone's records, whatever asked for the fetch: in Development the database holds the zones of
+        // other runs too, and none of them is this store's.
         var options = CKSyncEngine.FetchChangesOptions(scope: .zoneIDs([zoneID]), operationGroup: context.options.operationGroup)
         options.prioritizedZoneIDs = [zoneID]
         return options

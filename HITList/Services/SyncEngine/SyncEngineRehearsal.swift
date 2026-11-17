@@ -1,4 +1,5 @@
 #if DEBUG
+import CloudKit
 import Foundation
 import SwiftData
 import HITListCore
@@ -52,6 +53,43 @@ enum SyncEngineRehearsal {
                         let items = report.items(kind)
                         if !items.isEmpty { say("mirror audit \(kind.rawValue): \(items.count)") }
                     }
+                }
+            }
+        }
+        if arguments.contains("-rehearsalListBackups") {
+            // File names and dates only: when the real store's daily backups were last written on this device.
+            let names = LocalBackup.backups(in: LocalBackup.directory).map(\.lastPathComponent)
+            say("backups in Documents: \(names.count): \(names.suffix(6).joined(separator: ", "))")
+            let aside = (try? FileManager.default.contentsOfDirectory(atPath: LocalBackup.setAsideRoot.path)) ?? []
+            for folder in aside {
+                let inside = LocalBackup.backups(in: LocalBackup.setAsideRoot.appending(path: folder)).map(\.lastPathComponent)
+                say("backups set aside (\(folder.prefix(8))): \(inside.count): \(inside.suffix(4).joined(separator: ", "))")
+            }
+            let real = UserDefaults(suiteName: AppGroup.suiteName(suffix: nil))?.object(forKey: LocalBackup.lastBackupKey) as? Date
+            say("the real store's last backup, by its own note: \(real.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "none")")
+        }
+        if arguments.contains("-rehearsalRawChanges") {
+            // CloudKit asked directly, beside the engine: which zones the database says changed since the token this
+            // hook kept at its last run, and which subscriptions exist. To tell the engine's fault from iCloud's.
+            Task { @MainActor in
+                let database = CKContainer(identifier: SyncEngineSwitch.containerID).privateCloudDatabase
+                let key = "rehearsal.rawDatabaseToken"
+                let kept = AppGroup.defaults.data(forKey: key)
+                    .flatMap { try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: $0) }
+                do {
+                    let changes = try await database.databaseChanges(since: kept)
+                    say("raw database changes since \(kept == nil ? "nothing" : "the kept token"): changed \(changes.modifications.map(\.zoneID.zoneName).sorted()), deleted \(changes.deletions.map(\.zoneID.zoneName).sorted()), more \(changes.moreComing)")
+                    if let data = try? NSKeyedArchiver.archivedData(withRootObject: changes.changeToken, requiringSecureCoding: true) {
+                        AppGroup.defaults.set(data, forKey: key)
+                    }
+                } catch {
+                    say("raw database changes failed: \(SyncState.shortReason(for: error))")
+                }
+                do {
+                    let subscriptions = try await database.allSubscriptions()
+                    say("subscriptions: \(subscriptions.map(\.subscriptionID).sorted())")
+                } catch {
+                    say("subscriptions failed: \(SyncState.shortReason(for: error))")
                 }
             }
         }
@@ -117,12 +155,20 @@ enum SyncEngineRehearsal {
         do {
             let open = try context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted && $0.parent == nil }))
                 .sorted { $0.id.uuidString < $1.id.uuidString }
-            guard open.count >= 12 else { return say("edits: only \(open.count) open tasks, nothing edited") }
+            guard open.count >= 5 else {
+                // A short list (the earlier runs completed and deleted most of it): one made, one renamed if any.
+                let made = TaskItem(title: "Rehearsal task \(seed)")
+                context.insert(made)
+                if let first = open.first {
+                    first.title += " (edited \(seed))"
+                    first.updatedAt = Date()
+                }
+                try context.save()
+                return say("edits (seed \(seed), a short list): made \(short(made.id))\(open.first.map { ", renamed \(short($0.id))" } ?? ""); \(counts(container))")
+            }
             let groups = try context.fetch(FetchDescriptor<Project>()).sorted { $0.id.uuidString < $1.id.uuidString }
-            func pick(_ n: Int) -> TaskItem { open[(seed * 7 + n * 13) % open.count] }
-            var picked: [TaskItem] = []
-            var n = 0
-            while picked.count < 5 { let task = pick(n); n += 1; if !picked.contains(where: { $0 === task }) { picked.append(task) } }
+            // Five different tasks, starting where the seed says, so two devices mostly choose differently.
+            let picked = (0..<5).map { open[(seed + $0) % open.count] }
             let now = Date()
             TaskActions.toggleCompletion(picked[0], in: context)
             TaskActions.toggleCompletion(picked[1], in: context)
