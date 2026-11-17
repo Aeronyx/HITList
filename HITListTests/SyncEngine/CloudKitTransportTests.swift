@@ -214,6 +214,46 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertFalse(StoredState.decode(nil, log: log).zoneReady)
     }
 
+    // MARK: - Records owed (brief 149, item 1; the review's 16c)
+
+    /// A record of ours this build cannot read (a picture not downloaded, or over the limit) is owed; one that is not
+    /// ours at all is ignored, as before.
+    func testAnUnreadableRecordOfOursIsOwedAndOneNotOursIsNot() throws {
+        let record = CKRecord(recordType: "HLProfile", recordID: CKRecord.ID(recordName: "Profile.profile", zoneID: zone))
+        record["avatarData"] = CKAsset(fileURL: FileManager.default.temporaryDirectory.appending(path: "no-such-\(UUID().uuidString).png"))
+        XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: record)) { error in
+            XCTAssertNotNil(Rules.owedReason(error), "owed")
+            XCTAssertTrue(Rules.owedReason(error)?.contains("avatarData") == true, Rules.owedReason(error) ?? "")
+        }
+        XCTAssertNil(Rules.owedReason(CloudRecordCodec.DecodeProblem.notOurs(recordName: "CD_TaskItem", recordType: "CD_TaskItem")))
+    }
+
+    func testTheFetchsWordsSayWhatIsOwedFromTheSecondFetchOn() {
+        var owed = OwedRecords()
+        XCTAssertNil(owed.words)
+        XCTAssertNil(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: true), "nothing owed: a fetch that ended well")
+        owed.reasons["Profile.profile"] = "asset avatarData unreadable: no file"
+        XCTAssertEqual(owed.words, "1 record in iCloud could not be read here: Profile/profile (asset avatarData unreadable: no file); asked for again at each fetch")
+        XCTAssertEqual(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: true), owed.words, "the bolt is not filled")
+        // The first fetch under a state ends well: before its first whole fetch the brain sends nothing, and one
+        // record that never becomes readable must not stop everything else.
+        XCTAssertNil(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: false))
+        XCTAssertEqual(Rules.fetchEnding("no network", owed: owed, wholeFetchSeenBefore: true), "no network", "the fetch's own trouble first")
+        owed.reasons["TaskItem.00000000-0000-0000-0000-000000000001"] = "asset x unreadable: no file"
+        XCTAssertEqual(owed.words, "2 records in iCloud could not be read here, the first: Profile/profile (asset avatarData unreadable: no file); asked for again at each fetch")
+    }
+
+    func testOwedRecordsAreKeptThroughARelaunchAndAResetAndAnOldStateHasNone() throws {
+        let log = SyncTransportLog { _ in }
+        var state = StoredState(engine: nil, zoneReady: true, account: "_me")
+        state.owed = OwedRecords(reasons: ["Profile.profile": "asset avatarData unreadable: no file"])
+        let back = StoredState.decode(state.encoded(log: log), log: log)
+        XCTAssertEqual(back.owedRecords, state.owedRecords, "through a relaunch")
+        XCTAssertEqual(state.afterReset().owedRecords, state.owedRecords, "through a reset (T13)")
+        let old = try JSONDecoder().decode(StoredState.self, from: Data(#"{"version":1,"zoneReady":true,"account":"_me"}"#.utf8))
+        XCTAssertTrue(old.owedRecords.isEmpty)
+    }
+
     /// The transport can be made and asked before it starts without touching iCloud (the app makes it early).
     func testBeforeStartNothingIsPendingAndFetchAndSendThrow() async {
         let transport = CloudKitTransport(containerID: "iCloud.com.trammells.hitlist", zoneName: "HITListTest",

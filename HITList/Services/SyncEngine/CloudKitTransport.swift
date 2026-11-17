@@ -72,8 +72,9 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// for want of it are then refused with that reason instead of being tried again in a loop.
     private var zoneRefusal: CloudFailure?
     private var zoneRemade = false
-    /// Keys whose save lost to a version of iCloud's that could not be read, and was tried once more (16b).
-    private var unreadableConflicts: Set<SyncKey> = []
+    /// Whether a whole fetch had been seen under this state when the fetch now running began: only then are records
+    /// still owed told as the fetch's words (`CloudKitTransportRules.fetchEnding`).
+    private var wholeFetchSeenBeforeThisFetch = false
 
     // T1: one event at a time to the brain, whichever road it comes by (an engine event, or a `didFetch`/`didSend`
     // held for a manual fetch or send until its error is known).
@@ -180,7 +181,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         if heldDidFetch || (failure != nil && fetchOpen) {
             heldDidFetch = false
             fetchOpen = false
-            await deliver(.didFetch(error: failure ?? fetchTrouble))
+            await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(failure ?? fetchTrouble, owed: stored.owedRecords,
+                                                                              wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
         }
         if let thrown, !CloudKitTransportRules.isAnsweredByEvents(thrown, sending: false) {
             log.write("fetch failed: \(failure ?? "")")
@@ -287,6 +289,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             if mapped != nil {
                 stored.zoneReady = false
                 stored.fetchedWhole = false
+                // Records owed from the old account's zone are none of the new one's.
+                stored.owed = nil
             }
             stored.account = CloudKitTransportRules.currentAccount(change.changeType)
             // The change is written down as owed to the brain before it is told, and crossed off only when the brain
@@ -321,6 +325,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             fetchOpen = true
             fetchTrouble = nil
             zoneFetchEnded = false
+            wholeFetchSeenBeforeThisFetch = stored.fetchedWhole == true
             await deliver(.willFetch)
 
         case .willFetchRecordZoneChanges:
@@ -345,12 +350,17 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
         case .didFetchChanges(let done):
             fetchesEnded += 1
+            // Records this build could not read are asked for again, by name, at the end of every fetch that
+            // reached iCloud (16c), before the brain hears the fetch ended. Never on a timer.
+            if fetchTrouble == nil, zoneFetchEnded { await retryOwed() }
             if done.context.reason == .manual, manualFetches > 0 {
                 heldDidFetch = true // `fetch()` tells it, with the error it gets, if any
             } else {
                 fetchOpen = false
-                await deliver(.didFetch(error: CloudKitTransportRules.scheduledFetchEnding(
-                    trouble: fetchTrouble, reachedZone: zoneFetchEnded, wholeFetchSeen: stored.fetchedWhole == true)))
+                let ending = CloudKitTransportRules.scheduledFetchEnding(
+                    trouble: fetchTrouble, reachedZone: zoneFetchEnded, wholeFetchSeen: stored.fetchedWhole == true)
+                await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(ending, owed: stored.owedRecords,
+                                                                                  wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
                 if fetchTrouble == nil, zoneFetchEnded { await wholeFetchSeen() }
             }
 
@@ -484,22 +494,17 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 if !byEngine { resaveAtEnd.append(.saveRecord(id)) }
             case .conflict:
                 leaveList.append(.saveRecord(id))
-                if let server = failure.error.serverRecord, let record = try? CloudRecordCodec.cloudRecord(from: server) {
-                    failed[key] = .conflict(server: record)
-                } else {
-                    // iCloud's version came without a record this build can read (a picture not downloaded with
-                    // it): not a refusal for good, which would keep the item out until it changes again (the
-                    // review's finding 16b), but trouble that passes: the save is tried again at the next send, by
-                    // when a fetch has usually brought the version it lost to.
-                    // Once per launch for a key: a second time in a row it is told as refused, so a version that
-                    // can never be read is not sent against for ever.
-                    if unreadableConflicts.insert(key).inserted {
-                        leaveList.removeLast()
-                        sendTrouble = "a conflict whose record could not be read (\(key))"
-                        resaveAtEnd.append(.saveRecord(id))
-                    } else {
-                        failed[key] = .rejected(code: cloud.code.rawValue, message: "a conflict without iCloud's record")
-                    }
+                do {
+                    guard let server = failure.error.serverRecord else { throw CloudFailure(failure.error) }
+                    failed[key] = .conflict(server: try CloudRecordCodec.cloudRecord(from: server))
+                } catch {
+                    // iCloud holds a version this build cannot read (a picture not downloaded with it, 16b): it is
+                    // owed, like a fetched record that could not be read (16c), and asked for by name at the next
+                    // fetch. The change leaves the list and the brain is not told: a refusal would keep the item out
+                    // until it changes again, and a retry would lose to the same version in a loop. Nothing is
+                    // overwritten meanwhile (iCloud refuses a save on any token but its own), and when the version
+                    // can be read it arrives as fetched; the brain settles the two and sends what is still to go.
+                    owe(id.recordName, why: "iCloud's version, in a conflict, could not be read: \(error is CloudFailure ? "none came with it" : "\(error)")")
                 }
             case .refused(let reason):
                 leaveList.append(.saveRecord(id))
@@ -550,6 +555,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         for (key, failure) in unsentFailures where failed[key] == nil { failed[key] = failure }
         unsentFailures = [:]
 
+        await saveIfOwedChanged()
         if !(saved.isEmpty && removed.isEmpty && failed.isEmpty) {
             await deliver(.sent(saved: saved, removed: removed, failed: failed))
         }
@@ -584,23 +590,112 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private func fetched(_ changes: CKSyncEngine.Event.FetchedRecordZoneChanges) async {
         var changed: [CloudRecord] = []
         var removed: [SyncKey] = []
+        var arrived: [String] = []
         for modification in changes.modifications where modification.record.recordID.zoneID == zoneID {
+            let name = modification.record.recordID.recordName
             do {
                 changed.append(try CloudRecordCodec.cloudRecord(from: modification.record))
+                arrived.append(name)
             } catch {
-                log.write("a fetched record is ignored: \(error)")
+                // A record of ours this build cannot read (16c): owed, never dropped while the bookmark moves on.
+                // One that is not ours at all is ignored, as before.
+                if let why = CloudKitTransportRules.owedReason(error) {
+                    owe(name, why: why)
+                } else {
+                    log.write("a fetched record is ignored: \(error)")
+                }
             }
         }
         for deletion in changes.deletions where deletion.recordID.zoneID == zoneID {
             if let key = CloudRecordCodec.key(for: deletion.recordID) {
                 removed.append(key)
+                arrived.append(deletion.recordID.recordName)
             } else {
                 log.write("a removed record is ignored: not an engine record: \(deletion.recordID.recordName)")
             }
         }
         if !(changes.modifications.isEmpty && changes.deletions.isEmpty) { await zoneExists() }
+        // Owed records written down before the brain is told of the rest, and before `handle` returns (the bookmark
+        // moves past them at the next state update).
+        await saveIfOwedChanged()
         guard !(changed.isEmpty && removed.isEmpty) else { return }
-        await deliver(.fetched(changed: changed, removed: removed))
+        // A newer version that could be read, or its removal for good, settles what was owed for it; crossed off only
+        // once the brain has it.
+        if await deliver(.fetched(changed: changed, removed: removed)) { await settleOwed(arrived) }
+    }
+
+    // MARK: - Records owed (16c)
+
+    private var owedChanged = false
+
+    private func owe(_ recordName: String, why: String) {
+        var owed = stored.owedRecords
+        guard owed.reasons[recordName] != why else { return }
+        owed.reasons[recordName] = why
+        stored.owed = owed
+        owedChanged = true
+        log.write("\(CloudRecordCodec.key(forRecordName: recordName).map(String.init(describing:)) ?? recordName) owed: \(why)")
+    }
+
+    private func saveIfOwedChanged() async {
+        guard owedChanged else { return }
+        owedChanged = false
+        await save()
+    }
+
+    private func settleOwed(_ recordNames: [String]) async {
+        var owed = stored.owedRecords
+        let before = owed.reasons.count
+        for name in recordNames { owed.reasons[name] = nil }
+        guard owed.reasons.count != before else { return }
+        stored.owed = owed.reasons.isEmpty ? nil : owed
+        await save()
+        log.write("\(before - owed.reasons.count) owed record(s) settled, \(owed.reasons.count) still owed")
+    }
+
+    /// Asks iCloud for the owed records by name (a plain fetch of records, assets with them) and delivers those that
+    /// can be read now as fetched. One iCloud no longer holds is crossed off: its removal for good comes with the
+    /// zone's changes. Called at the end of a fetch that reached iCloud, so at each start too (the launch's sync
+    /// fetches first). Nothing here loops: the next try is the next fetch.
+    private func retryOwed() async {
+        let names = stored.owedRecords.reasons.keys.sorted()
+        guard !names.isEmpty, stored.account != nil else { return }
+        let ids = names.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
+        let results: [CKRecord.ID: Result<CKRecord, any Error>]
+        do {
+            results = try await database.records(for: ids)
+        } catch {
+            log.write("owed records could not be asked for: \(CloudKitTransportRules.words(for: error))")
+            return
+        }
+        var readable: [CloudRecord] = []
+        var settled: [String] = []
+        for id in ids {
+            switch results[id] {
+            case .success(let record)?:
+                do {
+                    readable.append(try CloudRecordCodec.cloudRecord(from: record))
+                    settled.append(id.recordName)
+                } catch {
+                    owe(id.recordName, why: CloudKitTransportRules.owedReason(error) ?? "\(error)")
+                }
+            case .failure(let error)?:
+                if (error as? CKError)?.code == .unknownItem {
+                    log.write("\(id.recordName): no longer in iCloud; no longer owed")
+                    settled.append(id.recordName)
+                } else {
+                    log.write("\(id.recordName): still owed, \(CloudKitTransportRules.words(for: error))")
+                }
+            case nil:
+                break
+            }
+        }
+        await saveIfOwedChanged()
+        if readable.isEmpty {
+            await settleOwed(settled)
+        } else if await deliver(.fetched(changed: readable, removed: [])) {
+            await settleOwed(settled)
+        }
     }
 
     // MARK: - The zone
@@ -627,6 +722,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         resaveAtEnd = []
         stored.zoneReady = false
         stored.fetchedWhole = false
+        // Nothing is owed from a zone that is gone: whatever a new one holds comes with its first fetch.
+        stored.owed = nil
         await save()
         log.write("zone lost (\(loss.rawValue)) from \(why)")
         await deliver(.zoneLost(loss))
@@ -758,6 +855,11 @@ struct StoredState: Codable {
     var fetchedWhole: Bool?
     /// An account change the engine announced that the brain has not handled yet (nil: none owed).
     var owedAccount: StoredAccountChange?
+    /// Records fetched that this build could not read, asked for again by name at each fetch until they can be
+    /// (16c; nil: none, and in a state saved before the field existed).
+    var owed: OwedRecords?
+
+    var owedRecords: OwedRecords { owed ?? OwedRecords() }
 
     init(engine: CKSyncEngine.State.Serialization? = nil, zoneReady: Bool = false, account: String? = nil) {
         self.engine = engine
@@ -765,11 +867,13 @@ struct StoredState: Codable {
         self.account = account
     }
 
-    /// What `reset()` keeps (T13): the account this state belongs to and whether the zone was known to exist. The
-    /// engine's own state (its bookmark and its list) and the proof of a whole fetch go.
+    /// What `reset()` keeps (T13): the account this state belongs to, whether the zone was known to exist, and the
+    /// records still owed (the whole fetch that follows brings them again anyway). The engine's own state (its
+    /// bookmark and its list) and the proof of a whole fetch go.
     func afterReset() -> StoredState {
         var kept = StoredState(engine: nil, zoneReady: zoneReady, account: account)
         kept.owedAccount = owedAccount
+        kept.owed = owed
         return kept
     }
 
@@ -795,10 +899,28 @@ struct StoredState: Codable {
     }
 }
 
+/// Records of ours iCloud holds that this build fetched and could not read (16c): by record name, why. Kept in the
+/// transport's state, so they are still owed after a relaunch; written down before the bookmark moves past them.
+struct OwedRecords: Codable, Equatable, Sendable {
+    var reasons: [String: String] = [:]
+
+    var isEmpty: Bool { reasons.isEmpty }
+
+    /// For the fetch's words: how many, the first one's name (as the brain names it) and why.
+    var words: String? {
+        guard let first = reasons.keys.sorted().first, let why = reasons[first] else { return nil }
+        let name = CloudRecordCodec.key(forRecordName: first).map(String.init(describing:)) ?? first
+        let count = reasons.count
+        let head = count == 1 ? "1 record in iCloud could not be read here"
+                              : "\(count) records in iCloud could not be read here, the first"
+        return "\(head): \(name) (\(why)); asked for again at each fetch"
+    }
+}
+
 // MARK: - Decisions
 
 /// One CloudKit error, as the decisions need it.
-struct CloudFailure: Equatable, Sendable {
+struct CloudFailure: Error, Equatable, Sendable {
     var code: CKError.Code
     /// `zoneNotFound` caused by the person resetting their encrypted data (`CKErrorUserDidResetEncryptedDataKey`).
     var encryptedDataReset: Bool
@@ -932,6 +1054,24 @@ enum CloudKitTransportRules {
     }
 
     static let notReached = "the fetch ended before it reached iCloud"
+
+    /// The words a fetch ends with: its own trouble if any; else, while records are owed (16c), what is owed, so the
+    /// bolt is not filled and Settings → iCloud says so. Not on the first fetch under a state (`wholeFetchSeenBefore`
+    /// false): the brain takes a fetch that ended with words as one that did not end, and before its first whole
+    /// fetch it sends nothing at all, so one record that can never be read (an asset over the limit) would stop every
+    /// other from going. Owed words from the second fetch on keep only what the brain does after a fetch that ended
+    /// well, and are cleared by the first fetch that ends with nothing owed.
+    static func fetchEnding(_ words: String?, owed: OwedRecords, wholeFetchSeenBefore: Bool) -> String? {
+        if let words { return words }
+        return wholeFetchSeenBefore ? owed.words : nil
+    }
+
+    /// Why a record of ours could not be read, so it is owed (16c); nil when it is not ours at all (a record the
+    /// mirror wrote, an unprefixed type): those are ignored, never owed.
+    static func owedReason(_ error: Error) -> String? {
+        if case CloudRecordCodec.DecodeProblem.notOurs = error { return nil }
+        return "\(error)"
+    }
 
     /// Whether a fetch the app asked for (`fetch()`) proves that iCloud was reached: it did not throw, the zone's
     /// fetch had no trouble, the engine really ended a fetch during the call, and someone is signed in.
