@@ -335,7 +335,7 @@ private struct BoltStyleRow: View {
             .buttonStyle(.plain)
             .hitOutsetLayout(horizontal: 11, vertical: 13)
             .accessibilityLabel("Play the sync bolt")
-            HITMenuRowLabel("Sync bolt", subtitle: "When you're good to go")
+            HITMenuRowLabel("Sync bolt", subtitle: "Plays when everything is in iCloud")
                 .foregroundStyle(HITColor.text)
             Spacer(minLength: HITSpacing.s)
             HITSegmented(selection: $style, segments: BoltStyle.allCases.map { HITSegment($0, $0.title) })

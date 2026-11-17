@@ -64,7 +64,7 @@ struct RemindersSettingsSection: View {
                 }
             }
 
-            HITMenuRow("Default reminder", subtitle: "For timed tasks without a !",
+            HITMenuRow("Default reminder", subtitle: "For timed tasks with no reminder of their own",
                        systemImage: "bell.badge", trailing: {
                 Menu {
                     Picker("Default reminder", selection: $defaultOffset) {

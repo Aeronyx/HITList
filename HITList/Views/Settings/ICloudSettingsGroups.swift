@@ -10,7 +10,10 @@ struct ICloudSyncGroup: View {
     @Environment(\.hitPages) private var pages
 
     static let title = "Sync"
-    static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows."
+    static let footer = "Tasks sync through your private iCloud database at no cost. Sign in to iCloud on each device and the data follows. "
+        + boltSentence
+    /// What the bolt at the top of every list means, in one sentence (round 32: nothing said it anywhere).
+    static let boltSentence = "The bolt at the top of each list is filled when everything on this device is in iCloud."
 
     var body: some View {
         HITGroup(Self.title, footer: Self.footer) {
@@ -203,16 +206,20 @@ struct SyncEnvironmentRow: View {
     /// Nil: the live state (`AccountState.current`).
     var account: AccountState?
 
-    static func subtitle(account: AccountState) -> String { "\(account.title). \(SyncEnvironment.explanation)" }
+    /// The account's state, and for a build run from Xcode the line that says why it sees none of a TestFlight
+    /// build's tasks. A friend's build says only the account's state (round 32: developer words on every device).
+    static func subtitle(account: AccountState, environment: SyncEnvironment = .current) -> String {
+        environment.channel.isDistribution ? "\(account.title)." : "\(account.title). \(SyncEnvironment.explanation)"
+    }
 
     var body: some View {
         let account = account ?? .current
-        HITMenuRowLabel(environment.summary, subtitle: Self.subtitle(account: account), systemImage: "server.rack",
+        HITMenuRowLabel(environment.summary, subtitle: Self.subtitle(account: account, environment: environment), systemImage: "server.rack",
                         iconTint: environment.cloudKit == .production ? Theme.secondaryText : HITColor.dueTomorrow)
             .frame(maxWidth: .infinity, alignment: .leading)
             .hitRowPadding()
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("CloudKit environment: \(environment.summary). \(Self.subtitle(account: account))")
+            .accessibilityLabel("CloudKit environment: \(environment.summary). \(Self.subtitle(account: account, environment: environment))")
             .accessibilityIdentifier("settings-sync-environment")
     }
 }
