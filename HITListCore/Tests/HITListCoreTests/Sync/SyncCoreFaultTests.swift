@@ -125,4 +125,47 @@ final class SyncCoreFaultTests: XCTestCase {
         XCTAssertEqual(status.refused, [])
         XCTAssertEqual(status.waiting, 2, "the task and the zone's record")
     }
+
+    // MARK: 2. A deletion's note is not forgotten while its save is still committing (148 finding 3)
+
+    /// Two quick deletes: the first save has committed (A is gone, its note written); the second save's `willSave`
+    /// has written B's note and the save has not committed yet (B is still here). The first save's hint arrives: the
+    /// brain notes A and must keep B's note, so that when B's save commits, B is a deletion and not missing (M14).
+    func testASecondDeletionStillCommittingKeepsItsNote() async {
+        let device = await synced([task("A", "Milk"), task("B", "Bread")])
+        await device.store.delete(taskKey("A"))
+        await device.store.writeDownDeletion(taskKey("B"))
+        await device.core.localChanged([taskKey("A")])
+        let told = try? await device.store.deletions()
+        XCTAssertEqual(told, [taskKey("B")], "B's note is kept: its row was still here")
+        // B's save commits; its hint arrives.
+        await device.store.lose(taskKey("B"))
+        await device.core.localChanged([taskKey("B")])
+        let entry = await device.entry(taskKey("B"))
+        XCTAssertNotNil(entry?.deletedHereAt, "B is a deletion written down, not missing")
+        let pending = await device.pending()
+        XCTAssertEqual(Set(pending), [.save(taskKey("A")), .save(taskKey("B"))])
+        let outgoing = await device.core.recordToSend(taskKey("B"))
+        XCTAssertEqual(outgoing?.record.isDeleted, true, "B's marker goes")
+        let resets = await device.transport.resets
+        XCTAssertEqual(resets, 0, "nothing was read as missing")
+    }
+
+    /// A note left for a row that is here (a save that failed and was rolled back) is cleared at the launch's whole
+    /// compare, and only there.
+    func testANoteForARowThatIsHereIsClearedAtTheLaunchsWholeCompare() async {
+        let device = await synced([task("A", "Milk")])
+        await device.store.writeDownDeletion(taskKey("A"))
+        await device.core.localChanged(nil)
+        let kept = try? await device.store.deletions()
+        XCTAssertEqual(kept, [taskKey("A")], "not at a compare while the app runs: the save may still be committing")
+        let relaunched = device.relaunched()
+        await relaunched.core.start()
+        let cleared = try? await relaunched.store.deletions()
+        XCTAssertEqual(cleared, [], "cleared at the launch")
+        let entry = await relaunched.entry(taskKey("A"))
+        XCTAssertNil(entry?.deletedHereAt)
+        let item = await relaunched.item(taskKey("A"))
+        XCTAssertNotNil(item)
+    }
 }

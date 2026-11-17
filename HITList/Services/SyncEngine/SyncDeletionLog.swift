@@ -9,8 +9,9 @@ import HITListCore
 /// still say its `id` (`SyncSaveHintObserver`), and it is kept in the ledger's own file (one fact row per key,
 /// `deleted|<type>/<name>`), so a crash in the instant after a delete does not lose it. It lives and dies with the
 /// ledger: a ledger reset (another store file, a sign-out) forgets it too, so a note made for one store can never
-/// delete anything from another. A note for a row that is still here (the save failed, or the row was made again) is
-/// ignored by the brain and forgotten.
+/// delete anything from another. A note for a row that is still here (its save still committing, a save that failed,
+/// the row made again) is kept and read again at each compare: the brain forgets it only at the launch's whole
+/// compare (brief 160, review 148 finding 3: forgetting it while the save committed brought the item back).
 ///
 /// Used from the saving thread (`record`) and from the store's actor (`all`, `forget`): each call makes a context of
 /// its own on the ledger's container, and the small state here is behind a lock.

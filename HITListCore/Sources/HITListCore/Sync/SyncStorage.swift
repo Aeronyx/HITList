@@ -57,7 +57,8 @@ public protocol SyncLocalStore: Sendable {
     /// is merely not on the device is never a deletion (`dev/SYNC-ENGINE.md` section 4), so a store that reads empty,
     /// loses a row or is put back from a copy can never delete anything in iCloud. The store writes a deletion down
     /// as it is saved (a task's sub-tasks that go with it too), and keeps it until the brain has; the engine's own
-    /// deletions (`apply`) are never in it. A key in it whose item is here again is simply ignored.
+    /// deletions (`apply`) are never in it. A key in it whose item is still here is left in it (its save may still be
+    /// committing: brief 160) and cleared by the brain at the launch's whole compare.
     func deletions() async throws -> Set<SyncKey>
 
     /// The brain has written these down (`LedgerEntry.deletedHereAt`): they need not be told again.

@@ -147,7 +147,7 @@ public actor SyncCore: SyncTransportDelegate {
         await serially {
             phase = .running
             await liftForStart()
-            await compare(nil)
+            await compare(nil, launch: true)
             await refetchIfOwed()
             publish()
         }
