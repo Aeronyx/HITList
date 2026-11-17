@@ -150,7 +150,7 @@ final class ShareInbox {
                 // Made before; its file was left behind (killed between the ledger and the removal, or the removal
                 // failed). Never a second task.
                 removeFile(request.id)
-                log("Share: ‘\(ledger.entry(request.id)?.title ?? "a share")’ was already made; its file was left behind and is gone now", .info)
+                log("Share: \(Self.named(ledger.entry(request.id)?.taskID, or: request.id)) was already made; its file was left behind and is gone now", .info)
             case .making?:
                 settle(request, now: now)
             case nil:
@@ -192,7 +192,7 @@ final class ShareInbox {
             finish(entry, task: task, request: request, plan: plan, now: now, recovered: false)
         } catch {
             // Left `making`: the next drain looks for the task (a save that landed late) and makes it if it isn't there.
-            log("Share: ‘\(plan.result.title)’ couldn't be saved yet (\(error.localizedDescription)); it stays in the outbox and is tried again", .error)
+            log("Share: \(Self.named(nil, or: request.id)) couldn't be saved yet (\(error.localizedDescription)); it stays in the outbox and is tried again", .error)
         }
     }
 
@@ -232,9 +232,9 @@ final class ShareInbox {
         // The ledger says "made" before the file goes: a kill in between leaves a file the next drain only removes.
         saveLedger()
         removeFile(request.id)
-        let place = plan.destination == .inbox ? "the Inbox" : "‘\(task.project?.name ?? "")’"
+        let place = task.project.map { "Group \(Self.short($0.id))" } ?? "the Inbox"
         let how = recovered ? " (the app had stopped mid-way; found, not made again)" : ""
-        log("Share: made ‘\(task.title)’ in \(place) from the share sheet\(how) (shared \(Self.time(request.askedAt)), recorded by \(request.recordedBy); made by \(ShareRoad.processDescription))", .notice)
+        log("Share: made \(Self.named(task.id, or: request.id)) in \(place) from the share sheet\(how) (shared \(Self.time(request.askedAt)), recorded by \(request.recordedBy); made by \(ShareRoad.processDescription))", .notice)
         osLogNotice("request \(request.id.uuidString) made into task \(task.id.uuidString)")
     }
 
@@ -281,6 +281,14 @@ final class ShareInbox {
     private func osLogNotice(_ text: String) {
         Self.osLog.notice("share inbox: \(text, privacy: .public) (pid \(ProcessInfo.processInfo.processIdentifier))")
     }
+
+    /// How a line names what a share made (brief 159): its kind and the first eight characters of its id, never its words,
+    /// which the sync log promises and the system log, where every line is mirrored public, must not carry.
+    private static func named(_ taskID: UUID?, or requestID: UUID) -> String {
+        taskID.map { "task \(short($0))" } ?? "share \(short(requestID))"
+    }
+
+    private static func short(_ id: UUID) -> String { String(id.uuidString.prefix(8)) }
 
     private static func time(_ date: Date) -> String { date.formatted(date: .abbreviated, time: .standard) }
 }

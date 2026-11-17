@@ -40,8 +40,10 @@ HITList can let Claude, Anthropic's assistant, work with your tasks. It is off a
 Settings → Claude → Claude integration and, on a Mac, connect Claude Desktop or Claude Code yourself. While it is on and HITList
 is open, the Claude app on your Mac can list, add, complete and edit the tasks your privacy setting allows
 (everything except tasks labelled `@private`, or only tasks labelled `@claude`); hidden tasks are never shown
-to it. What Claude does with what it reads is covered by Anthropic's terms and privacy policy, between you and
-Anthropic: HITList sends nothing to us or to Anthropic on its own. With the integration on, "Copy for Claude" only
+to it. HITList tells Claude that completing and editing change what is there; an edit replaces what it changes and
+HITList cannot undo it, so Claude's reply carries a title or description it replaced, and a description with text in
+it is erased only when Claude asks for that in so many words. What Claude does with what it reads is covered by
+Anthropic's terms and privacy policy, between you and Anthropic: HITList sends nothing to us or to Anthropic on its own. With the integration on, "Copy for Claude" only
 puts the allowed tasks on your clipboard for you to paste wherever you choose.
 
 ## Shared Tasks (optional preview, off unless you turn it on)
@@ -117,8 +119,11 @@ Settings → About → Copy diagnostics puts a short text on your clipboard: the
 device model and system version, the iCloud sync state and the last sync times, the iCloud environment, the
 app's storage location on the device, whether notifications are allowed and switched on, and whether a
 profile exists and has synced (never its name or picture). Settings → iCloud → Sync log records sync
-activity on the device (counts, record types, times and error codes; never task titles or other content).
-Neither is ever sent by the app: they reach us only if you copy, share or save them and send them yourself.
+activity on the device (counts, record types, times and error codes; never task titles, Group names or other
+content: a task or Group is named only by its kind and the first eight characters of its id). A storage location in the sync
+log starts at "~/Library/", so it never carries your Mac's user name. On iPhone and iPad, Share… makes a copy of the
+log for the share sheet and removes it when the sheet closes. Neither is ever sent by the app: they reach us only if
+you copy, share or save them and send them yourself.
 
 ## Beta feedback
 

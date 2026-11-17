@@ -124,7 +124,8 @@ final class WidgetCompletionTests: XCTestCase {
         center.drain()
         XCTAssertEqual(try shown(call.id), .gone, "the export finished: the row leaves")
         XCTAssertEqual(outbox.read().requests, [])
-        XCTAssertTrue(lines.contains { $0.contains("Call Sam") && $0.contains("iCloud has it") }, "\(lines)")
+        XCTAssertTrue(lines.contains { $0.contains("task \(call.id.uuidString.prefix(8))") && $0.contains("iCloud has it") }, "\(lines)")
+        XCTAssertFalse(lines.contains { $0.contains("Call Sam") }, "never the title (brief 159): \(lines)")
     }
 
     func testLocalOnlyTheSaveIsTheFinishLine() throws {
@@ -269,6 +270,10 @@ final class WidgetCompletionTests: XCTestCase {
         XCTAssertTrue(lost.isCompleted, "applied now")
         XCTAssertEqual(try shown(landed.id), .gone, "its save came before that export: iCloud has it")
         XCTAssertEqual(try shown(lost.id), .checked, "applied after that export started: it waits for the next")
+        // Brief 159, item 1: both relaunch lines name the task by its id, never its title.
+        XCTAssertTrue(lines.contains { $0.contains("task \(lost.id.uuidString.prefix(8))") && $0.contains("after a relaunch") }, "\(lines)")
+        XCTAssertTrue(lines.contains { $0.contains("task \(landed.id.uuidString.prefix(8))") && $0.contains("not applied again") }, "\(lines)")
+        XCTAssertFalse(lines.contains { $0.contains("Landed") || $0.contains("Lost") }, "\(lines)")
     }
 
     // MARK: - Idempotent and ordered

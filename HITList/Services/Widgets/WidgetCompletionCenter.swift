@@ -302,7 +302,7 @@ final class WidgetCompletionCenter {
         ledger.upsert(entry)
         saveLedger()
         let wait = sync.finishLine == .save ? "" : "; it leaves the widget once iCloud has it"
-        log("Widget: \(entry.outcome ?? "completed") ‘\(task.title)’ from the \(request.widget) widget (tapped \(Self.time(request.askedAt)), recorded by \(request.recordedBy))\(wait)", .notice)
+        log("Widget: \(entry.outcome ?? "completed") \(Self.named(task.id)) from the \(request.widget) widget (tapped \(Self.time(request.askedAt)), recorded by \(request.recordedBy))\(wait)", .notice)
         return true
     }
 
@@ -324,7 +324,7 @@ final class WidgetCompletionCenter {
         // The lists' paths save with `try?`; a save that failed is tried once more, out loud.
         if context.hasChanges {
             do { try context.save() } catch {
-                log("Widget: the completion of ‘\(task.title)’ couldn't be saved: \(error.localizedDescription)", .error)
+                log("Widget: the completion of \(Self.named(task.id)) couldn't be saved: \(error.localizedDescription)", .error)
                 outcome += ", not saved yet"
             }
         }
@@ -343,9 +343,9 @@ final class WidgetCompletionCenter {
             // Made now: only an export that starts after this moment carries it, not the relaunch's first.
             entry.appliedAt = now
             entry.outcome = perform(entry.request, on: task, now: now)
-            log("Widget: \(entry.outcome ?? "completed") ‘\(task.title)’ after a relaunch (the app had stopped mid-way)", .notice)
+            log("Widget: \(entry.outcome ?? "completed") \(Self.named(task.id)) after a relaunch (the app had stopped mid-way)", .notice)
         } else {
-            log("Widget: ‘\(task.title)’ had been completed before the app stopped; not applied again", .notice)
+            log("Widget: \(Self.named(task.id)) had been completed before the app stopped; not applied again", .notice)
         }
         entry.stage = .waiting
         ledger.upsert(entry)
@@ -354,9 +354,8 @@ final class WidgetCompletionCenter {
 
     private func resolve(_ id: UUID, _ resolution: WidgetCompletion.Resolution, now: Date) {
         let entry = ledger.entry(id)
-        let title = entry?.task?.title ?? task(entry?.request.taskID ?? id)?.title
         ledger.resolve(id, resolution, at: now)
-        let name = title.map { "‘\($0)’" } ?? "a task"
+        let name = entry.map { Self.named($0.request.taskID) } ?? "a task"
         let waited = (entry?.appliedAt).map { " after \(SyncLogFormat.duration(now.timeIntervalSince($0)))" } ?? ""
         switch resolution {
         case .exported: log("Widget: \(name) is done and iCloud has it\(waited)", .info)
@@ -379,6 +378,10 @@ final class WidgetCompletionCenter {
             return false
         }
     }
+
+    /// How a line names a task (brief 159): its kind and the first eight characters of its id, never its title, which the
+    /// sync log promises and the system log, where every line is mirrored public, must not carry.
+    private static func named(_ taskID: UUID) -> String { "task \(taskID.uuidString.prefix(8))" }
 
     private func osLogNotice(_ text: String) {
         Self.osLog.notice("widget center: \(text, privacy: .public) (pid \(ProcessInfo.processInfo.processIdentifier))")
