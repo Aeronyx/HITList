@@ -330,6 +330,10 @@ public actor SyncSimulation {
             }
             // The first whole fetch after a memory was lost: the device has a base for everything again.
             if delivery.round == 0, delivery.kind == .didFetch, !delivery.failed { observed.fetched(name) }
+            // Records that arrived are a memory to lose, whether or not the fetch they came in ended (round 32,
+            // refusal seed 672: a device that crashed in its only fetch, then lost its transport's state, held bases
+            // for what that fetch brought, and its merge without a memory was not counted).
+            if delivery.round == 0, delivery.kind == .fetched { observed.received(name) }
             // I4: the device after the first delivery of an event that comes twice, and after the second.
             if delivery.willRepeat {
                 observed.keep(name, await DeviceSnapshot.of(store: store, ledger: ledger, transport: transport))
@@ -891,7 +895,7 @@ final class Observed: @unchecked Sendable {
     private var forgotten: [String] = []
     /// Devices that lost their memory and have not finished a whole fetch since.
     private var amnesic: Set<String> = []
-    /// Devices that have finished a fetch at least once.
+    /// Devices that have received records (or finished a fetch) at least once.
     private var fetchedOnce: Set<String> = []
 
     func hasFetched(_ device: String) -> Bool {
@@ -904,6 +908,13 @@ final class Observed: @unchecked Sendable {
         lock.lock()
         forgotten.append(device)
         amnesic.insert(device)
+        lock.unlock()
+    }
+
+    /// Records reached the device (a `fetched` event): it has a memory of them to lose from now on.
+    func received(_ device: String) {
+        lock.lock()
+        fetchedOnce.insert(device)
         lock.unlock()
     }
 

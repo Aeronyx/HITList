@@ -257,6 +257,8 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "brain: a lost zone forgot what a record waited for; its parent went everywhere by M5"),
             KeptSeed(seed: 362, faults: "account", keys: ["C60FAAF7"],
                      found: "brain: a Group deleted just before a sign-out came back at the sign-in"),
+            KeptSeed(seed: 672, faults: "refusal", keys: ["8572DE5D", "5D9B7383"],
+                     found: "rig: a memory of records from a fetch that never ended, lost with the transport's state, was not counted"),
         ]
         return seeds
     }
@@ -356,6 +358,22 @@ final class SyncCoreSimulationTests: XCTestCase {
     }
 
     // MARK: The rig's model, corrected on what SyncCore does
+
+    /// Refusal seed 672: a device whose only fetch crashed after records reached it, and which then lost its
+    /// transport's state, held bases for those records; its merge without a memory (M5) was not counted, because the
+    /// rig counted a memory only after a fetch that ended.
+    func testTheRigCountsALostMemoryOfRecordsFromAFetchThatNeverEnded() async {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        await sim.play([.act("A", .put(Self.task("T", "one"))), .sync("A"),
+                        .fault("B", .crash(.afterHandling(.fetched))), .sync("B"),
+                        .relaunch("B", keepLedger: true, keepTransportState: false), .sync("B")])
+        let base = try? await sim.device("B")?.ledger.entry(SyncKey(type: "TaskItem", name: "T"))
+        XCTAssertNotNil(base ?? nil, "B settled T again after the loss")
+        let amnesia = await sim.intent.amnesia
+        XCTAssertTrue(amnesia.contains { $0.device == "B" }, "the rig saw B's memory lost: \(amnesia)")
+    }
 
     /// Seed 62 (everyday) and 16 (memory): a device whose transport lost its state while a deletion of its own was
     /// still to go forgets its memory but keeps that deletion as an entry with no base (section 7). The rig counted a
