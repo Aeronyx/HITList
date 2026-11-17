@@ -736,11 +736,14 @@ struct UpcomingView: View {
         } else {
             .uncomplete
         }
+        // Taken before the roll-over: Undo puts a repeating task's reminder and ticked sub-tasks back too, as in
+        // every other list (round 32, brief 157).
+        let rollOver: TaskActions.RollOver? = if case .restoreDueDate = revert { TaskActions.RollOver(task) } else { nil }
         let token = withAnimation(HITMotion.quick) { completions.begin(task.id, anchor: task.dueDate) }
         TaskActions.toggleCompletion(task, in: context)
         CompletionFeedback.shared.taskCompleted()
         Task { await finishCompletion(of: task, token: token) }
-        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+        showToast(CompletedTask(id: task.id, title: task.title, revert: revert, rollOver: rollOver))
     }
 
     private func showToast(_ completed: CompletedTask) {
@@ -767,6 +770,7 @@ struct UpcomingView: View {
                     continue
                 }
                 guard let task = context.storedTask(record.id) else { continue }
+                if Flipboard.undo(record, on: task, in: context) { continue } // the whole roll-over goes back
                 switch record.revert {
                 case .uncomplete:
                     if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }

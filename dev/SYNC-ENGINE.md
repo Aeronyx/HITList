@@ -184,7 +184,9 @@ The result is what both sides should end with: the item, a marker, or nothing.
 
 Then: the device is written if it differs from the result (through `LocalWrite.expected`: if the person changed the
 item meanwhile, nothing is written and it is settled again); `base` becomes S; and if the result differs from S it
-is waiting to go.
+is waiting to go. A fetch that moves a record's base clears a refusal for good of that key: what iCloud refused was
+a send against the old version, so it is tried once more against the new one, once per version another device
+makes (round 32, brief 160).
 
 A marker is read as its key and its time and nothing else, and a set of references as a set (sorted, no repeats,
 an empty one the same as none), whatever a transport hands over. A type this build does not know never reaches
@@ -228,7 +230,9 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   zone the transport cannot read (an asset not downloaded, or over the limit) is never dropped while the bookmark
   moves on: it is owed, kept in the transport's state, asked for again by name at the end of each fetch that
   reached iCloud, and delivered as fetched once it can be read; while one is owed, from the second fetch under a
-  state, `didFetch` carries words naming how many and the first (round 32, brief 149).
+  state, `didFetch` carries words naming how many and the first (round 32, brief 149). The transport tells the
+  owed keys (`owed`) before `didFetch`; the brain does not take that fetch as proof iCloud lacks the key, and keeps
+  a deletion of its own with no base for it (brief 160).
 - **T3 Pending.** The list is ordered, holds a key once (a save and a delete of one key replace each other, the last
   added stays), and survives a relaunch. The record is asked for when its turn comes (`recordToSend`); nil drops
   the change. `pending`, `add`, `remove` and `reset` never wait for the delegate: the brain calls them from inside
@@ -240,7 +244,8 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   person changed the item again while the save was on its way) stays on the list.
 - **T5 Passing trouble** (no network, iCloud busy or limiting, the account briefly unavailable): the change stays on
   the list and is tried again without the person: by the engine's pump in the app (section 6a), by the next
-  `send()` in a test. `didSend(error:)` / `didFetch(error:)` carry the words.
+  `send()` in a test. `didSend(error:)` / `didFetch(error:)` carry the words. `internalError`, `assetFileNotFound`
+  and `assetFileModified` are passing trouble too.
 - **T6 Conflict.** A save whose `system` is not the token of iCloud's current version (or that has none while iCloud
   holds the record) is refused whole. The failure carries iCloud's version. The change leaves the list; the brain
   settles and adds it again if something is still to go. A conflict whose iCloud version cannot be read is not
@@ -250,6 +255,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   list. A delete of a record iCloud does not hold counts as done.
 - **T8 Removed for good.** `delete` removes the record; other devices learn of it at their next fetch (`removed`).
 - **T9 Refused for good** (`quotaExceeded`, `tooLarge`, `rejected`): the change leaves the list; the brain decides.
+  `Meta/meta` honours a refusal like any other record.
+- **T9a Not ready** (`notReady`: CKError 12, 15, 10, 5, 8, 32, 18, 24; a Production schema without a record type or
+  a field refuses each record with 12): about the build, the environment or the account, never about the record.
+  The change leaves the list; the brain holds `iCloudNotReady`; nothing is refused for good (round 32, review 148:
+  a schema not yet deployed would have parked a whole store as "refused" until each item was edited).
 - **T10 Batches.** A send may take several batches (250 records at most each on CloudKit), one `sent` event each.
   A batch is not all-or-nothing.
 - **T11 The zone lost.** `zoneLost(reason)`, during a fetch or when a send finds a zone missing that this device
@@ -432,16 +442,24 @@ person or the world can lift:
 | `needsUpdate` | iCloud's format is newer | Nothing is sent or fetched |
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
+| `iCloudNotReady` | iCloud refused the send for the build or the account (a schema not yet deployed) | As `storageFull`: what is waiting stays waiting and counted, nothing refused; tried again on return to the app and by Try again, never by a timer |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown. Also when the ledger's file could not be opened now (no permission, a full disk): no engine runs, the file is left as it is, and deletions made in that launch are not taken down, so those items come back |
+| `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are one fixed sentence per failure (`SyncFailureWords`) and the error itself is in the sync log only. Also when the ledger's file could not be opened now (no permission, a full disk): no engine runs, the file is left as it is, and deletions made in that launch are not taken down, so those items come back |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
-again. An account switched: as sign-out, then sign-in.
+again. **An account switched** from one the device is signed in to, in one order (round 32, brief 160; the mirror's
+`AccountSwitch` and the brain used to race): the brain's backup; the previous account's backups set aside by that
+backup; every item removed, those iCloud never held too (they would otherwise travel into the next account's
+iCloud); the memory forgotten; the new account joined and fetched; `AccountSwitch` does the rest and leaves the
+backups alone. A sign-out keeps what iCloud never held, and the ledger keeps the account it was signed out of: a
+later sign-in to another account is a switch for the backups, and what the sign-out left stays. The engine's
+backup folders are keyed by the engine's container's account ids, so folders set aside under the mirror stay where
+they are.
 
 There is no hold for "many items gone": the engine never infers a deletion (section 4), so a store that reads
 empty is not a question for the person. It sends nothing and everything comes back.
 
-While held (a full iCloud excepted) nothing is compared, `recordToSend` answers nil, and fetched records are let go
+While held (a full iCloud, or one not ready, excepted) nothing is compared, `recordToSend` answers nil, and fetched records are let go
 unread; when the hold lifts the transport is reset, so everything comes again. Deletions the person makes while
 held are still taken down and noted. A full iCloud still reads what
 arrives and counts what waits, and is tried again on return to the app only (never by itself: no loop).
@@ -522,7 +540,10 @@ the push subscription (section 6a); a reset that let the old engine write its bo
 release guard blind to a field missing from both environments (the schema file, section 3); the merge by name on
 the engine and Group pairs of one name (finding 14; section 11); the move stopping the engine on a phone; a
 deletion through the app on the real service (dozens, in the rehearsal); the move from the mirror and the way back
-(section 9, item 5).
+(section 9, item 5); and by brief 160: a Production schema not yet deployed refusing every record for good (now
+the `iCloudNotReady` hold), a deletion's note forgotten while its save was still committing (notes for rows still
+here are kept until the launch's whole compare), a hold's words (never a Swift error), the account switch's two
+owners, and items iCloud never held travelling into another account.
 
 **Open:**
 
@@ -539,6 +560,15 @@ deletion through the app on the real service (dozens, in the rehearsal); the mov
   sub-task under a deleted task left to its own marker): not before the first live week, for the reasons brief 150
   gave (`switchTo` guards an account switch whose backup failed and cannot become "merge afresh"; the sub-task
   rewrite would show sub-tasks loose for a moment, and for good when a child's marker never comes).
+- **A zone deleted while a device is offline, then that device's sign-out**, removes an item its ledger calls
+  synced that iCloud no longer holds, with an edit not yet sent: only the backup has it (the simulation's `all`
+  set, seed 6; the engine before round 32 fails the same way; `all` mixes every fault and is not one of the eight
+  sets the exit line names). The smallest fix: at a sign-out keep the items whose last save was never followed by
+  a fetch. It goes with the sign-out decision below.
+- **Records owed** (brief 149's "brain gap"): a fetch that left records owed is still not counted as whole from
+  its first telling, and the owed words show from the second fetch.
+- **The status line shows iCloud's own words** for passing trouble that has lasted a while
+  (`SyncStatus.lastError`), raw. Holds have plain words; this does not yet.
 - **A sign-out** (section 12, decision 2): whether iCloud switched off for HITList alone is announced as a
   sign-out is not known (no session may sign a device out), and if it is, the tasks leave the device until
   sign-in. To decide before everyone moves.

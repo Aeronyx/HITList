@@ -24,6 +24,7 @@ enum WhatsNew {
             "Reminders: HITList asks to send notifications the first time you give a task a reminder. Before, reminders stayed silent until you switched them on in Settings → Reminders.",
             "Safer deleting: a label that is on tasks asks before it goes, and the question for a task names its sub-tasks. Undo after completing a repeating task puts its reminder and its checklist back too.",
             "Two Groups, two labels or two filters can no longer share a name; the editor says so, instead of HITList quietly merging them later.",
+            "Long lists are quicker: checking off a task, switching lists and searching no longer slow down as your list grows, and a list on screen does no work while it waits.",
             "What you type in a task's card is kept if you leave HITList before confirming.",
             "A daily backup that fails says so in Settings → iCloud & data → Backups. Import JSON asks before bringing back things you deleted since the backup.",
             "The sync log no longer contains any task's title. Settings → iCloud & data says what the bolt means: filled when everything on this device is in iCloud.",

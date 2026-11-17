@@ -53,6 +53,15 @@ Private:
   can no longer clear a task's description without saying so, and is told that edits cannot be undone.
 - The location question says where the location goes: only Apple's weather and map services.
 
+Faster with a long list (measured on a Mac with 5,000 tasks, before and after: checking off a task 2.6 s of
+processor time to 0.9 s, opening Today 2.6 s to 0.8 s, launch 3.8 s to 1.9 s; with a few dozen tasks nothing
+changes):
+
+- The sidebar's counts are kept by one small model instead of being recounted from every task on each change.
+- Each list fetches only the tasks it can show and keeps its rows between redraws.
+- A list on screen does nothing at all while it waits (it used to redraw itself every minute).
+- Search waits a moment after the last keystroke; the widgets' snapshot holds only what a widget can show.
+
 Steadier:
 
 - Fixes for crashes that could follow a task, Group, label or switch being deleted on another device while its
@@ -64,6 +73,8 @@ The sync engine (switched on only where it is moved to):
 - It catches up at every launch and return to the app. Found on George's iPhone beside the Mac: Apple's engine, left
   to schedule itself, fetched only when a push told it to, and missed what another device changed while the app was
   closed. HITList now asks for each sync itself and keeps its own push subscription.
+- If iCloud is not ready for a new version of HITList (a schema not yet deployed), the engine waits and says so;
+  nothing is refused and nothing is lost.
 - Check iCloud… on the engine reads every item in iCloud afresh and compares it with the device, field by field.
 - Moving back to the earlier sync asks whether this is the first device to go back (it sends its tasks) or another
   (it downloads a fresh copy), so nothing is saved twice.
