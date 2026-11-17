@@ -864,6 +864,27 @@ overrule: plain fields for the first live release; the engine goes live for him 
 friends do not see, for a week; then everyone at their first launch after updating; the mirror's code goes only
 after that.
 
+Round 32 (2026-11-16, night). George's words: "we don't need encryption right now; this is not something I plan to
+put on the App Store, only to share with friends" (**plain fields: decided**); "Remember to always tell me if any
+of my friend's data is gonna be wiped if ever so they can export it beforehand" (**a standing rule**, section 3);
+"Please work freely and complete the sync engine"; "let's shift into review and hardening mode so we can prepare
+for a real launch, but I also won't feel comfortable launching until we have at least a few days of experience
+with the new sync system"; "Don't be afraid to make feature changes as well if you notice/think of glaring issues
+or objective upgrades during your review, just be sure to make me aware of them"; "using Opus 5.5 subagents as
+often as possible"; "continue using my connected iPhone for development as needed" (taken as his word for that
+round's tests; still asked for each later round). He ran the reset of the tasks' container's Development side
+himself. My choices, his to reverse: the engine goes to his devices through a hidden group (seven taps), not a
+visible setting; Apple's engine runs with its own scheduling off; the way back asks which device this is; the
+engine's Development side was reset by me (my own test records) and its schema imported from the file, so that
+what he deploys is exactly the file; no merge by name on the engine and the editors refuse a used name;
+notifications are asked for at the first task with a reminder; a label on tasks asks before it is deleted and
+Flipboard's own cannot be; a move to Shared Tasks asks when it would drop something; Import JSON asks before
+bringing back what was deleted; Claude needs `clear_description` to erase a description. Left for him: whether a
+sign-out should keep the tasks on the device (I recommend it, before everyone moves); the location question at a
+first launch (the screens review would move it); the repository is public and holds his address in Send Beta
+Feedback and in `dev/` (his to keep or change); the 72 merged session worktrees (still unanswered, not asked
+again).
+
 ## 8. Where things stand (2026-11-16, evening: round 31 on master, nothing to release)
 
 **2026-11-16, evening: round 31 (Fable 5.2 supervisor, no sessions), after George released 0.9.13**
