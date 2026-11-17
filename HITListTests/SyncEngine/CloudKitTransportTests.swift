@@ -298,6 +298,9 @@ final class CloudKitTransportTests: XCTestCase {
     /// the new engine's sign-in for the same account is not told as a lost memory, T12, and the brain keeps its
     /// ledger), what was known of the zone, the records still owed and the pending list stay.
     func testAnExpiredTokenForgetsOnlyTheBookmark() async throws {
+        // CI builds unsigned (scripts/test.sh --unsigned): without the iCloud entitlement no engine can be made in
+        // the container, and the attempt ends the test process (seen on CI in round 32).
+        try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] == "1", "an unsigned build cannot make an engine in an iCloud container")
         let ledger = MemoryLedger()
         var known = StoredState(engine: nil, zoneReady: true, account: "_me")
         known.fetchedWhole = true
@@ -331,7 +334,10 @@ final class CloudKitTransportTests: XCTestCase {
     }
 
     /// Brief 160: two fetches in flight both found the push subscription unsaved and both saved it. Once.
-    func testThePushSubscriptionIsSavedOnceWhenTwoFetchesAskAtOnce() async {
+    func testThePushSubscriptionIsSavedOnceWhenTwoFetchesAskAtOnce() async throws {
+        // CI builds unsigned (scripts/test.sh --unsigned): without the iCloud entitlement no engine can be made in
+        // the container, and the attempt ends the test process (seen on CI in round 32).
+        try XCTSkipIf(ProcessInfo.processInfo.environment["HITLIST_UNSIGNED"] == "1", "an unsigned build cannot make an engine in an iCloud container")
         let ledger = MemoryLedger()
         await ledger.saveTransportState(StoredState(engine: nil, zoneReady: true, account: "_me").encoded(log: SyncTransportLog { _ in }))
         let saves = SaveCounter()
