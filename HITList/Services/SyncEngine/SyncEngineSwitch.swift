@@ -104,6 +104,15 @@ enum SyncEngineSwitch {
 
     /// This launch's answer, set once by `ModelContainerFactory.make()` before it opens the container.
     nonisolated(unsafe) private(set) static var current: Engine = .mirror
+    /// Whether a Debug argument chose this launch's engine against the store's own preference (`-syncEngine own` on
+    /// a side store that was never moved): the preference then says nothing about a move.
+    nonisolated(unsafe) private(set) static var launchedByArgument = false
+
+    /// The engine a move asked for that this launch does not run yet (the app must be reopened), or nil: the store's
+    /// preference when it differs from the engine this launch runs, unless an argument chose the engine.
+    static func pendingMove(current: Engine, preferred: Engine, byArgument: Bool) -> Engine? {
+        byArgument || preferred == current ? nil : preferred
+    }
 
     static var isDebugBuild: Bool {
         #if DEBUG
@@ -119,6 +128,8 @@ enum SyncEngineSwitch {
         let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
         current = decide(storeName: storeName, isTesting: isTesting, isDebug: isDebugBuild,
                          arguments: ProcessInfo.processInfo.arguments, defaults: AppGroup.defaults)
+        launchedByArgument = current != decide(storeName: storeName, isTesting: isTesting, isDebug: isDebugBuild,
+                                               arguments: [], defaults: AppGroup.defaults)
         return current
     }
 

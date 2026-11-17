@@ -278,6 +278,17 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults), "a move to the engine never sets the store aside")
     }
 
+    /// A move waits only when the store's preference differs from the engine this launch runs and no Debug argument
+    /// chose that engine: the group then offers to cancel it.
+    func testAMoveIsWaitingOnlyWhenThePreferenceDiffersFromThisLaunch() {
+        XCTAssertNil(SyncEngineSwitch.pendingMove(current: .mirror, preferred: .mirror, byArgument: false))
+        XCTAssertNil(SyncEngineSwitch.pendingMove(current: .own, preferred: .own, byArgument: false))
+        XCTAssertEqual(SyncEngineSwitch.pendingMove(current: .mirror, preferred: .own, byArgument: false), .own, "moved, not reopened yet")
+        XCTAssertEqual(SyncEngineSwitch.pendingMove(current: .own, preferred: .mirror, byArgument: false), .mirror, "moved back, not reopened yet")
+        XCTAssertNil(SyncEngineSwitch.pendingMove(current: .own, preferred: .mirror, byArgument: true),
+                     "a Debug run on the engine by argument was never moved")
+    }
+
     func testMovingToTheNewSyncWarnsWhileTodaysSyncHasNotFinished() {
         XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: false, isSynced: false), "today's sync is off: nothing to wait for")
         XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: true, isSynced: true))

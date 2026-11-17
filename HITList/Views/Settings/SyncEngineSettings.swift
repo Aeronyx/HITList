@@ -214,8 +214,12 @@ struct SyncEngineSwitchGroup: View {
     var body: some View {
         let running = board.engine
         // A move asked for and waiting for a reopen can be taken back: the button then offers the engine that runs.
-        let waiting = next != running
-        let target: SyncEngineBoard.Engine = waiting ? running : (running == .own ? .mirror : .own)
+        // Judged by the store's preference against the engine this launch was opened on, never by what the board
+        // shows (the Debug demo of the engine's marks shows an engine that is not running).
+        let pending = SyncEngineSwitch.pendingMove(current: SyncEngineSwitch.current, preferred: next,
+                                                   byArgument: SyncEngineSwitch.launchedByArgument)
+        let waiting = pending != nil
+        let target: SyncEngineBoard.Engine = waiting ? SyncEngineSwitch.current : (running == .own ? .mirror : .own)
         HITGroup(Self.title, footer: SyncEngineWords.switchFooter) {
             HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")

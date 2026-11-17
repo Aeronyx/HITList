@@ -60,7 +60,16 @@ final class SyncEngineStatusUITests: XCTestCase {
         shot(state, "hold")
     }
 
-    func testSynced() { check("synced", words: "Synced just now") }
+    func testSynced() {
+        check("synced", words: "Synced just now")
+        // Round 32: on the engine Check iCloud… is the engine's own, and the group that moves this store sits at the
+        // page's foot (always shown on a store that is on the engine: it is the way back).
+        let checkRow = element("settings-engine-check"), move = element("settings-engine-move")
+        for _ in 0..<8 where !move.isHittable { app.swipeUp(velocity: .slow) }
+        XCTAssertTrue(checkRow.exists, "Check iCloud… on the engine")
+        XCTAssertTrue(move.waitForExistence(timeout: 3), "the group that moves this store")
+        shot("synced", "foot")
+    }
     func testWaiting() { check("waiting3", words: "3 changes waiting to go to iCloud") }
     func testChecking() { check("checking", words: "Checking with iCloud…") }
     func testMassDeletion() {
