@@ -11,7 +11,19 @@ struct UpcomingView: View {
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    /// The open tasks, oldest first (review 154, finding 2(a)): Upcoming schedules only open ones
+    /// (`UpcomingSchedule.isScheduled`) and drops only move open ones (`TaskRescheduling.drop`); a completed task it still
+    /// shows while its completion animates comes from `heldTasks`. Sub-tasks stay in, as before, for a drop.
+    @Query(UpcomingView.openTasks) private var allTasks: [TaskItem]
+    /// The board's or the list's days, held between bodies (review 154, finding 2(b)).
+    @State private var listing = ListCache<ListingKey, Listing>()
+
+    static var openTasks: FetchDescriptor<TaskItem> {
+        var descriptor = FetchDescriptor<TaskItem>(predicate: #Predicate { !$0.isCompleted },
+                                                   sortBy: [SortDescriptor(\.createdAt)])
+        descriptor.relationshipKeyPathsForPrefetching = [\.labels]
+        return descriptor
+    }
 
     @Environment(PopoutController.self) private var popouts
     #if os(iOS)
@@ -65,7 +77,6 @@ struct UpcomingView: View {
     /// The strip's pages: a month back, a year ahead.
     private static let weeks = -4...52
     private let strip = WeekStrip(weekStart: Preferences.weekStartWeekday())
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var calendar: Calendar { strip.calendar }
     private var today: Date { calendar.startOfDay(for: now) }
@@ -82,7 +93,7 @@ struct UpcomingView: View {
 
     private var entries: [Entry] {
         let anchors = completions.anchors
-        let own = allTasks.map { task in
+        let own = tasksWithHeld(anchors).map { task in
             if let anchor = anchors[task.id] {
                 return Entry(task: task, filterDueDate: anchor, filterIsCompleted: false)
             }
@@ -94,14 +105,64 @@ struct UpcomingView: View {
         return own + shared
     }
 
+    /// The query's tasks, with those a completion holds that have left it (completed) each in its place among them by
+    /// age, so every entry is where it was when the query held every task.
+    private func tasksWithHeld(_ anchors: [UUID: Date?]) -> [TaskItem] {
+        guard !anchors.isEmpty else { return allTasks }
+        let inQuery = Set(allTasks.map(\.id))
+        var tasks = allTasks
+        for held in context.heldTasks(anchors.keys) where !inQuery.contains(held.id) {
+            let place = tasks.firstIndex { $0.createdAt > held.createdAt } ?? tasks.endIndex
+            tasks.insert(held, at: place)
+        }
+        return tasks
+    }
+
+    /// What the days are worked out from besides the models they read.
+    struct ListingKey: Equatable {
+        let showsBoard: Bool
+        let window: UpcomingWindow
+        let dayCount: Int
+        let now: Date
+        let overdueExpanded: Bool
+        let anchors: [UUID: Date?]
+    }
+
+    /// The board's columns (Mac, a full-width iPad), or the list's days and the week strip's dots (iPhone), and the next
+    /// moment one of the tasks changes by itself (`ListClock`).
+    struct Listing {
+        let board: UpcomingBoardModel<Entry>?
+        let schedule: UpcomingSchedule<Entry>?
+        let counts: [Date: Int]
+        let moment: Date?
+    }
+
+    /// The days: held while nothing they were worked out from has changed (`ListCache`), else worked out again.
+    private var currentListing: Listing {
+        listing.watch(context)
+        let key = ListingKey(showsBoard: showsBoard, window: window, dayCount: dayCount, now: now,
+                             overdueExpanded: overdueExpanded, anchors: completions.anchors)
+        return listing.value(key: key, sources: [ListSources.of(allTasks)]) {
+            let entries = entries
+            let moment = ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows)
+            if showsBoard {
+                return Listing(board: UpcomingBoardModel(items: entries, window: window, now: now,
+                                                         showOverdue: overdueExpanded, calendar: calendar),
+                               schedule: nil, counts: [:], moment: moment)
+            }
+            return Listing(board: nil, schedule: UpcomingSchedule(items: entries, now: now, dayCount: dayCount, calendar: calendar),
+                           counts: UpcomingSchedule.counts(of: entries, calendar: calendar), moment: moment)
+        }
+    }
+
     var body: some View {
-        let entries = entries
+        let listed = currentListing
         VStack(spacing: 0) {
             SwiftUI.Group {
-                if showsBoard {
-                    board(entries)
-                } else {
-                    weekList(entries)
+                if let model = listed.board {
+                    board(model)
+                } else if let schedule = listed.schedule {
+                    weekList(schedule, counts: listed.counts)
                 }
             }
             // An event's read-only card, over the list or the board (brief 136).
@@ -135,7 +196,9 @@ struct UpcomingView: View {
         } menu: {
             Button { jumpToToday() } label: { Label("Jump to today", systemImage: "calendar") }
         }
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a row or today's event changes.
+        .listClock(ListClock.soonest(listed.moment, ListClock.next(after: now, tasks: [], events: events(on: today))),
+                   now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day moves the days (and the Mac board) at once
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -167,9 +230,8 @@ struct UpcomingView: View {
 
     // MARK: - Board
 
-    private func board(_ entries: [Entry]) -> some View {
-        let board = UpcomingBoardModel(items: entries, window: window, now: now, showOverdue: overdueExpanded, calendar: calendar)
-        return UpcomingBoard(board: board, window: $window, now: now, calendar: calendar,
+    private func board(_ board: UpcomingBoardModel<Entry>) -> some View {
+        UpcomingBoard(board: board, window: $window, now: now, calendar: calendar,
                              events: { events(on: $0) },
                              phase: { completions.phase(of: $0) },
                              onToggleCompletion: { toggleCompletion($0) },
@@ -186,12 +248,11 @@ struct UpcomingView: View {
 
     // MARK: - List
 
-    private func weekList(_ entries: [Entry]) -> some View {
-        let schedule = UpcomingSchedule(items: entries, now: now, dayCount: dayCount, calendar: calendar)
-        return ScrollViewReader { proxy in
+    private func weekList(_ schedule: UpcomingSchedule<Entry>, counts: [Date: Int]) -> some View {
+        ScrollViewReader { proxy in
             VStack(spacing: 0) {
                 WeekStripView(strip: strip, today: today, focusedDay: focusedDay,
-                              counts: UpcomingSchedule.counts(of: entries, calendar: calendar),
+                              counts: counts,
                               weeks: Self.weeks, visibleWeek: $visibleWeek, dropTarget: $dropTarget,
                               onDrop: { drop($0, on: $1) }) { day in
                     jump(to: day, schedule: schedule, proxy: proxy)
@@ -705,7 +766,7 @@ struct UpcomingView: View {
                     if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
                     continue
                 }
-                guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                guard let task = context.storedTask(record.id) else { continue }
                 switch record.revert {
                 case .uncomplete:
                     if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }

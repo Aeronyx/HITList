@@ -4,16 +4,128 @@ import HITListCore
 
 struct TaskListView: View {
     let selection: SidebarItem
+    /// Here, not in the list, so the list's query can follow it (review 154, finding 2(a)); kept from list to list, as
+    /// it always was.
+    @State private var showCompleted = false
+    /// The day Today's query reaches from (`tasks(for:showCompleted:today:)`): a new day, zone or clock builds it again.
+    @State private var day = Date()
+
+    var body: some View {
+        TaskListContent(selection: selection, showCompleted: $showCompleted, day: day)
+            .onReceive(CalendarChange.moments) { day = $0 }
+    }
+
+    private static let topLevel = #Predicate<TaskItem> { task in task.parent == nil }
+    private static let openTopLevel = #Predicate<TaskItem> { task in !task.isCompleted && task.parent == nil }
+
+    /// Due before `bound`, or repeating (where the switches are).
+    private static func todaysTasks(before bound: Date) -> Predicate<TaskItem> {
+        let soon = dueBefore(bound)
+        return #Predicate<TaskItem> { task in task.parent == nil && (task.recurrence != nil || soon.evaluate(task)) }
+    }
+
+    private static func openTodaysTasks(before bound: Date) -> Predicate<TaskItem> {
+        let soon = dueBefore(bound)
+        return #Predicate<TaskItem> { task in
+            !task.isCompleted && task.parent == nil && (task.recurrence != nil || soon.evaluate(task))
+        }
+    }
+
+    /// Dated before `bound` (its own predicate, so the longer ones stay quick to compile).
+    private static func dueBefore(_ bound: Date) -> Predicate<TaskItem> {
+        let never = Date.distantFuture
+        return #Predicate<TaskItem> { task in (task.dueDate ?? never) < bound }
+    }
+
+    /// In no Group (its own predicate: inside a longer one it took the compiler too long).
+    private static let ungrouped = #Predicate<TaskItem> { task in task.project == nil }
+
+    /// Dated, or repeating, or in no Group: what is left out is an undated task in a Group that doesn't repeat (a note).
+    private static let inboxTasks = #Predicate<TaskItem> { task in
+        task.parent == nil && (task.dueDate != nil || task.recurrence != nil || ungrouped.evaluate(task))
+    }
+
+    private static let openInboxTasks = #Predicate<TaskItem> { task in
+        !task.isCompleted && task.parent == nil && (task.dueDate != nil || task.recurrence != nil || ungrouped.evaluate(task))
+    }
+
+    /// The tasks a list can show, fetched rather than filtered from every task (review 154, finding 2(a)), in the order
+    /// every list started from (oldest first). Each list's rules then run over these as they ran over every task, so
+    /// what a list shows is decided as before: sub-tasks are never rows of their own (`TaskOrdering`, `FilterQuery`), and
+    /// completed tasks are rows only in Completed, with Show completed on, or in a saved filter whose query names
+    /// completion (`FilterQuery.mentionsCompleted`), which therefore fetches them too.
+    /// Today and the Inbox fetch no more than their rules can take (`TaskOrdering.isInToday`, `isInInbox`): a task
+    /// that isn't a switch is in Today only when due by the end of `today` (the bound leaves a day to spare, for a list
+    /// whose moment moves before its query is built again), in the Inbox only when it has a date or no Group; a switch
+    /// repeats, and an opted-in one is today's whatever its date, so every repeating task is fetched.
+    static func tasks(for selection: SidebarItem, showCompleted: Bool, today: Date = Date(),
+                      calendar: Calendar = .current) -> FetchDescriptor<TaskItem> {
+        let predicate: Predicate<TaskItem>
+        switch selection {
+        case .today:
+            let bound = calendar.date(byAdding: .day, value: 2, to: calendar.startOfDay(for: today)) ?? .distantFuture
+            predicate = showCompleted ? todaysTasks(before: bound) : openTodaysTasks(before: bound)
+        case .inbox:
+            predicate = showCompleted ? inboxTasks : openInboxTasks
+        case .completed:
+            predicate = #Predicate<TaskItem> { task in task.isCompleted && task.parent == nil }
+        case .filter:
+            predicate = topLevel
+        default:
+            predicate = showCompleted ? topLevel : openTopLevel
+        }
+        var descriptor = FetchDescriptor<TaskItem>(predicate: predicate)
+        descriptor.sortBy = [SortDescriptor(\.createdAt)]
+        // Every rule asks whether a task is a switch, which reads its labels: in the fetch, not one fault per task.
+        descriptor.relationshipKeyPathsForPrefetching = [\.labels]
+        return descriptor
+    }
+}
+
+extension TaskListView {
+    /// A Group's, a label's or a filter's section: its title, the date of its first row (which colours and shortens the
+    /// header) and its rows in the order given.
+    struct DaySection {
+        let title: String
+        let firstDue: Date?
+        var rows: [TaskListRow]
+    }
+
+    /// `rows` by the day each is listed under (a red switch under today whatever its date, brief 59), each section where
+    /// its first row is, its rows in the order given. Each section's place is kept by its title (review 154, finding
+    /// 2(c)): a row joins its section in place, where the section was searched for and copied with every row.
+    static func daySections(_ rows: [TaskListRow], now: Date) -> [DaySection] {
+        var sections: [DaySection] = []
+        var index: [String: Int] = [:]
+        for row in rows {
+            let due = FlipboardSwitch.listedDueDate(for: row, now: now)
+            let title = DueFormatter.sectionTitle(for: due, now: now, style: .dated)
+            if let i = index[title] {
+                sections[i].rows.append(row)
+            } else {
+                index[title] = sections.count
+                sections.append(DaySection(title: title, firstDue: due, rows: [row]))
+            }
+        }
+        return sections
+    }
+}
+
+/// A list's screen (`TaskListView`): its rows held between bodies (`ListCache`) and worked out from its own query.
+private struct TaskListContent: View {
+    let selection: SidebarItem
+    @Binding var showCompleted: Bool
 
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    @Query private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query private var labels: [TaskLabel]
     /// Today's view options → Sort by (brief 61): Priority or Group, remembered for Today alone.
     @AppStorage(Preferences.todaySort, store: AppGroup.defaults) private var storedTodaySort = ""
     @Query private var filters: [SavedFilter]
-    @State private var showCompleted = false
+    /// The rows, held between bodies (review 154, finding 2(b)).
+    @State private var listing = ListCache<ListingKey, Listing>()
     @State private var editingProject: Project?
     @State private var editingLabel: TaskLabel?
     @State private var editingFilter: SavedFilter?
@@ -39,7 +151,11 @@ struct TaskListView: View {
     private let isCompact = false
     #endif
 
-    private let clock = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    init(selection: SidebarItem, showCompleted: Binding<Bool>, day: Date) {
+        self.selection = selection
+        _showCompleted = showCompleted
+        _allTasks = Query(TaskListView.tasks(for: selection, showCompleted: showCompleted.wrappedValue, today: day))
+    }
 
     private var currentProject: Project? {
         if case .project(let id) = selection { return projects.first { $0.id == id } }
@@ -82,10 +198,10 @@ struct TaskListView: View {
         }
     }
 
-    private struct Group: Identifiable {
+    struct Group: Identifiable {
         let id: String
         let title: String
-        let rows: [TaskListRow]
+        var rows: [TaskListRow]
         /// A day's header with the weekday in three letters, drawn when `title` does not fit (`DayHeadingLine`).
         var shortTitle: String?
         /// The header's colour: "Overdue" red, today green, other days grey.
@@ -119,8 +235,42 @@ struct TaskListView: View {
 
     /// Whether a row is still in this list, so a completion settles in place rather than collapsing.
     private func isListed(_ id: UUID) -> Bool {
-        (try? matchedTasks())?.contains(where: { $0.id == id }) == true || matchedShared().contains { $0.id == id }
+        currentListing.matched.contains(id)
     }
+
+    /// What the rows are worked out from besides the models they read: which list, its options, the moment and the rows
+    /// a completion holds.
+    struct ListingKey: Hashable {
+        let selection: SidebarItem
+        let showCompleted: Bool
+        let now: Date
+        let todaySort: ListSort
+        let anchors: [UUID: Date?]
+    }
+
+    /// The list's sections and the ids it matched (its rows before a completion's held ones are added).
+    struct Listing {
+        let result: Result<[Group], FilterQueryError>
+        let matched: Set<UUID>
+        /// The next moment one of the query's tasks changes by itself (`ListClock`).
+        let moment: Date?
+    }
+
+    /// The rows: held while nothing they were worked out from has changed (`ListCache`), else worked out again.
+    private var currentListing: Listing {
+        listing.watch(context)
+        let key = ListingKey(selection: selection, showCompleted: showCompleted, now: now, todaySort: todaySort,
+                             anchors: completions.anchors)
+        let sources = [ListSources.of(allTasks), ListSources.of(projects), ListSources.of(labels), ListSources.of(filters)]
+        return listing.value(key: key, sources: sources) {
+            let matching = Result { try matchedTasks() }
+            let shared = matchedShared()
+            let matched = Set(((try? matching.get()) ?? []).map(\.id)).union(shared.map(\.id))
+            return Listing(result: result(from: matching), matched: matched,
+                           moment: ListClock.next(after: now, tasks: allTasks, shared: showsSharedRows ? sharedRows.rows : []))
+        }
+    }
+
 
     private func matchedTasks() throws -> [TaskItem] {
         // The Shared Tasks Group holds no task of yours.
@@ -148,7 +298,7 @@ struct TaskListView: View {
         let held = recentlyCompleted
         let anchors = completions.anchors
         let shown = rows.filter { !held.contains($0.id) }
-        let animating = allTasks.compactMap { task in
+        let animating = context.heldTasks(anchors.keys).compactMap { task in
             anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
         } + (showsSharedRows ? sharedRows.rows : []).compactMap { row in
             anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
@@ -156,9 +306,9 @@ struct TaskListView: View {
         return FilterQuery.defaultSort(shown + animating)
     }
 
-    private var result: Result<[Group], FilterQueryError> {
+    private func result(from matching: Result<[TaskItem], Error>) -> Result<[Group], FilterQueryError> {
         do {
-            let matched = try matchedTasks()
+            let matched = try matching.get()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
                 // None yet: no section, so the empty state shows (an empty section drew a blank page).
@@ -173,24 +323,15 @@ struct TaskListView: View {
                 return .success(sorted.isEmpty ? [] : [Group(id: "inbox", title: "", rows: sorted)])
             default: break
             }
-            var groups: [Group] = []
-            for row in rows {
-                // A red switch files under today whatever its date (brief 59).
-                let due = FlipboardSwitch.listedDueDate(for: row, now: now)
-                let key = DueFormatter.sectionTitle(for: due, now: now, style: .dated)
+            return .success(TaskListView.daySections(rows, now: now).map { section in
                 // A header that names one day ("Nov 12 · Tomorrow · Thursday", "Nov 13 · Friday") says it for its rows;
                 // "Overdue" and "No date" do not.
-                let singleDay = due != nil && key != "Overdue"
-                if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, rows: groups[i].rows + [row], shortTitle: groups[i].shortTitle,
-                                      color: groups[i].color, hidesDay: groups[i].hidesDay)
-                } else {
-                    let short = singleDay ? due.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) } : nil
-                    groups.append(Group(id: key, title: key, rows: [row], shortTitle: short,
-                                        color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay))
-                }
-            }
-            return .success(groups)
+                let due = section.firstDue
+                let singleDay = due != nil && section.title != "Overdue"
+                let short = singleDay ? due.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) } : nil
+                return Group(id: section.title, title: section.title, rows: section.rows, shortTitle: short,
+                             color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay)
+            })
         } catch let error as FilterQueryError {
             return .failure(error)
         } catch {
@@ -301,7 +442,7 @@ struct TaskListView: View {
     var body: some View {
         VStack(spacing: 0) {
             SwiftUI.Group {
-                switch result {
+                switch currentListing.result {
                 case .success(let taskGroups):
                     let events = todayEvents
                     let groups = withDayHeader(taskGroups, events: events)
@@ -458,7 +599,9 @@ struct TaskListView: View {
         .sheet(item: $editingLabel) { LabelEditorView(label: $0).slateSheet() }
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sharingSheet(isPresented: $showSharing)
-        .onReceive(clock) { now = $0 }
+        // No clock at rest (review 154, finding 3): drawn again at the next moment a row changes by itself.
+        .listClock(ListClock.soonest(currentListing.moment, ListClock.next(after: now, tasks: [], events: todayEvents)),
+                   now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day regroups Today and Overdue at once
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -602,7 +745,7 @@ struct TaskListView: View {
                     if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
                     continue
                 }
-                guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                guard let task = context.storedTask(record.id) else { continue }
                 if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
                 case .uncomplete:

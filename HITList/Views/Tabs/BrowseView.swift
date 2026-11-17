@@ -22,9 +22,14 @@ struct BrowseView: View {
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
 
     @State private var search = ""
+    /// What the results are for: the field's text once it has rested `SearchScreen.feedDelay` (review 154, finding 6),
+    /// at once when it is emptied. The field follows every keystroke; the results, and their query of every task
+    /// (`BrowseSearchResults`), only this.
+    @State private var fed = ""
+    /// The Groups' and labels' counts, kept between saves rather than worked out in the body (review 154, finding 1).
+    @State private var counts = SidebarCountsModel()
     @State private var now = Date()
     @State private var editingFilter: SavedFilter?
     @State private var creatingFilter = false
@@ -43,8 +48,8 @@ struct BrowseView: View {
     /// title's row: the profile is its picture alone there, so "Browse" keeps the size every other title has.
     @Environment(\.islandPlacement) private var islandPlacement
 
-    /// What the field holds: nothing, words to find, or a filter query (`SearchIntent`, brief 61).
-    private var intent: SearchIntent { SearchIntent(search, now: now) }
+    /// What the field holds, once rested: nothing, words to find, or a filter query (`SearchIntent`, brief 61).
+    private var intent: SearchIntent { SearchIntent(fed, now: now) }
 
     var body: some View {
         let intent = intent
@@ -64,12 +69,19 @@ struct BrowseView: View {
                 sections
             case .query(let query):
                 saveRow(query)
-                SearchResults(results: results(of: query), now: now, emptyMessage: "No task matches this filter.")
-            case .text(let text, let unfinished):
-                SearchResults(results: TaskOrdering.search(allTasks, text: text, now: now), now: now,
-                              emptyMessage: unfinished.map { "Not a filter yet: \($0)" }
-                                  ?? "Search looks through task names and descriptions, completed tasks too.")
+                BrowseSearchResults(intent: intent, now: now)
+            case .text:
+                BrowseSearchResults(intent: intent, now: now)
             }
+        }
+        .task(id: search) {
+            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                fed = search
+                return
+            }
+            try? await Task.sleep(for: SearchScreen.feedDelay)
+            guard !Task.isCancelled else { return }
+            fed = search
         }
         .background(Theme.background)
         // Search results' rows on the field's and the large title's edge (brief 99); the cards keep the system's insets.
@@ -100,6 +112,7 @@ struct BrowseView: View {
         // Adding from Browse itself goes to the Inbox; a pushed Group or label sets its own context.
         .quickAddEntry(.inbox, showsButton: false)
         .onAppear { now = Date() }
+        .task { counts.start(context, labels: true) }
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .sheet(item: $settingsRequest) { request in SettingsView(page: request.page).slateSheet() }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(filter: nil).slateSheet() }
@@ -132,11 +145,8 @@ struct BrowseView: View {
 
     // MARK: - Sections
 
-    private var openTasks: [TaskItem] { allTasks.filter { !$0.isCompleted && !$0.isSubtask } }
-
     private var sections: some View {
-        let open = openTasks
-        return List {
+        List {
             // The saved filters, right under the field (brief 61), as the header of a section with no rows: inside
             // the list, since a second scroll view above it took the large title's room from the list (a 170 pt
             // gap), and a header, since a row's rounded mask cut into the first chip.
@@ -151,12 +161,12 @@ struct BrowseView: View {
             Section {
                 link(.inbox) {
                     BrowseRow(title: "Inbox", symbol: "tray.fill", tint: Theme.secondaryText,
-                              count: open.filter(\.isInInbox).count + SharedRows.shared.inboxCount(), subtitle: "Default Group")
+                              count: counts.inbox + SharedRows.shared.inboxCount(), subtitle: "Default Group")
                 }
                 ForEach(projects) { project in
                     link(.project(project.id)) {
                         BrowseRow(title: project.name, symbol: "circle.fill", tint: Color(hex: project.colorHex),
-                                  count: SidebarCounts.group(open, id: project.id), smallIcon: true)
+                                  count: counts.group(project.id), smallIcon: true)
                     }
                     .contextMenu {
                         Button("Edit Group…") { editingProject = project }
@@ -186,7 +196,7 @@ struct BrowseView: View {
                 ForEach(labels) { label in
                     link(.label(label.id)) {
                         BrowseRow(title: label.name, symbol: "tag.fill", tint: Color(hex: label.colorHex),
-                                  count: SidebarCounts.label(open, label))
+                                  count: counts.label(label.id))
                     }
                     .contextMenu {
                         Button("Edit Label…") { editingLabel = label }
@@ -299,11 +309,6 @@ struct BrowseView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("saveSearchAsFilter")
-    }
-
-    /// The query's tasks, as its saved filter would list them.
-    private func results(of query: String) -> [TaskItem] {
-        (try? FilterQuery(query, now: now).apply(to: allTasks, now: now)) ?? []
     }
 
     struct QueryToSave: Identifiable {
@@ -489,6 +494,29 @@ private struct BrowseRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// Browse's results for what the field holds once rested: the query of every task lives here, so Browse itself no
+/// longer reads every task on each save while nothing is being searched (review 154, finding 2).
+private struct BrowseSearchResults: View {
+    let intent: SearchIntent
+    let now: Date
+    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+
+    var body: some View {
+        switch intent {
+        case .empty:
+            EmptyView()
+        case .query(let query):
+            // The query's tasks, as its saved filter would list them.
+            SearchResults(results: (try? FilterQuery(query, now: now).apply(to: allTasks, now: now)) ?? [], now: now,
+                          emptyMessage: "No task matches this filter.")
+        case .text(let text, let unfinished):
+            SearchResults(results: TaskOrdering.search(allTasks, text: text, now: now), now: now,
+                          emptyMessage: unfinished.map { "Not a filter yet: \($0)" }
+                              ?? "Search looks through task names and descriptions, completed tasks too.")
+        }
     }
 }
 

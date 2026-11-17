@@ -20,8 +20,8 @@ struct SidebarView: View {
     @Query(sort: \SavedFilter.sortOrder) private var filters: [SavedFilter]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query(sort: \TaskLabel.name) private var labels: [TaskLabel]
-    // Sub-tasks live inside their parent, so the counts skip them (brief 32).
-    @Query(filter: #Predicate<TaskItem> { !$0.isCompleted && $0.parent == nil }) private var openTasks: [TaskItem]
+    /// The counts of your own tasks, kept between saves rather than worked out in the body (review 154, finding 1).
+    @State private var counts = SidebarCountsModel()
 
     @State private var editingFilter: SavedFilter?
     @State private var creatingFilter = false
@@ -46,20 +46,21 @@ struct SidebarView: View {
     /// The shared lists and their tasks (brief 62); nothing while Shared Tasks is off.
     private var sharedRows: SharedRows { SharedRows.shared }
 
-    /// Goes up when the zone, the clock or the day changes (`CalendarChange`), so the counts, which read the clock when
-    /// they are drawn, are drawn again: Today's count no longer stays on yesterday after midnight (brief 92's finding).
+    /// Goes up when the zone, the clock or the day changes (`CalendarChange`), so the shared tasks' part of the counts,
+    /// which reads the clock when drawn, is drawn again: Today's count no longer stays on yesterday after midnight
+    /// (brief 92's finding). Your own tasks' part is `counts`', which recounts on the same change.
     @State private var calendarTick = 0
 
     /// Today's count: the rows Today shows, yours and shared ones (briefs 62, 64).
     private var todayCount: Int {
         _ = calendarTick
-        return SidebarCounts.today(openTasks, shared: sharedRows)
+        return counts.today + sharedRows.todayCount()
     }
 
     /// The Inbox's count: yours and the dated shared tasks it shows (brief 62).
     private var inboxCount: Int {
         _ = calendarTick
-        return SidebarCounts.inbox(openTasks, shared: sharedRows)
+        return counts.inbox + sharedRows.inboxCount()
     }
 
     var body: some View {
@@ -70,6 +71,7 @@ struct SidebarView: View {
         // Sync status is the small cloud icon in every screen's toolbar (`SyncToolbarIcon`), not a footer.
         .navigationTitle("HITList")
         .onReceive(CalendarChange.moments) { _ in calendarTick &+= 1 }
+        .task { counts.start(context) }
         #if os(iOS)
         .scrollContentBackground(.hidden)
         .background(Theme.surface)
@@ -127,7 +129,7 @@ struct SidebarView: View {
                         HStack {
                             Text(project.name)
                             Spacer()
-                            let n = SidebarCounts.group(openTasks, id: project.id)
+                            let n = counts.group(project.id)
                             if n > 0 { Text("\(n)").foregroundStyle(.secondary).monospacedDigit() }
                         }
                     } icon: {
@@ -315,7 +317,7 @@ struct SidebarView: View {
 
     private func macProjectRow(_ project: Project, index: Int) -> some View {
         let item = SidebarItem.project(project.id)
-        let count = SidebarCounts.group(openTasks, id: project.id)
+        let count = counts.group(project.id)
         return selectable(item) {
             MacSidebarRow(title: project.name, isSelected: selection == item) {
                 Image(systemName: "circle.fill").foregroundStyle(Color(hex: project.colorHex)).imageScale(.small)
@@ -588,34 +590,6 @@ struct SidebarSectionHeader: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .animation(HITMotion.standard(reduceMotion: reduceMotion), value: isHovered)
-    }
-}
-
-/// The sidebar's counts (brief 64): exactly the rows Today and the Inbox show, by the lists' own rules, so a red
-/// Flipboard switch is one of today's (once, dated or not), a green one none, and shared tasks count among yours.
-@MainActor
-enum SidebarCounts {
-    static func today(_ open: [TaskItem], shared: SharedRows, now: Date = Date()) -> Int {
-        open.filter { TaskOrdering.isInToday($0, now: now) }.count + shared.todayCount(now: now)
-    }
-
-    static func inbox(_ open: [TaskItem], shared: SharedRows, now: Date = Date()) -> Int {
-        open.filter { !$0.isCompleted && TaskOrdering.isInInbox($0, now: now) }.count + shared.inboxCount(now: now)
-    }
-
-    /// A Group's count: its open tasks as its screen lists them, so a switch counts only while it is listed
-    /// (brief 72: never by default, as today's task once an opted-in one is due).
-    static func group(_ open: [TaskItem], id: UUID, now: Date = Date()) -> Int {
-        open.filter { $0.project?.id == id && FlipboardSwitch.listing(for: $0, now: now) != .hidden }.count
-    }
-
-    /// A label's count, the same way. The `flipboard` label itself counts every switch, as its screen shows them.
-    static func label(_ open: [TaskItem], _ label: TaskLabel, now: Date = Date()) -> Int {
-        let seesSwitches = FlipboardSwitch.hasLabel([label.name])
-        return open.filter { task in
-            task.labelList.contains { $0.id == label.id }
-                && (seesSwitches || FlipboardSwitch.listing(for: task, now: now) != .hidden)
-        }.count
     }
 }
 
