@@ -11,15 +11,29 @@ import HITListCore
 /// Tasks, after your Groups and before "Ungrouped" (brief 64).
 struct InboxView: View {
     @Binding var selectedTask: TaskItem?
+    /// Here, not in the list, so the list's query can follow it (review 154, finding 2(a)).
+    @State private var showCompleted = false
+
+    var body: some View {
+        InboxContent(selectedTask: $selectedTask, showCompleted: $showCompleted)
+    }
+}
+
+/// The Inbox's screen (`InboxView`): its rows held between bodies (`ListCache`) and worked out from its own query, the
+/// Inbox's tasks as `TaskListView.tasks(for: .inbox, …)` fetches them (top level; open ones unless Show completed).
+private struct InboxContent: View {
+    @Binding var selectedTask: TaskItem?
+    @Binding var showCompleted: Bool
 
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(PopoutController.self) private var popouts
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    @Query private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     /// View options → Sort by, remembered for the Inbox (brief 61), read through `Preferences.sort`.
     @AppStorage(Preferences.inboxSort, store: AppGroup.defaults) private var storedSort = ""
-    @State private var showCompleted = false
+    /// The rows, held between bodies (review 154, finding 2(b)).
+    @State private var listing = ListCache<ListingKey, Listing>()
     @State private var now = Date()
     /// Rows animating out after a completion, each anchored at the due date it had when tapped.
     @State private var completions = CompletionAnimator<Date?>()
@@ -34,6 +48,44 @@ struct InboxView: View {
     private let isCompact = false
     #endif
 
+    init(selectedTask: Binding<TaskItem?>, showCompleted: Binding<Bool>) {
+        _selectedTask = selectedTask
+        _showCompleted = showCompleted
+        _allTasks = Query(TaskListView.tasks(for: .inbox, showCompleted: showCompleted.wrappedValue))
+    }
+
+    /// What the rows are worked out from besides the models they read.
+    struct ListingKey: Hashable {
+        let showCompleted: Bool
+        let now: Date
+        let sort: ListSort
+        let anchors: [UUID: Date?]
+    }
+
+    /// The rows in their sections, the ids the Inbox matched (before a completion's held rows), how many need review,
+    /// and the next moment one of them changes by itself (`ListClock`).
+    struct Listing {
+        let rows: [TaskListRow]
+        let sections: [ListSection<ListRowGroup, TaskListRow>]
+        let matched: Set<UUID>
+        let reviewCount: Int
+        let moment: Date?
+    }
+
+    /// The rows: held while nothing they were worked out from has changed (`ListCache`), else worked out again.
+    private var currentListing: Listing {
+        listing.watch(context)
+        let key = ListingKey(showCompleted: showCompleted, now: now, sort: sort, anchors: completions.anchors)
+        return listing.value(key: key, sources: [ListSources.of(allTasks), ListSources.of(projects)]) {
+            let own = matchedTasks(), shared = matchedShared()
+            let placed = rows(own: own, shared: shared)
+            return Listing(rows: placed, sections: sections(placed),
+                           matched: Set(own.map(\.id)).union(shared.map(\.id)),
+                           reviewCount: InboxReview.count(allTasks),
+                           moment: ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows))
+        }
+    }
+
     private func matchedTasks() -> [TaskItem] {
         TaskOrdering.inbox(allTasks, includeCompleted: showCompleted, now: now)
     }
@@ -46,13 +98,13 @@ struct InboxView: View {
     /// The matched tasks, yours and shared ones, plus the recently completed ones, by priority then due date. Each
     /// is listed at its own date, or while its completion animates the one it had when tapped (a completed
     /// recurring task has already moved to its next date).
-    private var rows: [TaskListRow] {
-        let matched = ListRows.rows(own: matchedTasks(), shared: matchedShared())
+    private func rows(own: [TaskItem], shared: [SharedRow]) -> [TaskListRow] {
+        let matched = ListRows.rows(own: own, shared: shared)
         guard !completions.isEmpty else { return TaskOrdering.sorted(matched, now: now) }
         let held = completions.heldIDs
         let anchors = completions.anchors
         let shown = matched.filter { !held.contains($0.id) }
-        let animating = allTasks.compactMap { task in
+        let animating = context.heldTasks(anchors.keys).compactMap { task in
             anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
         } + sharedRows.rows.compactMap { row in
             anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
@@ -73,14 +125,14 @@ struct InboxView: View {
     }
 
     var body: some View {
-        let rows = rows
+        let listed = currentListing
         VStack(spacing: 0) {
             SwiftUI.Group {
-                if rows.isEmpty {
+                if listed.rows.isEmpty {
                     InboxZeroView()
                         .transition(.opacity)
                 } else {
-                    list(rows)
+                    list(listed.sections)
                 }
             }
             .frame(maxHeight: .infinity)
@@ -107,13 +159,13 @@ struct InboxView: View {
                 SortPicker(selection: sortBinding, choices: ListSort.inbox)
             }
         } menu: {
-            if let title = InboxText.reviewMenuItem(count: InboxReview.count(allTasks)) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
+            if let title = InboxText.reviewMenuItem(count: listed.reviewCount) { Button { processing = true } label: { Label(title, systemImage: "tray.and.arrow.down") } }
         }
         .sheet(isPresented: $processing) {
             InboxProcessView(selectedTask: $selectedTask)
         }
         // No clock at rest (review 154, finding 3): drawn again at the next moment a row changes by itself.
-        .listClock(ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows), now: $now)
+        .listClock(listed.moment, now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82's follow-up: a new zone or day shows at once, not at the next minute
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -121,9 +173,9 @@ struct InboxView: View {
         }
     }
 
-    private func list(_ rows: [TaskListRow]) -> some View {
+    private func list(_ sections: [ListSection<ListRowGroup, TaskListRow>]) -> some View {
         List(selection: popouts.listSelection) {
-            ForEach(sections(rows), id: \.key) { section in
+            ForEach(sections, id: \.key) { section in
                 Section {
                     ForEach(section.tasks) { item in
                         switch item.kind {
@@ -286,7 +338,7 @@ struct InboxView: View {
                     if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
                     continue
                 }
-                guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                guard let task = context.storedTask(record.id) else { continue }
                 if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
                 case .uncomplete:
@@ -302,7 +354,7 @@ struct InboxView: View {
     /// settles. When it was the last task, the list gives way to "Inbox zero" once the row is gone.
     private func finishCompletion(of id: UUID, token: Int) async {
         try? await Task.sleep(for: CompletionMotion.hold)
-        if matchedTasks().contains(where: { $0.id == id }) || matchedShared().contains(where: { $0.id == id }) {
+        if currentListing.matched.contains(id) {
             withAnimation(HITMotion.standard) { _ = completions.remove(id, token: token) }
             return
         }

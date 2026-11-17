@@ -4,16 +4,82 @@ import HITListCore
 
 struct TaskListView: View {
     let selection: SidebarItem
+    /// Here, not in the list, so the list's query can follow it (review 154, finding 2(a)); kept from list to list, as
+    /// it always was.
+    @State private var showCompleted = false
+
+    var body: some View {
+        TaskListContent(selection: selection, showCompleted: $showCompleted)
+    }
+
+    /// The tasks a list can show, fetched rather than filtered from every task (review 154, finding 2(a)), in the order
+    /// every list started from (oldest first). Each list's rules then run over these as they ran over every task, so
+    /// what a list shows is decided as before: sub-tasks are never rows of their own (`TaskOrdering`, `FilterQuery`), and
+    /// completed tasks are rows only in Completed, with Show completed on, or in a saved filter whose query names
+    /// completion (`FilterQuery.mentionsCompleted`), which therefore fetches them too.
+    static func tasks(for selection: SidebarItem, showCompleted: Bool) -> FetchDescriptor<TaskItem> {
+        var descriptor: FetchDescriptor<TaskItem>
+        switch selection {
+        case .completed:
+            descriptor = FetchDescriptor(predicate: #Predicate { $0.isCompleted && $0.parent == nil })
+        case .filter:
+            descriptor = FetchDescriptor(predicate: #Predicate { $0.parent == nil })
+        default:
+            descriptor = showCompleted
+                ? FetchDescriptor(predicate: #Predicate { $0.parent == nil })
+                : FetchDescriptor(predicate: #Predicate { !$0.isCompleted && $0.parent == nil })
+        }
+        descriptor.sortBy = [SortDescriptor(\.createdAt)]
+        // Every rule asks whether a task is a switch, which reads its labels: in the fetch, not one fault per task.
+        descriptor.relationshipKeyPathsForPrefetching = [\.labels]
+        return descriptor
+    }
+}
+
+extension TaskListView {
+    /// A Group's, a label's or a filter's section: its title, the date of its first row (which colours and shortens the
+    /// header) and its rows in the order given.
+    struct DaySection {
+        let title: String
+        let firstDue: Date?
+        var rows: [TaskListRow]
+    }
+
+    /// `rows` by the day each is listed under (a red switch under today whatever its date, brief 59), each section where
+    /// its first row is, its rows in the order given. Each section's place is kept by its title (review 154, finding
+    /// 2(c)): a row joins its section in place, where the section was searched for and copied with every row.
+    static func daySections(_ rows: [TaskListRow], now: Date) -> [DaySection] {
+        var sections: [DaySection] = []
+        var index: [String: Int] = [:]
+        for row in rows {
+            let due = FlipboardSwitch.listedDueDate(for: row, now: now)
+            let title = DueFormatter.sectionTitle(for: due, now: now, style: .dated)
+            if let i = index[title] {
+                sections[i].rows.append(row)
+            } else {
+                index[title] = sections.count
+                sections.append(DaySection(title: title, firstDue: due, rows: [row]))
+            }
+        }
+        return sections
+    }
+}
+
+/// A list's screen (`TaskListView`): its rows held between bodies (`ListCache`) and worked out from its own query.
+private struct TaskListContent: View {
+    let selection: SidebarItem
+    @Binding var showCompleted: Bool
 
     @Environment(\.modelContext) private var context
     @Environment(PopoutController.self) private var popouts
-    @Query(sort: \TaskItem.createdAt) private var allTasks: [TaskItem]
+    @Query private var allTasks: [TaskItem]
     @Query(sort: \Project.sortOrder) private var projects: [Project]
     @Query private var labels: [TaskLabel]
     /// Today's view options → Sort by (brief 61): Priority or Group, remembered for Today alone.
     @AppStorage(Preferences.todaySort, store: AppGroup.defaults) private var storedTodaySort = ""
     @Query private var filters: [SavedFilter]
-    @State private var showCompleted = false
+    /// The rows, held between bodies (review 154, finding 2(b)).
+    @State private var listing = ListCache<ListingKey, Listing>()
     @State private var editingProject: Project?
     @State private var editingLabel: TaskLabel?
     @State private var editingFilter: SavedFilter?
@@ -38,6 +104,12 @@ struct TaskListView: View {
     #else
     private let isCompact = false
     #endif
+
+    init(selection: SidebarItem, showCompleted: Binding<Bool>) {
+        self.selection = selection
+        _showCompleted = showCompleted
+        _allTasks = Query(TaskListView.tasks(for: selection, showCompleted: showCompleted.wrappedValue))
+    }
 
     private var currentProject: Project? {
         if case .project(let id) = selection { return projects.first { $0.id == id } }
@@ -80,10 +152,10 @@ struct TaskListView: View {
         }
     }
 
-    private struct Group: Identifiable {
+    struct Group: Identifiable {
         let id: String
         let title: String
-        let rows: [TaskListRow]
+        var rows: [TaskListRow]
         /// A day's header with the weekday in three letters, drawn when `title` does not fit (`DayHeadingLine`).
         var shortTitle: String?
         /// The header's colour: "Overdue" red, today green, other days grey.
@@ -117,8 +189,42 @@ struct TaskListView: View {
 
     /// Whether a row is still in this list, so a completion settles in place rather than collapsing.
     private func isListed(_ id: UUID) -> Bool {
-        (try? matchedTasks())?.contains(where: { $0.id == id }) == true || matchedShared().contains { $0.id == id }
+        currentListing.matched.contains(id)
     }
+
+    /// What the rows are worked out from besides the models they read: which list, its options, the moment and the rows
+    /// a completion holds.
+    struct ListingKey: Hashable {
+        let selection: SidebarItem
+        let showCompleted: Bool
+        let now: Date
+        let todaySort: ListSort
+        let anchors: [UUID: Date?]
+    }
+
+    /// The list's sections and the ids it matched (its rows before a completion's held ones are added).
+    struct Listing {
+        let result: Result<[Group], FilterQueryError>
+        let matched: Set<UUID>
+        /// The next moment one of the query's tasks changes by itself (`ListClock`).
+        let moment: Date?
+    }
+
+    /// The rows: held while nothing they were worked out from has changed (`ListCache`), else worked out again.
+    private var currentListing: Listing {
+        listing.watch(context)
+        let key = ListingKey(selection: selection, showCompleted: showCompleted, now: now, todaySort: todaySort,
+                             anchors: completions.anchors)
+        let sources = [ListSources.of(allTasks), ListSources.of(projects), ListSources.of(labels), ListSources.of(filters)]
+        return listing.value(key: key, sources: sources) {
+            let matching = Result { try matchedTasks() }
+            let shared = matchedShared()
+            let matched = Set(((try? matching.get()) ?? []).map(\.id)).union(shared.map(\.id))
+            return Listing(result: result(from: matching), matched: matched,
+                           moment: ListClock.next(after: now, tasks: allTasks, shared: showsSharedRows ? sharedRows.rows : []))
+        }
+    }
+
 
     private func matchedTasks() throws -> [TaskItem] {
         // The Shared Tasks Group holds no task of yours.
@@ -146,7 +252,7 @@ struct TaskListView: View {
         let held = recentlyCompleted
         let anchors = completions.anchors
         let shown = rows.filter { !held.contains($0.id) }
-        let animating = allTasks.compactMap { task in
+        let animating = context.heldTasks(anchors.keys).compactMap { task in
             anchors[task.id].map { TaskListRow(.own(task), listedAt: $0, isCompleted: task.isCompleted) }
         } + (showsSharedRows ? sharedRows.rows : []).compactMap { row in
             anchors[row.id].map { TaskListRow(.shared(row), listedAt: $0, isCompleted: row.filterIsCompleted) }
@@ -154,9 +260,9 @@ struct TaskListView: View {
         return FilterQuery.defaultSort(shown + animating)
     }
 
-    private var result: Result<[Group], FilterQueryError> {
+    private func result(from matching: Result<[TaskItem], Error>) -> Result<[Group], FilterQueryError> {
         do {
-            let matched = try matchedTasks()
+            let matched = try matching.get()
             if selection == .completed {
                 let sorted = matched.sorted { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) }
                 // None yet: no section, so the empty state shows (an empty section drew a blank page).
@@ -171,24 +277,15 @@ struct TaskListView: View {
                 return .success(sorted.isEmpty ? [] : [Group(id: "inbox", title: "", rows: sorted)])
             default: break
             }
-            var groups: [Group] = []
-            for row in rows {
-                // A red switch files under today whatever its date (brief 59).
-                let due = FlipboardSwitch.listedDueDate(for: row, now: now)
-                let key = DueFormatter.sectionTitle(for: due, now: now, style: .dated)
+            return .success(TaskListView.daySections(rows, now: now).map { section in
                 // A header that names one day ("Nov 12 · Tomorrow · Thursday", "Nov 13 · Friday") says it for its rows;
                 // "Overdue" and "No date" do not.
-                let singleDay = due != nil && key != "Overdue"
-                if let i = groups.firstIndex(where: { $0.id == key }) {
-                    groups[i] = Group(id: key, title: key, rows: groups[i].rows + [row], shortTitle: groups[i].shortTitle,
-                                      color: groups[i].color, hidesDay: groups[i].hidesDay)
-                } else {
-                    let short = singleDay ? due.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) } : nil
-                    groups.append(Group(id: key, title: key, rows: [row], shortTitle: short,
-                                        color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay))
-                }
-            }
-            return .success(groups)
+                let due = section.firstDue
+                let singleDay = due != nil && section.title != "Overdue"
+                let short = singleDay ? due.map { DueFormatter.dayHeading(for: $0, now: now, shortWeekday: true) } : nil
+                return Group(id: section.title, title: section.title, rows: section.rows, shortTitle: short,
+                             color: DueFormatter.sectionColor(for: due, now: now), hidesDay: singleDay)
+            })
         } catch let error as FilterQueryError {
             return .failure(error)
         } catch {
@@ -299,7 +396,7 @@ struct TaskListView: View {
     var body: some View {
         VStack(spacing: 0) {
             SwiftUI.Group {
-                switch result {
+                switch currentListing.result {
                 case .success(let taskGroups):
                     let events = todayEvents
                     let groups = withDayHeader(taskGroups, events: events)
@@ -457,8 +554,8 @@ struct TaskListView: View {
         .sheet(item: $editingFilter) { FilterEditorView(filter: $0).slateSheet() }
         .sharingSheet(isPresented: $showSharing)
         // No clock at rest (review 154, finding 3): drawn again at the next moment a row changes by itself.
-        .listClock(ListClock.next(after: now, tasks: allTasks, shared: showsSharedRows ? sharedRows.rows : [],
-                                  events: todayEvents), now: $now)
+        .listClock(ListClock.soonest(currentListing.moment, ListClock.next(after: now, tasks: [], events: todayEvents)),
+                   now: $now)
         .onReceive(CalendarChange.moments) { now = $0 } // brief 82: a new zone or day regroups Today and Overdue at once
         .onAppear {
             CompletionFeedback.shared.prepare()
@@ -602,7 +699,7 @@ struct TaskListView: View {
                     if shared.task.isCompleted { try? sharedRows.setCompleted(false, shared) }
                     continue
                 }
-                guard let task = allTasks.first(where: { $0.id == record.id }) else { continue }
+                guard let task = context.storedTask(record.id) else { continue }
                 if Flipboard.undo(record, on: task, in: context) { continue } // a flipped switch goes back as it was
                 switch record.revert {
                 case .uncomplete:

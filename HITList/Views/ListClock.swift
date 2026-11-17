@@ -36,6 +36,14 @@ enum ListClock {
         for event in events { consider(event.isAllDay ? event.dayEnd : min(event.event.end, event.dayEnd)) }
         return soonest
     }
+
+    /// The sooner of two moments, either of which may be none.
+    static func soonest(_ a: Date?, _ b: Date?) -> Date? {
+        switch (a, b) {
+        case let (a?, b?): min(a, b)
+        default: a ?? b
+        }
+    }
 }
 
 extension View {
