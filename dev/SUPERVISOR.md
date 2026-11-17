@@ -123,9 +123,20 @@ How George works with you:
   the Key ID `<key-id>` and Issuer ID `<issuer-id>` may be written, the key's
   contents never. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
   $200 promotional credit behind it expires 2026-11-05 and is not used any more).
-- HITList's own sync engine (switched off): **a released build never runs it** (`SyncEngineSwitch.isAvailable`
-  answers no in every build that is not a Debug build; that line changes only in the release George says switches
-  it on). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
+- HITList's own sync engine: **a store syncs on it only when it was moved** (from 0.9.14: every build may run it,
+  `SyncEngineSwitch.isAvailable`; the store's own preference decides, only the move writes it, and the group that
+  moves a store is hidden behind seven taps; nothing moves by itself until the release George says moves
+  everyone). **Apple's engine runs with its own scheduling off** (`automaticallySync: false`): switched on, a fetch
+  after a relaunch asks iCloud nothing, and what another device changed while the app was closed is missed until a
+  later push (round 32, found only with George's phone beside the Mac). Never switch it on; the app's engine asks
+  for each sync itself (`SyncEngine.pumpAfter`) and keeps its own push subscription. **Prove the mode that
+  ships**: the probe had only ever run the manual mode while the app ran the automatic one. **Its CloudKit schema
+  is the file** `dev/cloudkit/sync-engine.ckdb`: Production gets it by reset, import, deploy
+  (`scripts/release.sh` prints the three steps), never from whatever Development holds, and the transport's probe
+  is never run between the import and a deploy (it writes a field of its own into Development). **The way back
+  has an order**: the first device back sends, every other downloads a fresh copy, and no build from before
+  0.9.14 is installed on a moved device. **George is told ahead of anything that could wipe, hide or fail to carry
+  over a friend's data**, so they can export first (his word, 2026-11-16). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
   it (`SyncDeletionLog`, taken at `willSave`), and an item that is merely not on a device comes back from iCloud.
   Never add a rule, a repair or a "tidy up" that deletes in iCloud what no person deleted, and never a batch delete
   (`context.delete(model:)`) of a synced model: it bypasses the note. **The engine's records live in a container of
