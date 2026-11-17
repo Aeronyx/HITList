@@ -125,13 +125,17 @@ final class BrowseUITests: XCTestCase {
         // A tap where the swipe would be puts nothing away; go back if it opened.
         if !app.descendants(matching: .any)["browseSearch"].firstMatch.exists { goBack() }
 
-        // A label goes at once, as from its menu.
+        // A label that is on tasks asks first, as a Group with tasks does (round 32), and goes once answered.
         let bills = groupRow("bills")
         bringToTheMiddle(bills)
         bills.swipeLeft()
         XCTAssertTrue(delete.waitForExistence(timeout: 3), "a label swipes too")
         delete.tap()
-        XCTAssertTrue(bills.waitForNonExistence(timeout: 5), "a label goes at once")
+        XCTAssertTrue(app.staticTexts["Delete “bills”?"].waitForExistence(timeout: 5), "a label on tasks asks first")
+        snapshot("5 Delete bills? asks first")
+        XCTAssertTrue(bills.exists, "nothing goes before the answer")
+        app.buttons["Delete Label"].firstMatch.tap()
+        XCTAssertTrue(bills.waitForNonExistence(timeout: 5), "the label goes once the question is answered")
     }
 
     /// A Browse row whose label starts with `name` (its count follows: "Work, 2").
