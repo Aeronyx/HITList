@@ -513,128 +513,91 @@ guessing; Check iCloud… stays as the person's own audit.
    at its first launch. **He is told ahead of anything that could wipe, hide or fail to carry over a friend's
    data, so they can export first** (his word, 2026-11-16).
 
-## 13. Open, as round 31 left it
+## 13. Open, as round 32 left it
 
-Found and not yet fixed or not yet traced; none of it can matter while the engine is switched off (and a released
-build cannot switch it on, section 11).
+**Closed in round 32** (each with its test or its run; `dev/briefs/ROUND-32.md`): a fetched record that cannot be
+read (16c), an expired change token (16e), the ledger moved aside for any error (brief 149); the simulation's
+standing failures, fixed or pinned as limits (brief 150); a fetch after a relaunch that asked iCloud nothing, and
+the push subscription (section 6a); a reset that let the old engine write its bookmark back (review 148); the
+release guard blind to a field missing from both environments (the schema file, section 3); the merge by name on
+the engine and Group pairs of one name (finding 14; section 11); the move stopping the engine on a phone; a
+deletion through the app on the real service (dozens, in the rehearsal); the move from the mirror and the way back
+(section 9, item 5).
 
-- **From the first review** (`146-sync-review/FINDINGS.md` in the notes folder). Fixed in round 29: 18 (a change
-  that arrived while its item was open and unsaved is applied when the save comes or the next fetch ends). Smaller
-  now: 19, a store file put back from an older copy beside a newer ledger: nothing is deleted any more and items
-  made since come back (M14), but its older values of items changed since still go to iCloud over the newer ones.
-  Still open: 16c, a fetched record this build cannot read (an asset too large or missing) is dropped while the
-  bookmark moves on; 16e, an expired change token is only given words; 14, two devices that each make a Group of
-  the same name, and a task filed into the one the name merge then removes; the ledger file is moved aside for any
-  error at opening, not only a damaged file; the switch card's draft was not re-read after the other editors were
-  fixed; an account switch has two owners (the mirror-era `AccountSwitch` and the brain's backup) that are not
-  ordered.
-- **From the second review (round 29), named and not done.** The brain still carries a flag for each way a step
-  can half fail (`heldUnder`, `joinTo`, `switchTo`, `holdNote`): one recovery, "forget the memory and merge
-  afresh", already exists and could replace them. What a task's deletion arriving does to its sub-tasks
-  (`underneath`) decides for each sub-task; writing every sub-task out from under the task and letting its own
-  marker decide would be half the code. A first sync writes on the main thread, a batch at a time: measured in round
-  31 on an iPhone 16, 5,005 records took about 28 s end to end and held the main thread about 1.2 s in all, in
-  writes of 200 records of 43 to 65 ms each (`SyncApplyTimes` says such load in the sync log), so no change is
-  needed there. The ledger keeps a copy of every record as its base (twice
-  the data on disk, every entry in memory). `CloudSyncMonitor` carries a branch for the engine; when the mirror
-  retires, most of that file goes. A deletion is taken down from `ModelContext.willSave` in the app's process:
-  SwiftData's own history (`fetchHistory`, with `.preserveValueOnDeletion` on each model's `id`) would be the
-  store's own record of it and needs a change to the models, which is why it waits for the release that switches
-  the engine on.
-- **From the simulation** (seeds to replay, `SyncCoreSimulationTests.testTrace`, 300 steps, three devices).
-  Compared seed for seed with the engine before the review: it failed everyday 133, 210, 261, 284, 559, quota 59,
-  86 and refusal 86, 148, 314; the engine now fails everyday 210, 261, 559 (references to a Group deleted and put
-  back around an unsent change), quota 59, refusal 148 and 314, memory 36, account 362 (a Group's deletion against
-  a sign-out), zone 270 (after a lost zone every device sends everything again, and copies meet by M5 until each
-  holds a base again: to be written as a limit or fixed). Refusal 314 and the new set's `rows` 174 and 805 are one
-  thing: a deletion racing two devices that each bring the item back, where M5 keeps one device's record whole and
-  the other's label or parent is lost. `rows` 5, 196, 967: a person's change to a reference whose item the store
-  had lost cannot be told from the store's own clearing of it, so iCloud's reference comes back. And a reference
-  to a row the store lost is remembered only in the ledger: a ledger forgotten before the row is back forgets it
-  (why `rows` runs without the transport losing its state).
-- **A push waking the engine: proven in round 31** with George's iPhone 16 on a Debug build beside this Mac (zone
-  `HITList-r31` in the engine's container, Development). The phone's nine records reached the Mac app, which was in
-  the background and never brought forward, within seconds ("Sync for a push: done"); a change on the Mac reached
-  the phone in about 3 s with HITList in front, and in about 3 s with HITList in the background behind Settings.
-  With the phone locked and asleep a change did not arrive in three minutes and was fetched the moment the app came
-  forward: iOS delivers silent pushes to a sleeping phone when it chooses, as it does for today's sync. What made
-  it work: on a Mac the app never asked for pushes itself (Core Data's mirror registers once its setup succeeds;
-  with the mirror off nobody did), so the engine registers at its start (`SyncEngine.registerForPushes`; the iPhone
-  registers at every launch). Two apps on one Mac never notified each other in any run: one device.
-- **Not proven at all**: the move from the mirror on real data; the way back to the mirror; one contract suite run
-  against both the pretend iCloud and CloudKit (four of the first review's findings were a rule the two read
-  differently); a deletion through the app on the real service (through the app it has run on the pretend iCloud,
-  round 29; on the service the transport's probe carries markers and removals for good); a push that has to launch
-  the app (it was running, suspended, in every case above); the engine in Production.
-- **Proven on the service in round 30**, in the engine's own container on Development: the transport's probe, 18 of
-  18 steps (every type there and back, the echo, a conflict, markers of every type, removal for good, a newer
-  build's key, 300 records in batches of 250 and 50, a restart from saved state; and in a launch with the mirror on,
-  the engine's records and the side store untouched a minute after the engine's save); and two Debug Mac apps on side stores (zone
-  `HITList-r30`): one sent its 10 records, the other, launched empty, showed them, and a task completed on the first
-  reached the second when it came forward (two records settled by M7). This is the first run of the reviewed engine
-  against CloudKit.
+**Open:**
+
+- **A push from the phone to this Mac was not seen** on the night of round 32 (no push reached the Mac's push daemon
+  at all), after the engine's Development side had been reset; the Mac to the phone was, within seconds, and in
+  round 31 both were. On a Mac with a TestFlight build and a Debug build of one bundle the two register different
+  push tokens, which may be the whole of it. George's first week on real builds says: the sync log's "Sync for a
+  push" lines. **A push that has to launch the app** is still unproven (the phone locked before the test).
+- **The engine in Production**: nothing has run there. Stage 5 is that proof.
+- **One contract suite run against both the pretend iCloud and CloudKit** (stage 2, item 6): not built. The probe
+  proves the transport's rules on the service in the mode the app now runs; the pump is proven on the pretend
+  iCloud and on two devices. A shared suite remains worth having before the mirror retires.
+- **The two simplifications** the second review named (one recovery path for the brain's half-failed steps; a
+  sub-task under a deleted task left to its own marker): not before the first live week, for the reasons brief 150
+  gave (`switchTo` guards an account switch whose backup failed and cannot become "merge afresh"; the sub-task
+  rewrite would show sub-tasks loose for a moment, and for good when a child's marker never comes).
+- **A sign-out** (section 12, decision 2): whether iCloud switched off for HITList alone is announced as a
+  sign-out is not known (no session may sign a device out), and if it is, the tasks leave the device until
+  sign-in. To decide before everyone moves.
+- **A device reinstalled or new comes up on the mirror** with stale data until it is moved (section 11): fine while
+  only George's devices move; before everyone moves, either the release moves every device at launch (stage 6) or a
+  mirror launch looks once for the engine's zone and says so.
+- **"Delete all data from iCloud"** (`AccountCopy.deleteAll`) speaks of one entry in iCloud's storage settings;
+  with two containers there may be two. To be read off a device once the engine's container holds data.
+- **Deletions made while the engine cannot run** (the ledger's file could not be opened; a stint on the mirror)
+  are not taken down: those items come back. The safe direction; SwiftData's own history as the record of a
+  deletion (a model change, stage 7) closes it.
+- **A launch before the phone's first unlock** opens the empty in-memory fallback, and that process lives on after
+  the unlock (brief 149's A1, to check; it is so on the mirror too). The engine never runs on the fallback.
+- **A store file put back from an older copy beside a newer ledger** (the first review's finding 19): nothing is
+  deleted and items made since come back, but the older values of items changed since go to iCloud over the newer.
+- From the second review, unchanged: the ledger keeps a copy of every record as its base; `CloudSyncMonitor`
+  carries a branch for the engine that goes when the mirror retires.
+- The limits of section 5 are limits, not open work.
 
 ## 14. The road to switching it on
 
 George, 2026-11-16: "Please do plan the engine's next steps." Seven stages. A stage is done when its exit line is
 true and its evidence is written here; nothing in a later stage touches real data before the stage before it is
-done. What each needs from George is said, so he can see what is waiting on him and what is not.
+done.
 
-**Stage 1. On real devices. Done, round 31.** The engine ran on his iPhone 16 beside this Mac; a push woke it both
-ways, in front and in the background (section 13); a first sync of 5,005 records held the phone's main thread
-about 1.2 s in all and never more than 65 ms at a time.
+**Stage 1. On real devices. Done, round 31.**
 
-**Stage 2. Close what can lose or hide a change** (section 13 has each item). Needs nothing from George. In order:
+**Stage 2. Close what can lose or hide a change. Done in round 32**, items 1 to 5 (briefs 149, 150, 160 and the
+supervisor; section 13 lists what closed), and one item nobody had listed: the engine did not catch up after a
+relaunch (section 6a). Item 6 (one contract suite on both clouds) and item 7 (the two simplifications) are open
+and deliberately after the first live week (section 13). Exit met: 1,000 histories of every fault set with no
+failure that is not a written, tested limit; no open finding that can lose a person's change.
 
-1. A fetched record this build cannot read is dropped while the bookmark moves on (16c): it must stay owed.
-2. An expired change token is only given words (16e): reset and fetch everything (T13).
-3. The ledger file is moved aside for any error at opening: only a damaged file should be; anything else holds.
-4. An account switch has two owners (`AccountSwitch` and the brain's backup): one, in a written order.
-5. The simulation's standing failures, kind by kind, each either fixed or written down as a limit with a test that
-   pins it: a Group deleted and put back around an unsent change (everyday 210, 261, 559); copies that meet by M5
-   after a zone was lost, where one device's record wins whole and the other's label or parent goes (zone 270,
-   refusal 314, rows 174 and 805); a person's change to a reference whose row the store had lost (rows 5, 196,
-   967); and memory 36, account 362, quota 59, refusal 148.
-6. One contract suite (T1 to T14) run against both the pretend iCloud and CloudKit Development.
-7. The two simplifications the review named: one recovery path in place of a flag per half-failed step, and a
-   sub-task under a deleted task written out and left to its own marker.
+**Stage 3. George's decisions. Done**: plain fields (section 12). The sign-out's behaviour stays as built for his
+own week and is to be decided before everyone moves.
 
-Exit: 1,000 histories of every fault set with no failure that is not a written, tested limit; no open finding that
-can lose a person's change.
+**Stage 4. The move, rehearsed. Done in round 32** (section 9, item 5): two real devices, the mirror to the engine
+and back, a copy of his own tasks from each device's backup, every comparison by the audit and not by eye.
 
-**Stage 3. George's remaining decisions** (section 12), each before Production holds a record:
+**Stage 5. Live for George only: ready.** 0.9.14 lets a store be moved. In order:
 
-- *Plain or encrypted fields.* My recommendation: plain for the first live release, as the mirror stores them
-  today. It keeps the move a change of engine and nothing else, and keeps the CloudKit dashboard readable while
-  friends' first weeks are watched. Encrypting titles, notes and names later is one format version and a re-send;
-  the engine never queries by field, so it would cost nothing in speed.
-- *Sign-out removes what was synced from the device, after a backup* (as today), and *a purge in iCloud's settings
-  asks* instead of deleting here: both built that way; say if either should differ.
+1. The engine's container's Production schema: its Development side holds exactly `dev/cloudkit/sync-engine.ckdb`
+   since 2026-11-16; George deploys it (CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development →
+   Deploy Schema Changes…). `scripts/release.sh` refuses to upload until Production holds it.
+2. He releases 0.9.14 and installs it on the Mac and the iPhone.
+3. With the bolt filled on both: Settings → iCloud (iPhone: iCloud & data), seven taps on the row that reads
+   "Production · TestFlight build …", then the "Sync engine" group at the foot of the page → Move to the new sync.
+   The Mac first (it relaunches), then the iPhone at once (it asks to be reopened), changing nothing in between.
+4. A week of use. Each day or so: Check iCloud… on both. The sync log holds every fetch, send and push.
 
-Exit: decided, and `SyncSchema.formatVersion` final for the first live release.
-
-**Stage 4. The move, rehearsed on a copy of his real data.** Needs from George: a copy of his real store made by
-the app itself (a Debug-only "copy this store for a rehearsal" is to be built: no session reads the App Group
-folder), on the Mac and on the phone, so the two copies hold the same items under the same ids, as his devices do
-today. Then: both moved to the engine on Development (the first sends everything, the second finds its items
-already there), both compared with the copy field by field by a tool and not by eye, a week's worth of scripted
-edits on both, and the way back (the store reopened with the mirror) rehearsed once.
-Exit: after the move both devices and iCloud hold exactly the copy; no duplicate, nothing missing; the way back
-works.
-
-**Stage 5. Live for George only.** One release in which a released build may run the engine but nothing moves by
-itself: the move is a row behind a deliberate gesture only he knows (not shown to friends). Before it: the engine's
-container's schema deployed to Production (his click: CloudKit Console → `iCloud.com.trammells.hitlist.sync` →
-Development → Deploy Schema Changes…), `SyncEngineSwitch.isAvailable` and `release.sh`'s `SYNC_ENGINE_LIVE` set.
-He moves his Mac and his iPhone and uses them for a week.
-Exit: a week with no hold he did not cause, no change stranded, the bolt true, and a "compare everything" run on
-both devices that finds iCloud and the store the same.
+Exit: a week with no hold he did not cause, no change stranded, the bolt true, and Check iCloud… finding iCloud
+and the device the same on both. The way back, if it is ever wanted: Move back on the Mac ("First device"), then
+on the iPhone ("Another device already moved back").
 
 **Stage 6. Everyone.** A release that moves each device at its first launch after updating, after a backup, with
-one screen that says so. A device that has not updated keeps syncing through the mirror with other such devices;
-its changes join when it updates and moves (a merge without a memory, section 7: nothing is lost, and an item
-deleted meanwhile on a moved device stays deleted by its marker). The way back is kept for the releases that
-follow.
+one screen that says so. **Before it, George is told what a friend should do first** (export: Settings → iCloud &
+data → Export JSON…) **and what could go wrong for them**: a friend whose two devices update days apart has, in
+between, one device on each sync; what they change on the device still to move meets the other's copy without a
+base (section 11). Nothing is deleted by the move itself. The way back is kept for the releases that follow.
 Exit: every friend's devices moved; two weeks without a sync report.
 
 **Stage 7. The mirror retires.** Removed: the mirror's configuration, the instruments built to guess what it knows
