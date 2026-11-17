@@ -159,9 +159,21 @@ extension SyncCore {
         if !synced.isEmpty {
             guard await backup(reason) else { return false }
         }
+        // A deletion made here and not sent yet is the person's, as every one is (section 7): across a sign-out it is
+        // kept, with the account it belongs to, and goes at the next sign-in to that account (a sign-in to another
+        // drops it, as a switch: `accountChanged`). Round 32, account seed 362: a Group deleted just before a
+        // sign-out came back at the sign-in.
+        let unsent = reason == .signedOut ? entries.values.filter { $0.deletedHereAt != nil }.sorted { $0.key < $1.key } : []
+        let owner = account
         do {
             try await ledger.reset()
             forgetCache(keepAccount: false)
+            if let owner, !unsent.isEmpty {
+                var write = LedgerWrite()
+                write.facts[LedgerFact.account] = Data(owner.utf8)
+                write.upsert = unsent.map { LedgerEntry(key: $0.key, base: nil, system: nil, deletedHereAt: $0.deletedHereAt) }
+                try await commit(write)
+            }
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false

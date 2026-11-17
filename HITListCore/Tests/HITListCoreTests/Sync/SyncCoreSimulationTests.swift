@@ -255,6 +255,8 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "brain: a label the person took off, its row then lost, came back on the task (the set's twin of 210)"),
             KeptSeed(seed: 724, faults: "zone", keys: ["E7529A21", "278AB945"],
                      found: "brain: a lost zone forgot what a record waited for; its parent went everywhere by M5"),
+            KeptSeed(seed: 362, faults: "account", keys: ["C60FAAF7"],
+                     found: "brain: a Group deleted just before a sign-out came back at the sign-in"),
         ]
         return seeds
     }
@@ -315,6 +317,42 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(alice.filter { $0.type == "TaskItem" }, [t1], "nothing of the other account reached this one")
         let findings = await sim.check()
         XCTAssertEqual(findings, [])
+    }
+
+    /// Account seed 362: a Group deleted on A while A could not reach iCloud, then A signed out and back in to the same
+    /// account. The sign-out forgot the memory, the unsent deletion with it, and the Group came back at the sign-in.
+    /// The deletion is kept across the sign-out and goes at the sign-in.
+    func testADeletionNotYetSentSurvivesASignOutAndGoesAtTheSignIn() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g, Self.task("T", "task")])
+        await sim.play([.fault("A", .network(up: false)), .advance(milliseconds: 10), .act("A", .delete(g.key)),
+                        .fault("A", .account(nil)), .fault("A", .account(FakeCloud.defaultAccount)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let group = await sim.device(device)?.store.record(g.key)
+            XCTAssertNil(group, "the person deleted G, on \(device)")
+            let task = await held(sim, device, "T")
+            XCTAssertNotNil(task, "what was synced came back, on \(device)")
+        }
+        let marker = await sim.cloud.record(g.key)
+        XCTAssertEqual(marker?.record.isDeleted, true)
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// The same deletion does not follow the device to another account: there it is dropped.
+    func testADeletionNotYetSentIsDroppedWhenTheDeviceSignsInToAnotherAccount() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g])
+        await sim.play([.fault("A", .network(up: false)), .advance(milliseconds: 10), .act("A", .delete(g.key)),
+                        .fault("A", .account(nil)), .fault("A", .account("alice-other")),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A")])
+        let entry = try? await sim.device("A")?.ledger.entry(g.key)
+        XCTAssertNil(entry ?? nil, "nothing of the first account's is kept in the other's memory")
+        let other = await sim.cloud.records(account: "alice-other").map(\.key)
+        XCTAssertFalse(other.contains(g.key), "no marker of the first account's Group in the other account")
+        let alive = await sim.cloud.record(g.key)
+        XCTAssertEqual(alive?.record.isDeleted, false, "and the first account's Group is as it was")
     }
 
     // MARK: The rig's model, corrected on what SyncCore does
