@@ -77,24 +77,29 @@ public enum ClaudeTools {
                 date, as in the app. Completing a task also completes its open subtasks. The user can reopen it in HITList.
                 """,
             inputSchema: schema(["id": idProperty], required: ["id"]),
-            readOnly: false),
+            readOnly: false, destructive: true),
         MCPTool(
             name: updateTask, title: "Update a task",
             description: """
                 Changes a task. Give only the fields to change. `due` takes a date phrase as quick add reads \
                 it ("friday 5pm", "in 3 days", "every weekday 9am"), or "none" to clear it. `labels` replaces \
-                the task's labels. `group` moves it ("Inbox" for none). A subtask takes only title and description.
+                the task's labels. `group` moves it ("Inbox" for none). A subtask takes only title and description. \
+                What a field held is replaced and HITList has no undo for it: the reply's `previous` carries a title \
+                or description it replaced, so you can put it back if the user asks. Erasing a description that has \
+                text takes `clear_description: true`.
                 """,
             inputSchema: schema([
                 "id": idProperty,
                 "title": ["type": "string"],
-                "description": ["type": "string", "description": "Replaces the description; \"\" clears it."],
+                "description": ["type": "string", "description": "Replaces the whole description."],
+                "clear_description": ["type": "boolean",
+                                      "description": "true erases the description. Only when the user asked for it gone."],
                 "due": ["type": "string", "description": "A date phrase, or \"none\"."],
                 "priority": ["type": "integer", "minimum": 1, "maximum": 4, "description": "1 is most urgent, 4 is none."],
                 "labels": ["type": "array", "items": ["type": "string"], "description": "Label names, without @."],
                 "group": ["type": "string", "description": "A Group name; created if new. \"Inbox\" for none."],
             ], required: ["id"]),
-            readOnly: false),
+            readOnly: false, destructive: true),
         MCPTool(
             name: listGroups, title: "List Groups",
             description: "The user's Groups (projects) you can see, with how many open tasks each holds, plus the Inbox.",

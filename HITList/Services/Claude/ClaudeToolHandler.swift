@@ -173,7 +173,7 @@ struct ClaudeToolHandler {
         let task = try self.task(arguments["id"])
         let fields = Set(arguments.keys).subtracting(["id"])
         guard !fields.isEmpty else { throw ToolError("Nothing to change: give title, description, due, priority, labels or group.") }
-        if task.isSubtask, !fields.isSubset(of: ["title", "description"]) {
+        if task.isSubtask, !fields.isSubset(of: ["title", "description", "clear_description"]) {
             throw ToolError("A subtask has only a title and a description; its date, priority, labels and Group are its task's.")
         }
         // Check everything before changing anything, so a bad field changes nothing.
@@ -182,9 +182,20 @@ struct ClaudeToolHandler {
             guard !title.isEmpty else { throw ToolError("A task needs a title.") }
             return title
         }
-        let notes = try arguments["description"].map { value -> String in
+        let clearNotes = try arguments["clear_description"].map { value -> Bool in
+            guard let clear = value.boolValue else { throw ToolError("clear_description is true or false.") }
+            return clear
+        } ?? false
+        var notes = try arguments["description"].map { value -> String in
             guard let text = value.stringValue else { throw ToolError("description must be text.") }
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // Brief 159: no undo here, so words are erased only when asked for in so many words.
+        if clearNotes {
+            guard notes == nil else { throw ToolError("Give a description or clear_description, not both.") }
+            notes = ""
+        } else if notes == "", !task.notes.isEmpty {
+            throw ToolError("That would erase the task's description, and HITList can't undo it. If the user asked for it gone, send clear_description: true.")
         }
         let due = try arguments["due"].map(parseDue)
         let priority = try arguments["priority"].map { value -> Int in
@@ -203,6 +214,9 @@ struct ClaudeToolHandler {
             return bare.isEmpty || bare.caseInsensitiveCompare("Inbox") == .orderedSame ? nil : bare
         }
 
+        var previous: [String: JSONValue] = [:]
+        if let title, title != task.title { previous["title"] = .string(task.title) }
+        if let notes, notes != task.notes, !task.notes.isEmpty { previous["description"] = .string(task.notes) }
         if let title { task.title = title }
         if let notes { task.notes = notes }
         if let due {
@@ -233,6 +247,7 @@ struct ClaudeToolHandler {
                                       "fields": fields.sorted().joined(separator: ",")])
         didWrite()
         var reply: [String: JSONValue] = ["updated": json(task, full: true)]
+        if !previous.isEmpty { reply["previous"] = .object(previous) }
         if !isVisible(task) {
             reply["note"] = .string("It now carries @\(rule.hiddenLabel), so it is hidden from you from now on.")
         }

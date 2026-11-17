@@ -85,6 +85,9 @@ final class MCPServerTests: XCTestCase {
         }
         let readOnly = tools.filter { $0["annotations"]?["readOnlyHint"] == true }.compactMap { $0["name"]?.stringValue }
         XCTAssertEqual(readOnly, ["list_tasks", "get_task", "list_groups", "list_labels"])
+        // Brief 159, item 2: the tools that change or complete what is there say so; adding takes nothing away.
+        let destructive = tools.filter { $0["annotations"]?["destructiveHint"] == true }.compactMap { $0["name"]?.stringValue }
+        XCTAssertEqual(destructive, ["complete_task", "update_task"])
         XCTAssertEqual(tools[2]["inputSchema"]?["required"], ["text"])
     }
 
