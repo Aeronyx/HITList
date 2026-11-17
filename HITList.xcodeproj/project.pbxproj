@@ -274,6 +274,7 @@
 		758B50E6289C51644435C433 /* DuoInnerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF439F742971231AE951AD6C /* DuoInnerUITests.swift */; };
 		7595407495DF3BCC5B7A6391 /* CardInsetsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76D621ADAD71AF49B8CBBC49 /* CardInsetsTests.swift */; };
 		75DB1AFDC8E1E64368B9A9A0 /* ClaudeEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0781E2D4C2D5E09CF0EEB2B3 /* ClaudeEndpoint.swift */; };
+		75E368905F9CBC21379E3741 /* EditorSafetyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A4D0C1C360996E341A3A1D /* EditorSafetyTests.swift */; };
 		75EC156FFEF5271C580DE564 /* Inter_18pt-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 6D978A68326B1358A49518D7 /* Inter_18pt-Bold.ttf */; };
 		76C1786800477BB58F03F41F /* SyncRecordMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37D7C29C7E3D5F8A18412E1F /* SyncRecordMapping.swift */; };
 		77517A949A51E1324FBAE5A9 /* CloudSyncMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA53FDDB8D1E9FB5BBF59F27 /* CloudSyncMonitor.swift */; };
@@ -1141,6 +1142,7 @@
 		E098101387CC4E17342476ED /* InboxZeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InboxZeroView.swift; sourceTree = "<group>"; };
 		E0CDA94242E336C8805AF0BF /* FlipboardGrid.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipboardGrid.swift; sourceTree = "<group>"; };
 		E13ACE44A63995095A971A36 /* SearchScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchScreen.swift; sourceTree = "<group>"; };
+		E2A4D0C1C360996E341A3A1D /* EditorSafetyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorSafetyTests.swift; sourceTree = "<group>"; };
 		E3B995BCBE5A70A04406E507 /* SnapshotRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotRoundTripTests.swift; sourceTree = "<group>"; };
 		E3DF8FADE739784FAFE5D568 /* SchemaV5Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaV5Models.swift; sourceTree = "<group>"; };
 		E44155658C8F3884AA9502C5 /* FilterEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilterEditorView.swift; sourceTree = "<group>"; };
@@ -1820,6 +1822,7 @@
 				CFD1E714E0D088EB6CB927A4 /* DuoCardsTests.swift */,
 				ED4EB06EB866177E8291FF4D /* DuoLayoutTests.swift */,
 				A2F12A242C481EB8100BA636 /* DuoOuterListsTests.swift */,
+				E2A4D0C1C360996E341A3A1D /* EditorSafetyTests.swift */,
 				DE125D52AE09FDCA0A9BA31B /* FilterDraftTests.swift */,
 				8AEAF40D7B5D7F3D38A794EB /* FlipboardAddTests.swift */,
 				05B2293E57B181ADE1EEE463 /* FlipboardLightsTests.swift */,
@@ -3003,6 +3006,7 @@
 				48EAB8E61FA2446B6742D54E /* DuoCardsTests.swift in Sources */,
 				C9900D3D916A62FDA1BDC0E2 /* DuoLayoutTests.swift in Sources */,
 				D0827A9ABB8605ECDB463CD3 /* DuoOuterListsTests.swift in Sources */,
+				75E368905F9CBC21379E3741 /* EditorSafetyTests.swift in Sources */,
 				C22794ACDD36EC431A5202E8 /* FilterDraftTests.swift in Sources */,
 				D7CE880328DE945D47634FF7 /* FlipboardAddTests.swift in Sources */,
 				EDB29D421E6A3BE658EB08FE /* FlipboardLightsTests.swift in Sources */,

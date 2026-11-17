@@ -21,9 +21,18 @@ struct FilterEditorView: View {
     @State private var openedName = ""
     @State private var openedQuery = ""
     @State private var openedColorHex = ""
+    /// The filter's id as the editor opened it (`EditorTarget`).
+    @State private var openedID: UUID?
+    @State private var goneLine: String?
 
     private var status: FilterDraftStatus { FilterDraftStatus.evaluate(query, tasks: allTasks) }
-    private var saveBlocker: String? { FilterDraftStatus.saveBlocker(name: name, status: status) }
+    private var saveBlocker: String? {
+        if EditorNames.isTaken(name, among: filters.map { ($0.id, $0.name) }, editing: openedID,
+                               opened: filter == nil ? nil : openedName) {
+            return EditorNames.takenLine("filter", name)
+        }
+        return FilterDraftStatus.saveBlocker(name: name, status: status)
+    }
 
     var body: some View {
         let status = status
@@ -68,9 +77,10 @@ struct FilterEditorView: View {
         .onAppear {
             if let f = filter {
                 name = f.name; query = f.query; colorHex = f.colorHex
-                openedName = f.name; openedQuery = f.query; openedColorHex = f.colorHex
+                openedName = f.name; openedQuery = f.query; openedColorHex = f.colorHex; openedID = f.id
             } else if let initialQuery { query = initialQuery }
         }
+        .editorGoneAlert($goneLine, dismiss: dismiss)
         #if os(macOS)
         .frame(minWidth: 540, minHeight: 640)
         #endif
@@ -134,7 +144,11 @@ struct FilterEditorView: View {
         guard saveBlocker == nil else { return }
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let f = filter {
+        if let openedID {
+            guard let f = EditorTarget.fetch(SavedFilter.self, id: openedID, in: context) else {
+                goneLine = EditorTarget.goneLine("filter")
+                return
+            }
             let newName = OpenedField.edited(trimmedName, from: openedName)
             let newQuery = OpenedField.edited(trimmedQuery, from: openedQuery)
             let newColor = OpenedField.edited(colorHex, from: openedColorHex)

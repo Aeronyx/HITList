@@ -29,6 +29,8 @@ struct SidebarView: View {
     @State private var creatingProject = false
     /// The question before deleting a Group with tasks (brief 57).
     @State private var deletingProject: GroupDeletion?
+    /// The question before deleting a label on tasks (round 32).
+    @State private var deletingLabel: LabelDeletion?
     @State private var editingLabel: TaskLabel?
     @State private var creatingLabel = false
     @State private var settingsRequest: SettingsSheetRequest?
@@ -179,8 +181,9 @@ struct SidebarView: View {
                     .iPadSidebarRow(isSelected: selection == .label(label.id))
                     .contextMenu {
                         Button("Edit Label…") { editingLabel = label }
-                        Button("Delete", role: .destructive) { delete(label) }
+                        if LabelDeletion.canDelete(label) { Button("Delete", role: .destructive) { askToDelete(label) } }
                     }
+                    .labelDeletionDialog($deletingLabel, for: label) { delete($0) }
                 }
             } header: {
                 sectionHeader("Labels") { creatingLabel = true }
@@ -240,8 +243,9 @@ struct SidebarView: View {
                         }
                         .contextMenu {
                             Button("Edit Label…") { editingLabel = label }
-                            Button("Delete", role: .destructive) { delete(label) }
+                            if LabelDeletion.canDelete(label) { Button("Delete", role: .destructive) { askToDelete(label) } }
                         }
+                        .labelDeletionDialog($deletingLabel, for: label) { delete($0) }
                     }
                 }
                 // One fill follows the selected row (brief 75); it jumps under Reduce Motion.
@@ -500,6 +504,11 @@ struct SidebarView: View {
     private func delete(_ project: Project) {
         if selection == .project(project.id) { selection = .inbox }
         context.delete(project); try? context.save()
+    }
+    /// A label on tasks asks first; one on none goes at once. Flipboard's own label is never deleted.
+    private func askToDelete(_ label: TaskLabel) {
+        guard LabelDeletion.canDelete(label) else { return }
+        if let question = LabelDeletion(label: label) { deletingLabel = question } else { delete(label) }
     }
     private func delete(_ label: TaskLabel) {
         if selection == .label(label.id) { selection = .today }

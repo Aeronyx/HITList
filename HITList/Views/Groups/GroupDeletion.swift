@@ -41,13 +41,55 @@ struct GroupDeletion: Identifiable {
     }
 }
 
+/// The question before deleting a label that is on any task (round 32, review 151 A1): it goes with no undo, from every
+/// task that carries it. A label on no task goes without a question (nil). Flipboard's own label is never offered Delete.
+struct LabelDeletion: Identifiable {
+    let label: TaskLabel
+    let taskCount: Int
+
+    var id: UUID { label.id }
+
+    init?(label: TaskLabel) {
+        let count = (label.tasks ?? []).count
+        guard count > 0 else { return nil }
+        self.label = label
+        taskCount = count
+    }
+
+    /// False for the label the Flipboard puts its switches under (`Flipboard.labelID`).
+    static func canDelete(_ label: TaskLabel) -> Bool { label.id != Flipboard.labelID }
+
+    var title: String { "Delete “\(label.name)”?" }
+
+    var message: String {
+        taskCount == 1 ? "It comes off 1 task. The task stays." : "It comes off \(taskCount) tasks. The tasks stay."
+    }
+}
+
+extension View {
+    /// On `label`'s row: asks before deleting it while `deletion` names it (as `groupDeletionDialog`). Delete Label runs
+    /// `delete`.
+    func labelDeletionDialog(_ deletion: Binding<LabelDeletion?>, for label: TaskLabel,
+                             delete: @escaping (TaskLabel) -> Void) -> some View {
+        let question = deletion.wrappedValue?.id == label.id ? deletion.wrappedValue : nil
+        return confirmationDialog(question?.title ?? "", isPresented: Binding(
+            get: { question != nil }, set: { if !$0 { deletion.wrappedValue = nil } }
+        ), titleVisibility: .visible, presenting: question) { question in
+            Button("Delete Label", role: .destructive) { delete(question.label) }
+            Button("Cancel", role: .cancel) {}
+        } message: { question in
+            Text(question.message)
+        }
+    }
+}
+
 extension SidebarItem {
     /// A swipe left deletes this row in Browse (brief 73): a Group of yours or a label. Not the Inbox, not Shared
     /// Tasks (the forced Group, a `.project` with a reserved id), not the lists or Settings.
     var swipesToDelete: Bool {
         switch self {
         case .project(let id): id != SharedTasksGroup.id
-        case .label: true
+        case .label(let id): id != Flipboard.labelID
         case .inbox, .today, .upcoming, .completed, .filter: false
         }
     }
