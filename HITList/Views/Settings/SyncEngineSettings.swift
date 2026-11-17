@@ -179,17 +179,29 @@ struct SyncEngineHoldGroup: View {
     }
 }
 
-/// The switch between the engines, for Debug builds on a side store only this round. Showing it to testers is George's
-/// decision (`dev/SYNC-ENGINE.md` section 12): until he says so it is hidden in every other build, the real store
-/// included.
+/// The switch between the engines (`dev/SYNC-ENGINE.md` section 14, stage 5). From 0.9.14 it is in every build and
+/// hidden: it shows once it has been revealed on the device (seven taps on the environment row, `SevenTaps`), on a
+/// store that is already on the engine (the way back), and in a Debug build on a side store. Showing it to everyone
+/// is a later release's decision.
 struct SyncEngineSwitchGroup: View {
     private var board: SyncEngineBoard { .shared }
     @State private var confirmMove = false
     @State private var isMoving = false
     @State private var message: String?
+    /// The engine the store opens on next, re-read after each move (a move on the iPhone waits for a reopen).
+    @State private var next = SyncEngineSwitch.nextEngine()
+
+    @MainActor
+    static func isShown(revealed: Bool) -> Bool {
+        isShown(revealed: revealed, engine: SyncEngineBoard.shared.engine, isDebugSideStore: isDebugSideStore)
+    }
+
+    nonisolated static func isShown(revealed: Bool, engine: SyncEngineBoard.Engine, isDebugSideStore: Bool) -> Bool {
+        revealed || engine == .own || isDebugSideStore
+    }
 
     /// Debug builds, a side store (never HITList.store).
-    static var isShown: Bool {
+    static var isDebugSideStore: Bool {
         #if DEBUG
         return !ModelContainerFactory.isMainStoreOpen
         #else
@@ -198,18 +210,23 @@ struct SyncEngineSwitchGroup: View {
     }
 
     static let title = "Sync engine"
-    static let footer = "Debug builds on a side store only."
 
     var body: some View {
-        let target: SyncEngineBoard.Engine = board.engine == .own ? .mirror : .own
-        HITGroup(Self.title, footer: Self.footer) {
-            HITMenuRow("Sync engine", systemImage: "gearshape.2", value: SyncEngineWords.engineName(board.engine))
+        let running = board.engine
+        // A move asked for and waiting for a reopen can be taken back: the button then offers the engine that runs.
+        let waiting = next != running
+        let target: SyncEngineBoard.Engine = waiting ? running : (running == .own ? .mirror : .own)
+        HITGroup(Self.title, footer: SyncEngineWords.switchFooter) {
+            HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")
-            SettingsNote(text: SyncEngineWords.moveNote)
-            HITMenuRow(SyncEngineWords.moveTitle(to: target), subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
-                       systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) { confirmMove = true }
-                .disabled(board.actions == nil || isMoving)
-                .accessibilityIdentifier("settings-engine-move")
+            SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote)
+            HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
+                       subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
+                       systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
+                if waiting { move(to: target) } else { confirmMove = true }
+            }
+            .disabled(board.actions == nil || isMoving)
+            .accessibilityIdentifier("settings-engine-move")
             if let message {
                 SettingsMessage(text: message)
                     .padding(.leading, HITRowMetrics.titleInset)
@@ -229,13 +246,111 @@ struct SyncEngineSwitchGroup: View {
         isMoving = true
         message = nil
         Task { @MainActor in
-            defer { isMoving = false }
+            defer {
+                isMoving = false
+                next = SyncEngineSwitch.nextEngine()
+            }
             do {
                 try await actions.move(target)
+            } catch let error as SyncEngine.MoveError where error != .inMemory {
+                // Not a failure: the move is made and waits for the app to be reopened.
+                message = error.localizedDescription
             } catch {
                 message = "Nothing moved: \(SyncEngineWords.error(error))"
             }
         }
+    }
+}
+
+/// Seven taps in a row, each within two seconds of the one before: the gesture that reveals the engine's switch
+/// (`SyncEngineSwitch.revealSwitch`). No timer: a tap that comes late starts the count again.
+struct SevenTaps {
+    static let needed = 7
+    static let window: TimeInterval = 2
+
+    private var count = 0
+    private var last: Date?
+
+    /// Counts a tap; true on the seventh.
+    mutating func tap(at now: Date = Date()) -> Bool {
+        if let last, now.timeIntervalSince(last) <= Self.window { count += 1 } else { count = 1 }
+        last = now
+        guard count >= Self.needed else { return false }
+        count = 0
+        self.last = nil
+        return true
+    }
+}
+
+/// Check iCloud… on HITList's own engine (`SyncEngineAudit`): a sync, then every record in iCloud read afresh and
+/// compared with this device's, field by field. Nothing is repaired: what differs is the engine's to settle, and its
+/// keys are in the sync log.
+struct SyncEngineCheckRows: View {
+    private var board: SyncEngineBoard { .shared }
+    @State private var phase: Phase = .idle
+
+    enum Phase: Equatable {
+        case idle
+        case reading(Int?)
+        case done(SyncEngineAudit.Report)
+        case failed(String)
+    }
+
+    static let subtitle = "Syncs, then compares every item in iCloud with this device"
+
+    var body: some View {
+        let isBusy = { if case .reading = phase { return true } else { return false } }()
+        HITMenuRow("Check iCloud…", subtitle: Self.subtitle, systemImage: "checkmark.icloud", accessory: .none) { run() }
+            .disabled(isBusy || board.actions?.check == nil)
+            .overlay(alignment: .trailing) {
+                if isBusy { ProgressView().controlSize(.small).padding(.trailing, HITSpacing.l) }
+            }
+            .accessibilityIdentifier("settings-engine-check")
+        switch phase {
+        case .idle:
+            EmptyView()
+        case .reading(let read):
+            caption(read.map { "Reading iCloud… \($0) records" } ?? "Syncing, then reading iCloud…",
+                    systemImage: "icloud.and.arrow.down")
+                .accessibilityIdentifier("settings-engine-check-progress")
+        case .done(let report):
+            caption(report.summary, systemImage: report.isSame ? "checkmark.circle" : "exclamationmark.circle",
+                    warning: !report.isSame)
+                .accessibilityIdentifier("settings-engine-check-result")
+            if !report.isSame {
+                SettingsNote(text: SyncEngineWords.checkDifferenceNote)
+            }
+        case .failed(let words):
+            caption("Couldn't compare with iCloud: \(words)", systemImage: "exclamationmark.circle", warning: true)
+                .accessibilityIdentifier("settings-engine-check-result")
+        }
+    }
+
+    private func run() {
+        guard let check = board.actions?.check else { return }
+        phase = .reading(nil)
+        Task { @MainActor in
+            do {
+                let report = try await check { read in
+                    Task { @MainActor in
+                        if case .reading = phase { phase = .reading(read) }
+                    }
+                }
+                phase = .done(report)
+            } catch {
+                phase = .failed(SyncEngineWords.error(error))
+            }
+        }
+    }
+
+    private func caption(_ text: String, systemImage: String, warning: Bool = false) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(HITType.caption)
+            .foregroundStyle(warning ? HITColor.dueTomorrow : Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .hitRowPadding()
+            .textSelection(.enabled)
     }
 }
 
@@ -315,16 +430,39 @@ enum SyncEngineWords {
     static let notWired = "Needs a build that runs the engine"
 
     static func engineName(_ engine: SyncEngineBoard.Engine) -> String {
-        engine == .own ? "HITList's own" : "iCloud's mirror"
+        engine == .own ? "The new sync" : "The earlier sync"
     }
 
     static func moveTitle(to engine: SyncEngineBoard.Engine) -> String {
-        engine == .own ? "Move to HITList's own" : "Move back to iCloud's mirror"
+        engine == .own ? "Move to the new sync" : "Move back to the earlier sync"
     }
 
-    static let moveNote = "Moving saves a backup, merges items saved twice and reopens this device's tasks under the "
-        + "other engine, then HITList relaunches. Devices on different engines don't see each other's changes until "
-        + "they have all moved."
+    static let cancelTitle = "Cancel the move"
+
+    #if os(macOS)
+    private static let reopens = "then HITList relaunches"
+    #else
+    private static let reopens = "then asks you to reopen HITList"
+    #endif
+
+    static let moveNote = "Moving saves a backup first and keeps every task on this device, \(reopens). A device on "
+        + "the new sync and one on the earlier sync don't see each other's changes: move every device you use, one "
+        + "after another. You can move back."
+
+    static func waitingNote(_ next: SyncEngineBoard.Engine) -> String {
+        #if os(macOS)
+        let how = "Quit HITList and open it again"
+        #else
+        let how = "Swipe HITList away in the app switcher and open it again"
+        #endif
+        return "\(how) to finish moving to \(engineName(next).lowercased())."
+    }
+
+    static let switchFooter = "Early access. HITList's own sync knows exactly what is waiting to go to iCloud, so the "
+        + "bolt is exact."
+
+    static let checkDifferenceNote = "Nothing was changed. What is waiting to go is sent by itself; the Sync log names "
+        + "each item that differs."
 
     static func refusedTitle(_ count: Int) -> String {
         count == 1 ? "1 item couldn't go to iCloud" : "\(count) items couldn't go to iCloud"

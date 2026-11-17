@@ -375,6 +375,33 @@ enum TaskActions {
             print("-seedSyncLoad failed: \(error)")
         }
     }
+
+    /// Developer aid (round 32, the move's rehearsal: `dev/SYNC-ENGINE.md` section 14, stage 4):
+    /// `-seedFromNewestBackup` fills an empty side store from the newest daily backup of the real store on this
+    /// device (`LocalBackup.directory`, which every build on a device shares), ids kept, so that a Debug Mac and a
+    /// Debug iPhone hold the same items under the same ids as the real devices do. It reads the backup and writes
+    /// only the side store; it prints counts and never a title. Debug builds only, side stores only, once.
+    @MainActor
+    static func seedFromNewestBackupIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
+                                                storeName: String = ModelContainerFactory.storeName,
+                                                directory: URL = LocalBackup.directory) {
+        guard arguments.contains("-seedFromNewestBackup"), storeName != ModelContainerFactory.mainStoreName,
+              ((try? context.fetchCount(FetchDescriptor<TaskItem>())) ?? 1) == 0 else { return }
+        guard let url = LocalBackup.backups(in: directory).last else {
+            print("REHEARSAL no backup of the real store on this device")
+            return
+        }
+        do {
+            let snapshot = try Snapshot.from(json: try Data(contentsOf: url))
+            let summary = try SnapshotBuilder.restore(snapshot, into: context, overwriteNewer: true)
+            try context.save()
+            print("REHEARSAL \(url.lastPathComponent): \(snapshot.tasks.count) tasks, \(snapshot.projects.count) groups, "
+                  + "\(snapshot.labels.count) labels; \(summary.description)")
+        } catch {
+            print("REHEARSAL failed: \(error)")
+        }
+        fflush(stdout)
+    }
     #endif
 
     /// Developer aid: `HITList -seedSampleData` inserts one task with a project, a label and a sub-task so

@@ -31,6 +31,10 @@ final class SyncEngineBoard {
         /// Move this device's store to the other engine (a backup first, then a relaunch); the words of what
         /// went wrong when it throws.
         var move: @MainActor (Engine) async throws -> Void
+        /// Check iCloud… on the engine (`SyncEngineAudit`): a sync, then every record of iCloud's read afresh and
+        /// compared with this device's. The closure hears how many records have been read. Nil where it cannot run
+        /// (the mirror, a pretend iCloud, the demo).
+        var check: (@MainActor (@escaping @Sendable (Int) -> Void) async throws -> SyncEngineAudit.Report)? = nil
     }
 
     private(set) var engine: Engine = .mirror

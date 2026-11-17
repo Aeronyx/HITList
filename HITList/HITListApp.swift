@@ -54,6 +54,7 @@ struct HITListApp: App {
         TaskActions.seedDemoDataIfRequested(in: context) // screenshots and sessions: a believable week on a side store
         #if DEBUG
         TaskActions.seedSyncLoadIfRequested(in: context) // a store of a few thousand tasks, to time a first sync
+        TaskActions.seedFromNewestBackupIfRequested(in: context) // the move's rehearsal: a side store from the newest backup
         #endif
         // Imports arrive in bursts (one event per zone fetch); dedupe once the burst settles.
         let debounce = Debouncer(delay: .seconds(2))

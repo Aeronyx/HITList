@@ -52,12 +52,17 @@ struct ICloudCheckGroup: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showSyncDetails = false
     @State private var audit = SyncAuditModel()
+    @State private var taps = SevenTaps()
 
     static let title = "If something doesn't sync"
 
     var body: some View {
         HITGroup(Self.title) {
+            // Seven taps here reveal the group that moves this device between the two ways of syncing
+            // (`SyncEngineSwitch.revealSwitch`): George's own devices first, so nothing on the page speaks of it.
             SyncEnvironmentRow()
+                .contentShape(Rectangle())
+                .onTapGesture { if taps.tap() { SyncEngineSwitch.revealSwitch() } }
             HITMenuRow("Details", systemImage: "info.circle", accessory: .expand(isExpanded: showSyncDetails)) {
                 withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { showSyncDetails.toggle() }
             }
@@ -67,9 +72,11 @@ struct ICloudCheckGroup: View {
                     .padding(.horizontal, HITSpacing.l)
                     .padding(.vertical, HITSpacing.m)
             }
-            // Check iCloud… compares the mirror's records with iCloud's: the mirror's own audit, hidden on HITList's own
-            // engine this round (the engine knows what is waiting; its records are not the mirror's).
-            if !CloudSyncMonitor.shared.isOnEngine {
+            // Check iCloud… compares the mirror's records with iCloud's: the mirror's own audit. On HITList's own
+            // engine it is the engine's (`SyncEngineAudit`): its records are not the mirror's, and it repairs nothing.
+            if CloudSyncMonitor.shared.isOnEngine {
+                SyncEngineCheckRows()
+            } else {
                 HITMenuRow("Check iCloud…", subtitle: ICloudAuditRows.subtitle, systemImage: "checkmark.icloud",
                            accessory: .none) { audit.run(container: context.container, reduceMotion: reduceMotion) }
                     .disabled(audit.isBusy)
@@ -214,6 +221,8 @@ struct SyncEnvironmentRow: View {
 /// doesn't sync, then, last and apart, the two that throw something away. (The Mac splits it into its iCloud and
 /// Data sections.)
 struct ICloudDataPage: View {
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var switchRevealed = false
+
     var body: some View {
         ICloudSyncGroup()
         // HITList's own engine holding for the person: its own group, high on the page (nothing on the mirror).
@@ -222,7 +231,7 @@ struct ICloudDataPage: View {
         ExportImportGroup()
         ICloudCheckGroup()
         ResetLocalCacheGroup(includesDeleteAll: true)
-        if SyncEngineSwitchGroup.isShown { SyncEngineSwitchGroup() }
+        if SyncEngineSwitchGroup.isShown(revealed: switchRevealed) { SyncEngineSwitchGroup() }
     }
 }
 

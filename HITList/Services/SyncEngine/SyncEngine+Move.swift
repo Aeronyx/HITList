@@ -28,8 +28,12 @@ extension SyncEngine {
             switch self {
             case .inMemory: return "This device's data couldn't be opened, so there is nothing to move."
             case .reopenToFinish(let engine):
-                let name = engine == .own ? "HITList's own sync engine" : "iCloud's mirror"
-                return "Ready: quit HITList and open it again to sync on \(name)."
+                let name = engine == .own ? "the new sync" : "the earlier sync"
+                #if os(macOS)
+                return "Ready: quit HITList and open it again to finish moving to \(name)."
+                #else
+                return "Ready: swipe HITList away in the app switcher and open it again to finish moving to \(name)."
+                #endif
             }
         }
     }
@@ -37,12 +41,21 @@ extension SyncEngine {
     private static let moveLog = Logger(subsystem: "com.trammells.hitlist", category: "sync")
 
     /// Moves this store to `engine` and relaunches (the Mac's real store) or asks to be reopened (`reopenToFinish`).
-    /// Nothing happens when the store is already on `engine`.
+    /// Nothing happens when the store is already on `engine` and no move is waiting. A move that was asked for and
+    /// is still waiting for the app to be reopened (the iPhone) is taken back by moving to the engine this launch
+    /// runs on: the preference is put back and nothing else is needed, because nothing else had changed.
     static func move(to engine: SyncEngineBoard.Engine, container: ModelContainer,
                      storeName: String = ModelContainerFactory.storeName, defaults: UserDefaults = AppGroup.defaults,
+                     current: SyncEngineBoard.Engine = SyncEngineSwitch.current,
                      backUp: @MainActor (ModelContext) throws -> URL? = { try SyncRepair.backUp(context: $0) },
                      relaunch: Bool = true) async throws {
-        guard engine != SyncEngineSwitch.current else { return }
+        guard engine != current else {
+            if SyncEngineSwitch.nextEngine(storeName: storeName, defaults: defaults) != engine {
+                SyncEngineSwitch.setPreference(engine, storeName: storeName, defaults: defaults)
+                moveLog.notice("move to \(engine.rawValue, privacy: .public): a waiting move was taken back")
+            }
+            return
+        }
         guard !ModelContainerFactory.isRunningInMemory else { throw MoveError.inMemory }
         let context = container.mainContext
         // 1. The backup. Nothing of the person's is at risk in a move (the file stays), but it is the moment a person

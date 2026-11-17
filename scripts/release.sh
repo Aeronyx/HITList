@@ -31,15 +31,21 @@
 # field the models have: the diff alone is blind to a field missing from both environments, which is how
 # three TaskItem fields went undeployed for a week and stopped a tester's sync (2026-11-06).
 # In the task store's container only the record types this release syncs through are compared (the mirror's:
-# CD_*, CDMR, Users). HITList's own sync engine (dev/SYNC-ENGINE.md) was first tested in that container (round 28)
-# and left HL* record types in its Development that no build uses; they are listed and left out. Since round 30 the
-# engine has a container of its own (SYNC_CONTAINER_ID), which no released build opens yet: it is compared from the
-# release in which SYNC_ENGINE_LIVE below is 1 (the one that switches the engine on), when its HL* types must be in
-# its Production.
+# CD_*, CDMR, Users); anything else in its Development is listed and left out (round 28's test runs of HITList's own
+# sync engine once left HL* types there; George reset that side on 2026-11-16).
+#
+# The sync engine (dev/SYNC-ENGINE.md) has a container of its own (SYNC_CONTAINER_ID) and its schema is a file in the
+# repository: dev/cloudkit/sync-engine.ckdb, pinned to the engine's own table by SyncEngineSchemaFileTests. From the
+# release in which SYNC_ENGINE_LIVE is 1 (0.9.14: a released build may run the engine for a store that was moved to
+# it) this script refuses to upload while that container's Production lacks a record type or a field the file has.
+# Its Development side is not compared with Production: the engine's own test runs write a field of their own there
+# on purpose. That is also why its schema is never deployed from whatever Development happens to hold: the three
+# steps the failure prints (reset Development, import the file, deploy) put exactly the file into Production.
 set -euo pipefail
 
-# 1 from the release whose builds use HITList's own sync engine by default; 0 while it ships switched off.
-SYNC_ENGINE_LIVE=0
+# 1 from the release whose builds may run HITList's own sync engine; 0 while it ships switched off.
+SYNC_ENGINE_LIVE=1
+SYNC_SCHEMA_FILE=dev/cloudkit/sync-engine.ckdb
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -117,7 +123,6 @@ if (( SCHEMA_CHECK && UPLOAD )); then
   # Every container this release syncs with: the task store's, Shared Tasks' own (brief 51, 0.7.0), and the sync
   # engine's own once it is live.
   CONTAINERS=("$CONTAINER_ID" "$SHARED_CONTAINER_ID")
-  (( SYNC_ENGINE_LIVE )) && CONTAINERS+=("$SYNC_CONTAINER_ID")
   for CID in "${CONTAINERS[@]}"; do
     if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
          --environment development --output-file "$TMP/$CID-dev.ckdb" >/dev/null 2>&1 &&
@@ -132,7 +137,7 @@ if (( SCHEMA_CHECK && UPLOAD )); then
       OTHERS=$(schema_others "$TMP/$CID-dev.ckdb" "$KEEP")
       if [[ -n "${OTHERS// /}" ]]; then
         print -P "%F{yellow}$CID: Development also holds record types this release does not sync through, left out of the comparison: $OTHERS%f"
-        print -P "%F{yellow}They come from round 28's test runs of the sync engine, which has its own container now. Do not press Deploy Schema Changes for this container while they are there: it deploys everything. Reset Development first (CloudKit Console → $CID → Development → Reset Environment…).%f"
+        print -P "%F{yellow}Do not press Deploy Schema Changes for this container while they are there: it deploys everything. Reset Development first (CloudKit Console → $CID → Development → Reset Environment…, or: xcrun cktool reset-schema --team-id $TEAM_ID --container-id $CID).%f"
       fi
       if ! diff -qB "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" >/dev/null; then
         diff -B "$TMP/$CID-dev-used.ckdb" "$TMP/$CID-prod-used.ckdb" || true
@@ -149,6 +154,39 @@ if (( SCHEMA_CHECK && UPLOAD )); then
       print -P "%F{yellow}$CID: could not export its schemas (no cktool management token saved?); skipping its drift check. Run: xcrun cktool save-token --type management%f"
     fi
   done
+
+  # The sync engine's container: Production must hold every record type and field of the schema file.
+  if (( SYNC_ENGINE_LIVE )); then
+    CID="$SYNC_CONTAINER_ID"
+    # `schema_fields <file.ckdb>`: one line per field, "RecordType field TYPE", without CloudKit's own fields, its
+    # own Users type and the index words (QUERYABLE, SEARCHABLE, SORTABLE), which may differ.
+    schema_fields() {
+      awk '
+        /^[[:space:]]*RECORD TYPE / { type = $3; next }
+        /^[[:space:]]*\);/ { type = ""; next }
+        type == "" || type == "Users" || $1 == "GRANT" || $1 ~ /^"___/ { next }
+        { kind = $2; sub(/,$/, "", kind); print type, $1, kind }
+      ' "$1" | sort
+    }
+    [[ -f "$SYNC_SCHEMA_FILE" ]] || fail "$SYNC_SCHEMA_FILE is missing"
+    if xcrun cktool export-schema --team-id "$TEAM_ID" --container-id "$CID" \
+         --environment production --output-file "$TMP/$CID-prod.ckdb" >/dev/null 2>&1; then
+      schema_fields "$SYNC_SCHEMA_FILE" > "$TMP/$CID-file.fields"
+      schema_fields "$TMP/$CID-prod.ckdb" > "$TMP/$CID-prod.fields"
+      MISSING=$(comm -23 "$TMP/$CID-file.fields" "$TMP/$CID-prod.fields")
+      if [[ -n "$MISSING" ]]; then
+        echo "$MISSING" | sed 's/^/  missing in Production: /'
+        print -P "%F{yellow}Three steps, in this order (the first two touch only the sync engine's test side, never anyone's tasks):%f"
+        print -P "%F{yellow}  1. xcrun cktool reset-schema --team-id $TEAM_ID --container-id $CID%f"
+        print -P "%F{yellow}  2. xcrun cktool import-schema --team-id $TEAM_ID --container-id $CID --environment development --file $SYNC_SCHEMA_FILE%f"
+        print -P "%F{yellow}  3. icloud.developer.apple.com → CloudKit Database → $CID → Development → Deploy Schema Changes… → Production%f"
+        fail "$CID: Production lacks what the sync engine sends (above). Then run this again (nothing was changed here). Or pass --skip-schema-check."
+      fi
+      echo "$CID: Production holds every record type and field of $SYNC_SCHEMA_FILE."
+    else
+      print -P "%F{yellow}$CID: could not export its Production schema (no cktool management token saved?); skipping its check. Run: xcrun cktool save-token --type management%f"
+    fi
+  fi
 fi
 
 # ---- build number -------------------------------------------------------------------------------

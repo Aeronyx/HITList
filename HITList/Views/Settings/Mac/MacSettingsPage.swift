@@ -180,6 +180,7 @@ struct MacSettingsSectionRows: View {
 /// One section's groups: the iPhone's pages (`SettingsPageContent`), with iCloud & data as two sections, the
 /// shortcuts under General, the larger swatches and a preview in Appearance, and What's New inline in About.
 struct MacSettingsSectionContent: View {
+    @AppStorage(SyncEngineSwitch.revealedKey, store: AppGroup.defaults) private var switchRevealed = false
     let section: MacSettingsSection
 
     var body: some View {
@@ -205,7 +206,7 @@ struct MacSettingsSectionContent: View {
                 ICloudCheckGroup()
                 SyncLogSection()
                 ResetLocalCacheGroup()
-                if SyncEngineSwitchGroup.isShown { SyncEngineSwitchGroup() }
+                if SyncEngineSwitchGroup.isShown(revealed: switchRevealed) { SyncEngineSwitchGroup() }
             case .data:
                 MacDataSection()
             case .claude:

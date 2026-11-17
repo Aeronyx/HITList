@@ -48,21 +48,51 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertEqual(decide(), .own)
         XCTAssertEqual(decide(store: "HITList-other.store"), .mirror, "another store's preference is its own")
         XCTAssertEqual(decide(["-syncEngine", "mirror"]), .mirror)
-        XCTAssertEqual(decide(debug: false), .mirror, "a released build runs the mirror whatever the preference says")
+        XCTAssertEqual(decide(debug: false), .own, "a released build follows a moved store's preference (0.9.14)")
         SyncEngineSwitch.setPreference(.mirror, storeName: "HITList-s143.store", defaults: defaults)
         XCTAssertNil(defaults.object(forKey: SyncEngineSwitch.preferenceKey(storeName: "HITList-s143.store")),
                      "moving back leaves the store as one that never moved")
         XCTAssertEqual(decide(), .mirror)
     }
 
-    /// The engine ships switched off: in a released build nothing can switch it on, not the preference a Debug build
-    /// on the same device left in the shared defaults, not an argument, not on any store.
-    func testAReleasedBuildNeverRunsTheEngine() {
-        for store in ["HITList.store", "HITList-s143.store"] {
-            SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults)
-            XCTAssertEqual(decide(["-syncEngine", "own", "-syncEnginePretend", "x"], store: store, debug: false), .mirror, store)
-        }
-        XCTAssertFalse(SyncEngineSwitch.isAvailable(isDebug: false))
+    /// From 0.9.14 a released build may run the engine, and nothing moves by itself: only a store whose own
+    /// preference says so (the move writes it) opens on the engine. An argument, a pretend iCloud, another store's
+    /// preference (a Debug run's leftover on the same device) switch nothing on in a released build.
+    func testAReleasedBuildRunsTheEngineOnlyForAStoreThatWasMoved() {
+        XCTAssertTrue(SyncEngineSwitch.isAvailable(isDebug: false))
+        XCTAssertEqual(decide(["-syncEngine", "own", "-syncEnginePretend", "x"], store: "HITList.store", debug: false), .mirror)
+        SyncEngineSwitch.setPreference(.own, storeName: "HITList-s143.store", defaults: defaults)
+        XCTAssertEqual(decide(store: "HITList.store", debug: false), .mirror, "a side store's preference is not the real store's")
+        SyncEngineSwitch.setPreference(.own, storeName: "HITList.store", defaults: defaults)
+        XCTAssertEqual(decide(store: "HITList.store", debug: false), .own)
+        XCTAssertEqual(decide(["-syncEngine", "mirror"], store: "HITList.store", debug: false), .own,
+                       "no argument takes a released build's store back; the move does")
+        SyncEngineSwitch.setPreference(.mirror, storeName: "HITList.store", defaults: defaults)
+        XCTAssertEqual(decide(store: "HITList.store", debug: false), .mirror)
+    }
+
+    /// The group that moves a store is hidden until revealed on the device; a store on the engine always shows it
+    /// (the way back).
+    func testTheSwitchIsHiddenUntilRevealedAndAlwaysShownOnTheEngine() {
+        XCTAssertFalse(SyncEngineSwitch.isSwitchRevealed(defaults: defaults))
+        XCTAssertFalse(SyncEngineSwitchGroup.isShown(revealed: false, engine: .mirror, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .own, isDebugSideStore: false))
+        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: false, engine: .mirror, isDebugSideStore: true))
+        SyncEngineSwitch.revealSwitch(defaults: defaults)
+        XCTAssertTrue(SyncEngineSwitch.isSwitchRevealed(defaults: defaults))
+        XCTAssertTrue(SyncEngineSwitchGroup.isShown(revealed: true, engine: .mirror, isDebugSideStore: false))
+    }
+
+    func testSevenTapsInARowRevealAndASlowTapStartsAgain() {
+        var taps = SevenTaps()
+        let start = Date(timeIntervalSince1970: 1_000)
+        for n in 0..<6 { XCTAssertFalse(taps.tap(at: start.addingTimeInterval(Double(n) * 0.3))) }
+        XCTAssertTrue(taps.tap(at: start.addingTimeInterval(1.8)), "the seventh")
+        // Six quick taps, a pause, then six more: never seven in a row.
+        var slow = SevenTaps()
+        for n in 0..<6 { XCTAssertFalse(slow.tap(at: start.addingTimeInterval(Double(n) * 0.3))) }
+        for n in 0..<6 { XCTAssertFalse(slow.tap(at: start.addingTimeInterval(10 + Double(n) * 0.3))) }
+        XCTAssertTrue(slow.tap(at: start.addingTimeInterval(12)))
     }
 
     /// The engine's records live in a container of their own (round 30): never the one SwiftData's mirror reads (it
@@ -194,7 +224,20 @@ final class SyncEngineWiringTests: XCTestCase {
             XCTAssertEqual(error, .reopenToFinish(.own))
             XCTAssertTrue(error.localizedDescription.contains("open it again"))
         }
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: "HITList-s143t.store", defaults: defaults), .own)
+        // The move waits for a reopen; moving to the engine that still runs takes it back, and needs no backup.
+        try await SyncEngine.move(to: .mirror, container: container, storeName: "HITList-s143t.store", defaults: defaults,
+                                  current: .mirror, backUp: { _ in backedUp += 1; return nil })
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: "HITList-s143t.store", defaults: defaults), .mirror)
         XCTAssertEqual(backedUp, 1)
+        // And asked again, it is made again.
+        do {
+            try await SyncEngine.move(to: .own, container: container, storeName: "HITList-s143t.store", defaults: defaults,
+                                      current: .mirror, backUp: { _ in backedUp += 1; return nil })
+        } catch let error as SyncEngine.MoveError {
+            XCTAssertEqual(error, .reopenToFinish(.own))
+        }
+        XCTAssertEqual(backedUp, 2)
         XCTAssertEqual(try container.mainContext.fetchCount(FetchDescriptor<TaskItem>()), 1, "rows that shared an id merged")
         XCTAssertEqual(SyncEngineSwitch.decide(storeName: "HITList-s143t.store", isTesting: false, isDebug: true,
                                                arguments: [], defaults: defaults), .own, "the next launch opens it on the engine")

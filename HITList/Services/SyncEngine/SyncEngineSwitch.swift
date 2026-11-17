@@ -5,17 +5,17 @@ import HITListCore
 /// so far, or HITList's own engine (`dev/SYNC-ENGINE.md`). One answer per launch, decided before the container opens,
 /// because the answer decides how it opens (the engine needs the same file without the mirror).
 ///
-/// **A released build always answers `mirror`** (`isAvailable`): the engine's code ships switched off, and no
-/// preference, argument or leftover of a Debug run on the same device can switch it on. That line changes in the
-/// release in which George decides the engine goes live, and nowhere else.
+/// **`own` only for a store that was moved** (round 32; George, 2026-11-16: "Please work freely and complete the sync
+/// engine … I also won't feel comfortable launching until we have at least a few days of experience with the new
+/// sync system"). From 0.9.14 a released build may run the engine (`isAvailable`), and nothing moves by itself: a
+/// store syncs on the engine only when its own preference says so (`AppGroup.defaults`, a key per store name), and
+/// only the move writes that preference (`SyncEngine.move(to:)`), from a group in Settings → iCloud that stays hidden
+/// until it is revealed on that device (`isSwitchRevealed`). Every other store, on every device, opens on the mirror
+/// exactly as before.
 ///
-/// In a Debug build, `own` only when
-/// - the store's own preference says so (`AppGroup.defaults`, a key per store name, written by the move,
-///   `SyncEngine.move(to:)`), or
-/// - it was launched on a side store with `-syncEngine own` (`-syncEngine mirror` wins the other way, over the
-///   preference).
-/// Never under hosted tests (the tests call `decide` themselves), and the engine never runs on the in-memory fallback
-/// (`SyncEngine.launch` says why instead).
+/// In a Debug build also when launched on a side store with `-syncEngine own` (`-syncEngine mirror` wins the other
+/// way, over the preference). Never under hosted tests (the tests call `decide` themselves), and the engine never
+/// runs on the in-memory fallback (`SyncEngine.launch` says why instead).
 enum SyncEngineSwitch {
     typealias Engine = SyncEngineBoard.Engine
 
@@ -45,9 +45,29 @@ enum SyncEngineSwitch {
     /// device shares the App Group's defaults, so the key names its store, as `resetLocalStoreOnNextLaunch` does.
     static func preferenceKey(storeName: String) -> String { "syncEngine.\(storeName)" }
 
-    /// Whether this build may run the engine at all. Debug builds only, until George says which release switches it
-    /// on (`dev/SYNC-ENGINE.md` section 11): in a released build nothing below is even looked at.
-    static func isAvailable(isDebug: Bool) -> Bool { isDebug }
+    /// Whether this build may run the engine at all: every build, from the release George said switches it on
+    /// (0.9.14, `dev/SYNC-ENGINE.md` section 14, stage 5). The one line that takes every device back to the mirror
+    /// at its next launch, should that ever be needed: answer `isDebug` again. (Until 0.9.13 it did.)
+    static func isAvailable(isDebug: Bool) -> Bool { true }
+
+    // MARK: - The hidden switch
+
+    /// Whether Settings → iCloud shows the group that moves a store between the engines on this device. Off until
+    /// someone taps the environment row seven times (`SevenTaps`): the engine is George's alone for its first days,
+    /// and a friend who never hears of the gesture never sees the row. A store already on the engine always shows
+    /// the group (it is the way back), and so does a Debug build on a side store.
+    static let revealedKey = "syncEngine.switchRevealed"
+
+    static func isSwitchRevealed(defaults: UserDefaults = AppGroup.defaults) -> Bool { defaults.bool(forKey: revealedKey) }
+
+    static func revealSwitch(defaults: UserDefaults = AppGroup.defaults) { defaults.set(true, forKey: revealedKey) }
+
+    /// The engine the store named `storeName` will open on at its next launch: what a move asked for, which is this
+    /// launch's engine unless a move is waiting for the app to be reopened.
+    static func nextEngine(storeName: String = ModelContainerFactory.storeName,
+                           defaults: UserDefaults = AppGroup.defaults) -> Engine {
+        defaults.string(forKey: preferenceKey(storeName: storeName)) == Engine.own.rawValue ? .own : .mirror
+    }
 
     /// The answer, from what the launch was given. Pure, for the tests.
     static func decide(storeName: String, isTesting: Bool, isDebug: Bool, arguments: [String],

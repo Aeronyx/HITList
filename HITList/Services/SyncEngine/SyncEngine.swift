@@ -33,6 +33,9 @@ final class SyncEngine {
     let widgetFacts = SyncEngineWidgetFacts()
     /// The store file this engine's ledger is bound to; nil in tests that bind nothing.
     let storeURL: URL?
+    /// The zone in the engine's container that Check iCloud… reads (`SyncEngineAudit`); nil when this engine does
+    /// not sync with iCloud (a pretend iCloud, a test's transport).
+    var auditZone: String?
 
     private var hintObserver: SyncSaveHintObserver?
     /// Save hints, in the order the saves posted them, read by one task (`feedHints`): the brain hears them in order.
@@ -133,6 +136,7 @@ final class SyncEngine {
         // terminal: one line per thing on stdout (`open --stdout <file>`), as well as in the board's log and os_log.
         engine.echo = { line in print("SYNCENGINE \(line)"); fflush(stdout) }
         #endif
+        if pretend == nil { engine.auditZone = zone }
         shared = engine
         // From now on, before anything else of the launch writes the store: a deletion nobody took down would come
         // back from iCloud instead of going there.
@@ -153,7 +157,7 @@ final class SyncEngine {
     }
 
     var actions: SyncEngineBoard.Actions {
-        SyncEngineBoard.Actions(
+        var actions = SyncEngineBoard.Actions(
             // The person's own "sync now" looks at everything first, then fetches and sends.
             syncNow: { [core] in
                 await core.localChanged(nil)
@@ -162,6 +166,20 @@ final class SyncEngine {
             resume: { [core] in await core.resume() },
             answerPurge: { [core] choice in try await core.answer(choice) },
             move: { [container] engine in try await SyncEngine.move(to: engine, container: container) })
+        if let zone = auditZone {
+            // Check iCloud…: a sync first, so that what is merely on its way is not counted as a difference, then
+            // the read and the comparison, said in the sync log by key.
+            actions.check = { [weak self, core, container] progress in
+                await core.localChanged(nil)
+                try await core.syncNow()
+                let waiting = await core.status.waiting
+                let report = try await SyncEngineAudit.run(container: container, zoneName: zone, waiting: waiting,
+                                                           progress: progress)
+                for line in report.logLines { self?.say("Check iCloud: \(line)") }
+                return report
+            }
+        }
+        return actions
     }
 
     // MARK: - Life cycle
