@@ -55,11 +55,15 @@ private struct InboxContent: View {
     }
 
     /// What the rows are worked out from besides the models they read.
-    struct ListingKey: Hashable {
+    struct ListingKey: Equatable {
         let showCompleted: Bool
         let now: Date
         let sort: ListSort
         let anchors: [UUID: Date?]
+        /// The shared tasks this list can show, as they are now. They live in the shared store, not in a query, so
+        /// they are compared here: a shared task reopened by Undo once its row had gone changed nothing else the
+        /// cache watched, and the row did not come back (round 32, the UI suite's `testSharedTasksAreOneGroup`).
+        let shared: [SharedRow]
     }
 
     /// The rows in their sections, the ids the Inbox matched (before a completion's held rows), how many need review,
@@ -75,7 +79,8 @@ private struct InboxContent: View {
     /// The rows: held while nothing they were worked out from has changed (`ListCache`), else worked out again.
     private var currentListing: Listing {
         listing.watch(context)
-        let key = ListingKey(showCompleted: showCompleted, now: now, sort: sort, anchors: completions.anchors)
+        let key = ListingKey(showCompleted: showCompleted, now: now, sort: sort, anchors: completions.anchors,
+                             shared: sharedRows.rows)
         return listing.value(key: key, sources: [ListSources.of(allTasks), ListSources.of(projects)]) {
             let own = matchedTasks(), shared = matchedShared()
             let placed = rows(own: own, shared: shared)

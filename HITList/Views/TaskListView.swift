@@ -240,12 +240,16 @@ private struct TaskListContent: View {
 
     /// What the rows are worked out from besides the models they read: which list, its options, the moment and the rows
     /// a completion holds.
-    struct ListingKey: Hashable {
+    struct ListingKey: Equatable {
         let selection: SidebarItem
         let showCompleted: Bool
         let now: Date
         let todaySort: ListSort
         let anchors: [UUID: Date?]
+        /// The shared tasks this list can show, as they are now. They live in the shared store, not in a query, so
+        /// they are compared here: a shared task reopened by Undo once its row had gone changed nothing else the
+        /// cache watched, and the row did not come back (round 32, the UI suite's `testSharedTasksAreOneGroup`).
+        let shared: [SharedRow]
     }
 
     /// The list's sections and the ids it matched (its rows before a completion's held ones are added).
@@ -260,7 +264,7 @@ private struct TaskListContent: View {
     private var currentListing: Listing {
         listing.watch(context)
         let key = ListingKey(selection: selection, showCompleted: showCompleted, now: now, todaySort: todaySort,
-                             anchors: completions.anchors)
+                             anchors: completions.anchors, shared: showsSharedRows ? sharedRows.rows : [])
         let sources = [ListSources.of(allTasks), ListSources.of(projects), ListSources.of(labels), ListSources.of(filters)]
         return listing.value(key: key, sources: sources) {
             let matching = Result { try matchedTasks() }

@@ -126,6 +126,10 @@ struct UpcomingView: View {
         let now: Date
         let overdueExpanded: Bool
         let anchors: [UUID: Date?]
+        /// The shared tasks this list can show, as they are now. They live in the shared store, not in a query, so
+        /// they are compared here: a shared task reopened by Undo once its row had gone changed nothing else the
+        /// cache watched, and the row did not come back (round 32, the UI suite's `testSharedTasksAreOneGroup`).
+        let shared: [SharedRow]
     }
 
     /// The board's columns (Mac, a full-width iPad), or the list's days and the week strip's dots (iPhone), and the next
@@ -141,7 +145,7 @@ struct UpcomingView: View {
     private var currentListing: Listing {
         listing.watch(context)
         let key = ListingKey(showsBoard: showsBoard, window: window, dayCount: dayCount, now: now,
-                             overdueExpanded: overdueExpanded, anchors: completions.anchors)
+                             overdueExpanded: overdueExpanded, anchors: completions.anchors, shared: sharedRows.rows)
         return listing.value(key: key, sources: [ListSources.of(allTasks)]) {
             let entries = entries
             let moment = ListClock.next(after: now, tasks: allTasks, shared: sharedRows.rows)
