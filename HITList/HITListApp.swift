@@ -52,6 +52,9 @@ struct HITListApp: App {
         Deduplicator.runAndLog(in: context, trigger: "launch")
         TaskActions.seedSampleDataIfRequested(in: context)
         TaskActions.seedDemoDataIfRequested(in: context) // screenshots and sessions: a believable week on a side store
+        #if DEBUG
+        TaskActions.seedSyncLoadIfRequested(in: context) // a store of a few thousand tasks, to time a first sync
+        #endif
         // Imports arrive in bursts (one event per zone fetch); dedupe once the burst settles.
         let debounce = Debouncer(delay: .seconds(2))
         importObserver = NotificationCenter.default.addObserver(forName: .cloudKitImportSucceeded, object: nil, queue: .main) { _ in

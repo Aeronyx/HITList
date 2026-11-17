@@ -50,14 +50,19 @@ actor SwiftDataSyncStore: SyncLocalStore {
     /// `SyncSaveHintObserver` as each save deletes, and by `apply` for a person's deletion pending in the engine's
     /// own save. The only way the engine learns of a deletion here (`dev/SYNC-ENGINE.md` section 4).
     nonisolated let deletionLog: SyncDeletionLog
+    /// Told after each write through the main context: how many records, and how long the main thread was held for
+    /// them (`SyncApplyTimes`; measured on a phone in round 31).
+    nonisolated let timing: (@MainActor @Sendable (_ records: Int, _ seconds: Double) -> Void)?
 
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "sync")
 
     /// `deletions`: the engine passes one kept in its ledger's file; the default keeps them in memory (tests).
-    init(container: ModelContainer, writer: Writer = .mainContext, deletions: SyncDeletionLog = SyncDeletionLog(ledger: nil)) {
+    init(container: ModelContainer, writer: Writer = .mainContext, deletions: SyncDeletionLog = SyncDeletionLog(ledger: nil),
+         timing: (@MainActor @Sendable (_ records: Int, _ seconds: Double) -> Void)? = nil) {
         self.container = container
         self.writer = writer
         self.deletionLog = deletions
+        self.timing = timing
     }
 
     func deletions() async throws -> Set<SyncKey> { deletionLog.all() }
@@ -77,8 +82,15 @@ actor SwiftDataSyncStore: SyncLocalStore {
         guard !writes.isEmpty else { return [] }
         switch writer {
         case .mainContext:
-            let container = container, log = deletionLog
-            return try await MainActor.run { try Self.apply(writes, on: container.mainContext, shared: true, deletions: log) }
+            let container = container, log = deletionLog, timing = timing
+            return try await MainActor.run {
+                let began = ContinuousClock.now
+                defer {
+                    let took = ContinuousClock.now - began
+                    timing?(writes.count, Double(took.components.seconds) + Double(took.components.attoseconds) / 1e18)
+                }
+                return try Self.apply(writes, on: container.mainContext, shared: true, deletions: log)
+            }
         case .ownContext:
             return try Self.apply(writes, in: container)
         }

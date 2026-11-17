@@ -350,6 +350,33 @@ enum TaskActions {
         }
     }
 
+    #if DEBUG
+    /// Developer aid (round 31): `-seedSyncLoad N` puts N ordinary tasks in four Groups on an empty side store, so a
+    /// first sync of a store that size can be timed on a device (the engine's store writes on the main thread).
+    /// Debug builds only, side stores only, once.
+    static func seedSyncLoadIfRequested(in context: ModelContext, arguments: [String] = CommandLine.arguments,
+                                        storeName: String = ModelContainerFactory.storeName) {
+        guard let index = arguments.firstIndex(of: "-seedSyncLoad"), arguments.indices.contains(index + 1),
+              let count = Int(arguments[index + 1]), count > 0, storeName != ModelContainerFactory.mainStoreName,
+              ((try? context.fetchCount(FetchDescriptor<TaskItem>())) ?? 1) == 0 else { return }
+        do {
+            let groups = try (1...4).map { try findOrCreateProject(named: "Load \($0)", in: context) }
+            let label = try findOrCreateLabel(named: "load", in: context)
+            let today = Date()
+            for i in 0..<min(count, 20_000) {
+                let due = i % 3 == 0 ? Calendar.current.date(byAdding: .day, value: i % 60, to: today) : nil
+                context.insert(TaskItem(title: "Load task \(i + 1)",
+                                        notes: i % 5 == 0 ? "A note of ordinary length, as a real task has." : "",
+                                        priority: 1 + i % 4, dueDate: due, project: groups[i % groups.count],
+                                        labels: i % 4 == 0 ? [label] : []))
+            }
+            try context.save()
+        } catch {
+            print("-seedSyncLoad failed: \(error)")
+        }
+    }
+    #endif
+
     /// Developer aid: `HITList -seedSampleData` inserts one task with a project, a label and a sub-task so
     /// every record type and field exists in CloudKit (needed once before deploying the schema to
     /// Production). Only into a side store (`HITLIST_STORE_SUFFIX`, which a Development build sets for itself): never into

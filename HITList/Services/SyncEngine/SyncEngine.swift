@@ -24,6 +24,8 @@ final class SyncEngine {
     let container: ModelContainer
     let ledger: SyncLedgerStore
     let store: SwiftDataSyncStore
+    /// How long the engine's writes have held the main thread this launch.
+    let applyTimes: SyncApplyTimes
     let transport: any SyncTransport
     let core: SyncCore
     let host: SyncEngineHost
@@ -77,7 +79,10 @@ final class SyncEngine {
         self.storeURL = storeURL
         self.board = board
         // Deletions are taken down in the ledger's own file as they are saved (`SyncDeletionLog`).
-        store = SwiftDataSyncStore(container: container, writer: .mainContext, deletions: SyncDeletionLog(ledger: ledger.container))
+        let times = SyncApplyTimes()
+        applyTimes = times
+        store = SwiftDataSyncStore(container: container, writer: .mainContext, deletions: SyncDeletionLog(ledger: ledger.container),
+                                   timing: { records, seconds in times.note(records, seconds) })
         let transport = makeTransport(ledger)
         self.transport = transport
         host = SyncEngineHost(clock: clock, backUp: backUp ?? { reason in try SyncEngineHost.backUpStore(container, reason: reason) })
@@ -85,6 +90,7 @@ final class SyncEngine {
         var continuation: AsyncStream<Hint>.Continuation!
         hintStream = AsyncStream(bufferingPolicy: .unbounded) { continuation = $0 }
         hints = continuation
+        times.report = { [weak self] line in self?.say(line) }
     }
 
     // MARK: - Launch (the app)
@@ -385,5 +391,33 @@ final class SyncEngine {
         Self.osLog.notice("sync engine: \(line, privacy: .public)")
         board.log(line)
         echo?(line)
+    }
+}
+
+/// How long the engine's writes held the main thread (the store writes through the app's main context, where the
+/// views read: `SwiftDataSyncStore`). A usual write is a few rows and is not worth a word. A line goes to the sync log
+/// when one write held the main thread for a tenth of a second, or when the writes since the last line add up to a
+/// quarter of a second (a first sync, a large fetch after a long absence), with the launch's running total: its cost
+/// on a real device is then a number and not a guess (round 31: 5,005 records on an iPhone 16).
+@MainActor
+final class SyncApplyTimes {
+    static let slowWrite = 0.1
+    static let worthSaying = 0.25
+
+    private(set) var records = 0
+    private(set) var seconds = 0.0
+    private(set) var longest = 0.0
+    private var unsaid = (records: 0, seconds: 0.0, writes: 0, longest: 0.0)
+    var report: ((String) -> Void)?
+
+    func note(_ count: Int, _ took: Double) {
+        records += count
+        seconds += took
+        longest = max(longest, took)
+        unsaid = (unsaid.records + count, unsaid.seconds + took, unsaid.writes + 1, max(unsaid.longest, took))
+        guard took >= Self.slowWrite || unsaid.seconds >= Self.worthSaying else { return }
+        report?(String(format: "Writes held the main thread %.2f s for %d records in %d writes (the longest %.3f s); this launch %.2f s for %d records",
+                       unsaid.seconds, unsaid.records, unsaid.writes, unsaid.longest, seconds, records))
+        unsaid = (0, 0, 0, 0)
     }
 }

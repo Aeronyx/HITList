@@ -386,6 +386,23 @@ does not notify of its own change. Do not spend another run on it here: it needs
 **Driving a menu in my own Mac app**: a click that opens a menu leaves the window looking inactive in a
 single-window capture (the menu is another window); arrow keys sent before the menu is open move the list's
 selection instead. Open it, capture once to see the inactive title bar, then send the keys.
+
+Lessons from round 31 (no sessions; the engine on George's iPhone, a push proven, the road written):
+**George's phone can run a Debug build, on his word, and nothing of his is at risk from it**: a Development build
+opens only its own side store and settings suite, and stands down from reminders, Spotlight and backups (read
+`SyncStoreGuard`, `AppGroup.suiteName`, `SpotlightSync.isAllowed`, `LocalBackup` again before the next time rather
+than trusting this line). It does replace the TestFlight app until he installs that over it again, so tell him
+the moment it is installed, keep it short (forty minutes this time), and tell him the moment he can take the phone
+back. `dev/briefs/ROUND-31.md` has the `devicectl` commands: build, install, launch with an environment and
+arguments and the console to a file, the lock state, and Settings launched to put the app in the background, so
+the whole run needs him only to unlock the phone once.
+**A phone that is locked cannot be launched into**: check `devicectl device info lockState` first and ask him
+before building, not after installing.
+**A second device was the whole difference for the push.** Three rounds of "no push reached a Debug build" were one
+missing call on the Mac and one Mac. When a thing cannot be shown with what is on the desk, say what it needs and
+ask for it, as soon as that is known.
+**A timer with a threshold can hide the total**: the first main-thread timer spoke only of a slow write and said
+nothing of 5,005 records written 200 at a time. Report what adds up, not only what spikes.
 **77 worktrees held 113 GB.** Every branch was merged and every tree clean. Agent worktrees are removed when their
 branch is merged; the older sessions' need George's word (he has now been asked with the number in front of him).
 
@@ -828,7 +845,32 @@ flipped early with the question); changing a board's clock moves only the switch
 engine's records keep their `HL` types in the new container; the Mac registers for pushes when the engine starts.
 He did not answer about the 72 merged session worktrees: they are still there, and still his to say.
 
-## 8. Where things stand (2026-11-16, round 30 on master)
+Round 31 (2026-11-16, evening). George's words: "Please do plan the engine's next steps. You may indeed use my
+iPhone for a debug build if you wish; I've connected it via wire to this laptop." **His phone may carry a Debug
+build for a test when he has said so for that test** (not a standing permission: ask each time, and say when it is
+installed and when he can have it back). The plan is section 14 of the design; my recommendations in it, his to
+overrule: plain fields for the first live release; the engine goes live for him alone first, behind a gesture
+friends do not see, for a week; then everyone at their first launch after updating; the mirror's code goes only
+after that.
+
+## 8. Where things stand (2026-11-16, evening: round 31 on master, nothing to release)
+
+**2026-11-16, evening: round 31 (Fable 5.2 supervisor, no sessions), after George released 0.9.13**
+(`dev/briefs/ROUND-31.md`). At his word ("Please do plan the engine's next steps. You may indeed use my iPhone for a
+debug build") the engine ran on his iPhone 16 beside this Mac in its own container on Development: **a push wakes
+it both ways** (phone to a Mac app in the background; Mac to the phone in about 3 s, in front and in the
+background), and a first sync of 5,005 records held the phone's main thread about 1.2 s in all, 65 ms at most at a
+time. **The road to switching the engine on is `dev/SYNC-ENGINE.md` section 14**: stage 1 (real devices) is done;
+stage 2 (close what can lose or hide a change: seven items, none needing George) is next; his decisions are stage 3
+(plain fields recommended for the first live release). On master since 0.9.13, in no release yet and with nothing
+a person can see: the engine says in the sync log how long its writes held the main thread (`SyncApplyTimes`), and
+a Debug-only `-seedSyncLoad N`. He quoted `release.sh`'s warning about the tasks' container's Development side: it
+goes when that side is reset (`xcrun cktool reset-schema --team-id UC8N98H3RT --container-id
+iCloud.com.trammells.hitlist`, or the console); he was asked whether to run it from here, and **nobody presses
+Deploy Schema Changes there before it is reset**. Open with him: that reset; the 72 merged session worktrees (no
+answer yet). The next brief number is 147.
+
+### Round 30 (kept for the record; 0.9.13, released 2026-11-16)
 
 **2026-11-16: round 30 on master for 0.9.13 (Fable 5.2 supervisor, no sessions), the day after George released
 0.9.12** (`dev/briefs/ROUND-30.md` has his message, both decisions and the proof). **Flipboard: a switch keeps its

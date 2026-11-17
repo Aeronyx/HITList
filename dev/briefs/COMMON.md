@@ -787,6 +787,13 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 31 (2026-11-16, evening; the supervisor alone, no briefs): the engine's road
+
+`dev/SYNC-ENGINE.md` section 14 is the plan every engine brief from now on belongs to; say which stage and item a
+brief closes. A push waking the engine is proven (a second device was needed: George's phone, on his word for that
+test only; no session installs anything on his phone). The engine says in the sync log how long its writes held
+the main thread (`SyncApplyTimes`); `-seedSyncLoad N` (Debug, an empty side store) makes a store of N tasks.
+
 ## Round 30 (2026-11-16; the supervisor alone, no briefs): what a session must know now
 
 `dev/briefs/ROUND-30.md` has the round. Two things that are no longer as older blocks here say:

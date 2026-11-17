@@ -93,6 +93,29 @@ final class SyncEngineWiringTests: XCTestCase {
         #endif
     }
 
+    /// How long the engine's writes held the main thread (round 31, measured on an iPhone 16): ordinary small writes
+    /// say nothing; a sustained load says a line each quarter of a second it adds up to, with the launch's total (the
+    /// first form spoke only of a single slow write and said nothing of 5,005 records written 200 at a time); one slow
+    /// write is said at once.
+    func testSustainedWritesAreSaidWithTheirTotal() {
+        let times = SyncApplyTimes()
+        var lines: [String] = []
+        times.report = { lines.append($0) }
+        for _ in 0..<4 { times.note(200, 0.05) }
+        XCTAssertEqual(lines, [], "0.20 s in all, no write slow: not worth a word yet")
+        times.note(200, 0.05)
+        XCTAssertEqual(lines.count, 1)
+        XCTAssertTrue(lines[0].contains("0.25 s for 1000 records in 5 writes"), lines[0])
+        XCTAssertTrue(lines[0].contains("this launch 0.25 s for 1000 records"), lines[0])
+        times.note(3, 0.001)
+        XCTAssertEqual(lines.count, 1, "a usual write says nothing")
+        times.note(5000, 1.4)
+        XCTAssertEqual(lines.count, 2, "one slow write is said at once")
+        XCTAssertTrue(lines[1].contains("this launch 1.65 s for 6003 records"), lines[1])
+        XCTAssertEqual(times.records, 6003)
+        XCTAssertEqual(times.longest, 1.4)
+    }
+
     func testNeverUnderHostedTests() {
         SyncEngineSwitch.setPreference(.own, storeName: "HITList-s143.store", defaults: defaults)
         XCTAssertEqual(decide(["-syncEngine", "own"], testing: true), .mirror)
