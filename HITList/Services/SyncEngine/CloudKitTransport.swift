@@ -204,6 +204,30 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             log.write("fetch failed: \(failure ?? "")")
             throw thrown
         }
+        if thrown == nil { await ensureSubscription() }
+    }
+
+    /// The subscription that makes iCloud push this device when the database changes: **the engine's own**, saved
+    /// once per device and account after a fetch that reached iCloud. Apple's engine keeps one of its own while it
+    /// schedules itself; with its scheduling off (as the app runs it) nothing here may depend on that, and after
+    /// the Development side was reset in round 32 no push reached either device until one was saved again. A silent
+    /// push for it reaches the app's delegate, which asks for a sync (`SyncAppDelegate`).
+    static let subscriptionID = "HITListSync-Private"
+
+    private func ensureSubscription() async {
+        guard stored.subscribed != true, stored.account != nil, !stopped else { return }
+        let subscription = CKDatabaseSubscription(subscriptionID: Self.subscriptionID)
+        let info = CKSubscription.NotificationInfo()
+        info.shouldSendContentAvailable = true
+        subscription.notificationInfo = info
+        do {
+            _ = try await database.save(subscription)
+            stored.subscribed = true
+            await save()
+            log.write("the push subscription is saved")
+        } catch {
+            log.write("the push subscription could not be saved (\(CloudKitTransportRules.words(for: error))); tried again at the next fetch")
+        }
     }
 
     func send() async throws {
@@ -360,6 +384,8 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 stored.fetchedWhole = false
                 // Records owed from the old account's zone are none of the new one's.
                 stored.owed = nil
+                // And the push subscription is saved again for the new account.
+                stored.subscribed = nil
             }
             stored.account = CloudKitTransportRules.currentAccount(change.changeType)
             // The change is written down as owed to the brain before it is told, and crossed off only when the brain
@@ -953,6 +979,9 @@ struct StoredState: Codable {
     /// Records fetched that this build could not read, asked for again by name at each fetch until they can be
     /// (16c; nil: none, and in a state saved before the field existed).
     var owed: OwedRecords?
+    /// Whether this device has saved the engine's push subscription for the account (`CloudKitTransport
+    /// .ensureSubscription`; nil: not yet, and in a state saved before the field existed).
+    var subscribed: Bool?
 
     var owedRecords: OwedRecords { owed ?? OwedRecords() }
 
@@ -969,6 +998,7 @@ struct StoredState: Codable {
         var kept = StoredState(engine: nil, zoneReady: zoneReady, account: account)
         kept.owedAccount = owedAccount
         kept.owed = owed
+        kept.subscribed = subscribed
         return kept
     }
 
