@@ -253,6 +253,8 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "brain: as 210, with the Group's row lost by the store"),
             KeptSeed(seed: 196, faults: "rows", keys: ["9B55AEFC", "5C0AB22F"],
                      found: "brain: a label the person took off, its row then lost, came back on the task (the set's twin of 210)"),
+            KeptSeed(seed: 724, faults: "zone", keys: ["E7529A21", "278AB945"],
+                     found: "brain: a lost zone forgot what a record waited for; its parent went everywhere by M5"),
         ]
         return seeds
     }
@@ -550,6 +552,31 @@ final class SyncCoreSimulationTests: XCTestCase {
             XCTAssertNotNil(label, "the label nobody deleted is back, on \(device)")
             let task = await held(sim, device, "T")
             XCTAssertNil(task?["labels"], "the person took L off T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Zone seed 724: a record waited for an item that was not on its device (here a label iCloud had refused, so
+    /// that it never reached A) when the zone was lost. The forgetting took the wait with it, so A sent its task again
+    /// without the label, and the merge without a memory (M5) kept that copy over B's. What a record waits for is the
+    /// device's own and is kept across the forgetting.
+    func testAReferenceWaitedForSurvivesALostZone() async {
+        var config = SimConfig()
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        let l = Self.label("L")
+        await sim.play([.sync("A"), .sync("B"),
+                        .act("B", .put(l)), .act("B", .put(Self.task("T", "task", ["labels": .references(["L"])]))),
+                        .cloud(.refuseNextSave(l.key, .tooLarge)), .sync("B"), .sync("A"),
+                        .cloud(.deleteZone(.deleted)), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(l.key, ["name": .string("smaller")])),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertEqual(task?["labels"], .references(["L"]), "T keeps its label, on \(device)")
         }
         let findings = await sim.check()
         XCTAssertEqual(findings, [])
