@@ -297,6 +297,33 @@ final class NotificationPlanTests: XCTestCase {
         XCTAssertFalse(ask(.authorized))
     }
 
+    @MainActor
+    func testATaskWithAReminderOfItsOwnIsFound() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        XCTAssertFalse(NotificationScheduler.hasOwnReminder(in: context))
+        context.insert(TaskItem(title: "No reminder"))
+        try context.save()
+        XCTAssertFalse(NotificationScheduler.hasOwnReminder(in: context))
+        let done = TaskItem(title: "Done, with a reminder")
+        done.reminderOffsetMinutes = 15
+        done.isCompleted = true
+        context.insert(done)
+        try context.save()
+        XCTAssertFalse(NotificationScheduler.hasOwnReminder(in: context), "a completed task's reminder asks for nothing")
+        let offset = TaskItem(title: "Fifteen minutes before")
+        offset.reminderOffsetMinutes = 15
+        context.insert(offset)
+        try context.save()
+        XCTAssertTrue(NotificationScheduler.hasOwnReminder(in: context))
+        context.delete(offset)
+        let moment = TaskItem(title: "At a moment")
+        moment.reminderDate = Date().addingTimeInterval(3600)
+        context.insert(moment)
+        try context.save()
+        XCTAssertTrue(NotificationScheduler.hasOwnReminder(in: context))
+    }
+
     func testTheSchedulersLineNeverCarriesTheSummarysBody() throws {
         let request = try XCTUnwrap(summary([task("Haircut", day: 29, hour: 11)]))
         XCTAssertTrue(request.body.contains("Haircut"))

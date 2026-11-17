@@ -46,6 +46,17 @@ enum NotificationScheduler {
         !everChosen && !alreadyAsked && authorization == .notDetermined && hasOwnReminder
     }
 
+    /// Whether any open task has a reminder of its own ("!15m", a reminder moment), as against the default offset
+    /// every timed task may take from Settings.
+    @MainActor
+    static func hasOwnReminder(in context: ModelContext) -> Bool {
+        var own = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+            task.isCompleted == false && (task.reminderOffsetMinutes != nil || task.reminderDate != nil)
+        })
+        own.fetchLimit = 1
+        return ((try? context.fetchCount(own)) ?? 0) > 0
+    }
+
     @MainActor
     private static func askAtFirstReminderIfNeeded(context: ModelContext, defaults: UserDefaults = AppGroup.defaults) async {
         // Never under the hosted tests: a system prompt has no place in a test run, and a test's container may be
@@ -56,13 +67,8 @@ enum NotificationScheduler {
         let alreadyAsked = defaults.bool(forKey: askedAtFirstReminderKey)
         guard !everChosen, !alreadyAsked else { return }
         guard await authorizationStatus() == .notDetermined else { return }
-        var own = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
-            task.isCompleted == false && (task.reminderOffsetMinutes != nil || task.reminderDate != nil)
-        })
-        own.fetchLimit = 1
-        let hasOwnReminder = ((try? context.fetchCount(own)) ?? 0) > 0
         guard shouldAskAtFirstReminder(everChosen: everChosen, alreadyAsked: alreadyAsked,
-                                       authorization: await authorizationStatus(), hasOwnReminder: hasOwnReminder) else { return }
+                                       authorization: .notDetermined, hasOwnReminder: hasOwnReminder(in: context)) else { return }
         defaults.set(true, forKey: askedAtFirstReminderKey)
         let granted = await requestPermission()
         isEnabled = granted
