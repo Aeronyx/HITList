@@ -330,6 +330,36 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertEqual(Rules.owedKeys(OwedRecords()), [])
     }
 
+    /// Brief 160: two fetches in flight both found the push subscription unsaved and both saved it. Once.
+    func testThePushSubscriptionIsSavedOnceWhenTwoFetchesAskAtOnce() async {
+        let ledger = MemoryLedger()
+        await ledger.saveTransportState(StoredState(engine: nil, zoneReady: true, account: "_me").encoded(log: SyncTransportLog { _ in }))
+        let saves = SaveCounter()
+        let transport = CloudKitTransport(containerID: SyncEngineSwitch.containerID, zoneName: "HITList-t160",
+                                          state: ledger, automaticallySync: false, log: SyncTransportLog { _ in },
+                                          saveSubscription: { _ in await saves.save() })
+        await transport.start(delegate: NoDelegate())
+        async let first: Void = transport.ensureSubscription()
+        async let second: Void = transport.ensureSubscription()
+        _ = await (first, second)
+        let count = await saves.count
+        XCTAssertEqual(count, 1)
+        await transport.ensureSubscription()
+        let after = await saves.count
+        XCTAssertEqual(after, 1, "saved: not asked again")
+        let saved = StoredState.decode(await ledger.loadTransportState(), log: SyncTransportLog { _ in })
+        XCTAssertEqual(saved.subscribed, true)
+        await transport.stop()
+    }
+
+    private actor SaveCounter {
+        private(set) var count = 0
+        func save() async {
+            count += 1
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
     private final class NoDelegate: SyncTransportDelegate, @unchecked Sendable {
         func handle(_ event: TransportEvent) async {}
         func recordToSend(_ key: SyncKey) async -> OutgoingRecord? { nil }

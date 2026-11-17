@@ -98,13 +98,18 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// How many times the state was written (the probe reads it).
     private(set) var stateSaves = 0
 
+    /// Saves the push subscription (`ensureSubscription`); nil: in the container's private database. Tests pass one.
+    private let saveSubscription: (@Sendable (CKSubscription) async throws -> Void)?
+
     init(containerID: String, zoneName: String = SyncSchema.zoneName, state: any SyncTransportState,
-         automaticallySync: Bool = true, log: SyncTransportLog = .system) {
+         automaticallySync: Bool = true, log: SyncTransportLog = .system,
+         saveSubscription: (@Sendable (CKSubscription) async throws -> Void)? = nil) {
         self.containerID = containerID
         self.zoneID = CloudRecordCodec.zoneID(zoneName)
         self.stateStore = state
         self.automaticallySync = automaticallySync
         self.log = log
+        self.saveSubscription = saveSubscription
     }
 
     private var database: CKDatabase { CKContainer(identifier: containerID).privateCloudDatabase }
@@ -215,14 +220,20 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// push for it reaches the app's delegate, which asks for a sync (`SyncAppDelegate`).
     static let subscriptionID = "HITListSync-Private"
 
-    private func ensureSubscription() async {
-        guard stored.subscribed != true, stored.account != nil, !stopped else { return }
+    /// A save of the subscription is on its way: a second fetch ending meanwhile (the actor lets it in at the save's
+    /// `await`) does not save it again (brief 160). Its answer is the first's.
+    private var subscribing = false
+
+    func ensureSubscription() async {
+        guard stored.subscribed != true, stored.account != nil, !stopped, !subscribing else { return }
+        subscribing = true
+        defer { subscribing = false }
         let subscription = CKDatabaseSubscription(subscriptionID: Self.subscriptionID)
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true
         subscription.notificationInfo = info
         do {
-            _ = try await database.save(subscription)
+            if let saveSubscription { try await saveSubscription(subscription) } else { _ = try await database.save(subscription) }
             stored.subscribed = true
             await save()
             log.write("the push subscription is saved")
