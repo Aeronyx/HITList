@@ -104,6 +104,43 @@ final class SubtaskTests: XCTestCase {
         XCTAssertEqual(loose.labels ?? [], [])
     }
 
+    /// Round 32 (brief 157, the privacy review's finding 2): the label that hides a task from Claude stays when it is
+    /// nested, so "All tasks but @private" keeps hiding it under a visible parent.
+    func testNestingKeepsTheLabelThatHidesATaskFromClaude() throws {
+        let parent = try task("Errands")
+        let secret = try task("Pharmacy")
+        secret.labels = [try TaskActions.findOrCreateLabel(named: "Private", in: context),
+                         try TaskActions.findOrCreateLabel(named: "town", in: context)]
+        XCTAssertTrue(TaskActions.makeSubtask(secret, of: parent, in: context, hiddenLabel: "private"))
+        XCTAssertEqual(secret.labelList.map(\.name), ["Private"], "only the hiding label stays")
+        let rule = ClaudeAccessRule(mode: .allExceptHidden)
+        XCTAssertFalse(rule.isVisible(secret, labelNames: { $0.labelList.map(\.name) }, parent: { $0.parent }))
+        XCTAssertTrue(rule.isVisible(parent, labelNames: { $0.labelList.map(\.name) }, parent: { $0.parent }))
+    }
+
+    /// Round 32 (brief 157, the data review's B7): what a move to Shared Tasks leaves behind, named in its question.
+    func testAMoveToSharedTasksNamesWhatItLeavesBehind() throws {
+        let plain = try task("Call the plumber", due: tomorrow())
+        XCTAssertEqual(TaskActions.sharedMoveLosses(of: plain), [], "nothing lost: the move asks nothing")
+
+        let rich = try task("Water plants", due: tomorrow(), recurrence: .daily)
+        rich.labels = [try TaskActions.findOrCreateLabel(named: "home", in: context)]
+        rich.reminderOffsetMinutes = 10
+        rich.deadline = tomorrow()
+        rich.locationName = "Balcony"
+        let fern = try TaskActions.addSubtask("Fern", to: rich, in: context)
+        let palm = try TaskActions.addSubtask("Palm", to: rich, in: context)
+        _ = try TaskActions.addSubtask("Cactus", to: rich, in: context)
+        fern.isCompleted = true
+        palm.isCompleted = true
+        let losses = TaskActions.sharedMoveLosses(of: rich)
+        XCTAssertEqual(losses, ["label", "repeat", "reminder", "deadline", "location", "2 ticked sub-tasks"])
+        XCTAssertEqual(TaskActions.sharedMoveMessage(losses),
+                       "Shared tasks can’t keep its label, repeat, reminder, deadline, location and 2 ticked sub-tasks. They’ll be dropped.")
+        XCTAssertEqual(TaskActions.sharedMoveMessage(["deadline"]), "Shared tasks can’t keep its deadline. It’ll be dropped.")
+        XCTAssertEqual(TaskActions.sharedMoveMessage(["labels"]), "Shared tasks can’t keep its labels. They’ll be dropped.")
+    }
+
     // MARK: Completion
 
     func testCompletingTheParentCompletesItsOpenSubtasksAndUndoReopensThem() throws {

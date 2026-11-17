@@ -68,9 +68,11 @@ struct TaskEditorDraft: Equatable {
     private static func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private func notesToSave(for task: TaskItem) -> String? {
-        let notes = Self.trimmed(notes)
+        let typed = Self.trimmed(notes)
         // Not typed in: whatever the task holds now stands.
-        guard notes != Self.trimmed(openedNotes) else { return nil }
+        guard typed != Self.trimmed(openedNotes) else { return nil }
+        // Cut to the limit a record can carry (round 32, brief 157; `TaskLimits.notesCharacters`).
+        let notes = TaskLimits.clampedNotes(typed)
         return notes == Self.trimmed(task.notes) ? nil : notes
     }
 

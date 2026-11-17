@@ -36,6 +36,9 @@ struct TaskPopout: View {
     @State private var openChip: Chip?
     @State private var showsNotes: Bool
     @State private var confirmDelete = false
+    /// Shared Tasks was picked for a task with what a shared task can't hold: "Move to Shared Tasks?" first (brief 157).
+    @State private var confirmShared = false
+    @Environment(\.scenePhase) private var scenePhase
     /// The check fills for a moment before the popout closes with the toast.
     @State private var completing = false
     @State private var pops = 0
@@ -159,7 +162,18 @@ struct TaskPopout: View {
         .confirmationDialog("Delete this task?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete", role: .destructive, action: delete)
         } message: {
-            Text("“\(task.title)” will be deleted on all your devices.")
+            Text(Self.deleteMessage(title: task.title, subtasks: task.subtasks?.count ?? 0))
+        }
+        .confirmationDialog("Move to Shared Tasks?", isPresented: $confirmShared, titleVisibility: .visible) {
+            Button("Move", role: .destructive, action: moveToShared)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(TaskActions.sharedMoveMessage(TaskActions.sharedMoveLosses(of: task)))
+        }
+        // iOS may end the app while it is in the background: what was typed lands first, the editor staying open as it
+        // was, asking nothing (the data review's B9).
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background, !isClosing { commitDraft() }
         }
         #if os(macOS)
         .onExitCommand(perform: requestClose)
@@ -360,19 +374,9 @@ struct TaskPopout: View {
                   action: { openChip = .project })
             .pickerAnchor(.group, isPresented: chipBinding(.project)) {
                 ProjectChipPopover(projects: projects, selectedName: task.project?.name, onPickShared: {
-                    // Into Shared Tasks (brief 64): the task moves to the shared store and its editor opens there.
                     openChip = nil
-                    commitDraft()
-                    guard let row = try? TaskActions.sharedCopy(of: task) else { return }
-                    isClosing = true
-                    let moved = task
-                    popouts.openShared(SharedTaskRef(row))
-                    // Yours goes once this editor has stopped drawing it, as Delete does.
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(450))
-                        TaskActions.delete(moved, in: context)
-                        rescheduleNotifications()
-                    }
+                    // What a shared task can't hold is named first, and only when there is any (brief 157).
+                    if TaskActions.sharedMoveLosses(of: task).isEmpty { moveToShared() } else { confirmShared = true }
                 }) { project in
                     openChip = nil
                     setProject(project)
@@ -380,6 +384,21 @@ struct TaskPopout: View {
             }
             .accessibilityLabel("Group: \(task.project?.name ?? "Inbox")")
             .accessibilityIdentifier("editorGroupRow")
+    }
+
+    /// Into Shared Tasks (brief 64): the task moves to the shared store and its editor opens there.
+    private func moveToShared() {
+        commitDraft()
+        guard let taskID, let row = try? TaskActions.sharedCopy(of: task) else { return }
+        isClosing = true
+        popouts.openShared(SharedTaskRef(row))
+        // Yours goes once this editor has stopped drawing it, as Delete does; by id, as Delete does.
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(450))
+            guard let moved = TaskActions.task(withID: taskID, in: context) else { return }
+            TaskActions.delete(moved, in: context)
+            rescheduleNotifications()
+        }
     }
 
     private func dateRow(now: Date, shown: EditorFields) -> some View {
@@ -829,15 +848,26 @@ struct TaskPopout: View {
     }
 
     private func delete() {
-        let doomed = task
-        popouts.requestDelete(doomed) {
+        guard let taskID else { return }
+        popouts.requestDelete(task) {
             popouts.closeTask()
-            // Delete once the popout has gone, so nothing draws a deleted task while it animates out.
+            // Delete once the popout has gone, so nothing draws a deleted task while it animates out; by id, since by
+            // then it may be gone already (another device, another window; brief 157).
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(450))
+                guard let doomed = TaskActions.task(withID: taskID, in: context) else { return }
                 TaskActions.delete(doomed, in: context)
                 rescheduleNotifications()
             }
+        }
+    }
+
+    /// Under "Delete this task?": what goes, sub-tasks included (the data review's C13).
+    static func deleteMessage(title: String, subtasks: Int) -> String {
+        switch subtasks {
+        case 0: "“\(title)” will be deleted on all your devices."
+        case 1: "“\(title)” and its sub-task will be deleted on all your devices."
+        default: "“\(title)” and its \(subtasks) sub-tasks will be deleted on all your devices."
         }
     }
 
@@ -856,10 +886,11 @@ struct TaskPopout: View {
         if !reduceMotion { pops += 1 }
         withAnimation(.easeOut(duration: 0.15)) { completing = true }
         CompletionFeedback.shared.taskCompleted()
-        let completed = task
+        guard let taskID else { return }
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(reduceMotion ? 150 : 380))
-            popouts.complete(completed, in: context)
+            // By id: the task may have gone while the check filled (brief 157).
+            popouts.complete(taskWithID: taskID, in: context)
         }
     }
 }

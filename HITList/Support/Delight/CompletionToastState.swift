@@ -15,6 +15,9 @@ struct CompletedTask: Equatable {
     /// A Flipboard switch flipped from its row (brief 59): how it was before, which Undo puts back
     /// (`Flipboard.undo`). The toast then says "Flipped". Nil for every other completion.
     var flip: Flipboard.RowFlip? = nil
+    /// A repeating task that rolled over: its reminder moment and checklist ticks as they were, which Undo puts back
+    /// with its date (`Flipboard.undo`, brief 157). Nil for every other completion.
+    var rollOver: TaskActions.RollOver? = nil
 }
 
 /// The undo toast after completing tasks: "Completed ‘Title’", or "3 completed" when several land

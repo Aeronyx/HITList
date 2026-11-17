@@ -209,7 +209,7 @@ struct PopoutHost: ViewModifier {
                 Button("Delete", role: .destructive) { popouts.confirmPendingDelete() }
                 Button("Cancel", role: .cancel) { popouts.cancelPendingDelete() }
             } message: {
-                Text("This can't be undone.")
+                Text(popouts.pendingDelete?.message ?? PopoutController.PendingDelete.message(subtasks: 0))
             }
             #if os(macOS)
             // ⌘← / ⌘→ move the popped-out task a day, from any list; a text field being edited keeps them.

@@ -65,6 +65,31 @@ enum TaskActions {
                             due: task.dueDate.map { SharedDue(date: $0, hasTime: task.hasDueTime) }, subtasks: subtasks)
     }
 
+    /// What a shared task cannot hold and a move to Shared Tasks leaves behind, in words for the question the editor
+    /// asks first (round 32, brief 157; the data review's B7): "label(s)", "repeat", "reminder", "deadline", "location",
+    /// "ticked sub-task" / "2 ticked sub-tasks". Empty when the task has none of it: then the move asks nothing.
+    static func sharedMoveLosses(of task: TaskItem) -> [String] {
+        var lost: [String] = []
+        let labels = task.labels?.count ?? 0
+        if labels > 0 { lost.append(labels == 1 ? "label" : "labels") }
+        if task.recurrence != nil { lost.append("repeat") }
+        if task.reminderDate != nil || task.reminderOffsetMinutes != nil { lost.append("reminder") }
+        if task.deadline != nil { lost.append("deadline") }
+        if task.locationName != nil { lost.append("location") }
+        let ticked = (task.subtasks ?? []).filter(\.isCompleted).count
+        if ticked > 0 { lost.append(ticked == 1 ? "ticked sub-task" : "\(ticked) ticked sub-tasks") }
+        return lost
+    }
+
+    /// The question's words under its title: "Shared tasks can’t keep its labels, repeat and deadline. They’ll be
+    /// dropped." ("… its deadline. It’ll be dropped." for one thing).
+    static func sharedMoveMessage(_ losses: [String]) -> String {
+        guard let last = losses.last else { return "" }
+        let list = losses.count == 1 ? last : losses.dropLast().joined(separator: ", ") + " and " + last
+        let one = losses.count == 1 && !last.hasSuffix("s")
+        return "Shared tasks can’t keep its \(list). \(one ? "It’ll" : "They’ll") be dropped."
+    }
+
     static func findOrCreateProject(named name: String, in context: ModelContext) throws -> Project {
         let all = try context.fetch(FetchDescriptor<Project>())
         if let existing = all.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) { return existing }
@@ -119,6 +144,45 @@ enum TaskActions {
         }
         task.touch()
         followParent(task, wasCompleted: wasCompleted, closedAt: closedAt)
+        try? context.save()
+    }
+
+    /// What completing a repeating task changes besides its date, so Undo can put it all back (round 32, brief 157; the
+    /// data review's B6): the roll-over moves the date, may store an anchor or a time in the rule, clears the task's own
+    /// reminder moment and opens the checklist. `Flipboard.RowFlip` is the same for a switch.
+    struct RollOver: Equatable {
+        let dueDate: Date?
+        let recurrence: String?
+        let reminderDate: Date?
+        /// The ticked sub-tasks, by id, with when each was ticked.
+        let ticked: [UUID: Date]
+
+        /// Read before the completion.
+        init(_ task: TaskItem) {
+            dueDate = task.dueDate
+            recurrence = task.recurrence
+            reminderDate = task.reminderDate
+            var ticked: [UUID: Date] = [:]
+            for subtask in task.subtasks ?? [] where subtask.isCompleted {
+                ticked[subtask.id] = subtask.completedAt ?? .distantPast
+            }
+            self.ticked = ticked
+        }
+    }
+
+    /// Undo of a repeating task's completion: the date, the rule, the reminder moment and the ticks as `rollOver` found
+    /// them. A sub-task ticked or deleted since is left as it is.
+    static func undo(_ rollOver: RollOver, on task: TaskItem, in context: ModelContext) {
+        task.dueDate = rollOver.dueDate
+        task.recurrence = rollOver.recurrence
+        task.reminderDate = rollOver.reminderDate
+        for subtask in task.subtasks ?? [] where !subtask.isCompleted {
+            guard let tickedAt = rollOver.ticked[subtask.id] else { continue }
+            subtask.isCompleted = true
+            subtask.completedAt = tickedAt == .distantPast ? nil : tickedAt
+            subtask.touch()
+        }
+        task.touch()
         try? context.save()
     }
 
@@ -180,9 +244,11 @@ enum TaskActions {
 
     /// Makes `task` the last subtask of `parent`, dropping what subtasks don't have (date, time, repeat,
     /// reminder, deadline, priority, labels) and taking the parent's Group. False, and nothing changed,
-    /// when the one-level rule forbids it.
+    /// when the one-level rule forbids it. The label that hides a task from Claude (`hiddenLabel`, "@private") stays:
+    /// a task marked private stays private wherever it sits (round 32, brief 157; `ClaudeAccessRule.isVisible`).
     @discardableResult
-    static func makeSubtask(_ task: TaskItem, of parent: TaskItem, in context: ModelContext) -> Bool {
+    static func makeSubtask(_ task: TaskItem, of parent: TaskItem, in context: ModelContext,
+                            hiddenLabel: String = ClaudeSettings().rule.hiddenLabel) -> Bool {
         guard canNest(task, under: parent) else { return false }
         task.sortOrder = ((parent.subtasks ?? []).map(\.sortOrder).max() ?? -1) + 1
         task.parent = parent
@@ -194,7 +260,7 @@ enum TaskActions {
         task.reminderDate = nil
         task.deadline = nil
         task.priority = Priority.p4.rawValue
-        task.labels = []
+        task.labels = (task.labels ?? []).filter { $0.name.caseInsensitiveCompare(hiddenLabel) == .orderedSame }
         task.touch()
         try? context.save()
         return true
@@ -291,6 +357,12 @@ enum TaskActions {
     static func delete(_ task: TaskItem, in context: ModelContext) {
         context.delete(task)
         try? context.save()
+    }
+
+    /// The task with this id in `context`'s store (or waiting to be inserted), nil when there is none: what an action
+    /// that runs a moment after it was asked for acts on (round 32, brief 157), never the model it was asked with.
+    static func task(withID id: UUID, in context: ModelContext) -> TaskItem? {
+        try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first
     }
 
     struct DefaultFilter {

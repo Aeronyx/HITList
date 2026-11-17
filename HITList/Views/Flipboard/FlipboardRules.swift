@@ -315,12 +315,10 @@ enum Flipboard {
             return CompletedTask(id: task.id, title: task.title,
                                  revert: .restoreDueDate(task.dueDate ?? Calendar.current.startOfDay(for: Date())), flip: flip)
         }
-        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
-            .restoreDueDate(due)
-        } else {
-            .uncomplete
+        if task.recurrenceRule != nil, let due = task.dueDate {
+            return CompletedTask(id: task.id, title: task.title, revert: .restoreDueDate(due), rollOver: TaskActions.RollOver(task))
         }
-        return CompletedTask(id: task.id, title: task.title, revert: revert)
+        return CompletedTask(id: task.id, title: task.title, revert: .uncomplete)
     }
 
     /// Completes a row: a switch flips (the interval restarts from today; a charger counts one flip),
@@ -334,11 +332,15 @@ enum Flipboard {
         }
     }
 
-    /// Undo for a flipped row: puts the switch back as `record` found it. False when the record is not
-    /// a flip (the list undoes it as before).
+    /// Undo for a flipped row: puts the switch back as `record` found it; and for a repeating task's roll-over, its date,
+    /// reminder moment and ticks (brief 157). False when the record is neither (the list undoes it as before).
     @MainActor
     @discardableResult
     static func undo(_ record: CompletedTask, on task: TaskItem, in context: ModelContext) -> Bool {
+        if record.flip == nil, let rollOver = record.rollOver {
+            TaskActions.undo(rollOver, on: task, in: context)
+            return true
+        }
         guard let flip = record.flip else { return false }
         task.dueDate = flip.charge.due
         task.flipCount = flip.charge.count
