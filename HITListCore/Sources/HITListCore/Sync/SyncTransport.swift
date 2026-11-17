@@ -93,7 +93,8 @@ public enum TransportEvent: Sendable {
     /// T11.
     case zoneLost(ZoneLoss)
     /// The fetch ended: everything up to now has been delivered (`error` nil), or it stopped early and will be
-    /// tried again (`error`: its words, for the log and the status line).
+    /// tried again (`error`: its words, for the log and the status line). `CloudKitTransport` also gives words, from
+    /// the second fetch under its state on, while a record it could not read is still owed (brief 149).
     case didFetch(error: String?)
     case willSend
     /// One batch came back (T3 to T9): `saved` as iCloud now holds them, `removed` for good, and the changes

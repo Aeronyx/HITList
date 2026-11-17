@@ -214,6 +214,94 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertFalse(StoredState.decode(nil, log: log).zoneReady)
     }
 
+    // MARK: - Records owed (brief 149, item 1; the review's 16c)
+
+    /// A record of ours this build cannot read (a picture not downloaded, or over the limit) is owed; one that is not
+    /// ours at all is ignored, as before.
+    func testAnUnreadableRecordOfOursIsOwedAndOneNotOursIsNot() throws {
+        let record = CKRecord(recordType: "HLProfile", recordID: CKRecord.ID(recordName: "Profile.profile", zoneID: zone))
+        record["avatarData"] = CKAsset(fileURL: FileManager.default.temporaryDirectory.appending(path: "no-such-\(UUID().uuidString).png"))
+        XCTAssertThrowsError(try CloudRecordCodec.cloudRecord(from: record)) { error in
+            XCTAssertNotNil(Rules.owedReason(error), "owed")
+            XCTAssertTrue(Rules.owedReason(error)?.contains("avatarData") == true, Rules.owedReason(error) ?? "")
+        }
+        XCTAssertNil(Rules.owedReason(CloudRecordCodec.DecodeProblem.notOurs(recordName: "CD_TaskItem", recordType: "CD_TaskItem")))
+    }
+
+    func testTheFetchsWordsSayWhatIsOwedFromTheSecondFetchOn() {
+        var owed = OwedRecords()
+        XCTAssertNil(owed.words)
+        XCTAssertNil(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: true), "nothing owed: a fetch that ended well")
+        owed.reasons["Profile.profile"] = "asset avatarData unreadable: no file"
+        XCTAssertEqual(owed.words, "1 record in iCloud could not be read here: Profile/profile (asset avatarData unreadable: no file); asked for again at each fetch")
+        XCTAssertEqual(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: true), owed.words, "the bolt is not filled")
+        // The first fetch under a state ends well: before its first whole fetch the brain sends nothing, and one
+        // record that never becomes readable must not stop everything else.
+        XCTAssertNil(Rules.fetchEnding(nil, owed: owed, wholeFetchSeenBefore: false))
+        XCTAssertEqual(Rules.fetchEnding("no network", owed: owed, wholeFetchSeenBefore: true), "no network", "the fetch's own trouble first")
+        owed.reasons["TaskItem.00000000-0000-0000-0000-000000000001"] = "asset x unreadable: no file"
+        XCTAssertEqual(owed.words, "2 records in iCloud could not be read here, the first: Profile/profile (asset avatarData unreadable: no file); asked for again at each fetch")
+    }
+
+    func testOwedRecordsAreKeptThroughARelaunchAndAResetAndAnOldStateHasNone() throws {
+        let log = SyncTransportLog { _ in }
+        var state = StoredState(engine: nil, zoneReady: true, account: "_me")
+        state.owed = OwedRecords(reasons: ["Profile.profile": "asset avatarData unreadable: no file"])
+        let back = StoredState.decode(state.encoded(log: log), log: log)
+        XCTAssertEqual(back.owedRecords, state.owedRecords, "through a relaunch")
+        XCTAssertEqual(state.afterReset().owedRecords, state.owedRecords, "through a reset (T13)")
+        let old = try JSONDecoder().decode(StoredState.self, from: Data(#"{"version":1,"zoneReady":true,"account":"_me"}"#.utf8))
+        XCTAssertTrue(old.owedRecords.isEmpty)
+    }
+
+    // MARK: - An expired change token (brief 149, item 2; the review's 16e)
+
+    /// `CKSyncEngine` is not documented to answer `changeTokenExpired` itself (it is not among the seven codes it
+    /// retries), so the transport does: the bookmark forgotten, a whole fetch, once per fetch.
+    func testAnExpiredTokenIsAnsweredWithAWholeFetchOncePerFetch() {
+        XCTAssertFalse(Rules.retriedByEngine.contains(.changeTokenExpired), "not one the engine handles")
+        XCTAssertEqual(Rules.fetchOutcome(failure(.changeTokenExpired), zoneKnown: true), .tokenExpired)
+        XCTAssertEqual(Rules.fetchOutcome(failure(.changeTokenExpired), zoneKnown: false), .tokenExpired)
+        XCTAssertTrue(Rules.isTokenExpired(CKError(.changeTokenExpired)), "thrown by fetchChanges (the database's token)")
+        XCTAssertFalse(Rules.isTokenExpired(CKError(.networkFailure)))
+        XCTAssertTrue(Rules.refetchesAfterExpiredToken(expired: true, round: 0))
+        XCTAssertFalse(Rules.refetchesAfterExpiredToken(expired: true, round: 1), "never in a loop")
+        XCTAssertFalse(Rules.refetchesAfterExpiredToken(expired: false, round: 0))
+    }
+
+    /// What the transport forgets for an expired token is T13's reset and less: the bookmark goes; the account (so
+    /// the new engine's sign-in for the same account is not told as a lost memory, T12, and the brain keeps its
+    /// ledger), what was known of the zone, the records still owed and the pending list stay.
+    func testAnExpiredTokenForgetsOnlyTheBookmark() async throws {
+        let ledger = MemoryLedger()
+        var known = StoredState(engine: nil, zoneReady: true, account: "_me")
+        known.fetchedWhole = true
+        known.owed = OwedRecords(reasons: ["Profile.profile": "asset avatarData unreadable: no file"])
+        await ledger.saveTransportState(known.encoded(log: SyncTransportLog { _ in }))
+        let transport = CloudKitTransport(containerID: SyncEngineSwitch.containerID, zoneName: "HITList-t149",
+                                          state: ledger, automaticallySync: false, log: SyncTransportLog { print("transport: \($0)") })
+        await transport.start(delegate: NoDelegate())
+        let key = SyncKey(type: "TaskItem", name: UUID().uuidString)
+        await transport.add([.save(key)])
+        await transport.forgetExpiredToken()
+        let pending = await transport.pending()
+        XCTAssertEqual(pending, [.save(key)], "the pending list is kept")
+        let saved = StoredState.decode(await ledger.loadTransportState(), log: SyncTransportLog { _ in })
+        XCTAssertEqual(saved.account, "_me")
+        XCTAssertTrue(saved.zoneReady)
+        XCTAssertEqual(saved.owedRecords, known.owedRecords)
+        XCTAssertNil(saved.fetchedWhole, "the next fetch must reach iCloud to count as whole")
+        XCTAssertNil(saved.engine, "the bookmark is gone")
+        XCTAssertNil(Rules.accountChange(.signIn(currentUser: CKRecord.ID(recordName: "_me")), known: saved.account),
+                     "the new engine's sign-in is no change: the brain keeps its memory")
+        await transport.stop()
+    }
+
+    private final class NoDelegate: SyncTransportDelegate, @unchecked Sendable {
+        func handle(_ event: TransportEvent) async {}
+        func recordToSend(_ key: SyncKey) async -> OutgoingRecord? { nil }
+    }
+
     /// The transport can be made and asked before it starts without touching iCloud (the app makes it early).
     func testBeforeStartNothingIsPendingAndFetchAndSendThrow() async {
         let transport = CloudKitTransport(containerID: "iCloud.com.trammells.hitlist", zoneName: "HITListTest",

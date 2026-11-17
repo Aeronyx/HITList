@@ -117,7 +117,22 @@ final class SyncEngine {
             osLog.error("sync engine: not started: \(why, privacy: .public)")
             return
         }
-        let ledger = SyncLedgerStore.forAppStore(storeURL: url, storeInMemory: false)
+        let ledger: SyncLedgerStore
+        do {
+            ledger = try SyncLedgerStore.forAppStore(storeURL: url, storeInMemory: false)
+        } catch {
+            // The ledger's file is there and cannot be opened now (no permission, a full disk, its protection before
+            // the first unlock): left as it is, since the deletions not yet sent are in it (brief 149). Held `failed`
+            // with the words; "Try again" (and the next launch) runs this launch again.
+            board.launched(.own, actions: SyncEngineBoard.Actions(
+                syncNow: { throw SyncCoreError.notStarted },
+                resume: { launchIfSwitchedOn(container: container, engine: choice, inMemory: inMemory, board: board) },
+                answerPurge: { _ in throw SyncCoreError.notStarted },
+                move: { engine in try await SyncEngine.move(to: engine, container: container) }))
+            board.publish(SyncStatus(state: .held(.failed("\(error)"))))
+            osLog.error("sync engine: not started: \(String(describing: error), privacy: .public)")
+            return
+        }
         let storeName = ModelContainerFactory.storeName
         let arguments = ProcessInfo.processInfo.arguments
         let zone = SyncEngineSwitch.zoneName(storeName: storeName, isDebug: SyncEngineSwitch.isDebugBuild, arguments: arguments)
@@ -141,7 +156,7 @@ final class SyncEngine {
         // From now on, before anything else of the launch writes the store: a deletion nobody took down would come
         // back from iCloud instead of going there.
         engine.watchSaves()
-        if let moved = ledger.movedAside { engine.say("The ledger could not be read and was set aside (\(moved.lastPathComponent)); merging afresh") }
+        if let moved = ledger.movedAside { engine.say("The ledger was damaged and was set aside (\(moved.lastPathComponent)); merging afresh") }
         engine.say("Engine: \(pretend.map { "pretend iCloud ‘\($0)’" } ?? "\(SyncEngineSwitch.containerID), zone \(zone)"), store \(storeName)")
         board.launched(.own, actions: engine.actions)
         Task { await engine.start() }

@@ -32,18 +32,18 @@ final class SyncLedgerStoreTests: XCTestCase {
 
     // MARK: - Where it lives
 
-    func testTheLedgerSitsBesideItsStoreUnderItsOwnName() {
+    func testTheLedgerSitsBesideItsStoreUnderItsOwnName() throws {
         let group = URL(filePath: "/group")
         XCTAssertEqual(SyncLedgerStore.url(forStoreAt: group.appending(path: "HITList.store")).path, "/group/HITList.ledger")
         XCTAssertEqual(SyncLedgerStore.url(forStoreAt: group.appending(path: "HITList-s141.store")).path, "/group/HITList-s141.ledger",
                        "a side store has a ledger of its own")
-        XCTAssertNil(SyncLedgerStore.forAppStore(storeURL: group.appending(path: "HITList.store"), storeInMemory: true).url,
+        XCTAssertNil(try SyncLedgerStore.forAppStore(storeURL: group.appending(path: "HITList.store"), storeInMemory: true).url,
                      "an app store in memory has its ledger in memory")
-        XCTAssertNil(SyncLedgerStore.forAppStore(storeURL: nil, storeInMemory: false).url)
+        XCTAssertNil(try SyncLedgerStore.forAppStore(storeURL: nil, storeInMemory: false).url)
     }
 
     func testTheLedgersSchemaIsItsOwnAndNotSynced() throws {
-        let ledger = SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
+        let ledger = try SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
         let names = Set(SyncLedgerStore.schema.entities.map(\.name))
         XCTAssertTrue(names.isDisjoint(with: Set(HITListSchema.schema.entities.map(\.name))))
         XCTAssertTrue(names.isDisjoint(with: Set(HITListSchema.models.map { "\($0)" })))
@@ -122,7 +122,7 @@ final class SyncLedgerStoreTests: XCTestCase {
     }
 
     func testAWriteThatFailsHalfWayLeavesNothing() async throws {
-        let ledger = SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
+        let ledger = try SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
         var first = LedgerWrite()
         first.upsert = [entry(1)]
         first.facts = [LedgerFact.firstFetchDone: Data([1])]
@@ -180,14 +180,14 @@ final class SyncLedgerStoreTests: XCTestCase {
     func testTheTransportsStateIsOnDiskWhenItsSaveReturns() async throws {
         let url = folder.appending(path: "HITList.ledger")
         do {
-            let ledger = SyncLedgerStore.open(at: url)
+            let ledger = try SyncLedgerStore.open(at: url)
             var write = LedgerWrite()
             write.upsert = [entry(1)]
             try await ledger.write(write)
             await ledger.saveTransportState(Data("bookmark 1".utf8))
             await ledger.saveTransportState(Data("bookmark 2".utf8))
         }
-        let reopened = SyncLedgerStore.open(at: url)
+        let reopened = try SyncLedgerStore.open(at: url)
         XCTAssertNil(reopened.movedAside)
         let state = await reopened.loadTransportState()
         XCTAssertEqual(state, Data("bookmark 2".utf8))
@@ -203,7 +203,7 @@ final class SyncLedgerStoreTests: XCTestCase {
         let url = folder.appending(path: "HITList.ledger")
         let garbage = Data(repeating: 0x5A, count: 8_192)
         try garbage.write(to: url)
-        let ledger = SyncLedgerStore.open(at: url)
+        let ledger = try SyncLedgerStore.open(at: url)
         let aside = try XCTUnwrap(ledger.movedAside, "moved aside")
         XCTAssertEqual(try Data(contentsOf: aside), garbage, "kept as it was")
         XCTAssertTrue(aside.lastPathComponent.hasPrefix("HITList.ledger.unreadable-"))
@@ -216,6 +216,88 @@ final class SyncLedgerStoreTests: XCTestCase {
         try await ledger.write(write)
         let after = try await ledger.entries()
         XCTAssertEqual(after, [entry(1)])
+    }
+
+    /// Brief 149, item 3: a ledger file that is there and sound but cannot be opened now (here: no permission to read
+    /// it; on a phone, its protection before the first unlock, or a full disk) is left exactly as it is, and the
+    /// opening throws, so the engine holds `failed` and tries again at the next start or "Try again". Moving it aside
+    /// would take with it the deletions this device has not sent yet, and those items would come back.
+    func testALedgerFileThatCannotBeOpenedNowIsLeftAloneAndOpensLater() async throws {
+        let url = folder.appending(path: "HITList.ledger")
+        do {
+            let ledger = try SyncLedgerStore.open(at: url)
+            var write = LedgerWrite()
+            write.upsert = [entry(1)]
+            write.facts = ["deleted|TaskItem/A": Data()]
+            try await ledger.write(write)
+        }
+        let before = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+
+        XCTAssertThrowsError(try SyncLedgerStore.open(at: url)) { error in
+            XCTAssertTrue(error is SyncLedgerStore.NotOpened, "\(error)")
+        }
+        let after = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
+        XCTAssertEqual(after, before, "nothing moved aside, nothing made")
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path)
+        let later = try SyncLedgerStore.open(at: url)
+        XCTAssertNil(later.movedAside)
+        let entries = try await later.entries()
+        XCTAssertEqual(entries, [entry(1)], "the memory is all there")
+        let note = try await later.fact("deleted|TaskItem/A")
+        XCTAssertNotNil(note, "and the deletion not yet sent with it")
+    }
+
+    /// No file and a folder where none can be made (no permission, a full disk): nothing is made in memory in its
+    /// place; the opening throws.
+    func testALedgerThatCannotBeMadeThrows() throws {
+        let locked = folder.appending(path: "locked")
+        try FileManager.default.createDirectory(at: locked, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: locked.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: locked.path) }
+        XCTAssertThrowsError(try SyncLedgerStore.open(at: locked.appending(path: "HITList.ledger"))) { error in
+            XCTAssertTrue(error is SyncLedgerStore.NotOpened, "\(error)")
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: locked.path), [])
+    }
+
+    /// Which failures to open count as damage (the file moved aside) and which as "not now" (held, left alone).
+    func testOnlyAFileDamagedBeyondOpeningIsMovedAside() {
+        typealias Store = SyncLedgerStore
+        let any = CocoaError(.fileReadUnknown)
+        XCTAssertEqual(Store.classify(any, file: .damaged("file is not a database (26)")), .damaged("file is not a database (26)"))
+        XCTAssertEqual(Store.classify(any, file: .missing), .notNow("\(any.localizedDescription)"), "nothing there: it could not be made")
+        XCTAssertEqual(Store.classify(any, file: .unreadable("unable to open database file (14)")),
+                       .notNow("unable to open database file (14)"), "no permission, locked, busy")
+        XCTAssertEqual(Store.classify(any, file: .sound), .notNow("\(any.localizedDescription)"),
+                       "a sound file and a reason we do not know: held, never moved")
+        // A sound file this build's models cannot open (a newer build's ledger after a tester went back): damaged
+        // for this build, moved aside (the ledger's own models carry no migration plan).
+        let incompatible = NSError(domain: NSCocoaErrorDomain, code: 134100)
+        XCTAssertEqual(Store.classify(NSError(domain: "SwiftData", code: 1, userInfo: [NSUnderlyingErrorKey: incompatible]), file: .sound),
+                       .damaged(incompatible.localizedDescription))
+        // A full disk or no permission named anywhere in the chain is never damage, whatever the file says.
+        let full = NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)
+        XCTAssertEqual(Store.classify(NSError(domain: "SwiftData", code: 1, userInfo: [NSUnderlyingErrorKey: full]), file: .sound),
+                       .notNow(full.localizedDescription))
+    }
+
+    func testTheFileCheckTellsDamageFromSoundFromMissing() async throws {
+        let url = folder.appending(path: "HITList.ledger")
+        XCTAssertEqual(SyncLedgerStore.check(url), .missing)
+        do {
+            let ledger = try SyncLedgerStore.open(at: url)
+            await ledger.saveTransportState(Data("bookmark".utf8))
+        }
+        XCTAssertEqual(SyncLedgerStore.check(url), .sound)
+        let garbage = folder.appending(path: "garbage.ledger")
+        try Data(repeating: 0x5A, count: 8_192).write(to: garbage)
+        guard case .damaged = SyncLedgerStore.check(garbage) else { return XCTFail("\(SyncLedgerStore.check(garbage))") }
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: url.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o644], ofItemAtPath: url.path) }
+        guard case .unreadable = SyncLedgerStore.check(url) else { return XCTFail("\(SyncLedgerStore.check(url))") }
     }
 
     // MARK: - Which store file
@@ -282,7 +364,7 @@ final class SyncLedgerStoreTests: XCTestCase {
     // MARK: - Size
 
     func testFiveThousandEntriesWrittenAndReadBack() async throws {
-        let ledger = SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
+        let ledger = try SyncLedgerStore.open(at: folder.appending(path: "HITList.ledger"))
         var write = LedgerWrite()
         write.upsert = (0..<5_000).map(entry)
         let clock = ContinuousClock()
