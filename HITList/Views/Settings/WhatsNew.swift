@@ -20,6 +20,14 @@ enum WhatsNew {
     }
 
     static let entries: [Entry] = [
+        Entry(version: "0.9.14", items: [
+            "Reminders: HITList asks to send notifications the first time you give a task a reminder. Before, reminders stayed silent until you switched them on in Settings → Reminders.",
+            "Safer deleting: a label that is on tasks asks before it goes, and the question for a task names its sub-tasks. Undo after completing a repeating task puts its reminder and its checklist back too.",
+            "Two Groups, two labels or two filters can no longer share a name; the editor says so, instead of HITList quietly merging them later.",
+            "What you type in a task's card is kept if you leave HITList before confirming.",
+            "A daily backup that fails says so in Settings → iCloud & data → Backups. Import JSON asks before bringing back things you deleted since the backup.",
+            "The sync log no longer contains any task's title. Settings → iCloud & data says what the bolt means: filled when everything on this device is in iCloud.",
+        ]),
         Entry(version: "0.9.13", items: [
             "Flipboard: a switch keeps its own timing when you put it on a Switchboard. Group one that resets once a week with one that resets every other day, and each stays on its own days.",
             "A Switchboard's reset is a default now, not a lock. A new switch on a board starts on the board's Daily or Weekly and resets with it; choose any other interval in the switch's card and it keeps its own days.",

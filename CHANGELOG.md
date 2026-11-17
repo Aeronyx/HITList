@@ -5,6 +5,70 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
+## 0.9.14
+
+0.9.13 was released on 2026-11-16. George that night: "Please work freely and complete the sync engine. The app is
+largely feature complete, or as far as I wanted it to get for an initial release; let's shift into review and
+hardening mode so we can prepare for a real launch, but I also won't feel comfortable launching until we have at
+least a few days of experience with the new sync system to confirm its legitimacy". Six reviews of the whole app
+by Opus agents, their findings fixed, and the engine made ready for his own devices (`dev/briefs/ROUND-32.md`).
+
+**Nothing in this release moves, deletes or rewrites anyone's tasks.** Every device goes on syncing exactly as
+before. HITList's own sync engine can now be switched on for one device at a time, from a group in Settings → iCloud
+that stays hidden until it is revealed; it is for George's devices first.
+
+Safer:
+
+- **A label that is on tasks asks before it is deleted**, and says how many tasks it comes off. Flipboard's own
+  label can no longer be deleted (deleting it emptied the Flipboard).
+- **Two Groups, two labels or two filters can no longer share a name**: the editor says so. Before, HITList merged
+  such pairs later by itself, and a filter's query could be lost with it.
+- **The question before deleting a task names its sub-tasks**, which go with it.
+- **Undo after completing a repeating task puts everything back**: its reminder and its ticked sub-tasks too.
+- **Moving a task to Shared Tasks asks first** when the move would drop something a shared task cannot hold (a
+  label, a repeat, a reminder, a deadline, a location, ticked sub-tasks).
+- **What you type in a task's card is kept** if you leave HITList before confirming.
+- **Import JSON asks** before bringing back what was deleted since the backup; **Import from Todoist** keeps two
+  tasks with the same title, and an import that stops part way says what it wrote and can be undone.
+- **A daily backup that fails says so**, in Settings → iCloud & data → Backups and in the sync log; backups no
+  longer hold up the app while they are written. Reset local cache saves a backup first.
+- A description is limited to 100,000 characters (a larger one could stop a device's sync).
+
+Reminders:
+
+- **HITList asks to send notifications the first time you give a task a reminder.** Before, reminders stayed silent
+  until they were switched on in Settings → Reminders, while quick add said "Fires 10:45 AM" all the same.
+
+Clearer:
+
+- Settings → iCloud & data says what the bolt means: it is filled when everything on this device is in iCloud.
+- An empty Flipboard says what a switch is.
+- The iCloud page no longer shows a line meant for developers.
+
+Private:
+
+- The sync log never holds a task's title or a Group's name (a share or a widget's completion wrote them), nor the
+  Mac's user name; the copy made for sharing the log is removed afterwards.
+- With "All tasks but @private", a sub-task that carries the label is hidden from Claude wherever it sits. Claude
+  can no longer clear a task's description without saying so, and is told that edits cannot be undone.
+- The location question says where the location goes: only Apple's weather and map services.
+
+Steadier:
+
+- Fixes for crashes that could follow a task, Group, label or switch being deleted on another device while its
+  card or a delete question was open, and while Spotlight was indexing.
+- Siri and Shortcuts say plainly when HITList cannot open its data, instead of "Added".
+
+The sync engine (switched on only where it is moved to):
+
+- It catches up at every launch and return to the app. Found on George's iPhone beside the Mac: Apple's engine, left
+  to schedule itself, fetched only when a push told it to, and missed what another device changed while the app was
+  closed. HITList now asks for each sync itself and keeps its own push subscription.
+- Check iCloud… on the engine reads every item in iCloud afresh and compares it with the device, field by field.
+- Moving back to the earlier sync asks whether this is the first device to go back (it sends its tasks) or another
+  (it downloads a fresh copy), so nothing is saved twice.
+- The move was rehearsed with two real devices on iCloud's test side, with a copy of George's own tasks.
+
 ## 0.9.13 — build 30, 2026-11-16
 
 0.9.12 was released on the evening of 2026-11-15. George the next day: "currently, when you group Switches on Flipboard, they all

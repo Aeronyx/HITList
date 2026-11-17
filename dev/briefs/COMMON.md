@@ -833,6 +833,35 @@ they make sense; where they differ from this block, this block is right.
   and place (the full text is in your file); what you did not get to; for code agents also the branch, each commit,
   test counts before and after, and exactly how you proved it.
 
+## Round 32 record (2026-11-16, night; agents 147 to 160 merged for 0.9.14): what a session must know now
+
+`dev/briefs/ROUND-32.md` has the round. What is no longer as older blocks here say:
+
+- **A released build may run the engine, for a store that was moved to it** (`SyncEngineSwitch`; the group that
+  moves a store is hidden behind seven taps on Settings → iCloud's environment row). Nothing moves by itself.
+- **Apple's `CKSyncEngine` runs with its own scheduling off**, and the app asks for each sync
+  (`SyncEngine.pumpAfter`; `dev/SYNC-ENGINE.md` section 6a). Never switch `automaticallySync` on: with it on, a
+  fetch after a relaunch asks iCloud nothing. The engine keeps a push subscription of its own.
+- **Two stores on one Mac cannot stand in for two devices**, for a push or for a fetch. A fault that needs a second
+  device needs George's phone, on his word for that test.
+- **The engine's CloudKit schema is `dev/cloudkit/sync-engine.ckdb`**; a field added to `SyncSchema` fails
+  `SyncEngineSchemaFileTests` until the file has it. The transport's probe writes a field of its own into the
+  engine's container's Development side: never run it between an import of the file and George's deploy.
+- **Check iCloud… on the engine** is `SyncEngineAudit` (every record read afresh, compared field by field), and
+  `SyncEngineRehearsal` (Debug, side stores) runs a move, edits and checks from a terminal: `-syncEngineMoveNow
+  own|mirror|mirror-fresh`, `-syncEngineCheck YES`, `-syncMirrorAudit YES`, `-rehearsalEdits <seed>`,
+  `-seedFromNewestBackup`, `-rehearsalRawChanges YES`; `HITLIST_SYNC_TRACE=1` logs every engine event.
+- **No merge by name on the engine** (`Deduplicator.mergesByName`); the editors refuse a used name. A label on
+  tasks asks before it is deleted; Flipboard's own label is never offered Delete.
+- **The task card acts by id** after any delay (`TaskActions.task(withID:)`); an undo of a repeating task's
+  completion is `TaskActions.RollOver` through `Flipboard.completion(for:)` and `Flipboard.undo`: build a
+  completion's undo record there, never by hand.
+- **The sync log names an item by its kind and the first eight characters of its id, never its words**
+  (`SyncLogText`), and a path from `~/Library/` on.
+- `TaskLimits.clampedNotes` on every path that writes a description.
+- An agent's report file may be refused by the harness: the report is its final message, and the supervisor saves
+  it into the notes folder.
+
 ## Round 31 (2026-11-16, evening; the supervisor alone, no briefs): the engine's road
 
 `dev/SYNC-ENGINE.md` section 14 is the plan every engine brief from now on belongs to; say which stage and item a
