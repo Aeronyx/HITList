@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.13: core 1047 (the sync engine's brain, rules and simulation are most of the growth), Mac 2205, iOS 2168, and 160 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.14: core 1081 (the sync engine's brain, rules and simulation are most of the growth), Mac 2295, iOS 2258, and 163 UI tests (61 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
