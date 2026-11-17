@@ -69,6 +69,9 @@ struct HITListApp: App {
         WidgetCompletionCenter.start(container: container) // brief 81: completes what the widgets ask, once iCloud can have it
         WidgetRefresh.start() // brief 81: the background refresh (iOS) or the hourly settle (Mac) that keeps widgets true
         ShareInbox.start(container: container) // brief 90: makes the share sheet's tasks, once each, by quick add's road
+        #if DEBUG
+        SyncEngineRehearsal.runIfAsked(container: container) // round 32: the move rehearsed from a terminal, side stores only
+        #endif
     }
 
     var body: some Scene {

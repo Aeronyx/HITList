@@ -332,6 +332,7 @@
 		91445F841F1807D9F4272BB5 /* Quill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF631693F1C48C03F264CB0 /* Quill.swift */; };
 		926274475D6599BDD81C3CF2 /* HITTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDE419EFB9497F9FB13FE74B /* HITTokens.swift */; };
 		92973FBF19DB570087754456 /* HITField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3DE63E2D5D5BA8429AB8933 /* HITField.swift */; };
+		930509D5CC305B4EA838FEA0 /* SyncEngineRehearsal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12789AD0572D97F7826DAA5F /* SyncEngineRehearsal.swift */; };
 		9352FF35C50B0B33014FBC32 /* SyncRecordCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = D316865C2C1C523F0BBCF98C /* SyncRecordCheck.swift */; };
 		935B78ADE8FC76D7BEC94BB1 /* SwitchboardRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87B31D4A1617C81BED0241B1 /* SwitchboardRules.swift */; };
 		9389AECD2F6D6541F34B7928 /* WidgetSamples.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0F161F1073708868471BC88 /* WidgetSamples.swift */; };
@@ -692,6 +693,7 @@
 		1091FF783F8A92B246FC79EA /* QuickAddGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddGuideView.swift; sourceTree = "<group>"; };
 		10C42650F78D2424DD988E18 /* SwitchDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwitchDrag.swift; sourceTree = "<group>"; };
 		11E505FCA26D72096CDA8233 /* CompanionPhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionPhaseTests.swift; sourceTree = "<group>"; };
+		12789AD0572D97F7826DAA5F /* SyncEngineRehearsal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncEngineRehearsal.swift; sourceTree = "<group>"; };
 		12E0708590628F21E41388B0 /* SwiftDataSyncStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataSyncStoreTests.swift; sourceTree = "<group>"; };
 		133AA521EC7B65332664F695 /* UpcomingScheduleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingScheduleTests.swift; sourceTree = "<group>"; };
 		14255A51748F8F42EA94CDCF /* HighlightRun.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HighlightRun.swift; sourceTree = "<group>"; };
@@ -1373,6 +1375,7 @@
 				F6B6F5B3669EF4C9554F4111 /* SyncEngineAudit.swift */,
 				B028B6895A9501171AF8712E /* SyncEngineBoard.swift */,
 				46CDDA673EF96572DD49C69B /* SyncEngineHost.swift */,
+				12789AD0572D97F7826DAA5F /* SyncEngineRehearsal.swift */,
 				74F64C188702E8DED1FBB281 /* SyncEngineSwitch.swift */,
 				B13FB0B92F7378AC2FAF38D2 /* SyncLedgerStore.swift */,
 				37D7C29C7E3D5F8A18412E1F /* SyncRecordMapping.swift */,
@@ -2855,6 +2858,7 @@
 				A98FDBDEAD363A9F88B42A29 /* SyncEngineAudit.swift in Sources */,
 				BFC377140291B7A0FE7765AB /* SyncEngineBoard.swift in Sources */,
 				AD1D295271A44F1D1AD37890 /* SyncEngineHost.swift in Sources */,
+				930509D5CC305B4EA838FEA0 /* SyncEngineRehearsal.swift in Sources */,
 				061DE12F8601C7BC85447709 /* SyncEngineSettings.swift in Sources */,
 				DDC1FD96F34A93D9CEEC0A78 /* SyncEngineSwitch.swift in Sources */,
 				AC0A5906024DDBA597C16B87 /* SyncEnvironment.swift in Sources */,
