@@ -168,4 +168,92 @@ final class SyncCoreFaultTests: XCTestCase {
         let item = await relaunched.item(taskKey("A"))
         XCTAssertNotNil(item)
     }
+
+    // MARK: 3. A hold's words are a person's (147 F10)
+
+    /// No Swift error, and never "engine", "ledger" or "memory", in what a person reads; the error in the log only.
+    static func isPlain(_ words: String) -> Bool {
+        let lower = words.lowercased()
+        return !["engine", "ledger", "memory", "error", "writefailed", "("].contains { lower.contains($0) }
+    }
+
+    func testALedgerWriteThatFailsHoldsWithPlainWordsAndTheErrorInTheLog() async {
+        let device = await synced([task("A", "Milk")])
+        await device.ledger.failNext()
+        await device.deliverFetch([cloud(task("A", "Oat milk", updated: 30), "c2")])
+        let status = await device.status()
+        XCTAssertEqual(status.hold, .failed(SyncFailureWords.recordsNotSaved))
+        XCTAssertEqual(SyncFailureWords.recordsNotSaved, "HITList couldn't save its sync records on this device.")
+        XCTAssertTrue(device.log.lines.contains { $0.contains("WriteFailed") }, "the error itself is in the log: \(device.log.lines)")
+    }
+
+    func testALedgerThatCannotBeReadHoldsWithPlainWords() async {
+        let log = TestLog()
+        let core = SyncCore(store: MemoryLocalStore([task("A", "Milk")]), ledger: BrokenLedger160(),
+                            transport: ScriptedTransport(), host: nil, log: { log.write($0) })
+        await core.start()
+        let status = await core.status
+        XCTAssertEqual(status.hold, SyncHold.failed(SyncFailureWords.recordsNotRead))
+        XCTAssertTrue(log.lines.contains { $0.contains("Unreadable") }, "\(log.lines)")
+    }
+
+    func testAStoreThatFailsHoldsWithPlainWords() async {
+        let store = BrokenStore160(MemoryLocalStore([task("A", "Milk")]))
+        let ledger = MemoryLedger()
+        let log = TestLog()
+        let core = SyncCore(store: store, ledger: ledger, transport: ScriptedTransport(), host: nil, log: { log.write($0) })
+        await store.failReads(true)
+        await core.start()
+        let status = await core.status
+        guard case .failed(let words)? = status.hold else { return XCTFail("\(status)") }
+        XCTAssertTrue(Self.isPlain(words), words)
+        XCTAssertTrue(log.lines.contains { $0.contains("StoreBroke") }, "\(log.lines)")
+    }
+
+    func testEveryFailureWordIsPlain() {
+        for words in SyncFailureWords.all { XCTAssertTrue(Self.isPlain(words), words) }
+    }
+
+    func testABackupThatFailsSaysSoPlainly() async {
+        let device = await synced([task("A", "Milk")])
+        device.host.backupError = BackupBroke()
+        await device.transport.deliver(.account(.signedOut(previous: "me")))
+        let status = await device.status()
+        let note = status.lastError ?? ""
+        XCTAssertEqual(note, "Nothing was removed from this device: the backup failed.")
+        XCTAssertTrue(device.log.lines.contains { $0.contains("BackupBroke") }, "\(device.log.lines)")
+    }
+}
+
+private struct BackupBroke: Error {}
+
+private actor BrokenLedger160: SyncLedger {
+    struct Unreadable: Error {}
+    func entries() async throws -> [LedgerEntry] { throw Unreadable() }
+    func deferred() async throws -> [CloudRecord] { [] }
+    func fact(_ name: String) async throws -> Data? { nil }
+    func facts(prefix: String) async throws -> [String: Data] { [:] }
+    func write(_ write: LedgerWrite) async throws {}
+    func reset() async throws {}
+    func loadTransportState() async -> Data? { nil }
+    func saveTransportState(_ state: Data?) async {}
+}
+
+private actor BrokenStore160: SyncLocalStore {
+    struct StoreBroke: Error {}
+    let inner: MemoryLocalStore
+    var failing = false
+    init(_ inner: MemoryLocalStore) { self.inner = inner }
+    func failReads(_ fail: Bool) { failing = fail }
+    func records() async throws -> [SyncRecord] {
+        if failing { throw StoreBroke() }
+        return try await inner.records()
+    }
+    func records(_ keys: Set<SyncKey>) async throws -> [SyncRecord] {
+        if failing { throw StoreBroke() }
+        return try await inner.records(keys)
+    }
+    func apply(_ writes: [LocalWrite]) async throws -> Set<SyncKey> { try await inner.apply(writes) }
+    func deletions() async throws -> Set<SyncKey> { try await inner.deletions() }
+    func forget(deletions: Set<SyncKey>) async throws { try await inner.forget(deletions: deletions) }
 }

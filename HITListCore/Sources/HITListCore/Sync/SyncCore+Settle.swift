@@ -50,7 +50,7 @@ extension SyncCore {
             do {
                 try await commit(forget)
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 await markRefetch()
                 return
             }
@@ -79,7 +79,7 @@ extension SyncCore {
                 try await commit(write)
                 log("First whole fetch finished: what iCloud lacks can go now")
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 return
             }
         }
@@ -128,7 +128,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         let version = Self.formatVersion(of: record.record)
@@ -219,7 +219,7 @@ extension SyncCore {
                 // (dropped by it): the same state, settled again by the next fetch.
                 try await commit(under.ledgerWrite)
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 return false
             }
             reached.formUnion(under.keys)
@@ -316,7 +316,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         for key in landed { remembered[key] = nil }
@@ -525,7 +525,7 @@ extension SyncCore {
         if case SyncStoreError.duplicates(let keys) = error {
             await enterHold(.duplicates(keys.sorted()))
         } else {
-            await fail("The device's items could not be read or written: \(error)")
+            await fail(SyncFailureWords.dataNotSaved, error)
         }
     }
 
@@ -555,7 +555,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         for key in saved.map(\.key) + removed + Array(failed.keys) { remembered[key] = nil }
@@ -585,7 +585,7 @@ extension SyncCore {
                 if key == Self.metaKey {
                     var forget = LedgerWrite()
                     forget.remove = [key]
-                    do { try await commit(forget) } catch { await fail("The engine's memory could not be written: \(error)"); return }
+                    do { try await commit(forget) } catch { await fail(SyncFailureWords.recordsNotSaved, error); return }
                 } else {
                     gone.append(key)
                 }

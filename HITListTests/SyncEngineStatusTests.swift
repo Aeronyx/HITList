@@ -239,6 +239,16 @@ final class SyncEngineStatusTests: XCTestCase {
         let line = SyncWords.engineHold(.iCloudNotReady, waiting: 0) + " " + SyncEngineWords.holdNote(.iCloudNotReady, waiting: 2)
         XCTAssertTrue(line.hasPrefix("iCloud isn't ready for this version of HITList yet. Nothing is lost: what is waiting stays waiting."), line)
         XCTAssertEqual(SyncEngineWords.tryAgainSubtitle(.iCloudNotReady), "Sends what is waiting, if iCloud is ready now")
+        // Brief 160 (147 F10): what a person reads names no engine, ledger or memory and carries no Swift error.
+        XCTAssertEqual(SyncEngineWords.error(SyncCoreError.notStarted), "sync hasn't started yet; try again in a moment.")
+        let backup = SyncEngineHost.BackupFailed(words: "The file “x” couldn’t be saved (NSCocoaErrorDomain 640)")
+        XCTAssertEqual(SyncEngineWords.error(backup), "No backup could be written, so nothing was removed from this device.")
+        for words in SyncFailureWords.all + [SyncEngine.notRunningWords(inMemory: true), SyncEngine.notRunningWords(inMemory: false)] {
+            XCTAssertEqual(SyncWords.engineHold(.failed(words), waiting: 0), "Sync stopped: \(words)")
+            for banned in ["engine", "ledger", "memory", "error", "("] {
+                XCTAssertFalse(words.lowercased().contains(banned), "\(words)")
+            }
+        }
         XCTAssertEqual(SyncEngineWords.error(SyncCoreError.noBackup), "no backup could be written, so nothing was removed.")
         XCTAssertEqual(SyncEngineStatusRows.waitingValue(idle(waiting: 3)), "3 changes")
         XCTAssertEqual(SyncEngineStatusRows.waitingValue(idle(waiting: 1)), "1 change")

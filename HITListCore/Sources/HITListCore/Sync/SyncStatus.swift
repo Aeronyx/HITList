@@ -61,6 +61,24 @@ public enum SyncHold: Hashable, Sendable, Codable {
     }
 }
 
+/// The words of a `failed` hold, which a person reads after "Sync stopped:" (brief 160, review 147 F10): one fixed
+/// sentence per way the brain can fail, never a Swift error and never "engine", "ledger" or "memory". The error itself
+/// goes to the sync log, on the line that says the hold began.
+public enum SyncFailureWords {
+    /// The ledger (the engine's records beside the store) could not be written.
+    public static let recordsNotSaved = "HITList couldn't save its sync records on this device."
+    /// The ledger could not be read at a start.
+    public static let recordsNotRead = "HITList couldn't read its sync records on this device."
+    /// The store's items could not be read.
+    public static let dataNotRead = "HITList couldn't read the data on this device."
+    /// The store's items could not be read or written while something from iCloud was settled.
+    public static let dataNotSaved = "HITList couldn't read or save the data on this device."
+    /// A deletion the store wrote down could not be taken up.
+    public static let deletionNotNoted = "HITList couldn't note a deletion made on this device."
+
+    public static let all = [recordsNotSaved, recordsNotRead, dataNotRead, dataNotSaved, deletionNotNoted]
+}
+
 /// The engine's state for the bolt: what it is doing, how many changes wait, and whether everything is in iCloud.
 public struct SyncStatus: Equatable, Sendable {
     public enum State: Equatable, Sendable {

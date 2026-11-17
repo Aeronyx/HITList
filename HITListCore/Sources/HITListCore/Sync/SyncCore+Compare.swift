@@ -63,7 +63,7 @@ extension SyncCore {
             try await commit(write)
             try await store.forget(deletions: clearingLeftovers ? told : told.subtracting(here))
         } catch {
-            await fail("A deletion made here could not be written down: \(error)")
+            await fail(SyncFailureWords.deletionNotNoted, error)
             return false
         }
         for entry in write.upsert where entry.base != nil { log("\(entry.key): deleted here; its marker is waiting to go") }
@@ -137,7 +137,7 @@ extension SyncCore {
             await enterHold(.duplicates(keys.sorted()))
             return
         } catch {
-            await fail("The device's items could not be read: \(error)")
+            await fail(SyncFailureWords.dataNotRead, error)
             return
         }
         if keys == nil { universe.insert(Self.metaKey) }
@@ -192,7 +192,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         if !missing.isEmpty {
@@ -361,7 +361,7 @@ extension SyncCore {
             await enterHold(.duplicates(keys.sorted()))
             return nil
         } catch {
-            await fail("The device's items could not be read: \(error)")
+            await fail(SyncFailureWords.dataNotRead, error)
             return nil
         }
         if let refusal = refused[key], RecordMerge.same(refusal.local, local) { return nil }

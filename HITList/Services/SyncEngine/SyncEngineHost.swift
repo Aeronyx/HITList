@@ -72,9 +72,12 @@ final class SyncEngineHost: SyncHost, @unchecked Sendable {
 
     // MARK: The backup
 
-    struct BackupFailed: Error, LocalizedError {
+    /// A person reads `errorDescription` (Settings, after the purge's "remove here too"); `words`, the underlying
+    /// error's, are for the log (`backUpStore` writes them there) and the brain's log line.
+    struct BackupFailed: Error, LocalizedError, CustomStringConvertible {
         let words: String
-        var errorDescription: String? { "No backup could be written, so nothing was removed from this device: \(words)" }
+        var errorDescription: String? { "No backup could be written, so nothing was removed from this device." }
+        var description: String { "BackupFailed: \(words)" }
     }
 
     /// The backup the pre-repair backups write (`SyncRepair.backUp`): today's daily backup for HITList.store, a file of

@@ -31,8 +31,10 @@ extension SyncCore {
     }
 
     /// The device's items or the ledger could not be read or written. Tried again by the next `start()` or
-    /// `resume()`; fetched records are let go meanwhile and fetched again then.
-    func fail(_ words: String) async {
+    /// `resume()`; fetched records are let go meanwhile and fetched again then. `words` are a person's
+    /// (`SyncFailureWords`); the error goes to the log only (brief 160, review 147 F10).
+    func fail(_ words: String, _ error: Error) async {
+        log("\(words) The error: \(error)")
         await enterHold(.failed(words))
     }
 
@@ -74,7 +76,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         if let hold { log("Hold lifted: \(hold.words)") }
@@ -175,7 +177,7 @@ extension SyncCore {
                 try await commit(write)
             }
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         await enterHold(.noAccount)
@@ -218,7 +220,7 @@ extension SyncCore {
             try await commit(write)
         } catch {
             joinTo = current
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         switchTo = nil
@@ -258,15 +260,15 @@ extension SyncCore {
         let synced = Set(entries.values.filter { $0.base?.isDeleted == false }.map(\.key))
         if choice == .removeHere, !synced.isEmpty {
             guard let host else {
-                holdNote = "Nothing was removed from this device: no backup could be written"
+                holdNote = "Nothing was removed from this device: no backup could be written."
                 publish()
                 throw SyncCoreError.noBackup
             }
             do {
                 try await host.willRemoveLocalData(reason: .zonePurged)
             } catch {
-                holdNote = "The backup before removing HITList's items failed: \(error)"
-                log(holdNote ?? "")
+                holdNote = "Nothing was removed from this device: the backup failed."
+                log("\(holdNote ?? "") The error: \(error)")
                 publish()
                 throw error
             }
@@ -281,7 +283,7 @@ extension SyncCore {
             write.facts[LedgerFact.firstFetchDone] = Data([1])
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         await transport.reset()
@@ -323,7 +325,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         remembered = [:]
@@ -340,7 +342,7 @@ extension SyncCore {
     /// The host's backup. False (and the reason kept for the status) when there is no host or it throws.
     func backup(_ reason: SyncRemovalReason) async -> Bool {
         guard let host else {
-            holdNote = "Nothing was removed from this device: no backup could be written"
+            holdNote = "Nothing was removed from this device: no backup could be written."
             log(holdNote ?? "")
             return false
         }
@@ -348,8 +350,9 @@ extension SyncCore {
             try await host.willRemoveLocalData(reason: reason)
             return true
         } catch {
-            holdNote = "Nothing was removed from this device: the backup failed (\(error))"
-            log(holdNote ?? "")
+            // Plain words for the person; the error in the log only (brief 160).
+            holdNote = "Nothing was removed from this device: the backup failed."
+            log("\(holdNote ?? "") The error: \(error)")
             publish()
             return false
         }

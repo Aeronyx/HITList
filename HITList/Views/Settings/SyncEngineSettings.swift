@@ -550,7 +550,7 @@ enum SyncEngineWords {
         if let core = error as? SyncCoreError {
             switch core {
             case .held(let hold): return SyncWords.engineHold(hold, waiting: 0)
-            case .notStarted: return "the engine hasn't started yet; try again in a moment."
+            case .notStarted: return "sync hasn't started yet; try again in a moment."
             case .noQuestion: return "iCloud isn't asking that any more."
             case .noBackup: return "no backup could be written, so nothing was removed."
             }

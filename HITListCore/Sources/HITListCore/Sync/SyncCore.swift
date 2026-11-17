@@ -382,8 +382,8 @@ public actor SyncCore: SyncTransportDelegate {
             return true
         } catch {
             phase = .off
-            hold = .failed("The engine's memory could not be read: \(error)")
-            log("Not started: \(hold?.words ?? "")")
+            hold = .failed(SyncFailureWords.recordsNotRead)
+            log("Not started: \(SyncFailureWords.recordsNotRead) The error: \(error)")
             publish()
             return false
         }
