@@ -48,14 +48,14 @@ final class SidebarCountsModelTests: XCTestCase {
         XCTAssertGreaterThan(try openTopLevel().count, 10)
         try assertSameAsTheRules(now: now)
         // Later the same day, the next day and a week on: what moves with the clock moves the same way.
-        for hours in [5.0, 26, 24 * 7 + 3] { try assertSameAsTheRules(now: now.addingTimeInterval(hours * 3600)) }
+        for hours: Double in [5, 26, 171] { try assertSameAsTheRules(now: now.addingTimeInterval(hours * 3600)) }
     }
 
     func testAMixedStoresCountsAreTheRulesCounts() throws {
         let now = Date()
         try ListSamenessStore.fill(context, now: now)
         try assertSameAsTheRules(now: now)
-        for hours in [3.0, 30, 24 * 9] { try assertSameAsTheRules(now: now.addingTimeInterval(hours * 3600)) }
+        for hours: Double in [3, 30, 216] { try assertSameAsTheRules(now: now.addingTimeInterval(hours * 3600)) }
     }
 
     /// A save counts again by itself, after the debounce.
