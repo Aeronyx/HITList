@@ -177,7 +177,7 @@ final class DeduplicatorTests: XCTestCase {
         let l2 = label("X", createdAt: 1)
         context.insert(TaskItem(title: "t", project: work2, labels: [l1, l2]))
         TaskActions.seedDefaultsIfNeeded(in: context, defaults: defaults)
-        context.insert(SavedFilter(name: "focus ", query: "p1"))
+        context.insert(SavedFilter(name: "focus ", query: TaskActions.defaultFilters[0].query))
         try context.save()
 
         let first = try Deduplicator.run(in: context)
@@ -199,6 +199,53 @@ final class DeduplicatorTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 5, "dedupe should stay roughly linear")
         XCTAssertEqual(try fetch(Project.self).count, 1_000)
         XCTAssertEqual(try Deduplicator.run(in: context), DedupeReport())
+    }
+
+    // MARK: Round 32 (review 151 A2; 147 F2, F8)
+
+    /// Two filters of one name and different queries are two things the person made: neither goes.
+    func testFiltersMergeByNameOnlyWhenTheirQueriesAreEqual() throws {
+        let mine = SavedFilter(name: "Waiting", query: "@waiting & p1")
+        let seeded = SavedFilter(name: "waiting", query: "@waiting")
+        let same = SavedFilter(name: "Waiting ", query: " @waiting")
+        [mine, seeded, same].forEach(context.insert)
+        try context.save()
+
+        let report = try Deduplicator.run(in: context, byName: true)
+
+        XCTAssertEqual(report.filters, 1, "only the copy with the same query merges")
+        XCTAssertEqual(Set(try fetch(SavedFilter.self).map(\.query)), ["@waiting & p1", "@waiting"])
+    }
+
+    /// On HITList's own engine nothing merges by name: a deletion there is a marker that deletes the item on every
+    /// device. Rows that share an id, sub-tasks and profiles still merge.
+    func testOnTheEngineGroupsLabelsAndFiltersAreNotMergedByName() throws {
+        let work = project("Work", createdAt: 0)
+        let work2 = project("work", createdAt: 10)
+        let task = TaskItem(title: "t", project: work2)
+        context.insert(task)
+        _ = label("home", createdAt: 0)
+        _ = label("Home", createdAt: 1)
+        context.insert(SavedFilter(name: "Focus", query: "p1"))
+        context.insert(SavedFilter(name: "focus", query: "p1"))
+        let copy = project("Home renamed", createdAt: 3)
+        let original = project("Home", createdAt: 0)
+        copy.id = original.id
+        try context.save()
+
+        let report = try Deduplicator.run(in: context, byName: false)
+
+        XCTAssertEqual(report.projects, 1, "the row that shares an id still merges")
+        XCTAssertEqual(report.labels, 0)
+        XCTAssertEqual(report.filters, 0)
+        XCTAssertEqual(Set(try fetch(Project.self).map(\.name)), ["Work", "work", "Home"])
+        XCTAssertEqual(task.project?.persistentModelID, work2.persistentModelID)
+        _ = work
+    }
+
+    /// The engine's answer is the default, decided in one place.
+    func testTheDefaultFollowsTheEngine() {
+        XCTAssertEqual(Deduplicator.mergesByName, !ModelContainerFactory.isOwnEngineEnabled)
     }
 
     private func state() throws -> [String] {
