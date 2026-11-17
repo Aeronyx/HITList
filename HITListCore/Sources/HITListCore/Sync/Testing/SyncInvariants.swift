@@ -294,6 +294,55 @@ public struct SimIntent: Sendable {
     /// The zone was lost at this step.
     public mutating func recordZoneLoss(step: Int) { zoneLosses.append(step) }
 
+    // MARK: Written limits (round 32, brief 150; dev/SYNC-ENGINE.md section 5, "Known limits")
+    //
+    // Two places where two copies of one item meet with nothing in common to settle them field by field, so the copy
+    // changed last stands whole (M5) and the other copy's changes go. Each is excused here as narrowly as the rig can
+    // tell it, and pinned by a `testLimit…` script.
+
+    /// After a lost zone every device sends everything again, and the copies of an item made before the loss meet
+    /// without a base (M5) until every device holding it has a base from the new zone. Per item, the runs of steps in
+    /// which some device held it without one (`SyncSimulation` records them after every step once a zone was lost).
+    public private(set) var zoneWindows: [SyncKey: [ClosedRange<Int>]] = [:]
+
+    public mutating func recordZoneExposure(step: Int, keys: Set<SyncKey>) {
+        for key in keys {
+            var windows = zoneWindows[key] ?? []
+            if let last = windows.last, last.upperBound >= step - 1 {
+                windows[windows.count - 1] = last.lowerBound...max(last.upperBound, step)
+            } else {
+                windows.append(step...step)
+            }
+            zoneWindows[key] = windows
+        }
+    }
+
+    /// Whether a change to `key` at `step` was made while some device held the item without a base from the zone
+    /// iCloud had then, after a lost zone: it may meet a merge without a base.
+    func zoneExposed(_ key: SyncKey, at step: Int) -> Bool {
+        zoneWindows[key]?.contains { $0.contains(step) } ?? false
+    }
+
+    /// Whether a person made `key` before `step`.
+    public func madeBefore(_ key: SyncKey, step: Int) -> Bool {
+        events(of: key).contains { event in
+            if case .made = event.change { return event.step < step }
+            return false
+        }
+    }
+
+    /// An item a person deleted that persons on `device` and on another device then each brought back (changed it
+    /// after the deletion, or made it again: an undo), by `step`. The two copies meet with nothing in common but the
+    /// marker, and the copy changed last stands whole (M12 against a live record, as M5).
+    func revivedApart(_ key: SyncKey, by device: String, by step: Int) -> Bool {
+        let events = events(of: key)
+        for deletion in events where deletion.change == .deleted && deletion.step < step {
+            let back = Set(events.filter { $0.step > deletion.step && $0.step <= step && $0.change != .deleted }.map(\.device))
+            if back.contains(device), back.count >= 2 { return true }
+        }
+        return false
+    }
+
     /// Whether a deletion can have been forgotten: the device that made it lost its memory at that step or later
     /// (a deletion is known only from the base its ledger kept; section 4), before or without sending the marker.
     func forgotten(_ deletion: Event) -> Bool {
@@ -477,7 +526,8 @@ public enum SyncInvariants {
                 let expected: SyncValue?
                 let because: String
                 if setters.count == 1, let only = setters.first, let value {
-                    guard only.value.step > intent.exposedThrough else { continue }
+                    // A change that may have met a merge without a base after a lost zone (a written limit).
+                    guard only.value.step > intent.exposedThrough, !intent.zoneExposed(key, at: only.value.step) else { continue }
                     expected = value
                     because = "device \(only.key) set it at step \(only.value.step) and no other device changed it"
                 } else if setters.isEmpty, case .made(let record) = made.change {
@@ -536,7 +586,8 @@ public enum SyncInvariants {
                 present = initial.contains(name)
                 because = "device \(made.device) made it so at step \(made.step) and nobody changed it"
             } else {
-                guard Set(touched.map(\.device)).count == 1, let last = touched.last, last.step > intent.exposedThrough else { continue }
+                guard Set(touched.map(\.device)).count == 1, let last = touched.last, last.step > intent.exposedThrough,
+                      !intent.zoneExposed(key, at: last.step) else { continue }
                 present = last.present
                 because = "device \(last.device) \(last.present ? "added" : "removed") it at step \(last.step) and no other device changed it"
             }
@@ -773,6 +824,13 @@ public enum SyncInvariants {
             if let given = intent.lastGiven(drop.key, drop.field, names: drop.removed), given <= intent.exposedThrough {
                 continue
             }
+            // The written limits: copies that meet without a base after a lost zone, and an item brought back on two
+            // devices after its deletion. The copy changed last stands whole, and the reference goes with the other.
+            if intent.zoneExposed(drop.key, at: step) { continue }
+            if let given = intent.lastGiven(drop.key, drop.field, names: drop.removed), intent.zoneExposed(drop.key, at: given) {
+                continue
+            }
+            if intent.revivedApart(drop.key, by: drop.device, by: step) { continue }
             let names = drop.removed.map(short).joined(separator: ", ")
             findings.append(SyncFinding(.referencesKept, "device \(drop.device) sent \(drop.key) without \(drop.field) →\(names) at step \(step), which iCloud held; no person on \(drop.device) changed \(drop.field)"))
         }

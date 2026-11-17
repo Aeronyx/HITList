@@ -395,6 +395,27 @@ public actor SyncSimulation {
         for name in observed.takeForgotten() { intent.recordAmnesia(step: step, device: name) }
         intent.recordDrops(step: step, await cloud.takeDrops())
         intent.recordRefusals(step: step, await cloud.takeRefusals())
+        await recordZoneExposure()
+    }
+
+    /// Once a zone was lost: the items made before it that some device holds without a base from the zone iCloud has
+    /// now (none, or one from a zone that is gone). Their copies may meet without a base (M5), a written limit.
+    private func recordZoneExposure() async {
+        guard let lastLoss = intent.zoneLosses.last else { return }
+        let zone = await cloud.incarnation(account: config.account)
+        var exposed = Set<SyncKey>()
+        for name in deviceNames {
+            guard let device = slots[name] else { continue }
+            let entries = Dictionary(((try? await device.ledger.entries()) ?? []).map { ($0.key, $0) },
+                                     uniquingKeysWith: { first, _ in first })
+            for record in await held(device) where !exposed.contains(record.key) {
+                let entry = entries[record.key]
+                let current = zone != nil && entry?.base?.isDeleted == false
+                    && entry?.system.flatMap(FakeCloud.token)?.zone == zone
+                if !current, intent.madeBefore(record.key, step: lastLoss) { exposed.insert(record.key) }
+            }
+        }
+        if !exposed.isEmpty { intent.recordZoneExposure(step: step, keys: exposed) }
     }
 
     private func act(_ name: String, _ action: SimAction, hint: SimHint) async {
