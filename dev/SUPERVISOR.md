@@ -418,6 +418,10 @@ each with a list of files that were its own and a list that were not, and every 
 refuses an agent's report file: the report is its final message, and the supervisor saves it. Cut worktree agents
 from a commit that holds their brief, and tell them to fast-forward if they find they were cut earlier. An
 interrupted tool call means stop: say where things stand and wait for George, whatever notices arrive meanwhile.
+**Run the whole UI suite on the merged tree even when every agent ran its own.** Two agents each saw
+`testSharedTasksAreOneGroup` pass on their branch; merged, a shared task reopened by Undo no longer came back (the
+lists' new cache did not hear the shared store). A cache is only as good as the list of things it watches: for
+every source a view reads that is not a query or a model, say in the key that it is compared.
 **A reset of a CloudKit Development side takes the push subscription with it**, and Apple's engine does not save
 its own again while it is not scheduling itself: the engine keeps its own now.
 **A test that passes on the Mac can crash on the iPhone suite**: a detached task that outlives its test reached a

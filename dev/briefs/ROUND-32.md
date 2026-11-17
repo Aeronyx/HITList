@@ -142,6 +142,22 @@ code changed since. Either the real apps were not brought forward since, or back
 - Claude cannot clear a task's description without saying so (`clear_description`).
 - Long lists are faster, and a list at rest does nothing; what each list shows is unchanged.
 
+## What the suites found on the merged tree, after every agent had reported green
+
+- **A shared task reopened by Undo did not come back** (the UI suite, `testSharedTasksAreOneGroup`; both the
+  popout agent and the performance agent had run that test on their own branches and seen it pass). The lists'
+  new cache did not notice a change in the shared store once the completed row had gone. Shared tasks are part of
+  the cache's key now, in Today, the Inbox and Upcoming.
+- The iPhone suite crashed where the Mac's passed: the first-reminder question reached a test's store after the
+  test had ended. It never runs under the hosted tests now.
+- A flake in the ledger's file check ("database is locked" right after a save): it waits out a writer for half a
+  second.
+- CI's unsigned build cannot make a real engine: two transport tests skip themselves there.
+- Browse's UI test still expected a label to go without a question.
+
+The whole UI suite was run once on the merged tree (163 tests: 100 passed, 61 on demand, 2 failed and were fixed
+and rerun); the classes that touch the lists were run again on the final tree.
+
 ## Proof
 
 - Core 1,081, Mac 2,294 tests on the merged tree, no failures; the iPhone suite and the whole UI suite: see the
