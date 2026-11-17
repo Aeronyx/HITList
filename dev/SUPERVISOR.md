@@ -942,8 +942,8 @@ or filters of one name; a label on tasks asks before it goes; a move to Shared T
 round looked (are backups failing, or were the apps not opened?); whether a sign-out should keep the tasks on the
 device (recommended, before everyone moves); the location question at a first launch; the repository is public
 and holds his address; his phone carried a Debug build at the round's end (TestFlight → HITList → Install); a
-push from the phone to the Mac was not seen that night; the worktrees (72 earlier ones and this round's fourteen;
-about 30 GB free). The next brief number is 161.
+push from the phone to the Mac was not seen that night; the 72 earlier worktrees (this round's were removed;
+about 54 GB free). The next brief number is 161.
 
 ### Round 31 (kept for the record; nothing released)
 

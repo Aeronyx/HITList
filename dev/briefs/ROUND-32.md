@@ -160,8 +160,13 @@ and rerun); the classes that touch the lists were run again on the final tree.
 
 ## Proof
 
-- Core 1,081, Mac 2,294 tests on the merged tree, no failures; the iPhone suite and the whole UI suite: see the
-  handbook's section 8 for the final counts.
+- On the final tree: core 1,081, Mac 2,295, iPhone 2,258 tests, no failures. The whole UI suite once on the
+  merged tree (163: 100 passed, 61 on demand, 2 failed, fixed and rerun); `HITListUITests`, `BrowseUITests`,
+  `SweepPolishUITests` and `EditorSafetyUITests` again on the final tree (28 run, 1 skipped, none failed);
+  `SyncEngineStatusUITests` on an iPhone 16 simulator, which also checks the engine page's foot now. Archive and
+  export of both platforms with every packaging check passed. CI green on the final push.
+- Pictures: `build.noindex/round-32/handover/` (the engine's states in Settings on an iPhone 16 simulator); the
+  agents' own are in their notes folders.
 - The simulation: 1,000 histories of 300 steps of each of the eight fault sets and `ledger` with no failure (150);
   300 of each again after 160.
 - The transport's probe on CloudKit Development, 18 of 18, with the manual fetch asking for every zone and the
@@ -197,5 +202,5 @@ and rerun); the classes that touch the lists were run again on the final tree.
 - The engine's container, Development: zones `HITList-r32real` (a copy of his own tasks, in his own account),
   `HITList-r32w`; they go at the next reset of that side. The tasks' container, Development: the mirror's zone
   holds the rehearsal's demo items.
-- Simulator `HITList-sup32`. Disk: about 30 GB free; the round's fourteen agent worktrees are merged and can go
-  with the 72 earlier ones (still George's to say).
+- This round's agent worktrees were merged and removed by the supervisor (about 10 GB); the 72 earlier ones are
+  still George's to say. Disk: about 54 GB free.
