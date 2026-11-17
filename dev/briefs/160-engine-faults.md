@@ -16,6 +16,10 @@ switch statements (a new hold needs its words and its button); `HITList/Services
 (`setAside` only); tests in `HITListTests/`. **Not yours**: `dev/SYNC-ENGINE.md` (give the words for sections 5, 6,
 10 and 13 in your report), anything else.
 
+**Do not run the transport's probe** (`-syncTransportProbe`): it writes a field of its own into the engine's
+container's Development schema on purpose, and that schema was put into its final shape on 2026-11-16
+(`dev/cloudkit/sync-engine.ckdb` imported) for George to deploy to Production. Nothing of yours needs CloudKit.
+
 In this order:
 
 1. **iCloud refusing the whole send must hold, never refuse each record for good** (148 finding 1). In Production an

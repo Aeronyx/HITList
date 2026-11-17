@@ -402,6 +402,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             log.write("fetch ended (\(done.context.reason == .manual ? "asked" : "by itself")): \(fetchBrought.changed) changed, "
                       + "\(fetchBrought.removed) removed, zone \(zoneFetchEnded ? "reached" : "not reached")"
                       + (fetchTrouble.map { ", trouble: \($0)" } ?? ""))
+            fetchBrought = (0, 0)
             // Records this build could not read are asked for again, by name, at the end of every fetch that
             // reached iCloud (16c), before the brain hears the fetch ended. Never on a timer.
             if fetchTrouble == nil, zoneFetchEnded { await retryOwed() }
