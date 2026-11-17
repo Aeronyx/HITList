@@ -170,11 +170,12 @@ public actor SyncCore: SyncTransportDelegate {
     /// The device's items changed: compare them with the ledger and make the transport's list match (section 4).
     /// `keys` is what a save touched (the rows it made or changed, and the ones it deleted, which the store has
     /// written down: `SyncLocalStore.deletions`); nil compares everything, which only a launch and a save that could
-    /// not be named need. A nil compare also tries a full iCloud again (`storageFull`).
+    /// not be named need. A nil compare also tries a full iCloud, or one not ready for this build, again
+    /// (`SyncHold.triedOnReturn`).
     public func localChanged(_ keys: Set<SyncKey>?) async {
         await serially {
             guard loaded else { return }
-            if keys == nil, hold == .storageFull { await lift(resetTransport: false) }
+            if keys == nil, hold?.triedOnReturn == true { await lift(resetTransport: false) }
             await compare(keys)
             await settleUnsettled(keys)
             await refetchIfOwed()
@@ -182,12 +183,13 @@ public actor SyncCore: SyncTransportDelegate {
         }
     }
 
-    /// A fetch, then a send: the person's "sync now". Throws `SyncCoreError.held` while held (a full iCloud is tried
-    /// again first), and what the transport throws. Never call it from inside `handle`.
+    /// A fetch, then a send: the person's "sync now". Throws `SyncCoreError.held` while held (a full iCloud, or one
+    /// not ready for this build, is tried again first), and what the transport throws. Never call it from inside
+    /// `handle`.
     public func syncNow() async throws {
         try await serially {
             guard loaded, transportStarted else { throw SyncCoreError.notStarted }
-            if hold == .storageFull {
+            if hold?.triedOnReturn == true {
                 await lift(resetTransport: false)
                 await compare(nil)
             }
@@ -199,13 +201,13 @@ public actor SyncCore: SyncTransportDelegate {
     }
 
     /// Tries again after a hold the app or time can lift: `duplicates` (after the app merged them), `failed`,
-    /// `storageFull`, and an account switch whose backup failed (`noAccount` with the account to join remembered).
-    /// Everything iCloud brought while held is fetched again. Other holds stay.
+    /// `storageFull`, `iCloudNotReady`, and an account switch whose backup failed (`noAccount` with the account to join
+    /// remembered). Everything iCloud brought while held is fetched again. Other holds stay.
     public func resume() async {
         await serially {
             guard loaded else { return }
             switch hold {
-            case .duplicates?, .failed?, .storageFull?:
+            case .duplicates?, .failed?, .storageFull?, .iCloudNotReady?:
                 log("Resumed after: \(hold?.words ?? "")")
                 await lift(resetTransport: true)
             default: break

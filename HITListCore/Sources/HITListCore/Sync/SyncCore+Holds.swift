@@ -96,7 +96,7 @@ extension SyncCore {
             return
         }
         switch hold {
-        case .failed?, .duplicates?, .storageFull?:
+        case .failed?, .duplicates?, .storageFull?, .iCloudNotReady?:
             await lift(resetTransport: true)
         case .needsUpdate?:
             if Self.formatVersion(of: entries[Self.metaKey]?.base) <= SyncSchema.formatVersion {

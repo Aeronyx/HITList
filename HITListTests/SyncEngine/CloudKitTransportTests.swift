@@ -49,9 +49,25 @@ final class CloudKitTransportTests: XCTestCase {
     func testT9RefusedForGood() {
         XCTAssertEqual(Rules.saveOutcome(failure(.quotaExceeded), batchSize: 3), .refused(.quotaExceeded))
         XCTAssertEqual(Rules.deleteOutcome(failure(.quotaExceeded), batchSize: 3), .refused(.quotaExceeded))
-        for code: CKError.Code in [.serverRejectedRequest, .invalidArguments, .permissionFailure, .assetFileNotFound,
-                                   .constraintViolation, .internalError, .referenceViolation] {
+        for code: CKError.Code in [.constraintViolation, .referenceViolation] {
             XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .refused(.rejected(code: code.rawValue, message: "words")), "\(code)")
+        }
+    }
+
+    /// Brief 160 (148 finding 1): a Production schema that lacks a type or field refuses each record with
+    /// `invalidArguments` (12); the container, an entitlement, a permission, the account's restrictions or a version
+    /// say the same about the build or the account, not the record. None of them is a refusal for good: the brain
+    /// holds (`iCloudNotReady`) with everything still waiting. Codes 12, 15, 10, 5, 8, 32, 18, 24.
+    func testT9aICloudNotReadyForThisBuildIsNeverARefusalForGood() {
+        let codes: [CKError.Code] = [.invalidArguments, .serverRejectedRequest, .permissionFailure, .badContainer,
+                                     .missingEntitlement, .managedAccountRestricted, .incompatibleVersion, .badDatabase]
+        XCTAssertEqual(codes.map(\.rawValue), [12, 15, 10, 5, 8, 32, 18, 24])
+        for code in codes {
+            let notReady = SendFailure.notReady(code: code.rawValue, message: "words")
+            XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .refused(notReady), "\(code)")
+            XCTAssertEqual(Rules.deleteOutcome(failure(code), batchSize: 3), .refused(notReady), "\(code)")
+            // The zone refused the same way: its saves hold too, they are not refused for good.
+            XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 3, zoneRefusal: failure(code)), .refused(notReady), "\(code)")
         }
     }
 

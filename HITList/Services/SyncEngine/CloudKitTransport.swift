@@ -1151,8 +1151,19 @@ enum CloudKitTransportRules {
         }
     }
 
-    /// T9's three: iCloud full, too large, anything else said no to for good.
+    /// What iCloud says about the build, the environment or the account rather than the record (brief 160, review 148
+    /// finding 1): Production refuses a record type or field its schema lacks with `invalidArguments`, record by
+    /// record; the container, an entitlement, a permission, the account's restrictions or a version say the same of
+    /// every record. Never a refusal for good: the brain holds (`SyncHold.iCloudNotReady`) with everything waiting.
+    static let notReadyCodes: Set<CKError.Code> = [
+        .invalidArguments, .serverRejectedRequest, .permissionFailure, .badContainer, .missingEntitlement,
+        .managedAccountRestricted, .incompatibleVersion, .badDatabase,
+    ]
+
+    /// T9's three: iCloud full, too large, anything else said no to for good; and T9a, iCloud not ready for this
+    /// build or account.
     static func refusal(_ failure: CloudFailure) -> SendFailure {
+        if notReadyCodes.contains(failure.code) { return .notReady(code: failure.code.rawValue, message: failure.message) }
         switch failure.code {
         case .quotaExceeded: return .quotaExceeded
         default: return .rejected(code: failure.code.rawValue, message: failure.message)
@@ -1323,6 +1334,11 @@ enum CloudKitTransportRules {
         case .assetFileNotFound: return "assetFileNotFound"
         case .missingEntitlement: return "missingEntitlement"
         case .badContainer: return "badContainer"
+        case .managedAccountRestricted: return "managedAccountRestricted"
+        case .incompatibleVersion: return "incompatibleVersion"
+        case .badDatabase: return "badDatabase"
+        case .internalError: return "internalError"
+        case .assetFileModified: return "assetFileModified"
         default: return "CKError"
         }
     }

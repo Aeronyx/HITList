@@ -14,6 +14,10 @@ public enum SyncHold: Hashable, Sendable, Codable {
     /// iCloud is full. What is waiting stays waiting; tried again on return to the app (`SyncCore.resume()`,
     /// `start()`, `syncNow()`, `localChanged(nil)`).
     case storageFull
+    /// iCloud refused what was sent for a reason that is not the records' (`SendFailure.notReady`: a schema not yet
+    /// deployed, the container, an entitlement, a permission, a version). Kept and lifted exactly as `storageFull`
+    /// is: what is waiting stays waiting, tried again on return to the app and by "Try again", never by a timer.
+    case iCloudNotReady
     /// Two rows on the device share a key. Lifted by `SyncCore.resume()` once the app has merged them.
     case duplicates([SyncKey])
     /// The device's items or the engine's memory could not be read or written: the words. Tried again at the next
@@ -22,16 +26,23 @@ public enum SyncHold: Hashable, Sendable, Codable {
 
     /// Whether a fetched record is set aside unread while this hold lasts (and everything is fetched again when it
     /// lifts). Only a full iCloud still takes what arrives: reading is not what it refuses.
-    var stopsFetching: Bool {
-        if case .storageFull = self { return false }
-        return true
+    var stopsFetching: Bool { !triedOnReturn }
+
+    /// The holds iCloud's answer to a send puts the brain in (`storageFull`, `iCloudNotReady`): one path for both.
+    /// The device is still compared and counted (nothing is added to the list), what arrives is still read, and the
+    /// hold is lifted on return to the app (`SyncCore.localChanged(nil)`, `start()`, `syncNow()`, `resume()`).
+    public var triedOnReturn: Bool {
+        switch self {
+        case .storageFull, .iCloudNotReady: return true
+        default: return false
+        }
     }
 
     /// Whether the hold is kept in the ledger across a relaunch. `duplicates` and `failed` are found again (or not)
     /// by the next start itself.
     var persists: Bool {
         switch self {
-        case .noAccount, .needsUpdate, .zonePurged, .storageFull: return true
+        case .noAccount, .needsUpdate, .zonePurged, .storageFull, .iCloudNotReady: return true
         case .duplicates, .failed: return false
         }
     }
@@ -43,6 +54,7 @@ public enum SyncHold: Hashable, Sendable, Codable {
         case .needsUpdate: return "Update HITList to sync"
         case .zonePurged: return "HITList's data was removed from iCloud"
         case .storageFull: return "iCloud is full"
+        case .iCloudNotReady: return "iCloud isn't ready for this version of HITList"
         case .duplicates(let keys): return "\(keys.count) item\(keys.count == 1 ? "" : "s") on this device share an id"
         case .failed(let words): return words
         }

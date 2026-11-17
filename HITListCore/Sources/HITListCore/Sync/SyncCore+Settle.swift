@@ -108,7 +108,7 @@ extension SyncCore {
     /// Settles again the records set aside because the person had their item changed and unsaved (`unsettled`):
     /// those among `keys`, or all of them (nil). One the person still has unsaved is set aside again.
     func settleUnsettled(_ keys: Set<SyncKey>?) async {
-        guard !unsettled.isEmpty, hold == nil || hold == .storageFull else { return }
+        guard !unsettled.isEmpty, hold == nil || hold?.triedOnReturn == true else { return }
         let due = unsettled.values.filter { keys?.contains($0.key) ?? true }.sorted { $0.key < $1.key }
         guard !due.isEmpty else { return }
         for record in due { unsettled[record.key] = nil }
@@ -569,7 +569,8 @@ extension SyncCore {
 
         var conflicts: [CloudRecord] = []
         var gone: [SyncKey] = []
-        var full = false
+        // A full iCloud, or one not ready for this build: one hold, the same path (`SyncHold.triedOnReturn`).
+        var held: SyncHold?
         for (key, failure) in failed.sorted(by: { $0.key < $1.key }) {
             switch failure {
             case .conflict(let server):
@@ -589,7 +590,11 @@ extension SyncCore {
                     gone.append(key)
                 }
             case .quotaExceeded:
-                full = true
+                held = .storageFull
+            case .notReady(let code, let message):
+                // Not the record's fault (148 finding 1): never refused for good, it stays waiting.
+                log("\(key): iCloud said no to this build or account, not to the record (\(code)): \(message). It stays waiting")
+                if held == nil { held = .iCloudNotReady }
             case .tooLarge:
                 await refuse(key, words: "too large for iCloud")
             case .rejected(let code, let message):
@@ -599,9 +604,9 @@ extension SyncCore {
         if !conflicts.isEmpty || !gone.isEmpty {
             guard await settle(conflicts, removed: gone, why: "sent back") else { return }
         }
-        if full {
-            log("iCloud is full: what is waiting stays waiting, and is tried again on return to the app")
-            await enterHold(.storageFull)
+        if let held {
+            log("\(held.words): what is waiting stays waiting, and is tried again on return to the app")
+            await enterHold(held)
         }
         // A change made here while its save was on the way: the transport took it off the list with the save. (The
         // zone's meta among them, so the count drops when iCloud accepts it.)

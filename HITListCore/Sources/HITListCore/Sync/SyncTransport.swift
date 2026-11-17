@@ -79,6 +79,12 @@ public enum SendFailure: Hashable, Sendable {
     case tooLarge
     /// Anything else iCloud says no to for good, with its code and words, for the log (T9).
     case rejected(code: Int, message: String)
+    /// iCloud said no for a reason that is not the record's (T9a, brief 160): the environment's schema lacks a type or
+    /// field this build sends (Production refuses those record by record with `invalidArguments`), or the container,
+    /// an entitlement, a permission, the account's restrictions or a version stands in the way. Nothing is refused
+    /// for good: the brain holds (`SyncHold.iCloudNotReady`), everything stays waiting and counted, and it is tried
+    /// again on return to the app, as a full iCloud is. `code` and `message` are iCloud's, for the log.
+    case notReady(code: Int, message: String)
 }
 
 /// What a transport tells the brain. One at a time, in order (T1).

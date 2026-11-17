@@ -77,6 +77,9 @@ enum SyncWords {
         case .storageFull:
             if waiting == 0 { return "iCloud is full." }
             return "iCloud is full: \(waiting == 1 ? "1 change is" : "\(waiting) changes are") waiting."
+        case .iCloudNotReady:
+            if waiting == 0 { return "iCloud isn't ready for this version of HITList yet." }
+            return "iCloud isn't ready for this version of HITList yet: \(waiting == 1 ? "1 change is" : "\(waiting) changes are") waiting."
         case .failed(let words): return "Sync stopped: \(words)"
         case .duplicates(let keys):
             let count = max(duplicates, keys.count)

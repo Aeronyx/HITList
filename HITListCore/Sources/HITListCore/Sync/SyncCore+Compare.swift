@@ -97,7 +97,7 @@ extension SyncCore {
     func compare(_ asked: Set<SyncKey>?) async {
         guard loaded else { return }
         guard await noteDeletions() else { return }
-        if let hold, hold != .storageFull { return }
+        if let hold, !hold.triedOnReturn { return }
         // The deletions just noted are looked at too, whatever was asked for.
         let keys = asked.map { $0.union(noted) }
         noted = []
@@ -316,10 +316,13 @@ extension SyncCore {
         return finding
     }
 
-    /// The zone's own record: sent once the first fetch has shown iCloud has none.
+    /// The zone's own record: sent once the first fetch has shown iCloud has none. Refused for good, it is kept out
+    /// like any other record (until the next launch), not put back at every compare (148 finding 1).
     func metaFinding() -> Finding {
         var finding = Finding()
-        if firstFetchDone, entries[Self.metaKey]?.base == nil { finding.change = .save(Self.metaKey) }
+        if firstFetchDone, entries[Self.metaKey]?.base == nil, refused[Self.metaKey] == nil {
+            finding.change = .save(Self.metaKey)
+        }
         return finding
     }
 

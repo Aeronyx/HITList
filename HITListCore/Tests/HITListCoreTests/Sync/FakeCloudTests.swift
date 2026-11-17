@@ -894,6 +894,7 @@ actor FakeRecorder: SyncTransportDelegate {
                 case .quotaExceeded: return "\(key.name): quotaExceeded"
                 case .tooLarge: return "\(key.name): tooLarge"
                 case .rejected(let code, _): return "\(key.name): rejected \(code)"
+                case .notReady(let code, _): return "\(key.name): notReady \(code)"
                 }
             }
             return "sent saved [\(saved.map(\.key.name).sorted().joined(separator: ", "))] removed [\(removed.map(\.name).sorted().joined(separator: ", "))] failed [\(failures.joined(separator: ", "))]"

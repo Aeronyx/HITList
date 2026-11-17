@@ -143,7 +143,7 @@ struct SyncEngineHoldGroup: View {
                 run { try await $0.answerPurge(.keepAndSendAgain) }
             }
             .accessibilityIdentifier("settings-engine-send-again")
-        case .storageFull, .failed:
+        case .storageFull, .iCloudNotReady, .failed:
             HITMenuRow("Try again", subtitle: SyncEngineWords.tryAgainSubtitle(hold), systemImage: "arrow.clockwise",
                        iconTint: Theme.accent, accessory: .none) {
                 run { actions in
@@ -374,7 +374,7 @@ enum SyncEngineWords {
     /// state), not tidying up.
     static func needsYou(_ hold: SyncHold) -> Bool {
         switch hold {
-        case .zonePurged, .needsUpdate, .storageFull, .failed: true
+        case .zonePurged, .needsUpdate, .storageFull, .iCloudNotReady, .failed: true
         case .noAccount, .duplicates: false
         }
     }
@@ -384,6 +384,7 @@ enum SyncEngineWords {
         case .zonePurged: "Removed from iCloud"
         case .needsUpdate: "Update HITList"
         case .storageFull: "iCloud is full"
+        case .iCloudNotReady: "iCloud isn't ready"
         case .failed: "Sync stopped"
         case .duplicates: "Tidying up"
         case .noAccount: "Not signed in"
@@ -405,6 +406,9 @@ enum SyncEngineWords {
             #endif
             let kept = waiting == 0 ? "Nothing is lost." : "Nothing is lost: what is waiting stays waiting."
             return "\(kept) Free up space in \(where_), then try again."
+        case .iCloudNotReady:
+            let kept = waiting == 0 ? "Nothing is lost." : "Nothing is lost: what is waiting stays waiting."
+            return "\(kept) HITList tries again each time you come back to it, or now with Try again."
         case .failed:
             return "HITList couldn't read or write what it keeps on this device for sync. Nothing was sent or deleted."
         case .duplicates:
@@ -419,6 +423,7 @@ enum SyncEngineWords {
 
     static func tryAgainSubtitle(_ hold: SyncHold) -> String {
         if case .storageFull = hold { return "Sends what is waiting, once iCloud has room" }
+        if case .iCloudNotReady = hold { return "Sends what is waiting, if iCloud is ready now" }
         return "Reads this device's items and HITList's sync records again"
     }
 
