@@ -57,7 +57,11 @@ phone showed it too.
 - **150** (merged): the simulation's standing failures, each fixed or pinned as a written limit; 1,000 histories of
   300 steps of every fault set with no failure. Two limits written into section 5.
 - **148's findings**: a reset replaces the engine before the forgotten state is written (the supervisor); the rest
-  with 160.
+  by 160.
+- **160** (merged): iCloud refusing a send for the build or the account (a Production schema not yet deployed) is a
+  hold, `iCloudNotReady`, on the path a full iCloud has, and never a refusal of each record for good; a deletion's
+  note is kept while its save is still committing; a hold's words are a person's; the account switch runs in one
+  order, and items iCloud never held no longer travel into another account; the subscription is saved once.
 - The transport's lines are in the person's sync log now, with one line per fetch (what it brought, whether it
   reached the zone), so a week on the engine can be read afterwards.
 
@@ -116,6 +120,12 @@ code changed since. Either the real apps were not brought forward since, or back
 - **159** (merged): no titles, Group names or the Mac's user name in the logs; Claude's `update_task` and
   `complete_task` say they change what is there, and a description with text is erased only on
   `clear_description`; the privacy manifest's two categories; true words for the location question.
+- **158** (merged): the lists at 5,000 tasks. The sidebar's counts kept by one model; no 60-second clock (a list
+  sleeps to the next moment one of its rows changes); rows held between bodies and fetched by each list's own
+  predicate; search 150 ms after the last keystroke; the widgets' snapshot holds what a widget can show. Its own
+  numbers on a Debug Mac build, master against final (CPU seconds): check off a task 2.55 to 0.92, Today 2.62 to
+  0.81, launch 3.82 to 1.93, a minute at rest 0.48 to 0.06; at 26 tasks the same. What each list shows is pinned
+  by `ListSamenessTests`. A Group's list was left on the slower fetch (its meaning is a name match, not an id).
 - **The supervisor**: notifications are asked for at the first task with a reminder (they were silently off); the
   empty Flipboard says what a switch is; the iCloud page says what the bolt means and drops the developer line in
   a friend's build; a backup before Reset local cache; Claude's completion carries the full undo.
@@ -130,3 +140,46 @@ code changed since. Either the real apps were not brought forward since, or back
   ticked sub-tasks.
 - Import JSON asks before bringing back what was deleted since the backup.
 - Claude cannot clear a task's description without saying so (`clear_description`).
+- Long lists are faster, and a list at rest does nothing; what each list shows is unchanged.
+
+## Proof
+
+- Core 1,081, Mac 2,294 tests on the merged tree, no failures; the iPhone suite and the whole UI suite: see the
+  handbook's section 8 for the final counts.
+- The simulation: 1,000 histories of 300 steps of each of the eight fault sets and `ledger` with no failure (150);
+  300 of each again after 160.
+- The transport's probe on CloudKit Development, 18 of 18, with the manual fetch asking for every zone and the
+  reset in its new order (before the engine's Development side was put into its final shape; not run since).
+- The rehearsal above, every comparison by the engine's audit or the mirror's; the final build smoked on both
+  devices (each caught up at launch with the other's edits, sent its own a second later, compared exact).
+- The engine's container's Development schema exported after all of it: exactly the file.
+
+## Not done, not proven
+
+- A push from the phone to this Mac (not seen that night); a push that has to start the app (the phone's app not
+  running, a change on the Mac: nothing started within a minute; it catches up when opened).
+- The engine in Production: George's week.
+- One contract suite on both clouds; the two simplifications (after the first live week, `dev/SYNC-ENGINE.md`
+  section 13).
+- The sign-out: whether iCloud switched off for HITList alone removes the tasks from the device, and the `all`
+  set's seed 6 (a zone deleted while a device is offline, then its sign-out). Recommended to George: keep the
+  tasks on the device at a sign-out, before everyone moves.
+- From the screens review, left: the location question at a first launch (George's to decide), the reminder card's
+  small minutes field, empty Today and Upcoming with one grey line where the Inbox has a picture, What's New on a
+  first install, the largest text size on Today's heading. The "+" over a row of a scrolling list is the design.
+- From the performance review, left: the 60-second clocks in `MobileShell`, `FlipboardView`, `InboxProcessView` and
+  `DuoNextDays`; reminders and Spotlight recomputed after every save; `TaskRow`'s own cost in a long list.
+- From the crash review, left: rows identified by a task's `id` where two rows share one (the mirror's doubles; a
+  row identity from the store's own id changes when a new row is saved, which would make a row flicker).
+
+## Housekeeping
+
+- George's phone: the Debug build (he reinstalls from TestFlight); side stores `HITList-r32real` and
+  `HITList-r32pm` in the app's group container.
+- This Mac's App Group folder, for him to delete by hand (never `HITList.store`): anything starting `HITList-r32`,
+  `HITList-p32`, `HITList-p15`, beside the earlier rounds'.
+- The engine's container, Development: zones `HITList-r32real` (a copy of his own tasks, in his own account),
+  `HITList-r32w`; they go at the next reset of that side. The tasks' container, Development: the mirror's zone
+  holds the rehearsal's demo items.
+- Simulator `HITList-sup32`. Disk: about 30 GB free; the round's fourteen agent worktrees are merged and can go
+  with the 72 earlier ones (still George's to say).

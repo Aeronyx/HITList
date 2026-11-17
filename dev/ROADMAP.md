@@ -5,23 +5,25 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: the engine's road (round 31, 2026-11-16, evening; nothing to release)
+## Now: 0.9.14, the engine for George's own devices, and hardening for a launch (round 32, 2026-11-16 to 17)
 
-George, on releasing 0.9.13 (`dev/briefs/ROUND-31.md`): "Please do plan the engine's next steps. You may indeed use
-my iPhone for a debug build." The plan is `dev/SYNC-ENGINE.md` section 14.
+George: "Please work freely and complete the sync engine … let's shift into review and hardening mode so we can
+prepare for a real launch, but I also won't feel comfortable launching until we have at least a few days of
+experience with the new sync system" (`dev/briefs/ROUND-32.md`). The engine's road is `dev/SYNC-ENGINE.md` section 14.
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | On real devices: the engine on his iPhone 16 beside the Mac; a push both ways, in front and in the background; a first sync of 5,005 records timed on the phone | done, round 31 |
-| 2 | Close what can lose or hide a change: the unreadable record, the expired token, the ledger moved aside, the account switch's two owners, the simulation's standing failures, one contract suite on both clouds, two simplifications | next; needs nothing from George |
-| 3 | His decisions: plain or encrypted fields (plain recommended first), sign-out, purge | his |
-| 4 | The move rehearsed on a copy of his real data, Mac and phone | after 2 and 3 |
-| 5 | Live for George only, a week | a release; the engine's container's schema deployed first |
-| 6 | Everyone | a release |
+| 1 | On real devices | done, round 31 |
+| 2 | Close what can lose or hide a change | done, round 32 (and one nobody had listed: Apple's engine did not catch up after a relaunch); the contract suite and the two simplifications wait for the first live week |
+| 3 | His decisions | plain fields decided; the sign-out to decide before everyone moves |
+| 4 | The move rehearsed, Mac and phone, with a copy of his own tasks | done, round 32 |
+| 5 | Live for George only, a week | ready with 0.9.14: he deploys the engine's schema, releases, moves the Mac and then the iPhone |
+| 6 | Everyone | a release; he is told first what a friend should do (export) and what could go wrong |
 | 7 | The mirror and its instruments removed | a release |
 
-On master since 0.9.13 and in no release yet (nothing a person can see): the engine's sync-log line for how long
-its writes held the main thread; a Debug-only load seed. The next release's notes carry them under the hood.
+Hardening: six reviews of the whole app (the engine on the real store, the transport, data safety, crashes, every
+screen, performance, privacy) and their findings fixed in 0.9.14. What was left on purpose is at the foot of
+`dev/briefs/ROUND-32.md`.
 
 ## Before: 0.9.13 (round 30, 2026-11-16, the day after 0.9.12 was released; released that day)
 
