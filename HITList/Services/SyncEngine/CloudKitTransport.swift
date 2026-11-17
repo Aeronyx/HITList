@@ -19,8 +19,10 @@ struct SyncTransportLog: Sendable {
 /// The engine's road to iCloud on Apple's `CKSyncEngine` (brief 142; the rules T1 to T14 are in `dev/SYNC-ENGINE.md`,
 /// section 6, and this file keeps them as `FakeCloud` does).
 ///
-/// One engine on the private database of `containerID`, working in one zone (`SyncSchema.zoneName`; the probe passes
-/// a zone of its own). The mirror's zone lives in the same database: fetches are scoped to this zone
+/// One engine on the private database of `containerID`, working in one zone (`SyncSchema.zoneName`; the probe and
+/// the supervisor's runs pass zones of their own, so in Development the database holds several). A fetch asked for
+/// here asks the engine for everything (`.all`, as Apple's sample does: the step that learns from the database which
+/// zones changed is then never in question); which zones' records are then fetched is this zone alone
 /// (`nextFetchChangesOptions`), batches hold only this zone's changes (`context.options.scope.contains` and the zone),
 /// and every event is filtered by zone before the brain sees it.
 ///
@@ -173,7 +175,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             tokenExpired = false
             thrown = nil
             do {
-                try await engine.fetchChanges(CKSyncEngine.FetchChangesOptions(scope: .zoneIDs([zoneID])))
+                try await engine.fetchChanges(CKSyncEngine.FetchChangesOptions(scope: .all))
             } catch {
                 thrown = error
                 if CloudKitTransportRules.isTokenExpired(error) { tokenExpired = true }
@@ -360,6 +362,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
             fetchOpen = true
             fetchTrouble = nil
             zoneFetchEnded = false
+            fetchBrought = (0, 0)
             wholeFetchSeenBeforeThisFetch = stored.fetchedWhole == true
             await deliver(.willFetch)
 
@@ -390,6 +393,11 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
         case .didFetchChanges(let done):
             fetchesEnded += 1
+            // One line per fetch in the sync log: what it brought and whether it reached the zone. A fetch that
+            // brings nothing while another device's changes wait in iCloud is then visible as such (round 32).
+            log.write("fetch ended (\(done.context.reason == .manual ? "asked" : "by itself")): \(fetchBrought.changed) changed, "
+                      + "\(fetchBrought.removed) removed, zone \(zoneFetchEnded ? "reached" : "not reached")"
+                      + (fetchTrouble.map { ", trouble: \($0)" } ?? ""))
             // Records this build could not read are asked for again, by name, at the end of every fetch that
             // reached iCloud (16c), before the brain hears the fetch ended. Never on a timer.
             if fetchTrouble == nil, zoneFetchEnded { await retryOwed() }
@@ -635,7 +643,12 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
 
     // MARK: - Fetching
 
+    /// What the fetch in progress has brought so far, for its line in the sync log.
+    private var fetchBrought = (changed: 0, removed: 0)
+
     private func fetched(_ changes: CKSyncEngine.Event.FetchedRecordZoneChanges) async {
+        fetchBrought.changed += changes.modifications.count
+        fetchBrought.removed += changes.deletions.count
         var changed: [CloudRecord] = []
         var removed: [SyncKey] = []
         var arrived: [String] = []

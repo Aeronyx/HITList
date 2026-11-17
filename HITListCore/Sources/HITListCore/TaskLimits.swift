@@ -7,6 +7,16 @@ public enum TaskLimits {
     /// Characters in a title (George: 500).
     public static let titleCharacters = 500
 
+    /// Characters in a description (round 32). A description near a megabyte is more than a CloudKit record holds:
+    /// SwiftData's mirror then stores it as an asset under a field Production's schema was never given, and that
+    /// device stops sending anything. No task's notes come near this in use; a stray paste or an import can.
+    public static let notesCharacters = 100_000
+
+    /// `notes` cut to `notesCharacters`. Nothing else is changed: a description keeps its line breaks and spaces.
+    public static func clampedNotes(_ notes: String) -> String {
+        notes.count > notesCharacters ? String(notes.prefix(notesCharacters)) : notes
+    }
+
     /// `title` cut to `titleCharacters`, whitespace trimmed.
     public static func clampedTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)

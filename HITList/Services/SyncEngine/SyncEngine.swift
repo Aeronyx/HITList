@@ -143,8 +143,20 @@ final class SyncEngine {
                 return PretendCloudTransport(name: pretend, device: storeName, state: ledger)
             }
             #endif
+            // The transport's lines (keys, counts, CloudKit's codes; never a title) go to the person's sync log too,
+            // so that a week on the engine can be read afterwards: each fetch and what it brought, each refusal.
+            let lines = SyncTransportLog { line in
+                SyncTransportLog.system.write(line)
+                Task { @MainActor in
+                    board.log("Transport: \(line)")
+                    #if DEBUG
+                    print("SYNCENGINE transport: \(line)")
+                    fflush(stdout)
+                    #endif
+                }
+            }
             return CloudKitTransport(containerID: SyncEngineSwitch.containerID, zoneName: zone, state: ledger,
-                                     automaticallySync: true)
+                                     automaticallySync: true, log: lines)
         }
         #if DEBUG
         // A Debug run on a side store (the pretend run, the supervisor's run on CloudKit Development) is watched from a
