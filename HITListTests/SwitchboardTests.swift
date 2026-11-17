@@ -525,3 +525,47 @@ final class SwitchboardDraftTests: XCTestCase {
         XCTAssertEqual(SwitchboardDraft.doneCount(board.switches ?? [], now: Date()), "1 of 2")
     }
 }
+
+/// Round 32 (brief 157, the crash review's finding 2, "same shape"): the switch and Switchboard cards keep the id of
+/// what they edit and fetch it on Save, so a switch or board deleted while its card was open (an import, another
+/// window, another device) is never written to or brought back; Save says so in one line.
+@MainActor
+final class SwitchCardTargetTests: XCTestCase {
+    func testSavingASwitchDeletedWhileItsCardWasOpenSaysSoAndWritesNothing() throws {
+        let container = ModelContainerFactory.preview()
+        let main = container.mainContext
+        let floss = try Flipboard.createSwitch(title: "Floss", rule: .daily, in: main)
+        try main.save()
+        let id = floss.id
+        XCTAssertTrue(try SwitchCard.target(editing: id, in: main) === floss, "still there: Save writes into it")
+        XCTAssertNil(try SwitchCard.target(editing: nil, in: main), "adding: nothing to fetch")
+
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+
+        XCTAssertThrowsError(try SwitchCard.target(editing: id, in: main)) { error in
+            XCTAssertEqual(error.localizedDescription, "This switch was deleted, so there’s nothing to save.")
+        }
+        XCTAssertEqual(try main.fetchCount(FetchDescriptor<TaskItem>()), 0, "nothing brought it back")
+    }
+
+    func testSavingASwitchboardDeletedWhileItsCardWasOpenSaysSo() throws {
+        let container = ModelContainerFactory.preview()
+        let main = container.mainContext
+        let bed = try Flipboard.createSwitchboard(name: "Before Bed", in: main)
+        try main.save()
+        let id = bed.id
+        XCTAssertTrue(try SwitchboardCard.target(editing: id, in: main) === bed)
+
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<Switchboard>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+
+        XCTAssertThrowsError(try SwitchboardCard.target(editing: id, in: main)) { error in
+            XCTAssertEqual(error.localizedDescription, "This Switchboard was deleted, so there’s nothing to save.")
+        }
+    }
+}

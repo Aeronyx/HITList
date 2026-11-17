@@ -11,6 +11,8 @@ import HITListCore
 struct SwitchboardCard: View {
     /// The board being edited; nil adds one.
     let editing: Switchboard?
+    /// Its id, which Save and Delete fetch by (`target(editing:in:)`).
+    private let editingID: UUID?
     var style: SwitchCard.Style
     /// Opened from a board's Delete…: the delete question shows at once.
     var asksToDelete = false
@@ -43,6 +45,7 @@ struct SwitchboardCard: View {
          onDeleted: @escaping () -> Void = {}, onDraftChange: @escaping (Bool) -> Void = { _ in },
          onDiscard: @escaping () -> Void = {}, onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
+        self.editingID = editing?.id
         self.style = style
         self.asksToDelete = asksToDelete
         self.isConfirmingDiscard = isConfirmingDiscard
@@ -222,10 +225,22 @@ struct SwitchboardCard: View {
 
     // MARK: Actions
 
+    /// What Save (or Delete) acts on: nil to add, the board being edited fetched afresh by its id, never the model the
+    /// card opened with (it may have been deleted meanwhile: round 32, brief 157). Throws `SwitchCard.Gone` when it is
+    /// no longer there.
+    static func target(editing id: UUID?, in context: ModelContext) throws -> Switchboard? {
+        guard let id else { return nil }
+        guard let board = try? context.fetch(FetchDescriptor<Switchboard>(predicate: #Predicate { $0.id == id })).first else {
+            throw SwitchCard.Gone(what: "Switchboard")
+        }
+        return board
+    }
+
     private func save() {
         guard !isConfirmingDiscard, !confirmingDelete else { return }
         do {
-            guard let board = try draft.save(editing: editing, in: context) else { return }
+            let target = try Self.target(editing: editingID, in: context)
+            guard let board = try draft.save(editing: target, in: context) else { return }
             errorMessage = nil
             #if os(iOS)
             if editing == nil { TapHaptic.play() }
@@ -239,8 +254,9 @@ struct SwitchboardCard: View {
     }
 
     private func delete(keepingSwitches: Bool) {
-        guard let editing else { return }
-        withAnimation(.snappy) { Flipboard.deleteSwitchboard(editing, deletingSwitches: !keepingSwitches, in: context) }
+        // Already gone (deleted elsewhere while the card asked): nothing left to delete.
+        guard let board = try? Self.target(editing: editingID, in: context) else { return onDeleted() }
+        withAnimation(.snappy) { Flipboard.deleteSwitchboard(board, deletingSwitches: !keepingSwitches, in: context) }
         Task { await NotificationScheduler.reschedule(context: context) }
         onDeleted()
     }
