@@ -120,6 +120,24 @@ final class SpotlightTests: XCTestCase {
         XCTAssertEqual(SpotlightLedger.load(from: defaults)?.count, 6)
     }
 
+    /// Round 32 (brief 157, the crash review's finding 1): a refresh reads every task before its first await. A task
+    /// changed (or deleted) while the index is busy is indexed as it was read, so what Spotlight holds matches the
+    /// ledger's fingerprint, and the change is the next refresh's; a deleted model is never read.
+    func testARefreshReadsItsTasksBeforeItsFirstAwait() async throws {
+        let milk = try task("Buy milk")
+        let bread = try task("Buy bread")
+        index.duringRemoveAll = { [context] in
+            milk.title = "Buy oat milk"
+            context!.delete(bread)
+            try context!.save()
+        }
+        let plan = await sync().refresh(in: context)
+
+        XCTAssertEqual(plan.index.count, 2)
+        XCTAssertEqual(Set(index.indexed.map(\.title)), ["Buy milk", "Buy bread"],
+                       "the values read before the await, not the models' state after it")
+    }
+
     func testLaterRefreshesSendOnlyWhatChanged() async throws {
         let milk = try task("Buy milk")
         let bread = try task("Buy bread")
@@ -289,6 +307,8 @@ private final class FakeIndex: SpotlightIndexing {
     var removed: [UUID] = []
     var removedAll = 0
     var failing = false
+    /// Runs inside `removeAll`, while the refresh is suspended at its first await (round 32, brief 157).
+    var duringRemoveAll: (() throws -> Void)?
 
     var indexed: [TaskEntity] { batches.flatMap { $0 } }
 
@@ -310,5 +330,6 @@ private final class FakeIndex: SpotlightIndexing {
 
     func removeAll() async throws {
         removedAll += 1
+        try duringRemoveAll?()
     }
 }

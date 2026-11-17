@@ -115,18 +115,22 @@ final class SpotlightSync {
             Self.log.error("Spotlight: couldn't read tasks: \(error.localizedDescription, privacy: .public)")
             return SpotlightPlan()
         }
+        // Every task is read here, before the first await: a model read after one may have been changed or deleted
+        // meanwhile (an import, another window), and a deleted one must never be read (round 32, brief 157). What is
+        // indexed is then exactly what the fingerprint describes; a change made meanwhile is the next refresh's.
         let records = Dictionary(tasks.map { (SpotlightRecord($0).id, $0) }, uniquingKeysWith: { first, _ in first })
         let current = records.mapValues { SpotlightRecord($0).fingerprint }
-        var ledger: [UUID: String]
-        if let stored = SpotlightLedger.load(from: defaults) {
-            ledger = stored
-        } else {
-            // No ledger (first run, a newer ledger format, an account switch): start from an empty index.
+        // No ledger (first run, a newer ledger format, an account switch): start from an empty index.
+        let stored = SpotlightLedger.load(from: defaults)
+        var ledger = stored ?? [:]
+        let plan = SpotlightPlan.make(current: current, ledger: ledger)
+        let entities = Dictionary(uniqueKeysWithValues: plan.index.compactMap { id in
+            records[id].map { (id, TaskEntity(spotlight: $0)) }
+        })
+        if stored == nil {
             do { try await index.removeAll() } catch { Self.log.error("Spotlight: clear failed: \(error.localizedDescription, privacy: .public)") }
-            ledger = [:]
             SpotlightLedger.save(ledger, to: defaults)
         }
-        let plan = SpotlightPlan.make(current: current, ledger: ledger)
         guard !plan.isEmpty else { return plan }
 
         for batch in plan.remove.chunked(into: batchSize) {
@@ -138,9 +142,8 @@ final class SpotlightSync {
             }
         }
         for batch in plan.index.chunked(into: batchSize) {
-            let entities = batch.compactMap { records[$0].map(TaskEntity.init(spotlight:)) }
             do {
-                try await index.index(entities)
+                try await index.index(batch.compactMap { entities[$0] })
                 for id in batch { ledger[id] = current[id] }
             } catch {
                 Self.log.error("Spotlight: index failed: \(error.localizedDescription, privacy: .public)")
