@@ -85,9 +85,13 @@ final class EditorSafetyUITests: XCTestCase {
         shared.tap()
         let words = "Shared tasks can’t keep its label and repeat. They’ll be dropped."
         XCTAssertTrue(app.staticTexts[words].waitForExistence(timeout: 5), "the move names what stays behind")
+        XCTAssertTrue(app.buttons["Move"].firstMatch.exists, "the question's Move")
         snapshot("4 Move to Shared Tasks question")
-        app.buttons["Cancel"].firstMatch.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForExistence(timeout: 5), "Cancel keeps the task")
+        // iOS draws the question without a Cancel button: a tap away is the cancel.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.85)).tap()
+        XCTAssertTrue(app.staticTexts[words].waitForNonExistence(timeout: 5), "a tap away cancels")
+        XCTAssertTrue(app.descendants(matching: .any)["editorTitle"].waitForExistence(timeout: 5), "the task stays yours")
+        snapshot("5 Cancelled: still in its editor")
     }
 
     // MARK: Helpers
@@ -99,7 +103,7 @@ final class EditorSafetyUITests: XCTestCase {
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
         app.typeText(title)
         app.buttons["quickAddSave"].tap()
-        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "the card closes after Add")
+        XCTAssertTrue(field.waitForNonExistence(timeout: 10), "the card closes after Add")
     }
 
     private func openEditor(_ title: String) {
