@@ -198,6 +198,11 @@ actor SyncLedgerStore: SyncLedger {
         }
         let opened = sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil)
         guard opened == SQLITE_OK else { return failure(opened) }
+        // A writer that holds the file for a moment (this process's own container, just closing) is waited out:
+        // "busy" is no answer about the file. Half a second at most; a lock that outlasts it reads as unreadable,
+        // which holds and never moves the file aside. (Seen in round 32: the check right after a save answered
+        // "database is locked" on the iPhone simulator.)
+        sqlite3_busy_timeout(db, 500)
         var statement: OpaquePointer?
         defer { sqlite3_finalize(statement) }
         guard sqlite3_prepare_v2(db, "PRAGMA quick_check(1)", -1, &statement, nil) == SQLITE_OK else {
