@@ -65,6 +65,9 @@ public actor SyncCore: SyncTransportDelegate {
     /// Deletions noted (`noteDeletions`) whose keys no compare has looked at yet: the next one does, whatever keys
     /// it was asked for (a save's hint names the rows it knows of; the store may have written down more).
     var noted: Set<SyncKey> = []
+    /// Records the transport fetched in this fetch and could not read (`TransportEvent.owed`): iCloud holds them, so
+    /// the fetch is no proof that iCloud lacks these keys (brief 160, 149's "brain gap"). Cleared at each `willFetch`.
+    var owedKeys: Set<SyncKey> = []
 
     enum Phase { case off, starting, running }
     var phase = Phase.off
@@ -277,6 +280,7 @@ public actor SyncCore: SyncTransportDelegate {
             await accountChanged(change)
         case .willFetch:
             fetching = true
+            owedKeys = []
         case .fetched(let changed, let removed):
             await fetched(changed, removed: removed)
         case .zoneLost(let reason):
@@ -284,6 +288,9 @@ public actor SyncCore: SyncTransportDelegate {
         case .didFetch(let error):
             fetching = false
             await didFetch(error: error)
+        case .owed(let keys):
+            owedKeys = Set(keys)
+            log("\(keys.count) record\(keys.count == 1 ? "" : "s") in iCloud could not be read here yet; not taken as missing from iCloud")
         case .willSend:
             sending = true
         case .sent(let saved, let removed, let failed):

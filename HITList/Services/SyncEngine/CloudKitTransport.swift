@@ -197,6 +197,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         if heldDidFetch || (failure != nil && fetchOpen) {
             heldDidFetch = false
             fetchOpen = false
+            await tellOwed()
             await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(failure ?? fetchTrouble, owed: stored.owedRecords,
                                                                               wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
         }
@@ -466,6 +467,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 fetchOpen = false
                 let ending = CloudKitTransportRules.scheduledFetchEnding(
                     trouble: fetchTrouble, reachedZone: zoneFetchEnded, wholeFetchSeen: stored.fetchedWhole == true)
+                await tellOwed()
                 await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(ending, owed: stored.owedRecords,
                                                                                   wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
                 if fetchTrouble == nil, zoneFetchEnded { await wholeFetchSeen() }
@@ -778,6 +780,14 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// can be read now as fetched. One iCloud no longer holds is crossed off: its removal for good comes with the
     /// zone's changes. Called at the end of a fetch that reached iCloud, so at each start too (the launch's sync
     /// fetches first). Nothing here loops: the next try is the next fetch.
+    /// Tells the brain, just before a fetch's end, which records are still owed (brief 160): it then keeps a deletion
+    /// of its own that has no base for such a key, which the whole fetch would otherwise drop.
+    private func tellOwed() async {
+        let keys = CloudKitTransportRules.owedKeys(stored.owedRecords)
+        guard !keys.isEmpty else { return }
+        await deliver(.owed(keys))
+    }
+
     private func retryOwed() async {
         let names = stored.owedRecords.reasons.keys.sorted()
         guard !names.isEmpty, stored.account != nil else { return }
@@ -1209,6 +1219,11 @@ enum CloudKitTransportRules {
 
     /// Why a record of ours could not be read, so it is owed (16c); nil when it is not ours at all (a record the
     /// mirror wrote, an unprefixed type): those are ignored, never owed.
+    /// The keys of the records still owed, as the brain names them (`TransportEvent.owed`), in order.
+    static func owedKeys(_ owed: OwedRecords) -> [SyncKey] {
+        owed.reasons.keys.sorted().compactMap { CloudRecordCodec.key(forRecordName: $0) }
+    }
+
     static func owedReason(_ error: Error) -> String? {
         if case CloudRecordCodec.DecodeProblem.notOurs = error { return nil }
         return "\(error)"

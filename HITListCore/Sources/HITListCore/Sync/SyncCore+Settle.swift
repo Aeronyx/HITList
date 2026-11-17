@@ -84,8 +84,9 @@ extension SyncCore {
             }
         }
         // Deletions kept across a forgotten memory that this whole fetch did not bring: iCloud does not hold the
-        // item, so there is nothing to delete there.
-        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil }.map(\.key)
+        // item, so there is nothing to delete there. Not one whose record the transport still owes: iCloud holds that
+        // one, and dropping the deletion would bring the item back once the record can be read (brief 160).
+        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) }.map(\.key)
         if !kept.isEmpty {
             do {
                 let here = try await localRecords(Set(kept))
@@ -320,6 +321,9 @@ extension SyncCore {
             return false
         }
         for key in landed { remembered[key] = nil }
+        // A base that moved: what iCloud refused for good was a send against the old one, so the key is tried again
+        // against the new one (brief 160, 149's "brain gap"), once per version another device makes.
+        for key in keys where !aside.contains(key) && settling[key]?.server != nil { refused[key] = nil }
 
         // 3. What each key now waits for, the references that arrived, and the transport's list.
         await compare(keys.union(reached))

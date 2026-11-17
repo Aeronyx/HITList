@@ -322,6 +322,14 @@ final class CloudKitTransportTests: XCTestCase {
         await transport.stop()
     }
 
+    /// Brief 160 (149's brain gap): the records still owed are told to the brain by key before a fetch ends, so a
+    /// deletion of its own with no base for one of them is not dropped by the whole fetch.
+    func testTheRecordsStillOwedAreToldByKey() {
+        let owed = OwedRecords(reasons: ["TaskItem.B": "asset unreadable", "Profile.profile": "no file", "not ours": "?"])
+        XCTAssertEqual(Rules.owedKeys(owed), [SyncKey(type: "Profile", name: "profile"), SyncKey(type: "TaskItem", name: "B")])
+        XCTAssertEqual(Rules.owedKeys(OwedRecords()), [])
+    }
+
     private final class NoDelegate: SyncTransportDelegate, @unchecked Sendable {
         func handle(_ event: TransportEvent) async {}
         func recordToSend(_ key: SyncKey) async -> OutgoingRecord? { nil }

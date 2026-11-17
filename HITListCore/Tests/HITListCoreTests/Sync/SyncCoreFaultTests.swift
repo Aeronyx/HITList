@@ -223,6 +223,71 @@ final class SyncCoreFaultTests: XCTestCase {
         XCTAssertEqual(note, "Nothing was removed from this device: the backup failed.")
         XCTAssertTrue(device.log.lines.contains { $0.contains("BackupBroke") }, "\(device.log.lines)")
     }
+
+    // MARK: 5. What 149 left for the brain
+
+    /// While the transport owes a record it could not read, a deletion of this device's own with no base for that
+    /// key is kept: the whole fetch did not bring the record, but iCloud holds it. When the record can be read and
+    /// arrives, the deletion settles against it (M3 with a deletion of its own) and its marker goes.
+    func testANoBaseDeletionIsKeptWhileItsRecordIsOwed() async {
+        let device = Device([task("A", "Milk"), task("B", "Bread")])
+        await device.core.start()
+        await device.store.delete(taskKey("A"))
+        await device.core.localChanged([taskKey("A")])
+        let noted = await device.entry(taskKey("A"))
+        XCTAssertNotNil(noted?.deletedHereAt)
+        XCTAssertNil(noted?.base)
+
+        // The first whole fetch: A's record is in iCloud and could not be read here.
+        await device.transport.deliver(.willFetch)
+        await device.transport.deliver(.fetched(changed: [cloud(task("B", "Bread")), meta()], removed: []))
+        await device.transport.deliver(.owed([taskKey("A")]))
+        await device.transport.deliver(.didFetch(error: nil))
+        let kept = await device.entry(taskKey("A"))
+        XCTAssertNotNil(kept?.deletedHereAt, "kept: iCloud holds the record, this device could not read it yet")
+
+        // It can be read now: the deletion settles against it, and the marker goes.
+        await device.deliverFetch([cloud(task("A", "Milk"))])
+        let back = await device.item(taskKey("A"))
+        XCTAssertNil(back, "the person's deletion stands")
+        let outgoing = await device.core.recordToSend(taskKey("A"))
+        XCTAssertEqual(outgoing?.record.isDeleted, true, "its marker goes to iCloud")
+    }
+
+    /// Without anything owed, the first whole fetch that does not bring the key drops the note (iCloud lacks it).
+    func testANoBaseDeletionIsDroppedByAWholeFetchWithNothingOwed() async {
+        let device = Device([task("A", "Milk")])
+        await device.core.start()
+        await device.store.delete(taskKey("A"))
+        await device.core.localChanged([taskKey("A")])
+        await device.deliverFetch([meta()])
+        let entry = await device.entry(taskKey("A"))
+        XCTAssertNil(entry)
+    }
+
+    /// A record refused for good is tried again when a fetch moves its base (another device changed it): the
+    /// refusal was of the version this device sent against the old one.
+    func testARefusedKeyIsClearedWhenAFetchMovesItsBase() async throws {
+        let device = await synced([task("A", "Milk")])
+        await device.store.edit(taskKey("A"), ["title": .string("Oat milk"), "updatedAt": at(40)])
+        await device.core.localChanged([taskKey("A")])
+        await device.transport.setAnswer { _, _ in
+            [.sent(saved: [], removed: [], failed: [taskKey("A"): .rejected(code: 99, message: "no")])]
+        }
+        try await device.transport.send()
+        let refused = await device.status().refused
+        XCTAssertEqual(refused, [taskKey("A")])
+        await device.transport.setAnswer(nil)
+        // Another device renamed it earlier than this one did: the merge keeps this device's version as it is (M7,
+        // the later writer), so the device is not written, and the base and its token move.
+        await device.deliverFetch([cloud(task("A", "Soy milk", updated: 20), "c2")])
+        let item = await device.item(taskKey("A"))
+        XCTAssertEqual(item?["title"], .string("Oat milk"))
+        let status = await device.status()
+        XCTAssertEqual(status.refused, [], "the base moved: the refusal was of a send against the old one")
+        let pending = await device.pending()
+        XCTAssertEqual(pending, [.save(taskKey("A"))], "tried again once, against the new base")
+    }
 }
 
 private struct BackupBroke: Error {}

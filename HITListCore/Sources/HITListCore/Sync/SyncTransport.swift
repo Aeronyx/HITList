@@ -102,6 +102,10 @@ public enum TransportEvent: Sendable {
     /// tried again (`error`: its words, for the log and the status line). `CloudKitTransport` also gives words, from
     /// the second fetch under its state on, while a record it could not read is still owed (brief 149).
     case didFetch(error: String?)
+    /// Told during a fetch, before its `didFetch`: records of ours iCloud holds that this transport fetched and could
+    /// not read and still owes (`CloudKitTransport`, 16c; brief 160). The brain does not take the fetch as proof that
+    /// iCloud lacks these keys. Told only when some are owed: a fetch that tells none owes none.
+    case owed([SyncKey])
     case willSend
     /// One batch came back (T3 to T9): `saved` as iCloud now holds them, `removed` for good, and the changes
     /// refused. A change that is neither here nor refused is still pending (the network dropped: T5). Every change

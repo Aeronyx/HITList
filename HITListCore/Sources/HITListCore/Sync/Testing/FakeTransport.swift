@@ -36,7 +36,9 @@ public enum FakeEventKind: String, Sendable, CaseIterable {
         switch event {
         case .account: self = .account
         case .willFetch: self = .willFetch
-        case .fetched: self = .fetched
+        // `owed` is part of what a fetch brought (FakeCloud never owes a record; a kind of its own would change
+        // which event the rig's seeds pick).
+        case .fetched, .owed: self = .fetched
         case .zoneLost: self = .zoneLost
         case .didFetch: self = .didFetch
         case .willSend: self = .willSend
