@@ -1,6 +1,7 @@
 import CoreData
 import Foundation
 import OSLog
+import SQLite3
 import SwiftData
 import HITListCore
 
@@ -10,11 +11,13 @@ import HITListCore
 /// A store of its own beside the data: its own SwiftData models in its own `ModelContainer`, never synced
 /// (`cloudKitDatabase: .none`) and never part of `HITListSchema`, at `<App Group>/<store name>.ledger` (`HITList.ledger`
 /// beside `HITList.store`, `HITList-s141.ledger` beside a side store), or in memory for tests and for an app store
-/// that runs in memory. It is the engine's scratch memory and **disposable by design**: losing it, resetting it, or
-/// starting with an empty one costs nothing of the person's, because the engine then merges everything afresh (a merge
-/// without a memory, section 7). That is why `reset()` deletes every row of this store and a file that cannot be
-/// opened is replaced by an empty ledger: COMMON's "never delete as a reset" protects the person's data, which deletes
-/// mirror to every device; nothing here is the person's or leaves the device.
+/// that runs in memory. It is the engine's scratch memory and **disposable by design, but for one thing**: losing it,
+/// resetting it, or starting with an empty one costs nothing of the person's items, because the engine then merges
+/// everything afresh (a merge without a memory, section 7); but the deletions this device has taken down and not yet
+/// sent live here too, and with them lost those items come back. That is why `reset()` deletes every row of this store,
+/// while a file is moved aside only when it is damaged beyond opening (`open(at:)`): one that cannot be opened now is
+/// left as it is, and the engine waits for it. COMMON's "never delete as a reset" protects the person's data, which
+/// deletes mirror to every device; nothing here leaves the device.
 ///
 /// One transaction per `write`: one context, one `save()`, all of it or none of it. The transport's state is a fact in
 /// the same file, so it is written by the same SQLite log as the entries: a bookmark is never on disk without the
@@ -55,10 +58,17 @@ actor SyncLedgerStore: SyncLedger {
     }
 
     /// The ledger for the app's store as `ModelContainerFactory` opened it: beside its file, or in memory when the
-    /// store runs in memory or has no file of its own.
-    static func forAppStore(storeURL: URL?, storeInMemory: Bool) -> SyncLedgerStore {
+    /// store runs in memory or has no file of its own. Throws `NotOpened` as `open(at:)` does.
+    static func forAppStore(storeURL: URL?, storeInMemory: Bool) throws -> SyncLedgerStore {
         guard let storeURL, !storeInMemory else { return inMemory() }
-        return open(at: url(forStoreAt: storeURL))
+        return try open(at: url(forStoreAt: storeURL))
+    }
+
+    /// The ledger's file is there (or should be) and cannot be opened now, and was left as it is: the engine holds
+    /// `failed` with these words and tries again at the next start or "Try again".
+    struct NotOpened: Error, CustomStringConvertible {
+        let words: String
+        var description: String { words }
     }
 
     /// An empty ledger in memory, gone with the process.
@@ -71,30 +81,131 @@ actor SyncLedgerStore: SyncLedger {
         return SyncLedgerStore(container: container, url: nil, movedAside: nil)
     }
 
-    /// The ledger at `url`. A file that cannot be opened is moved aside (never deleted: `<name>.unreadable-<time>`,
-    /// with its `-wal` and `-shm`) and an empty ledger is made in its place, with a line in the log, because an empty
-    /// ledger is always safe (`dev/SYNC-ENGINE.md` section 7). If even that fails, the ledger runs in memory.
-    static func open(at url: URL) -> SyncLedgerStore {
+    /// The ledger at `url`.
+    ///
+    /// A file **damaged beyond opening** (`classify`: SQLite finds no database or a corrupt one, or a sound file this
+    /// build's models cannot open) is moved aside (never deleted: `<name>.unreadable-<time>`, with its `-wal` and
+    /// `-shm`) and an empty ledger is made in its place, with a line in the log: a merge without a memory
+    /// (`dev/SYNC-ENGINE.md` section 7); the deletions not yet sent go with the file, which nothing could read anyway.
+    ///
+    /// Anything else (no permission, a full disk, the file's protection on a phone not unlocked since it started, the
+    /// file busy, a reason not known) throws `NotOpened` and leaves every file as it was: the deletions this device has
+    /// not sent are in it, and moving it aside would bring those items back. Nothing runs in memory in its place (a
+    /// ledger in memory would forget those deletions at the next launch just the same).
+    static func open(at url: URL) throws -> SyncLedgerStore {
         do {
             return SyncLedgerStore(container: try container(at: url), url: url, movedAside: nil)
         } catch {
-            let first = error
-            let aside: URL?
-            do {
-                aside = try moveAside(url)
-                log.error("Sync ledger at \(url.path, privacy: .public) could not be opened (\(first.localizedDescription, privacy: .public)); moved to \(aside?.lastPathComponent ?? "nowhere", privacy: .public), starting with an empty ledger")
-            } catch {
-                log.fault("Sync ledger at \(url.path, privacy: .public) could not be opened (\(first.localizedDescription, privacy: .public)) nor moved aside (\(error.localizedDescription, privacy: .public)); running on an empty ledger in memory")
-                return inMemory()
-            }
-            do {
-                return SyncLedgerStore(container: try container(at: url), url: url, movedAside: aside)
-            } catch {
-                log.fault("Sync ledger: a new file at \(url.path, privacy: .public) could not be made either (\(error.localizedDescription, privacy: .public)); running on an empty ledger in memory")
-                let memory = inMemory()
-                return SyncLedgerStore(container: memory.container, url: nil, movedAside: aside)
+            switch classify(error, file: check(url)) {
+            case .notNow(let words):
+                log.error("Sync ledger at \(url.path, privacy: .public) cannot be opened now (\(words, privacy: .public)); left as it is, the engine waits")
+                throw NotOpened(words: "The sync engine's memory could not be opened: \(words)")
+            case .damaged(let words):
+                let aside: URL?
+                do {
+                    aside = try moveAside(url)
+                } catch {
+                    log.fault("Sync ledger at \(url.path, privacy: .public) is damaged (\(words, privacy: .public)) and could not be moved aside (\(error.localizedDescription, privacy: .public))")
+                    throw NotOpened(words: "The sync engine's memory is damaged and could not be set aside: \(error.localizedDescription)")
+                }
+                log.error("Sync ledger at \(url.path, privacy: .public) is damaged (\(words, privacy: .public)); moved to \(aside?.lastPathComponent ?? "nowhere", privacy: .public), starting with an empty ledger")
+                do {
+                    return SyncLedgerStore(container: try container(at: url), url: url, movedAside: aside)
+                } catch {
+                    log.fault("Sync ledger: a new file at \(url.path, privacy: .public) could not be made (\(error.localizedDescription, privacy: .public))")
+                    throw NotOpened(words: "The sync engine's memory could not be made: \(error.localizedDescription)")
+                }
             }
         }
+    }
+
+    /// What a failure to open the ledger is.
+    enum OpenFailure: Equatable {
+        /// Damaged beyond opening: moved aside, an empty ledger in its place.
+        case damaged(String)
+        /// Cannot be opened now: left alone; the engine holds and tries again later.
+        case notNow(String)
+    }
+
+    /// What SQLite itself makes of the ledger's file, read-only (`check`): SwiftData's own error does not always carry
+    /// the cause.
+    enum FileCheck: Equatable {
+        case missing
+        /// Not a database, or a damaged one (`SQLITE_NOTADB`, `SQLITE_CORRUPT`, or a quick check that is not "ok").
+        case damaged(String)
+        /// SQLite could not read it now (no permission, the file's protection, locked or busy, an I/O error).
+        case unreadable(String)
+        /// A sound SQLite database.
+        case sound
+    }
+
+    /// Damage is only what SQLite itself calls damage, or a sound file whose models this build cannot open (Core
+    /// Data's incompatible-model codes in the error's chain: a newer build's ledger after a tester went back; the
+    /// ledger's models carry no migration plan, so this build could never open it). Everything else, a reason not
+    /// known included, is "not now": holding wrongly costs sync until the next try, moving aside wrongly costs the
+    /// deletions not yet sent. A full disk or a refused permission named in the chain is never damage.
+    static func classify(_ error: Error, file: FileCheck) -> OpenFailure {
+        let chain = errorChain(error)
+        let cause = chain.last?.localizedDescription ?? error.localizedDescription
+        switch file {
+        case .damaged(let words):
+            return .damaged(words)
+        case .missing:
+            return .notNow(cause)
+        case .unreadable(let words):
+            return .notNow(words)
+        case .sound:
+            if let named = chain.first(where: { $0.domain == NSCocoaErrorDomain && notNowCodes.contains($0.code) }) {
+                return .notNow(named.localizedDescription)
+            }
+            if let model = chain.first(where: { $0.domain == NSCocoaErrorDomain && incompatibleModelCodes.contains($0.code) }) {
+                return .damaged(model.localizedDescription)
+            }
+            return .notNow(cause)
+        }
+    }
+
+    /// Foundation's codes for a disk that is full or read-only, or a permission refused.
+    static let notNowCodes: Set<Int> = [NSFileWriteOutOfSpaceError, NSFileReadNoPermissionError, NSFileWriteNoPermissionError,
+                                        NSFileWriteVolumeReadOnlyError]
+
+    /// Core Data: the store's model is not this build's and cannot be brought to it.
+    static let incompatibleModelCodes: Set<Int> = [NSPersistentStoreIncompatibleVersionHashError, NSMigrationMissingSourceModelError,
+                                                   NSPersistentStoreIncompatibleSchemaError, NSMigrationError,
+                                                   NSMigrationMissingMappingModelError]
+
+    private static func errorChain(_ error: Error) -> [NSError] {
+        var out: [NSError] = []
+        var next: NSError? = error as NSError
+        while let current = next, out.count < 8 {
+            out.append(current)
+            next = current.userInfo[NSUnderlyingErrorKey] as? NSError
+        }
+        return out
+    }
+
+    /// Opens the file read-only with SQLite and runs `PRAGMA quick_check(1)`. Never writes, never makes a file.
+    static func check(_ url: URL) -> FileCheck {
+        guard FileManager.default.fileExists(atPath: url.path) else { return .missing }
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        func failure(_ code: Int32) -> FileCheck {
+            let words = "\(String(cString: sqlite3_errstr(code))) (\(code))"
+            switch code & 0xff {
+            case SQLITE_NOTADB, SQLITE_CORRUPT: return .damaged(words)
+            default: return .unreadable(words)
+            }
+        }
+        let opened = sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READONLY, nil)
+        guard opened == SQLITE_OK else { return failure(opened) }
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_prepare_v2(db, "PRAGMA quick_check(1)", -1, &statement, nil) == SQLITE_OK else {
+            return failure(sqlite3_extended_errcode(db))
+        }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return failure(sqlite3_extended_errcode(db)) }
+        let answer = sqlite3_column_text(statement, 0).map { String(cString: $0) } ?? ""
+        return answer == "ok" ? .sound : .damaged("quick check: \(answer)")
     }
 
     private static func container(at url: URL) throws -> ModelContainer {

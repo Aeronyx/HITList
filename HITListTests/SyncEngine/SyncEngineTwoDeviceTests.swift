@@ -384,7 +384,7 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
 
         // B on a file: it fetches everything, and its ledger is bound to its store file.
         var first: ModelContainer? = try open()
-        let b = await device("B", container: first!, ledger: SyncLedgerStore.open(at: ledgerURL), storeURL: storeURL)
+        let b = try await device("B", container: first!, ledger: SyncLedgerStore.open(at: ledgerURL), storeURL: storeURL)
         try await b.sync()
         XCTAssertEqual(try b.tasks().count, 3)
         let identity = try XCTUnwrap(SyncLedgerStore.storeIdentity(at: storeURL))
@@ -401,7 +401,7 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
         XCTAssertNotEqual(newIdentity, identity, "a new file is a new store")
         let saves = await cloud.acceptedSaves
 
-        let again = await device("B", container: fresh, ledger: SyncLedgerStore.open(at: ledgerURL), storeURL: storeURL)
+        let again = try await device("B", container: fresh, ledger: SyncLedgerStore.open(at: ledgerURL), storeURL: storeURL)
         let rebound = try await again.ledger.fact(SyncLedgerStore.storeFact).flatMap { String(data: $0, encoding: .utf8) }
         XCTAssertEqual(rebound, newIdentity, "the ledger was forgotten and bound to the new file")
         try await again.sync()
