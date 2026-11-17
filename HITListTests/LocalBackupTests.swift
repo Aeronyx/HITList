@@ -65,38 +65,38 @@ final class LocalBackupTests: XCTestCase {
         XCTAssertTrue(LocalBackup.isDue(lastBackup: t0, now: t0.addingTimeInterval(-3600)), "clock went backwards")
     }
 
-    func testRunIfDueWritesASnapshotAndSkipsUnder24Hours() throws {
+    func testRunIfDueWritesASnapshotAndSkipsUnder24Hours() async throws {
         let dir = try tempDir()
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
         context.insert(TaskItem(title: "Buy milk"))
         try context.save()
 
-        LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: t0)
+        await LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: t0)?.value
         let first = try XCTUnwrap(LocalBackup.backups(in: dir).first)
         let snapshot = try Snapshot.from(json: try Data(contentsOf: first))
         XCTAssertEqual(snapshot.tasks.map(\.title), ["Buy milk"])
         XCTAssertEqual(defaults.object(forKey: LocalBackup.lastBackupKey) as? Date, t0)
 
-        LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: day(1).addingTimeInterval(-60))
+        await LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: day(1).addingTimeInterval(-60))?.value
         XCTAssertEqual(LocalBackup.backups(in: dir).count, 1, "under 24 h: skipped")
         XCTAssertEqual(defaults.object(forKey: LocalBackup.lastBackupKey) as? Date, t0)
 
-        LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: day(1))
+        await LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: day(1))?.value
         XCTAssertEqual(LocalBackup.backups(in: dir).count, 2)
     }
 
     /// A Debug build on the Mac opens its own HITList-Development.store but shares this folder and the
     /// last-backup date with the TestFlight app (one bundle ID): it must neither write its data as the
     /// day's backup nor mark the day as backed up, or the real data goes unsaved for 24 hours.
-    func testASideStoreLeavesTheBackupsAlone() throws {
+    func testASideStoreLeavesTheBackupsAlone() async throws {
         let dir = try tempDir()
         let container = ModelContainerFactory.preview()
         let context = container.mainContext
         context.insert(TaskItem(title: "Development data"))
         try context.save()
 
-        LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: t0, ownsBackups: false)
+        await LocalBackup.runIfDue(context: context, defaults: defaults, directory: dir, now: t0, ownsBackups: false)?.value
         XCTAssertTrue(LocalBackup.backups(in: dir).isEmpty)
         XCTAssertNil(defaults.object(forKey: LocalBackup.lastBackupKey), "the TestFlight app still backs up today")
 
@@ -105,11 +105,67 @@ final class LocalBackupTests: XCTestCase {
         XCTAssertTrue(LocalBackup.backups(in: dir).isEmpty)
     }
 
-    func testEmptyStoreIsNotBackedUp() throws {
+    func testEmptyStoreIsNotBackedUp() async throws {
         let dir = try tempDir()
         let container = ModelContainerFactory.preview()
-        LocalBackup.runIfDue(context: container.mainContext, defaults: defaults, directory: dir, now: t0)
+        await LocalBackup.runIfDue(context: container.mainContext, defaults: defaults, directory: dir, now: t0)?.value
         XCTAssertTrue(LocalBackup.backups(in: dir).isEmpty)
         XCTAssertNil(defaults.object(forKey: LocalBackup.lastBackupKey), "retried on the next activation")
+    }
+
+    // MARK: Round 32 (review 152 finding 5; 151 C14; 155 finding 8)
+
+    /// The day's backup is built, encoded and written off the main thread, on a context of its own.
+    func testTheDailyBackupRunsOffTheMainThread() async throws {
+        let dir = try tempDir()
+        let container = ModelContainerFactory.preview()
+        container.mainContext.insert(TaskItem(title: "Buy milk"))
+        try container.mainContext.save()
+        var onMain: Bool?
+        await LocalBackup.runIfDue(context: container.mainContext, defaults: defaults, directory: dir, now: t0,
+                                   syncLog: { _, _, _ in },
+                                   write: { data, folder, now in
+                                       onMain = Thread.isMainThread
+                                       return try LocalBackup.write(data, in: folder, now: now)
+                                   })?.value
+        XCTAssertEqual(onMain, false)
+        XCTAssertEqual(LocalBackup.backups(in: dir).count, 1)
+        XCTAssertEqual(defaults.object(forKey: LocalBackup.lastBackupKey) as? Date, t0)
+    }
+
+    /// A failed backup reaches the sync log as an error and Settings until one succeeds.
+    func testAFailedBackupIsSaidUntilOneSucceeds() async throws {
+        let dir = try tempDir()
+        let container = ModelContainerFactory.preview()
+        container.mainContext.insert(TaskItem(title: "Buy milk"))
+        try container.mainContext.save()
+        struct DiskFull: LocalizedError { var errorDescription: String? { "The disk is full." } }
+        var lines: [(String, SyncLogEntry.Level)] = []
+        await LocalBackup.runIfDue(context: container.mainContext, defaults: defaults, directory: dir, now: t0,
+                                   syncLog: { line, level, _ in lines.append((line, level)) },
+                                   write: { _, _, _ in throw DiskFull() })?.value
+        XCTAssertEqual(lines.map(\.0), ["The daily backup failed: The disk is full."])
+        XCTAssertEqual(lines.first?.1, .error)
+        XCTAssertEqual(defaults.string(forKey: LocalBackup.lastFailureKey), "The disk is full.")
+        XCTAssertNil(defaults.object(forKey: LocalBackup.lastBackupKey), "tried again on the next activation")
+
+        await LocalBackup.runIfDue(context: container.mainContext, defaults: defaults, directory: dir, now: t0,
+                                   syncLog: { line, level, _ in lines.append((line, level)) })?.value
+        XCTAssertNil(defaults.string(forKey: LocalBackup.lastFailureKey), "a backup that succeeds clears it")
+        XCTAssertEqual(LocalBackup.backups(in: dir).count, 1)
+    }
+
+    /// The log names the file from /Library/ on, never the home folder (which holds the Mac user's short name).
+    func testTheLogPathLeavesOutTheHomeFolder() {
+        let mac = URL(filePath: "/Users/someone/Library/Containers/com.trammells.hitlist/Data/Documents/HITList-2026-11-16.json")
+        XCTAssertEqual(LocalBackup.shownPath(mac), "/Library/Containers/com.trammells.hitlist/Data/Documents/HITList-2026-11-16.json")
+        let phone = URL(filePath: "/var/mobile/Containers/Data/Application/ABC/Documents/HITList-2026-11-16.json")
+        XCTAssertEqual(LocalBackup.shownPath(phone), "Documents/HITList-2026-11-16.json")
+    }
+
+    /// Backups leave out the profile; the footer says so (151 C12).
+    func testTheFooterSaysTheProfileIsNotInBackups() {
+        XCTAssertTrue(BackupsGroup.footer.hasSuffix(BackupsGroup.profileLine))
+        XCTAssertEqual(BackupsGroup.profileLine, "Your name and picture are not in backups.")
     }
 }

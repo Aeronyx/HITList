@@ -104,7 +104,8 @@ public enum TodoistMapping {
         for name in existing.groupNames where groupSpelling[key(name)] == nil { groupSpelling[key(name)] = name }
         var labelSpelling: [String: String] = [:]
         for name in existing.labelNames where labelSpelling[key(name)] == nil { labelSpelling[key(name)] = name }
-        var open = Set(existing.openTasks.map { TodoistExisting.OpenTask(title: key($0.title), groupName: $0.groupName.map(key)) })
+        // What is already in HITList only: two tasks of one title in one project of the file are two tasks (round 32).
+        let open = Set(existing.openTasks.map { TodoistExisting.OpenTask(title: key($0.title), groupName: $0.groupName.map(key)) })
         var nextID = 0
         var sectionLabels: [String] = []
         var sectionsInNotes = 0
@@ -201,7 +202,7 @@ public enum TodoistMapping {
                     if let under { notes.append("Under: \(under)") }
                     if isHeading { notes.append("Heading in Todoist") }
                     if let sectionName, !options.sectionsAsLabels { notes.append("Section in Todoist: \(sectionName)") }
-                    task.notes = notes.joined(separator: "\n")
+                    task.notes = TaskLimits.clampedNotes(notes.joined(separator: "\n"))
 
                     // Labels: an existing one's spelling, each once.
                     var seen = Set<String>()
@@ -218,7 +219,6 @@ public enum TodoistMapping {
                         plan.checklistLineCount = checklistBefore
                         continue
                     }
-                    open.insert(openKey)
                     for name in task.labels where labelSpelling[key(name)] == nil {
                         labelSpelling[key(name)] = name
                         plan.labelsToMake.append(name)

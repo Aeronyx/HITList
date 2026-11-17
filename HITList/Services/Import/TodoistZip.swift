@@ -16,12 +16,14 @@ enum TodoistZip {
         case notAZip
         case damaged
         case unsupported(String)
+        case tooLarge
 
         var errorDescription: String? {
             switch self {
             case .notAZip: return "This is not a ZIP file."
             case .damaged: return "The ZIP file is damaged or incomplete. Download the backup from Todoist again."
             case .unsupported(let what): return "This ZIP uses \(what), which HITList cannot open. Unzip it and choose the CSV files instead."
+            case .tooLarge: return "This ZIP holds more than a Todoist backup does (over 64 MB of CSV files). Choose the CSV files instead."
             }
         }
     }
@@ -31,7 +33,10 @@ enum TodoistZip {
 
     static func isZip(_ data: Data) -> Bool { data.count >= 4 && data.prefix(4) == Data([0x50, 0x4B, 0x03, 0x04]) }
 
-    static func entries(of data: Data) throws -> [Entry] {
+    /// The most read from one ZIP, every CSV inflated together.
+    static let maxTotalSize = 64 * 1024 * 1024
+
+    static func entries(of data: Data, maxTotal: Int = maxTotalSize) throws -> [Entry] {
         let bytes = [UInt8](data)
         guard bytes.count >= 22, isZip(data) else { throw ZipError.notAZip }
         func u16(_ at: Int) throws -> Int {
@@ -59,6 +64,8 @@ enum TodoistZip {
         guard directoryOffset + directorySize <= end else { throw ZipError.damaged }
 
         var entries: [Entry] = []
+        var seenOffsets = Set<Int>()
+        var total = 0
         var at = directoryOffset
         for _ in 0..<count {
             guard try u32(at) == 0x0201_4B50 else { throw ZipError.damaged }
@@ -76,9 +83,15 @@ enum TodoistZip {
             let name = String(bytes: nameBytes, encoding: flags & 0x800 != 0 ? .utf8 : .isoLatin1) ?? String(decoding: nameBytes, as: UTF8.self)
             at += 46 + nameLength + extraLength + commentLength
 
-            if name.hasSuffix("/") { continue } // a folder
+            // Only a CSV is a project: anything else (a folder, a picture) is passed over before it is read (round 32,
+            // review 155 finding 5: a crafted ZIP inflated every entry first).
+            guard name.lowercased().hasSuffix(".csv") else { continue }
             if flags & 0x1 != 0 { throw ZipError.unsupported("a password") }
             guard size <= maxEntrySize, compressedSize <= maxEntrySize else { throw ZipError.unsupported("a file over 64 MB") }
+            // One entry's bytes read once: two directory entries pointing at one place is not a ZIP anyone wrote.
+            guard seenOffsets.insert(localOffset).inserted else { throw ZipError.damaged }
+            total += size
+            guard total <= maxTotal else { throw ZipError.tooLarge }
 
             guard try u32(localOffset) == 0x0403_4B50 else { throw ZipError.damaged }
             let start = localOffset + 30 + (try u16(localOffset + 26)) + (try u16(localOffset + 28))

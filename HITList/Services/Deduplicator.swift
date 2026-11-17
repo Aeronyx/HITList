@@ -9,6 +9,13 @@ protocol DeduplicatedModel: PersistentModel {
     var name: String { get }
     var createdAt: Date { get }
     var updatedAt: Date { get set }
+    /// What two rows of one name must also share to be one item: nothing more for a Group or a label; a filter's
+    /// query (two filters of one name and different queries are two things a person made, round 32).
+    var sameItemKey: String { get }
+}
+
+extension DeduplicatedModel {
+    var sameItemKey: String { "" }
 }
 
 /// A model whose rows are merged by `id` alone for HITList's own engine (`Deduplicator.mergeSharedIDs`).
@@ -26,7 +33,9 @@ extension Switchboard: SharedIDModel {}
 
 extension Project: DeduplicatedModel {}
 extension TaskLabel: DeduplicatedModel {}
-extension SavedFilter: DeduplicatedModel {}
+extension SavedFilter: DeduplicatedModel {
+    var sameItemKey: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
 
 struct DedupeReport: Equatable, CustomStringConvertible {
     var projects = 0
@@ -58,6 +67,11 @@ struct DedupeReport: Equatable, CustomStringConvertible {
 /// keeps its own fields except `updatedAt`, which becomes the newest of the group. One pass leaves no
 /// duplicates, so a second pass changes nothing.
 ///
+/// Filters merge by name only when their queries are equal. On HITList's own engine nothing merges by name (round 32,
+/// reviews 151 A2 and 147 F2, F8): the engine names a record by its `id`, seeds carry stable ids, and a row deleted by
+/// a merge becomes a marker that deletes the item on every device, a Group, label or filter made on purpose among them.
+/// Rows that share an `id` still merge there, as do sub-tasks and profiles.
+///
 /// Then subtasks follow their parent (`repairSubtasks`): into the surviving Group, and back to one level
 /// when two devices' edits nested them deeper. Last, two devices' profiles become one
 /// (`ProfileStore.mergeDuplicates`: newest name, newest picture, never none when either had one).
@@ -66,25 +80,31 @@ enum Deduplicator {
     private static let log = Logger(subsystem: "com.trammells.hitlist", category: "dedupe")
 
     @discardableResult
-    /// `profileLog` is where the profile merge's line goes (the sync log; tests pass their own).
-    static func run(in context: ModelContext, profileLog: @escaping ProfileStore.Log = ProfileStore.syncLog) throws -> DedupeReport {
+    /// `profileLog` is where the profile merge's line goes (the sync log; tests pass their own). `byName`: whether rows
+    /// of one name are merged; the engine's answer by default (`mergesByName`).
+    static func run(in context: ModelContext, profileLog: @escaping ProfileStore.Log = ProfileStore.syncLog,
+                    byName: Bool = mergesByName) throws -> DedupeReport {
         var report = DedupeReport()
-        report.projects = try collapse(Project.self, in: context) { loser, winner in
+        report.projects = try collapse(Project.self, in: context, byName: byName) { loser, winner in
             for task in loser.tasks ?? [] { task.project = winner }
         }
-        report.labels = try collapse(TaskLabel.self, in: context) { loser, winner in
+        report.labels = try collapse(TaskLabel.self, in: context, byName: byName) { loser, winner in
             for task in loser.tasks ?? [] {
                 var labels = (task.labels ?? []).filter { $0.persistentModelID != loser.persistentModelID }
                 if !labels.contains(where: { $0.persistentModelID == winner.persistentModelID }) { labels.append(winner) }
                 task.labels = labels
             }
         }
-        report.filters = try collapse(SavedFilter.self, in: context) { _, _ in }
+        report.filters = try collapse(SavedFilter.self, in: context, byName: byName) { _, _ in }
         report.subtasks = try repairSubtasks(in: context)
         report.profiles = try ProfileStore(context: context, log: profileLog).mergeDuplicates()
         if context.hasChanges { try context.save() }
         return report
     }
+
+    /// Whether this launch merges Groups, labels and filters by name: on SwiftData's mirror only, never on HITList's own
+    /// engine (`ModelContainerFactory.isOwnEngineEnabled`).
+    nonisolated static var mergesByName: Bool { !ModelContainerFactory.isOwnEngineEnabled }
 
     /// How a `runAndLog` pass ended.
     enum Outcome: Equatable {
@@ -236,16 +256,24 @@ enum Deduplicator {
         return repaired
     }
 
+    /// What makes two rows one item by name: the name, and for a filter its query (`sameItemKey`).
+    private struct NameKey: Hashable {
+        let name: String
+        let item: String
+    }
+
     /// Returns the number of records deleted.
-    private static func collapse<M: DeduplicatedModel>(_ type: M.Type, in context: ModelContext,
+    private static func collapse<M: DeduplicatedModel>(_ type: M.Type, in context: ModelContext, byName: Bool,
                                                        repoint: (_ loser: M, _ winner: M) -> Void) throws -> Int {
         var removed = 0
         var survivors: [M] = []
         for group in Dictionary(grouping: try context.fetch(FetchDescriptor<M>()), by: \.id).values {
             survivors.append(merge(group, in: context, removed: &removed, repoint: repoint))
         }
+        guard byName else { return removed }
         // Unnamed records have nothing in common but the missing name; leave them alone.
-        let named = Dictionary(grouping: survivors, by: { nameKey($0.name) }).filter { !$0.key.isEmpty }
+        let named = Dictionary(grouping: survivors, by: { NameKey(name: nameKey($0.name), item: $0.sameItemKey) })
+            .filter { !$0.key.name.isEmpty }
         for group in named.values where group.count > 1 {
             _ = merge(group, in: context, removed: &removed, repoint: repoint)
         }

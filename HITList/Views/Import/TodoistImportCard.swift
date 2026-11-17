@@ -65,12 +65,27 @@ final class TodoistImportModel {
             Task { await NotificationScheduler.reschedule(context: context) }
             message = "Imported \(receipt.summary) from Todoist."
                 + (plan.skipped.isEmpty ? "" : " \(TodoistMapping.count(plan.skipped.count, "task")) already here were skipped.")
+        } catch let stopped as TodoistImporter.Stopped {
+            // The receipt names what was saved before the stop: Undo last import is offered for it.
+            if stopped.written > 0 { receipt = TodoistImporter.loadReceipt() }
+            message = Self.stoppedMessage(stopped)
+            Task { await NotificationScheduler.reschedule(context: context) }
         } catch {
             message = "Import stopped before anything was written: \(error.localizedDescription)"
         }
         self.plan = nil
         projects = []
         phase = .idle
+    }
+
+    /// What a stopped import says: how many tasks were written, and that Undo last import removes them.
+    static func stoppedMessage(_ stopped: TodoistImporter.Stopped) -> String {
+        let why = stopped.underlying.localizedDescription
+        switch stopped.written {
+        case 0: return "Import stopped before anything was written: \(why)"
+        case 1: return "Import stopped after 1 task was written: \(why) Undo last import removes it."
+        default: return "Import stopped after \(stopped.written) tasks were written: \(why) Undo last import removes them."
+        }
     }
 
     func undo(context: ModelContext) {

@@ -171,6 +171,31 @@ final class TodoistMappingTests: XCTestCase {
         XCTAssertEqual(plan.projects.first?.destination, .inbox)
     }
 
+    /// Round 32 (review 151 A3): two tasks of one title in one project are two tasks; only what is already in
+    /// HITList is skipped.
+    func testTwoTasksOfOneTitleInOneProjectBothComeIn() throws {
+        let twice = try TodoistReader.read(csv: "TYPE,CONTENT,PRIORITY\ntask,Water plants,4\ntask,Water plants,4\n", fileName: "Home [1].csv")
+        let both = try plan(projects: [twice])
+        XCTAssertEqual(both.tasks.map(\.title), ["Water plants", "Water plants"])
+        XCTAssertEqual(both.skipped, [])
+
+        let again = try plan(existing: TodoistExisting(openTasks: [.init(title: "Water plants", groupName: "Home")]), projects: [twice])
+        XCTAssertEqual(again.taskCount, 0, "what is already in HITList is skipped, each copy")
+        XCTAssertEqual(again.skipped.count, 2)
+    }
+
+    /// Round 32 (review 151 A4): a description is cut to `TaskLimits.notesCharacters`.
+    func testADescriptionIsCutToTheLimit() throws {
+        let long = String(repeating: "a", count: TaskLimits.notesCharacters + 500)
+        let project = TodoistProject(name: "Home", sections: [TodoistSection(name: nil, tasks: [{
+            var task = TodoistTask(content: "Read")
+            task.description = long
+            return task
+        }()])])
+        let read = try plan(projects: [project])
+        XCTAssertEqual(read.tasks.first?.notes.count, TaskLimits.notesCharacters)
+    }
+
     func testNothingToImport() throws {
         let empty = try TodoistReader.read(csv: "TYPE,CONTENT\nsection,Later\n", fileName: "Empty.csv")
         XCTAssertTrue(try plan(projects: [empty]).isEmpty)
