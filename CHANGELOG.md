@@ -5,7 +5,7 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.13
+## 0.9.13 — build 30, 2026-11-16
 
 0.9.12 was released on the evening of 2026-11-15. George the next day: "currently, when you group Switches on Flipboard, they all
 reset at the same time. Could you make it so that when you group switches that already exist that they maintain
