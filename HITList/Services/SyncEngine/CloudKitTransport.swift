@@ -264,18 +264,23 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     private func replaceEngine(keepingPending: Bool) async {
         let records = keepingPending ? engine?.state.pendingRecordZoneChanges ?? [] : []
         let zones = keepingPending ? engine?.state.pendingDatabaseChanges ?? [] : []
-        stored = stored.afterReset()
-        await save()
         // Before `start()` there is no engine to replace: the state is forgotten, and `start()` makes the engine
         // with its delegate. (Making one here would leave `start()` nothing to do, and the delegate never set: found
         // by session 143.)
-        guard engine != nil else {
+        guard let old = engine else {
+            stored = stored.afterReset()
+            await save()
             log.write("reset before start: the saved state is forgotten")
             return
         }
-        let old = engine
+        // The new engine first, and the state forgotten in the same breath, before anything is awaited: from here
+        // the old engine's events are ignored (`isCurrent`). In the other order the old engine, still current while
+        // the forgotten state was being written, could hand in a state update of its own and put the old bookmark
+        // back; a kill before the new engine's first update then restored it, and records let go meanwhile were
+        // never fetched again (review 148, finding 4).
         let fresh = makeEngine(nil)
         engine = fresh
+        stored = stored.afterReset()
         if !zones.isEmpty { fresh.state.add(pendingDatabaseChanges: zones) }
         if !records.isEmpty {
             fresh.state.add(pendingRecordZoneChanges: records)
@@ -285,11 +290,10 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         resaveAtEnd = []
         unsentFailures = [:]
         zoneRefusal = nil
-        if let old {
-            // Not awaited: this may run while the old engine waits for an event to be handled, and its events are
-            // ignored from now on anyway (`isCurrent`).
-            Task { await old.cancelOperations() }
-        }
+        await save()
+        // Not awaited: this may run while the old engine waits for an event to be handled, and its events are
+        // ignored from now on anyway (`isCurrent`).
+        Task { await old.cancelOperations() }
         log.write("a new engine with no bookmark\(keepingPending ? ", \(records.count) pending change(s) kept" : "")")
     }
 
