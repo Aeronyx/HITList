@@ -20,9 +20,12 @@ enum IntentStore {
         SpotlightSync.shared.start(container: container)
     }
 
-    /// The app's main context, or `IntentFailure.appNotReady` if the app has not built its container.
-    static func context() throws -> ModelContext {
+    /// The app's main context, or `IntentFailure.appNotReady` if the app has not built its container. On the
+    /// in-memory fallback (the store couldn't be opened) `IntentFailure.notSaving`: a task Siri "added" there would be
+    /// gone when the app quits, and the person would never know (round 32, brief 157; the data review's B10).
+    static func context(inMemory: Bool = ModelContainerFactory.isRunningInMemory) throws -> ModelContext {
         guard let container else { throw IntentFailure.appNotReady }
+        guard !inMemory else { throw IntentFailure.notSaving }
         return container.mainContext
     }
 
@@ -33,6 +36,8 @@ enum IntentStore {
 /// Why an intent could not do what was asked, in words Siri can say.
 enum IntentFailure: Error, Equatable, CustomLocalizedStringResourceConvertible {
     case appNotReady
+    /// The app is running without its store (`ModelContainerFactory.isRunningInMemory`): nothing would be kept.
+    case notSaving
     case emptyTitle
     case groupNotFound
     case taskNotFound
@@ -40,6 +45,7 @@ enum IntentFailure: Error, Equatable, CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .appNotReady: "HITList isn’t ready yet. Open it once and try again."
+        case .notSaving: "HITList couldn’t open your tasks, so nothing would be saved. Open HITList to see why."
         case .emptyTitle: "That task has no name."
         case .groupNotFound: "That Group isn’t in HITList any more."
         case .taskNotFound: "That task isn’t in HITList any more."

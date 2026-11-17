@@ -104,6 +104,18 @@ final class IntentsTests: XCTestCase {
                       "one container per store: intents write through the app's main context")
     }
 
+    /// Round 32 (brief 157, the data review's B10): on the in-memory fallback Siri said "Added" for a task gone at quit.
+    /// Now every intent says, in plain words, that nothing would be saved.
+    func testIntentsRefuseInPlainWordsOnTheInMemoryFallback() throws {
+        IntentStore.register(container)
+        XCTAssertThrowsError(try IntentStore.context(inMemory: true)) { error in
+            XCTAssertEqual(error as? IntentFailure, .notSaving)
+        }
+        XCTAssertEqual(String(localized: IntentFailure.notSaving.localizedStringResource),
+                       "HITList couldn’t open your tasks, so nothing would be saved. Open HITList to see why.")
+        XCTAssertNoThrow(try IntentStore.context(inMemory: false))
+    }
+
     func testGroupQueryListsAndFindsGroups() throws {
         let home = Project(name: "Home", sortOrder: 1)
         let work = Project(name: "Work", sortOrder: 0)
