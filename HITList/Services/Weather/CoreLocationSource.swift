@@ -40,13 +40,34 @@ final class CoreLocationSource: NSObject, WeatherLocationSource {
         }
     }
 
+    /// An answer that has not come by then ends the wait with the permission as it is (still not determined): with
+    /// Location Services off, or a prompt the system never shows, no answer ever comes (round 32, brief 157).
+    static let accessTimeout: Duration = .seconds(60)
+    private var accessTimer: Task<Void, Never>?
+
     func requestAccess() async -> WeatherAccess {
         let current = access()
         guard current == .notDetermined else { return current }
         return await withCheckedContinuation { continuation in
             accessWaiters.append(continuation)
-            if accessWaiters.count == 1 { manager.requestWhenInUseAuthorization() }
+            guard accessWaiters.count == 1 else { return }
+            manager.requestWhenInUseAuthorization()
+            accessTimer = Task { [weak self] in
+                try? await Task.sleep(for: Self.accessTimeout)
+                guard !Task.isCancelled else { return }
+                self?.finishAccess()
+            }
         }
+    }
+
+    /// Hands every waiter the permission as it is now.
+    private func finishAccess() {
+        accessTimer?.cancel()
+        accessTimer = nil
+        let current = access()
+        let waiters = accessWaiters
+        accessWaiters = []
+        for waiter in waiters { waiter.resume(returning: current) }
     }
 
     func approximateLocation() async throws -> CLLocation {
@@ -74,9 +95,7 @@ final class CoreLocationSource: NSObject, WeatherLocationSource {
         let current = access()
         // The delegate hears the current status as soon as it is set; only an answer ends the wait.
         guard current != .notDetermined, !accessWaiters.isEmpty else { return }
-        let waiters = accessWaiters
-        accessWaiters = []
-        for waiter in waiters { waiter.resume(returning: current) }
+        finishAccess()
     }
 }
 

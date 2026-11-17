@@ -4,7 +4,7 @@ import Foundation
 /// either only the tasks labelled `sharedLabel` ("Only tasks with @claude", the default since brief 55),
 /// or every task except those labelled `hiddenLabel` ("All tasks but @private").
 ///
-/// A subtask has no labels of its own; it follows its parent. A hidden task is invisible to every
+/// A subtask follows its parent, and in "All tasks but @private" its own @private hides it as well. A hidden task is invisible to every
 /// connector tool and to the export: not listed, not counted, not reachable by id, not searchable.
 /// A Group or label is shown only when it has no tasks at all or at least one visible task, so the name
 /// of a Group that holds nothing but hidden tasks never reaches Claude either.
@@ -54,9 +54,13 @@ public struct ClaudeAccessRule: Equatable, Sendable {
         }
     }
 
-    /// Whether `task` is visible: a subtask by its parent's labels, any other task by its own.
+    /// Whether `task` is visible: a subtask by its parent's labels, any other task by its own; and in "All tasks but
+    /// @private" a subtask labelled @private itself is hidden too, so a task marked private stays private wherever it
+    /// sits (round 32, brief 157: nested under a visible task, it used to show).
     public func isVisible<T>(_ task: T, labelNames: (T) -> [String], parent: (T) -> T?) -> Bool {
-        allows(labelNames: labelNames(parent(task) ?? task))
+        guard let parent = parent(task) else { return allows(labelNames: labelNames(task)) }
+        guard allows(labelNames: labelNames(parent)) else { return false }
+        return mode != .allExceptHidden || allows(labelNames: labelNames(task))
     }
 
     /// The visible tasks among `tasks`, in their order.

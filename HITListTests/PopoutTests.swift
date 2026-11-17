@@ -94,6 +94,17 @@ final class PopoutTests: XCTestCase {
         XCTAssertEqual(task.title.count, TaskLimits.titleCharacters)
     }
 
+    /// Round 32 (brief 157, the data review's A4): a description is cut to `TaskLimits.notesCharacters` where the
+    /// editor saves it; a CloudKit record can't carry one near a megabyte.
+    func testConfirmCutsADescriptionToTheLimit() throws {
+        let (task, context) = editorTask()
+        var draft = TaskEditorDraft(task: task)
+        draft.notes = String(repeating: "y", count: TaskLimits.notesCharacters + 500)
+        try draft.commit(to: task, in: context)
+        XCTAssertEqual(task.notes.count, TaskLimits.notesCharacters)
+        XCTAssertFalse(draft.hasPendingChanges(for: task), "nothing more to save once cut")
+    }
+
     /// Return in the sub-task field adds it and keeps the field open, empty, for the next; Return on an
     /// empty field closes it.
     func testReturnInTheSubtaskFieldAddsAndKeepsItOpen() throws {
@@ -818,6 +829,153 @@ final class PopoutTests: XCTestCase {
         XCTAssertNotEqual(task.dueDate, due)
         popouts.undoCompletions(in: context)
         XCTAssertEqual(task.dueDate, due)
+    }
+
+    /// Round 32 (brief 157, the data review's B6): Undo of a repeating task's completion puts back what the roll-over
+    /// cleared, its own reminder moment and the checklist's ticks, as well as its date.
+    func testUndoingARepeatingTasksCompletionPutsBackItsReminderAndTicks() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let due = Calendar.current.startOfDay(for: Date())
+        let task = TaskItem(title: "Water plants", dueDate: due, recurrence: .daily)
+        let reminder = Date().addingTimeInterval(3_600)
+        task.reminderDate = reminder
+        context.insert(task)
+        let ticked = try TaskActions.addSubtask("Ferns", to: task, in: context)
+        let open = try TaskActions.addSubtask("Cactus", to: task, in: context)
+        let tickedAt = Date().addingTimeInterval(-600)
+        ticked.isCompleted = true
+        ticked.completedAt = tickedAt
+        try context.save()
+
+        let popouts = PopoutController()
+        popouts.complete(task, in: context)
+        XCTAssertNil(task.reminderDate, "the roll-over clears the reminder")
+        XCTAssertFalse(ticked.isCompleted, "and opens the checklist")
+
+        popouts.undoCompletions(in: context)
+        XCTAssertEqual(task.dueDate, due)
+        XCTAssertEqual(task.reminderDate, reminder, "Undo puts the reminder back")
+        XCTAssertTrue(ticked.isCompleted, "and the tick")
+        XCTAssertEqual(ticked.completedAt, tickedAt)
+        XCTAssertFalse(open.isCompleted, "an open sub-task stays open")
+    }
+
+    /// The lists' rows (`Flipboard.completion(for:)` and `Flipboard.undo`) undo the same way.
+    func testARowsUndoOfARepeatingCompletionPutsBackItsReminderAndTicks() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let due = Calendar.current.startOfDay(for: Date())
+        let task = TaskItem(title: "Stretch", dueDate: due, recurrence: .weekly)
+        let reminder = Date().addingTimeInterval(7_200)
+        task.reminderDate = reminder
+        context.insert(task)
+        let ticked = try TaskActions.addSubtask("Hamstrings", to: task, in: context)
+        TaskActions.toggleCompletion(ticked, in: context)
+
+        let record = Flipboard.completion(for: task)
+        Flipboard.completeRow(task, in: context)
+        XCTAssertNotEqual(task.dueDate, due)
+        XCTAssertTrue(Flipboard.undo(record, on: task, in: context), "a roll-over is undone in full")
+        XCTAssertEqual(task.dueDate, due)
+        XCTAssertEqual(task.reminderDate, reminder)
+        XCTAssertTrue(ticked.isCompleted)
+    }
+
+    // MARK: Delayed deletes and completions (brief 157, the crash review's finding 4)
+
+    /// The popout completes after its check has filled: by then the task may be gone (another device, another
+    /// window). It is fetched by id, and a gone task is left alone: no write, no toast.
+    func testCompletingByIdLeavesATaskDeletedMeanwhileAlone() throws {
+        let container = ModelContainerFactory.preview()
+        let main = container.mainContext
+        let task = TaskItem(title: "Gone soon")
+        main.insert(task)
+        try main.save()
+        let id = task.id
+        let popouts = PopoutController()
+        popouts.open(task)
+
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+
+        popouts.complete(taskWithID: id, in: main)
+        XCTAssertFalse(popouts.toast.isVisible, "nothing was completed")
+        XCTAssertFalse(PopoutController.taskExists(id, in: main), "and nothing brought it back")
+        XCTAssertFalse(popouts.state.isTaskOpen)
+    }
+
+    func testCompletingByIdCompletesATaskStillThere() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Call mom")
+        context.insert(task)
+        let popouts = PopoutController()
+        popouts.open(task)
+        popouts.complete(taskWithID: task.id, in: context)
+        XCTAssertTrue(task.isCompleted)
+        XCTAssertEqual(popouts.toast.message, "Completed ‘Call mom’")
+        XCTAssertFalse(popouts.state.isTaskOpen)
+    }
+
+    /// The delete question was asked about a task that is then deleted elsewhere: the question goes, and a Delete
+    /// tapped anyway does nothing.
+    func testAPendingDeleteOfATaskDeletedElsewhereIsDropped() throws {
+        let container = ModelContainerFactory.preview()
+        let main = container.mainContext
+        let task = TaskItem(title: "Asked about")
+        main.insert(task)
+        try main.save()
+        let id = task.id
+        let popouts = PopoutController()
+        popouts.asksBeforeDeleting = { true }
+        var performed = 0
+        popouts.requestDelete(task) { performed += 1 }
+        XCTAssertNotNil(popouts.pendingDelete)
+
+        let elsewhere = ModelContext(container)
+        let theirs = try XCTUnwrap(elsewhere.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first)
+        elsewhere.delete(theirs)
+        try elsewhere.save()
+
+        popouts.confirmPendingDelete()
+        XCTAssertEqual(performed, 0, "a Delete for a task already gone does nothing")
+
+        popouts.requestDelete(title: "Shared one") { performed += 1 }
+        let other = TaskItem(title: "Another")
+        main.insert(other)
+        popouts.requestDelete(other) { performed += 1 }
+        main.delete(other)
+        popouts.closeTaskIfDeleted(in: main)
+        XCTAssertNil(popouts.pendingDelete, "closeTaskIfDeleted drops a question about a task that is gone")
+    }
+
+    func testAPendingDeleteOfATaskStillThereRunsAndNamesItsSubtasks() throws {
+        let container = ModelContainerFactory.preview()
+        let context = container.mainContext
+        let task = TaskItem(title: "Pack")
+        context.insert(task)
+        try TaskActions.addSubtask("Socks", to: task, in: context)
+        try TaskActions.addSubtask("Shirts", to: task, in: context)
+        let popouts = PopoutController()
+        popouts.asksBeforeDeleting = { true }
+        var performed = 0
+        popouts.requestDelete(task) { performed += 1 }
+        XCTAssertEqual(popouts.pendingDelete?.message, "Its 2 sub-tasks go with it. This can’t be undone.")
+        popouts.confirmPendingDelete()
+        XCTAssertEqual(performed, 1)
+
+        let single = TaskItem(title: "Single")
+        context.insert(single)
+        popouts.requestDelete(single) {}
+        XCTAssertEqual(popouts.pendingDelete?.message, "This can’t be undone.")
+        XCTAssertEqual(TaskPopout.deleteMessage(title: "Pack", subtasks: 2),
+                       "“Pack” and its 2 sub-tasks will be deleted on all your devices.")
+        XCTAssertEqual(TaskPopout.deleteMessage(title: "Pack", subtasks: 1),
+                       "“Pack” and its sub-task will be deleted on all your devices.")
+        XCTAssertEqual(TaskPopout.deleteMessage(title: "Pack", subtasks: 0), "“Pack” will be deleted on all your devices.")
     }
 
     func testShiftingADayKeepsTheTimeAndCountsUndatedTasksFromToday() throws {

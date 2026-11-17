@@ -183,7 +183,27 @@ final class PopoutController {
 
     struct PendingDelete {
         let title: String
+        /// Under the question: what else goes with the task (its sub-tasks), and that it can't be undone.
+        var message = PendingDelete.message(subtasks: 0)
+        /// The task's id, read while it certainly existed; nil for a shared task (known by its title).
+        var taskID: UUID? = nil
+        /// Whether the task is still there when Delete is tapped: the question may wait while an import, another
+        /// window or another device deletes it, and `perform` then holds a model that is gone (round 32, brief 157).
+        var isStillThere: () -> Bool = { true }
         let perform: () -> Void
+
+        static func message(subtasks: Int) -> String {
+            switch subtasks {
+            case 0: "This can’t be undone."
+            case 1: "Its sub-task goes with it. This can’t be undone."
+            default: "Its \(subtasks) sub-tasks go with it. This can’t be undone."
+            }
+        }
+    }
+
+    /// Settings → General → Confirm before deleting; tests set their own.
+    @ObservationIgnored var asksBeforeDeleting: () -> Bool = {
+        Preferences.value(Preferences.confirmDelete, default: Preferences.confirmDeleteDefault)
     }
 
     // MARK: Delete
@@ -191,22 +211,29 @@ final class PopoutController {
     /// Every delete path comes through here with what deleting means for it (`perform`): it runs at
     /// once, or after the confirmation dialog when the preference asks for one.
     func requestDelete(_ task: TaskItem, perform: @escaping () -> Void) {
-        requestDelete(title: task.title, perform: perform)
+        guard asksBeforeDeleting() else { return perform() }
+        let id = task.id
+        let context = task.modelContext
+        pendingDelete = PendingDelete(title: task.title, message: PendingDelete.message(subtasks: task.subtasks?.count ?? 0),
+                                      taskID: id, isStillThere: { context.map { Self.taskExists(id, in: $0) } ?? false },
+                                      perform: perform)
     }
 
     /// The same for a task known by its title alone (a shared task, brief 62).
     func requestDelete(title: String, perform: @escaping () -> Void) {
-        if Preferences.value(Preferences.confirmDelete, default: Preferences.confirmDeleteDefault) {
+        if asksBeforeDeleting() {
             pendingDelete = PendingDelete(title: title, perform: perform)
         } else {
             perform()
         }
     }
 
+    /// Delete in the question: runs the delete, unless its task has gone meanwhile (then nothing is left to do).
     func confirmPendingDelete() {
         let pending = pendingDelete
         pendingDelete = nil
-        pending?.perform()
+        guard let pending, pending.isStillThere() else { return }
+        pending.perform()
     }
 
     func cancelPendingDelete() { pendingDelete = nil }
@@ -329,6 +356,8 @@ final class PopoutController {
     /// id kept in `state` (never reading the possibly gone model's attributes).
     @discardableResult
     func closeTaskIfDeleted(in context: ModelContext) -> Bool {
+        // A delete question about a task that is gone goes too (brief 157).
+        if let asked = pendingDelete?.taskID, !Self.taskExists(asked, in: context) { pendingDelete = nil }
         guard let id = state.taskID else { return false }
         let deletedHere = task?.isDeleted == true
         guard deletedHere || !Self.taskExists(id, in: context) else { return false }
@@ -349,15 +378,25 @@ final class PopoutController {
     /// Completes a task from its popout: saves, closes the popout, and shows the undo toast. (The
     /// popout has already played the check and the completion feedback.)
     func complete(_ task: TaskItem, in context: ModelContext) {
-        let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate {
-            .restoreDueDate(due)
-        } else {
-            .uncomplete
+        var record = CompletedTask(id: task.id, title: task.title, revert: .uncomplete)
+        if task.recurrenceRule != nil, let due = task.dueDate {
+            record = CompletedTask(id: task.id, title: task.title, revert: .restoreDueDate(due),
+                                   rollOver: TaskActions.RollOver(task))
         }
         TaskActions.toggleCompletion(task, in: context)
         Task { await NotificationScheduler.reschedule(context: context) }
         if self.task?.id == task.id { closeTask() }
-        showToast(CompletedTask(id: task.id, title: task.title, revert: revert))
+        showToast(record)
+    }
+
+    /// The popout's completion, which lands a moment after the tap (the check fills first): by then the task may
+    /// be gone, so it is fetched by id and a gone one is left alone (round 32, brief 157); the popout closes either way.
+    func complete(taskWithID id: UUID, in context: ModelContext) {
+        guard let task = TaskActions.task(withID: id, in: context) else {
+            if state.taskID == id { closeTask() }
+            return
+        }
+        complete(task, in: context)
     }
 
     /// "Completed ‘Title’ · Undo" for a completion that has already been saved (from a popout, or by Claude),
@@ -403,6 +442,8 @@ final class PopoutController {
             }
             let id = record.id
             guard let task = try? context.fetch(FetchDescriptor<TaskItem>(predicate: #Predicate { $0.id == id })).first else { continue }
+            // A repeating task's roll-over (or a flipped switch) goes back as it was, reminder and ticks included.
+            if Flipboard.undo(record, on: task, in: context) { continue }
             switch record.revert {
             case .uncomplete:
                 if task.isCompleted { TaskActions.toggleCompletion(task, in: context) }

@@ -27,6 +27,8 @@ struct SwitchCard: View {
 
     /// The switch being edited; nil adds one.
     let editing: TaskItem?
+    /// Its id, which Save fetches by (`target(editing:in:)`).
+    private let editingID: UUID?
     var style: Style
     /// Adding: the Switchboard whose "+" opened the card (brief 72); nil for a loose switch.
     var board: Switchboard?
@@ -83,6 +85,7 @@ struct SwitchCard: View {
          onDraftChange: @escaping (Bool) -> Void = { _ in }, onDiscard: @escaping () -> Void = {},
          onKeepEditing: @escaping () -> Void = {}) {
         self.editing = editing
+        self.editingID = editing?.id
         self.style = style
         self.board = board
         self.duplicating = duplicating
@@ -414,12 +417,28 @@ struct SwitchCard: View {
 
     // MARK: Saving
 
+    /// What Save writes into: nil to add, the switch being edited fetched afresh by its id (an import, another window
+    /// or another device may have deleted it while the card was open; the model the card opened with is never written
+    /// to: round 32, brief 157). Throws `Gone` when it is no longer there.
+    static func target(editing id: UUID?, in context: ModelContext) throws -> TaskItem? {
+        guard let id else { return nil }
+        guard let task = TaskActions.task(withID: id, in: context) else { throw Gone() }
+        return task
+    }
+
+    /// The edited switch (or Switchboard) was deleted while its card was open: Save says so in one line.
+    struct Gone: LocalizedError {
+        var what = "switch"
+        var errorDescription: String? { "This \(what) was deleted, so there’s nothing to save." }
+    }
+
     private func save() {
         guard !isConfirmingDiscard else { return }
         let parser = parser
         guard draft.canSave(parser) else { return }
         do {
-            guard let task = try draft.save(editing: editing, parser: parser, in: context) else { return }
+            let target = try Self.target(editing: editingID, in: context)
+            guard let task = try draft.save(editing: target, parser: parser, in: context) else { return }
             errorMessage = nil
             #if os(iOS)
             if editing == nil { TapHaptic.play() }
