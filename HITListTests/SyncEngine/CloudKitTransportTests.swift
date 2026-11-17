@@ -27,6 +27,15 @@ final class CloudKitTransportTests: XCTestCase {
         }
     }
 
+    /// Brief 160 (148, polish): `internalError` and the asset files' errors are passing trouble, tried again by the
+    /// transport at the send's end, never refused for good.
+    func testT5InternalErrorAndAssetFileErrorsArePassingTrouble() {
+        for code: CKError.Code in [.internalError, .assetFileNotFound, .assetFileModified] {
+            XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .keep(words: Rules.words(failure(code)), byEngine: false), "\(code)")
+            XCTAssertEqual(Rules.deleteOutcome(failure(code), batchSize: 3), .keep(words: Rules.words(failure(code)), byEngine: false), "\(code)")
+        }
+    }
+
     func testT5TroubleTheEngineLeavesIsTriedAgainByTheTransport() {
         for code: CKError.Code in [.serverResponseLost, .batchRequestFailed, .operationCancelled] {
             XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 10), .keep(words: Rules.words(failure(code)), byEngine: false))

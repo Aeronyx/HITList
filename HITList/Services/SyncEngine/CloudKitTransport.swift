@@ -1080,8 +1080,11 @@ enum CloudKitTransportRules {
     /// `serverResponseLost`: the save may have landed; sent again on the same token, it lands or comes back as a
     /// conflict carrying our own version, which the brain settles as the same. `batchRequestFailed`: another
     /// change in an atomic batch failed (the transport never asks for atomic batches). `operationCancelled`: the
-    /// send was stopped (`stop()`, `reset()`, the system).
-    static let retriedByTransport: Set<CKError.Code> = [.serverResponseLost, .batchRequestFailed, .operationCancelled]
+    /// send was stopped (`stop()`, `reset()`, the system). `internalError`: CloudKit's own fault, not the record's.
+    /// `assetFileNotFound`, `assetFileModified`: the file an asset was sent from went or changed while the send was
+    /// on its way (`AssetFiles`); the record is made again, with a new file, when it is sent again (brief 160).
+    static let retriedByTransport: Set<CKError.Code> = [.serverResponseLost, .batchRequestFailed, .operationCancelled,
+                                                        .internalError, .assetFileNotFound, .assetFileModified]
 
     enum SaveOutcome: Equatable {
         /// T5: stays pending (`byEngine`: on the engine's own list; else added again at the send's end).
