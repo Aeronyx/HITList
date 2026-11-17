@@ -9,15 +9,19 @@ public struct MCPTool: Equatable, Sendable {
     public var inputSchema: JSONValue
     /// MCP's hint that the tool changes nothing.
     public var readOnly: Bool
+    /// MCP's hint that the tool may change or take away what is there, rather than only add (brief 159): a client asks
+    /// the person before such a call when it is set.
+    public var destructive: Bool
 
-    public init(name: String, title: String, description: String, inputSchema: JSONValue, readOnly: Bool) {
+    public init(name: String, title: String, description: String, inputSchema: JSONValue, readOnly: Bool,
+                destructive: Bool = false) {
         self.name = name; self.title = title; self.description = description
-        self.inputSchema = inputSchema; self.readOnly = readOnly
+        self.inputSchema = inputSchema; self.readOnly = readOnly; self.destructive = !readOnly && destructive
     }
 
     var json: JSONValue {
         ["name": .string(name), "title": .string(title), "description": .string(description), "inputSchema": inputSchema,
-         "annotations": ["title": .string(title), "readOnlyHint": .bool(readOnly), "destructiveHint": false,
+         "annotations": ["title": .string(title), "readOnlyHint": .bool(readOnly), "destructiveHint": .bool(destructive),
                          "openWorldHint": false]]
     }
 }

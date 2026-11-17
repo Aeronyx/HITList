@@ -383,10 +383,11 @@ enum NotificationScheduler {
         }
     }
 
-    private static func summaryLog(_ summary: NotificationPlan.Request?, on: Bool) -> String {
+    static func summaryLog(_ summary: NotificationPlan.Request?, on: Bool) -> String {
         guard on else { return "" }
         guard let summary else { return "; morning summary skipped (nothing due)" }
-        return "; morning summary at \(summary.triggerDate.formatted(date: .abbreviated, time: .shortened)): \(summary.body)"
+        // Its time only: the body names tasks, which no log line carries (brief 159).
+        return "; morning summary at \(summary.triggerDate.formatted(date: .abbreviated, time: .shortened))"
     }
 
     private static func systemRequest(for request: NotificationPlan.Request, now: Date, calendar: Calendar) -> UNNotificationRequest {

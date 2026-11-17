@@ -395,6 +395,45 @@ final class ClaudeToolTests: XCTestCase {
         XCTAssertTrue(task.hasDueTime)
     }
 
+    /// Brief 159, item 2 (review 155, finding 3): update_task has no undo in HITList, so a description with text is
+    /// erased only when Claude says so in so many words, and a reply that replaced words carries the ones it replaced.
+    func testClearingADescriptionWithTextNeedsToSaySo() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
+        let task = try fetch("Buy milk")
+        task.notes = "The oat one, two cartons"
+        try context.save()
+
+        let (refused, _) = try call(ClaudeTools.updateTask, ["id": id, "description": ""])
+        XCTAssertTrue(refused.isError, refused.text)
+        XCTAssertTrue(refused.text.contains("clear_description"), refused.text)
+        XCTAssertEqual(task.notes, "The oat one, two cartons", "nothing erased")
+        let (blank, _) = try call(ClaudeTools.updateTask, ["id": id, "description": "   ", "priority": 2])
+        XCTAssertTrue(blank.isError, "white space is an empty description too")
+        XCTAssertEqual(task.priority, 4, "a refused call changes nothing")
+
+        let (cleared, json) = try call(ClaudeTools.updateTask, ["id": id, "clear_description": true])
+        XCTAssertFalse(cleared.isError, cleared.text)
+        XCTAssertEqual(task.notes, "")
+        XCTAssertEqual(json["previous"]?["description"], "The oat one, two cartons", "what it erased, to put back if asked")
+
+        let (again, _) = try call(ClaudeTools.updateTask, ["id": id, "description": ""])
+        XCTAssertFalse(again.isError, "an empty description stays empty without ceremony")
+        let (both, _) = try call(ClaudeTools.updateTask, ["id": id, "description": "x", "clear_description": true])
+        XCTAssertTrue(both.isError, "one or the other")
+    }
+
+    func testAReplyThatReplacedWordsCarriesThem() throws {
+        let id = JSONValue.string(try XCTUnwrap(ids["Buy milk"]).uuidString)
+        let task = try fetch("Buy milk")
+        task.notes = "Two cartons"
+        try context.save()
+        let (_, json) = try call(ClaudeTools.updateTask, ["id": id, "title": "Buy oat milk", "description": "Three cartons"])
+        XCTAssertEqual(json["previous"]?["title"], "Buy milk")
+        XCTAssertEqual(json["previous"]?["description"], "Two cartons")
+        let (_, same) = try call(ClaudeTools.updateTask, ["id": id, "priority": 2])
+        XCTAssertNil(same["previous"], "nothing replaced: nothing to carry")
+    }
+
     /// Brief 127's scan: a reminder before the due time leans on the time. A due with no time takes it away, so the
     /// "minutes before" goes with it (stored, it would come back the day a time is set again); a reminder typed in the
     /// due phrase ("fri 6pm !30mb") is read, not dropped.

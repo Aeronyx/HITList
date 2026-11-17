@@ -308,7 +308,7 @@ final class CloudSyncMonitor {
         LaunchTiming.mark("store")
         self.container = container
         let url = container.configurations.first?.url
-        var fields = ["store": url?.path ?? "unknown"]
+        var fields = ["store": url.map(SyncLogText.shownPath) ?? "unknown"]
         if ModelContainerFactory.didResetStore { fields["reset"] = "store moved to Trash; CloudKit re-imports" }
         if isOnEngine {
             write(.container, "Store opened for HITList's own engine (the mirror is off)", level: .notice, fields: fields)
@@ -353,7 +353,7 @@ final class CloudSyncMonitor {
             "push": env.push ?? "unknown",
             "channel": env.channel.rawValue,
             "pid": "\(ProcessInfo.processInfo.processIdentifier)",
-            "store": store?.path ?? "default location (app group unavailable)",
+            "store": store.map(SyncLogText.shownPath) ?? "default location (app group unavailable)",
             "storeSize": Self.storeSize(at: store).map { ByteCountFormatter.string(fromByteCount: $0, countStyle: .file) } ?? "none yet",
             "lastImport": lastImportAt.map { SyncState.relative($0, now: Date()) } ?? "never",
             "lastExport": lastExportAt.map { SyncState.relative($0, now: Date()) } ?? "never",

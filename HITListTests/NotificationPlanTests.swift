@@ -279,6 +279,17 @@ final class NotificationPlanTests: XCTestCase {
                                         locale: Locale(identifier: "en_GB"))
     }
 
+    /// Brief 159, item 1: the scheduler's log line gives the summary's time, never its body (which names a task).
+    @MainActor
+    func testTheSchedulersLineNeverCarriesTheSummarysBody() throws {
+        let request = try XCTUnwrap(summary([task("Haircut", day: 29, hour: 11)]))
+        XCTAssertTrue(request.body.contains("Haircut"))
+        let line = NotificationScheduler.summaryLog(request, on: true)
+        XCTAssertTrue(line.hasPrefix("; morning summary at "), line)
+        XCTAssertFalse(line.contains("Haircut"), line)
+        XCTAssertFalse(line.contains(request.body), line)
+    }
+
     func testMorningSummaryCountsTodayAndOverdueAndNamesTheFirstTimedTask() throws {
         // It's Wednesday 9:00, so the 8:00 summary is tomorrow's (Thursday the 29th).
         let request = try XCTUnwrap(summary([

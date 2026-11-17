@@ -78,7 +78,7 @@ final class ShareInboxTests: XCTestCase {
         XCTAssertEqual(entry.stage, .made)
         XCTAssertEqual(entry.taskID, made.id)
         XCTAssertEqual(entry.destination, "Added to your Inbox")
-        XCTAssertTrue(lines.contains { $0.contains("made ‘An article worth reading’ in the Inbox") && $0.contains("recorded by HITListShare 812") })
+        XCTAssertTrue(lines.contains { $0.contains("made task \(made.id.uuidString.prefix(8)) in the Inbox") && $0.contains("recorded by HITListShare 812") }, "\(lines)")
     }
 
     func testTheTitleIsReadAsQuickAddAndSiriReadIt() throws {
@@ -187,7 +187,8 @@ final class ShareInboxTests: XCTestCase {
         XCTAssertEqual(made.title, "Buy paint")
         XCTAssertEqual(made.project?.name, "Errands")
         XCTAssertEqual(try context.fetch(FetchDescriptor<Project>()).map(\.name), ["Errands"])
-        XCTAssertTrue(lines.contains { $0.contains("in ‘Errands’") })
+        let errands = try XCTUnwrap(made.project)
+        XCTAssertTrue(lines.contains { $0.contains("in Group \(errands.id.uuidString.prefix(8))") }, "\(lines)")
     }
 
     func testNothingIsMadeWhileTheStoreCouldNotBeOpened() throws {
@@ -234,8 +235,36 @@ final class ShareInboxTests: XCTestCase {
         launch().drain()
         let made = lines.filter { $0.contains("Share: made") }
         XCTAssertEqual(made.count, 2)
-        XCTAssertTrue(made[0].contains("‘First’"))
-        XCTAssertTrue(made[1].contains("‘Second’"))
+        let first = try XCTUnwrap(try tasks().first { $0.title == "First" })
+        let second = try XCTUnwrap(try tasks().first { $0.title == "Second" })
+        XCTAssertTrue(made[0].contains(String(first.id.uuidString.prefix(8))))
+        XCTAssertTrue(made[1].contains(String(second.id.uuidString.prefix(8))))
+    }
+
+    /// Brief 159, item 1 (review 155, finding 1): the sync log and the system log it mirrors name a shared task and its
+    /// Group by kind and the first eight characters of the id, never their words; on every road a drain takes.
+    func testNoLineNamesATitleOrAGroup() throws {
+        try project("Hideaway")
+        let request = try share("Secret plan #Hideaway")
+        launch().drain()
+        // Its file left behind: the "already made" line.
+        try outbox.record(request)
+        launch().drain()
+        // Killed after the save, before "made": the "found, not made again" line.
+        let killed = try share("Quiet errand", askedAgo: 5)
+        var ledger = ShareLedger.load(from: ledgerURL)
+        ledger.upsert(ShareLedger.Entry(id: killed.id, stage: .making, startedAt: clock.addingTimeInterval(-60), title: "Quiet errand"))
+        try ledger.save(to: ledgerURL)
+        let landed = TaskItem(title: "Quiet errand")
+        landed.createdAt = clock.addingTimeInterval(-59.9)
+        context.insert(landed)
+        try context.save()
+        launch().drain()
+        XCTAssertEqual(Set(try tasks().map(\.title)), ["Secret plan", "Quiet errand"])
+        XCTAssertGreaterThanOrEqual(lines.count, 3, "\(lines)")
+        for word in ["Secret", "plan", "Hideaway", "Quiet", "errand"] {
+            XCTAssertFalse(lines.contains { $0.contains(word) }, "‘\(word)’ in the log: \(lines)")
+        }
     }
 
     func testAShareWithNoTitleIsNamedAfterWhatWasShared() throws {

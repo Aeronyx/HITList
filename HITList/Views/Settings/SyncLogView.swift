@@ -20,6 +20,8 @@ struct SyncLogView: View {
     @State private var filter: Filter = .all
     @State private var copied = false
     @State private var saveDocument: SyncLogDocument?
+    /// The copy the iPhone's share sheet is sending; removed when the sheet closes (brief 159).
+    @State private var sharedCopy: URL?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var errorCount: Int { entries.lazy.filter(\.isError).count }
@@ -46,6 +48,17 @@ struct SyncLogView: View {
             entries.insert(entry, at: 0)
             if entries.count > SyncLog.defaultMaxEntries { entries.removeLast(entries.count - SyncLog.defaultMaxEntries) }
         }
+        #if os(iOS)
+        .onAppear { SyncLogShareCopy.remove() }
+        .sheet(isPresented: Binding(get: { sharedCopy != nil }, set: { if !$0 { sharedCopy = nil } }),
+               onDismiss: { SyncLogShareCopy.remove() }) {
+            if let sharedCopy {
+                SyncLogActivitySheet(file: sharedCopy) { self.sharedCopy = nil }
+                    .presentationDetents([.medium, .large])
+                    .ignoresSafeArea()
+            }
+        }
+        #endif
         #if os(macOS)
         .fileExporter(isPresented: Binding(get: { saveDocument != nil }, set: { if !$0 { saveDocument = nil } }),
                       document: saveDocument, contentType: .plainText,
@@ -83,7 +96,7 @@ struct SyncLogView: View {
                 .buttonStyle(HITButtonStyle(.secondary, size: .small))
                 .accessibilityIdentifier("sync-log-save")
             #else
-            ShareLink(item: SyncLogFile(log: log), preview: SharePreview("HITList sync log")) { Text("Share…") }
+            Button("Share…") { sharedCopy = try? SyncLogShareCopy.write(SyncLogText.full(log)) }
                 .buttonStyle(HITButtonStyle(.secondary, size: .small))
                 .accessibilityIdentifier("sync-log-share")
             #endif
@@ -218,6 +231,14 @@ enum SyncLogText {
     }
 
     /// "HITList sync log 2026-11-02".
+    /// A file's path as a log line carries it (brief 159): from its first "/Library/" on, after "~", so a Mac's user name
+    /// (in "/Users/<name>/") never reaches a log a person sends. A path with no "/Library/" in it is shown as it is.
+    static func shownPath(_ url: URL) -> String {
+        let path = url.path
+        guard let library = path.range(of: "/Library/") else { return path }
+        return "~" + path[library.lowerBound...]
+    }
+
     static func fileName(now: Date = Date(), timeZone: TimeZone = .current) -> String {
         "HITList sync log \(formatter("yyyy-MM-dd", timeZone).string(from: now))"
     }
@@ -268,18 +289,49 @@ struct SyncLogDocument: FileDocument {
     }
 }
 
-/// The log as a .txt file for the iPhone's share sheet, written only when something is shared.
-struct SyncLogFile: Transferable {
-    let log: SyncLog
+/// The log as a .txt file for the iPhone's share sheet (brief 159): written when Share… is pressed, one at a time, in a
+/// folder of its own in the app's temporary folder, and removed when the sheet closes, so no copy of the log outlives
+/// the sharing. Removing also takes a copy the old Share… left beside it.
+enum SyncLogShareCopy {
+    static var folder: URL { FileManager.default.temporaryDirectory.appending(path: "SyncLogShare", directoryHint: .isDirectory) }
 
-    static var transferRepresentation: some TransferRepresentation {
-        FileRepresentation(exportedContentType: .plainText) { file in
-            let url = FileManager.default.temporaryDirectory.appending(path: "\(SyncLogText.fileName()).txt")
-            try Data(SyncLogText.full(file.log).utf8).write(to: url, options: .atomic)
-            return SentTransferredFile(url)
+    static func write(_ text: String, in folder: URL = folder) throws -> URL {
+        remove(in: folder)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "\(SyncLogText.fileName()).txt")
+        try Data(text.utf8).write(to: url, options: .atomic)
+        return url
+    }
+
+    static func remove(in folder: URL = folder) {
+        let files = FileManager.default
+        try? files.removeItem(at: folder)
+        let parent = folder.deletingLastPathComponent()
+        let old = (try? files.contentsOfDirectory(at: parent, includingPropertiesForKeys: nil)) ?? []
+        for url in old where url.pathExtension == "txt" && url.lastPathComponent.hasPrefix("HITList sync log ") {
+            try? files.removeItem(at: url)
         }
     }
 }
+
+#if os(iOS)
+/// The system's share sheet for one file; `done` runs when the person shares or cancels.
+private struct SyncLogActivitySheet: UIViewControllerRepresentable {
+    let file: URL
+    let done: () -> Void
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(activityItems: [file], applicationActivities: nil)
+        controller.completionWithItemsHandler = { _, _, _, _ in
+            SyncLogShareCopy.remove()
+            done()
+        }
+        return controller
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
+}
+#endif
 
 #Preview("Sync log") {
     SyncLogSection()

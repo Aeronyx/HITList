@@ -704,6 +704,42 @@ final class SyncLogTextTests: XCTestCase {
         XCTAssertLessThan(first, second, "sorted by time, whatever order the lines were written in")
     }
 
+    /// Brief 159, item 1: the copy of the log the iPhone's share sheet sends lives in a folder of its own, one at a time,
+    /// and is gone once the sheet closes; a copy the old Share… left in the temporary folder goes with it.
+    func testTheSharedCopyIsOneFileAndIsRemovedWhenTheSheetCloses() throws {
+        let parent = FileManager.default.temporaryDirectory.appending(path: "SyncLogShareTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: parent) }
+        let folder = parent.appending(path: "SyncLogShare")
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        let old = parent.appending(path: "HITList sync log 2026-11-01.txt")
+        let unrelated = parent.appending(path: "something else.txt")
+        try Data("old".utf8).write(to: old)
+        try Data("keep".utf8).write(to: unrelated)
+
+        let first = try SyncLogShareCopy.write("first", in: folder)
+        XCTAssertEqual(try String(contentsOf: first, encoding: .utf8), "first")
+        XCTAssertEqual(first.pathExtension, "txt")
+        let second = try SyncLogShareCopy.write("second", in: folder)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).count, 1, "one copy at a time")
+        XCTAssertEqual(try String(contentsOf: second, encoding: .utf8), "second")
+
+        SyncLogShareCopy.remove(in: folder)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path), "gone when the sheet closes")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path), "the old Share…'s copy too")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path), "nothing else")
+    }
+
+    /// Brief 159, item 5 (review 155, finding 8): a path a log line carries starts at /Library/, so a Mac's user name,
+    /// which is in front of it, never reaches a log someone sends.
+    func testAPathIsShownFromLibraryOn() {
+        XCTAssertEqual(SyncLogText.shownPath(URL(filePath: "/Users/someone/Library/Group Containers/UC8N98H3RT.com.trammells.hitlist/HITList.store")),
+                       "~/Library/Group Containers/UC8N98H3RT.com.trammells.hitlist/HITList.store")
+        XCTAssertEqual(SyncLogText.shownPath(URL(filePath: "/private/var/mobile/Containers/Shared/AppGroup/0A1B/HITList.store")),
+                       "/private/var/mobile/Containers/Shared/AppGroup/0A1B/HITList.store", "no name in it: as it is")
+        XCTAssertEqual(SyncLogText.shownPath(URL(filePath: "/Users/someone/Library/Containers/x/Data/Library/HITList.store")),
+                       "~/Library/Containers/x/Data/Library/HITList.store", "from the first /Library/")
+    }
+
     // MARK: The view's filter (brief 99)
 
     /// "All" and "Errors" are one segmented control (the design system's `HITSegmented`), not two chips that looked like

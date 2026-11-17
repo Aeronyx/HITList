@@ -20,5 +20,5 @@ enum WeatherSettingsText {
 
     /// The system question's words (`NSLocationWhenInUseUsageDescription` in `project.yml`, both platforms): what the
     /// location is for, and nothing it is not used for. A test holds the Info.plist to this.
-    static let purpose = "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. It is never stored or shared."
+    static let purpose = "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. Only Apple's weather and map services see it, and HITList never stores it."
 }

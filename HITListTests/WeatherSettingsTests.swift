@@ -19,7 +19,7 @@ final class WeatherSettingsTests: XCTestCase {
     /// Brief 83: the system's question says what the location is for, on both platforms (one Info.plist).
     func testTheQuestionsWordsAreTrue() {
         XCTAssertEqual(WeatherSettingsText.purpose,
-                       "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. It is never stored or shared.")
+                       "HITList uses your approximate location to keep your companion on local time and dressed for the weather where you are. Only Apple's weather and map services see it, and HITList never stores it.")
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") as? String,
                        WeatherSettingsText.purpose)
         XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "NSLocationDefaultAccuracyReduced") as? Bool, true,
