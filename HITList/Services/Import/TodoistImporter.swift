@@ -37,6 +37,13 @@ enum TodoistImporter {
         var kept = 0
     }
 
+    /// An import that stopped part way: `written` tasks were saved (and are in the receipt, so Undo last import removes
+    /// them); the batch being made when `underlying` was thrown was rolled back.
+    struct Stopped: Error {
+        var written: Int
+        var underlying: Error
+    }
+
     static let batchSize = 50
 
     /// One receipt per store, in the app's own Application Support (never the App Group, never iCloud): a Debug run
@@ -79,10 +86,12 @@ enum TodoistImporter {
     }
 
     /// Writes the plan. `backup` runs before the first record is made; a throw stops the import with nothing written.
-    /// `progress` is told how many tasks are made after each batch.
+    /// `progress` is told how many tasks are made after each batch. A throw after that is a `Stopped` naming how many
+    /// tasks were saved; `save` is the batch's save (tests make it fail).
     static func run(_ plan: TodoistPlan, in context: ModelContext, now: Date = .now,
                     backup: (ModelContext) throws -> Void = backUpFirst,
                     receiptURL: URL = receiptURL,
+                    save: (ModelContext) throws -> Void = { try $0.save() },
                     progress: (Int) -> Void = { _ in }) async throws -> Receipt {
         try backup(context)
         var receipt = Receipt(date: now, taskIDs: [], checklistIDs: [], groupIDs: [], labelIDs: [])
@@ -115,36 +124,54 @@ enum TodoistImporter {
         }
 
         var made = 0
-        for (index, planned) in plan.tasks.enumerated() {
-            // As `TaskActions.create` makes a task (title clamped, deadline at its day's start), notes and checklist added.
-            let task = TaskItem(title: TaskLimits.clampedTitle(planned.title), notes: planned.notes, priority: planned.priority.rawValue,
-                                dueDate: planned.due, hasDueTime: planned.hasDueTime,
-                                project: planned.groupName.map(group(named:)), labels: planned.labels.map(label(named:)),
-                                recurrence: planned.recurrence)
-            if let deadline = planned.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
-            // The file's order, a millisecond apart, for lists that sort by when a task was made.
-            task.createdAt = now.addingTimeInterval(Double(index) / 1000)
-            task.updatedAt = task.createdAt
-            context.insert(task)
-            receipt.taskIDs.append(task.id)
-            // As `TaskActions.addSubtask` makes a checklist line: the title on one line, the parent's Group, in order.
-            for (order, line) in planned.checklist.enumerated() {
-                let subtask = TaskItem(title: TaskLimits.clampedTitle(TaskLimits.singleLine(line)), project: task.project)
-                subtask.sortOrder = order
-                context.insert(subtask)
-                subtask.parent = task
-                receipt.checklistIDs.append(subtask.id)
-            }
-            made += 1
-            if made % batchSize == 0 {
-                try context.save()
-                progress(made)
-                await Task.yield()
-            }
+        var written = 0
+        // After each batch's save the receipt names what is saved, so a stop part way leaves Undo last import for it;
+        // the batch being made when something throws is rolled back (round 32, review 151 B5).
+        func commit() throws {
+            try save(context)
+            written = made
+            try saveReceipt(receipt, at: receiptURL)
         }
-        try context.save()
+        do {
+            for (index, planned) in plan.tasks.enumerated() {
+                // As `TaskActions.create` makes a task (title clamped, deadline at its day's start), notes and checklist added.
+                let task = TaskItem(title: TaskLimits.clampedTitle(planned.title), notes: TaskLimits.clampedNotes(planned.notes), priority: planned.priority.rawValue,
+                                    dueDate: planned.due, hasDueTime: planned.hasDueTime,
+                                    project: planned.groupName.map(group(named:)), labels: planned.labels.map(label(named:)),
+                                    recurrence: planned.recurrence)
+                if let deadline = planned.deadline { task.deadline = Calendar.current.startOfDay(for: deadline) }
+                // The file's order, a millisecond apart, for lists that sort by when a task was made.
+                task.createdAt = now.addingTimeInterval(Double(index) / 1000)
+                task.updatedAt = task.createdAt
+                context.insert(task)
+                receipt.taskIDs.append(task.id)
+                // As `TaskActions.addSubtask` makes a checklist line: the title on one line, the parent's Group, in order.
+                for (order, line) in planned.checklist.enumerated() {
+                    let subtask = TaskItem(title: TaskLimits.clampedTitle(TaskLimits.singleLine(line)), project: task.project)
+                    subtask.sortOrder = order
+                    context.insert(subtask)
+                    subtask.parent = task
+                    receipt.checklistIDs.append(subtask.id)
+                }
+                made += 1
+                if made % batchSize == 0 {
+                    try commit()
+                    progress(made)
+                    await Task.yield()
+                }
+            }
+            try commit()
+        } catch {
+            // The unsaved batch is taken back by deleting its new rows. Not `rollback()`: it left them on the Group they
+            // were put in, emptied, and the next save wrote them as blank tasks (seen in
+            // `testAStoppedImportSaysWhatWasWrittenAndCanBeUndone`).
+            let pending = context.insertedModelsArray
+            for model in pending { context.delete(model) }
+            try? context.save()
+            log.error("Todoist import stopped after \(written) tasks: \(error.localizedDescription, privacy: .public)")
+            throw Stopped(written: written, underlying: error)
+        }
         progress(made)
-        try saveReceipt(receipt, at: receiptURL)
         log.notice("Todoist import: \(receipt.summary, privacy: .public)")
         return receipt
     }

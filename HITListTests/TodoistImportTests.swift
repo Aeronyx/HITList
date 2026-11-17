@@ -143,6 +143,45 @@ final class TodoistImportTests: XCTestCase {
         XCTAssertEqual(tasks.last?.title, "Task number 230")
     }
 
+    /// Round 32 (review 151 B5): an import stopped part way keeps the batches it saved, rolls back the rest, says how
+    /// many were written, and leaves a receipt so Undo last import removes them.
+    func testAStoppedImportSaysWhatWasWrittenAndCanBeUndone() async throws {
+        let rows = (1...120).map { "task,Task number \($0),,4,1" }.joined(separator: "\n")
+        let project = try TodoistReader.read(csv: "TYPE,CONTENT,DESCRIPTION,PRIORITY,INDENT\n\(rows)\n", fileName: "Big [1].csv")
+        let plan = TodoistMapping.plan([project], existing: try TodoistImporter.existing(in: context))
+        struct DiskFull: Error {}
+        var saves = 0
+        do {
+            try await TodoistImporter.run(plan, in: context, backup: { _ in }, receiptURL: receiptURL,
+                                          save: { context in
+                                              saves += 1
+                                              if saves == 2 { throw DiskFull() }
+                                              try context.save()
+                                          })
+            XCTFail("the second batch's save fails")
+        } catch let stopped as TodoistImporter.Stopped {
+            XCTAssertEqual(stopped.written, 50)
+            XCTAssertTrue(stopped.underlying is DiskFull)
+        }
+        XCTAssertFalse(context.hasChanges, "the unsaved batch is taken back")
+        XCTAssertEqual(try fetch(TaskItem.self).count, 50)
+        let receipt = try XCTUnwrap(TodoistImporter.loadReceipt(at: receiptURL), "Undo last import is offered")
+        XCTAssertEqual(receipt.taskIDs.count, 50)
+        XCTAssertEqual(try TodoistImporter.undo(receipt, in: context, receiptURL: receiptURL).tasks, 50)
+        XCTAssertEqual(try fetch(TaskItem.self).map(\.title), [], "no blank task left behind by the stopped batch")
+        XCTAssertEqual(try fetch(Project.self).count, 0, "the Group it made is empty again and goes")
+    }
+
+    func testTheStoppedWordsSayHowManyAndThatUndoRemovesThem() {
+        struct Boom: LocalizedError { var errorDescription: String? { "The disk is full." } }
+        XCTAssertEqual(TodoistImportModel.stoppedMessage(TodoistImporter.Stopped(written: 0, underlying: Boom())),
+                       "Import stopped before anything was written: The disk is full.")
+        XCTAssertEqual(TodoistImportModel.stoppedMessage(TodoistImporter.Stopped(written: 1, underlying: Boom())),
+                       "Import stopped after 1 task was written: The disk is full. Undo last import removes it.")
+        XCTAssertEqual(TodoistImportModel.stoppedMessage(TodoistImporter.Stopped(written: 150, underlying: Boom())),
+                       "Import stopped after 150 tasks were written: The disk is full. Undo last import removes them.")
+    }
+
     func testANewGroupIsMadeAndUndone() async throws {
         let receipt = try await run(try plan())
         XCTAssertEqual(try fetch(Project.self).map(\.name), ["Home Base"])
