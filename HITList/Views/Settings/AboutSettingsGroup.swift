@@ -148,7 +148,7 @@ struct CopyDiagnosticsRow: View {
     }
 
     private func copy() {
-        let store = context.container.configurations.first?.url.path ?? "unknown"
+        let store = (context.container.configurations.first?.url).map(SyncLogText.shownPath) ?? "unknown"
         Task {
             Diagnostics.copy(await Diagnostics.current(storePath: store, context: context).text)
             withAnimation(HITMotion.standard(reduceMotion: reduceMotion)) { copied = true }

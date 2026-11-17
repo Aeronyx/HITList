@@ -156,12 +156,14 @@ struct ClaudeToolHandler {
         let task = try self.task(arguments["id"])
         guard !task.isCompleted else { throw ToolError("That task is already completed.") }
         let revert: CompletedTask.Revert = if task.recurrenceRule != nil, let due = task.dueDate { .restoreDueDate(due) } else { .uncomplete }
+        // Taken before the roll-over: Undo puts the reminder and the ticked sub-tasks back too (round 32, brief 157).
+        let rollOver: TaskActions.RollOver? = if case .restoreDueDate = revert { TaskActions.RollOver(task) } else { nil }
         // The handler's own calendar, as for everything else it reads and writes: a repeat rolls on from the start of
         // its day in that zone (brief 92), which CI's UTC runner told apart from the device's.
         TaskActions.toggleCompletion(task, in: context, now: now, calendar: calendar)
         log("Claude completed a task", ["tool": ClaudeTools.completeTask, "task": task.id.uuidString])
         didWrite()
-        didComplete(CompletedTask(id: task.id, title: task.title, revert: revert))
+        didComplete(CompletedTask(id: task.id, title: task.title, revert: revert, rollOver: rollOver))
         if case .restoreDueDate = revert {
             return .json(["completed": false, "repeats": true, "next_due": dueJSON(task) ?? .null,
                           "note": "A repeating task moves to its next date instead of being marked done.", "task": json(task, full: false)])

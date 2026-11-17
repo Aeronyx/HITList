@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 import SwiftData
 import HITListCore
 @testable import HITList
@@ -281,6 +282,21 @@ final class NotificationPlanTests: XCTestCase {
 
     /// Brief 159, item 1: the scheduler's log line gives the summary's time, never its body (which names a task).
     @MainActor
+    /// Round 32: a person who gives a task a reminder is asked for notifications then, once, unless they already
+    /// chose in Settings or iOS was already asked.
+    func testNotificationsAreAskedForAtTheFirstReminderOnce() {
+        func ask(chosen: Bool = false, asked: Bool = false, _ status: UNAuthorizationStatus = .notDetermined, reminder: Bool = true) -> Bool {
+            NotificationScheduler.shouldAskAtFirstReminder(everChosen: chosen, alreadyAsked: asked, authorization: status,
+                                                           hasOwnReminder: reminder)
+        }
+        XCTAssertTrue(ask())
+        XCTAssertFalse(ask(reminder: false), "no task has a reminder of its own: nothing to ask for")
+        XCTAssertFalse(ask(chosen: true), "switched on or off in Settings: the person chose")
+        XCTAssertFalse(ask(asked: true), "asked once already")
+        XCTAssertFalse(ask(.denied), "iOS was asked and said no: Settings is the way")
+        XCTAssertFalse(ask(.authorized))
+    }
+
     func testTheSchedulersLineNeverCarriesTheSummarysBody() throws {
         let request = try XCTUnwrap(summary([task("Haircut", day: 29, hour: 11)]))
         XCTAssertTrue(request.body.contains("Haircut"))

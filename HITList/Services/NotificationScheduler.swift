@@ -31,6 +31,39 @@ enum NotificationScheduler {
         }
     }
 
+    // MARK: - The first reminder
+
+    /// Set once HITList has asked for notifications because of a task's own reminder, whatever the answer.
+    static let askedAtFirstReminderKey = "notifications.askedAtFirstReminder"
+
+    /// Whether to ask for notifications now (round 32, review 153). Reminders were off until someone found Settings →
+    /// Reminders, while quick add happily said "Fires 10:45 AM": a person who gives a task a reminder expects it to
+    /// fire. So the first time a task with a reminder of its own is saved, on a device where reminders were never
+    /// switched on or off and iOS was never asked, HITList asks; a yes switches reminders on. Once only: any answer,
+    /// here or in Settings, ends it.
+    static func shouldAskAtFirstReminder(everChosen: Bool, alreadyAsked: Bool, authorization: UNAuthorizationStatus,
+                                         hasOwnReminder: Bool) -> Bool {
+        !everChosen && !alreadyAsked && authorization == .notDetermined && hasOwnReminder
+    }
+
+    @MainActor
+    private static func askAtFirstReminderIfNeeded(context: ModelContext, defaults: UserDefaults = AppGroup.defaults) async {
+        let everChosen = defaults.object(forKey: enabledKey) != nil
+        let alreadyAsked = defaults.bool(forKey: askedAtFirstReminderKey)
+        guard !everChosen, !alreadyAsked else { return }
+        var own = FetchDescriptor<TaskItem>(predicate: #Predicate { task in
+            task.isCompleted == false && (task.reminderOffsetMinutes != nil || task.reminderDate != nil)
+        })
+        own.fetchLimit = 1
+        let hasOwnReminder = ((try? context.fetchCount(own)) ?? 0) > 0
+        guard shouldAskAtFirstReminder(everChosen: everChosen, alreadyAsked: alreadyAsked,
+                                       authorization: await authorizationStatus(), hasOwnReminder: hasOwnReminder) else { return }
+        defaults.set(true, forKey: askedAtFirstReminderKey)
+        let granted = await requestPermission()
+        isEnabled = granted
+        log.notice("Asked for notifications at the first task with a reminder: \(granted ? "allowed" : "not allowed", privacy: .public)")
+    }
+
     // MARK: - Settings: status, pending summary, test
 
     /// The identifier of Settings' test notification; rescheduling leaves it alone.
@@ -190,6 +223,7 @@ enum NotificationScheduler {
     static func reschedule(context: ModelContext, reason: String = "app",
                            isMainStore: Bool = ModelContainerFactory.isMainStoreOpen) async {
         guard isMainStore else { return }
+        await askAtFirstReminderIfNeeded(context: context)
         guard !isRescheduling else {
             rerunReasons.insert(reason)
             return

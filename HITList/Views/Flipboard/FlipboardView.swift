@@ -274,6 +274,10 @@ struct FlipboardView: View {
 
     // MARK: Sections
 
+    /// What a switch is, under the "Add switch" tile of a Flipboard that has none.
+    static let emptyHint = "A switch is for something you do again and again, like watering the plants. "
+        + "Flip it when it’s done, and it turns itself back when it’s due again."
+
     /// The loose switches, exactly as the board was before Switchboards, with the + tile (or the card) last. With a
     /// Switchboard on the board an "Ungrouped" header with their lights sits over them and folds them away (brief
     /// 126). A switch dragged here, or onto the folded header, leaves its Switchboard (brief 96).
@@ -296,6 +300,15 @@ struct FlipboardView: View {
             if !folded {
                 looseGrid(loose, tip: tip, tipID: tipID)
                     .transition(.opacity)
+            }
+            if loose.isEmpty, !hasBoards, !hasInlineCard {
+                // Round 32 (review 153): an empty Flipboard said nothing about what it is.
+                Text(Self.emptyHint)
+                    .font(HITType.caption)
+                    .foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, HITSpacing.s)
+                    .accessibilityIdentifier("flipboard-empty-hint")
             }
         }
         .switchDropTarget(.loose, dragging: dragging, lit: $dropTarget) { drop($0, onto: .loose) }
