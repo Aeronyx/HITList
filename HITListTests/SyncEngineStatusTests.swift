@@ -240,10 +240,10 @@ final class SyncEngineStatusTests: XCTestCase {
     }
 
     func testTheSwitchNamesBothEngines() {
-        XCTAssertEqual(SyncEngineWords.engineName(.mirror), "iCloud's mirror")
-        XCTAssertEqual(SyncEngineWords.engineName(.own), "HITList's own")
-        XCTAssertEqual(SyncEngineWords.moveTitle(to: .own), "Move to HITList's own")
-        XCTAssertEqual(SyncEngineWords.moveTitle(to: .mirror), "Move back to iCloud's mirror")
+        XCTAssertEqual(SyncEngineWords.engineName(.mirror), "The earlier sync")
+        XCTAssertEqual(SyncEngineWords.engineName(.own), "The new sync")
+        XCTAssertEqual(SyncEngineWords.moveTitle(to: .own), "Move to the new sync")
+        XCTAssertEqual(SyncEngineWords.moveTitle(to: .mirror), "Move back to the earlier sync")
     }
 
     func testTheEngineAccountIgnoresTheMirrorsSwitch() {

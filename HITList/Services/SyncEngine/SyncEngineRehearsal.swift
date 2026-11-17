@@ -8,8 +8,9 @@ import HITListCore
 /// actions, and prints one line per thing (`REHEARSAL …`) and never a title, so two devices' runs can be read side
 /// by side.
 ///
-/// - `-syncEngineMoveNow own|mirror [-rehearsalDelay <seconds>]`: after the delay (the mirror's first import and
-///   export need a while), the move, as the Settings row does it. A side store then asks to be reopened.
+/// - `-syncEngineMoveNow own|mirror|mirror-fresh [-rehearsalDelay <seconds>]`: after the delay (the mirror's first
+///   import and export need a while), the move, as the Settings row does it (`mirror-fresh`: the way back with a
+///   fresh copy, for every device but the first). A side store then asks to be reopened.
 /// - `-syncEngineCheck YES`: on the engine, once the launch's sync has ended with nothing waiting, Check iCloud…
 ///   (`SyncEngineAudit`), printed line by line.
 /// - `-syncMirrorAudit YES [-rehearsalDelay <seconds>]`: on the mirror, after the delay, the mirror's own audit
@@ -22,16 +23,19 @@ enum SyncEngineRehearsal {
     static func runIfAsked(container: ModelContainer, arguments: [String] = ProcessInfo.processInfo.arguments) {
         guard !ModelContainerFactory.isMainStoreOpen, !ModelContainerFactory.isRunningInMemory else { return }
         let delay = value("-rehearsalDelay", arguments).flatMap(Double.init) ?? 8
-        if let target = value("-syncEngineMoveNow", arguments).flatMap(SyncEngineBoard.Engine.init(rawValue:)) {
+        // `mirror-fresh`: the way back for every device but the first (a fresh copy at the next launch).
+        let asked = value("-syncEngineMoveNow", arguments)
+        let fresh = asked == "mirror-fresh"
+        if let target = (fresh ? "mirror" : asked).flatMap(SyncEngineBoard.Engine.init(rawValue:)) {
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(delay))
                 let counts = Self.counts(container)
                 do {
                     guard let actions = SyncEngineBoard.shared.actions else { return say("move: nothing is wired") }
-                    try await actions.move(target)
-                    say("move to \(target.rawValue): done; \(counts)")
+                    try await actions.move(target, fresh)
+                    say("move to \(target.rawValue)\(fresh ? " with a fresh copy" : ""): done; \(counts)")
                 } catch {
-                    say("move to \(target.rawValue): \(error.localizedDescription); \(counts)")
+                    say("move to \(target.rawValue)\(fresh ? " with a fresh copy" : ""): \(error.localizedDescription); \(counts)")
                 }
             }
         }

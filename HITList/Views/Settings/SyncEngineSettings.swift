@@ -219,11 +219,11 @@ struct SyncEngineSwitchGroup: View {
         HITGroup(Self.title, footer: SyncEngineWords.switchFooter) {
             HITMenuRow("Syncs through", systemImage: "gearshape.2", value: SyncEngineWords.engineName(running))
                 .accessibilityIdentifier("settings-engine-switch")
-            SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote)
+            SettingsNote(text: waiting ? SyncEngineWords.waitingNote(next) : SyncEngineWords.moveNote(to: target))
             HITMenuRow(waiting ? SyncEngineWords.cancelTitle : SyncEngineWords.moveTitle(to: target),
                        subtitle: board.actions == nil ? SyncEngineWords.notWired : nil,
                        systemImage: "arrow.left.arrow.right", iconTint: Theme.accent, accessory: .none) {
-                if waiting { move(to: target) } else { confirmMove = true }
+                if waiting { move(to: target, freshCopy: false) } else { confirmMove = true }
             }
             .disabled(board.actions == nil || isMoving)
             .accessibilityIdentifier("settings-engine-move")
@@ -234,14 +234,28 @@ struct SyncEngineSwitchGroup: View {
             }
         }
         .confirmationDialog("\(SyncEngineWords.moveTitle(to: target))?", isPresented: $confirmMove, titleVisibility: .visible) {
-            Button(SyncEngineWords.moveTitle(to: target)) { move(to: target) }
+            if target == .own {
+                Button(blocker == nil ? SyncEngineWords.moveTitle(to: target) : "Move anyway") { move(to: target, freshCopy: false) }
+            } else {
+                // The way back: the first device sends what it holds; every other device takes a fresh copy, or
+                // each would send the items made meanwhile as its own and every device would hold them twice.
+                Button(SyncEngineWords.backFirstTitle) { move(to: target, freshCopy: false) }
+                Button(SyncEngineWords.backOtherTitle) { move(to: target, freshCopy: true) }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(SyncEngineWords.moveNote)
+            Text(target == .own ? (blocker ?? SyncEngineWords.moveNote(to: target)) : SyncEngineWords.backMessage)
         }
     }
 
-    private func move(to target: SyncEngineBoard.Engine) {
+    /// Why moving to the new sync should wait: today's sync has not finished on this device, so what it has not
+    /// yet received (a deletion made on another device, say) would be missing from what this device sends.
+    private var blocker: String? {
+        SyncEngineWords.moveBlocker(mirrorRunning: ModelContainerFactory.isCloudKitEnabled,
+                                    isSynced: CloudSyncMonitor.shared.state.isSynced)
+    }
+
+    private func move(to target: SyncEngineBoard.Engine, freshCopy: Bool) {
         guard let actions = board.actions, !isMoving else { return }
         isMoving = true
         message = nil
@@ -251,7 +265,7 @@ struct SyncEngineSwitchGroup: View {
                 next = SyncEngineSwitch.nextEngine()
             }
             do {
-                try await actions.move(target)
+                try await actions.move(target, freshCopy)
             } catch let error as SyncEngine.MoveError where error != .inMemory {
                 // Not a failure: the move is made and waits for the app to be reopened.
                 message = error.localizedDescription
@@ -445,9 +459,29 @@ enum SyncEngineWords {
     private static let reopens = "then asks you to reopen HITList"
     #endif
 
-    static let moveNote = "Moving saves a backup first and keeps every task on this device, \(reopens). A device on "
-        + "the new sync and one on the earlier sync don't see each other's changes: move every device you use, one "
-        + "after another. You can move back."
+    /// Under the row, before the move: what moving does, in the direction it would go.
+    static func moveNote(to engine: SyncEngineBoard.Engine) -> String {
+        if engine == .own {
+            return "Moving saves a backup first and keeps every task on this device, \(reopens). A device on the new "
+                + "sync and one on the earlier sync don't see each other's changes: move every device you use, one "
+                + "right after another, and change nothing on a device between the first move and its own. You can "
+                + "move back."
+        }
+        return "Moving back saves a backup first, \(reopens). Move every device back, one right after another."
+    }
+
+    /// Moving to the new sync while today's sync has not finished here: said in the confirmation, which then offers
+    /// "Move anyway". Nil when nothing stands in the way (the earlier sync is off, or its bolt is filled).
+    static func moveBlocker(mirrorRunning: Bool, isSynced: Bool) -> String? {
+        guard mirrorRunning, !isSynced else { return nil }
+        return "iCloud sync hasn't finished on this device (the bolt isn't filled). Moving now can bring back "
+            + "something deleted on another device, or miss its latest changes. Better: wait for the bolt, then move."
+    }
+
+    static let backFirstTitle = "First device: send this device's tasks"
+    static let backOtherTitle = "Another device already moved back: download"
+    static let backMessage = "On the first device you move back, send its tasks. On every other device, download: "
+        + "it takes a fresh copy from iCloud, so nothing is saved twice. A backup is saved first either way."
 
     static func waitingNote(_ next: SyncEngineBoard.Engine) -> String {
         #if os(macOS)
@@ -601,7 +635,7 @@ enum SyncEngineDemo {
             syncNow: { note("Sync now") },
             resume: { note("Try again") },
             answerPurge: { note("Purge answer \($0.rawValue)") },
-            move: { _ in
+            move: { _, _ in
                 note("Move")
                 throw DemoError()
             })

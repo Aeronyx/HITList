@@ -16,6 +16,14 @@ import AppKit
 /// which the next launch reads. The engine's ledger needs nothing: a store that comes back to the engine after time on
 /// the mirror keeps its file, so its ledger is still bound to it, and the brain's compare finds whatever the mirror
 /// brought or changed meanwhile as changed here, as it finds any write.
+///
+/// **The way back** (rehearsed in round 32 on CloudKit Development, two stores): the first device to go back keeps
+/// its file, and the mirror, reopened, sends everything that changed while it was off (SwiftData records history on
+/// a store open without the mirror; the mirror's own audit agreed on the second launch). **Every other device must
+/// come back with a fresh copy** (`freshCopy`): an item made on the engine has no record of the mirror's on any
+/// device, so each device that came back with its own file would send it as a record of its own, and every device
+/// would then hold it twice (seen: 21 tasks where 19 were right). A fresh copy downloads what the first device sent.
+/// What a device changed on the engine and had not yet synced when it takes a fresh copy is in its backup only.
 extension SyncEngine {
     enum MoveError: Error, LocalizedError, Equatable {
         /// The store could not be opened and the app runs on an empty one: nothing to move.
@@ -47,6 +55,7 @@ extension SyncEngine {
     static func move(to engine: SyncEngineBoard.Engine, container: ModelContainer,
                      storeName: String = ModelContainerFactory.storeName, defaults: UserDefaults = AppGroup.defaults,
                      current: SyncEngineBoard.Engine = SyncEngineSwitch.current,
+                     freshCopy: Bool = false,
                      backUp: @MainActor (ModelContext) throws -> URL? = { try SyncRepair.backUp(context: $0) },
                      relaunch: Bool = true) async throws {
         guard engine != current else {
@@ -69,15 +78,24 @@ extension SyncEngine {
         }
         // 3. The preference: from here on the next launch opens the store on `engine`.
         SyncEngineSwitch.setPreference(engine, storeName: storeName, defaults: defaults)
-        // 4. The running engine stops before the process goes, so the transport's state is written.
-        if let running = shared { await running.stop() }
+        // 3b. A move back that takes a fresh copy: the store is set aside at that launch (as Reset local cache does,
+        //     never deleted), and the mirror downloads its zone into a new one.
+        if freshCopy, engine == .mirror {
+            LocalCacheReset.request(storeName: storeName, defaults: defaults)
+            moveLog.notice("move to the mirror: with a fresh copy; the store is set aside at the next launch")
+        }
         guard relaunch else { return }
         #if os(macOS)
         if storeName == ModelContainerFactory.mainStoreName {
+            // 4. The running engine stops before the process goes, so the transport's state is written.
+            if let running = shared { await running.stop() }
             relaunchMac(defaults: defaults)
             return
         }
         #endif
+        // On the iPhone and iPad (and a side store on the Mac) the person reopens the app, perhaps much later: until
+        // then this process goes on syncing on the engine it runs, and taking its deletions down. Stopping it here
+        // left an app that looked synced and sent nothing for as long as it stayed in the background (147's F5).
         throw MoveError.reopenToFinish(engine)
     }
 

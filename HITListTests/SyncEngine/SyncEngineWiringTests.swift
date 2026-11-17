@@ -243,6 +243,47 @@ final class SyncEngineWiringTests: XCTestCase {
                                                arguments: [], defaults: defaults), .own, "the next launch opens it on the engine")
     }
 
+    /// The way back for every device but the first: the store is set aside at the next launch (as Reset local cache
+    /// does), so the mirror downloads its zone into a new one. A move to the engine never asks for it.
+    func testTheWayBackWithAFreshCopyAsksForTheStoreToBeSetAside() async throws {
+        let container = ModelContainerFactory.preview()
+        let store = "HITList-s143t.store"
+        SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults)
+        do {
+            try await SyncEngine.move(to: .mirror, container: container, storeName: store, defaults: defaults,
+                                      current: .own, backUp: { _ in nil })
+        } catch let error as SyncEngine.MoveError {
+            XCTAssertEqual(error, .reopenToFinish(.mirror))
+        }
+        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults), "the first device back keeps its file")
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .mirror)
+
+        SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults)
+        do {
+            try await SyncEngine.move(to: .mirror, container: container, storeName: store, defaults: defaults,
+                                      current: .own, freshCopy: true, backUp: { _ in nil })
+        } catch let error as SyncEngine.MoveError {
+            XCTAssertEqual(error, .reopenToFinish(.mirror))
+        }
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), store, "set aside at the next launch of this store")
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .mirror)
+
+        defaults.removeObject(forKey: ModelContainerFactory.resetLocalStoreKey)
+        do {
+            try await SyncEngine.move(to: .own, container: container, storeName: store, defaults: defaults,
+                                      current: .mirror, freshCopy: true, backUp: { _ in nil })
+        } catch let error as SyncEngine.MoveError {
+            XCTAssertEqual(error, .reopenToFinish(.own))
+        }
+        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults), "a move to the engine never sets the store aside")
+    }
+
+    func testMovingToTheNewSyncWarnsWhileTodaysSyncHasNotFinished() {
+        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: false, isSynced: false), "today's sync is off: nothing to wait for")
+        XCTAssertNil(SyncEngineWords.moveBlocker(mirrorRunning: true, isSynced: true))
+        XCTAssertNotNil(SyncEngineWords.moveBlocker(mirrorRunning: true, isSynced: false))
+    }
+
     func testAMoveWhoseBackupFailsChangesNothing() async throws {
         let container = ModelContainerFactory.preview()
         struct NoBackup: Error {}

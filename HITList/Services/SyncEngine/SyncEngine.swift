@@ -112,8 +112,8 @@ final class SyncEngine {
             // The in-memory fallback is empty: an engine on it would read "everything deleted here" (and walk round
             // the mass-deletion guard as soon as one row is made: 146's finding 2). It never runs.
             board.launched(.own, actions: nil)
-            let why = inMemory ? "couldn't open this device's data" : "the store has no file of its own"
-            board.publish(SyncStatus(state: .held(.failed("The sync engine is not running: \(why)."))))
+            let why = inMemory ? "HITList couldn't open this device's data" : "this device's data has no file of its own"
+            board.publish(SyncStatus(state: .held(.failed("Sync is not running: \(why)."))))
             osLog.error("sync engine: not started: \(why, privacy: .public)")
             return
         }
@@ -128,8 +128,9 @@ final class SyncEngine {
                 syncNow: { throw SyncCoreError.notStarted },
                 resume: { launchIfSwitchedOn(container: container, engine: choice, inMemory: inMemory, board: board) },
                 answerPurge: { _ in throw SyncCoreError.notStarted },
-                move: { engine in try await SyncEngine.move(to: engine, container: container) }))
-            board.publish(SyncStatus(state: .held(.failed("\(error)"))))
+                move: { engine, fresh in try await SyncEngine.move(to: engine, container: container, freshCopy: fresh) }))
+            // Plain words for the person; the error itself is in the log, a line below.
+            board.publish(SyncStatus(state: .held(.failed("HITList couldn't open its sync records on this device."))))
             osLog.error("sync engine: not started: \(String(describing: error), privacy: .public)")
             return
         }
@@ -180,7 +181,7 @@ final class SyncEngine {
             syncNow: { throw SyncCoreError.notStarted },
             resume: {},
             answerPurge: { _ in throw SyncCoreError.notStarted },
-            move: { engine in try await SyncEngine.move(to: engine, container: container) })
+            move: { engine, fresh in try await SyncEngine.move(to: engine, container: container, freshCopy: fresh) })
     }
 
     var actions: SyncEngineBoard.Actions {
@@ -192,7 +193,7 @@ final class SyncEngine {
             },
             resume: { [core] in await core.resume() },
             answerPurge: { [core] choice in try await core.answer(choice) },
-            move: { [container] engine in try await SyncEngine.move(to: engine, container: container) })
+            move: { [container] engine, fresh in try await SyncEngine.move(to: engine, container: container, freshCopy: fresh) })
         if let zone = auditZone {
             // Check iCloud…: a sync first, so that what is merely on its way is not counted as a difference, then
             // the read and the comparison, said in the sync log by key.

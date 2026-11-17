@@ -96,7 +96,7 @@ struct ICloudCheckGroup: View {
         detailRow("Network", monitor.isOnline.map { $0 ? "reachable" : "unreachable" } ?? "checking")
         if monitor.isOnEngine {
             let status = SyncEngineBoard.shared.status
-            detailRow("Engine", "HITList's own (the mirror is off)")
+            detailRow("Syncs through", "the new sync (early access)")
             detailRow("Last fetch", timestamp(status?.lastFetchEnded))
             detailRow("Last accepted send", timestamp(status?.lastSendEnded))
             if let error = status?.lastError { detailBlock("Last error", error) }
@@ -240,6 +240,7 @@ struct ICloudDataPage: View {
 /// (`includesDeleteAll`), whose words say how (the Mac keeps that one at the foot of its Data section).
 struct ResetLocalCacheGroup: View {
     var includesDeleteAll = false
+    @Environment(\.modelContext) private var context
     @State private var confirmReset = false
     @State private var showReopenAlert = false
 
@@ -260,7 +261,7 @@ struct ResetLocalCacheGroup: View {
             Button(resetActionTitle, role: .destructive) { resetLocalCache() }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Your tasks stay in iCloud and are downloaded again into a fresh copy on this device. Changes made here that haven't synced yet won't come back.")
+            Text("Your tasks stay in iCloud and are downloaded again into a fresh copy on this device. A backup is saved first; changes made here that haven't synced yet are only in that backup.")
         }
         .alert("Quit and reopen HITList to finish", isPresented: $showReopenAlert) {
             Button("OK") {}
@@ -278,6 +279,9 @@ struct ResetLocalCacheGroup: View {
     #endif
 
     private func resetLocalCache() {
+        // A backup first (round 32, review 151): the copy set aside is out of a person's reach, a backup is not.
+        // Best effort: a reset is the way out of a store that can't be read, so a failed backup doesn't stop it.
+        _ = try? SyncRepair.backUp(context: context)
         LocalCacheReset.request()
         #if os(macOS)
         LocalCacheReset.relaunch { showReopenAlert = true }

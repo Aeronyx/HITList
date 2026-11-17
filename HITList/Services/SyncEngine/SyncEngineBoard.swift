@@ -29,8 +29,10 @@ final class SyncEngineBoard {
         /// The answer to a purge in iCloud's settings (`SyncCore.answer`).
         var answerPurge: @MainActor (PurgeAnswer) async throws -> Void
         /// Move this device's store to the other engine (a backup first, then a relaunch); the words of what
-        /// went wrong when it throws.
-        var move: @MainActor (Engine) async throws -> Void
+        /// went wrong when it throws. `freshCopy` (a move back to the mirror only): the store is also set aside at
+        /// the next launch, so this device downloads what the mirror's zone holds instead of sending its own
+        /// (`SyncEngine.move`: every device but the first to go back).
+        var move: @MainActor (Engine, _ freshCopy: Bool) async throws -> Void
         /// Check iCloud… on the engine (`SyncEngineAudit`): a sync, then every record of iCloud's read afresh and
         /// compared with this device's. The closure hears how many records have been read. Nil where it cannot run
         /// (the mirror, a pretend iCloud, the demo).
