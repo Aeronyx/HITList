@@ -20,8 +20,10 @@ The engine replaces the mirror with parts HITList owns:
 - **The list of what is waiting is ours**: so "everything is in iCloud" is a fact the app holds, and the bolt says it.
 - **The rules for two devices changing one thing are ours**, written down (section 5) and tested on a pretend iCloud
   with several devices, thousands of random edits and every failure injected (section 9).
-- **Apple still does what Apple does best**: `CKSyncEngine` schedules sends and fetches, retries after the network
-  or iCloud's limits, and wakes the app on a push. It is the transport, behind a protocol.
+- **Apple's `CKSyncEngine` is the road to iCloud**, behind a protocol: it batches, keeps the bookmark and the
+  pending list, and speaks CloudKit. It runs **with its own scheduling off** (round 32, section 6a): left to
+  schedule itself it fetched only when a push told it to, and missed what changed while the app was closed. HITList
+  asks for each sync itself: at launch, on coming forward, on a push, and after a change.
 
 Nothing a person has is at risk from the engine's own memory: it can be lost at any time and the engine merges
 everything afresh (section 7). One thing only lives nowhere else: a deletion made on this device that has not yet
@@ -75,6 +77,15 @@ delete anything for anyone, and the engine never has to ask a person whether the
   and robust (yet not overengineered) iCloud sync setup." It was registered that day (automatic signing did it at
   the first build that listed it; a container cannot be removed afterwards). Both apps' entitlements list it, the
   tasks' first.
+- **Its schema is a file in the repository**, `dev/cloudkit/sync-engine.ckdb` (round 32), pinned to `SyncSchema` by
+  `SyncEngineSchemaFileTests`: the `HL` record types, every field, and one index (`recordName` queryable, so the
+  CloudKit Console can list records; the engine never queries). Production gets exactly the file, in three steps
+  `scripts/release.sh` prints when Production lacks any of it: `xcrun cktool reset-schema` for the container's
+  Development side (test records only), `xcrun cktool import-schema --file dev/cloudkit/sync-engine.ckdb`, then
+  Deploy Schema Changes in the console. Never deployed from whatever Development happens to hold: the transport's
+  probe writes a field of its own there on purpose (`probeNewerBuildField`), so after a probe run Development is
+  reset and the file imported again before any deploy. `release.sh` does not compare this container's two
+  environments; it checks Production against the file.
 - **Zone** `HITList` (`SyncSchema.zoneName`). The transport makes it when it first has something to send and it is
   missing. Fetches are scoped to it.
 - **Kept out of the mirror's reach** (found by session 142 on CloudKit Development): the mirror does not keep to its
@@ -194,7 +205,11 @@ is found and sent like any other but is ordered by the old time, so it loses a c
 another device's change to the same field; two devices that meet for the first time with different labels on the
 same task keep one side's (with no base a removal cannot be told from an addition); and once a marker has been
 removed for good, after `markerLifetime` (400 days), a device that merges without a memory and still holds the
-item sends it back.
+item sends it back. Two more, each pinned by a `testLimit…` script in the simulation (round 32, brief 150): an item
+deleted on one device and then changed on two others (or changed on one and put back on another) before they hear
+of each other comes back as the copy changed last, whole, and what the other device changed on it is lost; and
+after HITList's data in iCloud is reset or deleted every device sends everything again, and until each has heard
+back for an item two devices' copies of it meet as strangers and the one changed last wins whole.
 
 ## 6. The transport's rules
 
@@ -209,7 +224,11 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   and the keys of records removed for good. Without a bookmark: every record in the zone. It may bring again what
   this device itself just sent (an echo), and after a lost bookmark everything: handling is idempotent. A fetch
   that ended without reaching iCloud is told with an error, never as one that ended well: with no bookmark the
-  brain takes a fetch that ended well for the whole of what iCloud holds (the review's finding 3).
+  brain takes a fetch that ended well for the whole of what iCloud holds (the review's finding 3). A record of the
+  zone the transport cannot read (an asset not downloaded, or over the limit) is never dropped while the bookmark
+  moves on: it is owed, kept in the transport's state, asked for again by name at the end of each fetch that
+  reached iCloud, and delivered as fetched once it can be read; while one is owed, from the second fetch under a
+  state, `didFetch` carries words naming how many and the first (round 32, brief 149).
 - **T3 Pending.** The list is ordered, holds a key once (a save and a delete of one key replace each other, the last
   added stays), and survives a relaunch. The record is asked for when its turn comes (`recordToSend`); nil drops
   the change. `pending`, `add`, `remove` and `reset` never wait for the delegate: the brain calls them from inside
@@ -220,10 +239,13 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   (as an answered change does under T6, T7 and T9), so a change the brain adds back while it handles `sent` (the
   person changed the item again while the save was on its way) stays on the list.
 - **T5 Passing trouble** (no network, iCloud busy or limiting, the account briefly unavailable): the change stays on
-  the list and the transport tries again by itself. `didSend(error:)` / `didFetch(error:)` carry the words.
+  the list and is tried again without the person: by the engine's pump in the app (section 6a), by the next
+  `send()` in a test. `didSend(error:)` / `didFetch(error:)` carry the words.
 - **T6 Conflict.** A save whose `system` is not the token of iCloud's current version (or that has none while iCloud
   holds the record) is refused whole. The failure carries iCloud's version. The change leaves the list; the brain
-  settles and adds it again if something is still to go.
+  settles and adds it again if something is still to go. A conflict whose iCloud version cannot be read is not
+  told: the change leaves the list and the record is owed (T2); when it arrives the brain settles it, the send
+  being one without an answer.
 - **T7 Unknown.** A save with a token for a record iCloud no longer holds is refused (`unknownItem`) and leaves the
   list. A delete of a record iCloud does not hold counts as done.
 - **T8 Removed for good.** `delete` removes the record; other devices learn of it at their next fetch (`removed`).
@@ -247,9 +269,40 @@ means the same on CloudKit. `SyncCore` relies on nothing else.
   account and what the device knew of the zone are kept, and no account event follows from it: a reset is how the
   brain asks for every record again with its memory intact, and must not look like a transport that lost its
   state (T12), which costs the brain its ledger (the review's finding 10). A fetch in flight when it is called
-  ends there.
+  ends there. An expired change token is answered by the transport itself: the bookmark forgotten, the account, the
+  zone, the owed records and the pending list kept, everything fetched once more within that fetch; never a loop.
+  The new engine is made before the forgotten state is written, so the old one cannot write its bookmark back
+  (round 32, review 148).
 - **T14 Now.** `fetch()` and `send()` return when their events have been handled and throw when they could not run.
   The transport may also sync by itself at any time (a push, its schedule): the same events arrive.
+
+## 6a. How the engine is driven (round 32)
+
+**Apple's engine never schedules itself here** (`automaticallySync: false`). Found with George's iPhone beside this
+Mac, on CloudKit Development: with the scheduling on, a fetch asked for after a relaunch began and ended without
+asking iCloud anything (the trace: `willFetchChanges`, `didFetchChanges`, nothing between), on the Mac in the
+background and on the phone in front alike. The engine then fetches only when a push tells it to, so six changes
+the phone made while the Mac's app was closed stayed in iCloud, the Mac's bolt filled, until Check iCloud… named
+them; CloudKit asked directly, beside the engine, reported the zone as changed. With the scheduling off the same
+fetch asks the database what changed and brings it (73 records, the comparison exact). That is also the only mode
+the transport's probe ever ran in, so the mode that was proven is now the mode that runs.
+
+What asks for a sync (`SyncEngine`): the launch; the app coming forward (everything compared first); a push (the
+app's delegate, `syncWithin`); the person's Sync now and Check iCloud…; and **the pump** (`pumpAfter`): one sleep
+to a known deadline, armed by what the brain just said. A new change is sent a second later; a try that left
+something waiting, or ended in trouble, is followed by the next after 5 s, 30 s, 2 min, then every 10 min; nothing
+waiting and no trouble arms nothing; a hold arms nothing (the person lifts it, or coming forward tries again). T5's
+"tries again by itself" is kept by this pump, not by Apple's scheduler.
+
+**The push subscription is the engine's own** (`CloudKitTransport.ensureSubscription`, id `HITListSync-Private`):
+saved once per device and account after a fetch that reached iCloud. Apple's engine keeps one of its own only while
+it schedules itself. After the Development side was reset in round 32 no push reached either device until one was
+saved again; then a change on the Mac reached the phone in seconds ("Sync for a push: done"). The other way was
+not seen that night (no push reached this Mac's push daemon at all; in round 31 it did): to be watched in George's
+first week, where the sync log's "Sync for a push" lines say.
+
+A manual fetch asks for every zone (`.all`, as Apple's sample does) and `nextFetchChangesOptions` keeps the records
+fetched to this store's zone. The sync log has one line per fetch: what it brought and whether it reached the zone.
 
 ## 7. A merge without a memory
 
@@ -261,7 +314,8 @@ This one path is the migration, the repair, and the answer to "what if the engin
 
 **The ledger never outlives the bookmark, nor the bookmark the ledger.** The transport's state is one of the ledger's
 facts, so they are lost together; and when the transport says its state is gone (T12) the brain forgets the ledger.
-One thing is carried across: a deletion this device made and has not yet sent (`deletedHereAt`) is kept as an entry
+Two things are carried across: what records wait for (the device's own knowledge, not a memory of iCloud's; round
+32), and a deletion this device made and has not yet sent (`deletedHereAt`), kept as an entry
 with no base, and settles against iCloud's record like M8 (iCloud's stands if it changed after the deletion, else
 the marker goes). Without that, an item deleted here a moment before the memory was lost would come back. (A
 ledger file lost whole, or one that belonged to another store file, takes these notes with it: the items come back.)
@@ -289,6 +343,10 @@ ledger file lost whole, or one that belonged to another store file, takes these 
   - Only a person's own change to the field is sent: another Group chosen, a label removed while the label exists.
     A to-one reference the device holds a value for is the person's; the waited-for one is honoured only while the
     field is empty.
+  - **A reference the person changed is theirs until it has gone** (round 32, brief 150): a to-one the device holds
+    with another item than the base names, or emptied while the base's item was here, is the person's; the base's
+    reference is marked cleared and not waited for again, so neither a deletion here nor an undo brings it back.
+    A name the person took off a set while its item was here likewise (`<field>.removed` in the wait).
   - What is waiting to go is sent with the items pointed at before those that point at them (`SyncSchema.types`
     order, a task after its parent), so iCloud rarely holds a record ahead of its target.
 - **A deletion that arrives never takes with it an item made or changed here after it** (found by the review,
@@ -347,7 +405,21 @@ ledger file lost whole, or one that belonged to another store file, takes these 
    YES -ApplePersistenceIgnoreState YES` (and once without `-disableCloudKit YES` for the mirror's step), and
    `open -g -n --env HITLIST_STORE_SUFFIX=<a> --stdout <file> …/Debug/HITList.app --args
    -ApplePersistenceIgnoreState YES -syncEngine own -syncEngineZone <zone> [-seedSampleData]`, twice.
-5. The move from the mirror rehearsed on copies of a real store before any real device moves.
+5. The move rehearsed before any real device moves. **Done in round 32** (`dev/briefs/ROUND-32.md` has each run):
+   on CloudKit Development with George's iPhone 16 and this Mac as the two devices, Debug builds on side stores,
+   driven from a terminal by `SyncEngineRehearsal`'s hooks and judged by Check iCloud… on the engine
+   (`SyncEngineAudit`: every record of the zone read afresh and compared field by field) and by the mirror's own
+   audit. (a) Both devices on the mirror with the same 30 items, two of them doubled by `id`: moved one after the
+   other; each merged the doubled rows, the first sent 31 records, the second found all 30 as it held them and
+   sent nothing; ordinary edits on both (completed, renamed, moved, deleted, made) crossed and both compared
+   exact. (b) The way back: the Mac first, keeping its file, the mirror sending what changed meanwhile (its audit
+   agreed, 19 tasks); the phone with a fresh copy (agreed, 19 tasks, nothing doubled). A second device that came
+   back with its own file doubled the items made meanwhile (seen on two Mac stores: 21 tasks where 19 were right),
+   which is why the move back asks. (c) George's real tasks, restored on each device from that device's newest
+   daily backup (59 tasks and their Groups, labels, filters and Switchboard; the phone's backup a day older than
+   the Mac's): sent by the Mac, met by the phone as M3 and M5, identical on both and in iCloud, then edited on
+   both through five rounds. Two stores on one Mac cannot stand in for two devices for a fetch: iCloud's change
+   feed, like its pushes, does not come back to the device a change was made on.
 
 ## 10. Holds and the bolt
 
@@ -356,12 +428,12 @@ person or the world can lift:
 
 | Hold | When | What the engine does |
 |---|---|---|
-| `noAccount` | Signed out of iCloud | Nothing is sent or fetched. Parity with the mirror: what was synced leaves the device at sign-out, after a backup is written; it returns at sign-in |
+| `noAccount` | Signed out of iCloud | Nothing is sent or fetched. Parity with the mirror: what was synced leaves the device at sign-out, after a backup is written; it returns at sign-in. A deletion not yet sent is kept and goes at the next sign-in to the same account (round 32) |
 | `needsUpdate` | iCloud's format is newer | Nothing is sent or fetched |
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
 | `duplicates` | Two rows share an `id` | The app merges them, then the engine starts |
-| `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown |
+| `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are shown. Also when the ledger's file could not be opened now (no permission, a full disk): no engine runs, the file is left as it is, and deletions made in that launch are not taken down, so those items come back |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
 again. An account switched: as sign-out, then sign-in.
@@ -380,36 +452,66 @@ guessing; Check iCloud… stays as the person's own audit.
 
 ## 11. Moving from the mirror
 
-- **Every released build until George says otherwise uses the mirror**, as today, and cannot do otherwise: a build
-  that is not a Debug build answers "mirror" before it looks at any preference or argument
-  (`SyncEngineSwitch.isAvailable`). The engine's code ships dark. In a Debug build a preference per store says
-  which engine a store uses.
-- Moving a device: the app backs up, merges rows that share an `id`, reopens the same store file without the mirror
-  (`cloudKitDatabase: .none`, the store itself is untouched), and the engine starts with an empty ledger
-  (section 7). The first device sends everything; each later one finds its items already there.
-- Devices still on the mirror and devices on the engine do not see each other's changes until they have all moved:
-  they move together, George's first. (They sync through two containers, section 3: a mirror never sees an
-  engine's record at all.)
-- Going back: the mirror's zone still holds everything as of the move.
-- The engine's container's Production schema gains the `HL` record types before any released build runs the engine
-  (George's click: CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development → Deploy Schema Changes…;
-  additive from then on). `scripts/release.sh` compares that container's two environments from the release in
-  which its `SYNC_ENGINE_LIVE` is 1. The tasks' container needs nothing for the engine, ever.
+- **A store syncs on the engine only when it was moved** (from 0.9.14, round 32; George, 2026-11-16: "Please work
+  freely and complete the sync engine … I also won't feel comfortable launching until we have at least a few days
+  of experience with the new sync system"). Every build may run the engine (`SyncEngineSwitch.isAvailable`); which
+  engine a store opens on is the store's own preference (`AppGroup.defaults`, a key per store name), and only the
+  move writes it. Every store that was not moved opens on the mirror exactly as before.
+- **The switch is hidden.** Settings → iCloud's "Sync engine" group shows after seven taps on the environment row
+  ("Production · TestFlight build N"; `SevenTaps`, `SyncEngineSwitch.revealSwitch`), always on a store that is on
+  the engine (the way back), and in a Debug build on a side store. Its words speak of "the new sync" and "the
+  earlier sync".
+- **Moving a device**: a backup; the rows that share an `id` merged; the preference written; the Mac relaunches,
+  the iPhone and iPad ask to be reopened (until then the app goes on with the engine it runs, and a move that is
+  still waiting can be taken back). The same store file then opens without the mirror
+  (`cloudKitDatabase: .none`) and the engine starts with an empty ledger (section 7): the first device sends
+  everything, each later one finds its items already there.
+- **Move every device, one right after another, changing nothing on a device between the first move and its own.**
+  A device on the engine and one on the mirror do not see each other's changes (two containers). What is changed
+  on the device still to move, in that window, meets the moved device's copy without a base when it moves: an
+  edit made on both keeps the record changed last, whole (M5), and a deletion made on either side comes back (M2,
+  M3). The move to the engine warns, and offers "Move anyway", while the mirror's bolt is not filled on that
+  device (what it has not yet received would be missing from what it sends).
+- **A reinstalled or new device comes up on the mirror**, with the data as it was at the move (the preference lives
+  in the App Group's defaults, which go with the app): it is moved like any other device. From the release that
+  moves everyone this is no longer so.
+- **The way back** (rehearsed, section 9): moving back asks which device this is. **The first device back sends**:
+  it keeps its file and the mirror, reopened, sends everything that changed while it was off (SwiftData records
+  history on a store open without the mirror). **Every other device downloads**: its store is set aside at the
+  next launch (as Reset local cache does, never deleted) and the mirror downloads its zone into a new one. A
+  second device that came back with its own file would send the items made on the engine as records of its own,
+  and every device would hold them twice. What a device changed on the engine and had not yet synced when it
+  downloads is in its backup only. Never install a build from before 0.9.14 on a moved device: it opens the store
+  on the mirror as a way back nobody chose.
+- **Deletions made during a stint on the mirror come back** when the store returns to the engine: the ledger is
+  kept, nobody took those deletions down, and an item iCloud holds that is missing here is brought back (M14). A
+  limit, on the safe side.
+- **No merge by name on the engine** (round 32): Groups, labels and filters of one name are merged only on the
+  mirror, which makes such pairs itself. On the engine a record is named by its `id` and seeds carry stable ids;
+  a merge there would delete on every device something a person made on purpose, or strand a task filed into
+  the copy that lost. Rows that share an `id`, the profile and the sub-task repair still merge.
+- **Check iCloud… on the engine** (`SyncEngineAudit`): a sync, then every record of the zone read afresh by a
+  second road (one zone-changes fetch with no token, nothing shared with the engine's bookmark) and compared with
+  the device field by field. It repairs nothing; the sync log names each record that differs, by key and field.
+- The engine's container's Production schema is deployed before the release that lets a store move (section 3).
+  The tasks' container needs nothing for the engine, ever.
 
-## 12. Decisions that are George's (each can be changed before Production holds a record)
+## 12. Decisions that are George's
 
 0. **A container of its own for the engine: decided and done, 2026-11-16** (`iCloud.com.trammells.hitlist.sync`;
-   his words and the reasons are in section 3). What round 28 left in the tasks' container's Development
-   environment (zones `HITList`, `HITList-e2e1`, the `HL` record types) is used by nothing now and goes when he
-   resets that environment; **until he has, nobody presses Deploy Schema Changes for the tasks' container** (a
-   deploy carries everything, and those types would be in its Production for good).
-1. **Plain or encrypted fields.** As built, fields are stored as the mirror stores them today (protected by the
-   account, readable in the CloudKit dashboard for support). `SyncSchema` can mark fields end-to-end encrypted
-   instead (titles, notes, names); the cost is a dashboard that shows nothing and one more way for a recovery to
-   lose data. Changing it later means a new format version.
-2. **Sign-out removes what was synced from the device** (as the mirror does), after a backup.
+   section 3). He reset the tasks' container's Development side that evening; nothing of the engine's is there.
+1. **Plain fields: decided, 2026-11-16** ("we don't need encryption right now; this is not something I plan to put
+   on the App Store, only to share with friends"). Fields are stored as the mirror stores them (protected by the
+   account, readable in the CloudKit Console for support). Encrypting titles, notes and names later is one format
+   version and a re-send.
+2. **Sign-out removes what was synced from the device** (as the mirror does), after a backup; it returns at
+   sign-in. Built that way. **Open, for the release that moves everyone**: iCloud switched off for HITList alone
+   may be announced as a sign-out, and the supervisor's recommendation is to keep the tasks on the device at a
+   sign-out and remove them only when a different account signs in.
 3. **A purge in iCloud's settings asks** instead of deleting the device's copy (Apple's guidance is to delete).
-4. **When devices move**: his first, then friends.
+4. **When devices move**: his first (0.9.14, the hidden switch), then friends, in a release that moves each device
+   at its first launch. **He is told ahead of anything that could wipe, hide or fail to carry over a friend's
+   data, so they can export first** (his word, 2026-11-16).
 
 ## 13. Open, as round 31 left it
 
