@@ -182,12 +182,18 @@ public struct SimIntent: Sendable {
     /// Items that left an account with their device because iCloud had never held them, and where they went.
     public private(set) var travels: [SyncKey: [(step: Int, from: String?, to: String?)]] = [:]
 
+    /// Where the items go that leave the device at a switch from an account it is signed in to (brief 160, 147 F11):
+    /// into the backup, no account's iCloud.
+    public static let leftWithTheBackup = "(left with the backup)"
+
     /// Device `device` signs in to `to` (nil: signs out) at `step`; `travelling` are the items on it that its ledger
-    /// holds no living base for: they stay on the device, and go to `to`.
-    public mutating func recordAccount(step: Int, device: String, to: String?, travelling: [SyncKey]) {
+    /// holds no living base for: they stay on the device, and go to `to`. At a switch from an account the device is
+    /// signed in to (`leaving`), they leave the device with the rest instead, after a backup, and belong to no
+    /// account (`leftWithTheBackup`).
+    public mutating func recordAccount(step: Int, device: String, to: String?, travelling: [SyncKey], leaving: Bool = false) {
         let from = accountOf(device, at: step)
         accountChanges.append((step, device, to))
-        for key in travelling { travels[key, default: []].append((step, from, to)) }
+        for key in travelling { travels[key, default: []].append((step, from, leaving ? Self.leftWithTheBackup : to)) }
     }
 
     /// The account `device` was signed in to at `step` (nil: signed out).

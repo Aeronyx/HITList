@@ -27,6 +27,15 @@ final class CloudKitTransportTests: XCTestCase {
         }
     }
 
+    /// Brief 160 (148, polish): `internalError` and the asset files' errors are passing trouble, tried again by the
+    /// transport at the send's end, never refused for good.
+    func testT5InternalErrorAndAssetFileErrorsArePassingTrouble() {
+        for code: CKError.Code in [.internalError, .assetFileNotFound, .assetFileModified] {
+            XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .keep(words: Rules.words(failure(code)), byEngine: false), "\(code)")
+            XCTAssertEqual(Rules.deleteOutcome(failure(code), batchSize: 3), .keep(words: Rules.words(failure(code)), byEngine: false), "\(code)")
+        }
+    }
+
     func testT5TroubleTheEngineLeavesIsTriedAgainByTheTransport() {
         for code: CKError.Code in [.serverResponseLost, .batchRequestFailed, .operationCancelled] {
             XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 10), .keep(words: Rules.words(failure(code)), byEngine: false))
@@ -49,9 +58,25 @@ final class CloudKitTransportTests: XCTestCase {
     func testT9RefusedForGood() {
         XCTAssertEqual(Rules.saveOutcome(failure(.quotaExceeded), batchSize: 3), .refused(.quotaExceeded))
         XCTAssertEqual(Rules.deleteOutcome(failure(.quotaExceeded), batchSize: 3), .refused(.quotaExceeded))
-        for code: CKError.Code in [.serverRejectedRequest, .invalidArguments, .permissionFailure, .assetFileNotFound,
-                                   .constraintViolation, .internalError, .referenceViolation] {
+        for code: CKError.Code in [.constraintViolation, .referenceViolation] {
             XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .refused(.rejected(code: code.rawValue, message: "words")), "\(code)")
+        }
+    }
+
+    /// Brief 160 (148 finding 1): a Production schema that lacks a type or field refuses each record with
+    /// `invalidArguments` (12); the container, an entitlement, a permission, the account's restrictions or a version
+    /// say the same about the build or the account, not the record. None of them is a refusal for good: the brain
+    /// holds (`iCloudNotReady`) with everything still waiting. Codes 12, 15, 10, 5, 8, 32, 18, 24.
+    func testT9aICloudNotReadyForThisBuildIsNeverARefusalForGood() {
+        let codes: [CKError.Code] = [.invalidArguments, .serverRejectedRequest, .permissionFailure, .badContainer,
+                                     .missingEntitlement, .managedAccountRestricted, .incompatibleVersion, .badDatabase]
+        XCTAssertEqual(codes.map(\.rawValue), [12, 15, 10, 5, 8, 32, 18, 24])
+        for code in codes {
+            let notReady = SendFailure.notReady(code: code.rawValue, message: "words")
+            XCTAssertEqual(Rules.saveOutcome(failure(code), batchSize: 3), .refused(notReady), "\(code)")
+            XCTAssertEqual(Rules.deleteOutcome(failure(code), batchSize: 3), .refused(notReady), "\(code)")
+            // The zone refused the same way: its saves hold too, they are not refused for good.
+            XCTAssertEqual(Rules.saveOutcome(failure(.zoneNotFound), batchSize: 3, zoneRefusal: failure(code)), .refused(notReady), "\(code)")
         }
     }
 
@@ -295,6 +320,44 @@ final class CloudKitTransportTests: XCTestCase {
         XCTAssertNil(Rules.accountChange(.signIn(currentUser: CKRecord.ID(recordName: "_me")), known: saved.account),
                      "the new engine's sign-in is no change: the brain keeps its memory")
         await transport.stop()
+    }
+
+    /// Brief 160 (149's brain gap): the records still owed are told to the brain by key before a fetch ends, so a
+    /// deletion of its own with no base for one of them is not dropped by the whole fetch.
+    func testTheRecordsStillOwedAreToldByKey() {
+        let owed = OwedRecords(reasons: ["TaskItem.B": "asset unreadable", "Profile.profile": "no file", "not ours": "?"])
+        XCTAssertEqual(Rules.owedKeys(owed), [SyncKey(type: "Profile", name: "profile"), SyncKey(type: "TaskItem", name: "B")])
+        XCTAssertEqual(Rules.owedKeys(OwedRecords()), [])
+    }
+
+    /// Brief 160: two fetches in flight both found the push subscription unsaved and both saved it. Once.
+    func testThePushSubscriptionIsSavedOnceWhenTwoFetchesAskAtOnce() async {
+        let ledger = MemoryLedger()
+        await ledger.saveTransportState(StoredState(engine: nil, zoneReady: true, account: "_me").encoded(log: SyncTransportLog { _ in }))
+        let saves = SaveCounter()
+        let transport = CloudKitTransport(containerID: SyncEngineSwitch.containerID, zoneName: "HITList-t160",
+                                          state: ledger, automaticallySync: false, log: SyncTransportLog { _ in },
+                                          saveSubscription: { _ in await saves.save() })
+        await transport.start(delegate: NoDelegate())
+        async let first: Void = transport.ensureSubscription()
+        async let second: Void = transport.ensureSubscription()
+        _ = await (first, second)
+        let count = await saves.count
+        XCTAssertEqual(count, 1)
+        await transport.ensureSubscription()
+        let after = await saves.count
+        XCTAssertEqual(after, 1, "saved: not asked again")
+        let saved = StoredState.decode(await ledger.loadTransportState(), log: SyncTransportLog { _ in })
+        XCTAssertEqual(saved.subscribed, true)
+        await transport.stop()
+    }
+
+    private actor SaveCounter {
+        private(set) var count = 0
+        func save() async {
+            count += 1
+            try? await Task.sleep(for: .milliseconds(200))
+        }
     }
 
     private final class NoDelegate: SyncTransportDelegate, @unchecked Sendable {

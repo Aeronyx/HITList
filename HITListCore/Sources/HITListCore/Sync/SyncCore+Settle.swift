@@ -50,7 +50,7 @@ extension SyncCore {
             do {
                 try await commit(forget)
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 await markRefetch()
                 return
             }
@@ -79,13 +79,14 @@ extension SyncCore {
                 try await commit(write)
                 log("First whole fetch finished: what iCloud lacks can go now")
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 return
             }
         }
         // Deletions kept across a forgotten memory that this whole fetch did not bring: iCloud does not hold the
-        // item, so there is nothing to delete there.
-        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil }.map(\.key)
+        // item, so there is nothing to delete there. Not one whose record the transport still owes: iCloud holds that
+        // one, and dropping the deletion would bring the item back once the record can be read (brief 160).
+        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) }.map(\.key)
         if !kept.isEmpty {
             do {
                 let here = try await localRecords(Set(kept))
@@ -108,7 +109,7 @@ extension SyncCore {
     /// Settles again the records set aside because the person had their item changed and unsaved (`unsettled`):
     /// those among `keys`, or all of them (nil). One the person still has unsaved is set aside again.
     func settleUnsettled(_ keys: Set<SyncKey>?) async {
-        guard !unsettled.isEmpty, hold == nil || hold == .storageFull else { return }
+        guard !unsettled.isEmpty, hold == nil || hold?.triedOnReturn == true else { return }
         let due = unsettled.values.filter { keys?.contains($0.key) ?? true }.sorted { $0.key < $1.key }
         guard !due.isEmpty else { return }
         for record in due { unsettled[record.key] = nil }
@@ -128,7 +129,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         let version = Self.formatVersion(of: record.record)
@@ -219,7 +220,7 @@ extension SyncCore {
                 // (dropped by it): the same state, settled again by the next fetch.
                 try await commit(under.ledgerWrite)
             } catch {
-                await fail("The engine's memory could not be written: \(error)")
+                await fail(SyncFailureWords.recordsNotSaved, error)
                 return false
             }
             reached.formUnion(under.keys)
@@ -316,10 +317,13 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         for key in landed { remembered[key] = nil }
+        // A base that moved: what iCloud refused for good was a send against the old one, so the key is tried again
+        // against the new one (brief 160, 149's "brain gap"), once per version another device makes.
+        for key in keys where !aside.contains(key) && settling[key]?.server != nil { refused[key] = nil }
 
         // 3. What each key now waits for, the references that arrived, and the transport's list.
         await compare(keys.union(reached))
@@ -525,7 +529,7 @@ extension SyncCore {
         if case SyncStoreError.duplicates(let keys) = error {
             await enterHold(.duplicates(keys.sorted()))
         } else {
-            await fail("The device's items could not be read or written: \(error)")
+            await fail(SyncFailureWords.dataNotSaved, error)
         }
     }
 
@@ -555,7 +559,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         for key in saved.map(\.key) + removed + Array(failed.keys) { remembered[key] = nil }
@@ -569,7 +573,8 @@ extension SyncCore {
 
         var conflicts: [CloudRecord] = []
         var gone: [SyncKey] = []
-        var full = false
+        // A full iCloud, or one not ready for this build: one hold, the same path (`SyncHold.triedOnReturn`).
+        var held: SyncHold?
         for (key, failure) in failed.sorted(by: { $0.key < $1.key }) {
             switch failure {
             case .conflict(let server):
@@ -584,12 +589,16 @@ extension SyncCore {
                 if key == Self.metaKey {
                     var forget = LedgerWrite()
                     forget.remove = [key]
-                    do { try await commit(forget) } catch { await fail("The engine's memory could not be written: \(error)"); return }
+                    do { try await commit(forget) } catch { await fail(SyncFailureWords.recordsNotSaved, error); return }
                 } else {
                     gone.append(key)
                 }
             case .quotaExceeded:
-                full = true
+                held = .storageFull
+            case .notReady(let code, let message):
+                // Not the record's fault (148 finding 1): never refused for good, it stays waiting.
+                log("\(key): iCloud said no to this build or account, not to the record (\(code)): \(message). It stays waiting")
+                if held == nil { held = .iCloudNotReady }
             case .tooLarge:
                 await refuse(key, words: "too large for iCloud")
             case .rejected(let code, let message):
@@ -599,9 +608,9 @@ extension SyncCore {
         if !conflicts.isEmpty || !gone.isEmpty {
             guard await settle(conflicts, removed: gone, why: "sent back") else { return }
         }
-        if full {
-            log("iCloud is full: what is waiting stays waiting, and is tried again on return to the app")
-            await enterHold(.storageFull)
+        if let held {
+            log("\(held.words): what is waiting stays waiting, and is tried again on return to the app")
+            await enterHold(held)
         }
         // A change made here while its save was on the way: the transport took it off the list with the save. (The
         // zone's meta among them, so the count drops when iCloud accepts it.)

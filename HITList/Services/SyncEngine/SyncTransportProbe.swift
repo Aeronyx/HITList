@@ -114,6 +114,8 @@ private actor ProbeDevice: SyncTransportDelegate {
         case .didFetch(let error):
             didFetchErrors.append(error)
             eventNames.append("didFetch")
+        case .owed(let keys):
+            eventNames.append("owed(\(keys.count))")
         case .willSend:
             eventNames.append("willSend")
         case .sent(let done, let gone, let refused):

@@ -99,6 +99,14 @@ public actor MemoryLocalStore: SyncLocalStore {
         remove(key)
     }
 
+    /// The first half of a person's deletion as the app makes it: the note taken at `willSave`, while the save that
+    /// removes the row has not committed yet (the row is still here). `lose(_:)` is then the commit (148 finding 3).
+    public func writeDownDeletion(_ key: SyncKey) {
+        guard items[key] != nil else { return }
+        deleted.insert(key)
+        deleted.formUnion(descendants(of: key))
+    }
+
     /// The item is gone from the device **with no deletion written down**: a store that lost a row, a file put back
     /// from a copy, a read that came back short. Never a deletion (`dev/SYNC-ENGINE.md` M14): iCloud's record comes back.
     public func lose(_ key: SyncKey) { remove(key) }

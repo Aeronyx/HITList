@@ -65,6 +65,9 @@ public actor SyncCore: SyncTransportDelegate {
     /// Deletions noted (`noteDeletions`) whose keys no compare has looked at yet: the next one does, whatever keys
     /// it was asked for (a save's hint names the rows it knows of; the store may have written down more).
     var noted: Set<SyncKey> = []
+    /// Records the transport fetched in this fetch and could not read (`TransportEvent.owed`): iCloud holds them, so
+    /// the fetch is no proof that iCloud lacks these keys (brief 160, 149's "brain gap"). Cleared at each `willFetch`.
+    var owedKeys: Set<SyncKey> = []
 
     enum Phase { case off, starting, running }
     var phase = Phase.off
@@ -147,7 +150,7 @@ public actor SyncCore: SyncTransportDelegate {
         await serially {
             phase = .running
             await liftForStart()
-            await compare(nil)
+            await compare(nil, launch: true)
             await refetchIfOwed()
             publish()
         }
@@ -170,11 +173,12 @@ public actor SyncCore: SyncTransportDelegate {
     /// The device's items changed: compare them with the ledger and make the transport's list match (section 4).
     /// `keys` is what a save touched (the rows it made or changed, and the ones it deleted, which the store has
     /// written down: `SyncLocalStore.deletions`); nil compares everything, which only a launch and a save that could
-    /// not be named need. A nil compare also tries a full iCloud again (`storageFull`).
+    /// not be named need. A nil compare also tries a full iCloud, or one not ready for this build, again
+    /// (`SyncHold.triedOnReturn`).
     public func localChanged(_ keys: Set<SyncKey>?) async {
         await serially {
             guard loaded else { return }
-            if keys == nil, hold == .storageFull { await lift(resetTransport: false) }
+            if keys == nil, hold?.triedOnReturn == true { await lift(resetTransport: false) }
             await compare(keys)
             await settleUnsettled(keys)
             await refetchIfOwed()
@@ -182,12 +186,13 @@ public actor SyncCore: SyncTransportDelegate {
         }
     }
 
-    /// A fetch, then a send: the person's "sync now". Throws `SyncCoreError.held` while held (a full iCloud is tried
-    /// again first), and what the transport throws. Never call it from inside `handle`.
+    /// A fetch, then a send: the person's "sync now". Throws `SyncCoreError.held` while held (a full iCloud, or one
+    /// not ready for this build, is tried again first), and what the transport throws. Never call it from inside
+    /// `handle`.
     public func syncNow() async throws {
         try await serially {
             guard loaded, transportStarted else { throw SyncCoreError.notStarted }
-            if hold == .storageFull {
+            if hold?.triedOnReturn == true {
                 await lift(resetTransport: false)
                 await compare(nil)
             }
@@ -199,13 +204,13 @@ public actor SyncCore: SyncTransportDelegate {
     }
 
     /// Tries again after a hold the app or time can lift: `duplicates` (after the app merged them), `failed`,
-    /// `storageFull`, and an account switch whose backup failed (`noAccount` with the account to join remembered).
-    /// Everything iCloud brought while held is fetched again. Other holds stay.
+    /// `storageFull`, `iCloudNotReady`, and an account switch whose backup failed (`noAccount` with the account to join
+    /// remembered). Everything iCloud brought while held is fetched again. Other holds stay.
     public func resume() async {
         await serially {
             guard loaded else { return }
             switch hold {
-            case .duplicates?, .failed?, .storageFull?:
+            case .duplicates?, .failed?, .storageFull?, .iCloudNotReady?:
                 log("Resumed after: \(hold?.words ?? "")")
                 await lift(resetTransport: true)
             default: break
@@ -275,6 +280,7 @@ public actor SyncCore: SyncTransportDelegate {
             await accountChanged(change)
         case .willFetch:
             fetching = true
+            owedKeys = []
         case .fetched(let changed, let removed):
             await fetched(changed, removed: removed)
         case .zoneLost(let reason):
@@ -282,6 +288,9 @@ public actor SyncCore: SyncTransportDelegate {
         case .didFetch(let error):
             fetching = false
             await didFetch(error: error)
+        case .owed(let keys):
+            owedKeys = Set(keys)
+            log("\(keys.count) record\(keys.count == 1 ? "" : "s") in iCloud could not be read here yet; not taken as missing from iCloud")
         case .willSend:
             sending = true
         case .sent(let saved, let removed, let failed):
@@ -380,8 +389,8 @@ public actor SyncCore: SyncTransportDelegate {
             return true
         } catch {
             phase = .off
-            hold = .failed("The engine's memory could not be read: \(error)")
-            log("Not started: \(hold?.words ?? "")")
+            hold = .failed(SyncFailureWords.recordsNotRead)
+            log("Not started: \(SyncFailureWords.recordsNotRead) The error: \(error)")
             publish()
             return false
         }

@@ -120,6 +120,8 @@ final class SyncEngineStatusTests: XCTestCase {
             (.needsUpdate, 0, "Update HITList to sync: iCloud holds data from a newer version."),
             (.storageFull, 12, "iCloud is full: 12 changes are waiting."),
             (.storageFull, 1, "iCloud is full: 1 change is waiting."),
+            (.iCloudNotReady, 3, "iCloud isn't ready for this version of HITList yet: 3 changes are waiting."),
+            (.iCloudNotReady, 0, "iCloud isn't ready for this version of HITList yet."),
             (.failed("this device's sync records could not be read"), 0,
              "Sync stopped: this device's sync records could not be read"),
         ]
@@ -229,9 +231,23 @@ final class SyncEngineStatusTests: XCTestCase {
     func testEveryHoldButtonSaysWhatItDoes() {
         XCTAssertTrue(SyncEngineWords.removeSubtitle.contains("backup"))
         XCTAssertFalse(SyncEngineWords.sendAgainSubtitle.isEmpty)
-        for hold: SyncHold in [.zonePurged, .needsUpdate, .storageFull, .failed("x"), .duplicates([])] {
+        for hold: SyncHold in [.zonePurged, .needsUpdate, .storageFull, .iCloudNotReady, .failed("x"), .duplicates([])] {
             XCTAssertFalse(SyncEngineWords.holdNote(hold).isEmpty, "\(hold)")
             XCTAssertFalse(SyncEngineWords.holdTitle(hold).isEmpty)
+        }
+        // Brief 160: iCloud not ready for this build reads as the brief words it, and its button tries again.
+        let line = SyncWords.engineHold(.iCloudNotReady, waiting: 0) + " " + SyncEngineWords.holdNote(.iCloudNotReady, waiting: 2)
+        XCTAssertTrue(line.hasPrefix("iCloud isn't ready for this version of HITList yet. Nothing is lost: what is waiting stays waiting."), line)
+        XCTAssertEqual(SyncEngineWords.tryAgainSubtitle(.iCloudNotReady), "Sends what is waiting, if iCloud is ready now")
+        // Brief 160 (147 F10): what a person reads names no engine, ledger or memory and carries no Swift error.
+        XCTAssertEqual(SyncEngineWords.error(SyncCoreError.notStarted), "sync hasn't started yet; try again in a moment.")
+        let backup = SyncEngineHost.BackupFailed(words: "The file “x” couldn’t be saved (NSCocoaErrorDomain 640)")
+        XCTAssertEqual(SyncEngineWords.error(backup), "No backup could be written, so nothing was removed from this device.")
+        for words in SyncFailureWords.all + [SyncEngine.notRunningWords(inMemory: true), SyncEngine.notRunningWords(inMemory: false)] {
+            XCTAssertEqual(SyncWords.engineHold(.failed(words), waiting: 0), "Sync stopped: \(words)")
+            for banned in ["engine", "ledger", "memory", "error", "("] {
+                XCTAssertFalse(words.lowercased().contains(banned), "\(words)")
+            }
         }
         XCTAssertEqual(SyncEngineWords.error(SyncCoreError.noBackup), "no backup could be written, so nothing was removed.")
         XCTAssertEqual(SyncEngineStatusRows.waitingValue(idle(waiting: 3)), "3 changes")

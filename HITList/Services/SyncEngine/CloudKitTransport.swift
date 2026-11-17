@@ -98,13 +98,18 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// How many times the state was written (the probe reads it).
     private(set) var stateSaves = 0
 
+    /// Saves the push subscription (`ensureSubscription`); nil: in the container's private database. Tests pass one.
+    private let saveSubscription: (@Sendable (CKSubscription) async throws -> Void)?
+
     init(containerID: String, zoneName: String = SyncSchema.zoneName, state: any SyncTransportState,
-         automaticallySync: Bool = true, log: SyncTransportLog = .system) {
+         automaticallySync: Bool = true, log: SyncTransportLog = .system,
+         saveSubscription: (@Sendable (CKSubscription) async throws -> Void)? = nil) {
         self.containerID = containerID
         self.zoneID = CloudRecordCodec.zoneID(zoneName)
         self.stateStore = state
         self.automaticallySync = automaticallySync
         self.log = log
+        self.saveSubscription = saveSubscription
     }
 
     private var database: CKDatabase { CKContainer(identifier: containerID).privateCloudDatabase }
@@ -197,6 +202,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
         if heldDidFetch || (failure != nil && fetchOpen) {
             heldDidFetch = false
             fetchOpen = false
+            await tellOwed()
             await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(failure ?? fetchTrouble, owed: stored.owedRecords,
                                                                               wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
         }
@@ -214,14 +220,20 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// push for it reaches the app's delegate, which asks for a sync (`SyncAppDelegate`).
     static let subscriptionID = "HITListSync-Private"
 
-    private func ensureSubscription() async {
-        guard stored.subscribed != true, stored.account != nil, !stopped else { return }
+    /// A save of the subscription is on its way: a second fetch ending meanwhile (the actor lets it in at the save's
+    /// `await`) does not save it again (brief 160). Its answer is the first's.
+    private var subscribing = false
+
+    func ensureSubscription() async {
+        guard stored.subscribed != true, stored.account != nil, !stopped, !subscribing else { return }
+        subscribing = true
+        defer { subscribing = false }
         let subscription = CKDatabaseSubscription(subscriptionID: Self.subscriptionID)
         let info = CKSubscription.NotificationInfo()
         info.shouldSendContentAvailable = true
         subscription.notificationInfo = info
         do {
-            _ = try await database.save(subscription)
+            if let saveSubscription { try await saveSubscription(subscription) } else { _ = try await database.save(subscription) }
             stored.subscribed = true
             await save()
             log.write("the push subscription is saved")
@@ -466,6 +478,7 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
                 fetchOpen = false
                 let ending = CloudKitTransportRules.scheduledFetchEnding(
                     trouble: fetchTrouble, reachedZone: zoneFetchEnded, wholeFetchSeen: stored.fetchedWhole == true)
+                await tellOwed()
                 await deliver(.didFetch(error: CloudKitTransportRules.fetchEnding(ending, owed: stored.owedRecords,
                                                                                   wholeFetchSeenBefore: wholeFetchSeenBeforeThisFetch)))
                 if fetchTrouble == nil, zoneFetchEnded { await wholeFetchSeen() }
@@ -778,6 +791,14 @@ actor CloudKitTransport: SyncTransport, CKSyncEngineDelegate {
     /// can be read now as fetched. One iCloud no longer holds is crossed off: its removal for good comes with the
     /// zone's changes. Called at the end of a fetch that reached iCloud, so at each start too (the launch's sync
     /// fetches first). Nothing here loops: the next try is the next fetch.
+    /// Tells the brain, just before a fetch's end, which records are still owed (brief 160): it then keeps a deletion
+    /// of its own that has no base for such a key, which the whole fetch would otherwise drop.
+    private func tellOwed() async {
+        let keys = CloudKitTransportRules.owedKeys(stored.owedRecords)
+        guard !keys.isEmpty else { return }
+        await deliver(.owed(keys))
+    }
+
     private func retryOwed() async {
         let names = stored.owedRecords.reasons.keys.sorted()
         guard !names.isEmpty, stored.account != nil else { return }
@@ -1080,8 +1101,11 @@ enum CloudKitTransportRules {
     /// `serverResponseLost`: the save may have landed; sent again on the same token, it lands or comes back as a
     /// conflict carrying our own version, which the brain settles as the same. `batchRequestFailed`: another
     /// change in an atomic batch failed (the transport never asks for atomic batches). `operationCancelled`: the
-    /// send was stopped (`stop()`, `reset()`, the system).
-    static let retriedByTransport: Set<CKError.Code> = [.serverResponseLost, .batchRequestFailed, .operationCancelled]
+    /// send was stopped (`stop()`, `reset()`, the system). `internalError`: CloudKit's own fault, not the record's.
+    /// `assetFileNotFound`, `assetFileModified`: the file an asset was sent from went or changed while the send was
+    /// on its way (`AssetFiles`); the record is made again, with a new file, when it is sent again (brief 160).
+    static let retriedByTransport: Set<CKError.Code> = [.serverResponseLost, .batchRequestFailed, .operationCancelled,
+                                                        .internalError, .assetFileNotFound, .assetFileModified]
 
     enum SaveOutcome: Equatable {
         /// T5: stays pending (`byEngine`: on the engine's own list; else added again at the send's end).
@@ -1151,8 +1175,19 @@ enum CloudKitTransportRules {
         }
     }
 
-    /// T9's three: iCloud full, too large, anything else said no to for good.
+    /// What iCloud says about the build, the environment or the account rather than the record (brief 160, review 148
+    /// finding 1): Production refuses a record type or field its schema lacks with `invalidArguments`, record by
+    /// record; the container, an entitlement, a permission, the account's restrictions or a version say the same of
+    /// every record. Never a refusal for good: the brain holds (`SyncHold.iCloudNotReady`) with everything waiting.
+    static let notReadyCodes: Set<CKError.Code> = [
+        .invalidArguments, .serverRejectedRequest, .permissionFailure, .badContainer, .missingEntitlement,
+        .managedAccountRestricted, .incompatibleVersion, .badDatabase,
+    ]
+
+    /// T9's three: iCloud full, too large, anything else said no to for good; and T9a, iCloud not ready for this
+    /// build or account.
     static func refusal(_ failure: CloudFailure) -> SendFailure {
+        if notReadyCodes.contains(failure.code) { return .notReady(code: failure.code.rawValue, message: failure.message) }
         switch failure.code {
         case .quotaExceeded: return .quotaExceeded
         default: return .rejected(code: failure.code.rawValue, message: failure.message)
@@ -1195,6 +1230,11 @@ enum CloudKitTransportRules {
 
     /// Why a record of ours could not be read, so it is owed (16c); nil when it is not ours at all (a record the
     /// mirror wrote, an unprefixed type): those are ignored, never owed.
+    /// The keys of the records still owed, as the brain names them (`TransportEvent.owed`), in order.
+    static func owedKeys(_ owed: OwedRecords) -> [SyncKey] {
+        owed.reasons.keys.sorted().compactMap { CloudRecordCodec.key(forRecordName: $0) }
+    }
+
     static func owedReason(_ error: Error) -> String? {
         if case CloudRecordCodec.DecodeProblem.notOurs = error { return nil }
         return "\(error)"
@@ -1323,6 +1363,11 @@ enum CloudKitTransportRules {
         case .assetFileNotFound: return "assetFileNotFound"
         case .missingEntitlement: return "missingEntitlement"
         case .badContainer: return "badContainer"
+        case .managedAccountRestricted: return "managedAccountRestricted"
+        case .incompatibleVersion: return "incompatibleVersion"
+        case .badDatabase: return "badDatabase"
+        case .internalError: return "internalError"
+        case .assetFileModified: return "assetFileModified"
         default: return "CKError"
         }
     }

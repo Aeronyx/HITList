@@ -12,6 +12,12 @@ public protocol SyncHost: AnyObject, Sendable {
     /// why.
     func willRemoveLocalData(reason: SyncRemovalReason) async throws
 
+    /// The same, with the accounts the device leaves and joins (`previous`, `current`: the transport's account ids;
+    /// nil when not known): the one call the brain makes. At an account switch the host also sets the previous
+    /// account's backups aside, after its own backup and before anything is removed, so the one order is the brain's
+    /// (brief 160, review 147 F6). The default writes the backup alone.
+    func willRemoveLocalData(reason: SyncRemovalReason, switchingFrom previous: String?, to current: String?) async throws
+
     /// Items a fetch (or a conflict settled after a send) wrote to the device: what the mirror's import used to
     /// trigger (the name deduplication, reminders, widgets, Spotlight) runs for these. Deleted items among them.
     func didWrite(_ keys: Set<SyncKey>)
@@ -21,4 +27,10 @@ public protocol SyncHost: AnyObject, Sendable {
 
     /// Every change of `SyncStatus`, the first one included.
     func statusDidChange(_ status: SyncStatus)
+}
+
+public extension SyncHost {
+    func willRemoveLocalData(reason: SyncRemovalReason, switchingFrom previous: String?, to current: String?) async throws {
+        try await willRemoveLocalData(reason: reason)
+    }
 }

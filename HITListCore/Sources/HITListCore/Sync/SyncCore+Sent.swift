@@ -36,7 +36,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return false
         }
         remembered[key] = kept

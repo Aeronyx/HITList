@@ -192,7 +192,7 @@ final class SyncEngineWiringTests: XCTestCase {
         XCTAssertEqual(board.engine, .own)
         XCTAssertNil(board.actions)
         guard case .held(.failed(let words))? = board.status?.state else { return XCTFail("\(String(describing: board.status))") }
-        XCTAssertTrue(words.contains("couldn't open this device's data"), words)
+        XCTAssertEqual(words, "HITList couldn't open the data on this device.", "plain words (brief 160)")
     }
 
     func testOnTheMirrorTheSeedKeepsTodaysStamps() throws {

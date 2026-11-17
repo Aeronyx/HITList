@@ -79,6 +79,12 @@ public enum SendFailure: Hashable, Sendable {
     case tooLarge
     /// Anything else iCloud says no to for good, with its code and words, for the log (T9).
     case rejected(code: Int, message: String)
+    /// iCloud said no for a reason that is not the record's (T9a, brief 160): the environment's schema lacks a type or
+    /// field this build sends (Production refuses those record by record with `invalidArguments`), or the container,
+    /// an entitlement, a permission, the account's restrictions or a version stands in the way. Nothing is refused
+    /// for good: the brain holds (`SyncHold.iCloudNotReady`), everything stays waiting and counted, and it is tried
+    /// again on return to the app, as a full iCloud is. `code` and `message` are iCloud's, for the log.
+    case notReady(code: Int, message: String)
 }
 
 /// What a transport tells the brain. One at a time, in order (T1).
@@ -96,6 +102,10 @@ public enum TransportEvent: Sendable {
     /// tried again (`error`: its words, for the log and the status line). `CloudKitTransport` also gives words, from
     /// the second fetch under its state on, while a record it could not read is still owed (brief 149).
     case didFetch(error: String?)
+    /// Told during a fetch, before its `didFetch`: records of ours iCloud holds that this transport fetched and could
+    /// not read and still owes (`CloudKitTransport`, 16c; brief 160). The brain does not take the fetch as proof that
+    /// iCloud lacks these keys. Told only when some are owed: a fetch that tells none owes none.
+    case owed([SyncKey])
     case willSend
     /// One batch came back (T3 to T9): `saved` as iCloud now holds them, `removed` for good, and the changes
     /// refused. A change that is neither here nor refused is still pending (the network dropped: T5). Every change

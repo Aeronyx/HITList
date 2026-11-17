@@ -883,6 +883,7 @@ actor FakeRecorder: SyncTransportDelegate {
             return "fetched [\(changed.map(\.key.name).sorted().joined(separator: ", "))] removed [\(removed.map(\.name).sorted().joined(separator: ", "))]"
         case .zoneLost(let reason): return "zoneLost \(reason.rawValue)"
         case .didFetch(let error): return error.map { "didFetch error: \($0)" } ?? "didFetch"
+        case .owed(let keys): return "owed [\(keys.map(\.name).sorted().joined(separator: ", "))]"
         case .willSend: return "willSend"
         case .sent(let saved, let removed, let failed):
             let failures = failed.keys.sorted().map { key -> String in
@@ -894,6 +895,7 @@ actor FakeRecorder: SyncTransportDelegate {
                 case .quotaExceeded: return "\(key.name): quotaExceeded"
                 case .tooLarge: return "\(key.name): tooLarge"
                 case .rejected(let code, _): return "\(key.name): rejected \(code)"
+                case .notReady(let code, _): return "\(key.name): notReady \(code)"
                 }
             }
             return "sent saved [\(saved.map(\.key.name).sorted().joined(separator: ", "))] removed [\(removed.map(\.name).sorted().joined(separator: ", "))] failed [\(failures.joined(separator: ", "))]"

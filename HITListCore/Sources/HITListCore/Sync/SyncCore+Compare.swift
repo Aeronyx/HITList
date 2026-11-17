@@ -28,7 +28,13 @@ extension SyncCore {
     /// before this device and iCloud ever agreed on it is kept too, with no base, until a fetch shows whether iCloud
     /// holds it (a save accepted whose answer was lost, a merge without a memory). Runs while held: a person goes on
     /// deleting things whatever iCloud is doing. False when the store or the ledger failed (the brain is then held).
-    func noteDeletions() async -> Bool {
+    ///
+    /// A note whose row is still here is kept (148 finding 3): the note is taken at `willSave`, so a second deletion
+    /// may be written down while its save is still committing, and forgetting its note then would leave the row,
+    /// once the save lands, missing with no deletion written down (M14: it would come back). Such a note is read again
+    /// at the next compare; only the launch's whole compare (`clearingLeftovers`), when no save of this process can
+    /// be in flight, forgets those left for rows that are here (a save that failed, an undo).
+    func noteDeletions(clearingLeftovers: Bool = false) async -> Bool {
         let told: Set<SyncKey>
         let here: Set<SyncKey>
         do {
@@ -55,9 +61,9 @@ extension SyncCore {
         }
         do {
             try await commit(write)
-            try await store.forget(deletions: told)
+            try await store.forget(deletions: clearingLeftovers ? told : told.subtracting(here))
         } catch {
-            await fail("A deletion made here could not be written down: \(error)")
+            await fail(SyncFailureWords.deletionNotNoted, error)
             return false
         }
         for entry in write.upsert where entry.base != nil { log("\(entry.key): deleted here; its marker is waiting to go") }
@@ -93,11 +99,12 @@ extension SyncCore {
     /// Compares `keys` (nil: everything) and makes the transport's list match. Deletions the store wrote down are
     /// noted first (while held too); then, unless held (a full iCloud excepted: the count is kept and nothing is
     /// added), each item is compared with its base. The ledger is written first, then the list: a crash in between
-    /// leaves a list the next compare puts right.
-    func compare(_ asked: Set<SyncKey>?) async {
+    /// leaves a list the next compare puts right. `launch`: the start's own whole compare, which also clears notes left
+    /// for rows that are here (`noteDeletions`).
+    func compare(_ asked: Set<SyncKey>?, launch: Bool = false) async {
         guard loaded else { return }
-        guard await noteDeletions() else { return }
-        if let hold, hold != .storageFull { return }
+        guard await noteDeletions(clearingLeftovers: launch && asked == nil) else { return }
+        if let hold, !hold.triedOnReturn { return }
         // The deletions just noted are looked at too, whatever was asked for.
         let keys = asked.map { $0.union(noted) }
         noted = []
@@ -130,7 +137,7 @@ extension SyncCore {
             await enterHold(.duplicates(keys.sorted()))
             return
         } catch {
-            await fail("The device's items could not be read: \(error)")
+            await fail(SyncFailureWords.dataNotRead, error)
             return
         }
         if keys == nil { universe.insert(Self.metaKey) }
@@ -185,7 +192,7 @@ extension SyncCore {
         do {
             try await commit(write)
         } catch {
-            await fail("The engine's memory could not be written: \(error)")
+            await fail(SyncFailureWords.recordsNotSaved, error)
             return
         }
         if !missing.isEmpty {
@@ -316,10 +323,13 @@ extension SyncCore {
         return finding
     }
 
-    /// The zone's own record: sent once the first fetch has shown iCloud has none.
+    /// The zone's own record: sent once the first fetch has shown iCloud has none. Refused for good, it is kept out
+    /// like any other record (until the next launch), not put back at every compare (148 finding 1).
     func metaFinding() -> Finding {
         var finding = Finding()
-        if firstFetchDone, entries[Self.metaKey]?.base == nil { finding.change = .save(Self.metaKey) }
+        if firstFetchDone, entries[Self.metaKey]?.base == nil, refused[Self.metaKey] == nil {
+            finding.change = .save(Self.metaKey)
+        }
         return finding
     }
 
@@ -351,7 +361,7 @@ extension SyncCore {
             await enterHold(.duplicates(keys.sorted()))
             return nil
         } catch {
-            await fail("The device's items could not be read: \(error)")
+            await fail(SyncFailureWords.dataNotRead, error)
             return nil
         }
         if let refusal = refused[key], RecordMerge.same(refusal.local, local) { return nil }

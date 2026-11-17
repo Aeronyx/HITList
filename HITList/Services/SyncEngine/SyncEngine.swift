@@ -131,9 +131,9 @@ final class SyncEngine {
             // The in-memory fallback is empty: an engine on it would read "everything deleted here" (and walk round
             // the mass-deletion guard as soon as one row is made: 146's finding 2). It never runs.
             board.launched(.own, actions: nil)
-            let why = inMemory ? "HITList couldn't open this device's data" : "this device's data has no file of its own"
-            board.publish(SyncStatus(state: .held(.failed("Sync is not running: \(why)."))))
-            osLog.error("sync engine: not started: \(why, privacy: .public)")
+            let why = notRunningWords(inMemory: inMemory)
+            board.publish(SyncStatus(state: .held(.failed(why))))
+            osLog.error("sync engine: not started: \(inMemory ? "the store runs in memory" : "the store has no file URL", privacy: .public)")
             return
         }
         let ledger: SyncLedgerStore
@@ -200,6 +200,12 @@ final class SyncEngine {
         engine.say("Engine: \(pretend.map { "pretend iCloud ‘\($0)’" } ?? "\(SyncEngineSwitch.containerID), zone \(zone)"), store \(storeName)")
         board.launched(.own, actions: engine.actions)
         Task { await engine.start() }
+    }
+
+    /// What "Sync stopped:" is followed by when the engine cannot run on this launch's store (147 F10, F12: a
+    /// person's words; what happened goes to the log).
+    static func notRunningWords(inMemory: Bool) -> String {
+        inMemory ? "HITList couldn't open the data on this device." : "HITList couldn't find the data file on this device."
     }
 
     /// On the mirror, only the move is wired: there is no engine to ask for anything else.
