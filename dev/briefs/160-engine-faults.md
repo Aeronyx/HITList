@@ -3,8 +3,17 @@
 `dev/SYNC-ENGINE.md` section 14, stage 2 ("no open finding that can lose a person's change"). Reviews 148 (the
 transport against Apple's documentation) and 147 (the engine on the real store) found these; 149 and 150 have
 merged, so the brain and the transport are yours now. The reports are in the notes folder:
-`round-32/148-transport-review/REPORT.md`, `147-engine-live-review/REPORT.md`, and 149's and 150's reports are in
-`dev/briefs/ROUND-32.md` if it exists, else ask nothing and read the code. Each fix with a test written first and
+`round-32/148-transport-review/REPORT.md`, `147-engine-live-review/REPORT.md`, `149-transport-hardening/REPORT.md`,
+`150-sim-limits/REPORT.md`.
+
+**What changed under you tonight** (found with George's iPhone beside this Mac; read the comments at the places
+named before you touch them, and keep them): Apple's engine runs with its own scheduling **off**
+(`SyncEngine.launchIfSwitchedOn`: `automaticallySync: false`; with it on, a fetch after a relaunch never asked
+iCloud what changed), so the app's engine asks for each sync itself (`SyncEngine.pumpAfter`, `syncSoon`,
+`SyncEnginePumpTests`): rule T5's "the transport tries again by itself" is now kept by that pump, and a hold arms
+nothing. A manual fetch asks for every zone (`.all`) and `nextFetchChangesOptions` keeps the records to this zone.
+The transport saves a push subscription of its own (`ensureSubscription`), and a reset replaces the engine before
+the forgotten state is written (148's finding 4: done, leave it). Each fix with a test written first and
 seen to fail; the simulation (`SyncCoreSimulationTests`, the commands at the top of that file) green at the end.
 
 **Yours**: `HITListCore/Sources/HITListCore/Sync/` and its tests; `HITList/Services/SyncEngine/` except
@@ -43,7 +52,8 @@ In this order:
    read, the brain keeps a deletion of its own that has no base for that key (the first whole fetch would otherwise
    drop it and the item would come back when the record becomes readable), and a refused key is cleared when a
    fetch moves its base. Only if each is a few lines; say what you left.
-6. **An account switch has two owners that race** (147 F6): on the engine the one order is: the brain's backup; the
+6. **`ensureSubscription` can run twice at once** (two fetches in flight both find it unsaved): once.
+7. **An account switch has two owners that race** (147 F6): on the engine the one order is: the brain's backup; the
    previous account's backups set aside (by the host's backup itself, which does not mark the day's backup done);
    the brain removes and forgets; the monitor's `handleSwitch` does the rest and skips its own setting aside; the
    brain joins and fetches. **And items iCloud never held are not carried into another account** (147 F11): at a
