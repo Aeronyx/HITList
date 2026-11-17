@@ -240,6 +240,19 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "brain: a person's unsent move to a Group whose deletion arrived was dropped; the base's older Group came back"),
             KeptSeed(seed: 79, faults: "conflict", keys: ["03755E0F", "13B58FC9", "B83108A4"],
                      found: "brain (review finding 1's first fix): a grandchild arriving in the same fetch under a sub-task that goes kept the parent's deletion stale; devices kept a task iCloud held deleted"),
+            // Round 32 (brief 150): fixed, a reference the person changed is theirs until it has gone.
+            KeptSeed(seed: 210, keys: ["CD432C52", "644580EB", "26BBE64E"],
+                     found: "brain: a move to another Group, then that Group deleted here before the change went: the base's older Group came back"),
+            KeptSeed(seed: 261, keys: ["BD681474", "F01456DB"],
+                     found: "brain: the same as 210, the person's clearing of a moved task read as the store's"),
+            KeptSeed(seed: 559, keys: ["17CA86D5", "BF63B19F"],
+                     found: "brain: a clearing still to go forgotten by the settle that brought the Group's deletion"),
+            KeptSeed(seed: 5, faults: "rows", keys: ["99C931D7", "616F9630"],
+                     found: "brain: as 210, with the Group's row lost by the store"),
+            KeptSeed(seed: 967, faults: "rows", keys: ["A2F232E9", "399B08E1"],
+                     found: "brain: as 210, with the Group's row lost by the store"),
+            KeptSeed(seed: 196, faults: "rows", keys: ["9B55AEFC", "5C0AB22F"],
+                     found: "brain: a label the person took off, its row then lost, came back on the task (the set's twin of 210)"),
         ]
         return seeds
     }
@@ -448,6 +461,96 @@ final class SyncCoreSimulationTests: XCTestCase {
         }
         let inCloud = await sim.cloud.record(t)
         XCTAssertNil(inCloud?.record["project"])
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    // MARK: Round 32 (brief 150): a reference the person changed is theirs until it has gone
+
+    static func label(_ name: String) -> SyncRecord {
+        SyncRecord(type: "TaskLabel", name: name, fields: ["name": .string("label \(name)")])
+    }
+
+    /// Everyday seeds 210, 261 (and rows 5, 967): offline, a person moved a task from a deleted Group G1 to G2, then
+    /// deleted G2, then put G1 back. G2's deletion emptied the field, and the base (still G1) was read as a reference
+    /// the store had taken off: the task waited for G1 and went back into it everywhere. A to-one the device holds
+    /// with another item than the base names is the person's: the base's reference is no longer waited for.
+    func testAMoveToAnotherGroupThenThatGroupsDeletion_doesNotBringTheBasesGroupBack() async {
+        let g1 = Self.group("G1"), g2 = Self.group("G2")
+        let sim = await Self.twoDevices([g1, g2, Self.task("T", "task", ["project": .reference("G1")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .delete(g1.key)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["project": .reference("G2")])),
+                        .advance(milliseconds: 10), .act("A", .delete(g2.key)),
+                        .advance(milliseconds: 10), .act("A", .put(g1)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "G2 is gone and G1 is not where the person put T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Everyday seed 559: B took a task out of its Group (not sent yet); A deleted the Group and changed the task; B's
+    /// fetch brought both, and the merge kept B's clearing. The settle then read the waits against iCloud's record
+    /// (which still names the Group) and forgot that the field was the person's: the task waited for the Group, and
+    /// A's undo put it back. A settle keeps the cleared mark the device held.
+    func testAClearingStillToGoSurvivesASettleThatBringsTheGroupsDeletion() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g, Self.task("T", "task", ["project": .reference("G")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("B", .network(up: false)),
+                        .advance(milliseconds: 10), .act("B", .edit(t, ["project": nil])),
+                        .advance(milliseconds: 10), .act("A", .delete(g.key)), .act("A", .edit(t, ["title": .string("A's")])),
+                        .sync("A"),
+                        .fault("B", .network(up: true)), .sync("B"),
+                        .advance(milliseconds: 10), .act("A", .put(g)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "the person on B took T out of G, on \(device)")
+            XCTAssertEqual(task?["title"], .string("A's"), "and A's edit stands, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// The same for a set (brief 145 left it open; rows seed 196): a person took a label off a task, then the label was
+    /// deleted here (or the store lost its row) before the change went, then it came back. The base still held the
+    /// name, so the task waited for it and got it back. A name the person took off while its item was here is noted
+    /// (`removedKey`) and never waited for.
+    func testALabelTakenOffThenDeletedAndPutBack_staysOff() async {
+        let l = Self.label("L")
+        let sim = await Self.twoDevices([l, Self.task("T", "task", ["labels": .references(["L"])])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["labels": nil])),
+                        .advance(milliseconds: 10), .act("A", .delete(l.key)),
+                        .advance(milliseconds: 10), .act("A", .put(l)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["labels"], "the person took L off T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    func testALabelTakenOffThenItsRowLost_staysOffWhenTheRowComesBack() async {
+        let l = Self.label("L")
+        let sim = await Self.twoDevices([l, Self.task("T", "task", ["labels": .references(["L"])])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["labels": nil])),
+                        .fault("A", .loseRows([l.key])), .relaunch("A"),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let label = await sim.device(device)?.store.record(l.key)
+            XCTAssertNotNil(label, "the label nobody deleted is back, on \(device)")
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["labels"], "the person took L off T, on \(device)")
+        }
         let findings = await sim.check()
         XCTAssertEqual(findings, [])
     }
