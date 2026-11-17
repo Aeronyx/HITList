@@ -25,14 +25,21 @@ extension SyncCore {
     /// A to-one field the person cleared while the base still points at an item: no reference is waited for there.
     static let clearedMark = SyncValue.referenceList([])
 
+    /// Where a wait keeps, beside a set field, the names the person took off it while the base still holds them: none
+    /// of them is waited for (the set's twin of `clearedMark`). Not a field of any type: nothing reads it as one.
+    static func removedKey(_ field: String) -> String { field + ".removed" }
+
     /// The device's record with every reference it waits for honoured: a set gets the names it waits for, a to-one
     /// gets the one it waits for only while the device's field is empty (a value there is the person's choice).
     static func whole(_ local: SyncRecord?, waiting: [String: SyncValue]) -> SyncRecord? {
         guard var out = local, !waiting.isEmpty else { return local }
         let type = SyncSchema.type(out.key.type)
         for field in waiting.keys.sorted() {
+            let kind = type?.fields.first(where: { $0.key == field })?.kind
+            // A set's removed names are a note, not a field.
+            if type != nil, kind == nil { continue }
             // A to-one's `clearedMark` (an empty list) is a note, not a reference.
-            if case .reference? = type?.fields.first(where: { $0.key == field })?.kind { if case .referenceList? = waiting[field] { continue } }
+            if case .reference? = kind { if case .referenceList? = waiting[field] { continue } }
             switch waiting[field] {
             case .reference?:
                 if out.fields[field] == nil { out.fields[field] = waiting[field] }
@@ -78,7 +85,16 @@ extension SyncCore {
         for field in type.fields {
             switch field.kind {
             case .reference(let target):
-                guard local.fields[field.key] == nil else { continue }
+                if let held = local.fields[field.key] {
+                    // The device holds another item than the base names: the person's choice (or the merge's), so the
+                    // base's reference is no longer one this record waits for. Remembered, so that this item's
+                    // deletion here before the change went leaves the field empty and does not bring the base's
+                    // older reference back (everyday seeds 210, 261; round 32).
+                    if case .reference? = base?.fields[field.key], base?.fields[field.key] != held {
+                        out[field.key] = Self.clearedMark
+                    }
+                    continue
+                }
                 if case .reference(let name)? = current[field.key], !present(SyncKey(type: target, name: name)) {
                     out[field.key] = .reference(name)
                 } else if case .reference(let name)? = base?.fields[field.key] {
@@ -95,16 +111,53 @@ extension SyncCore {
                     }
                 }
             case .references(let target):
-                var names = Set<String>()
-                if case .referenceList(let list)? = current[field.key] { names.formUnion(list) }
-                if case .referenceList(let list)? = base?.fields[field.key] { names.formUnion(list) }
-                let missing = names.filter { !present(SyncKey(type: target, name: $0)) }
+                func names(_ value: SyncValue?) -> Set<String> {
+                    if case .referenceList(let list)? = value { return Set(list) }
+                    return []
+                }
+                func isHere(_ name: String) -> Bool { present(SyncKey(type: target, name: name)) }
+                let held = names(local.fields[field.key]), noted = names(current[Self.removedKey(field.key)])
+                var missing = names(current[field.key]).filter { !isHere($0) }
+                var removed = Set<String>()
+                for name in names(base?.fields[field.key]) where !held.contains(name) && !missing.contains(name) {
+                    // A name the base holds and the device does not: taken off by the person while its item was here
+                    // (now, or noted before that item went), else by the store because the item is not here.
+                    if isHere(name) || noted.contains(name) { removed.insert(name) } else { missing.insert(name) }
+                }
                 if !missing.isEmpty { out[field.key] = .references(missing) }
+                if !removed.isEmpty { out[Self.removedKey(field.key)] = .references(removed) }
             default:
                 break
             }
         }
         return out
+    }
+
+    /// A settle's waits, read against the base the record now has: a to-one the device had marked cleared (the
+    /// person emptied it, `clearedMark`) stays marked while the decided record leaves it empty and `base` names an
+    /// item, so the base's reference is not waited for. Only a mark the device already held is kept: an empty field
+    /// with none may be the store's own clearing (a row it lost), which the next compare reads from the base.
+    static func keepCleared(_ wait: inout [String: SyncValue], current: [String: SyncValue], decided: SyncRecord?,
+                            base: SyncRecord) {
+        guard let decided, !base.isDeleted, let type = SyncSchema.type(decided.key.type) else { return }
+        for field in type.fields {
+            switch field.kind {
+            case .reference:
+                guard current[field.key] == Self.clearedMark, decided.fields[field.key] == nil,
+                      case .reference? = base.fields[field.key], wait[field.key] == nil else { continue }
+                wait[field.key] = Self.clearedMark
+            case .references:
+                // A set's removed names likewise: those still out of the decided set and still in iCloud's.
+                guard case .referenceList(let noted)? = current[Self.removedKey(field.key)],
+                      case .referenceList(let there)? = base.fields[field.key] else { continue }
+                var kept = Set(noted).intersection(there)
+                if case .referenceList(let decidedNames)? = decided.fields[field.key] { kept.subtract(decidedNames) }
+                if case .referenceList(let waited)? = wait[field.key] { kept.subtract(waited) }
+                if !kept.isEmpty { wait[Self.removedKey(field.key)] = .references(kept) }
+            default:
+                break
+            }
+        }
     }
 
     /// The references a wait names, by the items they point at.

@@ -240,6 +240,46 @@ final class SyncCoreSimulationTests: XCTestCase {
                      found: "brain: a person's unsent move to a Group whose deletion arrived was dropped; the base's older Group came back"),
             KeptSeed(seed: 79, faults: "conflict", keys: ["03755E0F", "13B58FC9", "B83108A4"],
                      found: "brain (review finding 1's first fix): a grandchild arriving in the same fetch under a sub-task that goes kept the parent's deletion stale; devices kept a task iCloud held deleted"),
+            // Round 32 (brief 150): fixed, a reference the person changed is theirs until it has gone.
+            KeptSeed(seed: 210, keys: ["CD432C52", "644580EB", "26BBE64E"],
+                     found: "brain: a move to another Group, then that Group deleted here before the change went: the base's older Group came back"),
+            KeptSeed(seed: 261, keys: ["BD681474", "F01456DB"],
+                     found: "brain: the same as 210, the person's clearing of a moved task read as the store's"),
+            KeptSeed(seed: 559, keys: ["17CA86D5", "BF63B19F"],
+                     found: "brain: a clearing still to go forgotten by the settle that brought the Group's deletion"),
+            KeptSeed(seed: 5, faults: "rows", keys: ["99C931D7", "616F9630"],
+                     found: "brain: as 210, with the Group's row lost by the store"),
+            KeptSeed(seed: 967, faults: "rows", keys: ["A2F232E9", "399B08E1"],
+                     found: "brain: as 210, with the Group's row lost by the store"),
+            KeptSeed(seed: 196, faults: "rows", keys: ["9B55AEFC", "5C0AB22F"],
+                     found: "brain: a label the person took off, its row then lost, came back on the task (the set's twin of 210)"),
+            KeptSeed(seed: 724, faults: "zone", keys: ["E7529A21", "278AB945"],
+                     found: "brain: a lost zone forgot what a record waited for; its parent went everywhere by M5"),
+            KeptSeed(seed: 362, faults: "account", keys: ["C60FAAF7"],
+                     found: "brain: a Group deleted just before a sign-out came back at the sign-in"),
+            KeptSeed(seed: 672, faults: "refusal", keys: ["8572DE5D", "5D9B7383"],
+                     found: "rig: a memory of records from a fetch that never ended, lost with the transport's state, was not counted"),
+            // Round 32, beyond the 400 seeds round 29 ran of these sets.
+            KeptSeed(seed: 940, faults: "quota", keys: ["E327C16C", "E0F00BEE"],
+                     found: "brain: as 210 (a reference the person changed), fixed with it"),
+            KeptSeed(seed: 909, faults: "zone", keys: ["05E217EC"],
+                     found: "rig: as 672 (a memory of records from a fetch that never ended), fixed with it"),
+            // Round 32 (brief 150): written limits, clean because the rig tells their signature (the `testLimit…` scripts).
+            KeptSeed(seed: 174, faults: "rows", keys: ["E783DA98", "9B971E28"],
+                     found: "limit: an item brought back on two devices after its deletion comes back as the copy changed last (I9)"),
+            KeptSeed(seed: 805, faults: "rows", keys: ["10CF4A3F", "40808A4D"],
+                     found: "limit: the same, a change after the deletion on one device and an undo on another"),
+            KeptSeed(seed: 59, faults: "quota", keys: ["336385D5", "C15214B2"],
+                     found: "limit: the same, the change held by a full iCloud while the undo landed"),
+            KeptSeed(seed: 148, faults: "refusal", keys: ["FA958A00", "25302F76"], found: "limit: the same, three devices"),
+            KeptSeed(seed: 314, faults: "refusal", keys: ["551710D2", "8446B65F"], found: "limit: the same, a label"),
+            KeptSeed(seed: 496, faults: "refusal", keys: ["E0C40984", "D4EEE287"], found: "limit: the same, a parent"),
+            KeptSeed(seed: 270, faults: "zone", keys: ["551BFECB"],
+                     found: "limit: after a lost zone two copies meet without a base until each device holds one again (I2)"),
+            KeptSeed(seed: 653, faults: "zone", keys: ["80CDA054"], found: "limit: the same, a Group"),
+            KeptSeed(seed: 856, faults: "zone", keys: ["357DB7D9", "684B3ED0", "9D7DA1BE"], found: "limit: the same, labels, dates, a parent (I2, I9)"),
+            KeptSeed(seed: 36, faults: "memory", keys: ["4C680305"], found: "limit: the same, a due date"),
+            KeptSeed(seed: 259, faults: "memory", keys: ["8DA01D21"], found: "limit: the same, a Group"),
         ]
         return seeds
     }
@@ -302,7 +342,59 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertEqual(findings, [])
     }
 
+    /// Account seed 362: a Group deleted on A while A could not reach iCloud, then A signed out and back in to the same
+    /// account. The sign-out forgot the memory, the unsent deletion with it, and the Group came back at the sign-in.
+    /// The deletion is kept across the sign-out and goes at the sign-in.
+    func testADeletionNotYetSentSurvivesASignOutAndGoesAtTheSignIn() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g, Self.task("T", "task")])
+        await sim.play([.fault("A", .network(up: false)), .advance(milliseconds: 10), .act("A", .delete(g.key)),
+                        .fault("A", .account(nil)), .fault("A", .account(FakeCloud.defaultAccount)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let group = await sim.device(device)?.store.record(g.key)
+            XCTAssertNil(group, "the person deleted G, on \(device)")
+            let task = await held(sim, device, "T")
+            XCTAssertNotNil(task, "what was synced came back, on \(device)")
+        }
+        let marker = await sim.cloud.record(g.key)
+        XCTAssertEqual(marker?.record.isDeleted, true)
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// The same deletion does not follow the device to another account: there it is dropped.
+    func testADeletionNotYetSentIsDroppedWhenTheDeviceSignsInToAnotherAccount() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g])
+        await sim.play([.fault("A", .network(up: false)), .advance(milliseconds: 10), .act("A", .delete(g.key)),
+                        .fault("A", .account(nil)), .fault("A", .account("alice-other")),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A")])
+        let entry = try? await sim.device("A")?.ledger.entry(g.key)
+        XCTAssertNil(entry ?? nil, "nothing of the first account's is kept in the other's memory")
+        let other = await sim.cloud.records(account: "alice-other").map(\.key)
+        XCTAssertFalse(other.contains(g.key), "no marker of the first account's Group in the other account")
+        let alive = await sim.cloud.record(g.key)
+        XCTAssertEqual(alive?.record.isDeleted, false, "and the first account's Group is as it was")
+    }
+
     // MARK: The rig's model, corrected on what SyncCore does
+
+    /// Refusal seed 672: a device whose only fetch crashed after records reached it, and which then lost its
+    /// transport's state, held bases for those records; its merge without a memory (M5) was not counted, because the
+    /// rig counted a memory only after a fetch that ended.
+    func testTheRigCountsALostMemoryOfRecordsFromAFetchThatNeverEnded() async {
+        let sim = SyncSimulation(seed: 1, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        await sim.play([.act("A", .put(Self.task("T", "one"))), .sync("A"),
+                        .fault("B", .crash(.afterHandling(.fetched))), .sync("B"),
+                        .relaunch("B", keepLedger: true, keepTransportState: false), .sync("B")])
+        let base = try? await sim.device("B")?.ledger.entry(SyncKey(type: "TaskItem", name: "T"))
+        XCTAssertNotNil(base ?? nil, "B settled T again after the loss")
+        let amnesia = await sim.intent.amnesia
+        XCTAssertTrue(amnesia.contains { $0.device == "B" }, "the rig saw B's memory lost: \(amnesia)")
+    }
 
     /// Seed 62 (everyday) and 16 (memory): a device whose transport lost its state while a deletion of its own was
     /// still to go forgets its memory but keeps that deletion as an entry with no base (section 7). The rig counted a
@@ -450,6 +542,208 @@ final class SyncCoreSimulationTests: XCTestCase {
         XCTAssertNil(inCloud?.record["project"])
         let findings = await sim.check()
         XCTAssertEqual(findings, [])
+    }
+
+    // MARK: Round 32 (brief 150): a reference the person changed is theirs until it has gone
+
+    static func label(_ name: String) -> SyncRecord {
+        SyncRecord(type: "TaskLabel", name: name, fields: ["name": .string("label \(name)")])
+    }
+
+    /// Everyday seeds 210, 261 (and rows 5, 967): offline, a person moved a task from a deleted Group G1 to G2, then
+    /// deleted G2, then put G1 back. G2's deletion emptied the field, and the base (still G1) was read as a reference
+    /// the store had taken off: the task waited for G1 and went back into it everywhere. A to-one the device holds
+    /// with another item than the base names is the person's: the base's reference is no longer waited for.
+    func testAMoveToAnotherGroupThenThatGroupsDeletion_doesNotBringTheBasesGroupBack() async {
+        let g1 = Self.group("G1"), g2 = Self.group("G2")
+        let sim = await Self.twoDevices([g1, g2, Self.task("T", "task", ["project": .reference("G1")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .delete(g1.key)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["project": .reference("G2")])),
+                        .advance(milliseconds: 10), .act("A", .delete(g2.key)),
+                        .advance(milliseconds: 10), .act("A", .put(g1)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "G2 is gone and G1 is not where the person put T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Everyday seed 559: B took a task out of its Group (not sent yet); A deleted the Group and changed the task; B's
+    /// fetch brought both, and the merge kept B's clearing. The settle then read the waits against iCloud's record
+    /// (which still names the Group) and forgot that the field was the person's: the task waited for the Group, and
+    /// A's undo put it back. A settle keeps the cleared mark the device held.
+    func testAClearingStillToGoSurvivesASettleThatBringsTheGroupsDeletion() async {
+        let g = Self.group("G")
+        let sim = await Self.twoDevices([g, Self.task("T", "task", ["project": .reference("G")])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("B", .network(up: false)),
+                        .advance(milliseconds: 10), .act("B", .edit(t, ["project": nil])),
+                        .advance(milliseconds: 10), .act("A", .delete(g.key)), .act("A", .edit(t, ["title": .string("A's")])),
+                        .sync("A"),
+                        .fault("B", .network(up: true)), .sync("B"),
+                        .advance(milliseconds: 10), .act("A", .put(g)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["project"], "the person on B took T out of G, on \(device)")
+            XCTAssertEqual(task?["title"], .string("A's"), "and A's edit stands, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// The same for a set (brief 145 left it open; rows seed 196): a person took a label off a task, then the label was
+    /// deleted here (or the store lost its row) before the change went, then it came back. The base still held the
+    /// name, so the task waited for it and got it back. A name the person took off while its item was here is noted
+    /// (`removedKey`) and never waited for.
+    func testALabelTakenOffThenDeletedAndPutBack_staysOff() async {
+        let l = Self.label("L")
+        let sim = await Self.twoDevices([l, Self.task("T", "task", ["labels": .references(["L"])])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["labels": nil])),
+                        .advance(milliseconds: 10), .act("A", .delete(l.key)),
+                        .advance(milliseconds: 10), .act("A", .put(l)),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["labels"], "the person took L off T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    func testALabelTakenOffThenItsRowLost_staysOffWhenTheRowComesBack() async {
+        let l = Self.label("L")
+        let sim = await Self.twoDevices([l, Self.task("T", "task", ["labels": .references(["L"])])])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.fault("A", .network(up: false)),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["labels": nil])),
+                        .fault("A", .loseRows([l.key])), .relaunch("A"),
+                        .fault("A", .network(up: true)), .sync("A"), .sync("A"), .sync("B"), .sync("A")])
+        for device in ["A", "B"] {
+            let label = await sim.device(device)?.store.record(l.key)
+            XCTAssertNotNil(label, "the label nobody deleted is back, on \(device)")
+            let task = await held(sim, device, "T")
+            XCTAssertNil(task?["labels"], "the person took L off T, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    /// Zone seed 724: a record waited for an item that was not on its device (here a label iCloud had refused, so
+    /// that it never reached A) when the zone was lost. The forgetting took the wait with it, so A sent its task again
+    /// without the label, and the merge without a memory (M5) kept that copy over B's. What a record waits for is the
+    /// device's own and is kept across the forgetting.
+    func testAReferenceWaitedForSurvivesALostZone() async {
+        var config = SimConfig()
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        await sim.addDevice("A")
+        await sim.addDevice("B")
+        let l = Self.label("L")
+        await sim.play([.sync("A"), .sync("B"),
+                        .act("B", .put(l)), .act("B", .put(Self.task("T", "task", ["labels": .references(["L"])]))),
+                        .cloud(.refuseNextSave(l.key, .tooLarge)), .sync("B"), .sync("A"),
+                        .cloud(.deleteZone(.deleted)), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(l.key, ["name": .string("smaller")])),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertEqual(task?["labels"], .references(["L"]), "T keeps its label, on \(device)")
+        }
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [])
+    }
+
+    // MARK: Written limits (round 32, brief 150): each fails if the behaviour changes either way
+
+    /// Rows seeds 174, 805, quota 59, refusal 148, 314, 496. A deleted T; B and C, apart, each changed it after the
+    /// deletion reached them (C gave it a Group, B a new title later). Both copies come back over the marker, and when
+    /// they meet they have nothing in common but the marker: the copy changed last stands whole (M12 against a live
+    /// record, as M5), and C's Group goes. The rig excuses exactly this (`SimIntent.revivedApart`).
+    func testLimit_anItemBroughtBackOnTwoDevicesAfterItsDeletion_comesBackAsTheCopyChangedLast() async {
+        var config = SimConfig()
+        if ProcessInfo.processInfo.environment["HITLIST_SIM_DEBUG"] != nil { config.log = { print("BRAIN \($0)") } }
+        let sim = SyncSimulation(seed: 1, config: config, brain: SyncCoreSimBrain.make)
+        for name in ["A", "B", "C"] { await sim.addDevice(name) }
+        let g = Self.group("G")
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.act("A", .put(g)), .act("A", .put(Self.task("T", "first"))), .sync("A"), .sync("B"), .sync("C"),
+                        .advance(milliseconds: 10), .act("A", .delete(t)), .sync("A"),
+                        // B and C learn of the deletion; neither has sent anything yet.
+                        .fault("B", .network(up: false)), .fault("C", .network(up: false)),
+                        .advance(milliseconds: 10), .act("C", .edit(t, ["project": .reference("G")])),
+                        .advance(milliseconds: 10), .act("B", .edit(t, ["title": .string("B's")])),
+                        .fault("B", .network(up: true)), .fault("B", .dropNetwork(after: 1)), .sync("B"),
+                        .fault("C", .network(up: true)), .sync("C"),
+                        .fault("B", .network(up: true)), .sync("B"), .sync("C"), .sync("A")])
+        for device in ["A", "B", "C"] {
+            let task = await held(sim, device, "T")
+            XCTAssertEqual(task?["title"], .string("B's"), "B's copy, changed last, stands whole on \(device)")
+            XCTAssertNil(task?["project"], "C's Group went with C's copy, on \(device)")
+        }
+        let drops = await sim.intent.drops.map(\.drop).filter { $0.key == t && $0.field == "project" }
+        XCTAssertEqual(drops.map(\.device), ["B"], "B's whole copy took C's Group away in iCloud")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [], "the rig knows this signature")
+    }
+
+    /// The rig's excuse for it is no wider than the signature: a reference dropped on an item only one device brought
+    /// back, or one never deleted, is still a finding.
+    func testLimit_theRevivalExcuseNeedsTwoDevicesBringingTheItemBack() {
+        var intent = SimIntent()
+        let t = SyncKey(type: "TaskItem", name: "T")
+        let made = SyncRecord(key: t, fields: ["title": .string("first")])
+        intent.record(step: 1, device: "A", before: [:], after: [t: made])
+        XCTAssertFalse(intent.revivedApart(t, by: "B", by: 10), "never deleted")
+        intent.record(step: 2, device: "A", before: [t: made], after: [:])
+        var changed = made
+        changed.fields["title"] = .string("B's")
+        intent.record(step: 3, device: "B", before: [t: made], after: [t: changed])
+        XCTAssertFalse(intent.revivedApart(t, by: "B", by: 10), "only B brought it back")
+        var other = made
+        other.fields["notes"] = .string("C's")
+        intent.record(step: 4, device: "C", before: [t: made], after: [t: other])
+        XCTAssertTrue(intent.revivedApart(t, by: "B", by: 10))
+        XCTAssertFalse(intent.revivedApart(t, by: "B", by: 3), "not yet: C had not brought it back")
+        XCTAssertFalse(intent.revivedApart(t, by: "A", by: 10), "A did not bring it back")
+    }
+
+    /// Zone seeds 270, 653, 856, memory 36, 259. The zone is lost; both devices hear of it and send everything again,
+    /// but B's copy of T does not land (here iCloud refuses it), so B holds T with no base while A's copy is in
+    /// iCloud. A changes T's title; B changes its notes later. B meets A's copy without a base (M5): the copy changed
+    /// last stands whole, and A's title goes, although both devices had finished a whole fetch since the loss. Once
+    /// both hold a base from the new zone, a change is judged again (and kept).
+    func testLimit_afterALostZoneTwoCopiesMeetWithoutABase_theCopyChangedLastStands() async {
+        let sim = await Self.twoDevices([Self.task("T", "first")])
+        let t = SyncKey(type: "TaskItem", name: "T")
+        await sim.play([.cloud(.deleteZone(.deleted)), .cloud(.refuseNextSave(t, .tooLarge)), .sync("B"), .sync("A"),
+                        .advance(milliseconds: 10), .act("A", .edit(t, ["title": .string("A's")])), .sync("A"),
+                        .advance(milliseconds: 10), .act("B", .edit(t, ["notes": .string("B's")])),
+                        .sync("B"), .sync("A"), .sync("B")])
+        for device in ["A", "B"] {
+            let task = await held(sim, device, "T")
+            XCTAssertEqual(task?["title"], .string("first"), "A's title went with A's copy, on \(device)")
+            XCTAssertEqual(task?["notes"], .string("B's"), "B's copy, changed last, stands whole on \(device)")
+        }
+        let intent = await sim.intent
+        let edits = intent.events.filter { $0.key == t && $0.change != .deleted && $0.step > 1 }.map(\.step)
+        XCTAssertEqual(edits.count, 2)
+        XCTAssertTrue(edits.allSatisfy { intent.zoneExposed(t, at: $0) }, "both made while a device held T with no base")
+        XCTAssertTrue(edits.allSatisfy { $0 > intent.exposedThrough }, "after every lost memory had ended: only the zone's window excuses them")
+        // Both hold a base from the new zone now: a change is judged again, and kept.
+        await sim.play([.advance(milliseconds: 10), .act("A", .edit(t, ["title": .string("A's again")])), .sync("A"), .sync("B")])
+        let later = await sim.intent.events.last { $0.key == t }?.step ?? 0
+        let exposed = await sim.intent.zoneExposed(t, at: later)
+        XCTAssertFalse(exposed, "the exposure ended when both had a base again")
+        let findings = await sim.check()
+        XCTAssertEqual(findings, [], "the rig knows this signature")
+        let task = await held(sim, "B", "T")
+        XCTAssertEqual(task?["title"], .string("A's again"))
     }
 
     // MARK: M5's amendment: a send with no base whose answer was lost (zone seed 270, memory seed 259)

@@ -298,7 +298,10 @@ extension SyncCore {
             // What it waits for comes from what the merge decided (section 8), not from the base: when this device's
             // version is the one still to go, its references are not iCloud's, and an older wait must not outlive
             // another device's move.
-            let wait = Self.waitFields(local: shown(decision), base: decision.target, present: { present.contains($0) })
+            var wait = Self.waitFields(local: shown(decision), base: decision.target, present: { present.contains($0) })
+            // Read against the base it now has (iCloud's): a to-one the person emptied, still empty in what was
+            // decided while iCloud's record names an item, is their clearing still to go (everyday seed 559).
+            Self.keepCleared(&wait, current: waitsFor(key), decided: decision.target, base: server.record)
             if wait != waitsFor(key) {
                 if wait.isEmpty { write.deferRemove.append(key) } else { write.deferUpsert.append(Self.waitRecord(key, wait)) }
             }

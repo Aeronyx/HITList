@@ -119,7 +119,9 @@ final class SyncCoreReferenceTests: XCTestCase {
         let record = await device.core.recordToSend(taskKey("T"))
         XCTAssertEqual(record?.record["project"], .reference("Q"), "the person's own choice")
         let waiting = await waits(device)
-        XCTAssertNil(waiting[taskKey("T")], "no longer waiting for P")
+        // Round 32: not waiting for P, and P marked as the person's choice away from it, so that Q's deletion here
+        // before the change went would not bring P back.
+        XCTAssertEqual(waiting[taskKey("T")], ["project": SyncCore.clearedMark], "no longer waiting for P")
     }
 
     func testALabelRemovedWhileItExistsIsSent() async {

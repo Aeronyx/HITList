@@ -159,9 +159,21 @@ extension SyncCore {
         if !synced.isEmpty {
             guard await backup(reason) else { return false }
         }
+        // A deletion made here and not sent yet is the person's, as every one is (section 7): across a sign-out it is
+        // kept, with the account it belongs to, and goes at the next sign-in to that account (a sign-in to another
+        // drops it, as a switch: `accountChanged`). Round 32, account seed 362: a Group deleted just before a
+        // sign-out came back at the sign-in.
+        let unsent = reason == .signedOut ? entries.values.filter { $0.deletedHereAt != nil }.sorted { $0.key < $1.key } : []
+        let owner = account
         do {
             try await ledger.reset()
             forgetCache(keepAccount: false)
+            if let owner, !unsent.isEmpty {
+                var write = LedgerWrite()
+                write.facts[LedgerFact.account] = Data(owner.utf8)
+                write.upsert = unsent.map { LedgerEntry(key: $0.key, base: nil, system: nil, deletedHereAt: $0.deletedHereAt) }
+                try await commit(write)
+            }
         } catch {
             await fail("The engine's memory could not be written: \(error)")
             return false
@@ -283,11 +295,12 @@ extension SyncCore {
 
     /// Whether the brain remembers anything of iCloud's.
     var hasMemory: Bool {
-        firstFetchDone || !waits.isEmpty || entries.values.contains { $0.base != nil }
+        // Not what records wait for: that is the device's own, kept across a forgetting (`forgetMemory`).
+        firstFetchDone || entries.values.contains { $0.base != nil }
     }
 
-    /// Forgets what the brain knows of iCloud's records (every base and token, what records wait for, and unless
-    /// `keepFirstFetch` the first fetch) in one write, keeping the deletions made here and not sent yet: each stays
+    /// Forgets what the brain knows of iCloud's records (every base and token, and unless `keepFirstFetch` the first
+    /// fetch) in one write, keeping what records wait for and the deletions made here and not sent yet: each stays
     /// as an entry with no base and its `deletedHereAt`, settled against iCloud's record when the next whole fetch
     /// brings it (M3/M4 with an explicit deletion), and dropped if that fetch does not.
     func forgetMemory(keepFirstFetch: Bool) async -> Bool {
@@ -300,7 +313,9 @@ extension SyncCore {
                 write.remove.append(key)
             }
         }
-        write.deferRemove = waits.keys.sorted()
+        // What records wait for is kept too (round 32, zone seed 724): it is the device's own (the references it
+        // cannot show), not a memory of iCloud's, and only it can say that a record points at an item that is not
+        // here. The next compare reads it against no base: what no longer applies goes there.
         if !keepFirstFetch { write.facts.updateValue(nil, forKey: LedgerFact.firstFetchDone) }
         // What was remembered of sends with no answer belongs to the memory forgotten: a new epoch makes it worth
         // nothing without naming every fact (M5's amendment, `SyncCore+Sent`).
