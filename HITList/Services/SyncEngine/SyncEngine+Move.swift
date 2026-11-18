@@ -61,6 +61,11 @@ extension SyncEngine {
         guard engine != current else {
             if SyncEngineSwitch.nextEngine(storeName: storeName, defaults: defaults) != engine {
                 SyncEngineSwitch.setPreference(engine, storeName: storeName, defaults: defaults)
+                // A waiting move that asked for a fresh copy is taken back whole: without this the store was still set
+                // aside at the next launch, on the engine it never left (brief 167's finding).
+                if ModelContainerFactory.requestedReset(in: defaults) == storeName {
+                    defaults.removeObject(forKey: ModelContainerFactory.resetLocalStoreKey)
+                }
                 moveLog.notice("move to \(engine.rawValue, privacy: .public): a waiting move was taken back")
             }
             return

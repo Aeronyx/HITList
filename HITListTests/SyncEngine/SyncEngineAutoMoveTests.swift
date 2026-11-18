@@ -304,6 +304,20 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .own)
     }
 
+    /// Finding: a waiting move that took a fresh copy, taken back, left the store to be set aside at the next launch.
+    func testFinding_aWaitingFreshCopyTakenBackIsTakenBackWhole() async throws {
+        let container = ModelContainerFactory.preview()
+        SyncEngineSwitch.setPreference(.own, storeName: store, defaults: defaults)
+        try await SyncEngine.move(to: .mirror, container: container, storeName: store, defaults: defaults, current: .own,
+                                  freshCopy: true, backUp: { _ in nil }, relaunch: false)
+        XCTAssertEqual(ModelContainerFactory.requestedReset(in: defaults), store)
+        // "Cancel the move": back to the engine this launch runs.
+        try await SyncEngine.move(to: .own, container: container, storeName: store, defaults: defaults, current: .own,
+                                  backUp: { _ in nil }, relaunch: false)
+        XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .own)
+        XCTAssertNil(ModelContainerFactory.requestedReset(in: defaults), "nothing is set aside on the engine it never left")
+    }
+
     /// A change made between the move and the reopen turns the engine's copy into an ordinary merge: nothing made in
     /// between is set aside.
     func testR3_aChangeBeforeTheReopenTurnsTheEnginesCopyIntoAMerge() async {
