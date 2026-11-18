@@ -498,8 +498,16 @@ public actor SyncSimulation {
         case .loseBookmark: await device.transport.loseBookmark()
         case .account(let account):
             await recordAccount(name, to: account)
+            let before = account == nil ? await items(device.store) : [:]
             await cloud.setAccount(account, for: name)
             await device.transport.noticeChanges()
+            if account == nil, await !device.transport.hasCrashed {
+                // Brief 165: after a sign-out every item that was here is here, as it was.
+                let after = await items(device.store)
+                observed.add(before.keys.sorted().filter { after[$0] != before[$0] }.map {
+                    SyncFinding(.keptAtSignOut, "\($0) left \(name), or was changed there, at its sign-out (step \(step))")
+                })
+            }
             await afterBrainCall(name)
         case .loseRows(let keys):
             // Nobody is told: the next whole compare finds them missing.
@@ -518,10 +526,11 @@ public actor SyncSimulation {
         // A switch from an account the device is signed in to, and its brain knows it is (its ledger names the
         // account: a brain that never joined one reads the next as a first sign-in): they leave with the rest (brief
         // 160, 147 F11).
+        // Signed out of it first (brief 165), likewise: the ledger keeps the account it was signed out of.
         let known = (try? await device.ledger.fact(LedgerFact.account)).flatMap { $0 }.map { String(decoding: $0, as: UTF8.self) }
         intent.recordAccount(step: step, device: name, to: account,
                              travelling: records.map(\.key).filter { !living.contains($0) },
-                             leaving: from != nil && account != nil && known != nil && known != account)
+                             leaving: account != nil && known != nil && known != account)
     }
 
     private func apply(_ fault: SimCloudFault) async {
@@ -759,8 +768,12 @@ public actor SyncSimulation {
         case .zoneReset: return .cloud(.deleteZone(.encryptedDataReset))
         case .accountSwitch, .signOut:
             if let previous = away[name] {
+                if kind == .accountSwitch, previous == nil {
+                    // Signed out, then another account signs in (brief 165): the switch, from a sign-out.
+                    away[name] = .some(config.account + "-other")
+                    return .fault(name, .account(config.account + "-other"))
+                }
                 away[name] = nil
-                _ = previous
                 return .fault(name, .account(config.account))
             }
             let other: String? = kind == .signOut ? nil : config.account + "-other"

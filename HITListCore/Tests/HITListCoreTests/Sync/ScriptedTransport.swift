@@ -142,6 +142,8 @@ final class TestHost: SyncHost, @unchecked Sendable {
     private var _statuses: [SyncStatus] = []
     private var _backups: [SyncRemovalReason] = []
     var backupError: Error?
+    /// Runs as the backup is written, before it returns (brief 165: what the backup holds is read here).
+    var atBackup: (@Sendable () async -> Void)?
 
     struct BackupFailed: Error {}
 
@@ -149,6 +151,7 @@ final class TestHost: SyncHost, @unchecked Sendable {
 
     func willRemoveLocalData(reason: SyncRemovalReason) async throws {
         lock.withLock { _backups.append(reason) }
+        if let atBackup { await atBackup() }
         if let backupError { throw backupError }
     }
 

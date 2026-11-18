@@ -428,7 +428,8 @@ enum SyncEngineWords {
         case .duplicates:
             return "Nothing to do: HITList merges them, then sync starts again by itself."
         case .noAccount:
-            return ""
+            // Brief 165: a sign-out keeps every item here; the one sentence, the same as the hold's own words.
+            return SyncHold.noAccountWords
         }
     }
 

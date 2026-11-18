@@ -5,7 +5,8 @@ import Foundation
 
 /// Why the engine is waiting for the person or the world instead of syncing. Each has its way out (`SyncCore`).
 public enum SyncHold: Hashable, Sendable, Codable {
-    /// Signed out of iCloud. Lifted by a sign-in (`AccountChange.signedIn`).
+    /// Signed out of iCloud. Nothing leaves the device (brief 165): every item stays and can be changed, and what
+    /// changes waits and is counted. Lifted by a sign-in (`AccountChange.signedIn`).
     case noAccount
     /// iCloud's format (`Meta/meta`) is newer than this build reads. Lifted by a build that reads it.
     case needsUpdate
@@ -27,6 +28,11 @@ public enum SyncHold: Hashable, Sendable, Codable {
     /// Whether a fetched record is set aside unread while this hold lasts (and everything is fetched again when it
     /// lifts). Only a full iCloud still takes what arrives: reading is not what it refuses.
     var stopsFetching: Bool { !triedOnReturn }
+
+    /// Whether the device is still compared and what waits counted while this hold lasts (nothing is added to the
+    /// list): the holds iCloud's answer puts the brain in, and a sign-out (brief 165: what is changed while signed out
+    /// waits and is counted, as changes made offline are).
+    var countsWhileHeld: Bool { triedOnReturn || self == .noAccount }
 
     /// The holds iCloud's answer to a send puts the brain in (`storageFull`, `iCloudNotReady`): one path for both.
     /// The device is still compared and counted (nothing is added to the list), what arrives is still read, and the
@@ -50,7 +56,7 @@ public enum SyncHold: Hashable, Sendable, Codable {
     /// For the log and the status line.
     public var words: String {
         switch self {
-        case .noAccount: return "Not signed in to iCloud"
+        case .noAccount: return Self.noAccountWords
         case .needsUpdate: return "Update HITList to sync"
         case .zonePurged: return "HITList's data was removed from iCloud"
         case .storageFull: return "iCloud is full"
@@ -59,6 +65,9 @@ public enum SyncHold: Hashable, Sendable, Codable {
         case .failed(let words): return words
         }
     }
+
+    /// The sign-out's one sentence (brief 165), the same in the status line and the hold's group.
+    public static let noAccountWords = "Not signed in to iCloud: your tasks are on this device only until you sign in."
 }
 
 /// The words of a `failed` hold, which a person reads after "Sync stopped:" (brief 160, review 147 F10): one fixed
@@ -142,7 +151,8 @@ public struct SyncStatus: Equatable, Sendable {
 
 /// Why the engine is about to remove the person's items from the device (`SyncHost.willRemoveLocalData`).
 public enum SyncRemovalReason: String, Hashable, Sendable {
-    /// Signed out of iCloud: what was synced leaves the device, as it did under the mirror.
+    /// Signed out of iCloud. No longer asked for by the engine (brief 165: a sign-out removes nothing); kept for the
+    /// host's words and the backups' reasons written before.
     case signedOut
     /// Another account signed in: the previous account's synced items leave the device.
     case accountSwitched

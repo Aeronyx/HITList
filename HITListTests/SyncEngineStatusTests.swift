@@ -228,6 +228,14 @@ final class SyncEngineStatusTests: XCTestCase {
         XCTAssertFalse(waiting.isWarning)
     }
 
+    /// Brief 165: the sign-out's one sentence, the hold's own words and its group's alike.
+    func testASignOutSaysTheTasksAreOnThisDeviceOnlyUntilTheSignIn() {
+        let words = "Not signed in to iCloud: your tasks are on this device only until you sign in."
+        XCTAssertEqual(SyncHold.noAccount.words, words)
+        XCTAssertEqual(SyncEngineWords.holdNote(.noAccount), words)
+        XCTAssertEqual(SyncEngineWords.holdNote(.noAccount, waiting: 3), words)
+    }
+
     func testEveryHoldButtonSaysWhatItDoes() {
         XCTAssertTrue(SyncEngineWords.removeSubtitle.contains("backup"))
         XCTAssertFalse(SyncEngineWords.sendAgainSubtitle.isEmpty)

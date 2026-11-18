@@ -25,6 +25,8 @@ extension SyncCore {
     // MARK: Fetched
 
     func fetched(_ changed: [CloudRecord], removed: [SyncKey]) async {
+        // After a sign-in to the account it was signed out of: what iCloud holds, for the check at the fetch's end.
+        if rejoining { rejoinSeen.formUnion(changed.map(\.key)) }
         if let hold, hold.stopsFetching {
             log("\(changed.count + removed.count) fetched records let go unread while held (\(hold.words)); all will be fetched again")
             await markRefetch()
@@ -75,9 +77,16 @@ extension SyncCore {
         if !firstFetchDone {
             var write = LedgerWrite()
             write.facts[LedgerFact.firstFetchDone] = Data([1])
+            // After a sign-in to the account it was signed out of: what this fetch did not bring is not in iCloud.
+            let stale = checkRejoin(into: &write)
+            rejoinKept.formUnion(stale)
             do {
                 try await commit(write)
+                rejoinSeen = []
                 log("First whole fetch finished: what iCloud lacks can go now")
+                if !stale.isEmpty {
+                    log("\(stale.count) record\(stale.count == 1 ? "" : "s") this device had synced \(stale.count == 1 ? "is" : "are") not in iCloud after the sign-in (the first: \(stale[0])): what is here goes again, nothing is deleted")
+                }
             } catch {
                 await fail(SyncFailureWords.recordsNotSaved, error)
                 return
@@ -86,7 +95,10 @@ extension SyncCore {
         // Deletions kept across a forgotten memory that this whole fetch did not bring: iCloud does not hold the
         // item, so there is nothing to delete there. Not one whose record the transport still owes: iCloud holds that
         // one, and dropping the deletion would bring the item back once the record can be read (brief 160).
-        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) }.map(\.key)
+        // (Nor one the sign-in's check kept: `rejoinKept`.)
+        let kept = entries.values.filter {
+            $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) && !rejoinKept.contains($0.key)
+        }.map(\.key)
         if !kept.isEmpty {
             do {
                 let here = try await localRecords(Set(kept))
