@@ -204,10 +204,15 @@ extension SyncCore {
     func checkRejoin(into write: inout LedgerWrite) -> [SyncKey] {
         guard rejoining else { return [] }
         let stale = entries.values.filter { $0.base != nil && !rejoinSeen.contains($0.key) && !owedKeys.contains($0.key) }
-            .map(\.key).sorted()
-        write.remove += stale
+            .sorted { $0.key < $1.key }
+        // A deletion made here (signed out, or before) stays a deletion: kept with no base, so that when another
+        // device sends the item to iCloud again it settles against it (M3 with a deletion of its own) and its marker
+        // goes, instead of the item coming back (the `all` set, seeds 13 and 26).
+        write.upsert += stale.filter { $0.deletedHereAt != nil }
+            .map { LedgerEntry(key: $0.key, base: nil, system: nil, deletedHereAt: $0.deletedHereAt) }
+        write.remove += stale.filter { $0.deletedHereAt == nil }.map(\.key)
         write.facts.updateValue(nil, forKey: Self.rejoinFact)
-        return stale
+        return stale.map(\.key)
     }
 
     /// At a switch to another account every item leaves the device, those iCloud never held too, after a backup

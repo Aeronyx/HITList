@@ -280,6 +280,12 @@ final class SyncCoreSimulationTests: XCTestCase {
             KeptSeed(seed: 856, faults: "zone", keys: ["357DB7D9", "684B3ED0", "9D7DA1BE"], found: "limit: the same, labels, dates, a parent (I2, I9)"),
             KeptSeed(seed: 36, faults: "memory", keys: ["4C680305"], found: "limit: the same, a due date"),
             KeptSeed(seed: 259, faults: "memory", keys: ["8DA01D21"], found: "limit: the same, a Group"),
+            // Brief 165 (a sign-out keeps everything). Seed 6 is section 13's: a zone deleted while away, then the
+            // sign-out removed an unsent edit. 13 and 26: a deletion made signed out while the zone was lost came back
+            // when another device sent the item again, until the sign-in's check kept the deletion.
+            KeptSeed(seed: 6, faults: "all", keys: [], found: "brain: the sign-out removed an item with an unsent edit"),
+            KeptSeed(seed: 13, faults: "all", keys: ["A9DFB91B"], found: "brain: a deletion made signed out came back (I3)"),
+            KeptSeed(seed: 26, faults: "all", keys: ["C2DC5F8B"], found: "brain: the same"),
         ]
         return seeds
     }

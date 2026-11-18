@@ -79,6 +79,7 @@ extension SyncCore {
             write.facts[LedgerFact.firstFetchDone] = Data([1])
             // After a sign-in to the account it was signed out of: what this fetch did not bring is not in iCloud.
             let stale = checkRejoin(into: &write)
+            rejoinKept.formUnion(stale)
             do {
                 try await commit(write)
                 rejoinSeen = []
@@ -94,7 +95,10 @@ extension SyncCore {
         // Deletions kept across a forgotten memory that this whole fetch did not bring: iCloud does not hold the
         // item, so there is nothing to delete there. Not one whose record the transport still owes: iCloud holds that
         // one, and dropping the deletion would bring the item back once the record can be read (brief 160).
-        let kept = entries.values.filter { $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) }.map(\.key)
+        // (Nor one the sign-in's check kept: `rejoinKept`.)
+        let kept = entries.values.filter {
+            $0.base == nil && $0.deletedHereAt != nil && !owedKeys.contains($0.key) && !rejoinKept.contains($0.key)
+        }.map(\.key)
         if !kept.isEmpty {
             do {
                 let here = try await localRecords(Set(kept))

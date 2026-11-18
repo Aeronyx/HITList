@@ -59,6 +59,9 @@ public actor SyncCore: SyncTransportDelegate {
     var rejoining = false
     /// The keys that whole fetch brought so far (not kept: a launch fetches everything again).
     var rejoinSeen: Set<SyncKey> = []
+    /// Deletions of this device's own that the sign-in's whole fetch found iCloud lacking: kept, not dropped as other
+    /// deletions with no base are (`didFetch`), until iCloud's record arrives or the process ends.
+    var rejoinKept: Set<SyncKey> = []
 
     // MARK: Working state, not kept
 
