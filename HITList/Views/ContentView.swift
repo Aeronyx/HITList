@@ -78,6 +78,9 @@ struct ContentView: View {
             }
         }
         .environment(\.appShell, shell)
+        #if DEBUG && os(iOS)
+        .onAppear { ResponseProbe.startIfAsked() } // brief 164: `-responseProbe YES` times every tap's answer
+        #endif
         .popoutHost(popouts, style: PopoutHost.Style(shell))
         // The Duo's outer display: the island follows the system's vertical bar (brief 50).
         .placesIsland()

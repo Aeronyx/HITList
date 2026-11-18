@@ -43,8 +43,8 @@ private struct QuickAddEntry: ViewModifier {
                 }
             }
             #endif
-            .onAppear { popouts.listContext = context }
-            .onChange(of: context) { _, new in popouts.listContext = new }
+            .onAppear { popouts.setListContext(context) }
+            .onChange(of: context) { _, new in popouts.setListContext(new) }
     }
 
     #if os(macOS)
