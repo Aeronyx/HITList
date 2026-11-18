@@ -37,7 +37,13 @@ enum AccountSwitch {
             Cleanup(
                 clearDraft: { AccountSwitch.clearDraft() },
                 clearReminders: { await NotificationScheduler.clearForAccountChange() },
-                setAsideBackups: { LocalBackup.setAside(previousAccount: $0, currentAccount: $1) },
+                // Only the real store owns the backups folder (as the daily backup and the engine's switch already
+                // hold): a Debug run on a side store shares it, and its "switch" (Development's account id differs
+                // from Production's) set the real app's backups aside on the developer's own Mac (found in round 34).
+                setAsideBackups: {
+                    ModelContainerFactory.isMainStoreOpen
+                        ? LocalBackup.setAside(previousAccount: $0, currentAccount: $1) : LocalBackup.SetAside()
+                },
                 forgetCaches: {
                     CloudSyncMonitor.shared.forgetLastSync(reason: "iCloud account changed")
                     ProfileAvatarCache.shared.removeAll()
