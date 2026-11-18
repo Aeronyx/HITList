@@ -77,7 +77,7 @@ final class UpcomingWeekUITests: XCTestCase {
         XCTAssertEqual(a.frame.minY, b.frame.minY, accuracy: 1, "at one time")
         XCTAssertTrue(a.frame.maxX <= b.frame.minX + 1 || b.frame.maxX <= a.frame.minX + 1, "side by side")
         shot("week-two-at-nine")
-        let overdue = element("weekOverdue")
+        let overdue = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Overdue")).firstMatch
         XCTAssertTrue(overdue.waitForExistence(timeout: 5), "Overdue in the header")
         hit(overdue)
         XCTAssertTrue(app.staticTexts["Pay the plumber"].waitForExistence(timeout: 5), "the overdue task in the list's row")
