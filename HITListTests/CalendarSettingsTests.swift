@@ -20,12 +20,12 @@ final class CalendarSettingsTests: XCTestCase {
         XCTAssertEqual(CalendarSettingsPage.accessWord(.notDetermined), "Not asked yet")
         XCTAssertEqual(CalendarSettingsPage.accessWord(.fullAccess), "Allowed")
         XCTAssertEqual(CalendarSettingsPage.accessWord(.denied), "Not allowed")
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .denied)?.contains("isn't allowed") == true)
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .writeOnly)?.contains("not read them") == true,
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .denied)?.contains("Tap to allow") == true)
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .writeOnly)?.contains("can't read them") == true,
                       "Add to Calendar's write-only access: the row asks for full access")
         XCTAssertTrue(CalendarSettingsPage.settingsPath.hasSuffix("Calendars → HITList"))
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .denied)?.contains(CalendarSettingsPage.settingsPath) == true)
-        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .restricted)?.contains("restricted") == true)
+        XCTAssertEqual(CalendarSettingsPage.accessWord(.restricted), "Restricted")
+        XCTAssertTrue(CalendarSettingsPage.subtitle(for: .restricted)?.contains("Screen Time") == true)
         XCTAssertTrue(CalendarSettingsPage.switchFooter.contains("asks for access when you switch this on"))
     }
 

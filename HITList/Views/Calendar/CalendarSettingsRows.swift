@@ -42,6 +42,7 @@ struct CalendarSettingsPage: View {
                            iconTint: HITColor.dueTomorrow, value: Self.accessWord(events.access), accessory: .chevron) {
                     openSystemSettings()
                 }
+                .accessibilityHint(Self.settingsPath)
                 .accessibilityIdentifier("settings-calendar-open-settings")
             } else {
                 HITMenuRow("Access", systemImage: "hand.raised", value: Self.accessWord(events.access))
@@ -146,18 +147,18 @@ struct CalendarSettingsPage: View {
     /// Under Access when it is refused: what fixes it (the row opens the system's settings). Nil while it is fine.
     static func subtitle(for access: CalendarAccess) -> String? {
         switch access {
-        case .denied: "HITList isn't allowed to read your calendars. Tap to allow it in \(settingsPath)"
-        case .writeOnly: "HITList can add events but not read them. Tap to allow full access in \(settingsPath)"
-        case .restricted: "Calendar access is restricted on this device (Screen Time or a device profile)"
+        case .denied: "Tap to allow it in Settings"
+        case .writeOnly: "Adds events, can't read them. Tap to allow"
+        case .restricted: "Set by Screen Time or a device profile"
         case .notDetermined, .fullAccess: nil
         }
     }
 
-    /// Where the permission is, under the system's settings (the Access row opens them).
+    /// Where the permission is, under the system's settings (the Access row opens them; its VoiceOver hint says it).
     static let settingsPath = "Privacy & Security → Calendars → HITList"
 
     /// "Add tasks to"'s subtitle while it can't list the calendars.
-    static let addTargetOffNote = "Switch on events above to pick one"
+    static let addTargetOffNote = "Switch on events first"
 
     /// The menu's first choice: the device's default calendar, by name once it can be read.
     static func defaultChoice(_ calendar: CalendarInfo?) -> String {

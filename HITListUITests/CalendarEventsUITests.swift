@@ -203,7 +203,7 @@ final class CalendarEventsUITests: XCTestCase {
         app.launch()
         openSettings()
         XCTAssertTrue(element("settings-calendar-open-settings").waitForExistence(timeout: 5))
-        XCTAssertTrue(element("settings-calendar-open-settings").label.contains("isn't allowed"),
+        XCTAssertTrue(element("settings-calendar-open-settings").label.contains("Not allowed"),
                       element("settings-calendar-open-settings").label)
         XCTAssertFalse(element("settings-calendar-account-iCloud").exists)
         snapshot("7b Settings → Calendar, access refused")
@@ -232,7 +232,7 @@ final class CalendarEventsUITests: XCTestCase {
         let openSettingsRow = app.descendants(matching: .any)["settings-calendar-open-settings"].firstMatch
         XCTAssertTrue(openSettingsRow.waitForExistence(timeout: 5), "refused: a way to the system's settings")
         XCTAssertFalse(element("settings-calendar-account-iCloud").exists)
-        XCTAssertTrue(openSettingsRow.label.contains("isn't allowed"), openSettingsRow.label)
+        XCTAssertTrue(openSettingsRow.label.contains("Not allowed"), openSettingsRow.label)
         snapshot("10 Settings, calendar access refused")
     }
 
