@@ -30,7 +30,7 @@ struct UpcomingWeekView: View {
     @State private var showingOverdue = false
     @State private var gridWidth: CGFloat = 0
     @ScaledMetric(relativeTo: .caption2) private var hourHeight: CGFloat = 56
-    @ScaledMetric(relativeTo: .caption2) private var gutter: CGFloat = 56
+    @ScaledMetric(relativeTo: .caption2) private var gutter: CGFloat = 66
 
     init(entries: [Entry], now: Date, calendar: Calendar = .current, strip: WeekStrip, wholeWeek: Bool,
          todayRequest: Int = 0, phase: @escaping (UUID) -> CompletionPhase? = { _ in nil },
@@ -132,6 +132,8 @@ struct UpcomingWeekView: View {
                 Button("Today") { goToToday() }
                     .buttonStyle(.plain)
                     .font(HITType.control)
+                    .lineLimit(1)
+                    .fixedSize()
                     .foregroundStyle(isAtToday ? Theme.secondaryText : HITColor.text)
                     .padding(.horizontal, HITSpacing.s)
                     .frame(minHeight: 28)
@@ -352,7 +354,10 @@ private struct NowLine: View {
                     .minimumScaleFactor(0.6)
                     .padding(.horizontal, HITSpacing.xs)
                     .background(HITColor.dueOverdue, in: Capsule())
-                    .frame(width: gutter - 2, alignment: .trailing)
+                    .frame(width: gutter - HITSpacing.xs, alignment: .trailing)
+                    // Covers an hour's name the present time stands on (the two drew over each other near the hour).
+                    .padding(.vertical, HITSpacing.xs)
+                    .background(Theme.background)
                     .alignmentGuide(.top) { $0[VerticalAlignment.center] }
                     .offset(y: y)
                 Rectangle()

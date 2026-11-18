@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import SwiftData
 import HITListCore
 @testable import HITList
@@ -149,4 +150,65 @@ final class UpcomingWeekTests: XCTestCase {
         XCTAssertEqual(UpcomingLayout.tasks.title(showsBoard: true), "Board")
         XCTAssertEqual(UpcomingLayout.week.title(showsBoard: true), "Week")
     }
+
+    #if os(macOS)
+    /// The Mac's seven days, drawn offscreen in a window of the board's size with the demo week, two tasks at one time
+    /// and a crowded all-day band: for the hand-over picture (`upcoming-week-mac.png` in the test host's temporary
+    /// folder, and attached), and a check that the grid and the chips drew.
+    func testTheMacsSevenDaysDraw() throws {
+        let now = Date()
+        TaskActions.seedDemoDataIfRequested(in: context, arguments: ["-seedDemoData"], storeName: "HITList-161.store",
+                                            now: now)
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))!
+        for (title, priority) in [("Dentist forms", 3), ("Water filter", 1)] {
+            context.insert(TaskItem(title: title, priority: priority,
+                                    dueDate: calendar.date(byAdding: .hour, value: 9, to: tomorrow)!, hasDueTime: true))
+        }
+        for title in ["Pick up the parcel", "Call the bank", "Order printer ink"] {
+            context.insert(TaskItem(title: title, dueDate: tomorrow))
+        }
+        try context.save()
+
+        let size = CGSize(width: 1280, height: 760)
+        let strip = WeekStrip(weekStart: Preferences.weekStartWeekday())
+        let root = UpcomingWeekView(entries: try entries(), now: now, strip: strip, wholeWeek: true)
+            .frame(width: size.width, height: size.height)
+            .environment(PopoutController())
+            .modelContainer(container)
+            .font(HITType.body)
+            .preferredColorScheme(.dark)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: .darkAqua)
+        let host = NSHostingView(rootView: root)
+        host.frame = NSRect(origin: .zero, size: size)
+        window.contentView = host
+        defer { window.close() }
+        let deadline = Date().addingTimeInterval(1.0)
+        while Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.02)) }
+        host.layoutSubtreeIfNeeded()
+
+        let rep = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let png = try XCTUnwrap(rep.representation(using: .png, properties: [:]))
+        let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("upcoming-week-mac.png")
+        try png.write(to: url)
+        print("UPCOMING_WEEK_PNG \(url.path)")
+        let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+        attachment.name = "upcoming-week-mac"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        let background = rep.colorAt(x: 2, y: rep.pixelsHigh - 2)
+        var differing = 0
+        for y in stride(from: rep.pixelsHigh / 3, to: rep.pixelsHigh, by: 6) {
+            for x in stride(from: rep.pixelsWide / 8, to: rep.pixelsWide, by: 6) where rep.colorAt(x: x, y: y) != background {
+                differing += 1
+            }
+        }
+        XCTAssertGreaterThan(differing, 200, "the grid and its chips drew")
+    }
+    #endif
 }

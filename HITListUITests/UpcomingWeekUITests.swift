@@ -57,21 +57,22 @@ final class UpcomingWeekUITests: XCTestCase {
         }
         openUpcoming()
         XCTAssertTrue(element("upcomingWeek").waitForExistence(timeout: 5))
-        let more = element("weekBandMore")
-        XCTAssertTrue(more.waitForExistence(timeout: 5), "the band's \"N more\"")
+        let more = bandMore
+        if !more.waitForExistence(timeout: 5) { shot("week-no-more") }
+        XCTAssertTrue(more.exists, "the band's \"N more\"")
         shot("week-band-closed")
         hit(more)
         pause()
-        XCTAssertFalse(element("weekBandMore").exists, "the band opened")
+        XCTAssertFalse(bandMore.exists, "the band opened")
         shot("week-band-open")
-        hit(element("weekBandToggle"))
+        hit(app.buttons["Show fewer all-day tasks"].firstMatch)
         pause()
-        XCTAssertTrue(element("weekBandMore").waitForExistence(timeout: 5), "and closed again")
+        XCTAssertTrue(bandMore.waitForExistence(timeout: 5), "and closed again")
         // Two tasks at 9 AM tomorrow, side by side.
         let a = chip("Dentist forms"), b = chip("Water filter")
         XCTAssertTrue(a.waitForExistence(timeout: 5) && b.exists)
         #if os(iOS)
-        if !a.isHittable { app.swipeDown() }
+        for _ in 0..<3 where !a.isHittable { app.swipeDown() }
         #endif
         XCTAssertEqual(a.frame.minY, b.frame.minY, accuracy: 1, "at one time")
         XCTAssertTrue(a.frame.maxX <= b.frame.minX + 1 || b.frame.maxX <= a.frame.minX + 1, "side by side")
@@ -145,7 +146,9 @@ final class UpcomingWeekUITests: XCTestCase {
     }
 
     private func addTask(_ line: String) {
-        hit(app.buttons["quickAddButton"].firstMatch)
+        let plus = app.buttons["quickAddButton"].firstMatch
+        XCTAssertTrue(plus.waitForExistence(timeout: 10), "the +")
+        hit(plus)
         let title = element("quickAddTitle")
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         app.typeText(line + " ")
@@ -176,6 +179,11 @@ final class UpcomingWeekUITests: XCTestCase {
         #else
         element.click()
         #endif
+    }
+
+    /// "N more" under a day's all-day chips.
+    private var bandMore: XCUIElement {
+        app.buttons.matching(NSPredicate(format: "label ENDSWITH %@", " more")).firstMatch
     }
 
     private func element(_ id: String) -> XCUIElement { app.descendants(matching: .any)[id].firstMatch }
