@@ -8,3 +8,5 @@ xcuserdata/
 *.pkg
 .claude/worktrees/
 crashreports/
+# This Mac's own build settings, included by Config/HITList.xcconfig (brief 166).
+Config/Local.xcconfig

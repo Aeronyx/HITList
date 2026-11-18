@@ -1,0 +1,13 @@
+// The app's build settings that must not be in the public repository (brief 166).
+//
+// HIT_FEEDBACK_ADDRESS: where Send Beta Feedback writes. Empty here, so CI and anyone else's clone build an app whose
+// feedback card offers TestFlight's own feedback and no address. On the release Mac the untracked, git-ignored
+// Config/Local.xcconfig beside this file sets it, in one line:
+//
+//     HIT_FEEDBACK_ADDRESS = you@example.com
+//
+// The app reads it from its Info.plist (HITFeedbackAddress). scripts/release.sh stops before archiving when it is
+// empty.
+HIT_FEEDBACK_ADDRESS =
+
+#include? "Local.xcconfig"

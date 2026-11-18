@@ -45,6 +45,12 @@ targets:
       - HITListShare/ShareStore.swift
     scheme:
       testTargets: [HITListTests]
+    # Settings kept out of the public repository (brief 166): the tracked file sets them empty and includes the
+    # untracked Config/Local.xcconfig where this Mac's values live. Nothing below sets HIT_FEEDBACK_ADDRESS, so the
+    # file's value is the one the Info.plist reads.
+    configFiles:
+      Debug: Config/HITList.xcconfig
+      Release: Config/HITList.xcconfig
     dependencies:
       - package: HITListCore
       # The widgets (brief 74): HITList.app/PlugIns/HITListWidgets.appex (Contents/PlugIns on the Mac).
@@ -116,6 +122,9 @@ targets:
         # Debug only (brief 81, WidgetDebug): the side store a build made with HITLIST_WIDGET_SUFFIX=<name> opens when the
         # system launches it for a widget's tap, as its extension reads that store's snapshot. Release ignores it.
         HITListWidgetSuffix: $(HITLIST_WIDGET_SUFFIX)
+        # Where Send Beta Feedback writes (BetaFeedback.swift), from Config/HITList.xcconfig: empty in a clone without
+        # Config/Local.xcconfig, and then the feedback card offers TestFlight's own feedback only.
+        HITFeedbackAddress: $(HIT_FEEDBACK_ADDRESS)
         # ProMotion iPhones may run animations above 60 Hz (the sync bolt's strike, brief 54); without this key
         # Core Animation caps them at 60 on iPhone.
         CADisableMinimumFrameDurationOnPhone: true
