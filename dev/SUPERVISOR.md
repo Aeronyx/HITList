@@ -124,6 +124,13 @@ How George works with you:
   feedback address; `scripts/release.sh` reads all three there and stops without them) and are written nowhere
   in the repository (round 33: it is public); the key's contents never, anywhere. `~/.config/hitlist/api.env` holds an API key that must never be printed or pasted (the
   $200 promotional credit behind it expires 2026-11-05 and is not used any more).
+- **The repository is public: nothing that identifies a person goes into a tracked file or a commit message**
+  (George, 2026-11-18): no e-mail address, surname, home folder (`~/…`, never `/Users/<name>`), device id (write
+  "its id from `xcrun devicectl list devices`"), tester's name, App Store Connect id, or a real task's title. The
+  feedback address and the App Store Connect key's ids live in the untracked `Config/Local.xcconfig`, which
+  `scripts/release.sh` needs: **a new checkout cannot release until that file is copied into it**. What stays on
+  purpose: the bundle, App Group and container identifiers, the team id, the first name. The history still holds
+  the old strings until George decides (a rewrite, or a private repository).
 - HITList's own sync engine: **a store syncs on it only when it was moved** (from 0.9.14: every build may run it,
   `SyncEngineSwitch.isAvailable`; the store's own preference decides, only the move writes it, and the group that
   moves a store is hidden behind seven taps; nothing moves by itself until the release George says moves
@@ -136,7 +143,11 @@ How George works with you:
   (`scripts/release.sh` prints the three steps), never from whatever Development holds, and the transport's probe
   is never run between the import and a deploy (it writes a field of its own into Development). **The way back
   has an order**: the first device back sends, every other downloads a fresh copy, and no build from before
-  0.9.14 is installed on a moved device. **George is told ahead of anything that could wipe, hide or fail to carry
+  0.9.15 is installed on a moved device (0.9.14 first held the switch and was not released). **The move made by
+  the app itself is built and off** (`SyncEngineSwitch.movesByItself`, round 33): it is flipped only on George's
+  word, after his own week on the engine and the rehearsal of each rule on two devices (`dev/SYNC-ENGINE.md`
+  section 14, stage 6). **On the engine a sign-out removes nothing** (round 33); only a sign-in to a different
+  account does, after a backup. **George is told ahead of anything that could wipe, hide or fail to carry
   over a friend's data**, so they can export first (his word, 2026-11-16). **The engine never reads absence as a deletion**: a deletion is known only from the store's own note of
   it (`SyncDeletionLog`, taken at `willSave`), and an item that is merely not on a device comes back from iCloud.
   Never add a rule, a repair or a "tidy up" that deletes in iCloud what no person deleted, and never a batch delete
@@ -398,6 +409,24 @@ does not notify of its own change. Do not spend another run on it here: it needs
 **Driving a menu in my own Mac app**: a click that opens a menu leaves the window looking inactive in a
 single-window capture (the menu is another window); arrow keys sent before the menu is open move the list's
 selection instead. Open it, capture once to see the inactive title bar, then send the keys.
+
+Lessons from round 33 (seven agents at once in the two hours before a usage limit reset; 0.9.15):
+**Seven agents on one Mac finish, but their own proof thins out**: builds were slow, a Flipboard UI test ran past
+ten minutes on two agents' simulators, two agents' Debug Mac apps opened no window (a third's did), and three of
+them stopped UI runs to make the clock. Their hosted suites were whole; **the UI suite on the merged tree is the
+supervisor's, and it is where the round's regressions show**. **Read the usage before and during**
+(`get_usage`): 9% of a week carried seven Opus agents for 75 minutes and the supervisor, with extra usage switched
+on, so running past the limit would have been billed; keep your own steps few while they run. **"Commit each item
+the moment it is whole"** in the shared block meant every agent could have been stopped at any minute with nothing
+lost. **Merge an agent as it reports**, the one that edits `dev/` first; the generated project file is the only
+conflict, and `xcodegen generate` settles it. **An agent told to find identifying strings found two the
+supervisor had not thought of** (the App Store Connect key's ids in the release script): a brief that says "if you
+find a credential, stop and put it first" earns its line. **George's phone can be installed on and launched without
+his help, but not driven**: XCUITest and `xctrace` need Settings → Developer → Enable UI Automation on the phone,
+his to switch on; ask for it in the message that asks for the phone. **A slow app measured on a side store with
+iCloud off is not the app he has**: what runs only with the real store and the mirror (reminders after each save,
+the export, the comparison) was in none of the numbers; say so, and measure it next. **Do not edit a compiled
+file while a suite builds**: notes and documents first, `WhatsNew.swift` and its pin after.
 
 Lessons from round 32 (fourteen agents with the Agent tool; the engine made ready, the whole app reviewed):
 **A rehearsal with the real second device found what three reviews, a simulation of thousands of histories and an
@@ -916,7 +945,42 @@ first launch (the screens review would move it); the repository is public and ho
 Feedback and in `dev/` (his to keep or change); the 72 merged session worktrees (still unanswered, not asked
 again).
 
-## 8. Where things stand (2026-11-17, early: round 32 on master, 0.9.14 prepared for George to release)
+Round 33 (2026-11-18). George's words: "definitely keep tasks on the device after sign-out if possible, and remove
+any identifying information from the repository"; of the move, "I'd even rather the update just automatically move
+their tasks after we've confirmed the new engine is working. The less technical stuff my friends have to deal with,
+the better"; "The tagging options in the 'Add task' popout should be a horizontally scrolling bar, not one that
+wraps" (this reverses round 22's wrapping row; the row now fades at an edge instead of cutting a chip); "The
+Upcoming page should have a Task-based layout (the current layout) and also a new Week view"; external testers now
+use the app and each build takes a while to reach them, so "this next one" must be "incredibly solid". My own, told
+to him: the version is 0.9.15 with 0.9.14 folded in; the Week layout is a choice and the list stays the default;
+tips lost their `#` and `@` lessons for shorter words; the App Store Connect key's ids left the repository with the
+address; a store set aside is kept thirty days. Left for him: the history (rewrite or private); the first name in
+`dev/`; Enable UI Automation on his phone so its slowness can be measured.
+
+## 8. Where things stand (2026-11-18: round 33 on master, 0.9.15 prepared for George to release)
+
+**2026-11-18, afternoon: round 33 on master for 0.9.15 (Fable 5.2 supervisor; seven Opus 5.5 agents with the Agent
+tool, briefs 161 to 167)** (`dev/briefs/ROUND-33.md`). 0.9.14 was never released; George had deployed the engine's
+Production schema (checked: the file's 61 fields, nothing missing). His message is quoted in section 7.
+
+**In 0.9.15**: everything 0.9.14 held; Upcoming's Week layout (a choice; the list stays the default); quick add's
+chips on one scrolling line; shorter tips that hold their shape; the Calendar settings page rebuilt and other pages'
+words shortened; one measured fix for the iPhone's tab switches; on the engine a sign-out keeps the tasks; the move
+made by the app itself, built and **off**; no identifying strings in the files.
+
+**What he does**: `scripts/release.sh --version 0.9.15 --quick` (it needs `Config/Local.xcconfig`, which is in
+this checkout and untracked); reinstall HITList from TestFlight on his phone (agent 164 left a Debug build on it);
+move the Mac and at once the iPhone (section 14, stage 5); a week. Then the rehearsal of stage 6 and his word
+before `movesByItself` is flipped.
+
+**Open with him**: the history's author lines and nine commits' content still hold his name and address (a
+rewrite and force-push, or a private repository: his to choose); the first name in `dev/`; **his phone's slowness
+is not explained** (taps are recognised at once on a simulator and the drawing is what takes time; what the real
+store and the mirror add was not measured: he switches on Settings → Developer → Enable UI Automation and it can
+be); the daily backups' dates from round 32 (not answered); the 72 earlier worktrees (not asked again; this
+round's seven are removed). The next brief number is 168.
+
+## 8-32. Round 32's state (2026-11-17, early: 0.9.14 prepared, never released; kept for the record)
 
 **2026-11-17, early: round 32 on master for 0.9.14 (Fable 5.2 supervisor; fourteen Opus 5.5 agents with the Agent
 tool, briefs 147 to 160; no sessions)** (`dev/briefs/ROUND-32.md`). George that night: "Please work freely and

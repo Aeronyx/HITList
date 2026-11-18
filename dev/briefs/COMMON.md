@@ -822,6 +822,30 @@ holds (you are an agent; nobody answers a question; your final message is your r
 - **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
   told of every one.
 
+## Round 33 record (2026-11-18; agents 161 to 167 merged for 0.9.15): what a session must know now
+
+- **The repository is public and holds nothing that identifies a person**: write no e-mail address, surname, home
+  folder (`~/…`), device id, tester's name or real task title into a tracked file or a commit message. The feedback
+  address is `BetaFeedback.address` (nil in a build made without the untracked `Config/Local.xcconfig`; the card
+  then offers TestFlight's own feedback); the App Store Connect key's ids are in that file too.
+- **Upcoming has two layouts** (`upcomingLayout` in `AppGroup.defaults`, default the list or board): the Week layout
+  is `Views/Upcoming/UpcomingWeekView.swift` over `UpcomingWeekModel`, which takes each day from `UpcomingSchedule`;
+  a hosted test holds its days equal to the list's. The present-time line is the only thing that ticks.
+- **Quick add's chips are one row that scrolls sideways** (`QuickAddChipRow`), never wrapping; the card's height
+  does not change with its chips; an edge fades only where more waits.
+- **Tips** (`HITTipStyle`, `HITTips`): one width per platform, laid out once; a title of at most four words and one
+  sentence; never over a popout; gone once their subject is used; contrast held by a test for every theme.
+- **`PopoutController` writes observable state only when it changes** (`PopoutQuietTests`): a tab switch with
+  nothing open must write nothing. `ResponseProbe` (Debug, `-responseProbe YES`) and `PhoneResponseUITests`
+  (`HITLIST_PERF=1`) measure a tap's answer.
+- **Settings' words were shortened** (the Calendar page rebuilt round "Show calendar events" and an Access row):
+  keep titles to three or four words and footers to a sentence.
+- **On the engine a sign-out removes nothing** (`SyncCore+Holds`: `signOut`, `rejoin`, `checkRejoin`; invariant
+  I11); reminders stay; the banner and Account say so. A sign-in to another account is the switch, unchanged.
+- **`SyncEngineAutoMove` exists and is off** (`SyncEngineSwitch.movesByItself`, pinned false by a test): nobody
+  flips it. A Debug side store with `-syncEngineAutoMove YES` rehearses it.
+- **A store set aside is kept thirty days** (`ModelContainerFactory.trashKeepsFor`).
+
 ## Round 32 (2026-11-16, night; briefs 147–155, Opus 5.5 agents started by the supervisor with the Agent tool)
 
 George, 2026-11-16: "Please work freely and complete the sync engine. The app is largely feature complete, or as far

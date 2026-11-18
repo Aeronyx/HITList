@@ -438,7 +438,7 @@ person or the world can lift:
 
 | Hold | When | What the engine does |
 |---|---|---|
-| `noAccount` | Signed out of iCloud | Nothing is sent or fetched. Parity with the mirror: what was synced leaves the device at sign-out, after a backup is written; it returns at sign-in. A deletion not yet sent is kept and goes at the next sign-in to the same account (round 32) |
+| `noAccount` | Signed out of iCloud | Nothing is sent or fetched, and **nothing leaves the device** (round 33, brief 165; George, 2026-11-18: "definitely keep tasks on the device after sign-out if possible"). Every item stays and can be changed; the ledger keeps its bases, the account it was signed out of and the deletions not sent; the device is still compared and what changes waits and is counted, as offline, with nothing listed to send. No backup is needed, since nothing is removed. Words: "Not signed in to iCloud: your tasks are on this device only until you sign in." |
 | `needsUpdate` | iCloud's format is newer | Nothing is sent or fetched |
 | `zonePurged` | The person removed HITList's data in iCloud's settings | Nothing is deleted here by itself. The person is asked: remove here too, or keep and send again |
 | `storageFull` | iCloud is full | What is waiting stays waiting; tried again on return to the app |
@@ -447,14 +447,21 @@ person or the world can lift:
 | `failed` | The store or the ledger could not be read or written | Tried again at the next start; the words are one fixed sentence per failure (`SyncFailureWords`) and the error itself is in the sync log only. Also when the ledger's file could not be opened now (no permission, a full disk): no engine runs, the file is left as it is, and deletions made in that launch are not taken down, so those items come back |
 
 A zone lost by reset of encrypted data, or deleted in testing: the ledger is forgotten and everything here is sent
-again. **An account switched** from one the device is signed in to, in one order (round 32, brief 160; the mirror's
-`AccountSwitch` and the brain used to race): the brain's backup; the previous account's backups set aside by that
-backup; every item removed, those iCloud never held too (they would otherwise travel into the next account's
-iCloud); the memory forgotten; the new account joined and fetched; `AccountSwitch` does the rest and leaves the
-backups alone. A sign-out keeps what iCloud never held, and the ledger keeps the account it was signed out of: a
-later sign-in to another account is a switch for the backups, and what the sign-out left stays. The engine's
-backup folders are keyed by the engine's container's account ids, so folders set aside under the mirror stay where
-they are.
+again. **A sign-in to the account it was signed out of** (round 33, brief 165) carries on with the memory: the hold
+lifts, nothing is sent before a whole fetch (the transport forgot its bookmark, T12, and a fresh bookmark never says
+the zone was lost meanwhile), then what changed here and in iCloud settles three ways (M7 to M9). At the end of that
+fetch a base whose record it did not bring is forgotten: the item goes up again as new (M2), never deleted here, and
+a deletion made here is kept with no base, so the item settles against it if another device sends it again. A
+launch in between asks for every record again. **An account switched** (a sign-in to another account, whether from
+one signed in or after a sign-out), in one order (round 32, brief 160; the mirror's `AccountSwitch` and the brain
+used to race): the brain's backup, which holds everything on the device including what changed while signed out;
+the previous account's backups set aside by it; every item removed, those iCloud never held too (they would
+otherwise travel into the next account's iCloud); the memory forgotten; the new account joined and fetched;
+`AccountSwitch` does the rest and leaves the backups alone. A device that never signed in keeps its items and they
+join the first account. On the engine a sign-out no longer clears the reminders of the tasks that stay
+(`CloudSyncMonitor`), and the banner and Settings → Account say the tasks stay on this device. The engine's backup
+folders are keyed by the engine's container's account ids, so folders set aside under the mirror stay where they
+are.
 
 There is no hold for "many items gone": the engine never infers a deletion (section 4), so a store that reads
 empty is not a question for the person. It sends nothing and everything comes back.
@@ -511,8 +518,15 @@ guessing; Check iCloud… stays as the person's own audit.
 - **Check iCloud… on the engine** (`SyncEngineAudit`): a sync, then every record of the zone read afresh by a
   second road (one zone-changes fetch with no token, nothing shared with the engine's bookmark) and compared with
   the device field by field. It repairs nothing; the sync log names each record that differs, by key and field.
-- The engine's container's Production schema is deployed before the release that lets a store move (section 3).
+- The engine's container's Production schema is deployed before the release that lets a store move (section 3):
+  George deployed it on 2026-11-18, and Production holds exactly the schema file's 61 fields (checked that day).
   The tasks' container needs nothing for the engine, ever.
+- **A store set aside is kept thirty days whatever came after it** (`ModelContainerFactory.trashKeepsFor`, round 33;
+  brief 167's finding: two later Reset local cache runs used to delete it the same afternoon, and after a move
+  that took a fresh copy it may be the only place a device's unsynced changes are). Beyond thirty days the newest
+  two stay. A waiting move that asked for a fresh copy and is taken back no longer sets the store aside.
+- **The move made by the app itself** (`SyncEngineAutoMove`, round 33, brief 167) is built and switched off
+  (`SyncEngineSwitch.movesByItself`): section 14, stage 6.
 
 ## 12. Decisions that are George's
 
@@ -522,16 +536,19 @@ guessing; Check iCloud… stays as the person's own audit.
    on the App Store, only to share with friends"). Fields are stored as the mirror stores them (protected by the
    account, readable in the CloudKit Console for support). Encrypting titles, notes and names later is one format
    version and a re-send.
-2. **Sign-out removes what was synced from the device** (as the mirror does), after a backup; it returns at
-   sign-in. Built that way. **Open, for the release that moves everyone**: iCloud switched off for HITList alone
-   may be announced as a sign-out, and the supervisor's recommendation is to keep the tasks on the device at a
-   sign-out and remove them only when a different account signs in.
+2. **A sign-out keeps everything on the device: decided, 2026-11-18** ("definitely keep tasks on the device after
+   sign-out if possible"; built by brief 165, section 10). Nothing leaves at a sign-out; a sign-in to the same
+   account carries on; a sign-in to another account removes everything after a backup. The mirror is Apple's and
+   still removes its copy at a sign-out, so a friend on the earlier sync sees an empty list until they sign in.
 3. **A purge in iCloud's settings asks** instead of deleting the device's copy (Apple's guidance is to delete).
-4. **When devices move**: his first (0.9.14, the hidden switch), then friends, in a release that moves each device
-   at its first launch. **He is told ahead of anything that could wipe, hide or fail to carry over a friend's
+4. **When devices move**: his first (the hidden switch; 0.9.14 was prepared and not released, so 0.9.15 carries
+   it), then friends, **moved by the app itself** (George, 2026-11-18: "I'd even rather the update just
+   automatically move their tasks after we've confirmed the new engine is working. The less technical stuff my
+   friends have to deal with, the better"): built in round 33 and switched off until his week has confirmed the
+   engine and each rule has been rehearsed on two devices (section 14, stage 6). **He is told ahead of anything that could wipe, hide or fail to carry over a friend's
    data, so they can export first** (his word, 2026-11-16).
 
-## 13. Open, as round 32 left it
+## 13. Open, as round 33 left it
 
 **Closed in round 32** (each with its test or its run; `dev/briefs/ROUND-32.md`): a fetched record that cannot be
 read (16c), an expired change token (16e), the ledger moved aside for any error (brief 149); the simulation's
@@ -560,21 +577,25 @@ owners, and items iCloud never held travelling into another account.
   sub-task under a deleted task left to its own marker): not before the first live week, for the reasons brief 150
   gave (`switchTo` guards an account switch whose backup failed and cannot become "merge afresh"; the sub-task
   rewrite would show sub-tasks loose for a moment, and for good when a child's marker never comes).
-- **A zone deleted while a device is offline, then that device's sign-out**, removes an item its ledger calls
-  synced that iCloud no longer holds, with an edit not yet sent: only the backup has it (the simulation's `all`
-  set, seed 6; the engine before round 32 fails the same way; `all` mixes every fault and is not one of the eight
-  sets the exit line names). The smallest fix: at a sign-out keep the items whose last save was never followed by
-  a fetch. It goes with the sign-out decision below.
+- **Closed in round 33** (brief 165): a zone deleted while a device is offline, then that device's sign-out, no
+  longer loses an unsent edit, because nothing leaves at a sign-out (`all` seed 6 passes and is a kept seed;
+  `testAZoneDeletedWhileAwayThenASignOutLosesNoUnsentEdit`); and the sign-out decision itself (section 12).
+- **The `all` fault set fails in about a quarter of its histories, before and after round 33** (it mixes every
+  fault and is not one of the sets an exit line names): a purge nobody answers followed by account switches on
+  every device leaves items only in the backups (seed 4); a deletion made during a purge hold is forgotten by the
+  purge's answer (seed 101). **A purge question still open is replaced by a sign-out**: the sign-in then sends
+  everything again without asking (as "keep and send again" would; nothing is deleted).
+- **The engine's status line while signed out** is the mirror's short "Not signed in to iCloud"; the hold's own
+  sentence shows in Settings.
 - **Records owed** (brief 149's "brain gap"): a fetch that left records owed is still not counted as whole from
   its first telling, and the owed words show from the second fetch.
 - **The status line shows iCloud's own words** for passing trouble that has lasted a while
   (`SyncStatus.lastError`), raw. Holds have plain words; this does not yet.
-- **A sign-out** (section 12, decision 2): whether iCloud switched off for HITList alone is announced as a
-  sign-out is not known (no session may sign a device out), and if it is, the tasks leave the device until
-  sign-in. To decide before everyone moves.
 - **A device reinstalled or new comes up on the mirror** with stale data until it is moved (section 11): fine while
-  only George's devices move; before everyone moves, either the release moves every device at launch (stage 6) or a
-  mirror launch looks once for the engine's zone and says so.
+  only George's devices move. Stage 6's rules R2 and R3 answer it (a mirror launch looks once for the engine's
+  zone; a store with nothing of its own takes the engine's copy), built and off.
+- **The hand move to the engine does not check that the device is signed in** (brief 167's finding 7): a
+  signed-out device can move and then holds `noAccount`. Nothing is lost.
 - **"Delete all data from iCloud"** (`AccountCopy.deleteAll`) speaks of one entry in iCloud's storage settings;
   with two containers there may be two. To be read off a device once the engine's container holds data.
 - **Deletions made while the engine cannot run** (the ledger's file could not be opened; a stint on the mirror)
@@ -602,18 +623,19 @@ relaunch (section 6a). Item 6 (one contract suite on both clouds) and item 7 (th
 and deliberately after the first live week (section 13). Exit met: 1,000 histories of every fault set with no
 failure that is not a written, tested limit; no open finding that can lose a person's change.
 
-**Stage 3. George's decisions. Done**: plain fields (section 12). The sign-out's behaviour stays as built for his
-own week and is to be decided before everyone moves.
+**Stage 3. George's decisions. Done**: plain fields, and a sign-out keeps everything on the device (section 12;
+built in round 33).
 
 **Stage 4. The move, rehearsed. Done in round 32** (section 9, item 5): two real devices, the mirror to the engine
 and back, a copy of his own tasks from each device's backup, every comparison by the audit and not by eye.
 
-**Stage 5. Live for George only: ready.** 0.9.14 lets a store be moved. In order:
+**Stage 5. Live for George only: ready.** 0.9.15 lets a store be moved (0.9.14, which first did, was prepared and
+not released). In order:
 
-1. The engine's container's Production schema: its Development side holds exactly `dev/cloudkit/sync-engine.ckdb`
-   since 2026-11-16; George deploys it (CloudKit Console → `iCloud.com.trammells.hitlist.sync` → Development →
-   Deploy Schema Changes…). `scripts/release.sh` refuses to upload until Production holds it.
-2. He releases 0.9.14 and installs it on the Mac and the iPhone.
+1. The engine's container's Production schema: **deployed by George on 2026-11-18** (Production holds the 61
+   fields of `dev/cloudkit/sync-engine.ckdb`, nothing missing and nothing more; `scripts/release.sh` checks it
+   again at each release).
+2. He releases 0.9.15 and installs it on the Mac and the iPhone.
 3. With the bolt filled on both: Settings → iCloud (iPhone: iCloud & data), seven taps on the row that reads
    "Production · TestFlight build …", then the "Sync engine" group at the foot of the page → Move to the new sync.
    The Mac first (it relaunches), then the iPhone at once (it asks to be reopened), changing nothing in between.
@@ -623,12 +645,64 @@ Exit: a week with no hold he did not cause, no change stranded, the bolt true, a
 and the device the same on both. The way back, if it is ever wanted: Move back on the Mac ("First device"), then
 on the iPhone ("Another device already moved back").
 
-**Stage 6. Everyone.** A release that moves each device at its first launch after updating, after a backup, with
-one screen that says so. **Before it, George is told what a friend should do first** (export: Settings → iCloud &
-data → Export JSON…) **and what could go wrong for them**: a friend whose two devices update days apart has, in
-between, one device on each sync; what they change on the device still to move meets the other's copy without a
-base (section 11). Nothing is deleted by the move itself. The way back is kept for the releases that follow.
-Exit: every friend's devices moved; two weeks without a sync report.
+**Stage 6. Everyone, moved by the app itself: built and switched off** (round 33, brief 167; `SyncEngineAutoMove`,
+off while `SyncEngineSwitch.movesByItself` is false, pinned by
+`testGeorgesWeekComesFirst_movesByItselfIsFalse`; with it false a build decides every launch exactly as before,
+`testOff_aLaunchDecidesExactlyAsToday`). The move is the hand move's own steps (`SyncEngine.move`), decided by a
+pure function taken afresh each time the mirror's marks change. No timer. Each rule has a test named after it
+(`SyncEngineAutoMoveTests`).
+
+- **R1 When.** Only on a launch on the mirror, and only when all of these hold: the mirror runs on the store's own
+  file (never the in-memory fallback, never with iCloud off); signed in; no move waiting, no Debug argument, no
+  store reset waiting; never moved by itself before and never moved back by hand (a move back writes a "stay" key:
+  it is the person's word); not tried yet this launch; **the mirror's bolt is filled** (the condition the hand
+  move's warning reads). Then, in order: a backup that succeeded (a failed one stops the move), the rows that share
+  an `id` merged, the preference written. It takes effect at the next launch on every platform; the Mac does not
+  relaunch itself either (a relaunch nobody asked for, mid-typing, is a fault). A move that fails says so in the
+  sync log and is tried at a later launch: at most one try per launch.
+- **R2 Another device moved.** A mirror launch looks once for the engine's zone, in the engine's container only
+  (one call, no record read); never while signed out, off, or on the engine. The decision waits for the look,
+  because the look chooses between a merge and the engine's copy. Zone found: the device moves as soon as R1
+  allows, and until then the status line reads "Waiting to join the new sync: HITList moves this device once it's
+  up to date." A look that fails counts as unknown and leads to an ordinary merge. Older builds cannot look, so
+  the moved device's status page says its other devices need the update.
+- **R3 A store with nothing of its own takes the engine's copy.** A device installed fresh after the account moved
+  comes up on the mirror and downloads the tasks' container's zone as it was at the move: stale items, and
+  everything deleted since. Merged, those would come back on every device. So `freshSince` is written when the
+  store's file is not there yet (only by builds that move by themselves); "nothing of its own" means no row of
+  any model has `updatedAt` after it (untouched seeds and an untouched profile excepted; the mirror's download
+  keeps the other devices' times and does not count). That, with the zone found, takes a fresh copy: the store is
+  set aside at the next launch (never deleted by the move) and the engine downloads into a new one. When it
+  cannot be known (a store from an older build, any change here, clocks that disagree, a failed look): the
+  ordinary merge, where items may come back and nothing is lost. A save after such a move and before the reopen
+  checks again, and a change of the device's own turns the fresh copy back into a merge. Meanwhile the person sees
+  the mirror's copy and one line: "Moving to the new sync: HITList finishes the next time it opens, and brings
+  your tasks down from iCloud."
+- **R4 Words.** One line, nothing to tap: "Moving to the new sync: HITList finishes the next time it opens. Nothing
+  to do." The hidden group stays as the way back; a move back, or Cancel the move, is never undone by the app.
+- **Rehearsal hook**: a Debug side store launched with `-syncEngineAutoMove YES` behaves as if the constant were
+  true. The real store and released builds never do.
+
+**Before the constant is flipped**: George's week (stage 5) has met its exit; a decision on whether a Mac left open
+for weeks should be told to reopen; the rehearsal on iCloud's Development side with Debug builds on side stores,
+the Mac and George's iPhone, on his word (both on the mirror on side store `r167`, seeded from the newest backup;
+the Mac relaunched with `-syncEngineAutoMove YES`: "Looked for the new sync's zone: not there", then once the bolt
+fills "Moved to the new sync by itself, after a backup", reopened, `-syncEngineCheck YES` exact; the phone the
+same: "found, another device has moved", the waiting line, the move with a merge, both exact; a backup made to
+fail: one log line per launch and no loop; the phone's side store reset so its file is new: a fresh copy, the
+engine's items only, nothing deleted since the move comes back; the same with one task completed before the
+reopen: a merge instead; a move back, then a relaunch: no move).
+
+**What George tells friends before that release** (his word, 2026-11-16: told ahead of anything that could wipe,
+hide or fail to carry over a friend's data): update every device the same day; export first on each (Settings →
+iCloud & data → Export JSON…); change nothing on a device that has not updated yet. What can go wrong, most likely
+first: (1) two devices that update days apart: edits made on both keep the copy changed last, whole, and deletions
+made on either side come back; nothing is lost, and an export on the later device holds its version. (2) A device
+whose mirror bolt never fills never moves and is left on the earlier sync alone; nothing is lost; the way out is
+the hidden group's Move anyway. (3) A new device takes the engine's copy while a third device on an old build
+still edits the mirror: those edits reach the others only when that device updates. (4) A deletion made on a
+fresh device before it takes the engine's copy comes back. Nothing is deleted by the move itself. The way back is
+kept for the releases that follow. Exit: every friend's devices moved; two weeks without a sync report.
 
 **Stage 7. The mirror retires.** Removed: the mirror's configuration, the instruments built to guess what it knows
 (`CloudSyncMonitor`'s reading of its events, the gates, the comparison of every record, the watchdog), Check

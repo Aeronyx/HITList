@@ -5,17 +5,80 @@ until the version has a section here, then stamps the heading with the build num
 per release. A second build of one version (0.9.0 had builds 20 and 21) is released with `scripts/release.sh --quick`
 and needs a section headed `## X.Y.Z (N)`, which the script stamps with the date.
 
-## 0.9.14
+## 0.9.15
 
-0.9.13 was released on 2026-11-16. George that night: "Please work freely and complete the sync engine. The app is
+0.9.14 was prepared on 2026-11-17 and not released: George wanted the release to come at a time of his choosing, and
+wrote on the 18th with what he had seen meanwhile. "Several external testers are now also using HITList on 0.9.13,
+and as it takes a while to release a new build for them, I want to ensure this next one is incredibly solid … some of
+the pages are not very user-friendly (such as the Calendar page) and some of the tooltips are really hard to read …
+The mobile app is also a bit slow to respond now … The Upcoming page should have a Task-based layout (the current
+layout) and also a new Week view … The tagging options in the 'Add task' popout should be a horizontally scrolling
+bar, not one that wraps … definitely keep tasks on the device after sign-out if possible, and remove any identifying
+information from the repository." And of the new sync: "I'd even rather the update just automatically move their
+tasks after we've confirmed the new engine is working." So this is 0.9.14 and the round after it together
+(`dev/briefs/ROUND-33.md`, `ROUND-32.md`): seven Opus agents in one afternoon, then the supervisor's merge.
+
+**Nothing in this release moves, deletes or rewrites anyone's tasks.** Every device goes on syncing exactly as
+before. The move to HITList's own sync is still only for a device where it is switched on by hand, in a group that
+stays hidden; the move the app will one day make by itself is built and switched off.
+
+New in Upcoming:
+
+- **A Week layout**: the week's tasks on a calendar. Tasks with a date and no time sit in a band under the day's
+  name (two rows, then "N more" opens it); tasks with a time sit at their hour; a line marks the present time. An
+  iPhone shows three days and moves a day at a swipe; an iPad and a Mac show the week. A tap opens the task, its
+  ring completes it (with Undo), and a red Overdue at the top lists what is overdue. Choose it from the new Layout
+  button at the top of Upcoming; the list (the board on a Mac) stays the default, and the choice is kept on each
+  device.
+
+Quick add and tips:
+
+- **Quick add's options stay on one line** that scrolls sideways, so the card keeps its height; a chip that changes
+  scrolls into view, and the row fades softly at an edge where more waits.
+- **Tips are shorter and hold their shape**: one width, a title of a few words and one sentence. A tip no longer
+  appears over quick add or a task's card, and goes away for good once you use what it points at.
+
+Settings:
+
+- **The Calendar page reads at a glance**: one switch ("Show calendar events"), an Access row that always says
+  where the permission stands and, when it was refused, is the one tap that fixes it, the calendars to show, Google
+  Calendar as one row, Add to Calendar last.
+- Shorter titles and footers on General ("App icon badge"), Reminders, Extras, iCloud & data and Claude.
+- Opening Settings → Appearance no longer works out every theme swatch's companion afresh each time it draws.
+
+Quicker on iPhone:
+
+- Switching tabs does less: the app no longer redraws for popouts that are not open (measured on a simulator, a
+  Debug build: a third less work on the main thread per switch). Taps were found to be recognised at once; the time
+  goes into drawing the screen that answers. What George's own phone does with his real data and iCloud on could
+  not be measured this round (its UI automation is switched off) and is the next thing to measure.
+
+The sync engine (switched on only where it is moved to):
+
+- **Signing out of iCloud keeps your tasks on the device.** They can be read and changed, and sync again at sign-in;
+  reminders stay too. Signing in to a different account still removes them, after a backup. (On the earlier sync
+  Apple's mirror removes its copy at a sign-out, as before, and brings it back at sign-in.)
+- **The move made by the app itself is built and switched off** (`dev/SYNC-ENGINE.md` section 14, stage 6): a
+  device moves once it is up to date, after a backup; a device that finds another has moved follows; a freshly
+  installed device takes the engine's copy instead of merging a stale one. It is switched on only after George's
+  own week on the engine and a rehearsal of each rule on two devices.
+- A store set aside (Reset local cache, a move that takes a fresh copy) is kept for thirty days whatever comes
+  after it. Cancel the move after choosing "Another device already moved back" no longer sets the store aside.
+
+The repository:
+
+- No e-mail address, surname, home folder, device id or App Store Connect key id is in its files any more. The
+  address Send Beta Feedback writes to is a build setting from an untracked file (`Config/Local.xcconfig`), and
+  `scripts/release.sh` stops without it; a build made without one offers TestFlight's own feedback.
+
+From the round before (0.9.14, never released). 0.9.13 was released on 2026-11-16. George that night: "Please work freely and complete the sync engine. The app is
 largely feature complete, or as far as I wanted it to get for an initial release; let's shift into review and
 hardening mode so we can prepare for a real launch, but I also won't feel comfortable launching until we have at
 least a few days of experience with the new sync system to confirm its legitimacy". Six reviews of the whole app
 by Opus agents, their findings fixed, and the engine made ready for his own devices (`dev/briefs/ROUND-32.md`).
 
-**Nothing in this release moves, deletes or rewrites anyone's tasks.** Every device goes on syncing exactly as
-before. HITList's own sync engine can now be switched on for one device at a time, from a group in Settings → iCloud
-that stays hidden until it is revealed; it is for George's devices first.
+HITList's own sync engine can now be switched on for one device at a time, from a group in Settings → iCloud that
+stays hidden until it is revealed; it is for George's devices first.
 
 Safer:
 

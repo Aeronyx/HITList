@@ -5,7 +5,7 @@ of each round; delegated sessions never edit it (their rows conflicted at every 
 release, is in `CHANGELOG.md`; how each round ran is in `dev/briefs/COMMON.md`; George's standing decisions are in
 `dev/SUPERVISOR.md` §7. Rewritten 2026-11-10: the file had grown a row per brief (history is in git before that date).
 
-## Now: 0.9.14, the engine for George's own devices, and hardening for a launch (round 32, 2026-11-16 to 17)
+## Now: 0.9.15, the engine for George's own devices, and a build fit for strangers (rounds 32 and 33, 2026-11-16 to 18)
 
 George: "Please work freely and complete the sync engine … let's shift into review and hardening mode so we can
 prepare for a real launch, but I also won't feel comfortable launching until we have at least a few days of
@@ -15,11 +15,15 @@ experience with the new sync system" (`dev/briefs/ROUND-32.md`). The engine's ro
 |---|---|---|
 | 1 | On real devices | done, round 31 |
 | 2 | Close what can lose or hide a change | done, round 32 (and one nobody had listed: Apple's engine did not catch up after a relaunch); the contract suite and the two simplifications wait for the first live week |
-| 3 | His decisions | plain fields decided; the sign-out to decide before everyone moves |
+| 3 | His decisions | done: plain fields; a sign-out keeps the tasks on the device (built, round 33) |
 | 4 | The move rehearsed, Mac and phone, with a copy of his own tasks | done, round 32 |
-| 5 | Live for George only, a week | ready with 0.9.14: he deploys the engine's schema, releases, moves the Mac and then the iPhone |
-| 6 | Everyone | a release; he is told first what a friend should do (export) and what could go wrong |
+| 5 | Live for George only, a week | ready with 0.9.15 (0.9.14 was not released): the schema is deployed (2026-11-18); he releases, moves the Mac and then the iPhone |
+| 6 | Everyone, moved by the app itself | built and switched off in round 33 (`SyncEngineAutoMove`); flipped after his week, a rehearsal on two devices and his word; he is told first what a friend should do (export) and what could go wrong |
 | 7 | The mirror and its instruments removed | a release |
+
+Round 33 (`dev/briefs/ROUND-33.md`): Upcoming's Week layout, quick add's chips on one scrolling line, shorter tips,
+the Calendar settings page, a first measured fix for the iPhone's response (its cause on George's own phone is
+still to measure), and a repository with no identifying strings.
 
 Hardening: six reviews of the whole app (the engine on the real store, the transport, data safety, crashes, every
 screen, performance, privacy) and their findings fixed in 0.9.14. What was left on purpose is at the foot of
