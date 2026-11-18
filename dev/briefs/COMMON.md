@@ -822,6 +822,28 @@ holds (you are an agent; nobody answers a question; your final message is your r
 - **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
   told of every one.
 
+## Round 34 (2026-11-18, evening; briefs 168–171, Opus 5.5 agents; `ROUND-34.md` says why)
+
+0.9.15 was prepared and not released. George that evening: "I want to be very confident in the next build we
+release and I also want it to force everyone to move over to the new sync engine so we can settle this once and
+for all … Please take more time to prepare a build that is truly worthy of both the new sync engine and to be
+sent to a wider group of friends." The version is 0.9.16. Everything in the Round 33 block and record holds (you
+are an agent; nobody answers a question; your final message is your report; commit each item the moment it is
+whole; a simulator and a derived-data folder of your own; nobody but the brief that says so touches George's
+phone; nobody talks to iCloud); what is new:
+
+- **There is time.** No report is due at a minute. Finish what your brief asks, prove it to the end (a UI suite
+  runs to its last test, however long the Flipboard's takes), and then report. A thing half proven is reported as
+  half proven.
+- **The history was rewritten on 2026-11-18** to take a person's address, surname and home folder out of it:
+  commits are authored "Aeronyx" with a GitHub no-reply address, and this checkout's git identity is set so.
+  Write none of those strings anywhere (round 33's record says which), and never change the git identity.
+- **The supervisor keeps the display awake** for the Mac's window scripts and is himself working in
+  `HITList/Services/SyncEngine/SyncEngineAutoMove.swift`, `SyncEngine+Move.swift`, `SyncEngineSwitch.swift`,
+  `HITListApp.swift` and `LocalBackup.swift`: nobody else edits those.
+- **Read**: the two sections at the top of this file, this block, the Round 33 record, your brief, then what it
+  names.
+
 ## Round 33 record (2026-11-18; agents 161 to 167 merged for 0.9.15): what a session must know now
 
 - **The repository is public and holds nothing that identifies a person**: write no e-mail address, surname, home
