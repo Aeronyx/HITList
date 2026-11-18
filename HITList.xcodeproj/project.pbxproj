@@ -255,6 +255,7 @@
 		67A3A49DBD40647EC332A341 /* TitlePhrases.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4808108D4F686CFD67A7CF99 /* TitlePhrases.swift */; };
 		68789767B446111D7C449F59 /* FilterSyntaxHelpView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A78F328265E076A5456E48E /* FilterSyntaxHelpView.swift */; };
 		697EDF94F465DA33D599FA29 /* WidgetCompletionCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5D751C9825869AFD8CC37B2 /* WidgetCompletionCenter.swift */; };
+		69A27CD0F53ECC4D8DE39D1A /* MoveRedTeamTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C940F3F6298149CFE9BF674B /* MoveRedTeamTests.swift */; };
 		69A4CC554774E422023A8E61 /* WhatsNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40F12A1583CCBDCFBE2646D5 /* WhatsNew.swift */; };
 		6AC16F7029CEB259CC10F7B8 /* TimeZoneCatchUpTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0551198F241BEB4513B3A57F /* TimeZoneCatchUpTests.swift */; };
 		6AD6C337203BBABA22EF463A /* HingeCreakSettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1C38DCAE81CB9275B78FAE4 /* HingeCreakSettingsRow.swift */; };
@@ -1130,6 +1131,7 @@
 		C88742D1EA977BE9D0D07677 /* MacSettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsSection.swift; sourceTree = "<group>"; };
 		C88ABAD9BF71EABED1CAB264 /* FlipSwitchTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlipSwitchTile.swift; sourceTree = "<group>"; };
 		C91DD9F46FB90E53ECB075CB /* OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = OFL.txt; sourceTree = "<group>"; };
+		C940F3F6298149CFE9BF674B /* MoveRedTeamTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoveRedTeamTests.swift; sourceTree = "<group>"; };
 		C9D467C47E42E2AAB3B343D7 /* WindowFocusGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFocusGuard.swift; sourceTree = "<group>"; };
 		CA4AB7CE25CA0272828E9792 /* HITTipStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HITTipStyle.swift; sourceTree = "<group>"; };
 		CA9BD27B56EBA4D8307553E6 /* CompanionButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionButtonTests.swift; sourceTree = "<group>"; };
@@ -2182,6 +2184,7 @@
 			children = (
 				57D13FF3061ABA6048533466 /* CloudKitTransportTests.swift */,
 				33454169F554C36DC682669E /* CloudRecordCodecTests.swift */,
+				C940F3F6298149CFE9BF674B /* MoveRedTeamTests.swift */,
 				12E0708590628F21E41388B0 /* SwiftDataSyncStoreTests.swift */,
 				3C2843524A103EC139813BF2 /* SyncEngineAuditTests.swift */,
 				F683A06A93AF412B87A4DD0D /* SyncEngineAutoMoveTests.swift */,
@@ -3127,6 +3130,7 @@
 				D99264CADBBCB47980A5D5A4 /* MacSettingsTests.swift in Sources */,
 				48B5F9A8831978AD2FD46F36 /* MobileChromeTests.swift in Sources */,
 				2F18D2CB7947C9CC9B80F69C /* MotionPolishTests.swift in Sources */,
+				69A27CD0F53ECC4D8DE39D1A /* MoveRedTeamTests.swift in Sources */,
 				891C4984160F34CED4C30C48 /* NotificationActionTests.swift in Sources */,
 				5F6D11E0B403F84E16514362 /* NotificationPlanTests.swift in Sources */,
 				F22430DD397F1ADD49921A1D /* PickerTests.swift in Sources */,

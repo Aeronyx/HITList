@@ -58,6 +58,15 @@ enum LocalBackup {
         return "HITList before the new sync \(day).json"
     }
 
+    /// The copies kept before the new sync in `directory`, oldest first.
+    static func keptBeforeTheNewSync(in directory: URL) -> [URL] {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+        return names
+            .filter { $0.wholeMatch(of: #/HITList before the new sync \d{4}-\d{2}-\d{2}\.json/#) != nil }
+            .sorted()
+            .map { directory.appending(path: $0) }
+    }
+
     /// Copies `backup` to its kept name in the same folder, replacing one of the same day. A failure is logged and
     /// stops nothing: the backup itself was written.
     @discardableResult
@@ -198,7 +207,8 @@ enum LocalBackup {
         let fm = FileManager.default
         var result = SetAside()
         let previousFolder = setAsideFolder(for: previousAccount, in: root)
-        let leaving = backups(in: directory)
+        // The daily backups and the copy kept before the new sync: all of them are the previous account's tasks.
+        let leaving = backups(in: directory) + keptBeforeTheNewSync(in: directory)
         if !leaving.isEmpty {
             do {
                 try fm.createDirectory(at: previousFolder, withIntermediateDirectories: true)
@@ -213,7 +223,7 @@ enum LocalBackup {
             }
         }
         let currentFolder = setAsideFolder(for: currentAccount, in: root)
-        let returning = backups(in: currentFolder)
+        let returning = backups(in: currentFolder) + keptBeforeTheNewSync(in: currentFolder)
         if !returning.isEmpty { try? fm.createDirectory(at: directory, withIntermediateDirectories: true) }
         for file in returning {
             let target = directory.appending(path: file.lastPathComponent)

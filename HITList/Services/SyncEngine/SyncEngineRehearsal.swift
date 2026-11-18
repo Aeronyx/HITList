@@ -22,10 +22,9 @@ import HITListCore
 /// - `-rehearsalRollout go|pause|clear [-rehearsalRolloutMinBuild <n>]` (round 34, brief 170): writes, pauses or
 ///   deletes the word that lets every device move (`SyncEngineRollout`, `HLRollout/everyone` in the engine's
 ///   container's public database: Development for a Debug build). `go` writes `paused` 0 and `minBuild` as given
-///   (none: every build); `pause` writes `paused` 1 and keeps `minBuild`. Only an account holding the role
-///   `HLRolloutAdmin` may: anyone else gets a permission failure.
+///   (none: every build); `pause` writes `paused` 1 and keeps `minBuild`.
 /// - `-rehearsalRolloutAsk YES`: asks the question as a release build asks it (`CloudKitRollout`) and prints the
-///   answer, the sync log's line, and this account's user record name in this environment (where the role is given).
+///   answer, the sync log's line, and this account's user record name in this environment.
 @MainActor
 enum SyncEngineRehearsal {
     static func runIfAsked(container: ModelContainer, arguments: [String] = ProcessInfo.processInfo.arguments) {
@@ -162,9 +161,7 @@ enum SyncEngineRehearsal {
                 return "rollout: unknown word \(word) (go, pause or clear)"
             }
         } catch {
-            let permission = (error as? CKError)?.code == .permissionFailure
             return "rollout \(word) failed: \(SyncState.shortReason(for: error))"
-                + (permission ? " (this account lacks the role \(SyncEngineRollout.adminRole); -rehearsalRolloutAsk YES prints its user record)" : "")
         }
     }
 

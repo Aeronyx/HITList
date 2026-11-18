@@ -83,7 +83,7 @@ enum Deduplicator {
     /// `profileLog` is where the profile merge's line goes (the sync log; tests pass their own). `byName`: whether rows
     /// of one name are merged; the engine's answer by default (`mergesByName`).
     static func run(in context: ModelContext, profileLog: @escaping ProfileStore.Log = ProfileStore.syncLog,
-                    byName: Bool = mergesByName) throws -> DedupeReport {
+                    byName: Bool = mergesByName, mergesSharedIDs: Bool = cameBackFromTheEngine) throws -> DedupeReport {
         var report = DedupeReport()
         report.projects = try collapse(Project.self, in: context, byName: byName) { loser, winner in
             for task in loser.tasks ?? [] { task.project = winner }
@@ -98,8 +98,25 @@ enum Deduplicator {
         report.filters = try collapse(SavedFilter.self, in: context, byName: byName) { _, _ in }
         report.subtasks = try repairSubtasks(in: context)
         report.profiles = try ProfileStore(context: context, log: profileLog).mergeDuplicates()
+        // A store that came back from HITList's own sync by hand: what it received through the engine may also
+        // arrive from the mirror as another device's records, and the mirror would keep both (round 34, brief 171).
+        // Rows that share an `id` are one item there too.
+        if mergesSharedIDs { _ = try mergeSharedIDs(in: context) }
         if context.hasChanges { try context.save() }
         return report
+    }
+
+    /// Whether this store was moved back from HITList's own sync by hand (`SyncEngineAutoMove.stayKey`), on the mirror.
+    nonisolated static var cameBackFromTheEngine: Bool {
+        mergesByName && AppGroup.defaults.bool(forKey: SyncEngineAutoMove.stayKey(ModelContainerFactory.storeName))
+    }
+
+    /// A seed this device made and nobody changed: a name-based id (`SeedIdentity`) and `updatedAt` within a second
+    /// of `createdAt`. Such a row never wins a merge against a row a person may have changed, and never lends its
+    /// stamp: a fresh install seeds its defaults "now", and that stamp, carried onto the person's own older copy,
+    /// would beat every change made to it on another device since (round 34, brief 171's A8).
+    static func isUntouchedSeed(id: UUID, createdAt: Date, updatedAt: Date) -> Bool {
+        (id.uuid.6 >> 4) == 5 && abs(updatedAt.timeIntervalSince(createdAt)) < 1
     }
 
     /// Whether this launch merges Groups, labels and filters by name: on SwiftData's mirror only, never on HITList's own
@@ -201,13 +218,16 @@ enum Deduplicator {
         let ids: [UUID] = groups.keys.sorted { $0.uuidString < $1.uuidString }
         for id in ids {
             guard let group = groups[id], group.count > 1 else { continue }
-            var winner = group[0]
-            for row in group.dropFirst() {
+            // An untouched seed stands aside for a row a person may have changed (`isUntouchedSeed`).
+            let touched: [M] = group.filter { !isUntouchedSeed(id: $0.id, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
+            let pool: [M] = touched.isEmpty ? group : touched
+            var winner = pool[0]
+            for row in pool.dropFirst() {
                 let newer = row.updatedAt > winner.updatedAt
                 let older = row.updatedAt == winner.updatedAt && row.createdAt < winner.createdAt
                 if newer || older { winner = row }
             }
-            let newest: Date = group.map { $0.updatedAt }.max() ?? winner.updatedAt
+            let newest: Date = pool.map { $0.updatedAt }.max() ?? winner.updatedAt
             if winner.updatedAt != newest { winner.updatedAt = newest }
             for loser in group where loser.persistentModelID != winner.persistentModelID {
                 repoint(loser, winner)
@@ -283,7 +303,12 @@ enum Deduplicator {
     private static func merge<M: DeduplicatedModel>(_ group: [M], in context: ModelContext, removed: inout Int,
                                                     repoint: (_ loser: M, _ winner: M) -> Void) -> M {
         guard group.count > 1, let winner = group.min(by: precedes) else { return group[0] }
-        let newest = group.map(\.updatedAt).max()!
+        // The winner takes the newest stamp of the rows a person may have changed, never an untouched seed's.
+        let stamps: [Date] = group
+            .filter { $0.persistentModelID == winner.persistentModelID
+                || !isUntouchedSeed(id: $0.id, createdAt: $0.createdAt, updatedAt: $0.updatedAt) }
+            .map(\.updatedAt)
+        let newest = stamps.max() ?? winner.updatedAt
         if winner.updatedAt != newest { winner.updatedAt = newest }
         for loser in group where loser.persistentModelID != winner.persistentModelID {
             repoint(loser, winner)

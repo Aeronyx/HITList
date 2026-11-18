@@ -34,8 +34,7 @@ final class SyncEngineSchemaFileTests: XCTestCase {
             ("\"___createTime\"", "TIMESTAMP"), ("\"___createdBy\"", "REFERENCE"), ("\"___etag\"", "STRING"),
             ("\"___modTime\"", "TIMESTAMP"), ("\"___modifiedBy\"", "REFERENCE"), ("\"___recordID\"", "REFERENCE QUERYABLE"),
         ]
-        // The file's one role (round 34, brief 170): the only one that may create or write the rollout's word.
-        var out = "DEFINE SCHEMA\n\n    CREATE ROLE \(SyncEngineRollout.adminRole);\n"
+        var out = "DEFINE SCHEMA\n"
         let types = ([SyncSchema.metaType] + SyncSchema.types.map(\.name)).sorted()
         var rolloutWritten = false
         for type in types {
@@ -77,8 +76,8 @@ final class SyncEngineSchemaFileTests: XCTestCase {
     /// One type beside the engine's (round 34, brief 170): `HLRollout`, George's word that lets every device move
     /// (`SyncEngineRollout`). It lives in the same container's **public** database and is never synced, so it is not
     /// in `SyncSchema`: it is pinned here from `SyncEngineRollout`'s own names instead, grants included. Readable by
-    /// the world; created and written only by the custom role (no `_icloud` CREATE, no `_creator` WRITE: no tester can
-    /// make, change or delete it). It sits in name order among the engine's types, as an export lists them.
+    /// the world, with the grants every type of the file has. It sits in name order among the engine's types, as an
+    /// export lists them.
     static func rolloutBlock(system: [(String, String)]) -> String {
         let rows = system + [(SyncEngineRollout.minBuildField, "INT64"), (SyncEngineRollout.pausedField, "INT64")]
         let width = rows.map(\.0.count).max() ?? 0
@@ -86,7 +85,7 @@ final class SyncEngineSchemaFileTests: XCTestCase {
         for (name, kind) in rows {
             out += "        \(name.padding(toLength: width, withPad: " ", startingAt: 0)) \(kind),\n"
         }
-        out += "        GRANT READ TO \"_world\",\n        GRANT WRITE, CREATE, READ TO \(SyncEngineRollout.adminRole)\n    );\n"
+        out += "        GRANT WRITE TO \"_creator\",\n        GRANT CREATE TO \"_icloud\",\n        GRANT READ TO \"_world\"\n    );\n"
         return out
     }
 

@@ -1,7 +1,5 @@
 DEFINE SCHEMA
 
-    CREATE ROLE HLRolloutAdmin;
-
     RECORD TYPE HLMeta (
         "___createTime" TIMESTAMP,
         "___createdBy"  REFERENCE,
@@ -63,8 +61,9 @@ DEFINE SCHEMA
         "___recordID"   REFERENCE QUERYABLE,
         minBuild        INT64,
         paused          INT64,
-        GRANT READ TO "_world",
-        GRANT WRITE, CREATE, READ TO HLRolloutAdmin
+        GRANT WRITE TO "_creator",
+        GRANT CREATE TO "_icloud",
+        GRANT READ TO "_world"
     );
 
     RECORD TYPE HLSavedFilter (

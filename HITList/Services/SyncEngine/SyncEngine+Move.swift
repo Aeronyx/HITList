@@ -88,10 +88,9 @@ extension SyncEngine {
         //    word that this store stays on the mirror: the move made by the app itself never moves it again.
         SyncEngineSwitch.setPreference(engine, storeName: storeName, defaults: defaults)
         if engine == .mirror { defaults.set(true, forKey: SyncEngineAutoMove.stayKey(storeName)) }
-        // 3b. A move that takes a fresh copy: the store is set aside at that launch (as Reset local cache does,
-        //     never deleted), and the other engine downloads into a new one: the mirror its zone (every device but the
-        //     first to go back), or the engine its zone (a store with nothing of its own that found the engine's zone,
-        //     `SyncEngineAutoMove` R3).
+        // 3b. A move that takes a fresh copy (the hand move back, for every device but the first): the store is set
+        //     aside at that launch (as Reset local cache does, never deleted), and the mirror downloads its zone into
+        //     a new one. The move the app makes by itself never takes one: it always merges (round 34).
         if freshCopy {
             LocalCacheReset.request(storeName: storeName, defaults: defaults)
             moveLog.notice("move to \(engine.rawValue, privacy: .public): with a fresh copy; the store is set aside at the next launch")

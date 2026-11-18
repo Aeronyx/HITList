@@ -7,9 +7,12 @@ import CloudKit
 /// build reaches everyone and moves nobody until George says so, by one record every device can read:
 ///
 /// - **Where**: the **public** database of the engine's container (`SyncEngineSwitch.containerID`), its default zone,
-///   record type `HLRollout`, record name `everyone`. Its schema is in `dev/cloudkit/sync-engine.ckdb`: readable by
-///   the world, created and written only by the custom role `HLRolloutAdmin` (George, assigned in the CloudKit
-///   Console). No released code path writes it (`SyncEngineRolloutTests` greps for one).
+///   record type `HLRollout`, record name `everyone`. Its schema is in `dev/cloudkit/sync-engine.ckdb`, with the
+///   grants every type of the file has (the world reads; a signed-in account creates; the creator writes). Nobody
+///   but an app signed for this container can reach its public database at all, and no released code path writes
+///   the record (`SyncEngineRolloutTests` greps for one): George makes it in the CloudKit Console, and a Debug
+///   build's rehearsal hook makes it on iCloud's test side. (The first draft kept creation to a custom security
+///   role; that cost George two more steps in the Console for no one it could stop.)
 /// - **Fields**: `minBuild` (INT64, optional: only builds whose build number is at least this move; absent means every
 ///   build) and `paused` (INT64, optional: anything but 0 means wait).
 /// - **The answer**: the record there, this build allowed and not paused → `go`; paused → `paused`; no such record
@@ -35,8 +38,6 @@ enum SyncEngineRollout {
     static let recordName = "everyone"
     static let minBuildField = "minBuild"
     static let pausedField = "paused"
-    /// The custom security role that alone may create and write the record (`dev/cloudkit/sync-engine.ckdb`).
-    static let adminRole = "HLRolloutAdmin"
 
     static var recordID: CKRecord.ID { CKRecord.ID(recordName: recordName, zoneID: CKRecordZone.default().zoneID) }
 

@@ -137,12 +137,6 @@ enum SyncEngineSwitch {
                          arguments: ProcessInfo.processInfo.arguments, defaults: AppGroup.defaults)
         launchedByArgument = current != decide(storeName: storeName, isTesting: isTesting, isDebug: isDebugBuild,
                                                arguments: [], defaults: AppGroup.defaults)
-        // The move made by the app itself (R3): when it is on, a store whose file is not there yet is noted as fresh,
-        // so a later launch can tell that nothing in it is this device's own. Off: nothing is read or written.
-        if !isTesting, current == .mirror, SyncEngineAutoMove.isOn(storeName: storeName) {
-            let exists = ModelContainerFactory.groupStoreURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? true
-            SyncEngineAutoMove.noteFreshStore(store: storeName, fileExists: exists, isOn: true, defaults: AppGroup.defaults)
-        }
         return current
     }
 
