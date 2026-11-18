@@ -275,8 +275,14 @@ enum ModelContainerFactory {
         return true
     }
 
-    /// Moves the store at `store` and its sidecars into `<trash>/<UTC timestamp>/`, then deletes all but
-    /// the newest `keep` trashed copies. Returns the new folder, or nil when there was no store. A move
+    /// How long a copy set aside is kept whatever came after it (round 33, brief 167's finding): a copy may be the
+    /// only place a device's unsynced changes are (a move that took a fresh copy), and two later resets used to
+    /// delete it the same afternoon.
+    static let trashKeepsFor: TimeInterval = 30 * 86_400
+
+    /// Moves the store at `store` and its sidecars into `<trash>/<UTC timestamp>/`, then deletes the trashed
+    /// copies that are both beyond the newest `keep` and older than `trashKeepsFor` (by the time in their name; one
+    /// whose name cannot be read is kept). Returns the new folder, or nil when there was no store. A move
     /// that throws is rolled back, so the store is never left split from its WAL.
     @discardableResult
     static func trashStore(at store: URL, into trash: URL, keep: Int = 2, now: Date = .now) throws -> URL? {
@@ -312,7 +318,12 @@ enum ModelContainerFactory {
         // Timestamp names sort chronologically.
         let copies = try fm.contentsOfDirectory(at: trash, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        for old in copies.dropLast(keep) { try? fm.removeItem(at: old) }
+        for old in copies.dropLast(keep) {
+            // "2026-11-18T19-04-05Z" or "2026-11-18T19-04-05Z-2": the first twenty characters are the time.
+            guard let made = formatter.date(from: String(old.lastPathComponent.prefix(20))),
+                  now.timeIntervalSince(made) > trashKeepsFor else { continue }
+            try? fm.removeItem(at: old)
+        }
         return folder
     }
 }

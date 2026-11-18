@@ -53,7 +53,9 @@ final class StoreResetTests: XCTestCase {
         XCTAssertEqual(String(decoding: try Data(contentsOf: store), as: UTF8.self), "v2")
     }
 
-    func testTrashKeepsTheNewestTwoCopies() throws {
+    /// Round 33 (brief 167's finding): a copy set aside may be the only place a device's unsynced changes are, so it
+    /// is kept thirty days whatever came after it; beyond that, the newest two stay.
+    func testTrashKeepsACopyForThirtyDaysThenTheNewestTwo() throws {
         let dir = try tempDir()
         let trash = dir.appending(path: "Trash")
         var folders: [String] = []
@@ -62,9 +64,12 @@ final class StoreResetTests: XCTestCase {
             let folder = try XCTUnwrap(try ModelContainerFactory.trashStore(at: store, into: trash, now: t0.addingTimeInterval(Double(i) * 3600)))
             folders.append(folder.lastPathComponent)
         }
-        XCTAssertEqual(try trashFolders(trash), Array(folders.suffix(2)))
-        let newest = trash.appending(path: folders[3]).appending(path: "HITList.store")
-        XCTAssertEqual(String(decoding: try Data(contentsOf: newest), as: UTF8.self), "v3")
+        XCTAssertEqual(try trashFolders(trash), folders, "four resets in an afternoon delete nothing")
+        let later = t0.addingTimeInterval(40 * 86_400)
+        let fifth = try XCTUnwrap(try ModelContainerFactory.trashStore(at: try makeStore(in: dir, tag: "v4"), into: trash, now: later))
+        XCTAssertEqual(try trashFolders(trash), [folders[3], fifth.lastPathComponent], "forty days on: the newest two")
+        let newest = fifth.appending(path: "HITList.store")
+        XCTAssertEqual(String(decoding: try Data(contentsOf: newest), as: UTF8.self), "v4")
     }
 
     func testTwoResetsInTheSameSecondDoNotCollide() throws {

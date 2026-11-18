@@ -181,7 +181,10 @@ final class CloudSyncMonitor {
     /// `state`'s words, for the bolt's label and Settings (`SyncWords`): "Synced 3 min ago", "Last synced 3 min ago,
     /// checking…".
     func statusWords(now: Date = Date()) -> String {
-        SyncWords.status(state: state, waiting: isChecking, lastSynced: lastSyncedAt, now: now)
+        // The move made by the app itself (brief 167, off in 0.9.15: `shared` is nil): its one line while a device
+        // waits to join the new sync or to be reopened.
+        if !isOnEngine, let line = SyncEngineAutoMove.Runner.shared?.line { return line }
+        return SyncWords.status(state: state, waiting: isChecking, lastSynced: lastSyncedAt, now: now)
     }
 
     /// What the marks draw: the steadied state held to the session gate, once there is one.
