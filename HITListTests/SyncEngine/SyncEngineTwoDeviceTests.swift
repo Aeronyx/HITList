@@ -327,7 +327,9 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
 
     // MARK: - The account
 
-    func testASignOutRemovesWhatWasSyncedAfterABackupAndASignInBringsItBack() async throws {
+    /// Brief 165: a sign-out removes nothing. B keeps every item and changes one while signed out; A changes another
+    /// field meanwhile; at B's sign-in to the same account both changes are on both devices.
+    func testASignOutKeepsEverythingAndASignInCarriesOnWithWhatChangedOnBothSides() async throws {
         let a = await device("A"), b = await device("B")
         let made = try makeErrand(on: a)
         try await a.sync()
@@ -337,31 +339,61 @@ final class SyncEngineTwoDeviceTests: XCTestCase {
         await cloud.setAccount(nil, for: "B")
         await b.transport.noticeChanges()
         await b.engine.settle()
-        XCTAssertEqual(b.backups.reasons, [.signedOut], "a backup before anything left")
-        XCTAssertEqual(try b.tasks().count, 0, "what was synced left the device, as with the mirror")
+        XCTAssertEqual(b.backups.reasons, [], "nothing removed, no backup")
+        XCTAssertEqual(try b.tasks().count, 3, "every item stays on the device")
         let held = await b.status
         XCTAssertEqual(held.hold, .noAccount)
         XCTAssertEqual(b.board.status?.hold, .noAccount)
 
+        let onB = try XCTUnwrap(try b.task(made.id))
+        onB.title = "Buy oat milk"
+        onB.touch()
+        try b.save()
+        await b.engine.settle()
+        let waiting = await b.status
+        XCTAssertEqual(waiting.waiting, 1, "the change made signed out waits and is counted")
+        let onA = try XCTUnwrap(try a.task(made.id))
+        onA.notes = "From the corner shop"
+        onA.touch()
+        try a.save()
+        try await a.sync()
+
         await cloud.setAccount(FakeCloud.defaultAccount, for: "B")
         await b.transport.noticeChanges()
         try await b.sync()
-        XCTAssertNotNil(try b.task(made.id), "back at sign-in")
-        XCTAssertEqual(try b.tasks().count, 3)
+        try await b.sync()
+        try await a.sync()
+        for device in [a, b] {
+            let task = try XCTUnwrap(try device.task(made.id), device.name)
+            XCTAssertEqual(task.title, "Buy oat milk", device.name)
+            XCTAssertEqual(task.notes, "From the corner shop", device.name)
+            XCTAssertEqual(try device.tasks().count, 3, device.name)
+        }
+        let status = await b.status
+        XCTAssertTrue(status.isSynced, "\(status)")
     }
 
-    func testASignOutWhoseBackupFailsRemovesNothing() async throws {
+    /// A sign-out, then another account: the switch. The backup comes first and every item leaves after it; nothing
+    /// of the first account's reaches the second's iCloud.
+    func testASignInToAnotherAccountAfterASignOutBacksUpThenRemovesEverything() async throws {
         let a = await device("A"), b = await device("B")
         try makeErrand(on: a)
         try await a.sync()
         try await b.sync()
-        b.backups.fail = true
         await cloud.setAccount(nil, for: "B")
         await b.transport.noticeChanges()
         await b.engine.settle()
-        XCTAssertEqual(try b.tasks().count, 3, "no backup, nothing removed")
-        let status = await b.status
-        XCTAssertNotNil(status.lastError)
+        b.context.insert(TaskItem(title: "Made signed out"))
+        try b.save()
+        await b.engine.settle()
+
+        await cloud.setAccount("other", for: "B")
+        await b.transport.noticeChanges()
+        try await b.sync()
+        XCTAssertEqual(b.backups.reasons, [.accountSwitched], "the backup before anything left")
+        XCTAssertEqual(try b.tasks().count, 0, "every item of the first account left, the one made signed out too")
+        let other = await cloud.records(account: "other").filter { $0.key.type == "TaskItem" }
+        XCTAssertEqual(other.count, 0, "nothing of the first account reached the other")
     }
 
     // MARK: - Reset local cache
