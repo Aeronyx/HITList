@@ -144,8 +144,33 @@ enum ThemeCompanion {
         return layout
     }
 
+    /// `unitLayout`'s answers, once each: they depend on the character and the seat only, and the corner fit tests a
+    /// path per sprite pixel (round 33, brief 164: about 0.8 s of the main thread each time Settings → Appearance
+    /// drew its swatches, on a Debug simulator).
+    private static let unitLayouts = UnitLayoutCache()
+
+    private final class UnitLayoutCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var layouts: [String: Layout] = [:]
+        func value(_ key: String, _ make: () -> Layout) -> Layout {
+            lock.lock()
+            let hit = layouts[key]
+            lock.unlock()
+            if let hit { return hit }
+            let made = make()
+            lock.lock()
+            layouts[key] = made
+            lock.unlock()
+            return made
+        }
+    }
+
     /// The seat in sprite pixels on the swatch at its own size (`ThemeSwatch.size` across).
     static func unitLayout(for character: CompanionCharacter, seat: Seat) -> Layout {
+        unitLayouts.value("\(character.id)|\(String(describing: seat))") { makeUnitLayout(for: character, seat: seat) }
+    }
+
+    private static func makeUnitLayout(for character: CompanionCharacter, seat: Seat) -> Layout {
         let side = ThemeSwatch.size
         let posture = character.posture(.plus)
         let frame: String

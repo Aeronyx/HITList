@@ -77,6 +77,15 @@ enum AccountState: Equatable {
     /// "iCloud: Signed in".
     var title: String { "iCloud: \(label)" }
 
+    /// `detail`, on the engine that runs: on HITList's own sync a sign-out removes nothing from the device (round 33,
+    /// brief 165), so the words do not say the tasks went to wait in iCloud.
+    func detail(onEngine: Bool) -> String {
+        if onEngine, case .signedOut = self {
+            return "Your tasks stay on this device and sync again when you sign in (\(Self.signInPath))."
+        }
+        return detail
+    }
+
     /// What it means and, when something is wrong, what to do.
     var detail: String {
         switch self {
@@ -309,7 +318,7 @@ struct AccountStatusRow: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { tick in
             HITMenuRowLabel(Self.title(account: state, sync: sync ?? CloudSyncMonitor.shared.state, now: tick.date),
-                            subtitle: state.detail, systemImage: state.systemImage,
+                            subtitle: state.detail(onEngine: CloudSyncMonitor.shared.isOnEngine), systemImage: state.systemImage,
                             iconTint: state.isWarning ? HITColor.dueTomorrow : Theme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
