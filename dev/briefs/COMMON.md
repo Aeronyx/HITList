@@ -787,6 +787,41 @@ names its region. New facts:
 - Your report includes screenshots of every screen you changed, on both platforms where it exists, and names anything
   that looks alike or that you could not check (SUPERVISOR §4 step 8 applies to sessions too).
 
+## Round 33 (2026-11-18, 14:40 to 15:45 Eastern; briefs 161–167, seven Opus 5.5 agents at once; `ROUND-33.md` says why)
+
+0.9.14 is prepared and was not released; George has deployed the engine's Production schema. George, 2026-11-18:
+"Several external testers are now also using HITList on 0.9.13, and as it takes a while to release a new build for
+them, I want to ensure this next one is incredibly solid … I want to be really comfortable sending this out to
+people, but we're still not quite there." This round's version is 0.9.15. Everything in the Round 32 block below
+holds (you are an agent; nobody answers a question; your final message is your report); what is new:
+
+- **Read**: the two sections at the top of this file, this block, the Round 32 block and record, your brief, then
+  what your brief names. Not the older blocks.
+- **The clock** (`TZ=America/New_York date`): your report is due at **15:45**. At 15:30 stop starting things, run
+  your proof, write the report. **Commit each item the moment it is whole**: George's usage limit may stop every
+  agent without warning, and what is not committed is lost. Fewer things, all proven, beats many. If your brief
+  is larger than the hour, do its items in order and say which you did not reach.
+- **Seven agents share this Mac**: one derived-data folder each (`-derivedDataPath build.noindex/<brief number>`
+  inside your worktree), build only the platforms your proof names, a simulator of your own
+  (`xcrun simctl create "HITList-<brief number>" "iPhone 17"`, deleted at the end). Builds will be slow while
+  seven run: start your first build early and read code while it runs. Never `/Applications/HITList.app`, never
+  the real store, never a system dialog. **George's phone is agent 164's alone.**
+- **Nobody talks to iCloud**: every app you launch gets `HITLIST_STORE_SUFFIX=r<brief number>`,
+  `-disableCloudKit YES` and (Mac) `-ApplePersistenceIgnoreState YES`. Never the transport's probe.
+- **Not yours unless your brief says so**: `dev/`, `CHANGELOG.md`, `WhatsNew.swift`, `project.yml`, `scripts/`,
+  entitlements, the models and schema (no schema change), `Services/SyncEngine/`, core's `Sync/`. Each brief names
+  what the other agents own; stay out of it, and where your work needs a change there, write the diff in your notes
+  folder and say so.
+- **George judges a build by its pictures.** Dark themes only; no text within 12 pt of a card's or the screen's
+  edge, 8 pt beside a control, 6 pt between unlike things. Pictures go in your notes folder
+  (`…/side-session-notes/local_8995b93d-4779-400a-855f-77db7b4e0b1d/round-33/<brief number>/`) as PNG, named in
+  your report with one line each on what it shows. Take them with your own UI test (`XCTAttachment` kept, or
+  `TEST_RUNNER_HITLIST_SHOTS_DIR` as `SyncEngineStatusUITests` does) or `xcrun simctl io <UDID> screenshot`; the Mac
+  with `scripts/window-shot.sh`.
+- **Anything that could delete, hide or fail to carry over a tester's data** goes at the top of your report.
+- **Changes in behaviour a person will notice** are listed in your report, each in one line: George asked to be
+  told of every one.
+
 ## Round 32 (2026-11-16, night; briefs 147–155, Opus 5.5 agents started by the supervisor with the Agent tool)
 
 George, 2026-11-16: "Please work freely and complete the sync engine. The app is largely feature complete, or as far
