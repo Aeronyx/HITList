@@ -54,7 +54,7 @@ struct DelightSettingsSection: View {
                         .buttonStyle(HITButtonStyle(.destructive, size: .small))
                 }
             }
-            HITMenuRow("Choose your own…", systemImage: "folder", accessory: .none) { isImporting = true }
+            HITMenuRow("Choose your own sound…", systemImage: "folder", accessory: .none) { isImporting = true }
             Toggle(isOn: $haptics) { HITMenuRowLabel("Haptics", systemImage: "hand.tap") }
                 .toggleStyle(.hit)
                 .hitRowPadding()
@@ -106,7 +106,7 @@ struct DelightSettingsSection: View {
     static let completingFooter = "Your own sound can be up to 2 seconds long. Haptics play on a Force Touch trackpad."
     static let companionsSubtitle = "One for each theme, on the search field"
     #endif
-    static let companionsFooter = "A small creature keeps you company. Mostly it sits still, and it sleeps at night; Reduce Motion keeps it still."
+    static let companionsFooter = "Mostly it sits still, and it sleeps at night. Reduce Motion keeps it still."
     static let holidaySubtitle = "Snow, fireworks, hearts and more"
     static let rareSurprisesSubtitle = "Once in a long while, someone drops by"
     static let effectsFooter = "Reduce Motion turns off holiday touches and rare surprises."

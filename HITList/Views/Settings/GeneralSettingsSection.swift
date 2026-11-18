@@ -50,7 +50,7 @@ struct GeneralSettingsSection: View {
                 .accessibilityIdentifier("settings-week-start")
             })
             Toggle(isOn: $showBadge) {
-                HITMenuRowLabel("Show task count on the app icon", subtitle: "Overdue and today's open tasks.",
+                HITMenuRowLabel("App icon badge", subtitle: "Counts overdue and today's open tasks",
                                 systemImage: "app.badge")
             }
             .toggleStyle(.hit)

@@ -136,7 +136,7 @@ struct ClaudeSettingsSection: View {
         #if os(macOS)
         return "\(rest) A hidden task's subtasks are hidden with it. With Claude integration off, nothing on this Mac can reach your tasks."
         #else
-        return "\(rest) This applies to Copy for Claude here, and to Claude on a Mac when you set it there; Claude's iPhone app can't connect to HITList."
+        return "\(rest) Copy for Claude and Claude on a Mac follow this; Claude's iPhone app can't connect to HITList."
         #endif
     }
 
