@@ -44,6 +44,23 @@ The version is 0.9.15; 0.9.14's notes are folded into it, as 0.9.10's were into 
 - Checked George's deploy: the engine's container's Production schema holds exactly the schema file's 61 fields.
 - `dev/SYNC-ENGINE.md` sections 10 to 14 rewritten for the sign-out and stage 6.
 
+## What the merged tree's own run found (the supervisor, after the merges)
+
+- **The Week layout's hours**: agent 161 reported that its test's swipes "did not scroll the grid". A test of the
+  supervisor's (`testTheHoursScrollAndASidewaysSwipeMovesTheDays`: a drag, a flick and a sideways swipe by screen
+  coordinates) showed the grid does scroll, and that XCUITest's own `app.swipeDown()` begins above it on that
+  screen. The sideways swipe was all the same moved from a SwiftUI `DragGesture` on the view that holds the scroll
+  view to a UIKit pan that begins only for a sideways move (`SidewaysPan`), so nothing can take the hours'
+  scrolling on any iOS; the test holds both.
+- **Tasks at one time on an iPhone** were drawn as rings with no words, and three of them ran out of their column:
+  a chip narrower than 72 pt now drops its ring and keeps its words ("W…", "C…", "D…" at three abreast).
+- **An hour's name half under the present time**: the name is covered whole while the time stands within about a
+  third of an hour of it.
+- The picture test now brings nine o'clock into view with a finger in the grid, and the Overdue list has its
+  picture.
+- `SweepPolishUITests.testTheSummaryTimeIsOurTimeField` failed in the full run (a second simulator was typing at
+  the same time) and passed alone.
+
 ## Left open, on purpose or for want of proof
 
 - **The iPhone's slowness is not explained on George's phone.** What runs only with the real store and iCloud on
@@ -53,8 +70,8 @@ The version is 0.9.15; 0.9.14's notes are folded into it, as 0.9.10's were into 
   only the tab on show): keeping tabs alive is a structural change, not made.
 - The Flipboard never lets XCUITest see the app idle (164's finding 4, 162 saw the same): something animates
   without end there, likely the overdue light's `TimelineView`. Not established whether it is new.
-- 161: the Overdue list and "two tasks at one time" were proven by tests, not by a picture; quick add from an empty
-  hour, dragging a chip and calendar events in the Week layout are not built.
+- 161: quick add from an empty hour, dragging a chip and calendar events in the Week layout are not built; the
+  Mac's Week layout was seen only as a picture drawn offscreen by a hosted test.
 - 162: no Mac or iPad pictures of the tips (the agents' Debug Mac apps opened no window); one Mac hover text longer
   than 60 characters is listed in its report and unchanged.
 - 163: `AccessibilityAuditUITests.testSettingsPages` has two findings on rows it did not change, not shown to
@@ -68,4 +85,9 @@ The version is 0.9.15; 0.9.14's notes are folded into it, as 0.9.10's were into 
 
 ## Proof
 
-See the end of `dev/SUPERVISOR.md` section 8 for the counts on the merged tree.
+On the merged tree: core 1,092 tests, the Mac 2,330, the iPhone 2,291, no failures. The whole UI suite once (172
+tests: 109 passed, 62 on demand, the one above that passed alone), then `UpcomingWeekUITests` (now six) again on
+the final tree. Archive and export of both platforms pass every packaging check, and the exported apps carry the
+feedback address. CI green on the merge. The simulation: 1,000 histories of each of nine fault sets, no failure
+(agent 165's run). Not proven: anything on George's phone; the Mac's Week layout and the tips on a Mac or an iPad
+by eye; the automatic move against iCloud (it is off).

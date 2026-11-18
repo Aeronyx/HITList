@@ -44,7 +44,7 @@ How George works with you:
   `DEVELOPER_DIR=… xcodegen generate`; never hand-edit the xcodeproj. The `sources` lists are whitelists:
   a new file outside them does not compile. Run `xcodegen generate` after every merge that adds files.
 - Tests: `scripts/test.sh` (all three suites, about three minutes), or `scripts/test.sh core`,
-  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.14: core 1081 (the sync engine's brain, rules and simulation are most of the growth), Mac 2295, iOS 2258, and 163 UI tests (61 of them on demand or for the Duo simulator only)
+  `scripts/test.sh macos`, `scripts/test.sh ios`. Counts at 0.9.15: core 1092 (the sync engine's brain, rules and simulation are most of the growth), Mac 2330, iOS 2291, and 173 UI tests (62 of them on demand or for the Duo simulator only)
   (`scripts/test.sh ui`, 75 minutes, fifteen of them one Flipboard test whose long presses never report idle; run it on the merged tree, not only per branch; the Duo's own, `DuoColumnUITests`, `CompanionIslandUITests`, `DuoCardsUITests` and `ScreenInsetsUITests`' Browse check, run on an `iPhone Duo` simulator; `CardInsetsUITests` measures every card over a list on whatever it runs on). CI
   (`.github/workflows`) runs core + Mac on `macos-26`; its red runs are usually "no runner available"
   (GitHub's macOS capacity), which `gh run rerun <id>` fixes. The runner has Xcode 26.6 (Swift 6.3, the macOS 26
@@ -426,7 +426,18 @@ his help, but not driven**: XCUITest and `xctrace` need Settings → Developer �
 his to switch on; ask for it in the message that asks for the phone. **A slow app measured on a side store with
 iCloud off is not the app he has**: what runs only with the real store and the mirror (reminders after each save,
 the export, the comparison) was in none of the numbers; say so, and measure it next. **Do not edit a compiled
-file while a suite builds**: notes and documents first, `WhatsNew.swift` and its pin after.
+file while a suite builds**: notes and documents first, `WhatsNew.swift` and its pin after. **An agent's "my test
+could not scroll it" is a finding until someone has dragged the thing**: the Week layout's pictures showed the grid
+where it had opened, and it took the supervisor's own test (a drag, a flick and a swipe by screen coordinates) to
+learn that the grid scrolled and XCUITest's `app.swipeDown()` had begun above it. On the way the same pictures
+showed what no test asserted: three tasks at one time drawn as rings with no words and running out of their
+column, and an hour's name half under the present time. **Look at every picture an agent could not take.** Three
+XCUITest traps met that hour: an `accessibilityIdentifier` on a container lands on each of its parts, so "the
+first match" is the header; `app.swipeDown()` starts where XCUITest likes, so drag by `app.coordinate(…)`;
+`TEST_RUNNER_…` variables must be in `xcodebuild`'s environment, not after it as arguments (a whole suite ran
+without saving a picture). **Two simulators running UI tests at once share the Mac's keyboard**: a test that types
+Command-A failed in the full run and passed alone. The Flipboard's breathing light keeps XCUITest from ever seeing
+the app idle: `testFlipboardSwitchesStayOnTheBoardUnlessTheyOptIn` takes fifteen minutes, in round 32 too.
 
 Lessons from round 32 (fourteen agents with the Agent tool; the engine made ready, the whole app reviewed):
 **A rehearsal with the real second device found what three reviews, a simulation of thousands of histories and an
