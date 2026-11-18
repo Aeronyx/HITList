@@ -51,8 +51,10 @@ private struct PopoverTip: ViewModifier {
     func body(content: Content) -> some View {
         let popoutUp = popouts.map { !$0.state.showsAddButton } ?? false
         content
-            // The tip goes for good once its subject is used (Browse's glass, the board's Add task, the switch).
-            .simultaneousGesture(TapGesture().onEnded { tip?.invalidate(reason: .actionPerformed) })
+            // The tip goes for good once its subject is used: Browse's glass, the board's Add task. Not on a switch,
+            // whose card has its own long press and drag: its tip goes when it is closed or after it has shown once.
+            .simultaneousGesture(TapGesture().onEnded { tip?.invalidate(reason: .actionPerformed) },
+                                 isEnabled: tip.map { $0.kind == .browse || $0.kind == .boardAddTask } ?? false)
             .popoverTip(popoutUp ? nil : tip, arrowEdge: arrowEdge)
             .tipViewStyle(HITTipStyle())
             .tipBackground(Theme.elevated)
