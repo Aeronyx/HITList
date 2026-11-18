@@ -163,6 +163,7 @@ final class SyncEngineAutoMoveTests: XCTestCase {
                                       current: .mirror, backUp: { _ in throw CocoaError(.fileWriteNoPermission) }, relaunch: false)
         }
         failing.evaluate()
+        await failing.looking?.value
         await failing.moving?.value
         XCTAssertEqual(SyncEngineSwitch.nextEngine(storeName: store, defaults: defaults), .mirror, "no backup, no move")
         XCTAssertFalse(SyncEngineAutoMove.movedByItself(store: store, defaults: defaults))
@@ -170,7 +171,8 @@ final class SyncEngineAutoMoveTests: XCTestCase {
             try await SyncEngine.move(to: .own, container: container, storeName: self.store, defaults: self.defaults,
                                       current: .mirror, freshCopy: fresh, backUp: { _ in backups += 1; return nil }, relaunch: false)
         }
-        XCTAssertEqual(moving.evaluate(), .move(freshCopy: false))
+        XCTAssertEqual(moving.evaluate(), .wait(.zoneNotLooked), "the look is waited for")
+        await moving.looking?.value
         await moving.moving?.value
         XCTAssertEqual(backups, 1)
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<TaskItem>()), 1, "rows that shared an id merged")
@@ -195,6 +197,7 @@ final class SyncEngineAutoMoveTests: XCTestCase {
         // The next launch tries again.
         let second = runner { _ in tries += 1 }
         second.evaluate()
+        await second.looking?.value
         await second.moving?.value
         XCTAssertEqual(tries, 2)
         XCTAssertNil(defaults.string(forKey: SyncEngineAutoMove.failureKey(store)))
