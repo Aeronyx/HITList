@@ -4,17 +4,19 @@ import HITListCore
 import UIKit
 #endif
 
-/// Settings → Calendar (brief 136; the switch was in General from brief 77): a page on the iPhone and iPad, a section
-/// on the Mac's Settings page. Groups, top to bottom:
+/// Settings → Calendar (brief 136; the switch was in General from brief 77; brief 163 made it read in ten seconds): a
+/// page on the iPhone and iPad, a section on the Mac's Settings page. Groups, top to bottom:
 ///
-/// - **Calendar events**: the switch, what the permission says, and the system's settings when it was refused.
-///   Switching on asks for full access (the system's prompt, once); nothing asks before that.
-/// - **The calendars, by account** (iCloud, Gmail, Exchange, Subscribed Calendars, Birthdays…), each account a group
-///   of its own with its calendars, each with its colour and a tick while it shows; all show by default.
+/// - **Show calendar events**: the switch, and under it Access, the permission in one word ("Not asked yet",
+///   "Allowed", "Not allowed"…); refused, the Access row is the one tap to the system's settings. Switching on asks
+///   for full access (the system's prompt, once); nothing asks before that.
+/// - **The calendars, by account** (iCloud, Gmail, Exchange, Subscribed Calendars, Birthdays…), only while events
+///   show: each account a group of its own with its calendars, each with its colour and a tick while it shows; all
+///   show by default.
+/// - **Google Calendar**: one row, connected through the device's accounts, or the device's own path to add it. No
+///   button that leaves the app.
 /// - **Add to Calendar**: "Add tasks to", the calendar a task's Add to Calendar writes to (only calendars that take
 ///   changes; the device's default until one is picked), and a footer: the event is a copy.
-/// - **Google Calendar**: how it gets onto this device, in words, as a real path for the platform; or, once a Google
-///   account is among the calendars' accounts, that it is connected through the device. No button that leaves the app.
 struct CalendarSettingsPage: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
@@ -27,18 +29,23 @@ struct CalendarSettingsPage: View {
     static func drawnOn(_ events: CalendarEvents) -> Bool { events.isOn && !events.access.isRefused }
 
     var body: some View {
-        HITGroup {
+        HITGroup(footer: Self.switchFooter) {
             Toggle(isOn: Binding(get: { isOn }, set: { switchTo($0) })) {
-                HITMenuRowLabel("Calendar events", subtitle: Self.subtitle(for: events.access), systemImage: "calendar.badge.clock")
+                HITMenuRowLabel(Self.switchTitle, subtitle: Self.switchSubtitle, systemImage: "calendar.badge.clock")
             }
             .toggleStyle(.hit)
             .hitRowPadding()
             .accessibilityIdentifier("settings-calendar-events")
             if events.access.isRefused {
-                HITMenuRow("Open system settings", subtitle: Self.settingsPath, systemImage: "gearshape", accessory: .chevron) {
+                // Refused: the row is the one tap that fixes it.
+                HITMenuRow("Access", subtitle: Self.subtitle(for: events.access), systemImage: "hand.raised",
+                           iconTint: HITColor.dueTomorrow, value: Self.accessWord(events.access), accessory: .chevron) {
                     openSystemSettings()
                 }
                 .accessibilityIdentifier("settings-calendar-open-settings")
+            } else {
+                HITMenuRow("Access", systemImage: "hand.raised", value: Self.accessWord(events.access))
+                    .accessibilityIdentifier("settings-calendar-access")
             }
         }
         .onAppear {
@@ -52,8 +59,11 @@ struct CalendarSettingsPage: View {
         }
         .onChange(of: events.access) { _, _ in isOn = Self.drawnOn(events) }
         if events.isShowing {
-            ForEach(Self.accounts(events.calendars), id: \.name) { account in
-                HITGroup(account.name.isEmpty ? "Other" : account.name) {
+            let accounts = Self.accounts(events.calendars)
+            ForEach(accounts, id: \.name) { account in
+                // The last account's group says what a tap does, once.
+                HITGroup(account.name.isEmpty ? "Other" : account.name,
+                         footer: account.name == accounts.last?.name ? Self.calendarsFooter : nil) {
                     ForEach(account.calendars) { calendar in
                         CalendarChoiceRow(calendar: calendar, isShown: !events.hidden.contains(calendar.id)) {
                             events.setShown(events.hidden.contains(calendar.id), calendarID: calendar.id)
@@ -64,28 +74,21 @@ struct CalendarSettingsPage: View {
                 .accessibilityIdentifier("settings-calendar-account-\(account.name)")
             }
         }
-        HITGroup("Add to Calendar", footer: Self.copyNote) {
-            addTargetRow
-        }
-        HITGroup("Google Calendar") {
+        HITGroup {
             let connected = events.isShowing && events.hasGoogleAccount
             // Words only: no button that leaves the app.
-            HStack(alignment: .firstTextBaseline, spacing: HITSpacing.m) {
-                Image(systemName: connected ? "checkmark.circle" : "person.crop.circle.badge.plus")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(connected ? Theme.accent : Theme.secondaryText)
-                    .frame(width: HITRowMetrics.iconColumn)
-                    .accessibilityHidden(true)
-                Text(Self.googleWords(connected: events.isShowing ? events.hasGoogleAccount : nil))
-                    .font(HITType.subheadline)
-                    .foregroundStyle(connected ? HITColor.text : Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-            }
-            .hitRowPadding()
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("settings-calendar-google")
+            HITMenuRowLabel("Google Calendar", subtitle: Self.googleWords(connected: events.isShowing ? events.hasGoogleAccount : nil),
+                            systemImage: connected ? "checkmark.circle" : "person.crop.circle.badge.plus",
+                            iconTint: connected ? Theme.accent : Theme.secondaryText)
+                .foregroundStyle(HITColor.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+                .hitRowPadding()
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("settings-calendar-google")
+        }
+        HITGroup("Add to Calendar", footer: Self.copyNote) {
+            addTargetRow
         }
     }
 
@@ -114,7 +117,7 @@ struct CalendarSettingsPage: View {
             })
             .accessibilityIdentifier("settings-calendar-add-target")
         } else {
-            HITMenuRow("Add tasks to", subtitle: "Switch on Calendar events to pick one", systemImage: "calendar.badge.plus",
+            HITMenuRow("Add tasks to", subtitle: Self.addTargetOffNote, systemImage: "calendar.badge.plus",
                        value: Self.defaultChoice(nil))
                 .accessibilityIdentifier("settings-calendar-add-target")
         }
@@ -122,22 +125,39 @@ struct CalendarSettingsPage: View {
 
     // MARK: - Words
 
-    /// The switch's subtitle: what it does, or why it can't.
-    static func subtitle(for access: CalendarAccess) -> String {
+    static let switchTitle = "Show calendar events"
+    /// What the switch does, in one line.
+    static let switchSubtitle = "Your events in Today and Upcoming"
+    /// Under the switch and Access: when it asks, and what it does with what it reads.
+    static let switchFooter = "HITList asks for access when you switch this on. It only reads your events, and they stay on this device."
+    static let calendarsFooter = "Tap a calendar to show or hide its events."
+
+    /// The permission in a word or two, as Access's value.
+    static func accessWord(_ access: CalendarAccess) -> String {
         switch access {
-        case .denied:
-            "HITList isn't allowed to read your calendars. Allow full access below."
-        case .writeOnly:
-            "HITList may add events but not read them. Switch on to ask, or allow full access below."
-        case .restricted:
-            "Calendar access is restricted on this device."
-        case .notDetermined, .fullAccess:
-            "Today and Upcoming show your events. Read-only, and they stay on this device."
+        case .notDetermined: "Not asked yet"
+        case .fullAccess: "Allowed"
+        case .denied: "Not allowed"
+        case .writeOnly: "Add only"
+        case .restricted: "Restricted"
         }
     }
 
-    /// Where the switch is, under the system's settings (the row above it opens them).
+    /// Under Access when it is refused: what fixes it (the row opens the system's settings). Nil while it is fine.
+    static func subtitle(for access: CalendarAccess) -> String? {
+        switch access {
+        case .denied: "HITList isn't allowed to read your calendars. Tap to allow it in \(settingsPath)"
+        case .writeOnly: "HITList can add events but not read them. Tap to allow full access in \(settingsPath)"
+        case .restricted: "Calendar access is restricted on this device (Screen Time or a device profile)"
+        case .notDetermined, .fullAccess: nil
+        }
+    }
+
+    /// Where the permission is, under the system's settings (the Access row opens them).
     static let settingsPath = "Privacy & Security → Calendars → HITList"
+
+    /// "Add tasks to"'s subtitle while it can't list the calendars.
+    static let addTargetOffNote = "Switch on events above to pick one"
 
     /// The menu's first choice: the device's default calendar, by name once it can be read.
     static func defaultChoice(_ calendar: CalendarInfo?) -> String {
@@ -151,17 +171,15 @@ struct CalendarSettingsPage: View {
     }
 
     /// The Add to Calendar group's footer: said once, here.
-    static let copyNote = "A dated task's menu has Add to Calendar: one event at its time (30 minutes) or all day. "
-        + "It's a copy: changing the task later doesn't change the event."
+    static let copyNote = "Add to Calendar is in a dated task's menu. The event is a copy: later changes to the task don't change it."
 
-    /// How Google Calendar gets here, for the device it is read on. `connected`: nil while HITList can't read the
+    /// The Google Calendar row's subtitle, for the device it is read on. `connected`: nil while HITList can't read the
     /// calendars to tell.
     static func googleWords(connected: Bool?, device: CalendarSettingsDevice = .current) -> String {
         if connected == true {
-            return "Google Calendar is connected through this \(device.name)'s accounts."
+            return "Connected through this \(device.name)'s accounts"
         }
-        return "HITList never signs in to Google: Google Calendar comes in through this \(device.name)'s own accounts. "
-            + "To add it: \(device.googlePath)."
+        return "Add your Google account to this \(device.name): \(device.googlePath)"
     }
 
     /// Accounts in the order their calendars come (`EventKitSource` sorts by account, then title).
