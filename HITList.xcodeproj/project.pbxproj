@@ -156,6 +156,7 @@
 		42B4A62347738E4D40E6A641 /* Inter_18pt-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BC516A0557E14903E6331376 /* Inter_18pt-ExtraBold.ttf */; };
 		42C25D10E5AF893E25E60E23 /* TipsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E794A10998B1D953655D0ABA /* TipsTests.swift */; };
 		435AA48F7B71EC4CCF7428F4 /* SpacingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFFB73EA220E7DD77461E00A /* SpacingTests.swift */; };
+		4367B2EDC62178BA86BB0F2B /* TipShotsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9818401523D36ADBFFDE061F /* TipShotsUITests.swift */; };
 		439DB36D43C5D48966D60813 /* SwitchCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = F66A82D7D7E91AA9118B93C6 /* SwitchCard.swift */; };
 		43EA15F9E925BB0244512E6A /* SubtaskChecklist.swift in Sources */ = {isa = PBXBuildFile; fileRef = F32A742F83D1AB9E93A17857 /* SubtaskChecklist.swift */; };
 		4427C494548C477A0D31DE0F /* NotificationPlan.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30CB1AE397AB35EB24E71B1 /* NotificationPlan.swift */; };
@@ -417,6 +418,7 @@
 		AEC25A82D0A695612C5C7305 /* ClaudeConnector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BAD8DAF8E3D43C3CEAC20E8 /* ClaudeConnector.swift */; };
 		AEDFB6CF04BDC3556EFCBDB5 /* DayAnchoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04EA904D351AF79C253142F8 /* DayAnchoring.swift */; };
 		AF5249E9EC87715562BD7933 /* ShareSheetTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09F94AFCA62D54C73A64FF93 /* ShareSheetTests.swift */; };
+		AF8837AB930B202D39FBE0BD /* QuickAddChipRowUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CED8947F361B80B51A331E5 /* QuickAddChipRowUITests.swift */; };
 		AF91F77726263D4D03F3DCD7 /* SharedTasksDebug.swift in Sources */ = {isa = PBXBuildFile; fileRef = B90C89E02634D6B5059FF614 /* SharedTasksDebug.swift */; };
 		B00E2C4B5166EBA8287E1B68 /* SchemaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C337D61DC8FDB5C8B0075440 /* SchemaTests.swift */; };
 		B09C1EA7E774D09EF6682495 /* TodoistImportUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */; };
@@ -870,6 +872,7 @@
 		5AF4339C7C8A865BF052BF26 /* WeatherServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WeatherServiceTests.swift; sourceTree = "<group>"; };
 		5BD967EB28FC0C3906824AF5 /* RepeatPickerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatPickerTests.swift; sourceTree = "<group>"; };
 		5CBB299B7017BD667C2ADA7E /* SyncSessionGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncSessionGate.swift; sourceTree = "<group>"; };
+		5CED8947F361B80B51A331E5 /* QuickAddChipRowUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAddChipRowUITests.swift; sourceTree = "<group>"; };
 		5D2FDF2D4FA353062924EFA4 /* SharedAddingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAddingTests.swift; sourceTree = "<group>"; };
 		5E0F881764310827D1A610F1 /* SettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsTests.swift; sourceTree = "<group>"; };
 		5E2844E2E5CBABB66E5F0A90 /* CompactQuickAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompactQuickAddTests.swift; sourceTree = "<group>"; };
@@ -1002,6 +1005,7 @@
 		95337ADE991268904AA7383E /* MacChromeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacChromeTests.swift; sourceTree = "<group>"; };
 		966FF672CF1AE97484CD00CE /* TaskActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskActions.swift; sourceTree = "<group>"; };
 		9681118E0D329F0DD5D4BBEE /* ShareDebug.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareDebug.swift; sourceTree = "<group>"; };
+		9818401523D36ADBFFDE061F /* TipShotsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TipShotsUITests.swift; sourceTree = "<group>"; };
 		985E3999361A39AC1B78A900 /* CompanionIslandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompanionIslandTests.swift; sourceTree = "<group>"; };
 		994FA0B078605DDC99DC19C2 /* ShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareInbox.swift; sourceTree = "<group>"; };
 		99F5C84701529B786312B4FD /* AppGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroupTests.swift; sourceTree = "<group>"; };
@@ -1695,6 +1699,7 @@
 				5F1534C71166CBA9B9773E90 /* MotionUITests.swift */,
 				298BBE27735672B4DAABE364 /* ProfileMenuUITests.swift */,
 				36F862657166AD5243F378BC /* QASweepUITests.swift */,
+				5CED8947F361B80B51A331E5 /* QuickAddChipRowUITests.swift */,
 				FFECF46968417C8C6D48C8C9 /* QuickAddGuideUITests.swift */,
 				5A323EAA03324E42F9B45926 /* RepeatPhraseUITests.swift */,
 				CCB8433A7D2C8CEE6F362F61 /* RepeatPickerUITests.swift */,
@@ -1705,6 +1710,7 @@
 				8A9B7362FAFC8FF6FF427357 /* SweepPolishUITests.swift */,
 				497ECACB37FF5F427681EA06 /* SwitchboardUITests.swift */,
 				BAA2E310A182159BE60C7D9E /* SyncEngineStatusUITests.swift */,
+				9818401523D36ADBFFDE061F /* TipShotsUITests.swift */,
 				1A3473EE8FE0512E58CD2A86 /* TodoistImportUITests.swift */,
 				4E15C0CED187F50576BBD250 /* WeatherUITests.swift */,
 				B66D4679C9375FA020237031 /* WidgetsUITests.swift */,
@@ -2572,6 +2578,7 @@
 				835EB0225B2DC3FF9F63FAD1 /* MotionUITests.swift in Sources */,
 				A20591E19F9667344A905D92 /* ProfileMenuUITests.swift in Sources */,
 				BDD9A27F2F93953F44792BA3 /* QASweepUITests.swift in Sources */,
+				AF8837AB930B202D39FBE0BD /* QuickAddChipRowUITests.swift in Sources */,
 				783B3276F2D1FCE8AABA79FA /* QuickAddGuideUITests.swift in Sources */,
 				F8D402AC7AD510F09615293C /* RepeatPhraseUITests.swift in Sources */,
 				5DF15A3C12EC8DD5DF109718 /* RepeatPickerUITests.swift in Sources */,
@@ -2582,6 +2589,7 @@
 				BAB2DFFF8F69A96BC781ED9D /* SweepPolishUITests.swift in Sources */,
 				56F5F4059BE7A1AC100FD66B /* SwitchboardUITests.swift in Sources */,
 				DA4D52ED3F73D56CDE79F34A /* SyncEngineStatusUITests.swift in Sources */,
+				4367B2EDC62178BA86BB0F2B /* TipShotsUITests.swift in Sources */,
 				B09C1EA7E774D09EF6682495 /* TodoistImportUITests.swift in Sources */,
 				ACEC42234258B3C2205FDDB8 /* WeatherUITests.swift in Sources */,
 				04D6BE7E882A7F3C9A23DCB1 /* WidgetsUITests.swift in Sources */,
