@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import TipKit
 import HITListCore
 
 /// The quick-add card, the same everywhere: on iPhone a detached oval floating just above the keyboard
@@ -104,6 +105,8 @@ struct QuickAddPopout: View {
             TokenHighlightField(placeholder: "Task Name", text: $draft.text, tokens: parsed.tokens,
                                 priority: parsed.priority, focus: $titleFocused, bordered: false,
                                 onDisable: { token in
+                                    // The keep-as-text tip has been used: it goes for good (brief 162).
+                                    HITTip(.keepAsText).invalidate(reason: .actionPerformed)
                                     withAnimation(HITMotion.quick(reduceMotion: reduceMotion)) { draft.disable(token) }
                                 },
                                 onEnable: { token in
@@ -595,6 +598,8 @@ struct QuickAddPopout: View {
                 try TaskActions.addSubtasks(draft.subtaskTitles, to: task, in: modelContext)
             }
             errorMessage = nil
+            // A task added from the card: the syntax tip has done its work (brief 162).
+            HITTip(.quickAddSyntax).invalidate(reason: .actionPerformed)
             if closesAfterSave { hasSavedForClose = true }
             if let cardID, let popouts { QuickAddDraftStore.clear(card: cardID, from: popouts.draftDefaults) }
             if !closesAfterSave {

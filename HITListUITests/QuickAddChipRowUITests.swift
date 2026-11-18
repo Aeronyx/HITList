@@ -27,7 +27,7 @@ final class QuickAddChipRowUITests: XCTestCase {
         XCTAssertTrue(bar.waitForExistence(timeout: 5), "the card is open")
         _ = app.keyboards.firstMatch.waitForExistence(timeout: 4)
         pause(1)
-        let emptyCard = card.frame, emptyBar = bar.frame
+        let emptyCard = card.frame, emptyBar = bar.frame, emptyTitle = element("quickAddTitle").frame
         let chipHeight = element("quickAddDateChip").frame.height
         shot("01 empty card")
 
@@ -45,8 +45,10 @@ final class QuickAddChipRowUITests: XCTestCase {
         XCTAssertTrue(element("quickAddDeadlineChip").exists, "the deadline chip")
         shot("02 three labels and a deadline")
 
+        // The card is as tall as with no chips added, but for the title's own lines (a long title wraps by design).
+        let titleGrowth = element("quickAddTitle").frame.height - emptyTitle.height
         let fullCard = card.frame, fullBar = bar.frame
-        XCTAssertEqual(fullCard.height, emptyCard.height, accuracy: 0.5, "the card is as tall as with no chips added")
+        XCTAssertEqual(fullCard.height - titleGrowth, emptyCard.height, accuracy: 0.5, "the chips added no height")
         XCTAssertEqual(fullBar.height, emptyBar.height, accuracy: 0.5, "the row is still one line")
         XCTAssertLessThan(fullBar.height, chipHeight * 1.5, "one chip high")
         // The row stays inside the card's padding: its edges are in line with the title's.

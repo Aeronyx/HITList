@@ -115,8 +115,8 @@ final class FirstRunUITests: XCTestCase {
     /// Any first-run tip on screen: its × ("Dismiss tip") or its title. (A popover tip's own identifier does
     /// not reach the accessibility tree; its contents do.)
     private var tip: XCUIElement {
-        let titles = ["Type it all in one line", "Keep the words as text", "Find anything",
-                      "Flip a switch when it’s done", "Add straight to a day"]
+        let titles = ["Type it naturally", "Keep words as text", "Find anything", "Flip it when done", "Add to a day",
+                      "Swipe to sort", "Switches stay here", "See your calendar here"]
         return app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == 'Dismiss tip' OR label IN %@", titles)).firstMatch
     }

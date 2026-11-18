@@ -57,11 +57,10 @@ final class TipShotsUITests: XCTestCase {
         pause(1)
         watchTip("quick add after typing")
         shot("4 Quick add, after typing")
-        let close = app.buttons["Close"].firstMatch
-        if close.exists { close.tap(); pause(0.8) }
-        let discard = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Discard")).firstMatch
-        if discard.waitForExistence(timeout: 2) { discard.tap() }
-        pause(1)
+        // Add it: the iPhone's card closes after a save.
+        let save = element("quickAddSave")
+        if save.exists { save.tap() }
+        pause(1.5)
 
         // The Flipboard: its first switch's tip.
         let flip = app.buttons["tab-flipboard"].firstMatch
@@ -100,9 +99,11 @@ final class TipShotsUITests: XCTestCase {
         pause(0.3)
     }
 
-    /// The tip's frame as soon as it is there, then after a second: the two must agree.
+    /// The tip's × as soon as it is there, then after a second: the two must agree (a popover tip's own identifier
+    /// does not reach the accessibility tree; its × sits in its top trailing corner, so it moves if the tip changes
+    /// its width or place).
     private func watchTip(_ name: String) {
-        let tip = element("tip")
+        let tip = app.buttons["Dismiss tip"].firstMatch
         guard tip.waitForExistence(timeout: 4) else { frames.append("\(name): no tip"); return }
         let first = tip.frame
         pause(1.2)

@@ -33,15 +33,41 @@ final class TipsTests: XCTestCase {
     func testWordingIsShortAndConcrete() {
         for kind in HITTipKind.allCases {
             XCTAssertFalse(kind.title.isEmpty, "\(kind)")
-            XCTAssertLessThanOrEqual(kind.title.count, 32, "\(kind)'s title is a few words")
-            XCTAssertLessThanOrEqual(kind.message.count, 110, "\(kind)'s message is one short sentence or two")
+            // Brief 162: a title of at most four words, a message of one sentence of at most 90 characters, no symbol
+            // a friend has to decode.
+            XCTAssertLessThanOrEqual(kind.title.split(separator: " ").count, 4, "\(kind)'s title is at most four words")
+            XCTAssertLessThanOrEqual(kind.message.count, 90, "\(kind)'s message is one short sentence")
+            XCTAssertTrue(kind.message.hasSuffix("."), "\(kind)")
+            XCTAssertEqual(kind.message.filter { ".!?".contains($0) }.count, 1, "\(kind)'s message is one sentence")
+            for symbol in ["#", "@", "→", "!", "·"] {
+                XCTAssertFalse(kind.message.contains(symbol) || kind.title.contains(symbol), "\(kind) has no \(symbol)")
+            }
             XCTAssertFalse(kind.message.contains("HITList"), "tips talk about the thing, not the app")
         }
-        XCTAssertTrue(HITTipKind.quickAddSyntax.message.contains("‘Call mom tomorrow 5pm p1 #Home’"))
+        XCTAssertTrue(HITTipKind.quickAddSyntax.message.contains("‘Call mom tomorrow 5pm’"))
         XCTAssertTrue(HITTipKind.keepAsText.message.contains("Backspace"))
-        XCTAssertTrue(HITTipKind.keepAsText.message.contains("keep the words as text"))
         XCTAssertTrue(HITTipKind.browse.message.contains("magnifying glass"))
-        XCTAssertTrue(HITTipKind.boardAddTask.message.contains("Add task"))
+        XCTAssertTrue(HITTipKind.boardAddTask.message.contains("under a day"))
+    }
+
+    /// The message's colour (`Theme.secondaryText`) on the tip's fill (`Theme.elevated`), and the title's
+    /// (`HITColor.text`), read at a glance in every theme: a contrast of at least 4.5 to 1 (WCAG AA), computed.
+    func testTipTextContrastInEveryTheme() {
+        func luminance(_ hex: String) -> Double {
+            let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+            let value = Int(digits, radix: 16) ?? 0
+            let channels = [(value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF].map { Double($0) / 255 }
+            let linear = channels.map { $0 <= 0.04045 ? $0 / 12.92 : pow(($0 + 0.055) / 1.055, 2.4) }
+            return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+        }
+        func contrast(_ a: String, _ b: String) -> Double {
+            let (la, lb) = (luminance(a), luminance(b))
+            return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+        }
+        for palette in ThemePalette.all {
+            XCTAssertGreaterThanOrEqual(contrast(palette.hex.secondaryText, palette.hex.elevated), 4.5, "\(palette.name): message")
+            XCTAssertGreaterThanOrEqual(contrast(palette.hex.text, palette.hex.elevated), 4.5, "\(palette.name): title")
+        }
     }
 
     func testEveryTipHasASymbolThatExists() {

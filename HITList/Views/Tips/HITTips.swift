@@ -31,27 +31,29 @@ enum HITTipKind: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .quickAddSyntax: "Type it all in one line"
-        case .keepAsText: "Keep the words as text"
+        // Brief 162: at most four words; the message one sentence of at most 90 characters that says what to do,
+        // with no symbol to decode (TipsTests holds both).
+        case .quickAddSyntax: "Type it naturally"
+        case .keepAsText: "Keep words as text"
         case .browse: "Find anything"
-        case .flipboard: "Flip a switch when it’s done"
-        case .boardAddTask: "Add straight to a day"
+        case .flipboard: "Flip it when done"
+        case .boardAddTask: "Add to a day"
         case .reviewSwipe: "Swipe to sort"
-        case .switchesStay: "Switches stay on the Flipboard"
-        case .calendarInToday: "Your calendar, beside your tasks"
+        case .switchesStay: "Switches stay here"
+        case .calendarInToday: "See your calendar here"
         }
     }
 
     var message: String {
         switch self {
-        case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm p1 #Home’: date and priority fill in. # picks its one Group; @ adds any labels."
-        case .keepAsText: "Tap a highlight, or press Backspace right after it, to keep the words as text."
-        case .browse: "The magnifying glass opens Browse: Groups, labels and filters, and a search that understands #Work or p1."
-        case .flipboard: "A switch is a routine, green when it’s done and red when it’s due: flip it when you’ve done it."
-        case .boardAddTask: "Add task under a day adds a task due that day. Drag a card to another day to move it."
-        case .reviewSwipe: "Swipe right for Today, left to delete."
-        case .switchesStay: "Red switches no longer wait in Today; turn on Become a task when Overdue to bring one back when it’s due."
-        case .calendarInToday: "Today can show the day’s events from your calendars, Google Calendar’s too. Turn it on in Settings → Calendar."
+        case .quickAddSyntax: "Try ‘Call mom tomorrow 5pm’ and the date and time fill in as you type."
+        case .keepAsText: "Tap a highlighted word, or press Backspace after it, to keep it as text."
+        case .browse: "Tap the magnifying glass to search, or to open a Group, label or filter."
+        case .flipboard: "Flip a switch once you’ve done it; it turns red again when it’s due."
+        case .boardAddTask: "Add a task under a day to make it due then, or drag a card to move it."
+        case .reviewSwipe: "Swipe right to move a task to Today, or left to delete."
+        case .switchesStay: "Turn on Become a task when Overdue to see a red switch in Today."
+        case .calendarInToday: "Turn on Calendar in Settings to see the day’s events beside your tasks."
         }
     }
 
